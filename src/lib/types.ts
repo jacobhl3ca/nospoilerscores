@@ -17,6 +17,9 @@ export interface Game {
   venue: string;
   // Game quality rating (0-100) based on score closeness
   rating: number | null;
+  // Highlight/recap links
+  highlightUrl: string | null; // ESPN video clip URL
+  recapUrl: string | null; // ESPN gamecast URL
 }
 
 export interface Team {

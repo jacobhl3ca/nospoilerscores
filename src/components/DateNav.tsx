@@ -33,7 +33,6 @@ export function getDateString(daysOffset: number): string {
 }
 
 export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
-  // Yesterday, Today, Tomorrow
   const dates = [-1, 0, 1].map((offset) => getDateString(offset));
 
   return (
@@ -42,11 +41,12 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
         <button
           key={date}
           onClick={() => onDateChange(date)}
-          className={`px-3 py-1.5 rounded text-sm transition-colors ${
+          className="px-3 py-1.5 rounded text-sm transition-colors"
+          style={
             selectedDate === date
-              ? "bg-white/15 text-white font-medium"
-              : "text-gray-400 hover:text-white hover:bg-white/5"
-          }`}
+              ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 500 }
+              : { color: "var(--text-secondary)" }
+          }
         >
           {formatDate(date)}
         </button>

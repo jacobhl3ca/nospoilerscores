@@ -83,6 +83,28 @@ function parseGame(event: any, sport: Sport): Game {
   // Tag sport for rating calculation
   event._sport = sport;
 
+  // Extract highlight video URL from headlines
+  let highlightUrl: string | null = null;
+  for (const headline of competition?.headlines ?? []) {
+    for (const video of headline?.video ?? []) {
+      const webHref = video?.links?.web?.href;
+      if (webHref) {
+        highlightUrl = webHref;
+        break;
+      }
+    }
+    if (highlightUrl) break;
+  }
+
+  // Extract gamecast/recap URL from event links
+  let recapUrl: string | null = null;
+  for (const link of event.links ?? []) {
+    if (link.rel?.includes("summary") || link.rel?.includes("event")) {
+      recapUrl = link.href;
+      break;
+    }
+  }
+
   return {
     id: event.id,
     sport,
@@ -99,6 +121,8 @@ function parseGame(event: any, sport: Sport): Game {
     broadcasts,
     venue: competition?.venue?.fullName ?? "",
     rating: calculateRating(event),
+    highlightUrl,
+    recapUrl,
   };
 }
 

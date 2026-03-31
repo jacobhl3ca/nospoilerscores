@@ -2,14 +2,18 @@ import { Sport } from "./types";
 
 const STORAGE_KEY = "nss-preferences";
 
+export type Theme = "dark" | "light" | "system";
+
 export interface Preferences {
   favoriteLeagues: Sport[]; // ordered by priority (first = highest)
   favoriteTeams: string[]; // team IDs, ordered by priority (first = highest)
+  theme: Theme;
 }
 
 const defaults: Preferences = {
   favoriteLeagues: [],
   favoriteTeams: [],
+  theme: "system",
 };
 
 export function loadPreferences(): Preferences {
