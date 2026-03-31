@@ -7,6 +7,7 @@ import { fetchAllLeagues } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
 import DateNav, { getDateString } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
+import VideoModal from "@/components/VideoModal";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -19,7 +20,9 @@ function getResolvedTheme(theme: Theme): "dark" | "light" {
 export default function Home() {
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => getDateString(-1));
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
     favoriteTeams: [],
@@ -43,19 +46,19 @@ export default function Home() {
 
   const fetchData = useCallback(async (date: string) => {
     setLoading(true);
+    setError(false);
     try {
       const data = await fetchAllLeagues(date);
       setLeagues(data);
     } catch {
       setLeagues([]);
+      setError(true);
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchData(selectedDate);
-    const interval = setInterval(() => fetchData(selectedDate), 60000);
-    return () => clearInterval(interval);
   }, [selectedDate, fetchData]);
 
   const updatePrefs = (update: Partial<Preferences>) => {
@@ -103,25 +106,55 @@ export default function Home() {
   });
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Header */}
       <header className="px-4 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <h1 className="text-xl font-bold tracking-tight">
-            No Spoiler Scores
-          </h1>
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto grid grid-cols-3 items-center">
+          <a href="/" className="text-lg font-bold tracking-tight hover:opacity-80 transition-opacity justify-self-start" style={{ color: "var(--text)" }}>
+            HideScore
+          </a>
+          <div className="justify-self-center">
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+          </div>
+          <div className="justify-self-end">
             <ThemeToggle theme={prefs.theme} onToggle={toggleTheme} />
           </div>
         </div>
       </header>
 
       {/* Content */}
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main className="max-w-6xl mx-auto px-4 py-6 flex-1 w-full">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div style={{ color: "var(--text-muted)" }}>Loading games...</div>
+          <div className="flex flex-col lg:flex-row gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex-1 min-w-0">
+                <div className="h-6 w-16 mx-auto mb-3 rounded" style={{ background: "var(--bg-card)" }} />
+                {[1, 2, 3, 4].map((j) => (
+                  <div key={j} className="rounded-lg px-4 py-3 mb-2 animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                    <div className="h-3 w-20 rounded mb-3" style={{ background: "var(--bg-card-hover)" }} />
+                    <div className="flex items-center gap-3 py-1.5">
+                      <div className="w-6 h-6 rounded-full" style={{ background: "var(--bg-card-hover)" }} />
+                      <div className="h-3 w-32 rounded" style={{ background: "var(--bg-card-hover)" }} />
+                    </div>
+                    <div className="flex items-center gap-3 py-1.5">
+                      <div className="w-6 h-6 rounded-full" style={{ background: "var(--bg-card-hover)" }} />
+                      <div className="h-3 w-28 rounded" style={{ background: "var(--bg-card-hover)" }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <p style={{ color: "var(--text-muted)" }}>Failed to load games</p>
+            <button
+              onClick={() => fetchData(selectedDate)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+            >
+              Retry
+            </button>
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row gap-6">
@@ -134,6 +167,7 @@ export default function Home() {
                 favoriteTeams={prefs.favoriteTeams}
                 onToggleFavoriteTeam={toggleFavoriteTeam}
                 onNavigateToDate={setSelectedDate}
+                onPlayHighlight={setVideoUrl}
               />
             ))}
           </div>
@@ -141,9 +175,12 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-auto px-4 py-3 text-center text-xs" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
-        Catch up on games without spoilers. Star your teams to track them.
+      <footer className="px-4 py-3 text-center text-xs" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+        Catch up on games without spoilers. Ratings tell you what&apos;s worth watching.
       </footer>
+
+      {/* Video Modal */}
+      {videoUrl && <VideoModal url={videoUrl} onClose={() => setVideoUrl(null)} />}
     </div>
   );
 }

@@ -13,11 +13,11 @@ export default function ThemeToggle({ theme, onToggle }: ThemeToggleProps) {
   return (
     <button
       onClick={onToggle}
-      className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+      className="w-9 h-9 flex items-center justify-center rounded-full transition-all"
       style={{
         background: "var(--bg-card)",
-        border: "1px solid var(--border)",
-        color: "var(--text-secondary)",
+        boxShadow: `0 0 0 2px ${isDark ? "var(--accent)" : "var(--accent)"}`,
+        color: "var(--accent)",
       }}
       title={`Switch to ${isDark ? "light" : "dark"} mode`}
     >

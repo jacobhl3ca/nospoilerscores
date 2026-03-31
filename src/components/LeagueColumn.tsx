@@ -12,6 +12,7 @@ interface LeagueColumnProps {
   favoriteTeams: string[];
   onToggleFavoriteTeam: (teamId: string) => void;
   onNavigateToDate: (date: string) => void;
+  onPlayHighlight: (url: string) => void;
 }
 
 export default function LeagueColumn({
@@ -21,6 +22,7 @@ export default function LeagueColumn({
   favoriteTeams,
   onToggleFavoriteTeam,
   onNavigateToDate,
+  onPlayHighlight,
 }: LeagueColumnProps) {
   const getFavPriority = (game: typeof league.games[0]) => {
     const ids = [game.homeTeam.id, game.awayTeam.id];
@@ -84,6 +86,7 @@ export default function LeagueColumn({
               game={game}
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
+              onPlayHighlight={onPlayHighlight}
             />
           ))}
         </div>

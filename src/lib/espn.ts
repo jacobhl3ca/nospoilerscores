@@ -10,11 +10,41 @@ const SPORT_PATHS: Record<Sport, string> = {
   nhl: "/hockey/nhl/scoreboard",
 };
 
-const LEAGUES: { sport: Sport; label: string }[] = [
-  { sport: "mlb", label: "MLB" },
-  { sport: "nba", label: "NBA" },
-  { sport: "ncaam", label: "NCAAM" },
+// Seasonal league config: show/hide based on date
+// endDate: 2 days after the final game of the season
+// startDate: when the sport's season starts
+interface LeagueConfig {
+  sport: Sport;
+  label: string;
+  startDate?: string; // MM-DD
+  endDate?: string;   // MM-DD (hide after this date)
+}
+
+const ALL_LEAGUES: LeagueConfig[] = [
+  { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-10" },
+  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-25" },
+  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-09" }, // 2 days after Final Four
+  { sport: "nhl", label: "NHL", startDate: "10-10", endDate: "06-25" },
+  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-15" },
 ];
+
+function isLeagueActive(league: LeagueConfig): boolean {
+  if (!league.startDate || !league.endDate) return true;
+
+  const now = new Date();
+  const mmdd = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  // Handle wrap-around seasons (e.g., NFL: Sep-Feb, NBA: Oct-Jun)
+  if (league.startDate <= league.endDate) {
+    return mmdd >= league.startDate && mmdd <= league.endDate;
+  } else {
+    return mmdd >= league.startDate || mmdd <= league.endDate;
+  }
+}
+
+function getActiveLeagues(): LeagueConfig[] {
+  return ALL_LEAGUES.filter(isLeagueActive);
+}
 
 function parseTeam(competitor: any, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
@@ -30,6 +60,18 @@ function parseTeam(competitor: any, sport: Sport): Team {
     record: competitor.records?.[0]?.summary ?? "",
   };
 }
+
+// Per-sport rating calibration
+// multiplier: how fast closeness drops per point of differential
+// overtimeBonus: extra points for OT/extras
+// scoringDivisor: normalizes scoring bonus per sport
+const SPORT_RATING_CONFIG: Record<Sport, { multiplier: number; overtimeBonus: number; scoringDivisor: number }> = {
+  mlb: { multiplier: 14, overtimeBonus: 15, scoringDivisor: 3 },    // 1 run = big deal, 7+ run diff = blowout
+  nba: { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40 },  // 22+ point diff = blowout
+  ncaam: { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30 }, // 18+ point diff = blowout
+  nhl: { multiplier: 22, overtimeBonus: 20, scoringDivisor: 2 },    // 1 goal = close, 5+ = blowout
+  nfl: { multiplier: 6, overtimeBonus: 15, scoringDivisor: 10 },    // 3 pts = close, 17+ = blowout
+};
 
 function calculateRating(game: any): number | null {
   const competition = game.competitions?.[0];
@@ -48,19 +90,20 @@ function calculateRating(game: any): number | null {
 
   if (total === 0) return 50;
 
-  // Closer games = higher rating
-  // A tie game = 100, blowout = lower
-  const closeness = Math.max(0, 100 - diff * 10);
+  const sport = game._sport as Sport;
+  const config = SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba;
+
+  // Closer games = higher rating, scaled per sport
+  const closeness = Math.max(0, 100 - diff * config.multiplier);
 
   // Bonus for overtime/extras
-  const sport = game._sport as Sport;
   const periods = game.status?.period ?? 0;
   const regulationPeriods: Record<Sport, number> = { mlb: 9, nba: 4, ncaam: 2, nfl: 4, nhl: 3 };
   const regulation = regulationPeriods[sport] ?? 4;
-  const overtimeBonus = periods > regulation ? 15 : 0;
+  const overtimeBonus = periods > regulation ? config.overtimeBonus : 0;
 
-  // Bonus for higher scoring (more exciting)
-  const scoringBonus = Math.min(total / 5, 10);
+  // Normalized scoring bonus per sport
+  const scoringBonus = Math.min(total / config.scoringDivisor, 10);
 
   return Math.min(100, Math.round(closeness + overtimeBonus + scoringBonus));
 }
@@ -143,8 +186,9 @@ export async function fetchGames(
 }
 
 export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
+  const active = getActiveLeagues();
   return Promise.all(
-    LEAGUES.map(async ({ sport, label }) => {
+    active.map(async ({ sport, label }) => {
       const games = await fetchGames(sport, date);
       return { sport, label, games };
     })

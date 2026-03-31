@@ -7,6 +7,7 @@ interface GameCardProps {
   game: Game;
   favoriteTeams: string[];
   onToggleFavoriteTeam: (teamId: string) => void;
+  onPlayHighlight: (url: string) => void;
 }
 
 function TeamRow({
@@ -119,16 +120,14 @@ function RatingExplainer({ onClose }: { onClose: () => void }) {
   );
 }
 
-function getHighlightUrl(game: Game): string {
-  if (game.highlightUrl) return game.highlightUrl;
-  // Fallback: YouTube search
+function getYouTubeSearchUrl(game: Game): string {
   const date = new Date(game.date);
   const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const query = `${game.awayTeam.shortDisplayName} vs ${game.homeTeam.shortDisplayName} highlights ${dateStr}`;
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, onPlayHighlight }: GameCardProps) {
   const [showExplainer, setShowExplainer] = useState(false);
   const showRating = (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
@@ -177,23 +176,41 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam }: 
           onToggleFavorite={() => onToggleFavoriteTeam(game.homeTeam.id)}
         />
 
-        {/* Recap link for finished games */}
+        {/* Highlight links for finished games */}
         {isFinished && (
-          <a
-            href={getHighlightUrl(game)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors"
-            style={{
-              background: "var(--bg-card-hover)",
-              color: "var(--accent)",
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5,3 19,12 5,21" />
-            </svg>
-            Watch Highlights
-          </a>
+          <div className="mt-2 flex gap-1.5">
+            <a
+              href={getYouTubeSearchUrl(game)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors"
+              style={{
+                background: "var(--bg-card-hover)",
+                color: "var(--accent)",
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+              Highlights
+            </a>
+            {game.highlightUrl && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onPlayHighlight(game.highlightUrl!); }}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+                style={{
+                  background: "var(--bg-card-hover)",
+                  color: "var(--text-muted)",
+                }}
+                title="Play ESPN recap"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="2" width="20" height="20" rx="2" />
+                  <polygon points="10,8 16,12 10,16" fill="currentColor" />
+                </svg>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
