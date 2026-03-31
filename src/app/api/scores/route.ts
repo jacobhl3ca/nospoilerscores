@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { fetchGames } from "@/lib/espn";
 import { Sport, LeagueData } from "@/lib/types";
 
+export const runtime = "edge";
+
 const LEAGUES: { sport: Sport; label: string }[] = [
   { sport: "mlb", label: "MLB" },
   { sport: "nba", label: "NBA" },
