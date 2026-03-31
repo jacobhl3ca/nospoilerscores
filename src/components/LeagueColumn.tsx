@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { LeagueData, Sport } from "@/lib/types";
+import { fetchNextGameDate } from "@/lib/espn";
 import GameCard from "./GameCard";
 
 interface LeagueColumnProps {
@@ -115,24 +116,11 @@ function NoGames({
   useEffect(() => {
     let cancelled = false;
     async function findNext() {
-      for (let i = 1; i <= 7; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().slice(0, 10).replace(/-/g, "");
-        try {
-          const res = await fetch(`/api/scores?date=${dateStr}`);
-          const data = await res.json();
-          const league = data.find((l: any) => l.sport === sport);
-          if (league && league.games.length > 0) {
-            if (!cancelled) {
-              setNextGameDate(dateStr);
-              setChecking(false);
-            }
-            return;
-          }
-        } catch {}
+      const date = await fetchNextGameDate(sport);
+      if (!cancelled) {
+        if (date) setNextGameDate(date);
+        setChecking(false);
       }
-      if (!cancelled) setChecking(false);
     }
     findNext();
     return () => { cancelled = true; };

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import { Preferences, loadPreferences, savePreferences } from "@/lib/preferences";
+import { fetchAllLeagues } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
 import DateNav, { getDateString } from "@/components/DateNav";
 import SpoilerToggle from "@/components/SpoilerToggle";
@@ -24,8 +25,7 @@ export default function Home() {
   const fetchData = useCallback(async (date: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/scores?date=${date}`);
-      const data = await res.json();
+      const data = await fetchAllLeagues(date);
       setLeagues(data);
     } catch {
       setLeagues([]);

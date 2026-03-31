@@ -1,4 +1,4 @@
-import { Game, Sport, Team } from "./types";
+import { Game, Sport, LeagueData, Team } from "./types";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -9,6 +9,12 @@ const SPORT_PATHS: Record<Sport, string> = {
   nfl: "/football/nfl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
 };
+
+const LEAGUES: { sport: Sport; label: string }[] = [
+  { sport: "mlb", label: "MLB" },
+  { sport: "nba", label: "NBA" },
+  { sport: "ncaam", label: "NCAAM" },
+];
 
 function parseTeam(competitor: any, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
@@ -110,4 +116,27 @@ export async function fetchGames(
   const data = await res.json();
   const events = data.events ?? [];
   return events.map((e: any) => parseGame(e, sport));
+}
+
+export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
+  return Promise.all(
+    LEAGUES.map(async ({ sport, label }) => {
+      const games = await fetchGames(sport, date);
+      return { sport, label, games };
+    })
+  );
+}
+
+export async function fetchNextGameDate(
+  sport: Sport,
+  daysToCheck = 7
+): Promise<string | null> {
+  for (let i = 1; i <= daysToCheck; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10).replace(/-/g, "");
+    const games = await fetchGames(sport, dateStr);
+    if (games.length > 0) return dateStr;
+  }
+  return null;
 }
