@@ -43,16 +43,16 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
   const isBeforeYesterday = !isStandardDate && selectedDate < yesterday;
   const isAfterTomorrow = !isStandardDate && selectedDate > tomorrow;
 
-  const dateButtons: { date: string; label: string }[] = [];
+  const dateButtons: { date: string; label: string; shortLabel?: string }[] = [];
 
   // Custom date before yesterday
   if (isBeforeYesterday) {
     dateButtons.push({ date: selectedDate, label: formatDayName(selectedDate) });
   }
 
-  dateButtons.push({ date: yesterday, label: "Yesterday" });
-  dateButtons.push({ date: today, label: "Today" });
-  dateButtons.push({ date: tomorrow, label: "Tomorrow" });
+  dateButtons.push({ date: yesterday, label: "Yesterday", shortLabel: "Yst" });
+  dateButtons.push({ date: today, label: "Today", shortLabel: "Today" });
+  dateButtons.push({ date: tomorrow, label: "Tomorrow", shortLabel: "Tmrw" });
 
   // Custom date after tomorrow
   if (isAfterTomorrow) {
@@ -67,24 +67,25 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
   };
 
   return (
-    <div className="flex gap-1 items-center justify-center">
+    <div className="flex gap-0.5 sm:gap-1 items-center justify-center">
       {dateButtons.map((btn) => (
         <button
           key={btn.date}
           onClick={() => onDateChange(btn.date)}
-          className="date-nav-btn px-2 sm:px-3 py-1.5 rounded text-xs sm:text-sm whitespace-nowrap transition-all"
+          className="date-nav-btn px-1.5 sm:px-3 py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-all"
           style={
             selectedDate === btn.date
               ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 500 }
               : { color: "var(--text-secondary)" }
           }
         >
-          {btn.label}
+          <span className="hidden sm:inline">{btn.label}</span>
+          <span className="sm:hidden">{btn.shortLabel || btn.label}</span>
         </button>
       ))}
       <button
         onClick={() => inputRef.current?.showPicker()}
-        className="date-nav-btn w-8 h-8 flex items-center justify-center rounded-full transition-all"
+        className="date-nav-btn w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition-all flex-shrink-0"
         style={{ background: "var(--bg-card)", color: "var(--text-secondary)" }}
         title="Pick a date"
       >

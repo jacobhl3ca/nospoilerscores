@@ -150,10 +150,10 @@ export default function Home() {
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Header */}
       <header className="px-4 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-6xl mx-auto grid grid-cols-3 items-center">
-          <a href="/" className="hover:opacity-80 transition-opacity justify-self-start flex items-center" style={{ color: "var(--text)" }}>
+        <div className="max-w-6xl mx-auto grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
+          <a href="/" className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0" style={{ color: "var(--text)" }}>
             <span className="hidden sm:inline text-lg font-bold tracking-tight">HideScore</span>
-            <svg className="sm:hidden w-7 h-7" viewBox="0 0 32 32" fill="none">
+            <svg className="sm:hidden w-6 h-6" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="8" fill="var(--accent)" />
               <text x="16" y="22" textAnchor="middle" fontSize="18" fontWeight="800" fontFamily="system-ui" fill="white">H</text>
             </svg>
@@ -161,10 +161,10 @@ export default function Home() {
           <div className="justify-self-center">
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
-          <div className="justify-self-end flex items-center gap-1.5 sm:gap-2">
+          <div className="justify-self-end flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <button
               onClick={handleMonkeyClick}
-              className="monkey-toggle w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all text-base sm:text-lg"
+              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all text-sm sm:text-lg"
               style={{
                 background: prefs.showRatings ? "var(--bg-card-hover)" : "var(--bg-card)",
               }}

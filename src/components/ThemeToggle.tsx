@@ -13,7 +13,7 @@ export default function ThemeToggle({ theme, onToggle }: ThemeToggleProps) {
   return (
     <button
       onClick={onToggle}
-      className="theme-toggle w-9 h-9 flex items-center justify-center rounded-full transition-all"
+      className="theme-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all"
       style={{
         background: "var(--bg-card)",
         color: "var(--text-secondary)",
