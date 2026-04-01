@@ -148,22 +148,17 @@ function NextGamesInline({
   const formatted = formatDateCompact(nextDay.date);
 
   return (
-    <div>
-      {/* Bold date header for the upcoming game day */}
-      <p className="text-sm sm:text-base font-bold text-center mb-2" style={{ color: "var(--text)" }}>
-        {formatted}
-      </p>
-      <div className="flex flex-col gap-1.5 sm:gap-2">
-        {nextDay.games.map((game) => (
-          <GameCard
-            key={game.id}
-            game={game}
-            favoriteTeams={favoriteTeams}
-            onToggleFavoriteTeam={onToggleFavoriteTeam}
-            showRatings={showRatings}
-          />
-        ))}
-      </div>
+    <div className="flex flex-col gap-1.5 sm:gap-2">
+      {nextDay.games.map((game) => (
+        <GameCard
+          key={game.id}
+          game={game}
+          favoriteTeams={favoriteTeams}
+          onToggleFavoriteTeam={onToggleFavoriteTeam}
+          showRatings={showRatings}
+          nextGameDate={formatted}
+        />
+      ))}
     </div>
   );
 

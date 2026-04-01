@@ -8,6 +8,7 @@ interface GameCardProps {
   favoriteTeams: string[];
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
+  nextGameDate?: string; // e.g. "Sat 4/4" — shown bold on card when it's a future date preview
 }
 
 function TeamRow({
@@ -89,7 +90,7 @@ function EspnPreviewLink({ href }: { href: string }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-1 opacity-40 hover:opacity-70 transition-opacity flex-shrink-0"
+      className="opacity-40 hover:opacity-70 transition-opacity flex-shrink-0"
       title="Preview on ESPN"
     >
       <img
@@ -97,12 +98,11 @@ function EspnPreviewLink({ href }: { href: string }) {
         alt="ESPN"
         className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain"
       />
-      <span className="text-[10px] sm:text-xs truncate" style={{ color: "var(--text-muted)" }}>Preview</span>
     </a>
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate }: GameCardProps) {
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
@@ -133,6 +133,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             <span className="text-green-500 font-medium">● LIVE</span>
           ) : game.state === "post" ? (
             "FINAL"
+          ) : nextGameDate ? (
+            <span className="text-[11px] font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>
           ) : (
             <span className="text-[11px]">{game.statusDetail}</span>
           )}
