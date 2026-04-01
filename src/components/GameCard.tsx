@@ -102,11 +102,26 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
   );
 }
 
+function getStreamUrl(broadcast: string): string | null {
+  const b = broadcast.toLowerCase();
+  if (b.includes("espn") || b === "abc") return "https://www.espn.com/watch/";
+  if (b === "tnt" || b === "tbs" || b === "trutv") return "https://www.max.com/live-tv";
+  if (b === "nba tv") return "https://www.nba.com/watch/";
+  if (b === "mlb network" || b === "mlb.tv") return "https://www.mlb.com/tv";
+  if (b === "fox" || b === "fs1" || b === "fs2") return "https://www.foxsports.com/live";
+  if (b === "nbc" || b === "usa" || b === "peacock") return "https://www.peacocktv.com/";
+  if (b === "nhl network") return "https://www.nhl.com/tv";
+  return null;
+}
+
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate }: GameCardProps) {
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
+  const isLive = game.state === "in";
   const espnUrl = game.recapUrl || null;
+  const streamUrl = game.broadcasts.length > 0 ? getStreamUrl(game.broadcasts[0]) : null;
+  const liveUrl = streamUrl || espnUrl;
 
   const highlightUrl = isFinished
     ? getYouTubeSearchUrl(
@@ -129,16 +144,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       {/* Status bar */}
       <div className="flex items-center justify-between mb-1 sm:mb-2 text-xs" style={{ color: "var(--text-muted)" }}>
         <span>
-          {game.state === "in" ? (
-            espnUrl ? (
-              <a href={espnUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors">● LIVE</a>
+          {isLive ? (
+            liveUrl ? (
+              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors">● LIVE</a>
             ) : (
               <span className="text-green-500 font-medium">● LIVE</span>
             )
-          ) : game.state === "post" ? (
+          ) : isFinished ? (
             "FINAL"
           ) : nextGameDate ? (
-            <span className="text-[11px]"><span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>{game.statusDetail ? ` — ${game.statusDetail}` : ""}</span>
+            <span className="text-[11px]"><span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>{game.statusDetail ? ` ${game.statusDetail}` : ""}</span>
           ) : (
             <span className="text-[11px]">{game.statusDetail}</span>
           )}
@@ -165,8 +180,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         onToggleFavorite={() => onToggleFavoriteTeam(game.homeTeam.id)}
       />
 
-      {/* Bottom bar: highlights + ESPN */}
-      {(isFinished || espnUrl) && (
+      {/* Bottom bar: highlights (finished) or ESPN link (future/live) */}
+      {(isFinished || (!isFinished && espnUrl)) && (
         <div className="flex items-center justify-between mt-1 sm:mt-2">
           {isFinished && highlightUrl ? (
             <a
@@ -188,7 +203,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           ) : (
             <span />
           )}
-          {espnUrl && <EspnLink href={espnUrl} />}
+          {!isFinished && espnUrl && <EspnLink href={espnUrl} />}
         </div>
       )}
     </div>
