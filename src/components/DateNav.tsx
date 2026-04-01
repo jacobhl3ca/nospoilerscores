@@ -72,7 +72,7 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
         <button
           key={btn.date}
           onClick={() => onDateChange(btn.date)}
-          className="px-3 py-1.5 rounded text-sm transition-colors whitespace-nowrap"
+          className="date-nav-btn px-2 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm whitespace-nowrap transition-all"
           style={
             selectedDate === btn.date
               ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 500 }
@@ -84,8 +84,8 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
       ))}
       <button
         onClick={() => inputRef.current?.showPicker()}
-        className="w-8 h-8 flex items-center justify-center rounded text-sm transition-colors"
-        style={{ color: "var(--text-secondary)" }}
+        className="date-nav-btn w-8 h-8 flex items-center justify-center rounded-full transition-all"
+        style={{ background: "var(--bg-card)", color: "var(--text-secondary)" }}
         title="Pick a date"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

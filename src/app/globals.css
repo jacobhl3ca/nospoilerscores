@@ -48,6 +48,15 @@ body {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
+.date-nav-btn {
+  box-shadow: 0 0 0 0px var(--accent);
+  transition: box-shadow 0.2s, background 0.2s, color 0.2s;
+}
+.date-nav-btn:hover {
+  box-shadow: 0 0 0 2px var(--accent);
+  color: var(--accent);
+}
+
 .highlight-btn {
   transition: background 0.15s, color 0.15s;
 }

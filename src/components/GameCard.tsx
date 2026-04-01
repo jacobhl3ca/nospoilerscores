@@ -82,22 +82,22 @@ function RatingBadge({ rating }: { rating: number }) {
   );
 }
 
-// Grey ESPN "E" logo
-function EspnLogo({ href }: { href: string }) {
+// ESPN preview link with real logo
+function EspnPreviewLink({ href }: { href: string }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="opacity-30 hover:opacity-60 transition-opacity flex-shrink-0"
+      className="flex items-center gap-1 opacity-40 hover:opacity-70 transition-opacity flex-shrink-0"
       title="Preview on ESPN"
     >
-      <svg width="20" height="14" viewBox="0 0 40 28" fill="currentColor" style={{ color: "var(--text-muted)" }}>
-        <rect width="40" height="28" rx="3" fill="currentColor" opacity="0.15" />
-        <text x="20" y="20" textAnchor="middle" fontSize="18" fontWeight="900" fontFamily="system-ui" fill="currentColor">
-          E
-        </text>
-      </svg>
+      <img
+        src="https://a.espncdn.com/combiner/i?img=/i/espn/misc_logos/500/espn.png&w=28&h=28"
+        alt="ESPN"
+        className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain"
+      />
+      <span className="text-[10px] sm:text-xs truncate" style={{ color: "var(--text-muted)" }}>Preview</span>
     </a>
   );
 }
@@ -139,7 +139,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         </span>
         <div className="flex items-center gap-2">
           {showRating && <RatingBadge rating={game.rating!} />}
-          {isFuture && espnUrl && <EspnLogo href={espnUrl} />}
+          {game.broadcasts.length > 0 && (
+            <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
+              {game.broadcasts[0]}
+            </span>
+          )}
         </div>
       </div>
 
@@ -155,7 +159,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         onToggleFavorite={() => onToggleFavoriteTeam(game.homeTeam.id)}
       />
 
-      {/* Bottom bar: highlights + broadcast */}
+      {/* Bottom bar: highlights + ESPN preview */}
       <div className="flex items-center justify-between mt-1 sm:mt-2">
         {/* Highlights button */}
         {isFinished && highlightUrl ? (
@@ -179,12 +183,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           <span />
         )}
 
-        {/* Broadcast channel — bottom right */}
-        {game.broadcasts.length > 0 && (
-          <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
-            {game.broadcasts[0]}
-          </span>
-        )}
+        {/* ESPN preview — bottom right */}
+        {espnUrl && <EspnPreviewLink href={espnUrl} />}
       </div>
     </div>
   );
