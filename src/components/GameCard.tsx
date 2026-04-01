@@ -1,13 +1,12 @@
 "use client";
 
 import { Game } from "@/lib/types";
-import { getYouTubeSearchEmbedUrl, buildHighlightQuery } from "@/lib/youtube";
+import { getYouTubeSearchUrl } from "@/lib/youtube";
 
 interface GameCardProps {
   game: Game;
   favoriteTeams: string[];
   onToggleFavoriteTeam: (teamId: string) => void;
-  onPlayHighlight: (url: string) => void;
   showRatings: boolean;
 }
 
@@ -21,14 +20,15 @@ function TeamRow({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 py-1.5 sm:flex">
+    <div className="flex items-center gap-2 sm:gap-3 py-1 sm:py-1.5">
       <img
         src={team.logo}
         alt={team.abbreviation}
         width={24}
         height={24}
-        className="w-6 h-6 object-contain"
+        className="w-5 h-5 sm:w-6 sm:h-6 object-contain"
       />
+      {/* Desktop: full name + record + star */}
       <span className="hidden sm:flex flex-1 text-sm items-center gap-1.5" style={{ color: "var(--text)" }}>
         {team.shortDisplayName}
         {team.record && (
@@ -43,7 +43,7 @@ function TeamRow({
           ★
         </button>
       </span>
-      {/* Mobile: show abbreviation only */}
+      {/* Mobile: abbreviation + star */}
       <span className="sm:hidden text-xs flex items-center gap-1" style={{ color: "var(--text)" }}>
         {team.abbreviation}
         <button
@@ -82,37 +82,39 @@ function RatingBadge({ rating }: { rating: number }) {
   );
 }
 
-function EspnIcon({ href }: { href: string }) {
+// Grey ESPN "E" logo
+function EspnLogo({ href }: { href: string }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="opacity-40 hover:opacity-70 transition-opacity"
-      title="View on ESPN"
+      className="opacity-30 hover:opacity-60 transition-opacity flex-shrink-0"
+      title="Preview on ESPN"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <path d="M7 8h6M7 12h10M7 16h4" />
+      <svg width="20" height="14" viewBox="0 0 40 28" fill="currentColor" style={{ color: "var(--text-muted)" }}>
+        <rect width="40" height="28" rx="3" fill="currentColor" opacity="0.15" />
+        <text x="20" y="20" textAnchor="middle" fontSize="18" fontWeight="900" fontFamily="system-ui" fill="currentColor">
+          E
+        </text>
       </svg>
     </a>
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, onPlayHighlight, showRatings }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings }: GameCardProps) {
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
-
-  const handleHighlightClick = () => {
-    const date = new Date(game.date);
-    const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    const query = buildHighlightQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr);
-    onPlayHighlight(getYouTubeSearchEmbedUrl(query));
-  };
-
-  // ESPN game page URL
   const espnUrl = game.recapUrl || null;
+
+  const highlightUrl = isFinished
+    ? getYouTubeSearchUrl(
+        game.awayTeam.shortDisplayName,
+        game.homeTeam.shortDisplayName,
+        new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      )
+    : null;
 
   return (
     <div
@@ -137,10 +139,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, on
         </span>
         <div className="flex items-center gap-2">
           {showRating && <RatingBadge rating={game.rating!} />}
-          {isFuture && espnUrl && <EspnIcon href={espnUrl} />}
-          {game.broadcasts.length > 0 && (
-            <span className="hidden sm:inline" style={{ color: "var(--text-muted)" }}>{game.broadcasts[0]}</span>
-          )}
+          {isFuture && espnUrl && <EspnLogo href={espnUrl} />}
         </div>
       </div>
 
@@ -156,23 +155,37 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, on
         onToggleFavorite={() => onToggleFavoriteTeam(game.homeTeam.id)}
       />
 
-      {/* Highlights button for finished games */}
-      {isFinished && (
-        <button
-          onClick={handleHighlightClick}
-          className="highlight-btn mt-1 sm:mt-2 w-full flex items-center justify-center gap-1.5 py-1 sm:py-1.5 rounded-md text-xs font-medium"
-          style={{
-            background: "var(--bg-card-hover)",
-            color: "var(--accent)",
-          }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5,3 19,12 5,21" />
-          </svg>
-          <span className="hidden sm:inline">Highlights</span>
-          <span className="sm:hidden">▶</span>
-        </button>
-      )}
+      {/* Bottom bar: highlights + broadcast */}
+      <div className="flex items-center justify-between mt-1 sm:mt-2">
+        {/* Highlights button */}
+        {isFinished && highlightUrl ? (
+          <a
+            href={highlightUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="highlight-btn flex items-center gap-1.5 py-1 sm:py-1.5 px-2 sm:px-3 rounded-md text-xs font-medium"
+            style={{
+              background: "var(--bg-card-hover)",
+              color: "var(--accent)",
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5,3 19,12 5,21" />
+            </svg>
+            <span className="hidden sm:inline">Highlights</span>
+            <span className="sm:hidden">▶</span>
+          </a>
+        ) : (
+          <span />
+        )}
+
+        {/* Broadcast channel — bottom right */}
+        {game.broadcasts.length > 0 && (
+          <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
+            {game.broadcasts[0]}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -7,7 +7,6 @@ import { fetchAllLeagues } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
 import DateNav, { getDateString } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
-import VideoModal from "@/components/VideoModal";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -22,8 +21,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => getDateString(-1));
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [showRatingsExplainer, setShowRatingsExplainer] = useState(false);
+  const [showShareCopied, setShowShareCopied] = useState(false);
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
     favoriteTeams: [],
@@ -33,6 +32,19 @@ export default function Home() {
 
   useEffect(() => {
     const loaded = loadPreferences();
+    // Import favorites from URL if present (e.g., ?f=mlb-123,nba-456&fl=mlb,nba)
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const teamsParam = params.get("f");
+      const leaguesParam = params.get("fl");
+      if (teamsParam || leaguesParam) {
+        if (teamsParam) loaded.favoriteTeams = teamsParam.split(",").filter(Boolean);
+        if (leaguesParam) loaded.favoriteLeagues = leaguesParam.split(",").filter(Boolean) as Sport[];
+        savePreferences(loaded);
+        // Clean URL
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
     setPrefs(loaded);
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
   }, []);
@@ -89,6 +101,19 @@ export default function Home() {
     setShowRatingsExplainer(false);
     updatePrefs({ showRatings: true });
   };
+
+  const shareFavorites = () => {
+    const params = new URLSearchParams();
+    if (prefs.favoriteTeams.length > 0) params.set("f", prefs.favoriteTeams.join(","));
+    if (prefs.favoriteLeagues.length > 0) params.set("fl", prefs.favoriteLeagues.join(","));
+    const url = `${window.location.origin}?${params.toString()}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShowShareCopied(true);
+      setTimeout(() => setShowShareCopied(false), 2000);
+    });
+  };
+
+  const hasFavorites = prefs.favoriteTeams.length > 0 || prefs.favoriteLeagues.length > 0;
 
   const toggleFavoriteLeague = (sport: Sport) => {
     const current = prefs.favoriteLeagues;
@@ -192,8 +217,6 @@ export default function Home() {
                 onToggleFavoriteLeague={toggleFavoriteLeague}
                 favoriteTeams={prefs.favoriteTeams}
                 onToggleFavoriteTeam={toggleFavoriteTeam}
-                onNavigateToDate={setSelectedDate}
-                onPlayHighlight={setVideoUrl}
                 showRatings={prefs.showRatings}
                 isPastDate={selectedDate < getDateString(0)}
               />
@@ -203,12 +226,18 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="px-4 py-3 text-center text-xs" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
-        Catch up on games without spoilers. Ratings tell you what&apos;s worth watching.
+      <footer className="px-4 py-3 text-center text-xs flex items-center justify-center gap-3" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+        <span>Catch up on games without spoilers.</span>
+        {hasFavorites && (
+          <button
+            onClick={shareFavorites}
+            className="underline underline-offset-2 transition-colors hover:opacity-70"
+            style={{ color: "var(--text-muted)" }}
+          >
+            {showShareCopied ? "Link copied!" : "Share favorites"}
+          </button>
+        )}
       </footer>
-
-      {/* Video Modal */}
-      {videoUrl && <VideoModal url={videoUrl} onClose={() => setVideoUrl(null)} />}
 
       {/* Ratings Explainer Modal — warning style */}
       {showRatingsExplainer && (
