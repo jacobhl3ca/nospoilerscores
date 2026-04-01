@@ -24,7 +24,7 @@ const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-10" },
   { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-25" },
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-09" }, // 2 days after Final Four
-  { sport: "nhl", label: "NHL", startDate: "10-10", endDate: "06-25" },
+  { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-25" }, // Playoffs only — day before typical start
   { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-15" },
 ];
 

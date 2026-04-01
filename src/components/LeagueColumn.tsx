@@ -14,17 +14,16 @@ interface LeagueColumnProps {
   onNavigateToDate: (date: string) => void;
   onPlayHighlight: (url: string) => void;
   showRatings: boolean;
+  isPastDate: boolean;
 }
 
-function formatDateLabel(yyyymmdd: string): string {
+function formatDateCompact(yyyymmdd: string): string {
   const y = yyyymmdd.slice(0, 4);
   const m = yyyymmdd.slice(4, 6);
   const d = yyyymmdd.slice(6, 8);
-  return new Date(`${y}-${m}-${d}T12:00:00`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  const date = new Date(`${y}-${m}-${d}T12:00:00`);
+  const dow = date.toLocaleDateString("en-US", { weekday: "short" });
+  return `${dow} ${parseInt(m)}/${parseInt(d)}`;
 }
 
 export default function LeagueColumn({
@@ -36,6 +35,7 @@ export default function LeagueColumn({
   onNavigateToDate,
   onPlayHighlight,
   showRatings,
+  isPastDate,
 }: LeagueColumnProps) {
   const getFavPriority = (game: Game) => {
     const ids = [game.homeTeam.id, game.awayTeam.id];
@@ -72,8 +72,8 @@ export default function LeagueColumn({
 
   return (
     <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-center gap-2 mb-3">
-        <h2 className="text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+      <div className="flex items-center justify-center gap-2 mb-2 sm:mb-3">
+        <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
           {league.label}
         </h2>
         <button
@@ -86,16 +86,16 @@ export default function LeagueColumn({
         </button>
       </div>
       {sorted.length === 0 ? (
-        <NextGamePreview
-          sport={league.sport}
-          favoriteTeams={favoriteTeams}
-          onToggleFavoriteTeam={onToggleFavoriteTeam}
-          onNavigateToDate={onNavigateToDate}
-          onPlayHighlight={onPlayHighlight}
-          showRatings={showRatings}
-        />
+        isPastDate ? (
+          <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
+        ) : (
+          <NextGameLink
+            sport={league.sport}
+            onNavigateToDate={onNavigateToDate}
+          />
+        )
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5 sm:gap-2">
           {sorted.map((game) => (
             <GameCard
               key={game.id}
@@ -112,22 +112,14 @@ export default function LeagueColumn({
   );
 }
 
-function NextGamePreview({
+function NextGameLink({
   sport,
-  favoriteTeams,
-  onToggleFavoriteTeam,
   onNavigateToDate,
-  onPlayHighlight,
-  showRatings,
 }: {
   sport: Sport;
-  favoriteTeams: string[];
-  onToggleFavoriteTeam: (teamId: string) => void;
   onNavigateToDate: (date: string) => void;
-  onPlayHighlight: (url: string) => void;
-  showRatings: boolean;
 }) {
-  const [nextDay, setNextDay] = useState<{ date: string; games: Game[] } | null>(null);
+  const [nextDate, setNextDate] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -135,7 +127,7 @@ function NextGamePreview({
     async function findNext() {
       const result = await fetchNextGameDay(sport);
       if (!cancelled) {
-        setNextDay(result);
+        setNextDate(result?.date ?? null);
         setChecking(false);
       }
     }
@@ -144,40 +136,21 @@ function NextGamePreview({
   }, [sport]);
 
   if (checking) {
-    return <p className="text-center text-sm py-8" style={{ color: "var(--text-muted)" }}>No games today</p>;
+    return <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games today</p>;
   }
 
-  if (!nextDay) {
-    return <p className="text-center text-sm py-8" style={{ color: "var(--text-muted)" }}>No upcoming games this week</p>;
+  if (!nextDate) {
+    return <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No upcoming games</p>;
   }
 
-  const formatted = formatDateLabel(nextDay.date);
+  const formatted = formatDateCompact(nextDate);
 
   return (
-    <div>
-      {/* Next game day header — same style as league header */}
-      <h3 className="text-base font-bold tracking-wide text-center mb-3" style={{ color: "var(--text)" }}>
-        {formatted}
-      </h3>
-
-      {/* Preview games */}
-      <div className="flex flex-col gap-2 mb-3">
-        {nextDay.games.map((game) => (
-          <GameCard
-            key={game.id}
-            game={game}
-            favoriteTeams={favoriteTeams}
-            onToggleFavoriteTeam={onToggleFavoriteTeam}
-            onPlayHighlight={onPlayHighlight}
-            showRatings={showRatings}
-          />
-        ))}
-      </div>
-
-      {/* Jump link */}
+    <div className="text-center py-6 sm:py-8">
+      <p className="text-xs sm:text-sm mb-2" style={{ color: "var(--text-muted)" }}>No games today</p>
       <button
-        onClick={() => onNavigateToDate(nextDay.date)}
-        className="w-full text-center text-sm underline underline-offset-2 transition-colors py-2"
+        onClick={() => onNavigateToDate(nextDate)}
+        className="text-xs sm:text-sm font-bold underline underline-offset-2 transition-colors"
         style={{ color: "var(--accent)" }}
       >
         Jump to {formatted} →
@@ -185,3 +158,76 @@ function NextGamePreview({
     </div>
   );
 }
+
+// --- COMMENTED OUT: Full next-game-day preview with loaded game cards ---
+// Shows the next game day's header and loads actual game cards inline.
+// Commented out per Jacob's request — too much for the empty state.
+//
+// function NextGamePreview({
+//   sport,
+//   favoriteTeams,
+//   onToggleFavoriteTeam,
+//   onNavigateToDate,
+//   onPlayHighlight,
+//   showRatings,
+// }: {
+//   sport: Sport;
+//   favoriteTeams: string[];
+//   onToggleFavoriteTeam: (teamId: string) => void;
+//   onNavigateToDate: (date: string) => void;
+//   onPlayHighlight: (url: string) => void;
+//   showRatings: boolean;
+// }) {
+//   const [nextDay, setNextDay] = useState<{ date: string; games: Game[] } | null>(null);
+//   const [checking, setChecking] = useState(true);
+//
+//   useEffect(() => {
+//     let cancelled = false;
+//     async function findNext() {
+//       const result = await fetchNextGameDay(sport);
+//       if (!cancelled) {
+//         setNextDay(result);
+//         setChecking(false);
+//       }
+//     }
+//     findNext();
+//     return () => { cancelled = true; };
+//   }, [sport]);
+//
+//   if (checking) {
+//     return <p className="text-center text-sm py-8" style={{ color: "var(--text-muted)" }}>No games today</p>;
+//   }
+//
+//   if (!nextDay) {
+//     return <p className="text-center text-sm py-8" style={{ color: "var(--text-muted)" }}>No upcoming games this week</p>;
+//   }
+//
+//   const formatted = formatDateCompact(nextDay.date);
+//
+//   return (
+//     <div>
+//       <h3 className="text-base font-bold tracking-wide text-center mb-3" style={{ color: "var(--text)" }}>
+//         {formatted}
+//       </h3>
+//       <div className="flex flex-col gap-2 mb-3">
+//         {nextDay.games.map((game) => (
+//           <GameCard
+//             key={game.id}
+//             game={game}
+//             favoriteTeams={favoriteTeams}
+//             onToggleFavoriteTeam={onToggleFavoriteTeam}
+//             onPlayHighlight={onPlayHighlight}
+//             showRatings={showRatings}
+//           />
+//         ))}
+//       </div>
+//       <button
+//         onClick={() => onNavigateToDate(nextDay.date)}
+//         className="w-full text-center text-sm underline underline-offset-2 transition-colors py-2"
+//         style={{ color: "var(--accent)" }}
+//       >
+//         Jump to {formatted} →
+//       </button>
+//     </div>
+//   );
+// }

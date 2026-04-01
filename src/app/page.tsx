@@ -132,10 +132,10 @@ export default function Home() {
           <div className="justify-self-center">
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
-          <div className="justify-self-end flex items-center gap-2">
+          <div className="justify-self-end flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={handleMonkeyClick}
-              className="monkey-toggle w-9 h-9 flex items-center justify-center rounded-full transition-all text-lg"
+              className="monkey-toggle w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all text-base sm:text-lg"
               style={{
                 background: prefs.showRatings ? "var(--bg-card-hover)" : "var(--bg-card)",
               }}
@@ -151,9 +151,9 @@ export default function Home() {
       {/* Content */}
       <main className="max-w-6xl mx-auto px-4 py-6 flex-1 w-full">
         {loading ? (
-          <div className="flex flex-col lg:flex-row gap-6">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:gap-6">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex-1 min-w-0">
+              <div key={i} className="min-w-0">
                 <div className="h-6 w-16 mx-auto mb-3 rounded" style={{ background: "var(--bg-card)" }} />
                 {[1, 2, 3, 4].map((j) => (
                   <div key={j} className="rounded-lg px-4 py-3 mb-2 animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
@@ -183,7 +183,7 @@ export default function Home() {
             </button>
           </div>
         ) : (
-          <div className="flex flex-col lg:flex-row gap-6">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:gap-6">
             {sortedLeagues.map((league) => (
               <LeagueColumn
                 key={league.sport}
@@ -195,6 +195,7 @@ export default function Home() {
                 onNavigateToDate={setSelectedDate}
                 onPlayHighlight={setVideoUrl}
                 showRatings={prefs.showRatings}
+                isPastDate={selectedDate < getDateString(0)}
               />
             ))}
           </div>
@@ -209,7 +210,62 @@ export default function Home() {
       {/* Video Modal */}
       {videoUrl && <VideoModal url={videoUrl} onClose={() => setVideoUrl(null)} />}
 
-      {/* Ratings Explainer Modal */}
+      {/* Ratings Explainer Modal — warning style */}
+      {showRatingsExplainer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowRatingsExplainer(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center text-3xl mb-2">⚠️</div>
+            <h3 className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>Show Game Ratings?</h3>
+            <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
+              This will reveal how competitive each game was. Ratings are based on how close the game was — not who won — but they can hint at the outcome.
+            </p>
+            <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
+              <div className="flex flex-col gap-1.5 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-600 text-white w-14 text-center">GREAT</span>
+                  <span style={{ color: "var(--text-secondary)" }}>Must-watch — down to the wire</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-600 text-white w-14 text-center">GOOD</span>
+                  <span style={{ color: "var(--text-secondary)" }}>Competitive and entertaining</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-600 text-white w-14 text-center">MEH</span>
+                  <span style={{ color: "var(--text-secondary)" }}>One-sided, but watchable</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-700 text-white w-14 text-center">SKIP</span>
+                  <span style={{ color: "var(--text-secondary)" }}>Blowout — skip unless your team</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowRatingsExplainer(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRatings}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{ background: "var(--accent)", color: "white" }}
+              >
+                Show Ratings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- COMMENTED OUT: Previous "Game Ratings" explainer (simpler version) ---
       {showRatingsExplainer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowRatingsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
@@ -223,34 +279,13 @@ export default function Home() {
             <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
               This shows how competitive each game was — without spoiling the outcome. Use it to find the best games worth watching.
             </p>
-            <div className="flex flex-col gap-1.5 text-sm mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-600 text-white w-14 text-center">GREAT</span>
-                <span style={{ color: "var(--text-secondary)" }}>Must-watch — down to the wire</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-600 text-white w-14 text-center">GOOD</span>
-                <span style={{ color: "var(--text-secondary)" }}>Competitive and entertaining</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-600 text-white w-14 text-center">MEH</span>
-                <span style={{ color: "var(--text-secondary)" }}>One-sided, but watchable</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-700 text-white w-14 text-center">SKIP</span>
-                <span style={{ color: "var(--text-secondary)" }}>Blowout — skip unless your team</span>
-              </div>
-            </div>
-            <button
-              onClick={confirmRatings}
-              className="w-full py-2 rounded-lg text-sm font-medium transition-colors"
-              style={{ background: "var(--accent)", color: "white" }}
-            >
+            <button onClick={confirmRatings} className="w-full py-2 rounded-lg text-sm font-medium" style={{ background: "var(--accent)", color: "white" }}>
               Show Ratings
             </button>
           </div>
         </div>
       )}
+      --- */}
     </div>
   );
 }
