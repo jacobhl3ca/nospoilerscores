@@ -102,22 +102,31 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
   );
 }
 
-function getStreamUrl(broadcast: string, gameId?: string): string | null {
+function getStreamUrl(broadcast: string, sport?: string, gameId?: string): string | null {
   const b = broadcast.toLowerCase();
   if (b.includes("espn") || b === "abc") return "https://www.espn.com/watch/";
   if (b === "tnt" || b === "tbs" || b === "trutv") return "https://www.max.com/live-tv";
   if (b === "nba tv") return "https://www.nba.com/watch/";
-  if (b === "mlb network" || b === "mlb.tv") return gameId ? `https://www.mlb.com/tv/g${gameId}` : "https://www.mlb.com/tv";
+  if (b === "mlb network" || b === "mlb.tv") return gameId ? `https://www.mlb.com/gameday/${gameId}` : "https://www.mlb.com/tv";
   if (b === "fox" || b === "fs1" || b === "fs2") return "https://www.foxsports.com/live";
   if (b === "nbc" || b === "usa" || b === "peacock") return "https://www.peacocktv.com/";
   if (b === "nhl network") return "https://www.nhl.com/tv";
+  // MLB default — any broadcast, link to gameday
+  if (sport === "mlb" && gameId) return `https://www.mlb.com/gameday/${gameId}`;
   return null;
 }
 
-// Strip leading date from statusDetail when we already show nextGameDate
-// e.g. "4/4 - 6:09 PM EDT" → "6:09 PM EDT"
-function stripDateFromDetail(detail: string): string {
-  return detail.replace(/^\d{1,2}\/\d{1,2}\s*-\s*/, "");
+// Format game time in user's local timezone (no timezone abbreviation)
+function formatLocalTime(isoDate: string): string {
+  const d = new Date(isoDate);
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+// Strip timezone abbreviations and leading date from statusDetail
+function cleanStatusDetail(detail: string, stripDate: boolean): string {
+  let cleaned = detail.replace(/\s*(EDT|EST|CDT|CST|MDT|MST|PDT|PST|ET|CT|MT|PT)\s*$/i, "");
+  if (stripDate) cleaned = cleaned.replace(/^\d{1,2}\/\d{1,2}\s*-\s*/, "");
+  return cleaned.trim();
 }
 
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate }: GameCardProps) {
@@ -126,9 +135,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
   const espnUrl = game.recapUrl || null;
-  const mlbGameId = game.sport === "mlb" ? game.id : undefined;
-  const streamUrl = game.broadcasts.length > 0 ? getStreamUrl(game.broadcasts[0], mlbGameId) : (game.sport === "mlb" && mlbGameId ? `https://www.mlb.com/tv/g${mlbGameId}` : null);
+  const streamUrl = game.broadcasts.length > 0
+    ? getStreamUrl(game.broadcasts[0], game.sport, game.id)
+    : (game.sport === "mlb" ? `https://www.mlb.com/gameday/${game.id}` : null);
   const liveUrl = streamUrl || espnUrl;
+  const localTime = isFuture ? formatLocalTime(game.date) : null;
 
   const highlightUrl = isFinished
     ? getYouTubeSearchUrl(
@@ -160,14 +171,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           ) : isFinished ? (
             "FINAL"
           ) : nextGameDate ? (
-            <span className="text-[11px]"><span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>{game.statusDetail ? ` ${stripDateFromDetail(game.statusDetail)}` : ""}</span>
+            <span className="text-[11px]"><span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>{localTime ? ` - ${localTime}` : ""}</span>
           ) : (
-            <span className="text-[11px]">{game.statusDetail}</span>
+            <span className="text-[11px]">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
           )}
         </span>
         <div className="flex items-center gap-2">
           {showRating && <RatingBadge rating={game.rating!} />}
-          {!isFinished && espnUrl && <EspnLink href={espnUrl} />}
           {game.broadcasts.length > 0 && (
             <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
               {game.broadcasts[0]}
@@ -188,25 +198,30 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         onToggleFavorite={() => onToggleFavoriteTeam(game.homeTeam.id)}
       />
 
-      {/* Bottom bar: highlights */}
-      {isFinished && highlightUrl && (
-        <div className="flex items-center mt-1 sm:mt-2">
-          <a
-            href={highlightUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="highlight-btn flex items-center gap-1.5 py-1 sm:py-1.5 px-2 sm:px-3 rounded-md text-xs font-medium"
-            style={{
-              background: "var(--bg-card-hover)",
-              color: "var(--accent)",
-            }}
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5,3 19,12 5,21" />
-            </svg>
-            <span className="hidden sm:inline">Highlights</span>
-            <span className="sm:hidden">▶</span>
-          </a>
+      {/* Bottom bar: highlights left, ESPN right — same row, no extra height */}
+      {((isFinished && highlightUrl) || (!isFinished && espnUrl)) && (
+        <div className="flex items-center justify-between mt-1 sm:mt-2">
+          {isFinished && highlightUrl ? (
+            <a
+              href={highlightUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="highlight-btn flex items-center gap-1.5 py-1 sm:py-1.5 px-2 sm:px-3 rounded-md text-xs font-medium"
+              style={{
+                background: "var(--bg-card-hover)",
+                color: "var(--accent)",
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+              <span className="hidden sm:inline">Highlights</span>
+              <span className="sm:hidden">▶</span>
+            </a>
+          ) : (
+            <span />
+          )}
+          {!isFinished && espnUrl && <EspnLink href={espnUrl} />}
         </div>
       )}
     </div>
