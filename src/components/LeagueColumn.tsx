@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { LeagueData, Sport } from "@/lib/types";
-import { fetchNextGameDate } from "@/lib/espn";
+import { Game, LeagueData, Sport } from "@/lib/types";
+import { fetchNextGameDay } from "@/lib/espn";
 import GameCard from "./GameCard";
 
 interface LeagueColumnProps {
@@ -13,6 +13,18 @@ interface LeagueColumnProps {
   onToggleFavoriteTeam: (teamId: string) => void;
   onNavigateToDate: (date: string) => void;
   onPlayHighlight: (url: string) => void;
+  showRatings: boolean;
+}
+
+function formatDateLabel(yyyymmdd: string): string {
+  const y = yyyymmdd.slice(0, 4);
+  const m = yyyymmdd.slice(4, 6);
+  const d = yyyymmdd.slice(6, 8);
+  return new Date(`${y}-${m}-${d}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function LeagueColumn({
@@ -23,8 +35,9 @@ export default function LeagueColumn({
   onToggleFavoriteTeam,
   onNavigateToDate,
   onPlayHighlight,
+  showRatings,
 }: LeagueColumnProps) {
-  const getFavPriority = (game: typeof league.games[0]) => {
+  const getFavPriority = (game: Game) => {
     const ids = [game.homeTeam.id, game.awayTeam.id];
     let best = Infinity;
     for (const id of ids) {
@@ -73,10 +86,13 @@ export default function LeagueColumn({
         </button>
       </div>
       {sorted.length === 0 ? (
-        <NoGames
+        <NextGamePreview
           sport={league.sport}
-          label={league.label}
+          favoriteTeams={favoriteTeams}
+          onToggleFavoriteTeam={onToggleFavoriteTeam}
           onNavigateToDate={onNavigateToDate}
+          onPlayHighlight={onPlayHighlight}
+          showRatings={showRatings}
         />
       ) : (
         <div className="flex flex-col gap-2">
@@ -87,6 +103,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               onPlayHighlight={onPlayHighlight}
+              showRatings={showRatings}
             />
           ))}
         </div>
@@ -95,24 +112,30 @@ export default function LeagueColumn({
   );
 }
 
-function NoGames({
+function NextGamePreview({
   sport,
-  label,
+  favoriteTeams,
+  onToggleFavoriteTeam,
   onNavigateToDate,
+  onPlayHighlight,
+  showRatings,
 }: {
   sport: Sport;
-  label: string;
+  favoriteTeams: string[];
+  onToggleFavoriteTeam: (teamId: string) => void;
   onNavigateToDate: (date: string) => void;
+  onPlayHighlight: (url: string) => void;
+  showRatings: boolean;
 }) {
-  const [nextGameDate, setNextGameDate] = useState<string | null>(null);
+  const [nextDay, setNextDay] = useState<{ date: string; games: Game[] } | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     async function findNext() {
-      const date = await fetchNextGameDate(sport);
+      const result = await fetchNextGameDay(sport);
       if (!cancelled) {
-        if (date) setNextGameDate(date);
+        setNextDay(result);
         setChecking(false);
       }
     }
@@ -124,28 +147,40 @@ function NoGames({
     return <p className="text-center text-sm py-8" style={{ color: "var(--text-muted)" }}>No games today</p>;
   }
 
-  if (!nextGameDate) {
+  if (!nextDay) {
     return <p className="text-center text-sm py-8" style={{ color: "var(--text-muted)" }}>No upcoming games this week</p>;
   }
 
-  const y = nextGameDate.slice(0, 4);
-  const m = nextGameDate.slice(4, 6);
-  const d = nextGameDate.slice(6, 8);
-  const formatted = new Date(`${y}-${m}-${d}T12:00:00`).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  const formatted = formatDateLabel(nextDay.date);
 
   return (
-    <div className="text-center text-sm py-8">
-      <p className="mb-2" style={{ color: "var(--text-muted)" }}>No games today</p>
+    <div>
+      {/* Next game day header — same style as league header */}
+      <h3 className="text-base font-bold tracking-wide text-center mb-3" style={{ color: "var(--text)" }}>
+        {formatted}
+      </h3>
+
+      {/* Preview games */}
+      <div className="flex flex-col gap-2 mb-3">
+        {nextDay.games.map((game) => (
+          <GameCard
+            key={game.id}
+            game={game}
+            favoriteTeams={favoriteTeams}
+            onToggleFavoriteTeam={onToggleFavoriteTeam}
+            onPlayHighlight={onPlayHighlight}
+            showRatings={showRatings}
+          />
+        ))}
+      </div>
+
+      {/* Jump link */}
       <button
-        onClick={() => onNavigateToDate(nextGameDate)}
-        className="underline underline-offset-2 transition-colors"
+        onClick={() => onNavigateToDate(nextDay.date)}
+        className="w-full text-center text-sm underline underline-offset-2 transition-colors py-2"
         style={{ color: "var(--accent)" }}
       >
-        Next game {formatted} →
+        Jump to {formatted} →
       </button>
     </div>
   );

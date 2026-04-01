@@ -1,25 +1,25 @@
 "use client";
 
+import { useRef } from "react";
+
 interface DateNavProps {
   selectedDate: string; // YYYYMMDD
   onDateChange: (date: string) => void;
 }
 
-function formatDate(yyyymmdd: string): string {
+function toYYYYMMDD(d: Date): string {
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+function toInputFormat(yyyymmdd: string): string {
+  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
+}
+
+function formatDayName(yyyymmdd: string): string {
   const y = yyyymmdd.slice(0, 4);
   const m = yyyymmdd.slice(4, 6);
   const d = yyyymmdd.slice(6, 8);
-  const date = new Date(`${y}-${m}-${d}T12:00:00`);
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-
-  const diffDays = Math.round((today.getTime() - date.getTime()) / 86400000);
-
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays === -1) return "Tomorrow";
-
-  return date.toLocaleDateString("en-US", {
+  return new Date(`${y}-${m}-${d}T12:00:00`).toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -29,28 +29,80 @@ function formatDate(yyyymmdd: string): string {
 export function getDateString(daysOffset: number): string {
   const d = new Date();
   d.setDate(d.getDate() + daysOffset);
-  return d.toISOString().slice(0, 10).replace(/-/g, "");
+  return toYYYYMMDD(d);
 }
 
 export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
-  const dates = [-1, 0, 1].map((offset) => getDateString(offset));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const yesterday = getDateString(-1);
+  const today = getDateString(0);
+  const tomorrow = getDateString(1);
+
+  const isStandardDate = selectedDate === yesterday || selectedDate === today || selectedDate === tomorrow;
+  const isBeforeYesterday = !isStandardDate && selectedDate < yesterday;
+  const isAfterTomorrow = !isStandardDate && selectedDate > tomorrow;
+
+  const dateButtons: { date: string; label: string }[] = [];
+
+  // Custom date before yesterday
+  if (isBeforeYesterday) {
+    dateButtons.push({ date: selectedDate, label: formatDayName(selectedDate) });
+  }
+
+  dateButtons.push({ date: yesterday, label: "Yesterday" });
+  dateButtons.push({ date: today, label: "Today" });
+  dateButtons.push({ date: tomorrow, label: "Tomorrow" });
+
+  // Custom date after tomorrow
+  if (isAfterTomorrow) {
+    dateButtons.push({ date: selectedDate, label: formatDayName(selectedDate) });
+  }
+
+  const handleCalendarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value; // YYYY-MM-DD
+    if (val) {
+      onDateChange(val.replace(/-/g, ""));
+    }
+  };
 
   return (
-    <div className="flex gap-1 justify-center">
-      {dates.map((date) => (
+    <div className="flex gap-1 items-center justify-center">
+      {dateButtons.map((btn) => (
         <button
-          key={date}
-          onClick={() => onDateChange(date)}
-          className="px-3 py-1.5 rounded text-sm transition-colors"
+          key={btn.date}
+          onClick={() => onDateChange(btn.date)}
+          className="px-3 py-1.5 rounded text-sm transition-colors whitespace-nowrap"
           style={
-            selectedDate === date
+            selectedDate === btn.date
               ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 500 }
               : { color: "var(--text-secondary)" }
           }
         >
-          {formatDate(date)}
+          {btn.label}
         </button>
       ))}
+      <button
+        onClick={() => inputRef.current?.showPicker()}
+        className="w-8 h-8 flex items-center justify-center rounded text-sm transition-colors"
+        style={{ color: "var(--text-secondary)" }}
+        title="Pick a date"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      </button>
+      <input
+        ref={inputRef}
+        type="date"
+        value={toInputFormat(selectedDate)}
+        onChange={handleCalendarChange}
+        className="sr-only"
+        tabIndex={-1}
+      />
     </div>
   );
 }

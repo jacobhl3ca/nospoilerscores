@@ -30,3 +30,27 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   transition: background-color 0.2s, color 0.2s;
 }
+
+.theme-toggle {
+  box-shadow: 0 0 0 0px var(--accent);
+  transition: box-shadow 0.2s, background 0.2s, color 0.2s;
+}
+.theme-toggle:hover {
+  box-shadow: 0 0 0 2px var(--accent);
+  color: var(--accent);
+}
+
+.monkey-toggle {
+  box-shadow: 0 0 0 0px var(--accent);
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.monkey-toggle:hover {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.highlight-btn {
+  transition: background 0.15s, color 0.15s;
+}
+.highlight-btn:hover {
+  filter: brightness(1.15);
+}

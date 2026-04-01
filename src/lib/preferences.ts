@@ -8,12 +8,14 @@ export interface Preferences {
   favoriteLeagues: Sport[]; // ordered by priority (first = highest)
   favoriteTeams: string[]; // team IDs, ordered by priority (first = highest)
   theme: Theme;
+  showRatings: boolean;
 }
 
 const defaults: Preferences = {
   favoriteLeagues: [],
   favoriteTeams: [],
   theme: "system",
+  showRatings: false,
 };
 
 export function loadPreferences(): Preferences {

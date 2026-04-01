@@ -195,16 +195,16 @@ export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
   );
 }
 
-export async function fetchNextGameDate(
+export async function fetchNextGameDay(
   sport: Sport,
   daysToCheck = 7
-): Promise<string | null> {
+): Promise<{ date: string; games: Game[] } | null> {
   for (let i = 1; i <= daysToCheck; i++) {
     const d = new Date();
     d.setDate(d.getDate() + i);
     const dateStr = d.toISOString().slice(0, 10).replace(/-/g, "");
     const games = await fetchGames(sport, dateStr);
-    if (games.length > 0) return dateStr;
+    if (games.length > 0) return { date: dateStr, games };
   }
   return null;
 }
