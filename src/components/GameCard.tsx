@@ -83,20 +83,20 @@ function RatingBadge({ rating }: { rating: number }) {
   );
 }
 
-// ESPN preview link with real logo
-function EspnPreviewLink({ href }: { href: string }) {
+// ESPN link with real logo
+function EspnLink({ href, title }: { href: string; title?: string }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="opacity-40 hover:opacity-70 transition-opacity flex-shrink-0"
-      title="Preview on ESPN"
+      title={title || "View on ESPN"}
     >
       <img
-        src="https://a.espncdn.com/combiner/i?img=/i/espn/misc_logos/500/espn.png&w=28&h=28"
+        src="https://a.espncdn.com/combiner/i?img=/i/espn/misc_logos/500/espn.png&w=40&h=40"
         alt="ESPN"
-        className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain"
+        className="w-5 h-5 sm:w-6 sm:h-6 object-contain"
       />
     </a>
   );
@@ -130,11 +130,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       <div className="flex items-center justify-between mb-1 sm:mb-2 text-xs" style={{ color: "var(--text-muted)" }}>
         <span>
           {game.state === "in" ? (
-            <span className="text-green-500 font-medium">● LIVE</span>
+            espnUrl ? (
+              <a href={espnUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors">● LIVE</a>
+            ) : (
+              <span className="text-green-500 font-medium">● LIVE</span>
+            )
           ) : game.state === "post" ? (
             "FINAL"
           ) : nextGameDate ? (
-            <span className="text-[11px] font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>
+            <span className="text-[11px]"><span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>{game.statusDetail ? ` — ${game.statusDetail}` : ""}</span>
           ) : (
             <span className="text-[11px]">{game.statusDetail}</span>
           )}
@@ -161,33 +165,32 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         onToggleFavorite={() => onToggleFavoriteTeam(game.homeTeam.id)}
       />
 
-      {/* Bottom bar: highlights + ESPN preview */}
-      <div className="flex items-center justify-between mt-1 sm:mt-2">
-        {/* Highlights button */}
-        {isFinished && highlightUrl ? (
-          <a
-            href={highlightUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="highlight-btn flex items-center gap-1.5 py-1 sm:py-1.5 px-2 sm:px-3 rounded-md text-xs font-medium"
-            style={{
-              background: "var(--bg-card-hover)",
-              color: "var(--accent)",
-            }}
-          >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5,3 19,12 5,21" />
-            </svg>
-            <span className="hidden sm:inline">Highlights</span>
-            <span className="sm:hidden">▶</span>
-          </a>
-        ) : (
-          <span />
-        )}
-
-        {/* ESPN preview — bottom right */}
-        {espnUrl && <EspnPreviewLink href={espnUrl} />}
-      </div>
+      {/* Bottom bar: highlights + ESPN */}
+      {(isFinished || espnUrl) && (
+        <div className="flex items-center justify-between mt-1 sm:mt-2">
+          {isFinished && highlightUrl ? (
+            <a
+              href={highlightUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="highlight-btn flex items-center gap-1.5 py-1 sm:py-1.5 px-2 sm:px-3 rounded-md text-xs font-medium"
+              style={{
+                background: "var(--bg-card-hover)",
+                color: "var(--accent)",
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+              <span className="hidden sm:inline">Highlights</span>
+              <span className="sm:hidden">▶</span>
+            </a>
+          ) : (
+            <span />
+          )}
+          {espnUrl && <EspnLink href={espnUrl} />}
+        </div>
+      )}
     </div>
   );
 }
