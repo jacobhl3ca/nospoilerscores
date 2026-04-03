@@ -210,7 +210,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       </div>
 
       {/* Teams */}
-      <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto auto" }}>
+      <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto auto auto auto 1fr" }}>
         {logo(game.awayTeam, awayTBD)}
         <span className="pl-2 sm:pl-3 min-w-0">
           <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
@@ -220,6 +220,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>
         ) : <span />}
         {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
+        <span />
         {logo(game.homeTeam, homeTBD)}
         <span className="pl-2 sm:pl-3 min-w-0">
           <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
@@ -229,6 +230,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>
         ) : <span />}
         {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
+        <span />
       </div>
 
       {/* Highlights — play button opens modal popup */}
