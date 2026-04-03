@@ -148,6 +148,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
   const hasFavorites = prefs.favoriteTeams.length > 0 || prefs.favoriteLeagues.length > 0;
 
+  // Dismiss fav toast when all favorites removed
+  useEffect(() => {
+    if (!hasFavorites) {
+      setShowFavToast(false);
+      setShowShareCopied(false);
+    }
+  }, [hasFavorites]);
+
   const [favToastCopied, setFavToastCopied] = useState(false);
 
   const showFavSavedToast = () => {
@@ -207,7 +215,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       <header className="px-4 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-        <div className="max-w-6xl mx-auto grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-4">
+        <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
           <a href="/" className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0" style={{ color: "var(--text)" }}>
             <span className="hidden sm:inline text-lg font-bold tracking-tight">HideScore</span>
             <svg className="sm:hidden w-6 h-6 header-logo" viewBox="0 0 32 32" fill="none">
@@ -215,10 +223,35 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
           </a>
-          <div className="justify-self-center">
+          <div className="absolute left-1/2 -translate-x-1/2">
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
           <div className="justify-self-end flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {hasFavorites && (
+              <button
+                onClick={shareFavorites}
+                className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer text-sm sm:text-lg"
+                style={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  color: showShareCopied ? "var(--accent)" : "var(--text-muted)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                }}
+                title={showShareCopied ? "Link copied!" : "Copy favorites link"}
+              >
+                {showShareCopied ? "\u2713" : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                )}
+              </button>
+            )}
             <button
               onClick={handleMonkeyClick}
               className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer text-sm sm:text-lg"
@@ -269,31 +302,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 />
               )}
             </div>
-            {hasFavorites && (
-              <button
-                onClick={shareFavorites}
-                className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer text-sm sm:text-lg"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-muted)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--accent)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--border)";
-                }}
-                title={showShareCopied ? "Link copied!" : "Copy favorites link"}
-              >
-                {showShareCopied ? "\u2713" : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  </svg>
-                )}
-              </button>
-            )}
             <ThemeToggle theme={prefs.theme} onToggle={toggleTheme} />
           </div>
         </div>
