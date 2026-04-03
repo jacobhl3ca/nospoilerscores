@@ -94,8 +94,6 @@ function calculateRating(game: any): number | null {
   const diff = Math.abs(score1 - score2);
   const total = score1 + score2;
 
-  if (total === 0) return 50;
-
   const sport = game._sport as Sport;
   const config = SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba;
 
