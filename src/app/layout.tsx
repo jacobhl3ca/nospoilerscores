@@ -50,8 +50,6 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('nss-preferences');if(t){var p=JSON.parse(t);if(p.theme==='dark'||p.theme==='light'){document.documentElement.setAttribute('data-theme',p.theme);return}}if(window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})()`,
           }}
         />
-        {/* Preload YouTube IFrame API so modal opens instantly */}
-        <script src="https://www.youtube.com/iframe_api" async />
       </head>
       <body className="antialiased">
         {children}
