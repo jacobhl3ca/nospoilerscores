@@ -1,62 +1,18 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Game } from "@/lib/types";
-import { getYouTubeSearchUrl } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId } from "@/lib/youtube";
 
 interface GameCardProps {
   game: Game;
   favoriteTeams: string[];
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
-  nextGameDate?: string; // e.g. "Sat 4/4" — shown bold on card when it's a future date preview
-}
-
-function TeamRow({
-  team,
-  isFavorite,
-  onToggleFavorite,
-}: {
-  team: { id: string; abbreviation: string; shortDisplayName: string; logo: string; record: string };
-  isFavorite: boolean;
-  onToggleFavorite: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 sm:gap-3 py-1 sm:py-1.5">
-      <img
-        src={team.logo}
-        alt={team.abbreviation}
-        width={24}
-        height={24}
-        className="w-5 h-5 sm:w-6 sm:h-6 object-contain"
-      />
-      {/* Desktop: full name + record + star */}
-      <span className="hidden sm:flex flex-1 text-sm items-center gap-1.5" style={{ color: "var(--text)" }}>
-        {team.shortDisplayName}
-        {team.record && (
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>({team.record})</span>
-        )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-          className={`text-xs transition-colors ${isFavorite ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
-          style={isFavorite ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-          title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-        >
-          ★
-        </button>
-      </span>
-      {/* Mobile: abbreviation + star */}
-      <span className="sm:hidden text-xs flex items-center gap-1" style={{ color: "var(--text)" }}>
-        {team.abbreviation}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-          className={`text-[10px] transition-colors ${isFavorite ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
-          style={isFavorite ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-        >
-          ★
-        </button>
-      </span>
-    </div>
-  );
+  nextGameDate?: string;
+  isPastDate?: boolean;
+  isToday?: boolean;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -83,145 +39,176 @@ function RatingBadge({ rating }: { rating: number }) {
   );
 }
 
-// ESPN link with real logo
+/* --- ESPN link (commented out — revisit: fit small into card without adding row) ---
 function EspnLink({ href, title }: { href: string; title?: string }) {
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
+    <a href={href} target="_blank" rel="noopener noreferrer"
       className="opacity-40 hover:opacity-70 transition-opacity flex-shrink-0"
-      title={title || "View on ESPN"}
-    >
-      <img
-        src="https://a.espncdn.com/combiner/i?img=/i/espn/misc_logos/500/espn.png&w=40&h=40"
-        alt="ESPN"
-        className="w-5 h-5 sm:w-6 sm:h-6 object-contain"
-      />
+      title={title || "View on ESPN"}>
+      <img src="https://a.espncdn.com/combiner/i?img=/i/espn/misc_logos/500/espn.png&w=40&h=40"
+        alt="ESPN" className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
     </a>
   );
 }
+*/
 
-function getStreamUrl(broadcast: string, sport?: string, gameId?: string): string | null {
+function getStreamUrl(broadcast: string): string | null {
   const b = broadcast.toLowerCase();
   if (b.includes("espn") || b === "abc") return "https://www.espn.com/watch/";
   if (b === "tnt" || b === "tbs" || b === "trutv") return "https://www.max.com/live-tv";
   if (b === "nba tv") return "https://www.nba.com/watch/";
-  if (b === "mlb network" || b === "mlb.tv") return gameId ? `https://www.mlb.com/gameday/${gameId}` : "https://www.mlb.com/tv";
+  if (b === "mlb network" || b === "mlb.tv") return "https://www.mlb.com/tv";
   if (b === "fox" || b === "fs1" || b === "fs2") return "https://www.foxsports.com/live";
   if (b === "nbc" || b === "usa" || b === "peacock") return "https://www.peacocktv.com/";
   if (b === "nhl network") return "https://www.nhl.com/tv";
-  // MLB default — any broadcast, link to gameday
-  if (sport === "mlb" && gameId) return `https://www.mlb.com/gameday/${gameId}`;
   return null;
 }
 
-// Format game time in user's local timezone (no timezone abbreviation)
-function formatLocalTime(isoDate: string): string {
-  const d = new Date(isoDate);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-// Strip timezone abbreviations and leading date from statusDetail
 function cleanStatusDetail(detail: string, stripDate: boolean): string {
   let cleaned = detail.replace(/\s*(EDT|EST|CDT|CST|MDT|MST|PDT|PST|ET|CT|MT|PT)\s*$/i, "");
   if (stripDate) cleaned = cleaned.replace(/^\d{1,2}\/\d{1,2}\s*-\s*/, "");
   return cleaned.trim();
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight }: GameCardProps) {
+  const prefetchedVideoId = useRef<string | null>(null);
+  const prefetchStarted = useRef(false);
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
   const espnUrl = game.recapUrl || null;
-  const streamUrl = game.broadcasts.length > 0
-    ? getStreamUrl(game.broadcasts[0], game.sport, game.id)
-    : (game.sport === "mlb" ? `https://www.mlb.com/gameday/${game.id}` : null);
+  const streamUrl = game.broadcasts.length > 0 ? getStreamUrl(game.broadcasts[0]) : null;
   const liveUrl = streamUrl || espnUrl;
-  const localTime = isFuture ? formatLocalTime(game.date) : null;
+  const localTime = isFuture ? cleanStatusDetail(game.statusDetail, true) : null;
+  const awayTBD = game.awayTeam.shortDisplayName === "TBD" || !game.awayTeam.abbreviation;
+  const homeTBD = game.homeTeam.shortDisplayName === "TBD" || !game.homeTeam.abbreviation;
+  // Show "● LIVE" on all screens unless broadcast name is long enough to overlap
+  const longBroadcast = game.broadcasts.length > 0 && game.broadcasts[0].length >= 8;
 
-  const highlightUrl = isFinished
-    ? getYouTubeSearchUrl(
-        game.awayTeam.shortDisplayName,
-        game.homeTeam.shortDisplayName,
-        new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      )
+  const highlightsReady = isFinished && (() => {
+    if (!isToday) return true;
+    const gameStart = new Date(game.date).getTime();
+    const bufferMs = 4.5 * 60 * 60 * 1000;
+    return Date.now() > gameStart + bufferMs;
+  })();
+
+  const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const highlightUrl = highlightsReady
+    ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote)
     : null;
+
+  // Pre-fetch YouTube video ID in background
+  useEffect(() => {
+    if (!highlightUrl || prefetchStarted.current) return;
+    prefetchStarted.current = true;
+    const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
+    fetchFirstVideoId(query).then((id) => {
+      prefetchedVideoId.current = id;
+    });
+  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr]);
+
+  const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
+    !isTBD ? (
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleFavoriteTeam(teamId); }}
+        className={`text-[10px] sm:text-xs transition-colors cursor-pointer ${isFav ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+        style={isFav ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
+        title={isFav ? "Remove from favorites" : "Add to favorites"}
+      >★</button>
+    ) : null;
+
+  const logo = (team: typeof game.awayTeam, isTBD: boolean) =>
+    isTBD ? (
+      <span className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-xs rounded" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>
+    ) : (
+      <img src={team.logo} alt={team.abbreviation} width={24} height={24} className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
+    );
 
   return (
     <div
       className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors"
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border)",
-      }}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
     >
       {/* Status bar */}
-      <div className="flex items-center justify-between mb-1 sm:mb-2 text-xs" style={{ color: "var(--text-muted)" }}>
+      <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] relative" style={{ color: "var(--text-muted)" }}>
         <span>
           {isLive ? (
             liveUrl ? (
-              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors">● LIVE</a>
+              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors">{longBroadcast ? <><span className="sm:hidden">●</span><span className="hidden sm:inline">● LIVE</span></> : "● LIVE"}</a>
             ) : (
-              <span className="text-green-500 font-medium">● LIVE</span>
+              <span className="text-green-500 font-medium">{longBroadcast ? <><span className="sm:hidden">●</span><span className="hidden sm:inline">● LIVE</span></> : "● LIVE"}</span>
             )
+          ) : isPastDate && isFinished ? (
+            null
           ) : isFinished ? (
             "FINAL"
           ) : nextGameDate ? (
-            <span className="text-[11px]"><span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>{localTime ? ` - ${localTime}` : ""}</span>
+            <span className="text-[11px]"><span className="font-bold underline underline-offset-2" style={{ color: "var(--text)" }}>{nextGameDate}</span>{localTime ? ` - ${localTime}` : ""}</span>
           ) : (
             <span className="text-[11px]">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
           )}
         </span>
-        <div className="flex items-center gap-2">
-          {showRating && <RatingBadge rating={game.rating!} />}
-          {game.broadcasts.length > 0 && (
-            <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
+        {showRating && (
+          <span className="absolute left-1/2 -translate-x-1/2">
+            <RatingBadge rating={game.rating!} />
+          </span>
+        )}
+        <span className="ml-auto">
+          {!(isPastDate && isFinished) && game.broadcasts.length > 0 && (
+            <span
+              className="text-[10px] sm:text-xs cursor-default"
+              style={{ color: "var(--text-muted)" }}
+              title={game.broadcasts.length > 1 ? game.broadcasts.join(", ") : undefined}
+            >
               {game.broadcasts[0]}
             </span>
           )}
-        </div>
+        </span>
       </div>
 
       {/* Teams */}
-      <TeamRow
-        team={game.awayTeam}
-        isFavorite={favoriteTeams.includes(game.awayTeam.id)}
-        onToggleFavorite={() => onToggleFavoriteTeam(game.awayTeam.id)}
-      />
-      <TeamRow
-        team={game.homeTeam}
-        isFavorite={favoriteTeams.includes(game.homeTeam.id)}
-        onToggleFavorite={() => onToggleFavoriteTeam(game.homeTeam.id)}
-      />
+      <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>
+        {logo(game.awayTeam, awayTBD)}
+        <span className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 min-w-0">
+          <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
+          <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
+          {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
+        </span>
+        {!awayTBD && game.awayTeam.record ? (
+          <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>
+        ) : <span />}
+        {logo(game.homeTeam, homeTBD)}
+        <span className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 min-w-0">
+          <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
+          <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
+          {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
+        </span>
+        {!homeTBD && game.homeTeam.record ? (
+          <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>
+        ) : <span />}
+      </div>
 
-      {/* Bottom bar: highlights left, ESPN right — same row, no extra height */}
-      {((isFinished && highlightUrl) || (!isFinished && espnUrl)) && (
-        <div className="flex items-center justify-between mt-1 sm:mt-2">
-          {isFinished && highlightUrl ? (
-            <a
-              href={highlightUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="highlight-btn flex items-center gap-1.5 py-1 sm:py-1.5 px-2 sm:px-3 rounded-md text-xs font-medium"
-              style={{
-                background: "var(--bg-card-hover)",
-                color: "var(--accent)",
-              }}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="5,3 19,12 5,21" />
-              </svg>
-              <span className="hidden sm:inline">Highlights</span>
-              <span className="sm:hidden">▶</span>
-            </a>
-          ) : (
-            <span />
-          )}
-          {!isFinished && espnUrl && <EspnLink href={espnUrl} />}
+      {/* Highlights — play button opens modal popup */}
+      {isFinished && highlightUrl && (
+        <div className="mt-1 sm:mt-2">
+          <button
+            onClick={() => {
+              if (prefetchedVideoId.current && onPlayHighlight) {
+                onPlayHighlight(prefetchedVideoId.current, highlightUrl);
+              } else {
+                window.open(highlightUrl, "_blank");
+              }
+            }}
+            className="highlight-btn flex items-center justify-center py-1.5 rounded-md w-full transition-opacity hover:opacity-80 cursor-pointer"
+            style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5,3 19,12 5,21" />
+            </svg>
+          </button>
         </div>
       )}
     </div>

@@ -31,6 +31,19 @@ body {
   transition: background-color 0.2s, color 0.2s;
 }
 
+/* Light mode: blue bg + white H */
+.header-logo-bg { fill: var(--accent); }
+.header-logo-text { fill: white; }
+
+/* Dark mode: dark bg + blue H */
+[data-theme="dark"] .header-logo-bg { fill: #111; }
+[data-theme="dark"] .header-logo-text { fill: #60a5fa; }
+
+.date-nav-btn:not([style*="font-weight"]):hover {
+  background: var(--bg-card) !important;
+  color: var(--text) !important;
+}
+
 .theme-toggle {
   box-shadow: 0 0 0 0px var(--accent);
   transition: box-shadow 0.2s, background 0.2s, color 0.2s;
@@ -48,17 +61,18 @@ body {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
-.date-nav-btn {
-  box-shadow: 0 0 0 0px var(--border-hover);
-  transition: box-shadow 0.2s, background 0.2s, color 0.2s;
-}
-.date-nav-btn:hover {
-  box-shadow: 0 0 0 1.5px var(--border-hover);
-}
 
 .highlight-btn {
   transition: background 0.15s, color 0.15s;
 }
 .highlight-btn:hover {
   filter: brightness(1.15);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.25s ease forwards;
 }

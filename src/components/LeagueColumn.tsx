@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Game, LeagueData, Sport } from "@/lib/types";
-import { fetchNextGameDay } from "@/lib/espn";
 import GameCard from "./GameCard";
 
 interface LeagueColumnProps {
@@ -13,6 +11,8 @@ interface LeagueColumnProps {
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
   isPastDate: boolean;
+  isToday?: boolean;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
 }
 
 function formatDateCompact(yyyymmdd: string): string {
@@ -32,6 +32,8 @@ export default function LeagueColumn({
   onToggleFavoriteTeam,
   showRatings,
   isPastDate,
+  isToday,
+  onPlayHighlight,
 }: LeagueColumnProps) {
   const getFavPriority = (game: Game) => {
     const ids = [game.homeTeam.id, game.awayTeam.id];
@@ -43,6 +45,28 @@ export default function LeagueColumn({
     return best;
   };
 
+  // Parse wins and losses from record string like "41-34"
+  const getWins = (record: string): number => {
+    const match = record.match(/^(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+  const getLosses = (record: string): number => {
+    const match = record.match(/-(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+  const isWinningRecord = (record: string): boolean => getWins(record) > getLosses(record);
+
+  // Matchup quality: both winning > one winning > neither; tiebreak by combined wins
+  const getMatchupTier = (game: Game): number => {
+    const homeWinning = isWinningRecord(game.homeTeam.record);
+    const awayWinning = isWinningRecord(game.awayTeam.record);
+    if (homeWinning && awayWinning) return 0; // best
+    if (homeWinning || awayWinning) return 1;
+    return 2; // worst
+  };
+  const getCombinedWins = (game: Game): number =>
+    getWins(game.homeTeam.record) + getWins(game.awayTeam.record);
+
   const sorted = [...league.games].sort((a, b) => {
     const aPri = getFavPriority(a);
     const bPri = getFavPriority(b);
@@ -53,22 +77,47 @@ export default function LeagueColumn({
     if (bHasFav && !aHasFav) return 1;
     if (aHasFav && bHasFav) return aPri - bPri;
 
+    // Live games first, sorted by rating
     if (a.state === "in" && b.state !== "in") return -1;
     if (b.state === "in" && a.state !== "in") return 1;
+    if (a.state === "in" && b.state === "in") {
+      return (b.rating ?? 0) - (a.rating ?? 0);
+    }
 
     if (a.state === "post" && b.state === "post") {
       return (b.rating ?? 0) - (a.rating ?? 0);
     }
 
-    if (a.state === "post" && b.state === "pre") return -1;
-    if (b.state === "post" && a.state === "pre") return 1;
+    // Today/future: upcoming above finished; past dates: finished above upcoming
+    if (isPastDate) {
+      if (a.state === "post" && b.state === "pre") return -1;
+      if (b.state === "post" && a.state === "pre") return 1;
+    } else {
+      if (a.state === "pre" && b.state === "post") return -1;
+      if (b.state === "pre" && a.state === "post") return 1;
+    }
+
+    // Future games: both-winning first, then combined wins
+    if (a.state === "pre" && b.state === "pre") {
+      const tierDiff = getMatchupTier(a) - getMatchupTier(b);
+      if (tierDiff !== 0) return tierDiff;
+      return getCombinedWins(b) - getCombinedWins(a);
+    }
 
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
+  // Split into sections for rendering separators
+  const liveGames = sorted.filter((g) => g.state === "in");
+  const preGames = sorted.filter((g) => g.state === "pre");
+  const postGames = sorted.filter((g) => g.state === "post");
+  const hasSections = !isPastDate && (
+    (liveGames.length > 0 || preGames.length > 0) && postGames.length > 0
+  );
+
   return (
     <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-center gap-2 mb-2 sm:mb-3">
+      <div className="flex items-center justify-center gap-1.5 mb-2 sm:mb-3">
         <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
           {league.label}
         </h2>
@@ -80,19 +129,36 @@ export default function LeagueColumn({
         >
           ★
         </button>
+        {/* Sort indicator — filter icon next to league name */}
+        {!isPastDate && preGames.length > 1 && (
+          <span title="Top matchups first" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46" />
+            </svg>
+          </span>
+        )}
       </div>
       {sorted.length === 0 ? (
         isPastDate ? (
           <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
+        ) : league.nextGameDay ? (
+          <div className="flex flex-col gap-1.5 sm:gap-2">
+            {league.nextGameDay.games.map((game) => (
+              <GameCard
+                key={game.id}
+                game={game}
+                favoriteTeams={favoriteTeams}
+                onToggleFavoriteTeam={onToggleFavoriteTeam}
+                showRatings={showRatings}
+                onPlayHighlight={onPlayHighlight}
+                nextGameDate={formatDateCompact(league.nextGameDay!.date)}
+              />
+            ))}
+          </div>
         ) : (
-          <NextGamesInline
-            sport={league.sport}
-            favoriteTeams={favoriteTeams}
-            onToggleFavoriteTeam={onToggleFavoriteTeam}
-            showRatings={showRatings}
-          />
+          <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No upcoming games</p>
         )
-      ) : (
+      ) : isPastDate ? (
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {sorted.map((game) => (
             <GameCard
@@ -101,6 +167,55 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              onPlayHighlight={onPlayHighlight}
+              isPastDate={isPastDate}
+              isToday={isToday}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5 sm:gap-2">
+          {/* Live games */}
+          {liveGames.map((game) => (
+            <GameCard
+              key={game.id}
+              game={game}
+              favoriteTeams={favoriteTeams}
+              onToggleFavoriteTeam={onToggleFavoriteTeam}
+              showRatings={showRatings}
+              onPlayHighlight={onPlayHighlight}
+              isToday={isToday}
+            />
+          ))}
+          {/* Upcoming games */}
+          {preGames.map((game) => (
+            <GameCard
+              key={game.id}
+              game={game}
+              favoriteTeams={favoriteTeams}
+              onToggleFavoriteTeam={onToggleFavoriteTeam}
+              showRatings={showRatings}
+              onPlayHighlight={onPlayHighlight}
+              isToday={isToday}
+            />
+          ))}
+          {/* Separator between upcoming/live and finished */}
+          {hasSections && (
+            <div className="flex items-center justify-center gap-1.5 my-1" style={{ color: "var(--text-muted)", opacity: 0.3 }}>
+              <span>·</span><span>·</span><span>·</span>
+            </div>
+          )}
+          {/* Finished games */}
+          {postGames.map((game) => (
+            <GameCard
+              key={game.id}
+              game={game}
+              favoriteTeams={favoriteTeams}
+              onToggleFavoriteTeam={onToggleFavoriteTeam}
+              showRatings={showRatings}
+              onPlayHighlight={onPlayHighlight}
+              isPastDate={false}
+              isToday={isToday}
             />
           ))}
         </div>
@@ -109,65 +224,3 @@ export default function LeagueColumn({
   );
 }
 
-// Shows the next game day's games inline with a bold date header
-function NextGamesInline({
-  sport,
-  favoriteTeams,
-  onToggleFavoriteTeam,
-  showRatings,
-}: {
-  sport: Sport;
-  favoriteTeams: string[];
-  onToggleFavoriteTeam: (teamId: string) => void;
-  showRatings: boolean;
-}) {
-  const [nextDay, setNextDay] = useState<{ date: string; games: Game[] } | null>(null);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function findNext() {
-      const result = await fetchNextGameDay(sport);
-      if (!cancelled) {
-        setNextDay(result);
-        setChecking(false);
-      }
-    }
-    findNext();
-    return () => { cancelled = true; };
-  }, [sport]);
-
-  if (checking) {
-    return <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Loading...</p>;
-  }
-
-  if (!nextDay) {
-    return <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No upcoming games</p>;
-  }
-
-  const formatted = formatDateCompact(nextDay.date);
-
-  return (
-    <div className="flex flex-col gap-1.5 sm:gap-2">
-      {nextDay.games.map((game) => (
-        <GameCard
-          key={game.id}
-          game={game}
-          favoriteTeams={favoriteTeams}
-          onToggleFavoriteTeam={onToggleFavoriteTeam}
-          showRatings={showRatings}
-          nextGameDate={formatted}
-        />
-      ))}
-    </div>
-  );
-
-  // --- COMMENTED OUT: "Jump to" link (per Jacob's request) ---
-  // <button
-  //   onClick={() => onNavigateToDate(nextDay.date)}
-  //   className="text-xs sm:text-sm font-bold underline underline-offset-2 transition-colors"
-  //   style={{ color: "var(--accent)" }}
-  // >
-  //   Jump to {formatted} →
-  // </button>
-}

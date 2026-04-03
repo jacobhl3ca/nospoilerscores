@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
 
 interface DateNavProps {
   selectedDate: string; // YYYYMMDD
@@ -8,18 +8,21 @@ interface DateNavProps {
 }
 
 function toYYYYMMDD(d: Date): string {
-  return d.toISOString().slice(0, 10).replace(/-/g, "");
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}${m}${day}`;
 }
 
-function toInputFormat(yyyymmdd: string): string {
-  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
+function parseYMD(yyyymmdd: string): Date {
+  const y = +yyyymmdd.slice(0, 4);
+  const m = +yyyymmdd.slice(4, 6) - 1;
+  const d = +yyyymmdd.slice(6, 8);
+  return new Date(y, m, d);
 }
 
 function formatDayName(yyyymmdd: string): string {
-  const y = yyyymmdd.slice(0, 4);
-  const m = yyyymmdd.slice(4, 6);
-  const d = yyyymmdd.slice(6, 8);
-  return new Date(`${y}-${m}-${d}T12:00:00`).toLocaleDateString("en-US", {
+  return parseYMD(yyyymmdd).toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -32,9 +35,109 @@ export function getDateString(daysOffset: number): string {
   return toYYYYMMDD(d);
 }
 
-export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+// Custom calendar dropdown — starts Monday, blue weekends
+function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps & { onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [viewDate, setViewDate] = useState(() => parseYMD(selectedDate));
 
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [onClose]);
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+
+  const firstOfMonth = new Date(year, month, 1);
+  // Monday = 0, Sunday = 6
+  const startDay = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
+
+  const todayStr = getDateString(0);
+  const dayHeaders = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < startDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const monthLabel = firstOfMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-full mt-2 right-0 z-50 rounded-xl shadow-lg p-3 w-64"
+      style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <button onClick={prevMonth} className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
+          {"<"}
+        </button>
+        <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{monthLabel}</span>
+        <button onClick={nextMonth} className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
+          {">"}
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {dayHeaders.map((dh, i) => (
+          <div
+            key={dh}
+            className="text-[10px] font-medium py-1"
+            style={{ color: i >= 5 ? "var(--accent)" : "var(--text-muted)" }}
+          >
+            {dh}
+          </div>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) return <div key={`empty-${i}`} />;
+          const dateStr = toYYYYMMDD(new Date(year, month, day));
+          const isSelected = dateStr === selectedDate;
+          const isToday = dateStr === todayStr;
+          const dow = (i % 7); // 0=Mon ... 6=Sun
+          const isWeekend = dow >= 5;
+
+          return (
+            <button
+              key={dateStr}
+              onClick={() => { onDateChange(dateStr); onClose(); }}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-xs cursor-pointer transition-colors"
+              style={
+                isSelected
+                  ? { background: "var(--accent)", color: "white", fontWeight: 700 }
+                  : {
+                      color: isWeekend ? "var(--accent)" : "var(--text)",
+                      fontWeight: isToday ? 700 : 400,
+                      ...(isToday && !isSelected ? { textDecoration: "underline", textUnderlineOffset: "2px" } : {}),
+                    }
+              }
+              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+              onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Exported for use in toolbar
+export { CalendarDropdown };
+
+export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
   const yesterday = getDateString(-1);
   const today = getDateString(0);
   const tomorrow = getDateString(1);
@@ -45,7 +148,6 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
 
   const dateButtons: { date: string; label: string; shortLabel?: string }[] = [];
 
-  // Custom date before yesterday
   if (isBeforeYesterday) {
     dateButtons.push({ date: selectedDate, label: formatDayName(selectedDate) });
   }
@@ -54,56 +156,33 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
   dateButtons.push({ date: today, label: "Today", shortLabel: "Today" });
   dateButtons.push({ date: tomorrow, label: "Tomorrow", shortLabel: "Tmrw" });
 
-  // Custom date after tomorrow
   if (isAfterTomorrow) {
     dateButtons.push({ date: selectedDate, label: formatDayName(selectedDate) });
   }
 
-  const handleCalendarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value; // YYYY-MM-DD
-    if (val) {
-      onDateChange(val.replace(/-/g, ""));
-    }
-  };
+  // NOTE: Calendar icon was here next to Tomorrow — commented out, moved to toolbar instead.
+  // Revisit positioning as low-priority item later.
 
   return (
     <div className="flex gap-0.5 sm:gap-1 items-center justify-center">
-      {dateButtons.map((btn) => (
-        <button
-          key={btn.date}
-          onClick={() => onDateChange(btn.date)}
-          className="date-nav-btn px-1.5 sm:px-3 py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-all"
-          style={
-            selectedDate === btn.date
-              ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 500 }
-              : { color: "var(--text-secondary)" }
-          }
-        >
-          <span className="hidden sm:inline">{btn.label}</span>
-          <span className="sm:hidden">{btn.shortLabel || btn.label}</span>
-        </button>
-      ))}
-      <button
-        onClick={() => inputRef.current?.showPicker()}
-        className="date-nav-btn w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition-all flex-shrink-0"
-        style={{ background: "var(--bg-card)", color: "var(--text-secondary)" }}
-        title="Pick a date"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-      </button>
-      <input
-        ref={inputRef}
-        type="date"
-        value={toInputFormat(selectedDate)}
-        onChange={handleCalendarChange}
-        className="sr-only"
-        tabIndex={-1}
-      />
+      {dateButtons.map((btn) => {
+        const isSelected = selectedDate === btn.date;
+        return (
+          <button
+            key={btn.date}
+            onClick={() => onDateChange(btn.date)}
+            className="date-nav-btn px-1.5 sm:px-3 py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-colors"
+            style={
+              isSelected
+                ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
+                : { color: "var(--text-muted)", background: "transparent" }
+            }
+          >
+            <span className="hidden sm:inline">{btn.label}</span>
+            <span className="sm:hidden">{btn.shortLabel || btn.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

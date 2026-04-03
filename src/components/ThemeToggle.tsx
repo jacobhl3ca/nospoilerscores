@@ -13,10 +13,19 @@ export default function ThemeToggle({ theme, onToggle }: ThemeToggleProps) {
   return (
     <button
       onClick={onToggle}
-      className="theme-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all"
+      className="w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
       style={{
         background: "var(--bg-card)",
-        color: "var(--text-secondary)",
+        border: "1px solid var(--border)",
+        color: "var(--text-muted)",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "var(--accent)";
+        e.currentTarget.style.color = "var(--accent)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "var(--border)";
+        e.currentTarget.style.color = "var(--text-muted)";
       }}
       title={`Switch to ${isDark ? "light" : "dark"} mode`}
     >

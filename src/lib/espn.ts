@@ -21,8 +21,8 @@ interface LeagueConfig {
 }
 
 const ALL_LEAGUES: LeagueConfig[] = [
-  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-25" },
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-09" }, // 2 days after Final Four
+  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-25" },
   { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-10" },
   { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-25" }, // Playoffs only — day before typical start
   { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-15" },
@@ -48,6 +48,12 @@ function getActiveLeagues(): LeagueConfig[] {
 
 function parseTeam(competitor: any, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
+  let record = competitor.records?.[0]?.summary ?? "";
+  // MLB spring training records include ties (e.g. "7-9-2") — strip to W-L
+  if (sport === "mlb" && record.split("-").length === 3) {
+    const parts = record.split("-");
+    record = `${parts[0]}-${parts[1]}`;
+  }
   return {
     id: rawId ? `${sport}-${rawId}` : "",
     abbreviation: competitor.team?.abbreviation ?? "",
@@ -57,7 +63,7 @@ function parseTeam(competitor: any, sport: Sport): Team {
     color: competitor.team?.color ?? "666666",
     score: competitor.score ?? "0",
     winner: competitor.winner ?? false,
-    record: competitor.records?.[0]?.summary ?? "",
+    record,
   };
 }
 
@@ -139,6 +145,17 @@ function parseGame(event: any, sport: Sport): Game {
     if (highlightUrl) break;
   }
 
+  // Extract series game number from notes (e.g. "ALWC - Game 2" → "Game 2")
+  let seriesNote: string | null = null;
+  for (const note of competition?.notes ?? []) {
+    const headline = note?.headline ?? "";
+    const match = headline.match(/Game \d+/i);
+    if (match) {
+      seriesNote = match[0];
+      break;
+    }
+  }
+
   // Extract gamecast/recap URL from event links
   let recapUrl: string | null = null;
   for (const link of event.links ?? []) {
@@ -164,6 +181,7 @@ function parseGame(event: any, sport: Sport): Game {
     broadcasts,
     venue: competition?.venue?.fullName ?? "",
     rating: calculateRating(event),
+    seriesNote,
     highlightUrl,
     recapUrl,
   };
@@ -182,29 +200,61 @@ export async function fetchGames(
 
   const data = await res.json();
   const events = data.events ?? [];
-  return events.map((e: any) => parseGame(e, sport));
+  return events
+    .filter((e: any) => {
+      // Filter out postponed/canceled/suspended games
+      const statusName = e.status?.type?.name ?? "";
+      if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
+      // Filter out preseason/spring training — bad highlights, ties in records, low-quality games
+      const seasonType = e.season?.type ?? 0;
+      if (seasonType === 1) return false;
+      return true;
+    })
+    .map((e: any) => parseGame(e, sport));
 }
 
 export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
   const active = getActiveLeagues();
-  return Promise.all(
+  const results = await Promise.all(
     active.map(async ({ sport, label }) => {
       const games = await fetchGames(sport, date);
-      return { sport, label, games };
+      // Pre-fetch next game day for empty leagues so the UI doesn't need a second round trip
+      let nextGameDay: { date: string; games: Game[] } | null = null;
+      if (games.length === 0) {
+        nextGameDay = await fetchNextGameDay(sport, 7, date);
+      }
+      return { sport, label, games, nextGameDay };
     })
   );
+  return results;
 }
 
 export async function fetchNextGameDay(
   sport: Sport,
-  daysToCheck = 7
+  daysToCheck = 7,
+  fromDate?: string // YYYYMMDD — search from this date instead of today
 ): Promise<{ date: string; games: Game[] } | null> {
-  for (let i = 1; i <= daysToCheck; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10).replace(/-/g, "");
-    const games = await fetchGames(sport, dateStr);
-    if (games.length > 0) return { date: dateStr, games };
-  }
-  return null;
+  const base = fromDate
+    ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
+    : new Date();
+
+  // Fetch all days in parallel for speed
+  const dates = Array.from({ length: daysToCheck }, (_, i) => {
+    const d = new Date(base);
+    d.setDate(d.getDate() + i + 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}${m}${day}`;
+  });
+
+  const results = await Promise.all(
+    dates.map(async (dateStr) => {
+      const games = await fetchGames(sport, dateStr);
+      const futureGames = games.filter((g) => g.state === "pre" || g.state === "in");
+      return { date: dateStr, games: futureGames };
+    })
+  );
+
+  return results.find((r) => r.games.length > 0) ?? null;
 }

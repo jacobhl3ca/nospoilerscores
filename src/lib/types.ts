@@ -17,6 +17,8 @@ export interface Game {
   venue: string;
   // Game quality rating (0-100) based on score closeness
   rating: number | null;
+  // Series info (e.g. "Game 2") for playoff games — used in YouTube search
+  seriesNote: string | null;
   // Highlight/recap links
   highlightUrl: string | null; // ESPN video clip URL
   recapUrl: string | null; // ESPN gamecast URL
@@ -38,4 +40,5 @@ export interface LeagueData {
   sport: Sport;
   label: string;
   games: Game[];
+  nextGameDay?: { date: string; games: Game[] } | null;
 }

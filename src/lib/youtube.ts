@@ -1,18 +1,39 @@
 export function getYouTubeSearchUrl(
   awayTeam: string,
   homeTeam: string,
-  dateStr: string
+  dateStr: string,
+  seriesNote?: string | null
 ): string {
-  const query = `${awayTeam} vs ${homeTeam} highlights ${dateStr}`;
+  const query = buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
-// --- COMMENTED OUT: YouTube search embed approach (deprecated, shows "Video is unavailable") ---
-// export function getYouTubeSearchEmbedUrl(query: string): string {
-//   return `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1&rel=0&modestbranding=1`;
-// }
+export function getHighlightSearchQuery(
+  awayTeam: string,
+  homeTeam: string,
+  dateStr: string,
+  seriesNote?: string | null
+): string {
+  return buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
+}
 
-// --- COMMENTED OUT: Piped API approach (all instances dead as of 2026-04-01) ---
-// const PIPED_INSTANCES = [ ... ];
-// export async function searchFirstVideoId(query: string): Promise<string | null> { ... }
-// export function getYouTubeEmbedUrl(videoId: string): string { ... }
+function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
+  const parts = [`${awayTeam} vs ${homeTeam} highlights ${dateStr}`];
+  if (seriesNote) parts.push(seriesNote);
+  return parts.join(" ");
+}
+
+export async function fetchFirstVideoId(query: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/youtube?q=${encodeURIComponent(query)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.videoId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function getYouTubeEmbedUrl(videoId: string): string {
+  return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1`;
+}
