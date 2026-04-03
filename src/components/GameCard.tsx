@@ -114,6 +114,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const prefetchedVideoId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
   const [fetchingOnClick, setFetchingOnClick] = useState(false);
+  const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
@@ -198,13 +199,23 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         )}
         <span className="ml-auto">
           {!(isPastDate && isFinished) && game.broadcasts.length > 0 && (
-            <span
-              className="text-[10px] sm:text-xs cursor-default"
-              style={{ color: "var(--text-muted)" }}
-              title={game.broadcasts.length > 1 ? game.broadcasts.join(", ") : undefined}
-            >
-              {game.broadcasts[0]}
-            </span>
+            game.broadcasts.length > 1 ? (
+              <span
+                className="text-[10px] sm:text-xs cursor-pointer hover:underline transition-colors"
+                style={{ color: "var(--text-muted)" }}
+                title={!broadcastExpanded ? game.broadcasts.join(", ") : undefined}
+                onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(!broadcastExpanded); }}
+              >
+                {broadcastExpanded ? game.broadcasts.join(" · ") : game.broadcasts[0]}
+              </span>
+            ) : (
+              <span
+                className="text-[10px] sm:text-xs"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {game.broadcasts[0]}
+              </span>
+            )
           )}
         </span>
       </div>

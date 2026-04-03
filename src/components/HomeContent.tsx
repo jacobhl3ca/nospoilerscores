@@ -413,8 +413,13 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           >
             <div className="text-center text-3xl mb-2">{"\u26A0\uFE0F"}</div>
             <h3 className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>Show Game Ratings?</h3>
+            {/* Previous wording (finished games only):
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
               This will reveal how competitive each game was. Ratings are based on how close the game was —<br />not who won — but they can hint at the outcome.
+            </p>
+            */}
+            <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
+              Ratings show how competitive each game is — based on score closeness, not who&apos;s winning. They can hint at the outcome.
             </p>
             <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
