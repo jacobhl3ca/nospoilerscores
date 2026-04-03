@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
 import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId } from "@/lib/youtube";
 
@@ -73,6 +73,7 @@ function cleanStatusDetail(detail: string, stripDate: boolean): string {
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight }: GameCardProps) {
   const prefetchedVideoId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
+  const [fetchingOnClick, setFetchingOnClick] = useState(false);
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
@@ -195,19 +196,34 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       {isFinished && highlightUrl && (
         <div className="mt-1 sm:mt-2">
           <button
-            onClick={() => {
-              if (prefetchedVideoId.current && onPlayHighlight) {
+            onClick={async () => {
+              if (!onPlayHighlight) return;
+              if (prefetchedVideoId.current) {
                 onPlayHighlight(prefetchedVideoId.current, highlightUrl);
+                return;
+              }
+              setFetchingOnClick(true);
+              const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
+              const id = await fetchFirstVideoId(query);
+              setFetchingOnClick(false);
+              if (id) {
+                prefetchedVideoId.current = id;
+                onPlayHighlight(id, highlightUrl);
               } else {
                 window.open(highlightUrl, "_blank");
               }
             }}
+            disabled={fetchingOnClick}
             className="highlight-btn flex items-center justify-center py-1.5 rounded-md w-full transition-opacity hover:opacity-80 cursor-pointer"
-            style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+            style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick ? 0.5 : undefined }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5,3 19,12 5,21" />
-            </svg>
+            {fetchingOnClick ? (
+              <span className="text-[10px]">Loading...</span>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            )}
           </button>
         </div>
       )}
