@@ -64,40 +64,44 @@ function getStreamUrl(broadcast: string): string | null {
   return null;
 }
 
-function formatGameProgress(game: Game): string {
+function formatGameProgress(game: Game): { full: string; short: string } {
   const { sport, statusDetail, clock, period } = game;
   if (sport === "mlb") {
-    // statusDetail is like "Top 5th", "Bot 7th", "Mid 3rd", "End 6th"
     const m = statusDetail.match(/^(Top|Bot|Mid|End)\s+(\d+)/i);
     if (m) {
       const half = m[1].toLowerCase();
       const inn = m[2];
-      if (half === "top") return `▲${inn}`;
-      if (half === "bot") return `▼${inn}`;
-      if (half === "mid") return `▲${inn}`; // mid inning = top half ending
-      if (half === "end") return `▼${inn}`; // end inning = bot half ending
+      const arrow = (half === "top" || half === "mid") ? "▲" : "▼";
+      const full = `${arrow}${inn}`;
+      return { full, short: full }; // already compact
     }
-    return statusDetail;
+    return { full: statusDetail, short: statusDetail.slice(0, 3) };
   }
-  if (sport === "nba" || sport === "ncaam") {
-    // e.g. "Q3 4:32" or "OT 1:20" or "Half"
+  if (sport === "ncaam") {
+    // NCAAM uses halves, not quarters
+    const h = period <= 2 ? `H${period}` : period === 3 ? "OT" : `${period - 2}OT`;
+    if (clock && clock !== "0.0") return { full: `${h} ${clock}`, short: h };
+    if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
+    return { full: h, short: h };
+  }
+  if (sport === "nba") {
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
-    if (clock && clock !== "0.0") return `${q} ${clock}`;
-    if (statusDetail.toLowerCase().includes("half")) return "Half";
-    return q;
+    if (clock && clock !== "0.0") return { full: `${q} ${clock}`, short: q };
+    if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
+    return { full: q, short: q };
   }
   if (sport === "nhl") {
     const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : `${period - 3}OT`;
-    if (clock && clock !== "0.0") return `${p} ${clock}`;
-    return p;
+    if (clock && clock !== "0.0") return { full: `${p} ${clock}`, short: p };
+    return { full: p, short: p };
   }
   if (sport === "nfl") {
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
-    if (clock && clock !== "0.0") return `${q} ${clock}`;
-    if (statusDetail.toLowerCase().includes("half")) return "Half";
-    return q;
+    if (clock && clock !== "0.0") return { full: `${q} ${clock}`, short: q };
+    if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
+    return { full: q, short: q };
   }
-  return statusDetail;
+  return { full: statusDetail, short: statusDetail.slice(0, 3) };
 }
 
 function cleanStatusDetail(detail: string, stripDate: boolean): string {
@@ -121,7 +125,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const awayTBD = game.awayTeam.shortDisplayName === "TBD" || !game.awayTeam.abbreviation;
   const homeTBD = game.homeTeam.shortDisplayName === "TBD" || !game.homeTeam.abbreviation;
   const gameProgress = isLive ? formatGameProgress(game) : null;
-  const longBroadcast = game.broadcasts.length > 0 && game.broadcasts[0].length >= 8;
 
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
@@ -172,11 +175,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       {/* Status bar */}
       <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] relative" style={{ color: "var(--text-muted)" }}>
         <span>
-          {isLive ? (
+          {isLive && gameProgress ? (
             liveUrl ? (
-              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors">● {gameProgress}</a>
+              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
             ) : (
-              <span className="text-green-500 font-medium">● {gameProgress}</span>
+              <span className="text-green-500 font-medium"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>
             )
           ) : isPastDate && isFinished ? (
             null
@@ -207,25 +210,21 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       </div>
 
       {/* Teams */}
-      <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>
+      <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr" }}>
         {logo(game.awayTeam, awayTBD)}
         <span className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 min-w-0">
           <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
           <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
+          {!awayTBD && game.awayTeam.record && <span className="text-[10px] sm:text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>}
           {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
         </span>
-        {!awayTBD && game.awayTeam.record ? (
-          <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>
-        ) : <span />}
         {logo(game.homeTeam, homeTBD)}
         <span className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 min-w-0">
           <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
           <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
+          {!homeTBD && game.homeTeam.record && <span className="text-[10px] sm:text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>}
           {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
         </span>
-        {!homeTBD && game.homeTeam.record ? (
-          <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>
-        ) : <span />}
       </div>
 
       {/* Highlights — play button opens modal popup */}

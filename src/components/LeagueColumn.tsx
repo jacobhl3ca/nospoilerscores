@@ -20,6 +20,12 @@ function formatDateCompact(yyyymmdd: string): string {
   const m = yyyymmdd.slice(4, 6);
   const d = yyyymmdd.slice(6, 8);
   const date = new Date(`${y}-${m}-${d}T12:00:00`);
+  // Check if this date is tomorrow
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  if (date.getFullYear() === tomorrow.getFullYear() && date.getMonth() === tomorrow.getMonth() && date.getDate() === tomorrow.getDate()) {
+    return "Tomorrow";
+  }
   const dow = date.toLocaleDateString("en-US", { weekday: "short" });
   return `${dow} ${parseInt(m)}/${parseInt(d)}`;
 }
