@@ -64,6 +64,42 @@ function getStreamUrl(broadcast: string): string | null {
   return null;
 }
 
+function formatGameProgress(game: Game): string {
+  const { sport, statusDetail, clock, period } = game;
+  if (sport === "mlb") {
+    // statusDetail is like "Top 5th", "Bot 7th", "Mid 3rd", "End 6th"
+    const m = statusDetail.match(/^(Top|Bot|Mid|End)\s+(\d+)/i);
+    if (m) {
+      const half = m[1].toLowerCase();
+      const inn = m[2];
+      if (half === "top") return `▲${inn}`;
+      if (half === "bot") return `▼${inn}`;
+      if (half === "mid") return `▲${inn}`; // mid inning = top half ending
+      if (half === "end") return `▼${inn}`; // end inning = bot half ending
+    }
+    return statusDetail;
+  }
+  if (sport === "nba" || sport === "ncaam") {
+    // e.g. "Q3 4:32" or "OT 1:20" or "Half"
+    const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
+    if (clock && clock !== "0.0") return `${q} ${clock}`;
+    if (statusDetail.toLowerCase().includes("half")) return "Half";
+    return q;
+  }
+  if (sport === "nhl") {
+    const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : `${period - 3}OT`;
+    if (clock && clock !== "0.0") return `${p} ${clock}`;
+    return p;
+  }
+  if (sport === "nfl") {
+    const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
+    if (clock && clock !== "0.0") return `${q} ${clock}`;
+    if (statusDetail.toLowerCase().includes("half")) return "Half";
+    return q;
+  }
+  return statusDetail;
+}
+
 function cleanStatusDetail(detail: string, stripDate: boolean): string {
   let cleaned = detail.replace(/\s*(EDT|EST|CDT|CST|MDT|MST|PDT|PST|ET|CT|MT|PT)\s*$/i, "");
   if (stripDate) cleaned = cleaned.replace(/^\d{1,2}\/\d{1,2}\s*-\s*/, "");
@@ -84,7 +120,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const localTime = isFuture ? cleanStatusDetail(game.statusDetail, true) : null;
   const awayTBD = game.awayTeam.shortDisplayName === "TBD" || !game.awayTeam.abbreviation;
   const homeTBD = game.homeTeam.shortDisplayName === "TBD" || !game.homeTeam.abbreviation;
-  // Show "● LIVE" on all screens unless broadcast name is long enough to overlap
+  const gameProgress = isLive ? formatGameProgress(game) : null;
   const longBroadcast = game.broadcasts.length > 0 && game.broadcasts[0].length >= 8;
 
   const highlightsReady = isFinished && (() => {
@@ -138,9 +174,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         <span>
           {isLive ? (
             liveUrl ? (
-              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors">{longBroadcast ? <><span className="sm:hidden">●</span><span className="hidden sm:inline">● LIVE</span></> : "● LIVE"}</a>
+              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors">● {gameProgress}</a>
             ) : (
-              <span className="text-green-500 font-medium">{longBroadcast ? <><span className="sm:hidden">●</span><span className="hidden sm:inline">● LIVE</span></> : "● LIVE"}</span>
+              <span className="text-green-500 font-medium">● {gameProgress}</span>
             )
           ) : isPastDate && isFinished ? (
             null
