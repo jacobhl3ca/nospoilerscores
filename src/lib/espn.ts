@@ -187,6 +187,22 @@ function parseGame(event: any, sport: Sport): Game {
   };
 }
 
+async function fetchWithRetry(url: string, retries = 1, timeoutMs = 10000): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok || attempt === retries) return res;
+    } catch (e) {
+      clearTimeout(timer);
+      if (attempt === retries) throw e;
+    }
+  }
+  throw new Error("Fetch failed");
+}
+
 export async function fetchGames(
   sport: Sport,
   date?: string
@@ -194,7 +210,12 @@ export async function fetchGames(
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   if (date) url.searchParams.set("dates", date);
 
-  const res = await fetch(url.toString());
+  let res: Response;
+  try {
+    res = await fetchWithRetry(url.toString());
+  } catch {
+    return [];
+  }
 
   if (!res.ok) return [];
 

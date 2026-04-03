@@ -21,11 +21,13 @@ export const metadata: Metadata = {
     url: "https://hidescore.com",
     siteName: "HideScore",
     type: "website",
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "HideScore — Catch Up on Games Without Spoilers",
     description: "Sports highlights and game ratings without spoilers.",
+    images: ["https://hidescore.com/og-image.png"],
   },
 };
 
