@@ -210,21 +210,25 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       </div>
 
       {/* Teams */}
-      <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr" }}>
+      <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto auto" }}>
         {logo(game.awayTeam, awayTBD)}
-        <span className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 min-w-0">
+        <span className="pl-2 sm:pl-3 min-w-0">
           <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
           <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
-          {!awayTBD && game.awayTeam.record && <span className="text-[10px] sm:text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>}
-          {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
         </span>
+        {!awayTBD && game.awayTeam.record ? (
+          <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>
+        ) : <span />}
+        {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
         {logo(game.homeTeam, homeTBD)}
-        <span className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 min-w-0">
+        <span className="pl-2 sm:pl-3 min-w-0">
           <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
           <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
-          {!homeTBD && game.homeTeam.record && <span className="text-[10px] sm:text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>}
-          {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
         </span>
+        {!homeTBD && game.homeTeam.record ? (
+          <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>
+        ) : <span />}
+        {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
       </div>
 
       {/* Highlights — play button opens modal popup */}
