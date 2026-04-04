@@ -431,7 +431,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               Ratings show how competitive each game is:<br />based on <strong>score closeness</strong>, not who&apos;s winning.<br />They can hint at the outcome.
             </p>
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
-              Games will also be reordered by <strong>top records and best matchups</strong>.<br /><em>This is my preferred view!</em>
+              Games will also be reordered by <strong>top records and best matchups</strong>.
+            </p>
+            <p className="text-sm mb-3" style={{ color: "var(--text-secondary)", fontStyle: "italic" }}>
+              This is my preferred view!
             </p>
             <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
