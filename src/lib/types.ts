@@ -22,6 +22,8 @@ export interface Game {
   // Highlight/recap links
   highlightUrl: string | null; // ESPN video clip URL
   recapUrl: string | null; // ESPN gamecast URL
+  // Direct stream URL for live games (e.g., MLB.tv deep link)
+  streamUrl: string | null;
 }
 
 export interface Team {

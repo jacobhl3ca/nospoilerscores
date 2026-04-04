@@ -52,17 +52,6 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
 }
 */
 
-function getStreamUrl(broadcast: string): string | null {
-  const b = broadcast.toLowerCase();
-  if (b.includes("espn") || b === "abc") return "https://www.espn.com/watch/";
-  if (b === "tnt" || b === "tbs" || b === "trutv") return "https://www.max.com/live-tv";
-  if (b === "nba tv") return "https://www.nba.com/watch/";
-  if (b === "mlb network" || b === "mlb.tv") return "https://www.mlb.com/tv";
-  if (b === "fox" || b === "fs1" || b === "fs2") return "https://www.foxsports.com/live";
-  if (b === "nbc" || b === "usa" || b === "peacock") return "https://www.peacocktv.com/";
-  if (b === "nhl network") return "https://www.nhl.com/tv";
-  return null;
-}
 
 function formatGameProgress(game: Game): { full: string; short: string } {
   const { sport, statusDetail, clock, period } = game;
@@ -120,8 +109,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
   const espnUrl = game.recapUrl || null;
-  const streamUrl = game.broadcasts.length > 0 ? getStreamUrl(game.broadcasts[0]) : null;
-  const liveUrl = streamUrl || espnUrl;
+  const liveUrl = game.streamUrl || espnUrl;
   const localTime = isFuture ? cleanStatusDetail(game.statusDetail, true) : null;
   const awayTBD = game.awayTeam.shortDisplayName === "TBD" || !game.awayTeam.abbreviation;
   const homeTBD = game.homeTeam.shortDisplayName === "TBD" || !game.homeTeam.abbreviation;

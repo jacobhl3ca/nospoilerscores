@@ -182,6 +182,7 @@ function parseGame(event: any, sport: Sport): Game {
     seriesNote,
     highlightUrl,
     recapUrl,
+    streamUrl: null, // populated after fetch for supported sports
   };
 }
 
@@ -201,12 +202,89 @@ async function fetchWithRetry(url: string, retries = 1, timeoutMs = 10000): Prom
   throw new Error("Fetch failed");
 }
 
+// Build stream deep link for a game based on broadcast + sport
+function buildStreamUrl(game: Game): string | null {
+  const broadcast = game.broadcasts[0]?.toLowerCase() ?? "";
+  const gameId = game.id;
+
+  // ESPN family — deep link to specific game stream
+  if (broadcast.includes("espn") || broadcast === "abc") {
+    return `https://www.espn.com/watch/player/_/id/${gameId}`;
+  }
+  // FOX family — deep link includes event ID in some cases, but no public pattern; use live page
+  if (broadcast === "fox" || broadcast === "fs1" || broadcast === "fs2") {
+    return "https://www.foxsports.com/live";
+  }
+  // TNT/TBS/TruTV → Max live TV
+  if (broadcast === "tnt" || broadcast === "tbs" || broadcast === "trutv") {
+    return "https://www.max.com/live-tv";
+  }
+  // NBC/Peacock
+  if (broadcast === "nbc" || broadcast === "usa" || broadcast === "peacock") {
+    return "https://www.peacocktv.com/";
+  }
+  // Sport-specific streaming services (handled by enrichment functions below)
+  // NBA TV, MLB.tv, NHL Network — these get deep links via sport-specific APIs
+  if (broadcast === "nba tv") return "https://www.nba.com/watch/";
+  if (broadcast === "nhl network") return "https://www.nhl.com/tv";
+  // MLB.tv / MLB Network — fallback if enrichment didn't set streamUrl
+  if (broadcast === "mlb.tv" || broadcast === "mlb network") return "https://www.mlb.com/tv";
+
+  return null;
+}
+
+// MLB Stats API: fetch gamePk values for a date, keyed by home team abbreviation
+async function fetchMLBGamePks(date?: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    // Convert YYYYMMDD to YYYY-MM-DD
+    let apiDate: string;
+    if (date && date.length === 8) {
+      apiDate = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
+    } else {
+      const now = new Date();
+      apiDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    }
+    const res = await fetchWithRetry(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${apiDate}&hydrate=team`, 1, 5000);
+    if (!res.ok) return map;
+    const data = await res.json();
+    for (const dateEntry of data.dates ?? []) {
+      for (const game of dateEntry.games ?? []) {
+        const gamePk = String(game.gamePk);
+        const homeAbbrev = game.teams?.home?.team?.abbreviation ?? "";
+        const awayAbbrev = game.teams?.away?.team?.abbreviation ?? "";
+        // Key by "away@home" to handle doubleheaders
+        if (homeAbbrev && awayAbbrev) {
+          map.set(`${awayAbbrev}@${homeAbbrev}`, gamePk);
+        }
+      }
+    }
+  } catch {
+    // Non-critical — games just won't have deep links
+  }
+  return map;
+}
+
+// MLB team abbreviation mapping: ESPN → MLB Stats API
+// Most match, but a few differ
+const ESPN_TO_MLB_ABBREV: Record<string, string> = {
+  ARI: "AZ",
+  CHW: "CWS",
+};
+
+function espnToMlbAbbrev(espnAbbrev: string): string {
+  return ESPN_TO_MLB_ABBREV[espnAbbrev] || espnAbbrev;
+}
+
 export async function fetchGames(
   sport: Sport,
   date?: string
 ): Promise<Game[]> {
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   if (date) url.searchParams.set("dates", date);
+
+  // For MLB, fetch game PKs in parallel with ESPN data
+  const mlbPksPromise = sport === "mlb" ? fetchMLBGamePks(date) : null;
 
   let res: Response;
   try {
@@ -219,7 +297,7 @@ export async function fetchGames(
 
   const data = await res.json();
   const events = data.events ?? [];
-  return events
+  const games: Game[] = events
     .filter((e: any) => {
       // Filter out postponed/canceled/suspended games
       const statusName = e.status?.type?.name ?? "";
@@ -230,6 +308,28 @@ export async function fetchGames(
       return true;
     })
     .map((e: any) => parseGame(e, sport));
+
+  // Enrich MLB games with direct MLB.tv stream links
+  if (sport === "mlb" && mlbPksPromise) {
+    const mlbPks = await mlbPksPromise;
+    for (const game of games) {
+      const awayAbbrev = espnToMlbAbbrev(game.awayTeam.abbreviation);
+      const homeAbbrev = espnToMlbAbbrev(game.homeTeam.abbreviation);
+      const gamePk = mlbPks.get(`${awayAbbrev}@${homeAbbrev}`);
+      if (gamePk) {
+        game.streamUrl = `https://www.mlb.com/gameday/${gamePk}`;
+      }
+    }
+  }
+
+  // Set fallback stream URLs from broadcast info
+  for (const game of games) {
+    if (!game.streamUrl) {
+      game.streamUrl = buildStreamUrl(game);
+    }
+  }
+
+  return games;
 }
 
 export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
