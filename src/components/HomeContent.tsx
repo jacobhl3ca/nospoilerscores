@@ -41,7 +41,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string } | null>(null);
-  const [sortByMatchups, setSortByMatchups] = useState(false);
+  // sortByMatchups removed — monkey toggle now controls both ratings visibility AND sort order
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
     favoriteTeams: [],
@@ -271,34 +271,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             >
               {prefs.showRatings ? "\u{1F649}" : "\u{1F648}"}
             </button>
-            <button
-              onClick={() => setSortByMatchups(!sortByMatchups)}
-              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-              style={{
-                background: sortByMatchups ? "var(--accent)" : "var(--bg-card)",
-                border: `1px solid ${sortByMatchups ? "var(--accent)" : "var(--border)"}`,
-                color: sortByMatchups ? "white" : "var(--text-muted)",
-              }}
-              onMouseEnter={(e) => {
-                if (!sortByMatchups) e.currentTarget.style.borderColor = "var(--accent)";
-              }}
-              onMouseLeave={(e) => {
-                if (!sortByMatchups) e.currentTarget.style.borderColor = "var(--border)";
-              }}
-              title={sortByMatchups ? "Sorted by top matchups — click for chronological" : "Sorted chronologically — click for top matchups"}
-            >
-              {sortByMatchups ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
-                  <path d="M6 9l6-6 6 6" />
-                  <path d="M6 15l6 6 6-6" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12,6 12,12 16,14" />
-                </svg>
-              )}
-            </button>
+            {/* Funnel/sort button removed — monkey now controls both ratings + sort */}
             <div className="relative">
               <button
                 onClick={() => setCalendarOpen(!calendarOpen)}
@@ -382,7 +355,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 showRatings={prefs.showRatings}
                 isPastDate={selectedDate < getDateString(0)}
                 isToday={isToday}
-                sortByMatchups={sortByMatchups}
+                sortByMatchups={prefs.showRatings}
                 onPlayHighlight={(videoId, fallbackUrl) => setVideoModal({ videoId, fallbackUrl })}
               />
             ))}

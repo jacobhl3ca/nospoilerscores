@@ -87,6 +87,15 @@ export default function LeagueColumn({
     if (bHasFav && !aHasFav) return 1;
     if (aHasFav && bHasFav) return aPri - bPri;
 
+    // Monkey OFF (topMatchups === false): fully chronological
+    if (!topMatchups) {
+      // Still group live games first (they're actively happening)
+      if (a.state === "in" && b.state !== "in") return -1;
+      if (b.state === "in" && a.state !== "in") return 1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    }
+
+    // Monkey ON: competitive sort
     // Live games first, sorted by rating
     if (a.state === "in" && b.state !== "in") return -1;
     if (b.state === "in" && a.state !== "in") return 1;
@@ -107,14 +116,11 @@ export default function LeagueColumn({
       if (b.state === "pre" && a.state === "post") return 1;
     }
 
-    // Future games: chronological by default, or top matchups when toggled
+    // Pre-game: sort by matchup quality
     if (a.state === "pre" && b.state === "pre") {
-      if (topMatchups) {
-        const tierDiff = getMatchupTier(a) - getMatchupTier(b);
-        if (tierDiff !== 0) return tierDiff;
-        return getCombinedWins(b) - getCombinedWins(a);
-      }
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
+      const tierDiff = getMatchupTier(a) - getMatchupTier(b);
+      if (tierDiff !== 0) return tierDiff;
+      return getCombinedWins(b) - getCombinedWins(a);
     }
 
     return new Date(a.date).getTime() - new Date(b.date).getTime();
