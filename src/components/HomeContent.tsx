@@ -371,7 +371,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
         <span>Catch up on games without spoilers.</span>
         {/* <span>Select {"\u{1F648}"} to rank by closest games.</span> */}
-        <span>Select {"\u{1F648}"} to show ratings, and sort by top records/best matchups.</span>
+        <span>Select {"\u{1F648}"} to show ratings and sort by top records/matchups.</span>
         {/* <span>Live and future games ranked by competitiveness and top teams.</span> */}
         {/* BACKUP — expanded footer copy to revisit later:
         <span style={{ fontSize: "0.8rem", fontWeight: 500 }}>Watch games like they&apos;re live — even when they&apos;re not.</span>
