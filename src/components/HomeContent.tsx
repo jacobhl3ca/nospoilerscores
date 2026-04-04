@@ -429,8 +429,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
               Ratings show how competitive each game is:<br />based on <strong>score closeness</strong>, not who&apos;s winning.<br />They can hint at the outcome.
             </p>
-            <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-              Games will also be reordered — best matchups and closest games first.
+            <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
+              Games will also be reordered:<br /><strong>top records</strong>, closest games, and best matchups first.
             </p>
             <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
@@ -453,10 +453,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 </div>
               </div>
             </div>
-            <label className="flex items-center gap-2 mb-3 cursor-pointer select-none" id="dont-show-label">
-              <input type="checkbox" id="dont-show-explainer" className="accent-[var(--accent)]" />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
-            </label>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowRatingsExplainer(false)}
@@ -480,6 +476,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 Show Ratings
               </button>
             </div>
+            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+              <input type="checkbox" id="dont-show-explainer" className="accent-[var(--accent)]" />
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
+            </label>
           </div>
         </div>
       )}
