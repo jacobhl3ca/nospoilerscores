@@ -370,7 +370,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
         <span>Catch up on games without spoilers.</span>
-        <span>Select {"\u{1F648}"} to rank by closest games.</span>
+        {/* <span>Select {"\u{1F648}"} to rank by closest games.</span> */}
+        <span>Select {"\u{1F648}"} to show ratings and sort by top records and best matchups.</span>
         {/* <span>Live and future games ranked by competitiveness and top teams.</span> */}
         {/* BACKUP — expanded footer copy to revisit later:
         <span style={{ fontSize: "0.8rem", fontWeight: 500 }}>Watch games like they&apos;re live — even when they&apos;re not.</span>
@@ -430,7 +431,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               Ratings show how competitive each game is:<br />based on <strong>score closeness</strong>, not who&apos;s winning.<br />They can hint at the outcome.
             </p>
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
-              Games will also be reordered:<br /><strong>top records</strong>, closest games, and best matchups first.
+              Games will also be reordered by <strong>top records and best matchups</strong>.
             </p>
             <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
@@ -476,7 +477,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 Show Ratings
               </button>
             </div>
-            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none justify-end">
               <input type="checkbox" id="dont-show-explainer" className="accent-[var(--accent)]" />
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
             </label>
