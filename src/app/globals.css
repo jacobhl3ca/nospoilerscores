@@ -43,6 +43,12 @@ body {
   background: var(--bg-card) !important;
   color: var(--text) !important;
 }
+.date-nav-btn:focus {
+  outline: none;
+}
+.date-nav-btn:not([style*="font-weight"]):active {
+  background: var(--bg-card) !important;
+}
 
 .theme-toggle {
   box-shadow: 0 0 0 0px var(--accent);

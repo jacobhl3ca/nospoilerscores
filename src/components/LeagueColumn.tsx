@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Game, LeagueData, Sport } from "@/lib/types";
 import GameCard from "./GameCard";
 
@@ -41,6 +42,8 @@ export default function LeagueColumn({
   isToday,
   onPlayHighlight,
 }: LeagueColumnProps) {
+  const [topMatchups, setTopMatchups] = useState(false);
+
   const getFavPriority = (game: Game) => {
     const ids = [game.homeTeam.id, game.awayTeam.id];
     let best = Infinity;
@@ -103,11 +106,14 @@ export default function LeagueColumn({
       if (b.state === "pre" && a.state === "post") return 1;
     }
 
-    // Future games: both-winning first, then combined wins
+    // Future games: chronological by default, or top matchups when toggled
     if (a.state === "pre" && b.state === "pre") {
-      const tierDiff = getMatchupTier(a) - getMatchupTier(b);
-      if (tierDiff !== 0) return tierDiff;
-      return getCombinedWins(b) - getCombinedWins(a);
+      if (topMatchups) {
+        const tierDiff = getMatchupTier(a) - getMatchupTier(b);
+        if (tierDiff !== 0) return tierDiff;
+        return getCombinedWins(b) - getCombinedWins(a);
+      }
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
     }
 
     return new Date(a.date).getTime() - new Date(b.date).getTime();
@@ -135,13 +141,20 @@ export default function LeagueColumn({
         >
           ★
         </button>
-        {/* Sort indicator — filter icon next to league name */}
+        {/* Sort toggle — chronological (default) or top matchups */}
         {!isPastDate && preGames.length > 1 && (
-          <span title="Top matchups first" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+          <button
+            onClick={() => setTopMatchups(!topMatchups)}
+            className="transition-colors cursor-pointer"
+            title={topMatchups ? "Sorted by top matchups — click for chronological" : "Sorted chronologically — click for top matchups"}
+            style={{ color: topMatchups ? "var(--accent)" : "var(--text-muted)", opacity: topMatchups ? 1 : 0.4 }}
+            onMouseEnter={(e) => { if (!topMatchups) e.currentTarget.style.opacity = "0.8"; }}
+            onMouseLeave={(e) => { if (!topMatchups) e.currentTarget.style.opacity = "0.4"; }}
+          >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46" />
             </svg>
-          </span>
+          </button>
         )}
       </div>
       {sorted.length === 0 ? (

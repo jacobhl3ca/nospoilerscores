@@ -29,10 +29,52 @@ function formatDayName(yyyymmdd: string): string {
   });
 }
 
+// Get current date in ET (America/New_York), shifted so the "day" doesn't roll
+// over until 1AM ET. This keeps late-night games on "today" instead of jumping
+// to "yesterday" at midnight.
+function getNowET(): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  const etHour = parseInt(get("hour"), 10);
+  const etMinute = parseInt(get("minute"), 10);
+  const etYear = parseInt(get("year"), 10);
+  const etMonth = parseInt(get("month"), 10) - 1;
+  const etDay = parseInt(get("day"), 10);
+  const d = new Date(etYear, etMonth, etDay);
+  // Before 1AM ET → still count as previous day
+  if (etHour < 1) {
+    d.setDate(d.getDate() - 1);
+  }
+  return d;
+}
+
 export function getDateString(daysOffset: number): string {
-  const d = new Date();
+  const d = getNowET();
   d.setDate(d.getDate() + daysOffset);
   return toYYYYMMDD(d);
+}
+
+// Export for use in smart default offset calculation
+export function getETHour(): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  return parseInt(get("hour"), 10);
+}
+
+export function getETMinute(): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  return parseInt(get("minute"), 10);
 }
 
 // Custom calendar dropdown — starts Monday, blue weekends

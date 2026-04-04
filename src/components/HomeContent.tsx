@@ -5,7 +5,7 @@ import { LeagueData, Sport } from "@/lib/types";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
-import DateNav, { getDateString, CalendarDropdown } from "@/components/DateNav";
+import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
 
@@ -18,9 +18,9 @@ function getResolvedTheme(theme: Theme): "dark" | "light" {
 }
 
 function getSmartDefaultOffset(): number {
-  const hour = new Date().getHours();
-  const minutes = new Date().getMinutes();
-  // Before 10:30am local → default to yesterday; after → today
+  const hour = getETHour();
+  const minutes = getETMinute();
+  // Before 10:30am ET → default to yesterday; after → today
   return (hour < 10 || (hour === 10 && minutes < 30)) ? -1 : 0;
 }
 
@@ -362,7 +362,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
         <span>Catch up on games without spoilers.</span>
-        <span>Ranks by top teams or closest games.</span>
+        <span>Select Monkey to rank by top teams/closest games.</span>
         {/* <span>Live and future games ranked by competitiveness and top teams.</span> */}
         {/* BACKUP — expanded footer copy to revisit later:
         <span style={{ fontSize: "0.8rem", fontWeight: 500 }}>Watch games like they&apos;re live — even when they&apos;re not.</span>
@@ -419,7 +419,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </p>
             */}
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
-              Ratings show how competitive each game is — based on score closeness, not who&apos;s winning. They can hint at the outcome.
+              Ratings show how competitive each game is — based on score closeness, not who&apos;s winning.<br />They can hint at the outcome.
             </p>
             <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
@@ -445,15 +445,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             <div className="flex gap-2">
               <button
                 onClick={() => setShowRatingsExplainer(false)}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmRatings}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
+                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
               >
                 Show Ratings
               </button>

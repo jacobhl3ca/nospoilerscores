@@ -228,7 +228,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
           {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
         </span>
-        {!awayTBD && game.awayTeam.record ? (
+        {!awayTBD && game.awayTeam.record && !isPastDate ? (
           <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>
         ) : <span />}
         {logo(game.homeTeam, homeTBD)}
@@ -237,7 +237,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
           {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
         </span>
-        {!homeTBD && game.homeTeam.record ? (
+        {!homeTBD && game.homeTeam.record && !isPastDate ? (
           <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>
         ) : <span />}
       </div>
