@@ -48,6 +48,7 @@ export interface Preferences {
   favoriteTeams: string[]; // team IDs, ordered by priority (first = highest)
   theme: Theme;
   showRatings: boolean;
+  skipExplainer: boolean;
 }
 
 const defaults: Preferences = {
@@ -55,6 +56,7 @@ const defaults: Preferences = {
   favoriteTeams: [],
   theme: "system",
   showRatings: false,
+  skipExplainer: false,
 };
 
 export function loadPreferences(): Preferences {

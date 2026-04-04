@@ -47,6 +47,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     favoriteTeams: [],
     theme: "system",
     showRatings: false,
+    skipExplainer: false,
   });
 
   useEffect(() => {
@@ -108,15 +109,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
   const handleMonkeyClick = () => {
     if (!prefs.showRatings) {
-      setShowRatingsExplainer(true);
+      if (prefs.skipExplainer) {
+        updatePrefs({ showRatings: true });
+      } else {
+        setShowRatingsExplainer(true);
+      }
     } else {
       updatePrefs({ showRatings: false });
     }
   };
 
-  const confirmRatings = () => {
+  const confirmRatings = (dontShowAgain: boolean) => {
     setShowRatingsExplainer(false);
-    updatePrefs({ showRatings: true });
+    updatePrefs({ showRatings: true, skipExplainer: dontShowAgain });
   };
 
   // Update favicon based on ratings toggle
@@ -267,7 +272,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = "var(--border)";
               }}
-              title={prefs.showRatings ? "Hide game ratings" : "Show game ratings"}
+              title={prefs.showRatings ? "Hide ratings & sort chronologically" : "Show ratings & sort by best games"}
             >
               {prefs.showRatings ? "\u{1F649}" : "\u{1F648}"}
             </button>
@@ -424,6 +429,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
               Ratings show how competitive each game is:<br />based on <strong>score closeness</strong>, not who&apos;s winning.<br />They can hint at the outcome.
             </p>
+            <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+              Games will also be reordered — best matchups and closest games first.
+            </p>
             <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
               <div className="flex flex-col gap-1.5 text-sm">
@@ -445,6 +453,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 </div>
               </div>
             </div>
+            <label className="flex items-center gap-2 mb-3 cursor-pointer select-none" id="dont-show-label">
+              <input type="checkbox" id="dont-show-explainer" className="accent-[var(--accent)]" />
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
+            </label>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowRatingsExplainer(false)}
@@ -456,7 +468,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 Cancel
               </button>
               <button
-                onClick={confirmRatings}
+                onClick={() => {
+                  const cb = document.getElementById("dont-show-explainer") as HTMLInputElement | null;
+                  confirmRatings(cb?.checked ?? false);
+                }}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
                 onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
