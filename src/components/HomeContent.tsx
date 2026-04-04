@@ -41,6 +41,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string } | null>(null);
+  const [sortByMatchups, setSortByMatchups] = useState(false);
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
     favoriteTeams: [],
@@ -214,7 +215,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <header className="px-4 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+      <header className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)" }}>
         <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
           <a href="/" className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0" style={{ color: "var(--text)" }}>
             <span className="hidden sm:inline text-lg font-bold tracking-tight">HideScore</span>
@@ -269,6 +270,34 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               title={prefs.showRatings ? "Hide game ratings" : "Show game ratings"}
             >
               {prefs.showRatings ? "\u{1F649}" : "\u{1F648}"}
+            </button>
+            <button
+              onClick={() => setSortByMatchups(!sortByMatchups)}
+              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+              style={{
+                background: sortByMatchups ? "var(--accent)" : "var(--bg-card)",
+                border: `1px solid ${sortByMatchups ? "var(--accent)" : "var(--border)"}`,
+                color: sortByMatchups ? "white" : "var(--text-muted)",
+              }}
+              onMouseEnter={(e) => {
+                if (!sortByMatchups) e.currentTarget.style.borderColor = "var(--accent)";
+              }}
+              onMouseLeave={(e) => {
+                if (!sortByMatchups) e.currentTarget.style.borderColor = "var(--border)";
+              }}
+              title={sortByMatchups ? "Sorted by top matchups — click for chronological" : "Sorted chronologically — click for top matchups"}
+            >
+              {sortByMatchups ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+                  <path d="M6 9l6-6 6 6" />
+                  <path d="M6 15l6 6 6-6" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12,6 12,12 16,14" />
+                </svg>
+              )}
             </button>
             <div className="relative">
               <button
@@ -353,6 +382,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 showRatings={prefs.showRatings}
                 isPastDate={selectedDate < getDateString(0)}
                 isToday={isToday}
+                sortByMatchups={sortByMatchups}
                 onPlayHighlight={(videoId, fallbackUrl) => setVideoModal({ videoId, fallbackUrl })}
               />
             ))}
@@ -362,7 +392,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
         <span>Catch up on games without spoilers.</span>
-        <span>Select Monkey to rank by top teams/closest games.</span>
+        <span>Select {"\u{1F648}"} to rank by closest games.</span>
         {/* <span>Live and future games ranked by competitiveness and top teams.</span> */}
         {/* BACKUP — expanded footer copy to revisit later:
         <span style={{ fontSize: "0.8rem", fontWeight: 500 }}>Watch games like they&apos;re live — even when they&apos;re not.</span>
@@ -419,7 +449,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </p>
             */}
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
-              Ratings show how competitive each game is: based on <strong>score closeness</strong>, not who&apos;s winning.<br />They can hint at the outcome.
+              Ratings show how competitive each game is:<br />based on <strong>score closeness</strong>, not who&apos;s winning.<br />They can hint at the outcome.
             </p>
             <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
