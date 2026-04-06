@@ -161,24 +161,19 @@ function calculateRating(game: any): number | null {
     finalPeriodCloseness = finalCloseness;
   }
 
-  // --- Factor 4: Overtime bonus (10%) ---
+  // Base score: weighted blend of three closeness factors
+  // Weights sum to 1.0 so a perfectly close game = 100 before bonuses
+  const baseScore =
+    finalCloseness * 0.45 +
+    runningCloseness * 0.35 +
+    finalPeriodCloseness * 0.20;
+
+  // Additive bonuses (on top, not weighted in) — these reward extras, never penalize
   const periods = game.status?.period ?? 0;
   const overtimeBonus = periods > config.regulationPeriods ? config.overtimeBonus : 0;
-  // Scale OT to 0-100 range for weighted sum (15 bonus → 75, 20 bonus → 100)
-  const overtimeScore = Math.min(100, overtimeBonus * 5);
+  const scoringBonus = Math.min(total / config.scoringDivisor, 10);
 
-  // --- Factor 5: Scoring volume (10%) ---
-  const scoringScore = Math.min(100, (total / config.scoringDivisor) * 10);
-
-  // Weighted combination
-  const weighted =
-    finalCloseness * 0.35 +
-    runningCloseness * 0.30 +
-    finalPeriodCloseness * 0.15 +
-    overtimeScore * 0.10 +
-    scoringScore * 0.10;
-
-  return Math.min(100, Math.round(weighted));
+  return Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus));
 }
 
 function parseGame(event: any, sport: Sport): Game {
