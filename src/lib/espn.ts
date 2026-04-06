@@ -68,16 +68,54 @@ function parseTeam(competitor: any, sport: Sport): Team {
 }
 
 // Per-sport rating calibration
-// multiplier: how fast closeness drops per point of differential
-// overtimeBonus: extra points for OT/extras
-// scoringDivisor: normalizes scoring bonus per sport
-const SPORT_RATING_CONFIG: Record<Sport, { multiplier: number; overtimeBonus: number; scoringDivisor: number }> = {
-  mlb: { multiplier: 14, overtimeBonus: 15, scoringDivisor: 3 },    // 1 run = big deal, 7+ run diff = blowout
-  nba: { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40 },  // 22+ point diff = blowout
-  ncaam: { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30 }, // 18+ point diff = blowout
-  nhl: { multiplier: 22, overtimeBonus: 20, scoringDivisor: 2 },    // 1 goal = close, 5+ = blowout
-  nfl: { multiplier: 6, overtimeBonus: 15, scoringDivisor: 10 },    // 3 pts = close, 17+ = blowout
+const SPORT_RATING_CONFIG: Record<Sport, {
+  multiplier: number;       // how fast closeness drops per point of final differential
+  overtimeBonus: number;    // extra points for OT/extras
+  scoringDivisor: number;   // normalizes scoring bonus per sport
+  regulationPeriods: number; // normal period count (innings for MLB)
+}> = {
+  mlb:   { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,  regulationPeriods: 9 },
+  nba:   { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40, regulationPeriods: 4 },
+  ncaam: { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30, regulationPeriods: 2 },
+  nhl:   { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 2,  regulationPeriods: 3 },
+  nfl:   { multiplier: 6,   overtimeBonus: 15, scoringDivisor: 10, regulationPeriods: 4 },
 };
+
+// Calculate running margin from linescores: average absolute margin across all periods
+// Returns null if linescore data is insufficient
+function calcRunningMargin(competitors: any[]): number | null {
+  const ls0: any[] = competitors[0].linescores ?? [];
+  const ls1: any[] = competitors[1].linescores ?? [];
+  const periods = Math.min(ls0.length, ls1.length);
+  if (periods < 2) return null; // need at least 2 periods for this to be meaningful
+
+  let cum0 = 0;
+  let cum1 = 0;
+  let totalMargin = 0;
+  for (let i = 0; i < periods; i++) {
+    cum0 += ls0[i]?.value ?? 0;
+    cum1 += ls1[i]?.value ?? 0;
+    totalMargin += Math.abs(cum0 - cum1);
+  }
+  return totalMargin / periods;
+}
+
+// Was the game close entering the final period?
+function calcFinalPeriodMargin(competitors: any[]): number | null {
+  const ls0: any[] = competitors[0].linescores ?? [];
+  const ls1: any[] = competitors[1].linescores ?? [];
+  const periods = Math.min(ls0.length, ls1.length);
+  if (periods < 2) return null;
+
+  // Sum scores through second-to-last period
+  let cum0 = 0;
+  let cum1 = 0;
+  for (let i = 0; i < periods - 1; i++) {
+    cum0 += ls0[i]?.value ?? 0;
+    cum1 += ls1[i]?.value ?? 0;
+  }
+  return Math.abs(cum0 - cum1);
+}
 
 function calculateRating(game: any): number | null {
   const competition = game.competitions?.[0];
@@ -97,19 +135,50 @@ function calculateRating(game: any): number | null {
   const sport = game._sport as Sport;
   const config = SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba;
 
-  // Closer games = higher rating, scaled per sport
-  const closeness = Math.max(0, 100 - diff * config.multiplier);
+  // --- Factor 1: Final margin closeness (35%) ---
+  const finalCloseness = Math.max(0, 100 - diff * config.multiplier);
 
-  // Bonus for overtime/extras
+  // --- Factor 2: Running margin throughout game (30%) ---
+  // Average margin across all periods — rewards games that were close throughout
+  // even if the final margin is large
+  const runningMargin = calcRunningMargin(competitors);
+  let runningCloseness: number;
+  if (runningMargin !== null) {
+    // Use same multiplier — a running average margin of 5 in NBA means it was tight
+    runningCloseness = Math.max(0, 100 - runningMargin * config.multiplier);
+  } else {
+    // No linescore data (live game early on) — fall back to final margin
+    runningCloseness = finalCloseness;
+  }
+
+  // --- Factor 3: Close entering final period (15%) ---
+  // Games within striking distance at end are more watchable
+  const fpMargin = calcFinalPeriodMargin(competitors);
+  let finalPeriodCloseness: number;
+  if (fpMargin !== null) {
+    finalPeriodCloseness = Math.max(0, 100 - fpMargin * config.multiplier);
+  } else {
+    finalPeriodCloseness = finalCloseness;
+  }
+
+  // --- Factor 4: Overtime bonus (10%) ---
   const periods = game.status?.period ?? 0;
-  const regulationPeriods: Record<Sport, number> = { mlb: 9, nba: 4, ncaam: 2, nfl: 4, nhl: 3 };
-  const regulation = regulationPeriods[sport] ?? 4;
-  const overtimeBonus = periods > regulation ? config.overtimeBonus : 0;
+  const overtimeBonus = periods > config.regulationPeriods ? config.overtimeBonus : 0;
+  // Scale OT to 0-100 range for weighted sum (15 bonus → 75, 20 bonus → 100)
+  const overtimeScore = Math.min(100, overtimeBonus * 5);
 
-  // Normalized scoring bonus per sport
-  const scoringBonus = Math.min(total / config.scoringDivisor, 10);
+  // --- Factor 5: Scoring volume (10%) ---
+  const scoringScore = Math.min(100, (total / config.scoringDivisor) * 10);
 
-  return Math.min(100, Math.round(closeness + overtimeBonus + scoringBonus));
+  // Weighted combination
+  const weighted =
+    finalCloseness * 0.35 +
+    runningCloseness * 0.30 +
+    finalPeriodCloseness * 0.15 +
+    overtimeScore * 0.10 +
+    scoringScore * 0.10;
+
+  return Math.min(100, Math.round(weighted));
 }
 
 function parseGame(event: any, sport: Sport): Game {
