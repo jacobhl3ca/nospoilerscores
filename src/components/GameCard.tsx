@@ -115,10 +115,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const homeTBD = game.homeTeam.shortDisplayName === "TBD" || !game.homeTeam.abbreviation;
   const gameProgress = isLive ? formatGameProgress(game) : null;
 
+  // Per-league buffer: avg game length + time for highlights to appear on YouTube
+  const highlightBufferHours: Record<string, number> = {
+    nba: 3,    // ~2.5hr game + 30min upload
+    ncaam: 3,  // ~2hr game + 45min upload
+    nhl: 3.5,  // ~2.5hr game + 45min upload
+    mlb: 4,    // ~3hr game + 45min upload
+    nfl: 4.5,  // ~3.5hr game + 45min upload
+  };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
-    const bufferMs = 4.5 * 60 * 60 * 1000;
+    const bufferMs = (highlightBufferHours[game.sport] ?? 4) * 60 * 60 * 1000;
     return Date.now() > gameStart + bufferMs;
   })();
 
@@ -161,7 +169,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
     >
-      {/* Status bar */}
+      {/* Status bar — relative container with badge absolutely centered */}
       <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] relative" style={{ color: "var(--text-muted)" }}>
         <span>
           {isLive && gameProgress ? (
@@ -185,7 +193,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             <RatingBadge rating={game.rating!} />
           </span>
         )}
-        <span className="ml-auto">
+        <span className={`ml-auto truncate text-right ${showRating ? "max-w-[3.5rem]" : ""}`}>
           {!(isPastDate && isFinished) && game.broadcasts.length > 0 && (
             game.broadcasts.length > 1 ? (
               <span
