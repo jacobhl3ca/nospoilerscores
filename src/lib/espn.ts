@@ -11,31 +11,44 @@ const SPORT_PATHS: Record<Sport, string> = {
 };
 
 // Seasonal league config: show/hide based on date
-// endDate: 2 days after the final game of the season
+// endDate: day after championship — league hides the day after its final game
 // startDate: when the sport's season starts
 interface LeagueConfig {
   sport: Sport;
   label: string;
   startDate?: string;       // MM-DD
-  endDate?: string;         // MM-DD (hide after this date)
+  endDate?: string;         // MM-DD (last day league is shown)
   championshipDate?: string; // MM-DD — day the championship game is played
 }
 
 const ALL_LEAGUES: LeagueConfig[] = [
-  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-09", championshipDate: "04-07" }, // Final Four Monday
-  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-25", championshipDate: "06-19" },
-  { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-10", championshipDate: "11-01" },
-  { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-25", championshipDate: "06-19" },
-  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-15", championshipDate: "02-09" }, // Super Bowl Sunday
+  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-07", championshipDate: "04-06" }, // Championship Monday 4/6, hide 4/8+
+  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-22", championshipDate: "06-19" },
+  { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-05", championshipDate: "11-01" },
+  { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-22", championshipDate: "06-19" },
+  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-11", championshipDate: "02-09" }, // Super Bowl Sunday
 ];
 
-function isLeagueActive(league: LeagueConfig): boolean {
+// Column rotation schedule (auto-computed from daysSinceChampionship):
+// Apr 7:  NCAAM just ended → [NBA, MLB] (NCAAM gone next day)
+// Apr 18: NHL starts → [NBA, MLB, NHL]
+// Jun 20: NBA+NHL ended → [MLB, NBA, NHL] → then [MLB] alone
+// Sep 4:  NFL starts → [MLB, NFL]
+// Oct 20: NBA starts → [NFL, NBA, MLB]
+// Nov 2:  MLB ended → [NFL, NBA] (MLB gone few days later)
+// Nov 1:  NCAAM starts → [NFL, NBA, NCAAM]
+// Feb 10: NFL ended → [NBA, NCAAM] (NFL gone few days later)
+// Mar 20: MLB starts → [NBA, MLB, NCAAM]
+
+function toMMDD(d: Date): string {
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
   if (!league.startDate || !league.endDate) return true;
+  const mmdd = toMMDD(viewDate);
 
-  const now = new Date();
-  const mmdd = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
-  // Handle wrap-around seasons (e.g., NFL: Sep-Feb, NBA: Oct-Jun)
+  // Handle wrap-around seasons (e.g., NFL: Sep-Feb)
   if (league.startDate <= league.endDate) {
     return mmdd >= league.startDate && mmdd <= league.endDate;
   } else {
@@ -43,21 +56,22 @@ function isLeagueActive(league: LeagueConfig): boolean {
   }
 }
 
-// Days since most recent championship — leagues that just finished go to the back (rightmost column)
-function daysSinceChampionship(league: LeagueConfig): number {
+// Which league most recently finished its championship relative to viewDate?
+// That league goes to position 3 (rightmost column).
+function daysSinceChampionship(league: LeagueConfig, viewDate: Date): number {
   if (!league.championshipDate) return 365;
-  const now = new Date();
-  const year = now.getFullYear();
+  const year = viewDate.getFullYear();
   const [m, d] = league.championshipDate.split("-").map(Number);
   let champ = new Date(year, m - 1, d);
-  // If championship hasn't happened yet this year, use last year's date
-  if (champ > now) champ = new Date(year - 1, m - 1, d);
-  return Math.floor((now.getTime() - champ.getTime()) / (1000 * 60 * 60 * 24));
+  if (champ > viewDate) champ = new Date(year - 1, m - 1, d);
+  return Math.floor((viewDate.getTime() - champ.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function getActiveLeagues(): LeagueConfig[] {
-  // Sort descending by days since championship — recently finished leagues go last (rightmost)
-  return ALL_LEAGUES.filter(isLeagueActive).sort((a, b) => daysSinceChampionship(b) - daysSinceChampionship(a));
+function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
+  const d = viewDate ?? new Date();
+  const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d));
+  // Sort: most recently finished championship → last (rightmost column)
+  return active.sort((a, b) => daysSinceChampionship(b, d) - daysSinceChampionship(a, d));
 }
 
 function parseTeam(competitor: any, sport: Sport): Team {
@@ -411,7 +425,11 @@ export async function fetchGames(
 }
 
 export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
-  const active = getActiveLeagues();
+  // Parse viewed date so league visibility matches the day being viewed, not today
+  const viewDate = date
+    ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`)
+    : new Date();
+  const active = getActiveLeagues(viewDate);
   const results = await Promise.all(
     active.map(async ({ sport, label }) => {
       const games = await fetchGames(sport, date);
