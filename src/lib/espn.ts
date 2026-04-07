@@ -22,11 +22,11 @@ interface LeagueConfig {
 }
 
 const ALL_LEAGUES: LeagueConfig[] = [
-  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-07", championshipDate: "04-06" }, // Championship Monday 4/6, hide 4/8+
-  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-22", championshipDate: "06-19" },
-  { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-05", championshipDate: "11-01" },
-  { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-22", championshipDate: "06-19" },
-  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-11", championshipDate: "02-09" }, // Super Bowl Sunday
+  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06" }, // Championship 4/6, gone 4/7+
+  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-19", championshipDate: "06-19" },
+  { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-01", championshipDate: "11-01" },
+  { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-19", championshipDate: "06-19" },
+  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-09", championshipDate: "02-09" }, // Super Bowl Sunday
 ];
 
 // Column rotation schedule (auto-computed from daysSinceChampionship):
