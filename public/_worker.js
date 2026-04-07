@@ -4,6 +4,7 @@ export default {
 
     if (url.pathname === "/api/youtube") {
       const query = url.searchParams.get("q");
+      const preferChannel = url.searchParams.get("channel"); // e.g. "NBA", "MLB"
       if (!query) {
         return new Response(JSON.stringify({ error: "Missing q param" }), {
           status: 400,
@@ -60,19 +61,36 @@ export default {
           return variants.some((v) => titleLower.includes(v));
         }
 
-        // Extract videoRenderer blocks which contain both videoId and title
+        // Extract videoRenderer blocks which contain videoId, title, and channel name
+        // Channel name appears in ownerText or longBylineText after the videoId/title
         const rendererPattern = /"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"(.*?)"\}/g;
+        // Separate pattern to extract channel names near each videoId
+        const channelPattern = /"videoId":"([a-zA-Z0-9_-]{11})".*?"ownerText":\{"runs":\[\{"text":"(.*?)"/g;
+        const channelMap = {};
+        let cm;
+        while ((cm = channelPattern.exec(html)) !== null) {
+          channelMap[cm[1]] = cm[2];
+        }
+
         let match;
         let bestMatchId = null;
         let yearMatchedId = null;
         let teamsMatchedId = null;
         let teamsGameMatchedId = null;
         let firstHighlightId = null;
+        // Channel-specific tracking
+        let channelBestId = null;
+        let channelTeamsYearId = null;
+        let channelTeamsId = null;
+        let channelAnyId = null;
+        const preferChannelLower = preferChannel ? preferChannel.toLowerCase() : null;
 
         while ((match = rendererPattern.exec(html)) !== null) {
           const videoId = match[1];
           const title = match[2];
           const titleLower = title.toLowerCase();
+          const videoChannel = (channelMap[videoId] || "").toLowerCase();
+          const isFromChannel = preferChannelLower && videoChannel === preferChannelLower;
 
           // Check if title contains "highlight"
           const isHighlight = titleLower.includes("highlight");
@@ -89,10 +107,20 @@ export default {
           // Check if series game number matches (e.g. "Game 2" in title)
           const hasGameNum = queryGameNum && titleLower.includes(`game ${queryGameNum}`);
 
+          // Track channel-specific matches
+          if (isFromChannel) {
+            if (hasTeams && hasYear && (!queryGameNum || hasGameNum) && !channelBestId) {
+              channelBestId = videoId;
+            }
+            if (hasTeams && hasYear && !channelTeamsYearId) channelTeamsYearId = videoId;
+            if (hasTeams && !channelTeamsId) channelTeamsId = videoId;
+            if (!channelAnyId) channelAnyId = videoId;
+          }
+
           // Best: highlight + both teams + year + game number (playoff series)
           if (hasTeams && hasYear && queryGameNum && hasGameNum) {
             bestMatchId = videoId;
-            break;
+            if (!preferChannel) break;
           }
           // Great: highlight + both teams + year (no series or series matched)
           if (hasTeams && hasYear && !queryGameNum && !bestMatchId) {
@@ -116,9 +144,14 @@ export default {
           }
         }
 
-        // Priority: teams+year+game > teams+year > teams+game > teams > year > any highlight > raw first result
-        let videoId =
-          bestMatchId || teamsGameMatchedId || teamsMatchedId || yearMatchedId || firstHighlightId;
+        let videoId;
+        if (preferChannel) {
+          // When channel is requested, prefer channel matches, fall back to any match
+          videoId = channelBestId || channelTeamsYearId || channelTeamsId || channelAnyId || null;
+        } else {
+          // General search: best match from any source
+          videoId = bestMatchId || teamsGameMatchedId || teamsMatchedId || yearMatchedId || firstHighlightId;
+        }
         if (!videoId) {
           const fallback = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
           videoId = fallback ? fallback[1] : null;

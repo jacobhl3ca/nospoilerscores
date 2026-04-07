@@ -1,3 +1,12 @@
+// Official YouTube channel names per league
+const OFFICIAL_CHANNELS: Record<string, string> = {
+  nba: "NBA",
+  mlb: "MLB",
+  nhl: "NHL",
+  nfl: "NFL",
+  ncaam: "NCAA March Madness",
+};
+
 export function getYouTubeSearchUrl(
   awayTeam: string,
   homeTeam: string,
@@ -17,15 +26,21 @@ export function getHighlightSearchQuery(
   return buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
 }
 
+export function getOfficialChannelName(sport: string): string | null {
+  return OFFICIAL_CHANNELS[sport] ?? null;
+}
+
 function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
   const parts = [`${awayTeam} vs ${homeTeam} highlights ${dateStr}`];
   if (seriesNote) parts.push(seriesNote);
   return parts.join(" ");
 }
 
-export async function fetchFirstVideoId(query: string): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string): Promise<string | null> {
   try {
-    const res = await fetch(`/api/youtube?q=${encodeURIComponent(query)}`);
+    let url = `/api/youtube?q=${encodeURIComponent(query)}`;
+    if (channel) url += `&channel=${encodeURIComponent(channel)}`;
+    const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
     return data.videoId ?? null;

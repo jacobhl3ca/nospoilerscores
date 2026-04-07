@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
-import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
 
 interface GameCardProps {
   game: Game;
@@ -101,8 +101,9 @@ function cleanStatusDetail(detail: string, stripDate: boolean): string {
 
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight }: GameCardProps) {
   const prefetchedVideoId = useRef<string | null>(null);
+  const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
-  const [fetchingOnClick, setFetchingOnClick] = useState(false);
+  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | null>(null);
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
@@ -139,15 +140,17 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote)
     : null;
 
-  // Pre-fetch YouTube video ID in background
+  // Pre-fetch YouTube video IDs in background (official channel + top search)
+  const officialChannel = getOfficialChannelName(game.sport);
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
     const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-    fetchFirstVideoId(query).then((id) => {
-      prefetchedVideoId.current = id;
-    });
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr]);
+    fetchFirstVideoId(query).then((id) => { prefetchedVideoId.current = id; });
+    if (officialChannel) {
+      fetchFirstVideoId(query, officialChannel).then((id) => { prefetchedOfficialId.current = id; });
+    }
+  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, officialChannel]);
 
   const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
@@ -242,9 +245,43 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ) : <span />}
       </div>
 
-      {/* Highlights — play button opens modal popup */}
+      {/* Highlights — official channel + top search result */}
       {isFinished && highlightUrl && (
-        <div className="mt-1 sm:mt-2">
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          {/* Official channel button */}
+          <button
+            onClick={async () => {
+              if (!onPlayHighlight) return;
+              if (prefetchedOfficialId.current) {
+                onPlayHighlight(prefetchedOfficialId.current, highlightUrl);
+                return;
+              }
+              setFetchingOnClick("official");
+              const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
+              const id = await fetchFirstVideoId(query, officialChannel ?? undefined);
+              setFetchingOnClick(null);
+              if (id) {
+                prefetchedOfficialId.current = id;
+                onPlayHighlight(id, highlightUrl);
+              } else {
+                window.open(highlightUrl, "_blank");
+              }
+            }}
+            disabled={fetchingOnClick !== null}
+            className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+            style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+            title={`${officialChannel ?? "Official"} highlights`}
+          >
+            {fetchingOnClick === "official" ? (
+              <span className="text-[10px]">Loading...</span>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                <span className="text-[10px] font-medium">{game.sport.toUpperCase()}</span>
+              </>
+            )}
+          </button>
+          {/* Top search result button */}
           <button
             onClick={async () => {
               if (!onPlayHighlight) return;
@@ -252,10 +289,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 onPlayHighlight(prefetchedVideoId.current, highlightUrl);
                 return;
               }
-              setFetchingOnClick(true);
+              setFetchingOnClick("search");
               const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
               const id = await fetchFirstVideoId(query);
-              setFetchingOnClick(false);
+              setFetchingOnClick(null);
               if (id) {
                 prefetchedVideoId.current = id;
                 onPlayHighlight(id, highlightUrl);
@@ -263,16 +300,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 window.open(highlightUrl, "_blank");
               }
             }}
-            disabled={fetchingOnClick}
-            className="highlight-btn flex items-center justify-center py-1.5 rounded-md w-full transition-opacity hover:opacity-80 cursor-pointer"
-            style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick ? 0.5 : undefined }}
+            disabled={fetchingOnClick !== null}
+            className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+            style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
+            title="Top search result highlights"
           >
-            {fetchingOnClick ? (
+            {fetchingOnClick === "search" ? (
               <span className="text-[10px]">Loading...</span>
             ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="5,3 19,12 5,21" />
-              </svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
             )}
           </button>
         </div>
