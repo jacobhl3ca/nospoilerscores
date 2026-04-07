@@ -61,18 +61,20 @@ export default {
           return variants.some((v) => titleLower.includes(v));
         }
 
-        // Extract videoRenderer blocks which contain videoId, title, and channel name
-        // Channel name appears in ownerText or longBylineText after the videoId/title
-        const rendererPattern = /"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"(.*?)"\}/g;
-        // Separate pattern to extract channel names near each videoId
-        const channelPattern = /"videoId":"([a-zA-Z0-9_-]{11})".*?"ownerText":\{"runs":\[\{"text":"(.*?)"/g;
-        const channelMap = {};
-        let cm;
-        while ((cm = channelPattern.exec(html)) !== null) {
-          channelMap[cm[1]] = cm[2];
-        }
+        // Split HTML into videoRenderer blocks and parse each one individually
+        const blocks = html.split('"videoRenderer":{').slice(1);
+        const videos = blocks.map((block) => {
+          const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
+          const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
+          const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
+          if (!idMatch) return null;
+          return {
+            videoId: idMatch[1],
+            title: titleMatch ? titleMatch[1] : "",
+            channel: channelMatch ? channelMatch[1] : "",
+          };
+        }).filter(Boolean);
 
-        let match;
         let bestMatchId = null;
         let yearMatchedId = null;
         let teamsMatchedId = null;
@@ -85,12 +87,10 @@ export default {
         let channelAnyId = null;
         const preferChannelLower = preferChannel ? preferChannel.toLowerCase() : null;
 
-        while ((match = rendererPattern.exec(html)) !== null) {
-          const videoId = match[1];
-          const title = match[2];
+        for (const video of videos) {
+          const { videoId, title, channel } = video;
           const titleLower = title.toLowerCase();
-          const videoChannel = (channelMap[videoId] || "").toLowerCase();
-          const isFromChannel = preferChannelLower && videoChannel === preferChannelLower;
+          const isFromChannel = preferChannelLower && channel.toLowerCase() === preferChannelLower;
 
           // Check if title contains "highlight"
           const isHighlight = titleLower.includes("highlight");
