@@ -177,6 +177,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
     >
       {/* Status bar — relative container with badge absolutely centered */}
+      {/* Hide entirely for past finished games with no rating (avoids blank space) */}
+      {!(isPastDate && isFinished && !showRating) && (
       <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] relative" style={{ color: "var(--text-muted)" }}>
         <span>
           {isLive && gameProgress ? (
@@ -222,6 +224,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           )}
         </span>
       </div>
+      )}
 
       {/* Teams */}
       <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>

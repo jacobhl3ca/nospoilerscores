@@ -135,14 +135,15 @@ export default function LeagueColumn({
   );
 
   return (
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center justify-center gap-1.5 mb-2 sm:mb-3">
+    <div className="flex-1 min-w-0 w-full max-w-[225px]">
+      <div className="flex items-center justify-center mb-2 sm:mb-3">
+        <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
         <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
           {league.label}
         </h2>
         <button
           onClick={() => onToggleFavoriteLeague(league.sport)}
-          className={`text-sm transition-colors ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+          className={`text-sm transition-colors ml-1.5 ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
           style={isFavoriteLeague ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
           title={isFavoriteLeague ? "Remove favorite league" : "Set as favorite league"}
         >
@@ -212,8 +213,10 @@ export default function LeagueColumn({
           ))}
           {/* Separator between upcoming/live and finished */}
           {hasSections && (
-            <div className="flex items-center justify-center gap-1.5 my-1" style={{ color: "var(--text-muted)", opacity: 0.3 }}>
-              <span>·</span><span>·</span><span>·</span>
+            <div className="flex items-center gap-2 my-1" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              <span className="text-[10px] uppercase tracking-wide">Final</span>
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
             </div>
           )}
           {/* Finished games */}
