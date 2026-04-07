@@ -124,10 +124,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     mlb: 5,    // ~3hr game + highlights up in ~2hrs (verified Dodgers-Jays 4/6/26)
     nfl: 5,    // ~3.5hr game + highlights up in 1-2hrs
   };
+  const regulationPeriods: Record<string, number> = { nba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4 };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
-    const bufferMs = (highlightBufferHours[game.sport] ?? 4) * 60 * 60 * 1000;
+    const otPeriods = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
+    const otExtra = otPeriods * (game.sport === "mlb" ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
+    const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
     return Date.now() > gameStart + bufferMs;
   })();
 
