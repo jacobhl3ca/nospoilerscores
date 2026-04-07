@@ -22,21 +22,25 @@ interface LeagueConfig {
 }
 
 const ALL_LEAGUES: LeagueConfig[] = [
-  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06" }, // Championship 4/6, gone 4/7+
+  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06" },
   { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-19", championshipDate: "06-19" },
   { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-01", championshipDate: "11-01" },
-  { sport: "nhl", label: "NHL", startDate: "10-04", endDate: "06-19", championshipDate: "06-19" }, // Full season (reg + playoffs)
-  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-09", championshipDate: "02-09" }, // Super Bowl Sunday
+  { sport: "nhl", label: "NHL", startDate: "04-07", endDate: "06-19", championshipDate: "06-19" }, // Enters day after NCAAM ends
+  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-09", championshipDate: "02-09" },
 ];
 
-// Column rotation — always 3 leagues visible:
-// Apr 7:  NCAAM gone → [NBA, MLB, NHL]
-// Jun 20: NBA+NHL end → [MLB, NFL, ...] — summer gap, only MLB+NFL pre-season
-// Sep 4:  NFL starts → [MLB, NFL, NHL(Oct)]
-// Oct 4:  NHL starts → [NFL, NBA(Oct), MLB]
-// Nov 2:  MLB ends → [NFL, NBA, NCAAM]
-// Feb 10: NFL ends → [NBA, NCAAM, NHL]
-// Mar 20: MLB starts → [NBA, MLB, NCAAM]
+// Transition schedule — new league enters rightmost:
+// ────────────────────────────────────────────────────────────
+// Mar 20:       MLB starts        → [NBA, NCAAM, MLB]    (MLB enters right)
+// Apr 6:        NCAAM championship → [NBA, NCAAM, MLB]    (NCAAM leftmost on its big day)
+// Apr 7:        NCAAM out, NHL in → [NBA, MLB, NHL]       (NHL enters right)
+// Jun 20:       NBA+NHL end       → [MLB]                 (summer — 1 column)
+// Sep 4:        NFL starts        → [MLB, NFL]            (NFL enters right)
+// Oct 20:       NBA starts        → [MLB, NFL, NBA]       (NBA enters right)
+// Nov 1:        NCAAM starts      → [MLB, NFL, NBA, NCAAM] (4 leagues — all shown)
+// Nov 2:        MLB ends          → [NFL, NBA, NCAAM]
+// Feb 10:       NFL ends          → [NBA, NCAAM]          (2 columns until MLB returns)
+// ────────────────────────────────────────────────────────────
 
 function toMMDD(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -46,7 +50,6 @@ function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
   if (!league.startDate || !league.endDate) return true;
   const mmdd = toMMDD(viewDate);
 
-  // Handle wrap-around seasons (e.g., NFL: Sep-Feb)
   if (league.startDate <= league.endDate) {
     return mmdd >= league.startDate && mmdd <= league.endDate;
   } else {
@@ -54,26 +57,26 @@ function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
   }
 }
 
-// Which league most recently finished its championship relative to viewDate?
-// That league goes to position 3 (rightmost column).
-// On championship day itself, return 0 so the league stays prominent (leftmost).
-function daysSinceChampionship(league: LeagueConfig, viewDate: Date): number {
-  if (!league.championshipDate) return 365;
+// Days since this league's current season started — newest leagues sort rightmost.
+// On championship day, the league gets max priority (leftmost).
+function daysSinceSeasonStart(league: LeagueConfig, viewDate: Date): number {
+  if (!league.startDate) return 365;
   const mmdd = toMMDD(viewDate);
-  // Championship day itself — treat as "long ago" so it sorts leftmost
-  if (mmdd === league.championshipDate) return 365;
+  // Championship day — force leftmost
+  if (league.championshipDate && mmdd === league.championshipDate) return 999;
   const year = viewDate.getFullYear();
-  const [m, d] = league.championshipDate.split("-").map(Number);
-  let champ = new Date(year, m - 1, d);
-  if (champ > viewDate) champ = new Date(year - 1, m - 1, d);
-  return Math.floor((viewDate.getTime() - champ.getTime()) / (1000 * 60 * 60 * 24));
+  const [m, d] = league.startDate.split("-").map(Number);
+  let start = new Date(year, m - 1, d);
+  // For wrap-around or if start hasn't happened yet this year, use last year
+  if (start > viewDate) start = new Date(year - 1, m - 1, d);
+  return Math.floor((viewDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
   const d = viewDate ?? new Date();
   const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d));
-  // Sort: most recently finished championship → last (rightmost column)
-  return active.sort((a, b) => daysSinceChampionship(b, d) - daysSinceChampionship(a, d));
+  // Sort descending: longest-active leftmost, newest rightmost
+  return active.sort((a, b) => daysSinceSeasonStart(b, d) - daysSinceSeasonStart(a, d));
 }
 
 function parseTeam(competitor: any, sport: Sport): Team {
