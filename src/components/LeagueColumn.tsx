@@ -14,6 +14,33 @@ interface LeagueColumnProps {
   isToday?: boolean;
   sortByMatchups?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  selectedDate: string; // YYYYMMDD
+}
+
+// 2025-26 season playoff start dates (update each season)
+const PLAYOFF_START_DATES: Record<string, { date: string; label: string }> = {
+  nba: { date: "2026-04-19", label: "Playoffs" },
+  nhl: { date: "2026-04-18", label: "Playoffs" },
+  mlb: { date: "2026-10-06", label: "Postseason" },
+  nfl: { date: "2027-01-09", label: "Playoffs" },
+  ncaam: { date: "2026-03-17", label: "March Madness" },
+};
+
+function getPlayoffSubtitle(sport: Sport, selectedDate: string): string | null {
+  const config = PLAYOFF_START_DATES[sport];
+  if (!config) return null;
+  const y = +selectedDate.slice(0, 4);
+  const m = +selectedDate.slice(4, 6) - 1;
+  const d = +selectedDate.slice(6, 8);
+  const viewDate = new Date(y, m, d);
+  const playoffDate = new Date(config.date + "T12:00:00");
+  const diff = playoffDate.getTime() - viewDate.getTime();
+  if (diff <= 0) return null; // already in or past playoffs
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  const weeks = Math.floor(days / 7);
+  const playoffLabel = playoffDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const timeLabel = weeks >= 2 ? `${weeks} wks` : days === 1 ? "tomorrow" : `${days}d`;
+  return `${config.label} start ${playoffLabel} (${timeLabel})`;
 }
 
 function formatDateCompact(yyyymmdd: string): string {
@@ -42,6 +69,7 @@ export default function LeagueColumn({
   isToday,
   sortByMatchups,
   onPlayHighlight,
+  selectedDate,
 }: LeagueColumnProps) {
   const topMatchups = sortByMatchups ?? false;
 
@@ -136,19 +164,29 @@ export default function LeagueColumn({
 
   return (
     <div className="flex-1 min-w-0 w-full max-w-[225px]">
-      <div className="flex items-center justify-center mb-2 sm:mb-3">
-        <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
-        <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-          {league.label}
-        </h2>
-        <button
-          onClick={() => onToggleFavoriteLeague(league.sport)}
-          className={`text-sm transition-colors ml-1.5 ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
-          style={isFavoriteLeague ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-          title={isFavoriteLeague ? "Remove favorite league" : "Set as favorite league"}
-        >
-          ★
-        </button>
+      <div className="flex flex-col items-center mb-2 sm:mb-3">
+        <div className="flex items-center justify-center">
+          <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
+          <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+            {league.label}
+          </h2>
+          <button
+            onClick={() => onToggleFavoriteLeague(league.sport)}
+            className={`text-sm transition-colors ml-1.5 ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+            style={isFavoriteLeague ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
+            title={isFavoriteLeague ? "Remove favorite league" : "Set as favorite league"}
+          >
+            ★
+          </button>
+        </div>
+        {(() => {
+          const subtitle = getPlayoffSubtitle(league.sport, selectedDate);
+          return subtitle ? (
+            <span className="text-[9px] sm:text-[10px] italic mt-0.5" style={{ color: "var(--text-muted)" }}>
+              {subtitle}
+            </span>
+          ) : null;
+        })()}
       </div>
       {sorted.length === 0 ? (
         isPastDate ? (

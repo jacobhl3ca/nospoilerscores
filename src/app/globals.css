@@ -50,6 +50,14 @@ body {
   background: var(--bg-card) !important;
 }
 
+.date-nav-arrow:hover {
+  background: var(--bg-card);
+  color: var(--text) !important;
+}
+.date-nav-arrow:focus {
+  outline: none;
+}
+
 .theme-toggle {
   box-shadow: 0 0 0 0px var(--accent);
   transition: box-shadow 0.2s, background 0.2s, color 0.2s;
@@ -73,6 +81,34 @@ body {
 }
 .highlight-btn:hover {
   filter: brightness(1.15);
+}
+
+/* Playoff card — gold left border with subtle shimmer */
+.playoff-card {
+  position: relative;
+  overflow: hidden;
+}
+.playoff-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    #c9a032 0%,
+    #f5d56e 40%,
+    #c9a032 60%,
+    #a67c1a 100%
+  );
+  background-size: 100% 200%;
+  animation: gold-shimmer 3s ease infinite;
+}
+
+@keyframes gold-shimmer {
+  0%, 100% { background-position: 0% 0%; }
+  50% { background-position: 0% 100%; }
 }
 
 @keyframes fade-in {

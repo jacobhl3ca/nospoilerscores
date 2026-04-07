@@ -202,11 +202,32 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
     dateButtons.push({ date: selectedDate, label: formatDayName(selectedDate) });
   }
 
-  // NOTE: Calendar icon was here next to Tomorrow — commented out, moved to toolbar instead.
-  // Revisit positioning as low-priority item later.
+  // Navigate one day earlier than the leftmost visible date
+  const goEarlier = () => {
+    const leftmost = isBeforeYesterday ? selectedDate : yesterday;
+    const d = parseYMD(leftmost);
+    d.setDate(d.getDate() - 1);
+    onDateChange(toYYYYMMDD(d));
+  };
+
+  // Navigate one day later than the rightmost visible date
+  const goLater = () => {
+    const rightmost = isAfterTomorrow ? selectedDate : tomorrow;
+    const d = parseYMD(rightmost);
+    d.setDate(d.getDate() + 1);
+    onDateChange(toYYYYMMDD(d));
+  };
 
   return (
-    <div className="flex gap-0.5 sm:gap-1 items-center justify-center">
+    <div className="flex gap-0 sm:gap-0.5 items-center justify-center">
+      <button
+        onClick={goEarlier}
+        className="date-nav-arrow w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full text-[10px] sm:text-xs transition-colors cursor-pointer"
+        style={{ color: "var(--text-muted)" }}
+        title="Go back one day"
+      >
+        ‹
+      </button>
       {dateButtons.map((btn) => {
         const isSelected = selectedDate === btn.date;
         return (
@@ -225,6 +246,14 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
           </button>
         );
       })}
+      <button
+        onClick={goLater}
+        className="date-nav-arrow w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full text-[10px] sm:text-xs transition-colors cursor-pointer"
+        style={{ color: "var(--text-muted)" }}
+        title="Go forward one day"
+      >
+        ›
+      </button>
     </div>
   );
 }

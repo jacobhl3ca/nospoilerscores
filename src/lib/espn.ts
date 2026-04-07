@@ -283,13 +283,21 @@ function parseGame(event: any, sport: Sport): Game {
 
   // Extract series game number from notes (e.g. "ALWC - Game 2" → "Game 2")
   let seriesNote: string | null = null;
+  let isPlayoff = false;
   for (const note of competition?.notes ?? []) {
-    const headline = note?.headline ?? "";
+    const headline = (note?.headline ?? "").toLowerCase();
     const match = headline.match(/Game \d+/i);
     if (match) {
       seriesNote = match[0];
-      break;
     }
+    // Detect playoff/postseason/tournament games from notes
+    if (/playoff|postseason|wild.?card|divisional|conference|championship|finals|round|semi.?final|quarter.?final|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headline)) {
+      isPlayoff = true;
+    }
+  }
+  // Also check season type from the API if available
+  if (event.season?.type === 3 || event.season?.type === 4) {
+    isPlayoff = true; // type 3 = postseason, type 4 = off-season/all-star but sometimes playoff
   }
 
   // Extract gamecast/recap URL from event links
@@ -318,6 +326,7 @@ function parseGame(event: any, sport: Sport): Game {
     venue: competition?.venue?.fullName ?? "",
     rating: calculateRating(event),
     seriesNote,
+    isPlayoff,
     highlightUrl,
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports

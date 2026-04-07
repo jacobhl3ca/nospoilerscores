@@ -65,6 +65,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         window.history.replaceState({}, "", window.location.pathname);
       }
     }
+    // Before noon ET: always start with ratings hidden (don't persist — just override for this session)
+    const hour = getETHour();
+    if (hour < 12) {
+      loaded.showRatings = false;
+    }
     setPrefs(loaded);
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
   }, []);
@@ -229,7 +234,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
           </a>
-          <div className="absolute left-1/2 -translate-x-1/2">
+          <div className="flex-1 flex justify-start sm:justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
           <div className="justify-self-end flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -316,9 +321,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
       <main className="max-w-6xl mx-auto px-4 py-6 flex-1 w-full">
         {loading ? (
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:gap-6">
+          <div className="flex flex-col items-center gap-6 sm:flex sm:flex-row sm:justify-center sm:items-start sm:gap-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="min-w-0">
+              <div key={i} className="min-w-0 w-full max-w-[225px]">
                 <div className="h-6 w-16 mx-auto mb-3 rounded" style={{ background: "var(--bg-card)" }} />
                 {[1, 2, 3, 4].map((j) => (
                   <div key={j} className="rounded-lg px-4 py-3 mb-2 animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
@@ -348,7 +353,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:gap-6">
+          <div className="flex flex-col items-center gap-6 sm:flex sm:flex-row sm:justify-center sm:items-start sm:gap-4">
             {sortedLeagues.map((league) => (
               <LeagueColumn
                 key={league.sport}
@@ -362,6 +367,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 isToday={isToday}
                 sortByMatchups={prefs.showRatings}
                 onPlayHighlight={(videoId, fallbackUrl) => setVideoModal({ videoId, fallbackUrl })}
+                selectedDate={selectedDate}
               />
             ))}
           </div>

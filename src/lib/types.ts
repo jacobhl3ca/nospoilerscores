@@ -19,6 +19,8 @@ export interface Game {
   rating: number | null;
   // Series info (e.g. "Game 2") for playoff games — used in YouTube search
   seriesNote: string | null;
+  // Whether this is a playoff/postseason/tournament game
+  isPlayoff: boolean;
   // Highlight/recap links
   highlightUrl: string | null; // ESPN video clip URL
   recapUrl: string | null; // ESPN gamecast URL
