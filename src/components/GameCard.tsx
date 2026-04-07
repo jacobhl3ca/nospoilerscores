@@ -121,7 +121,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     nba: 3.5,  // ~2.5hr game + highlights up in 30-60min
     ncaam: 4,  // ~2hr game + highlights up in 1-3hrs (varies by matchup prominence)
     nhl: 4.5,  // ~2.5hr game + highlights up in 1-3hrs (Sportsnet/NHL)
-    mlb: 7,    // ~3hr game + highlights notoriously slow (4-8hrs, often overnight)
+    mlb: 5,    // ~3hr game + highlights up in ~2hrs (verified Dodgers-Jays 4/6/26)
     nfl: 5,    // ~3.5hr game + highlights up in 1-2hrs
   };
   const highlightsReady = isFinished && (() => {
