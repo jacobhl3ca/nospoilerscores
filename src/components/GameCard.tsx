@@ -176,55 +176,60 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
     >
-      {/* Status bar — relative container with badge absolutely centered */}
-      {/* Hide entirely for past finished games with no rating (avoids blank space) */}
-      {!(isPastDate && isFinished && !showRating) && (
-      <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] relative" style={{ color: "var(--text-muted)" }}>
-        <span>
-          {isLive && gameProgress ? (
-            liveUrl ? (
-              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
-            ) : (
-              <span className="text-green-500 font-medium"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>
-            )
-          ) : isPastDate && isFinished ? (
-            null
-          ) : isFinished ? (
-            "FINAL"
-          ) : nextGameDate ? (
-            <span className="text-[11px]"><span className="font-bold underline underline-offset-2" style={{ color: "var(--text)" }}>{nextGameDate}</span>{localTime ? ` - ${localTime}` : ""}</span>
-          ) : (
-            <span className="text-[11px]">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
-          )}
-        </span>
-        {showRating && (
-          <span className="absolute left-1/2 -translate-x-1/2">
-            <RatingBadge rating={game.rating!} />
-          </span>
-        )}
-        <span className={`ml-auto truncate text-right ${showRating ? "max-w-[3.5rem]" : ""}`}>
-          {!(isPastDate && isFinished) && game.broadcasts.length > 0 && (
-            game.broadcasts.length > 1 ? (
-              <span
-                className="text-[10px] sm:text-xs cursor-pointer hover:underline transition-colors"
-                style={{ color: "var(--text-muted)" }}
-                title={!broadcastExpanded ? game.broadcasts.join(", ") : undefined}
-                onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(!broadcastExpanded); }}
-              >
-                {broadcastExpanded ? game.broadcasts.join(" · ") : game.broadcasts[0]}
+      {/* Status bar: hide entirely when there's nothing useful to show */}
+      {(() => {
+        const hasStatusText = isLive || isFuture || nextGameDate || (!isFinished);
+        const hasRating = showRating;
+        const hasBroadcast = !isFinished && game.broadcasts.length > 0;
+        const showFinal = isFinished && !isPastDate;
+        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal;
+        if (!showBar) return null;
+        return (
+          <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] relative" style={{ color: "var(--text-muted)" }}>
+            <span>
+              {isLive && gameProgress ? (
+                liveUrl ? (
+                  <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
+                ) : (
+                  <span className="text-green-500 font-medium"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>
+                )
+              ) : showFinal && !hasRating ? (
+                "FINAL"
+              ) : nextGameDate ? (
+                <span className="text-[11px]"><span className="font-bold underline underline-offset-2" style={{ color: "var(--text)" }}>{nextGameDate}</span>{localTime ? ` - ${localTime}` : ""}</span>
+              ) : isFuture ? (
+                <span className="text-[11px]">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
+              ) : null}
+            </span>
+            {hasRating && (
+              <span className={showFinal ? "absolute left-1/2 -translate-x-1/2" : ""}>
+                <RatingBadge rating={game.rating!} />
               </span>
-            ) : (
-              <span
-                className="text-[10px] sm:text-xs"
-                style={{ color: "var(--text-muted)" }}
-              >
-                {game.broadcasts[0]}
-              </span>
-            )
-          )}
-        </span>
-      </div>
-      )}
+            )}
+            <span className={`ml-auto truncate text-right ${hasRating ? "max-w-[3.5rem]" : ""}`}>
+              {hasBroadcast && (
+                game.broadcasts.length > 1 ? (
+                  <span
+                    className="text-[10px] sm:text-xs cursor-pointer hover:underline transition-colors"
+                    style={{ color: "var(--text-muted)" }}
+                    title={!broadcastExpanded ? game.broadcasts.join(", ") : undefined}
+                    onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(!broadcastExpanded); }}
+                  >
+                    {broadcastExpanded ? game.broadcasts.join(" · ") : game.broadcasts[0]}
+                  </span>
+                ) : (
+                  <span
+                    className="text-[10px] sm:text-xs"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {game.broadcasts[0]}
+                  </span>
+                )
+              )}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Teams */}
       <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>

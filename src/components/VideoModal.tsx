@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface VideoModalProps {
   videoId: string;
@@ -9,6 +9,9 @@ interface VideoModalProps {
 }
 
 export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModalProps) {
+  const playerRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -21,7 +24,49 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
     };
   }, [onClose]);
 
-  const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1&playsinline=1&vq=hd1080`;
+  // Use YouTube IFrame Player API to force highest available quality
+  useEffect(() => {
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+
+    // Only add if not already loaded
+    if (!(window as any).YT) {
+      document.head.appendChild(tag);
+    }
+
+    const initPlayer = () => {
+      playerRef.current = new (window as any).YT.Player("yt-player", {
+        videoId,
+        playerVars: {
+          autoplay: 1,
+          mute: 1,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1,
+        },
+        events: {
+          onReady: (event: any) => {
+            // Force highest available quality
+            const qualities = event.target.getAvailableQualityLevels();
+            if (qualities.length > 0) {
+              event.target.setPlaybackQuality(qualities[0]);
+            }
+            event.target.playVideo();
+          },
+        },
+      });
+    };
+
+    if ((window as any).YT && (window as any).YT.Player) {
+      initPlayer();
+    } else {
+      (window as any).onYouTubeIframeAPIReady = initPlayer;
+    }
+
+    return () => {
+      if (playerRef.current?.destroy) playerRef.current.destroy();
+    };
+  }, [videoId]);
 
   return (
     <div
@@ -51,14 +96,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
         </button>
 
         {/* 16:9 YouTube player */}
-        <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }}>
-          <iframe
-            src={embedUrl}
-            className="absolute inset-0 w-full h-full"
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-            allowFullScreen
-            frameBorder="0"
-          />
+        <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }}>
+          <div id="yt-player" className="absolute inset-0 w-full h-full" />
         </div>
 
         {/* YouTube direct link */}
