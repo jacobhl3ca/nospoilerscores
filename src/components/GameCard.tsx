@@ -115,13 +115,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const homeTBD = game.homeTeam.shortDisplayName === "TBD" || !game.homeTeam.abbreviation;
   const gameProgress = isLive ? formatGameProgress(game) : null;
 
-  // Per-league buffer: avg game length + time for highlights to appear on YouTube
+  // Per-league buffer (hrs from game start) before showing highlight button
+  // Based on actual YouTube upload timing research (April 2026)
   const highlightBufferHours: Record<string, number> = {
-    nba: 3,    // ~2.5hr game + 30min upload
-    ncaam: 3,  // ~2hr game + 45min upload
-    nhl: 3.5,  // ~2.5hr game + 45min upload
-    mlb: 4,    // ~3hr game + 45min upload
-    nfl: 4.5,  // ~3.5hr game + 45min upload
+    nba: 3.5,  // ~2.5hr game + highlights up in 30-60min
+    ncaam: 4,  // ~2hr game + highlights up in 1-3hrs (varies by matchup prominence)
+    nhl: 4.5,  // ~2.5hr game + highlights up in 1-3hrs (Sportsnet/NHL)
+    mlb: 7,    // ~3hr game + highlights notoriously slow (4-8hrs, often overnight)
+    nfl: 5,    // ~3.5hr game + highlights up in 1-2hrs
   };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
