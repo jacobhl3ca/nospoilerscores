@@ -16,16 +16,17 @@ const SPORT_PATHS: Record<Sport, string> = {
 interface LeagueConfig {
   sport: Sport;
   label: string;
-  startDate?: string; // MM-DD
-  endDate?: string;   // MM-DD (hide after this date)
+  startDate?: string;       // MM-DD
+  endDate?: string;         // MM-DD (hide after this date)
+  championshipDate?: string; // MM-DD — day the championship game is played
 }
 
 const ALL_LEAGUES: LeagueConfig[] = [
-  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-09" }, // 2 days after Final Four
-  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-25" },
-  { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-10" },
-  { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-25" }, // Playoffs only — day before typical start
-  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-15" },
+  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-09", championshipDate: "04-07" }, // Final Four Monday
+  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-25", championshipDate: "06-19" },
+  { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-10", championshipDate: "11-01" },
+  { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-25", championshipDate: "06-19" },
+  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-15", championshipDate: "02-09" }, // Super Bowl Sunday
 ];
 
 function isLeagueActive(league: LeagueConfig): boolean {
@@ -42,8 +43,21 @@ function isLeagueActive(league: LeagueConfig): boolean {
   }
 }
 
+// Days since most recent championship — leagues that just finished go to the back (rightmost column)
+function daysSinceChampionship(league: LeagueConfig): number {
+  if (!league.championshipDate) return 365;
+  const now = new Date();
+  const year = now.getFullYear();
+  const [m, d] = league.championshipDate.split("-").map(Number);
+  let champ = new Date(year, m - 1, d);
+  // If championship hasn't happened yet this year, use last year's date
+  if (champ > now) champ = new Date(year - 1, m - 1, d);
+  return Math.floor((now.getTime() - champ.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 function getActiveLeagues(): LeagueConfig[] {
-  return ALL_LEAGUES.filter(isLeagueActive);
+  // Sort descending by days since championship — recently finished leagues go last (rightmost)
+  return ALL_LEAGUES.filter(isLeagueActive).sort((a, b) => daysSinceChampionship(b) - daysSinceChampionship(a));
 }
 
 function parseTeam(competitor: any, sport: Sport): Team {
