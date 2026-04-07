@@ -13,6 +13,7 @@ interface GameCardProps {
   isPastDate?: boolean;
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  leagueLabel?: string;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -99,7 +100,7 @@ function cleanStatusDetail(detail: string, stripDate: boolean): string {
   return cleaned.trim();
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, leagueLabel }: GameCardProps) {
   const prefetchedVideoId = useRef<string | null>(null);
   const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
@@ -124,8 +125,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     nhl: 4.5,  // ~2.5hr game + highlights up in 1-3hrs (Sportsnet/NHL)
     mlb: 5,    // ~3hr game + highlights up in ~2hrs (verified Dodgers-Jays 4/6/26)
     nfl: 5,    // ~3.5hr game + highlights up in 1-2hrs
+    fifa: 3,   // ~2hr match + highlights up quickly
+    golf: 6,   // ~5hr round + recap upload delay
+    tennis: 4, // ~2-3hr match + highlights up in 1-2hrs
   };
-  const regulationPeriods: Record<string, number> = { nba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4 };
+  const regulationPeriods: Record<string, number> = { nba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4, fifa: 2, golf: 4, tennis: 3 };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
@@ -141,7 +145,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     : null;
 
   // Pre-fetch YouTube video IDs in background (official channel + top search)
-  const officialChannel = getOfficialChannelName(game.sport);
+  const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;

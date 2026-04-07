@@ -8,6 +8,9 @@ const SPORT_PATHS: Record<Sport, string> = {
   ncaam: "/basketball/mens-college-basketball/scoreboard",
   nfl: "/football/nfl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
+  golf: "/golf/pga/scoreboard",
+  tennis: "/tennis/atp/scoreboard",
+  fifa: "/soccer/fifa.world/scoreboard",
 };
 
 // Seasonal league config: show/hide based on date
@@ -22,25 +25,55 @@ interface LeagueConfig {
 }
 
 const ALL_LEAGUES: LeagueConfig[] = [
+  // ── Major team sports ──
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06" },
   { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-19", championshipDate: "06-19" },
   { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-01", championshipDate: "11-01" },
-  { sport: "nhl", label: "NHL", startDate: "04-07", endDate: "06-19", championshipDate: "06-19" }, // Enters day after NCAAM ends
+  { sport: "nhl", label: "NHL", startDate: "04-07", endDate: "06-19", championshipDate: "06-19" },
   { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-09", championshipDate: "02-09" },
+  // ── Golf majors (leaderboard — needs custom UI) ──
+  { sport: "golf", label: "Masters", startDate: "04-09", endDate: "04-13", championshipDate: "04-13" },
+  { sport: "golf", label: "PGA Champ", startDate: "05-14", endDate: "05-18", championshipDate: "05-18" },
+  { sport: "golf", label: "US Open", startDate: "06-18", endDate: "06-22", championshipDate: "06-22" },
+  { sport: "golf", label: "The Open", startDate: "07-16", endDate: "07-20", championshipDate: "07-20" },
+  // ── Tennis Grand Slams ──
+  { sport: "tennis", label: "French Open", startDate: "05-24", endDate: "06-08", championshipDate: "06-08" },
+  { sport: "tennis", label: "Wimbledon", startDate: "06-29", endDate: "07-13", championshipDate: "07-13" },
+  { sport: "tennis", label: "US Open", startDate: "08-25", endDate: "09-14", championshipDate: "09-14" },
+  // ── FIFA World Cup 2026 (US/Canada/Mexico — one-time) ──
+  { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19" },
 ];
 
-// Transition schedule — new league enters rightmost:
-// ────────────────────────────────────────────────────────────
-// Mar 20:       MLB starts        → [NBA, NCAAM, MLB]    (MLB enters right)
-// Apr 6:        NCAAM championship → [NBA, NCAAM, MLB]    (NCAAM leftmost on its big day)
-// Apr 7:        NCAAM out, NHL in → [NBA, MLB, NHL]       (NHL enters right)
-// Jun 20:       NBA+NHL end       → [MLB]                 (summer — 1 column)
-// Sep 4:        NFL starts        → [MLB, NFL]            (NFL enters right)
-// Oct 20:       NBA starts        → [MLB, NFL, NBA]       (NBA enters right)
-// Nov 1:        NCAAM starts      → [MLB, NFL, NBA, NCAAM] (4 leagues — all shown)
-// Nov 2:        MLB ends          → [NFL, NBA, NCAAM]
-// Feb 10:       NFL ends          → [NBA, NCAAM]          (2 columns until MLB returns)
-// ────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// FULL YEAR SCHEDULE — Apr 7 2026 → Apr 6 2027
+// New leagues always enter rightmost. Championship day = leftmost.
+// ═══════════════════════════════════════════════════════════════
+// Apr 7-8:        NCAAM out, NHL in           → [NBA, MLB, NHL]
+// Apr 9-13:       + Masters                   → [NBA, MLB, NHL, Masters]
+// Apr 14 – May 13:                            → [NBA, MLB, NHL]
+// May 14-18:      + PGA Championship          → [NBA, MLB, NHL, PGA Champ]
+// May 19-23:                                  → [NBA, MLB, NHL]
+// May 24 – Jun 8: + French Open              → [NBA, MLB, NHL, French Open]
+// Jun 9-10:                                   → [NBA, MLB, NHL]
+// Jun 11-17:      + World Cup                 → [NBA, MLB, NHL, World Cup]
+// Jun 18-19:      + US Open Golf              → [NBA, MLB, NHL, World Cup, US Open]
+// Jun 20-22:      NBA+NHL end                 → [MLB, World Cup, US Open]
+// Jun 23-28:      US Open Golf ends           → [MLB, World Cup]
+// Jun 29 – Jul 12: + Wimbledon               → [MLB, World Cup, Wimbledon]
+// Jul 13-15:      Wimbledon out               → [MLB, World Cup]
+// Jul 16-19:      + The Open (golf)           → [MLB, World Cup, The Open]
+// Jul 20:         World Cup + Open end        → [MLB]
+// Jul 21 – Aug 24:                            → [MLB]
+// Aug 25 – Sep 3: + US Open Tennis            → [MLB, US Open]
+// Sep 4-14:       + NFL                       → [MLB, US Open, NFL]
+// Sep 15 – Oct 19:                            → [MLB, NFL]
+// Oct 20-31:      + NBA                       → [MLB, NFL, NBA]
+// Nov 1:          + NCAAM, MLB ends next day  → [MLB, NFL, NBA, NCAAM]
+// Nov 2 – Feb 9:                              → [NFL, NBA, NCAAM]
+// Feb 10 – Mar 19: NFL ends                   → [NBA, NCAAM]
+// Mar 20 – Apr 6:  + MLB                      → [NBA, NCAAM, MLB]
+// Apr 6:          NCAAM championship day      → [NCAAM, NBA, MLB]
+// ═══════════════════════════════════════════════════════════════
 
 function toMMDD(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -107,11 +140,14 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   scoringDivisor: number;   // normalizes scoring bonus per sport
   regulationPeriods: number; // normal period count (innings for MLB)
 }> = {
-  mlb:   { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,  regulationPeriods: 9 },
-  nba:   { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40, regulationPeriods: 4 },
-  ncaam: { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30, regulationPeriods: 2 },
-  nhl:   { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 2,  regulationPeriods: 3 },
-  nfl:   { multiplier: 6,   overtimeBonus: 15, scoringDivisor: 10, regulationPeriods: 4 },
+  mlb:    { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,  regulationPeriods: 9 },
+  nba:    { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40, regulationPeriods: 4 },
+  ncaam:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30, regulationPeriods: 2 },
+  nhl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 2,  regulationPeriods: 3 },
+  nfl:    { multiplier: 6,   overtimeBonus: 15, scoringDivisor: 10, regulationPeriods: 4 },
+  fifa:   { multiplier: 30,  overtimeBonus: 25, scoringDivisor: 1,  regulationPeriods: 2 },
+  golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,  regulationPeriods: 4 },
+  tennis: { multiplier: 8,   overtimeBonus: 15, scoringDivisor: 5,  regulationPeriods: 3 },
 };
 
 // Calculate running margin from linescores: average absolute margin across all periods

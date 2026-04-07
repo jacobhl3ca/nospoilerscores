@@ -162,6 +162,7 @@ export default function LeagueColumn({
                 favoriteTeams={favoriteTeams}
                 onToggleFavoriteTeam={onToggleFavoriteTeam}
                 showRatings={showRatings}
+                leagueLabel={league.label}
                 onPlayHighlight={onPlayHighlight}
                 nextGameDate={formatDateCompact(league.nextGameDay!.date)}
               />

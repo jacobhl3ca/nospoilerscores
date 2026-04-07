@@ -5,6 +5,16 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   nhl: "NHL",
   nfl: "NFL",
   ncaam: "March Madness",
+  fifa: "FIFA",
+  // Golf majors — each tournament has its own channel
+  golf_masters: "The Masters",
+  golf_pga: "PGA Championship",
+  golf_usopen: "USGA",
+  golf_theopen: "The Open",
+  // Tennis Grand Slams
+  tennis_frenchopen: "Roland-Garros",
+  tennis_wimbledon: "Wimbledon",
+  tennis_usopen: "US Open Tennis Championships",
 };
 
 export function getYouTubeSearchUrl(
@@ -26,7 +36,12 @@ export function getHighlightSearchQuery(
   return buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
 }
 
-export function getOfficialChannelName(sport: string): string | null {
+export function getOfficialChannelName(sport: string, label?: string): string | null {
+  // Tournament-specific channels for golf/tennis
+  if (label) {
+    const labelKey = `${sport}_${label.toLowerCase().replace(/\s+/g, "")}`;
+    if (OFFICIAL_CHANNELS[labelKey]) return OFFICIAL_CHANNELS[labelKey];
+  }
   return OFFICIAL_CHANNELS[sport] ?? null;
 }
 
