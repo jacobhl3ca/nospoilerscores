@@ -6,6 +6,7 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   nfl: "NFL",
   ncaam: "March Madness",
   fifa: "FIFA",
+  epl: "Premier League",
   // Golf majors — each tournament has its own channel
   golf_masters: "The Masters",
   golf_pga: "PGA Championship",

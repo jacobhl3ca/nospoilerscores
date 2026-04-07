@@ -11,6 +11,7 @@ const SPORT_PATHS: Record<Sport, string> = {
   golf: "/golf/pga/scoreboard",
   tennis: "/tennis/atp/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",
+  epl: "/soccer/eng.1/scoreboard",
 };
 
 // Seasonal league config: show/hide based on date
@@ -42,6 +43,8 @@ const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "tennis", label: "US Open", startDate: "08-25", endDate: "09-14", championshipDate: "09-14" },
   // ── FIFA World Cup 2026 (US/Canada/Mexico — one-time) ──
   { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19" },
+  // ── Premier League (Aug–May) ──
+  { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -63,16 +66,17 @@ const ALL_LEAGUES: LeagueConfig[] = [
 // Jul 13-15:      Wimbledon out               → [MLB, World Cup]
 // Jul 16-19:      + The Open (golf)           → [MLB, World Cup, The Open]
 // Jul 20:         World Cup + Open end        → [MLB]
-// Jul 21 – Aug 24:                            → [MLB]
-// Aug 25 – Sep 3: + US Open Tennis            → [MLB, US Open]
-// Sep 4-14:       + NFL                       → [MLB, US Open, NFL]
-// Sep 15 – Oct 19:                            → [MLB, NFL]
-// Oct 20-31:      + NBA                       → [MLB, NFL, NBA]
-// Nov 1:          + NCAAM, MLB ends next day  → [MLB, NFL, NBA, NCAAM]
-// Nov 2 – Feb 9:                              → [NFL, NBA, NCAAM]
-// Feb 10 – Mar 19: NFL ends                   → [NBA, NCAAM]
-// Mar 20 – Apr 6:  + MLB                      → [NBA, NCAAM, MLB]
-// Apr 6:          NCAAM championship day      → [NCAAM, NBA, MLB]
+// Jul 21 – Aug 15:                            → [MLB]
+// Aug 16-24:      + Prem                      → [MLB, Prem]
+// Aug 25 – Sep 3: + US Open Tennis            → [MLB, Prem, US Open]
+// Sep 4-14:       + NFL                       → [MLB, Prem, US Open, NFL]
+// Sep 15 – Oct 19:                            → [MLB, Prem, NFL]
+// Oct 20-31:      + NBA                       → [MLB, Prem, NFL, NBA]
+// Nov 1:          + NCAAM, MLB ends next day  → [MLB, Prem, NFL, NBA, NCAAM]
+// Nov 2 – Feb 9:                              → [Prem, NFL, NBA, NCAAM]
+// Feb 10 – Mar 19: NFL ends                   → [Prem, NBA, NCAAM]
+// Mar 20 – Apr 6:  + MLB                      → [Prem, NBA, NCAAM, MLB]
+// Apr 6:          NCAAM championship day      → [NCAAM, Prem, NBA, MLB]
 // ═══════════════════════════════════════════════════════════════
 
 function toMMDD(d: Date): string {
@@ -146,6 +150,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   nhl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 2,  regulationPeriods: 3 },
   nfl:    { multiplier: 6,   overtimeBonus: 15, scoringDivisor: 10, regulationPeriods: 4 },
   fifa:   { multiplier: 30,  overtimeBonus: 25, scoringDivisor: 1,  regulationPeriods: 2 },
+  epl:    { multiplier: 30,  overtimeBonus: 20, scoringDivisor: 1,  regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,  regulationPeriods: 4 },
   tennis: { multiplier: 8,   overtimeBonus: 15, scoringDivisor: 5,  regulationPeriods: 3 },
 };
