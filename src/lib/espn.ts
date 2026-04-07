@@ -25,19 +25,17 @@ const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06" }, // Championship 4/6, gone 4/7+
   { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-19", championshipDate: "06-19" },
   { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-01", championshipDate: "11-01" },
-  { sport: "nhl", label: "NHL", startDate: "04-18", endDate: "06-19", championshipDate: "06-19" },
+  { sport: "nhl", label: "NHL", startDate: "10-04", endDate: "06-19", championshipDate: "06-19" }, // Full season (reg + playoffs)
   { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-09", championshipDate: "02-09" }, // Super Bowl Sunday
 ];
 
-// Column rotation schedule (auto-computed from daysSinceChampionship):
-// Apr 7:  NCAAM just ended → [NBA, MLB] (NCAAM gone next day)
-// Apr 18: NHL starts → [NBA, MLB, NHL]
-// Jun 20: NBA+NHL ended → [MLB, NBA, NHL] → then [MLB] alone
-// Sep 4:  NFL starts → [MLB, NFL]
-// Oct 20: NBA starts → [NFL, NBA, MLB]
-// Nov 2:  MLB ended → [NFL, NBA] (MLB gone few days later)
-// Nov 1:  NCAAM starts → [NFL, NBA, NCAAM]
-// Feb 10: NFL ended → [NBA, NCAAM] (NFL gone few days later)
+// Column rotation — always 3 leagues visible:
+// Apr 7:  NCAAM gone → [NBA, MLB, NHL]
+// Jun 20: NBA+NHL end → [MLB, NFL, ...] — summer gap, only MLB+NFL pre-season
+// Sep 4:  NFL starts → [MLB, NFL, NHL(Oct)]
+// Oct 4:  NHL starts → [NFL, NBA(Oct), MLB]
+// Nov 2:  MLB ends → [NFL, NBA, NCAAM]
+// Feb 10: NFL ends → [NBA, NCAAM, NHL]
 // Mar 20: MLB starts → [NBA, MLB, NCAAM]
 
 function toMMDD(d: Date): string {
@@ -58,8 +56,12 @@ function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
 
 // Which league most recently finished its championship relative to viewDate?
 // That league goes to position 3 (rightmost column).
+// On championship day itself, return 0 so the league stays prominent (leftmost).
 function daysSinceChampionship(league: LeagueConfig, viewDate: Date): number {
   if (!league.championshipDate) return 365;
+  const mmdd = toMMDD(viewDate);
+  // Championship day itself — treat as "long ago" so it sorts leftmost
+  if (mmdd === league.championshipDate) return 365;
   const year = viewDate.getFullYear();
   const [m, d] = league.championshipDate.split("-").map(Number);
   let champ = new Date(year, m - 1, d);

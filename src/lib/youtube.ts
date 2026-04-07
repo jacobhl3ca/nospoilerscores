@@ -4,7 +4,7 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   mlb: "MLB",
   nhl: "NHL",
   nfl: "NFL",
-  ncaam: "NCAA March Madness",
+  // ncaam: no reliable highlights channel — March Madness posts hype, not full game highlights
 };
 
 export function getYouTubeSearchUrl(

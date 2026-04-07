@@ -253,43 +253,43 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ) : <span />}
       </div>
 
-      {/* Highlights — official channel + top search result */}
+      {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}
       {isFinished && highlightUrl && (
         <div className="mt-1 sm:mt-2 flex gap-1">
-          {/* Official channel button */}
-          <button
-            onClick={async () => {
-              if (!onPlayHighlight) return;
-              if (prefetchedOfficialId.current) {
-                onPlayHighlight(prefetchedOfficialId.current, highlightUrl);
-                return;
-              }
-              setFetchingOnClick("official");
-              const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-              const id = await fetchFirstVideoId(query, officialChannel ?? undefined);
-              setFetchingOnClick(null);
-              if (id) {
-                prefetchedOfficialId.current = id;
-                onPlayHighlight(id, highlightUrl);
-              } else {
-                window.open(highlightUrl, "_blank");
-              }
-            }}
-            disabled={fetchingOnClick !== null}
-            className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-            style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
-            title={`${officialChannel ?? "Official"} highlights`}
-          >
-            {fetchingOnClick === "official" ? (
-              <span className="text-[10px]">Loading...</span>
-            ) : (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                <span className="text-[10px] font-medium">{game.sport.toUpperCase()}</span>
-              </>
-            )}
-          </button>
-          {/* Top search result button */}
+          {officialChannel && (
+            <button
+              onClick={async () => {
+                if (!onPlayHighlight) return;
+                if (prefetchedOfficialId.current) {
+                  onPlayHighlight(prefetchedOfficialId.current, highlightUrl);
+                  return;
+                }
+                setFetchingOnClick("official");
+                const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
+                const id = await fetchFirstVideoId(query, officialChannel);
+                setFetchingOnClick(null);
+                if (id) {
+                  prefetchedOfficialId.current = id;
+                  onPlayHighlight(id, highlightUrl);
+                } else {
+                  window.open(highlightUrl, "_blank");
+                }
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              title={`${officialChannel} highlights`}
+            >
+              {fetchingOnClick === "official" ? (
+                <span className="text-[10px]">Loading...</span>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[10px] font-medium">{game.sport.toUpperCase()}</span>
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={async () => {
               if (!onPlayHighlight) return;
