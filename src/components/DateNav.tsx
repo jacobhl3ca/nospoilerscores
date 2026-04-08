@@ -184,9 +184,13 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
   const today = getDateString(0);
   const tomorrow = getDateString(1);
 
+  const isStandardDate = selectedDate === yesterday || selectedDate === today || selectedDate === tomorrow;
+
   const dateButtons = [
     { date: yesterday, label: "Yesterday", shortLabel: "Yst" },
-    { date: today, label: "Today", shortLabel: "Today" },
+    isStandardDate
+      ? { date: today, label: "Today", shortLabel: "Today" }
+      : { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayName(selectedDate) },
     { date: tomorrow, label: "Tomorrow", shortLabel: "Tmrw" },
   ];
 
