@@ -61,8 +61,9 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   if (days > 30) return null; // only show within 1 month
   const mm = playoffDate.getMonth() + 1;
   const dd = playoffDate.getDate();
-  const timeLabel = days === 1 ? "tomorrow" : `in ${days} days`;
-  const full = `${config.label} ${timeLabel} (${mm}/${dd})`;
+  const full = days === 1
+    ? `${config.label} start tomorrow`
+    : `${config.label} start ${mm}/${dd} (${days} days)`;
   const short = `${config.label} ${mm}/${dd}`;
   return { full, short };
 }
