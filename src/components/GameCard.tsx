@@ -245,10 +245,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           {useAbbreviations ? (
             <span className="text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
           ) : (
-            <>
-              <span className="hidden xl:inline text-sm truncate team-name" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
-              <span className="xl:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
-            </>
+            <span className="text-sm truncate team-name" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
           )}
           {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
         </span>
@@ -260,10 +257,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           {useAbbreviations ? (
             <span className="text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
           ) : (
-            <>
-              <span className="hidden xl:inline text-sm truncate team-name" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
-              <span className="xl:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
-            </>
+            <span className="text-sm truncate team-name" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
           )}
           {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
         </span>
