@@ -194,7 +194,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         const showBar = hasStatusText || hasRating || hasBroadcast || showFinal;
         if (!showBar) return null;
         return (
-          <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] relative" style={{ color: "var(--text-muted)" }}>
+          <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px]" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
             <span>
               {isLive && gameProgress ? (
                 liveUrl ? (
@@ -210,12 +210,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 <span className="text-[11px]">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
               ) : null}
             </span>
-            {hasRating && (
-              <span className="absolute left-1/2 -translate-x-1/2">
-                <RatingBadge rating={game.rating!} />
-              </span>
-            )}
-            <span className={`ml-auto truncate text-right ${hasRating ? "max-w-[3.5rem]" : ""}`}>
+            <span>
+              {hasRating && <RatingBadge rating={game.rating!} />}
+            </span>
+            <span className="truncate text-right">
               {hasBroadcast && (
                 game.broadcasts.length > 1 ? (
                   <span
