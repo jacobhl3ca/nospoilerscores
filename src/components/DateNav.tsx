@@ -206,7 +206,7 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
     <div className="flex gap-0 sm:gap-0.5 items-center justify-center">
       <button
         onClick={goEarlier}
-        className="date-nav-arrow w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full text-[10px] sm:text-xs transition-colors cursor-pointer"
+        className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full text-sm sm:text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
         title="Go back one day"
       >
@@ -232,7 +232,7 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
       })}
       <button
         onClick={goLater}
-        className="date-nav-arrow w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full text-[10px] sm:text-xs transition-colors cursor-pointer"
+        className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full text-sm sm:text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
         title="Go forward one day"
       >
