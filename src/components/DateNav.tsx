@@ -226,7 +226,7 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
           <button
             key={btn.date}
             onClick={() => onDateChange(btn.date)}
-            className="date-nav-btn px-1.5 sm:px-3 py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-colors"
+            className="date-nav-btn w-[3.2rem] sm:w-[5.5rem] py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden"
             style={
               isSelected
                 ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
