@@ -180,10 +180,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       style={{
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
-        ...(game.isPlayoff ? { borderLeft: "2px solid #c9a032" } : {}),
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; if (game.isPlayoff) e.currentTarget.style.borderLeftColor = "#c9a032"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
     >
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
