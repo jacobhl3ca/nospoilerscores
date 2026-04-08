@@ -211,7 +211,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               ) : null}
             </span>
             {hasRating && (
-              <span className={showFinal ? "absolute left-1/2 -translate-x-1/2" : ""}>
+              <span className="absolute left-1/2 -translate-x-1/2">
                 <RatingBadge rating={game.rating!} />
               </span>
             )}
