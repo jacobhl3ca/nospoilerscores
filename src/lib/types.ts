@@ -21,6 +21,8 @@ export interface Game {
   seriesNote: string | null;
   // Whether this is a playoff/postseason/tournament game
   isPlayoff: boolean;
+  // Full playoff round label (e.g. "Sweet 16", "ALWC - Game 2", "Conference Finals")
+  playoffLabel: string | null;
   // Highlight/recap links
   highlightUrl: string | null; // ESPN video clip URL
   recapUrl: string | null; // ESPN gamecast URL

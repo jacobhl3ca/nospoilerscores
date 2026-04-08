@@ -176,7 +176,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
 
   return (
     <div
-      className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors${game.isPlayoff ? " playoff-card" : ""}`}
+      className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors"
       style={{
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
@@ -261,6 +261,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>
         ) : <span />}
       </div>
+
+      {/* Playoff label */}
+      {game.isPlayoff && (
+        <div className="mt-1 text-[9px] sm:text-[10px] font-medium tracking-wide uppercase" style={{ color: "#c9a032" }}>
+          {game.playoffLabel || (game.seriesNote ? `Playoffs · ${game.seriesNote}` : "Playoffs")}
+        </div>
+      )}
 
       {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}
       {isFinished && highlightUrl && (

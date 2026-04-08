@@ -284,18 +284,21 @@ function parseGame(event: any, sport: Sport): Game {
     if (highlightUrl) break;
   }
 
-  // Extract series game number from notes (e.g. "ALWC - Game 2" → "Game 2")
+  // Extract series game number and playoff round from notes
   let seriesNote: string | null = null;
+  let playoffLabel: string | null = null;
   let isPlayoff = false;
   for (const note of competition?.notes ?? []) {
-    const headline = (note?.headline ?? "").toLowerCase();
-    const match = headline.match(/Game \d+/i);
+    const headline = note?.headline ?? "";
+    const headlineLower = headline.toLowerCase();
+    const match = headlineLower.match(/Game \d+/i);
     if (match) {
       seriesNote = match[0];
     }
     // Detect playoff/postseason/tournament games from notes
-    if (/playoff|postseason|wild.?card|divisional|conference|championship|finals|round|semi.?final|quarter.?final|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headline)) {
+    if (/playoff|postseason|wild.?card|divisional|conference|championship|finals|round|semi.?final|quarter.?final|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
       isPlayoff = true;
+      if (!playoffLabel) playoffLabel = headline;
     }
   }
   // Also check season type from the API if available
@@ -330,6 +333,7 @@ function parseGame(event: any, sport: Sport): Game {
     rating: calculateRating(event),
     seriesNote,
     isPlayoff,
+    playoffLabel,
     highlightUrl,
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports
