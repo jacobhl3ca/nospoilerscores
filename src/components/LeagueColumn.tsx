@@ -70,34 +70,41 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
 }
 
 function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
-  const containerRef = useRef<HTMLSpanElement>(null);
+  const ref = useRef<HTMLSpanElement>(null);
   const result = getPlayoffSubtitle(sport, selectedDate, games);
-  const [text, setText] = useState(result?.short || "\u00A0");
+  const [useShort, setUseShort] = useState(false);
 
   useEffect(() => {
-    if (!result) { setText("\u00A0"); return; }
-    const el = containerRef.current;
-    if (!el) { setText(result.short); return; }
-    // Measure full text against container width using a hidden probe
-    const probe = document.createElement("span");
-    probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-style:italic;";
-    // Match the responsive font size
-    const fontSize = window.matchMedia("(min-width:640px)").matches ? "10px" : "9px";
-    probe.style.fontSize = fontSize;
-    document.body.appendChild(probe);
-    probe.textContent = result.full;
-    const fullWidth = probe.offsetWidth;
-    document.body.removeChild(probe);
-    setText(fullWidth <= el.clientWidth ? result.full : result.short);
-  }, [result?.full, result?.short]);
+    if (!result) return;
+    setUseShort(false); // try full first
+  }, [result?.full]);
+
+  // After rendering full text, check if it overflows
+  useEffect(() => {
+    if (useShort || !result) return;
+    const el = ref.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      if (el.scrollWidth > el.clientWidth + 1) setUseShort(true);
+    });
+  });
+
+  // Re-check on resize
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setUseShort(false));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <span
-      ref={containerRef}
-      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full text-center"
+      ref={ref}
+      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center"
       style={{ color: result ? "var(--text-muted)" : "transparent" }}
     >
-      {text}
+      {result ? (useShort ? result.short : result.full) : "\u00A0"}
     </span>
   );
 }
