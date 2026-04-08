@@ -26,7 +26,17 @@ const PLAYOFF_START_DATES: Record<string, { date: string; label: string }> = {
   ncaam: { date: "2026-03-17", label: "March Madness" },
 };
 
-function getPlayoffSubtitle(sport: Sport, selectedDate: string): string | null {
+// Extract short round name from ESPN's long headline
+// e.g. "NCAA Men's Basketball Championship - National Championship" → "National Championship"
+// e.g. "ALWC - Game 2" → "AL Wild Card · Game 2"
+function shortenPlayoffLabel(headline: string): string {
+  // Take everything after the last " - " separator
+  const parts = headline.split(" - ");
+  const round = parts[parts.length - 1].trim();
+  return round;
+}
+
+function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): string | null {
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
   const y = +selectedDate.slice(0, 4);
@@ -35,13 +45,21 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string): string | null {
   const viewDate = new Date(y, m, d);
   const playoffDate = new Date(config.date + "T12:00:00");
   const diff = playoffDate.getTime() - viewDate.getTime();
-  if (diff <= 0) return null; // already in or past playoffs
+
+  // Playoffs already started — show round name from game data
+  if (diff <= 0) {
+    if (!games?.length) return null;
+    const label = games.find(g => g.playoffLabel)?.playoffLabel;
+    if (!label) return null;
+    return shortenPlayoffLabel(label);
+  }
+
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
   if (days > 30) return null; // only show within 1 month
   const weeks = Math.floor(days / 7);
-  const playoffLabel = playoffDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const playoffDateLabel = playoffDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const timeLabel = weeks >= 2 ? `${weeks} wks` : days === 1 ? "tomorrow" : `${days}d`;
-  return `${config.label} start ${playoffLabel} (${timeLabel})`;
+  return `${config.label} start ${playoffDateLabel} (${timeLabel})`;
 }
 
 function formatDateCompact(yyyymmdd: string): string {
@@ -181,7 +199,7 @@ export default function LeagueColumn({
           </button>
         </div>
         {(() => {
-          const subtitle = getPlayoffSubtitle(league.sport, selectedDate);
+          const subtitle = getPlayoffSubtitle(league.sport, selectedDate, league.games);
           return (
             <span className="text-[9px] sm:text-[10px] italic mt-0.5" style={{ color: subtitle ? "var(--text-muted)" : "transparent" }}>
               {subtitle || "\u00A0"}

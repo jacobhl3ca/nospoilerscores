@@ -260,13 +260,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ) : <span />}
       </div>
 
-      {/* Playoff label */}
-      {game.isPlayoff && (
-        <div className="mt-1 text-[9px] sm:text-[10px] font-medium tracking-wide uppercase" style={{ color: "#c9a032" }}>
-          {game.playoffLabel || (game.seriesNote ? `Playoffs · ${game.seriesNote}` : "Playoffs")}
-        </div>
-      )}
-
       {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}
       {isFinished && highlightUrl && (
         <div className="mt-1 sm:mt-2 flex gap-1">
