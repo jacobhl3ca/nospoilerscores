@@ -182,11 +182,11 @@ export default function LeagueColumn({
         </div>
         {(() => {
           const subtitle = getPlayoffSubtitle(league.sport, selectedDate);
-          return subtitle ? (
-            <span className="text-[9px] sm:text-[10px] italic mt-0.5" style={{ color: "var(--text-muted)" }}>
-              {subtitle}
+          return (
+            <span className="text-[9px] sm:text-[10px] italic mt-0.5" style={{ color: subtitle ? "var(--text-muted)" : "transparent" }}>
+              {subtitle || "\u00A0"}
             </span>
-          ) : null;
+          );
         })()}
       </div>
       {sorted.length === 0 ? (
