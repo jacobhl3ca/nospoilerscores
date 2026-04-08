@@ -70,26 +70,31 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
 }
 
 function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
-  const ref = useRef<HTMLSpanElement>(null);
+  const containerRef = useRef<HTMLSpanElement>(null);
   const result = getPlayoffSubtitle(sport, selectedDate, games);
   const [text, setText] = useState(result?.short || "\u00A0");
 
   useEffect(() => {
     if (!result) { setText("\u00A0"); return; }
-    // Try full text, fall back to short if it overflows
-    setText(result.full);
-    requestAnimationFrame(() => {
-      const el = ref.current;
-      if (el && el.scrollWidth > el.clientWidth) {
-        setText(result.short);
-      }
-    });
+    const el = containerRef.current;
+    if (!el) { setText(result.short); return; }
+    // Measure full text against container width using a hidden probe
+    const probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-style:italic;";
+    // Match the responsive font size
+    const fontSize = window.matchMedia("(min-width:640px)").matches ? "10px" : "9px";
+    probe.style.fontSize = fontSize;
+    document.body.appendChild(probe);
+    probe.textContent = result.full;
+    const fullWidth = probe.offsetWidth;
+    document.body.removeChild(probe);
+    setText(fullWidth <= el.clientWidth ? result.full : result.short);
   }, [result?.full, result?.short]);
 
   return (
     <span
-      ref={ref}
-      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-ellipsis"
+      ref={containerRef}
+      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full text-center"
       style={{ color: result ? "var(--text-muted)" : "transparent" }}
     >
       {text}
