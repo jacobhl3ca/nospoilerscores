@@ -38,7 +38,7 @@ function shortenPlayoffLabel(headline: string): string {
   return round;
 }
 
-function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): string | null {
+function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): { full: string; short: string } | null {
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
   const y = +selectedDate.slice(0, 4);
@@ -53,15 +53,46 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
     if (!games?.length) return null;
     const label = games.find(g => g.playoffLabel)?.playoffLabel;
     if (!label) return null;
-    return shortenPlayoffLabel(label);
+    const text = shortenPlayoffLabel(label);
+    return { full: text, short: text };
   }
 
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
   if (days > 30) return null; // only show within 1 month
   const mm = playoffDate.getMonth() + 1;
   const dd = playoffDate.getDate();
-  if (days === 1) return `${config.label} tomorrow`;
-  return `${config.label} ${mm}/${dd} (${days}d)`;
+  const timeLabel = days === 1 ? "tomorrow" : `in ${days} days`;
+  const full = `${config.label} ${timeLabel} (${mm}/${dd})`;
+  const short = `${config.label} ${mm}/${dd}`;
+  return { full, short };
+}
+
+function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const result = getPlayoffSubtitle(sport, selectedDate, games);
+  const [text, setText] = useState(result?.short || "\u00A0");
+
+  useEffect(() => {
+    if (!result) { setText("\u00A0"); return; }
+    // Try full text, fall back to short if it overflows
+    setText(result.full);
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (el && el.scrollWidth > el.clientWidth) {
+        setText(result.short);
+      }
+    });
+  }, [result?.full, result?.short]);
+
+  return (
+    <span
+      ref={ref}
+      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-ellipsis"
+      style={{ color: result ? "var(--text-muted)" : "transparent" }}
+    >
+      {text}
+    </span>
+  );
 }
 
 function formatDateCompact(yyyymmdd: string): string {
@@ -257,14 +288,7 @@ export default function LeagueColumn({
               ★
             </button>
           </div>
-          {(() => {
-            const subtitle = getPlayoffSubtitle(league.sport, selectedDate, league.games);
-            return (
-              <span className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap" style={{ color: subtitle ? "var(--text-muted)" : "transparent" }}>
-                {subtitle || "\u00A0"}
-              </span>
-            );
-          })()}
+          <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
         </div>
       )}
       {sorted.length === 0 ? (
