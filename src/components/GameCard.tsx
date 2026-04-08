@@ -241,7 +241,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       {/* Teams */}
       <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>
         {logo(game.awayTeam, awayTBD)}
-        <span className="flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
+        <span className="team-name-container flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
           {useAbbreviations ? (
             <span className="text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
           ) : (
@@ -253,7 +253,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>
         ) : <span />}
         {logo(game.homeTeam, homeTBD)}
-        <span className="flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
+        <span className="team-name-container flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
           {useAbbreviations ? (
             <span className="text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
           ) : (

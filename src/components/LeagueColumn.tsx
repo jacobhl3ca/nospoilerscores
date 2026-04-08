@@ -60,8 +60,8 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   if (days > 30) return null; // only show within 1 month
   const mm = playoffDate.getMonth() + 1;
   const dd = playoffDate.getDate();
-  const timeLabel = days === 1 ? "tomorrow" : `in ${days} days`;
-  return `${config.label} ${timeLabel} (${mm}/${dd})`;
+  if (days === 1) return `${config.label} tomorrow`;
+  return `${config.label} ${mm}/${dd} (${days}d)`;
 }
 
 function formatDateCompact(yyyymmdd: string): string {
@@ -94,43 +94,58 @@ export default function LeagueColumn({
   section,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
-  const [useAbbreviations, setUseAbbreviations] = useState(false);
-  const checkedRef = useRef(false);
+  const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
 
-  // Reset when games change so we re-measure
+  // Measure whether full names would fit in the available column width
+  const checkIfFullNamesFit = () => {
+    const el = columnRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      // Find a team-name cell to measure available width
+      // The name sits in a flex container: [name] [star], inside a grid cell (1fr)
+      const nameContainers = el.querySelectorAll(".team-name-container");
+      if (!nameContainers.length) return;
+
+      // Get the longest team name from the rendered games
+      const allNames = league.games.flatMap(g => [
+        g.awayTeam.shortDisplayName,
+        g.homeTeam.shortDisplayName,
+      ]);
+      if (!allNames.length) return;
+
+      // Measure available width from the first name container
+      const container = nameContainers[0] as HTMLElement;
+      // Available width = container width minus star button (~18px) minus gap (4px)
+      const availableWidth = container.clientWidth - 22;
+
+      // Measure longest name using a hidden span
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-size:0.875rem;"; // text-sm = 14px
+      document.body.appendChild(probe);
+      let longestWidth = 0;
+      for (const name of allNames) {
+        probe.textContent = name;
+        if (probe.offsetWidth > longestWidth) longestWidth = probe.offsetWidth;
+      }
+      document.body.removeChild(probe);
+
+      setUseAbbreviations(longestWidth > availableWidth);
+    });
+  };
+
+  // Re-check when games change
   useEffect(() => {
-    checkedRef.current = false;
-    setUseAbbreviations(false);
+    checkIfFullNamesFit();
   }, [league.games]);
 
-  // After rendering full names, check if any would be truncated
-  useEffect(() => {
-    if (useAbbreviations || checkedRef.current) return;
-    const el = columnRef.current;
-    if (!el) return;
-    // Wait a frame for layout
-    requestAnimationFrame(() => {
-      const names = el.querySelectorAll(".team-name");
-      let anyTruncated = false;
-      names.forEach((name) => {
-        if (name.scrollWidth > name.clientWidth) anyTruncated = true;
-      });
-      checkedRef.current = true;
-      if (anyTruncated) setUseAbbreviations(true);
-    });
-  });
-
-  // Re-check on resize (column width may change)
+  // Re-check on resize
   useEffect(() => {
     const el = columnRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      checkedRef.current = false;
-      setUseAbbreviations(false);
-    });
+    const ro = new ResizeObserver(() => checkIfFullNamesFit());
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [league.games]);
 
   const topMatchups = sortByMatchups ?? false;
 
@@ -245,7 +260,7 @@ export default function LeagueColumn({
           {(() => {
             const subtitle = getPlayoffSubtitle(league.sport, selectedDate, league.games);
             return (
-              <span className="text-[9px] sm:text-[10px] italic mt-0.5" style={{ color: subtitle ? "var(--text-muted)" : "transparent" }}>
+              <span className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap" style={{ color: subtitle ? "var(--text-muted)" : "transparent" }}>
                 {subtitle || "\u00A0"}
               </span>
             );
