@@ -202,18 +202,14 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
     dateButtons.push({ date: selectedDate, label: formatDayName(selectedDate) });
   }
 
-  // Navigate one day earlier than the leftmost visible date
   const goEarlier = () => {
-    const leftmost = isBeforeYesterday ? selectedDate : yesterday;
-    const d = parseYMD(leftmost);
+    const d = parseYMD(selectedDate);
     d.setDate(d.getDate() - 1);
     onDateChange(toYYYYMMDD(d));
   };
 
-  // Navigate one day later than the rightmost visible date
   const goLater = () => {
-    const rightmost = isAfterTomorrow ? selectedDate : tomorrow;
-    const d = parseYMD(rightmost);
+    const d = parseYMD(selectedDate);
     d.setDate(d.getDate() + 1);
     onDateChange(toYYYYMMDD(d));
   };
