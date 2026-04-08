@@ -240,18 +240,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       {/* Teams */}
       <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>
         {logo(game.awayTeam, awayTBD)}
-        <span className="flex items-center gap-1 lg:gap-1.5 pl-2 lg:pl-3 min-w-0">
-          <span className="hidden lg:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
-          <span className="lg:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
+        <span className="flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
+          <span className="hidden xl:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
+          <span className="xl:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
           {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
         </span>
         {!awayTBD && game.awayTeam.record && !isPastDate ? (
           <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>
         ) : <span />}
         {logo(game.homeTeam, homeTBD)}
-        <span className="flex items-center gap-1 lg:gap-1.5 pl-2 lg:pl-3 min-w-0">
-          <span className="hidden lg:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
-          <span className="lg:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
+        <span className="flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
+          <span className="hidden xl:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
+          <span className="xl:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
           {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
         </span>
         {!homeTBD && game.homeTeam.record && !isPastDate ? (
