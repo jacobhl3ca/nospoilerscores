@@ -323,7 +323,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         {loading ? (
           <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="min-w-0 flex-1 max-w-[225px]">
+              <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="h-6 w-16 mx-auto mb-3 rounded" style={{ background: "var(--bg-card)" }} />
                 {[1, 2, 3, 4].map((j) => (
                   <div key={j} className="rounded-lg px-4 py-3 mb-2 animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
@@ -353,24 +353,71 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </button>
           </div>
         ) : (
-          <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
-            {sortedLeagues.map((league) => (
-              <LeagueColumn
-                key={league.sport}
-                league={league}
-                isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
-                onToggleFavoriteLeague={toggleFavoriteLeague}
-                favoriteTeams={prefs.favoriteTeams}
-                onToggleFavoriteTeam={toggleFavoriteTeam}
-                showRatings={prefs.showRatings}
-                isPastDate={selectedDate < getDateString(0)}
-                isToday={isToday}
-                sortByMatchups={prefs.showRatings}
-                onPlayHighlight={(videoId, fallbackUrl) => setVideoModal({ videoId, fallbackUrl })}
-                selectedDate={selectedDate}
-              />
-            ))}
-          </div>
+          (() => {
+            const isPast = selectedDate < getDateString(0);
+            const hasNonFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state !== "post"));
+            const hasFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state === "post"));
+            const showFinalSplit = hasNonFinished && hasFinished;
+            const commonProps = {
+              isFavoriteLeague: false as boolean,
+              onToggleFavoriteLeague: toggleFavoriteLeague,
+              favoriteTeams: prefs.favoriteTeams,
+              onToggleFavoriteTeam: toggleFavoriteTeam,
+              showRatings: prefs.showRatings,
+              isPastDate: isPast,
+              isToday,
+              sortByMatchups: prefs.showRatings,
+              onPlayHighlight: (videoId: string, fallbackUrl: string) => setVideoModal({ videoId, fallbackUrl }),
+              selectedDate,
+            };
+
+            if (showFinalSplit) {
+              return (
+                <>
+                  <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
+                    {sortedLeagues.map((league) => (
+                      <LeagueColumn
+                        key={league.sport}
+                        league={league}
+                        {...commonProps}
+                        isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
+                        section="upcoming"
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 my-2 sm:my-3 mx-auto w-full" style={{ maxWidth: "calc(280px * 3 + 1rem * 2)", color: "var(--text-muted)", opacity: 0.4 }}>
+                    <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                    <span className="text-[10px] uppercase tracking-wide">Final</span>
+                    <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                  </div>
+                  <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
+                    {sortedLeagues.map((league) => (
+                      <LeagueColumn
+                        key={league.sport}
+                        league={league}
+                        {...commonProps}
+                        isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
+                        section="finished"
+                      />
+                    ))}
+                  </div>
+                </>
+              );
+            }
+
+            return (
+              <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
+                {sortedLeagues.map((league) => (
+                  <LeagueColumn
+                    key={league.sport}
+                    league={league}
+                    {...commonProps}
+                    isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
+                  />
+                ))}
+              </div>
+            );
+          })()
         )}
       </main>
 

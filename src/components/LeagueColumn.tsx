@@ -16,6 +16,7 @@ interface LeagueColumnProps {
   sortByMatchups?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
   selectedDate: string; // YYYYMMDD
+  section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
 }
 
 // 2025-26 season playoff start dates (update each season)
@@ -57,10 +58,10 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
 
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
   if (days > 30) return null; // only show within 1 month
-  const weeks = Math.floor(days / 7);
-  const playoffDateLabel = playoffDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const timeLabel = weeks >= 2 ? `${weeks} wks` : days === 1 ? "tomorrow" : `${days}d`;
-  return `${config.label} start ${playoffDateLabel} (${timeLabel})`;
+  const mm = playoffDate.getMonth() + 1;
+  const dd = playoffDate.getDate();
+  const timeLabel = days === 1 ? "tomorrow" : `in ${days} days`;
+  return `${config.label} ${timeLabel} (${mm}/${dd})`;
 }
 
 function formatDateCompact(yyyymmdd: string): string {
@@ -90,6 +91,7 @@ export default function LeagueColumn({
   sortByMatchups,
   onPlayHighlight,
   selectedDate,
+  section,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const [useAbbreviations, setUseAbbreviations] = useState(false);
@@ -213,62 +215,67 @@ export default function LeagueColumn({
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
-  // Split into sections for rendering separators
+  // Split into sections
   const liveGames = sorted.filter((g) => g.state === "in");
   const preGames = sorted.filter((g) => g.state === "pre");
   const postGames = sorted.filter((g) => g.state === "post");
-  const hasSections = !isPastDate && (
-    (liveGames.length > 0 || preGames.length > 0) && postGames.length > 0
-  );
+
+  const showHeader = section !== "finished";
+  const renderUpcoming = section !== "finished";
+  const renderFinished = section !== "upcoming";
 
   return (
-    <div ref={columnRef} className="flex-1 min-w-0 max-w-[225px]">
-      <div className="flex flex-col items-center mb-2 sm:mb-3">
-        <div className="flex items-center justify-center">
-          <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
-          <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-            {league.label}
-          </h2>
-          <button
-            onClick={() => onToggleFavoriteLeague(league.sport)}
-            className={`text-sm transition-colors ml-1.5 ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
-            style={isFavoriteLeague ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-            title={isFavoriteLeague ? "Remove favorite league" : "Set as favorite league"}
-          >
-            ★
-          </button>
-        </div>
-        {(() => {
-          const subtitle = getPlayoffSubtitle(league.sport, selectedDate, league.games);
-          return (
-            <span className="text-[9px] sm:text-[10px] italic mt-0.5" style={{ color: subtitle ? "var(--text-muted)" : "transparent" }}>
-              {subtitle || "\u00A0"}
-            </span>
-          );
-        })()}
-      </div>
-      {sorted.length === 0 ? (
-        isPastDate ? (
-          <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
-        ) : league.nextGameDay ? (
-          <div className="flex flex-col gap-1.5 sm:gap-2">
-            {league.nextGameDay.games.map((game) => (
-              <GameCard
-                key={game.id}
-                game={game}
-                favoriteTeams={favoriteTeams}
-                onToggleFavoriteTeam={onToggleFavoriteTeam}
-                showRatings={showRatings}
-                leagueLabel={league.label}
-                onPlayHighlight={onPlayHighlight}
-                nextGameDate={formatDateCompact(league.nextGameDay!.date)}
-                useAbbreviations={useAbbreviations}
-              />
-            ))}
+    <div ref={columnRef} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+      {showHeader && (
+        <div className="flex flex-col items-center mb-2 sm:mb-3">
+          <div className="flex items-center justify-center">
+            <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
+            <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+              {league.label}
+            </h2>
+            <button
+              onClick={() => onToggleFavoriteLeague(league.sport)}
+              className={`text-sm transition-colors ml-1.5 ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+              style={isFavoriteLeague ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
+              title={isFavoriteLeague ? "Remove favorite league" : "Set as favorite league"}
+            >
+              ★
+            </button>
           </div>
-        ) : (
-          <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No upcoming games</p>
-        )
+          {(() => {
+            const subtitle = getPlayoffSubtitle(league.sport, selectedDate, league.games);
+            return (
+              <span className="text-[9px] sm:text-[10px] italic mt-0.5" style={{ color: subtitle ? "var(--text-muted)" : "transparent" }}>
+                {subtitle || "\u00A0"}
+              </span>
+            );
+          })()}
+        </div>
+      )}
+      {sorted.length === 0 ? (
+        renderUpcoming ? (
+          isPastDate ? (
+            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
+          ) : league.nextGameDay ? (
+            <div className="flex flex-col gap-1.5 sm:gap-2">
+              {league.nextGameDay.games.map((game) => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  favoriteTeams={favoriteTeams}
+                  onToggleFavoriteTeam={onToggleFavoriteTeam}
+                  showRatings={showRatings}
+                  leagueLabel={league.label}
+                  onPlayHighlight={onPlayHighlight}
+                  nextGameDate={formatDateCompact(league.nextGameDay!.date)}
+                  useAbbreviations={useAbbreviations}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No upcoming games</p>
+          )
+        ) : null
       ) : isPastDate ? (
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {sorted.map((game) => (
@@ -287,8 +294,7 @@ export default function LeagueColumn({
         </div>
       ) : (
         <div className="flex flex-col gap-1.5 sm:gap-2">
-          {/* Live games */}
-          {liveGames.map((game) => (
+          {renderUpcoming && liveGames.map((game) => (
             <GameCard
               key={game.id}
               game={game}
@@ -300,8 +306,7 @@ export default function LeagueColumn({
               useAbbreviations={useAbbreviations}
             />
           ))}
-          {/* Upcoming games */}
-          {preGames.map((game) => (
+          {renderUpcoming && preGames.map((game) => (
             <GameCard
               key={game.id}
               game={game}
@@ -313,16 +318,7 @@ export default function LeagueColumn({
               useAbbreviations={useAbbreviations}
             />
           ))}
-          {/* Separator between upcoming/live and finished */}
-          {hasSections && (
-            <div className="flex items-center gap-2 my-1" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
-              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-              <span className="text-[10px] uppercase tracking-wide">Final</span>
-              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-            </div>
-          )}
-          {/* Finished games */}
-          {postGames.map((game) => (
+          {renderFinished && postGames.map((game) => (
             <GameCard
               key={game.id}
               game={game}
