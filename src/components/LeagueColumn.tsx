@@ -37,6 +37,7 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string): string | null {
   const diff = playoffDate.getTime() - viewDate.getTime();
   if (diff <= 0) return null; // already in or past playoffs
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  if (days > 30) return null; // only show within 1 month
   const weeks = Math.floor(days / 7);
   const playoffLabel = playoffDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const timeLabel = weeks >= 2 ? `${weeks} wks` : days === 1 ? "tomorrow" : `${days}d`;
