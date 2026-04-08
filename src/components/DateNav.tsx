@@ -185,13 +185,17 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
   const tomorrow = getDateString(1);
 
   const isStandardDate = selectedDate === yesterday || selectedDate === today || selectedDate === tomorrow;
+  const isBefore = !isStandardDate && selectedDate < yesterday;
+  const isAfter = !isStandardDate && selectedDate > tomorrow;
 
   const dateButtons = [
-    { date: yesterday, label: "Yesterday", shortLabel: "Yst" },
-    isStandardDate
-      ? { date: today, label: "Today", shortLabel: "Today" }
-      : { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayName(selectedDate) },
-    { date: tomorrow, label: "Tomorrow", shortLabel: "Tmrw" },
+    isBefore
+      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayName(selectedDate) }
+      : { date: yesterday, label: "Yesterday", shortLabel: "Yst" },
+    { date: today, label: "Today", shortLabel: "Today" },
+    isAfter
+      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayName(selectedDate) }
+      : { date: tomorrow, label: "Tomorrow", shortLabel: "Tmrw" },
   ];
 
   const goEarlier = () => {
