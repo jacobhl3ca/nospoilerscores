@@ -63,7 +63,7 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   const dd = playoffDate.getDate();
   const full = days === 1
     ? `${config.label} start tomorrow`
-    : `${config.label} start ${mm}/${dd} (${days} days)`;
+    : `${config.label} start ${mm}/${dd}`;
   const short = `${config.label} ${mm}/${dd}`;
   return { full, short };
 }
