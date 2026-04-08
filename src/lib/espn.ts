@@ -112,8 +112,11 @@ function daysSinceSeasonStart(league: LeagueConfig, viewDate: Date): number {
 function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
   const d = viewDate ?? new Date();
   const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d));
+  // EPL is low-priority filler — only show when fewer than 3 other leagues are active
+  const nonEpl = active.filter((l) => l.sport !== "epl");
+  const filtered = nonEpl.length < 3 ? active : nonEpl;
   // Sort descending: longest-active leftmost, newest rightmost
-  return active.sort((a, b) => daysSinceSeasonStart(b, d) - daysSinceSeasonStart(a, d));
+  return filtered.sort((a, b) => daysSinceSeasonStart(b, d) - daysSinceSeasonStart(a, d));
 }
 
 function parseTeam(competitor: any, sport: Sport): Team {

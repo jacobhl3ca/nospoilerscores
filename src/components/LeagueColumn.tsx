@@ -163,7 +163,7 @@ export default function LeagueColumn({
   );
 
   return (
-    <div className="flex-1 min-w-0 w-full max-w-[225px]">
+    <div className="flex-1 min-w-0 max-w-[225px]">
       <div className="flex flex-col items-center mb-2 sm:mb-3">
         <div className="flex items-center justify-center">
           <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>

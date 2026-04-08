@@ -321,9 +321,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
       <main className="max-w-6xl mx-auto px-4 py-6 flex-1 w-full">
         {loading ? (
-          <div className="flex flex-col items-center gap-6 sm:flex sm:flex-row sm:justify-center sm:items-start sm:gap-4">
+          <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="min-w-0 w-full max-w-[225px]">
+              <div key={i} className="min-w-0 flex-1 max-w-[225px]">
                 <div className="h-6 w-16 mx-auto mb-3 rounded" style={{ background: "var(--bg-card)" }} />
                 {[1, 2, 3, 4].map((j) => (
                   <div key={j} className="rounded-lg px-4 py-3 mb-2 animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
@@ -353,7 +353,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-6 sm:flex sm:flex-row sm:justify-center sm:items-start sm:gap-4">
+          <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
             {sortedLeagues.map((league) => (
               <LeagueColumn
                 key={league.sport}
