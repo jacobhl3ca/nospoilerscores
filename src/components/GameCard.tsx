@@ -241,8 +241,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>
         {logo(game.awayTeam, awayTBD)}
         <span className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 min-w-0">
-          <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
-          <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
+          <span className="text-xs sm:text-sm" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
           {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
         </span>
         {!awayTBD && game.awayTeam.record && !isPastDate ? (
@@ -250,8 +249,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ) : <span />}
         {logo(game.homeTeam, homeTBD)}
         <span className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 min-w-0">
-          <span className="hidden sm:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
-          <span className="sm:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
+          <span className="text-xs sm:text-sm" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
           {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
         </span>
         {!homeTBD && game.homeTeam.record && !isPastDate ? (
