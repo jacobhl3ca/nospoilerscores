@@ -234,7 +234,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
           </a>
-          <div className="flex-1 flex justify-start sm:justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
+          <div className="flex-1 flex justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
           <div className="justify-self-end flex items-center gap-1 sm:gap-2 flex-shrink-0">
