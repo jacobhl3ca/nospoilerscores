@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Game, LeagueData, Sport } from "@/lib/types";
 import GameCard from "./GameCard";
 
@@ -90,6 +91,45 @@ export default function LeagueColumn({
   onPlayHighlight,
   selectedDate,
 }: LeagueColumnProps) {
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [useAbbreviations, setUseAbbreviations] = useState(false);
+  const checkedRef = useRef(false);
+
+  // Reset when games change so we re-measure
+  useEffect(() => {
+    checkedRef.current = false;
+    setUseAbbreviations(false);
+  }, [league.games]);
+
+  // After rendering full names, check if any would be truncated
+  useEffect(() => {
+    if (useAbbreviations || checkedRef.current) return;
+    const el = columnRef.current;
+    if (!el) return;
+    // Wait a frame for layout
+    requestAnimationFrame(() => {
+      const names = el.querySelectorAll(".team-name");
+      let anyTruncated = false;
+      names.forEach((name) => {
+        if (name.scrollWidth > name.clientWidth) anyTruncated = true;
+      });
+      checkedRef.current = true;
+      if (anyTruncated) setUseAbbreviations(true);
+    });
+  });
+
+  // Re-check on resize (column width may change)
+  useEffect(() => {
+    const el = columnRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      checkedRef.current = false;
+      setUseAbbreviations(false);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const topMatchups = sortByMatchups ?? false;
 
   const getFavPriority = (game: Game) => {
@@ -182,7 +222,7 @@ export default function LeagueColumn({
   );
 
   return (
-    <div className="flex-1 min-w-0 max-w-[225px]">
+    <div ref={columnRef} className="flex-1 min-w-0 max-w-[225px]">
       <div className="flex flex-col items-center mb-2 sm:mb-3">
         <div className="flex items-center justify-center">
           <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
@@ -222,6 +262,7 @@ export default function LeagueColumn({
                 leagueLabel={league.label}
                 onPlayHighlight={onPlayHighlight}
                 nextGameDate={formatDateCompact(league.nextGameDay!.date)}
+                useAbbreviations={useAbbreviations}
               />
             ))}
           </div>
@@ -240,6 +281,7 @@ export default function LeagueColumn({
               onPlayHighlight={onPlayHighlight}
               isPastDate={isPastDate}
               isToday={isToday}
+              useAbbreviations={useAbbreviations}
             />
           ))}
         </div>
@@ -255,6 +297,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               onPlayHighlight={onPlayHighlight}
               isToday={isToday}
+              useAbbreviations={useAbbreviations}
             />
           ))}
           {/* Upcoming games */}
@@ -267,6 +310,7 @@ export default function LeagueColumn({
               showRatings={showRatings}
               onPlayHighlight={onPlayHighlight}
               isToday={isToday}
+              useAbbreviations={useAbbreviations}
             />
           ))}
           {/* Separator between upcoming/live and finished */}
@@ -288,6 +332,7 @@ export default function LeagueColumn({
               onPlayHighlight={onPlayHighlight}
               isPastDate={false}
               isToday={isToday}
+              useAbbreviations={useAbbreviations}
             />
           ))}
         </div>

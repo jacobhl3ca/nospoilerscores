@@ -14,6 +14,7 @@ interface GameCardProps {
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
   leagueLabel?: string;
+  useAbbreviations?: boolean;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -100,7 +101,7 @@ function cleanStatusDetail(detail: string, stripDate: boolean): string {
   return cleaned.trim();
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, leagueLabel }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, leagueLabel, useAbbreviations }: GameCardProps) {
   const prefetchedVideoId = useRef<string | null>(null);
   const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
@@ -241,8 +242,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>
         {logo(game.awayTeam, awayTBD)}
         <span className="flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
-          <span className="hidden xl:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
-          <span className="xl:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
+          {useAbbreviations ? (
+            <span className="text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
+          ) : (
+            <>
+              <span className="hidden xl:inline text-sm truncate team-name" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
+              <span className="xl:hidden text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
+            </>
+          )}
           {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
         </span>
         {!awayTBD && game.awayTeam.record && !isPastDate ? (
@@ -250,8 +257,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ) : <span />}
         {logo(game.homeTeam, homeTBD)}
         <span className="flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
-          <span className="hidden xl:inline text-sm truncate" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
-          <span className="xl:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
+          {useAbbreviations ? (
+            <span className="text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
+          ) : (
+            <>
+              <span className="hidden xl:inline text-sm truncate team-name" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
+              <span className="xl:hidden text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
+            </>
+          )}
           {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
         </span>
         {!homeTBD && game.homeTeam.record && !isPastDate ? (
