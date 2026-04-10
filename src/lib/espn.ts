@@ -48,35 +48,36 @@ const ALL_LEAGUES: LeagueConfig[] = [
 ];
 
 // ═══════════════════════════════════════════════════════════════
-// FULL YEAR SCHEDULE — Apr 7 2026 → Apr 6 2027
-// New leagues always enter rightmost. Championship day = leftmost.
+// FULL YEAR SCHEDULE — Max 3 leagues at a time
+// Event leagues (golf/tennis/FIFA) always shown; team leagues fill remaining slots by priority
+// Team priority: NBA > MLB > NHL > NFL > NCAAM > EPL
 // ═══════════════════════════════════════════════════════════════
-// Apr 7-8:        NCAAM out, NHL in           → [NBA, MLB, NHL]
-// Apr 9-13:       + Masters                   → [NBA, MLB, NHL, Masters]
-// Apr 14 – May 13:                            → [NBA, MLB, NHL]
-// May 14-18:      + PGA Championship          → [NBA, MLB, NHL, PGA Champ]
-// May 19-23:                                  → [NBA, MLB, NHL]
-// May 24 – Jun 8: + French Open              → [NBA, MLB, NHL, French Open]
-// Jun 9-10:                                   → [NBA, MLB, NHL]
-// Jun 11-17:      + World Cup                 → [NBA, MLB, NHL, World Cup]
-// Jun 18-19:      + US Open Golf              → [NBA, MLB, NHL, World Cup, US Open]
-// Jun 20-22:      NBA+NHL end                 → [MLB, World Cup, US Open]
-// Jun 23-28:      US Open Golf ends           → [MLB, World Cup]
-// Jun 29 – Jul 12: + Wimbledon               → [MLB, World Cup, Wimbledon]
-// Jul 13-15:      Wimbledon out               → [MLB, World Cup]
-// Jul 16-19:      + The Open (golf)           → [MLB, World Cup, The Open]
-// Jul 20:         World Cup + Open end        → [MLB]
-// Jul 21 – Aug 15:                            → [MLB]
-// Aug 16-24:      + Prem                      → [MLB, Prem]
-// Aug 25 – Sep 3: + US Open Tennis            → [MLB, Prem, US Open]
-// Sep 4-14:       + NFL                       → [MLB, Prem, US Open, NFL]
-// Sep 15 – Oct 19:                            → [MLB, Prem, NFL]
-// Oct 20-31:      + NBA                       → [MLB, Prem, NFL, NBA]
-// Nov 1:          + NCAAM, MLB ends next day  → [MLB, Prem, NFL, NBA, NCAAM]
-// Nov 2 – Feb 9:                              → [Prem, NFL, NBA, NCAAM]
-// Feb 10 – Mar 19: NFL ends                   → [Prem, NBA, NCAAM]
-// Mar 20 – Apr 6:  + MLB                      → [Prem, NBA, NCAAM, MLB]
-// Apr 6:          NCAAM championship day      → [NCAAM, Prem, NBA, MLB]
+// Apr 7-8:         NHL in, NCAAM out           → [NBA, MLB, NHL]
+// Apr 9-13:        + Masters (event)           → [Masters, NBA, MLB]        ← NHL bumped
+// Apr 14 – May 13:                             → [NBA, MLB, NHL]
+// May 14-18:       + PGA Champ (event)         → [PGA, NBA, MLB]           ← NHL bumped
+// May 19-23:                                   → [NBA, MLB, NHL]
+// May 24 – Jun 8:  + French Open (event)       → [French Open, NBA, MLB]   ← NHL bumped
+// Jun 9-10:                                    → [NBA, MLB, NHL]
+// Jun 11-17:       + World Cup (event)          → [World Cup, NBA, MLB]     ← NHL bumped
+// Jun 18-19:       + US Open Golf (2 events!)   → [World Cup, US Open, NBA] ← MLB+NHL bumped
+// Jun 20-22:       NBA+NHL end                  → [World Cup, US Open, MLB]
+// Jun 23-28:       US Open Golf ends            → [World Cup, MLB] (2 only)
+// Jun 29 – Jul 12: + Wimbledon                  → [World Cup, Wimbledon, MLB]
+// Jul 13-15:       Wimbledon out                → [World Cup, MLB] (2 only)
+// Jul 16-19:       + The Open (golf)            → [World Cup, The Open, MLB]
+// Jul 20:          World Cup + Open end         → [MLB] (1 only)
+// Jul 21 – Aug 15:                              → [MLB] (1 only)
+// Aug 16-24:       + EPL                        → [MLB, EPL] (2 only)
+// Aug 25 – Sep 3:  + US Open Tennis (event)     → [US Open, MLB, EPL]
+// Sep 4-14:        + NFL                        → [US Open, MLB, NFL]       ← EPL bumped
+// Sep 15 – Oct 19:                              → [MLB, NFL] (2 only)
+// Oct 20-31:       + NBA                        → [MLB, NFL, NBA]
+// Nov 1:           + NCAAM, MLB ends next day   → [MLB, NFL, NBA]           ← NCAAM bumped
+// Nov 2 – Feb 9:                                → [NFL, NBA, NCAAM]
+// Feb 10 – Mar 19: NFL ends                     → [NBA, NCAAM] (2 only)
+// Mar 20 – Apr 6:  + MLB                        → [NBA, NCAAM, MLB]
+// Apr 6:           NCAAM championship           → [NCAAM, NBA, MLB]
 // ═══════════════════════════════════════════════════════════════
 
 function toMMDD(d: Date): string {
@@ -109,14 +110,39 @@ function daysSinceSeasonStart(league: LeagueConfig, viewDate: Date): number {
   return Math.floor((viewDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+const MAX_LEAGUES = 3;
+
+// Event leagues (short-lived) get priority over long-running team leagues
+const EVENT_SPORTS = new Set(["golf", "tennis", "fifa"]);
+
+// Team sport priority — lower number = higher priority
+const TEAM_PRIORITY: Record<string, number> = {
+  nba: 1,
+  mlb: 2,
+  nhl: 3,
+  nfl: 4,
+  ncaam: 5,
+  epl: 6,
+};
+
 function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
   const d = viewDate ?? new Date();
   const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d));
-  // EPL is low-priority filler — only show when fewer than 3 other leagues are active
-  const nonEpl = active.filter((l) => l.sport !== "epl");
-  const filtered = nonEpl.length < 3 ? active : nonEpl;
-  // Sort descending: longest-active leftmost, newest rightmost
-  return filtered.sort((a, b) => daysSinceSeasonStart(b, d) - daysSinceSeasonStart(a, d));
+
+  // Split into event leagues (always shown) and team leagues (fill remaining slots)
+  const events = active.filter((l) => EVENT_SPORTS.has(l.sport));
+  const teams = active.filter((l) => !EVENT_SPORTS.has(l.sport));
+
+  // Sort teams by priority
+  teams.sort((a, b) => (TEAM_PRIORITY[a.sport] ?? 99) - (TEAM_PRIORITY[b.sport] ?? 99));
+
+  // Events always make the cut; fill remaining with top team leagues
+  const teamSlots = Math.max(0, MAX_LEAGUES - events.length);
+  const selected = [...events, ...teams.slice(0, teamSlots)];
+
+  // Sort for display: longest-active leftmost, newest rightmost
+  // On championship day, force leftmost
+  return selected.sort((a, b) => daysSinceSeasonStart(b, d) - daysSinceSeasonStart(a, d));
 }
 
 function parseTeam(competitor: any, sport: Sport): Team {
