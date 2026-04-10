@@ -6,8 +6,6 @@ import {
   getGolfHighlightQuery,
   getGolfHighlightUrl,
   getOfficialChannelName,
-  getSecondaryChannelName,
-  getSecondaryChannelLabel,
   fetchFirstVideoId,
 } from "@/lib/youtube";
 
@@ -99,7 +97,7 @@ export default function GolfLeaderboard({
       const scoreW = showRatings ? 32 : 0;
       const thruW = showRatings && tournament.state === "in" ? 22 : 0;
       // Position column hidden on mobile, visible only when ratings shown on desktop
-      const rankW = !isMobile && showRatings ? 22 : 0;
+      const rankW = !isMobile && showRatings ? 18 : 0;
       const flagW = isMobile ? 18 : 22;
       const gaps = 6 * 4; // ~6px between each adjacent element
       const available = containerW - cardPadding - rankW - flagW - thruW - scoreW - gaps;
@@ -202,22 +200,15 @@ export default function GolfLeaderboard({
     ? getGolfHighlightUrl(leagueLabel!, completedRounds, highlightYear)
     : null;
   const officialChannel = highlightsAvailable ? getOfficialChannelName("golf", leagueLabel) : null;
-  const secondaryChannel = highlightsAvailable ? getSecondaryChannelName("golf", leagueLabel) : null;
-  const secondaryLabel = secondaryChannel ? getSecondaryChannelLabel(secondaryChannel) : null;
 
   useEffect(() => {
     if (!highlightQuery || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    // Prefetch the secondary channel if curated, else fall back to generic search
-    if (secondaryChannel) {
-      fetchFirstVideoId(highlightQuery, secondaryChannel).then((id) => { prefetchedSearchId.current = id; });
-    } else {
-      fetchFirstVideoId(highlightQuery).then((id) => { prefetchedSearchId.current = id; });
-    }
+    fetchFirstVideoId(highlightQuery).then((id) => { prefetchedSearchId.current = id; });
     if (officialChannel) {
       fetchFirstVideoId(highlightQuery, officialChannel).then((id) => { prefetchedOfficialId.current = id; });
     }
-  }, [highlightQuery, officialChannel, secondaryChannel]);
+  }, [highlightQuery, officialChannel]);
 
   return (
     <div
@@ -280,14 +271,14 @@ export default function GolfLeaderboard({
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
               }}
             >
-              {/* Position — right-aligned so single/double digits hug the
-                  flag+name on the right, eliminating the gap that pushed
-                  names visually away from their rank.
+              {/* Position — text-left so digits sit flush at the card edge,
+                  aligned with the "After Round X" header above (no indent).
+                  Narrow 18px box (fits 1-99 and T1-T15) keeps the name close.
                   Hidden on mobile; only meaningful when scores are revealed. */}
               {showScore && (
                 <span
-                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-right flex-shrink-0"
-                  style={{ color: "var(--text-muted)", width: "22px" }}
+                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-left flex-shrink-0"
+                  style={{ color: "var(--text-muted)", width: "18px" }}
                 >
                   {posStr}
                 </span>
@@ -434,16 +425,23 @@ export default function GolfLeaderboard({
                 window.open(highlightFallbackUrl, "_blank");
                 return;
               }
-              if (prefetchedSearchId.current) {
+              // For golf, the top organic search result is usually the same
+              // video as the official tournament channel (R&A / Augusta dominate
+              // search). When that's the case, fall back to opening the full
+              // YouTube search page so the user can pick a different option.
+              const officialId = prefetchedOfficialId.current;
+              if (prefetchedSearchId.current && prefetchedSearchId.current !== officialId) {
                 onPlayHighlight(prefetchedSearchId.current, highlightFallbackUrl);
                 return;
               }
+              if (prefetchedSearchId.current && prefetchedSearchId.current === officialId) {
+                window.open(highlightFallbackUrl, "_blank");
+                return;
+              }
               setFetchingHighlight("search");
-              const id = secondaryChannel
-                ? await fetchFirstVideoId(highlightQuery, secondaryChannel)
-                : await fetchFirstVideoId(highlightQuery);
+              const id = await fetchFirstVideoId(highlightQuery);
               setFetchingHighlight(null);
-              if (id) {
+              if (id && id !== officialId) {
                 prefetchedSearchId.current = id;
                 onPlayHighlight(id, highlightFallbackUrl);
               } else {
@@ -451,19 +449,14 @@ export default function GolfLeaderboard({
               }
             }}
             disabled={fetchingHighlight !== null}
-            className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+            className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
             style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingHighlight === "search" ? 0.5 : undefined }}
-            title={secondaryChannel ? `${secondaryChannel} — Round ${completedRounds} highlights` : `Round ${completedRounds} highlights`}
+            title={`Round ${completedRounds} highlights — more on YouTube`}
           >
             {fetchingHighlight === "search" ? (
               <span className="text-[10px]">Loading...</span>
             ) : (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                {secondaryLabel && (
-                  <span className="text-[10px] font-medium">{secondaryLabel} R{completedRounds}</span>
-                )}
-              </>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
             )}
           </button>
         </div>
