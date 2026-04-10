@@ -207,9 +207,18 @@ export default function GolfLeaderboard({
     if (!highlightQuery || prefetchStarted.current) return;
     prefetchStarted.current = true;
     // Prefer the curated secondary channel (e.g. PGA TOUR) so the 2nd button
-    // gets a known-good upload instead of whatever organic search returns.
+    // gets a known-good upload — but fall back to a generic YouTube search if
+    // that channel hasn't uploaded a matching video yet (otherwise the click
+    // handler gives up and opens a new tab instead of playing in the modal).
     if (secondaryChannel) {
-      fetchFirstVideoId(highlightQuery, secondaryChannel).then((id) => { prefetchedSearchId.current = id; });
+      fetchFirstVideoId(highlightQuery, secondaryChannel).then(async (id) => {
+        if (id) {
+          prefetchedSearchId.current = id;
+        } else {
+          const fallback = await fetchFirstVideoId(highlightQuery);
+          prefetchedSearchId.current = fallback;
+        }
+      });
     } else {
       fetchFirstVideoId(highlightQuery).then((id) => { prefetchedSearchId.current = id; });
     }
@@ -446,13 +455,21 @@ export default function GolfLeaderboard({
                 return;
               }
               setFetchingHighlight("search");
-              const id = secondaryChannel
+              let id = secondaryChannel
                 ? await fetchFirstVideoId(highlightQuery, secondaryChannel)
                 : await fetchFirstVideoId(highlightQuery);
+              // If the curated channel returned nothing, fall back to a
+              // generic search so the click still autoplays in the modal.
+              if (!id && secondaryChannel) {
+                id = await fetchFirstVideoId(highlightQuery);
+              }
               setFetchingHighlight(null);
               if (id && id !== officialId) {
                 prefetchedSearchId.current = id;
                 onPlayHighlight(id, highlightFallbackUrl);
+              } else if (id && id === officialId) {
+                // Last-resort: same video as button 1 — open new tab.
+                window.open(highlightFallbackUrl, "_blank");
               } else {
                 window.open(highlightFallbackUrl, "_blank");
               }
