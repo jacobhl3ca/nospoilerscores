@@ -271,13 +271,12 @@ export default function GolfLeaderboard({
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
               }}
             >
-              {/* Position — text-left so digits sit flush at the card edge,
-                  aligned with the "After Round X" header above (no indent).
-                  Narrow 18px box (fits 1-99 and T1-T15) keeps the name close.
+              {/* Position — text-right so digits sit flush against the flag.
+                  Narrow 18px box (fits 1-99 and T1-T15) keeps name close.
                   Hidden on mobile; only meaningful when scores are revealed. */}
               {showScore && (
                 <span
-                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-left flex-shrink-0"
+                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-right flex-shrink-0"
                   style={{ color: "var(--text-muted)", width: "18px" }}
                 >
                   {posStr}
