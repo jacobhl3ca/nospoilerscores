@@ -59,7 +59,6 @@ export default function GolfLeaderboard({
 }: GolfLeaderboardProps) {
   const [expandLevel, setExpandLevel] = useState<ExpandLevel>("collapsed");
   const containerRef = useRef<HTMLDivElement>(null);
-  const statusRef = useRef<HTMLSpanElement>(null);
   const [nameTier, setNameTier] = useState<"full" | "initial" | "last">("full");
   const [statusOverflow, setStatusOverflow] = useState(false);
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
@@ -78,39 +77,86 @@ export default function GolfLeaderboard({
     expandLevel === "all" ? sortedPlayers.length : expandLevel === "top25" ? TOP25_SHOW : INITIAL_SHOW;
   const visible = sortedPlayers.slice(0, visibleCount);
 
-  // Decide which name format fits the available column width.
-  // Tier 1: full name ("Rory McIlroy"), Tier 2: ESPN short ("R. McIlroy"), Tier 3: last only ("McIlroy")
+  const showScore = showRatings;
+  const showRating = showRatings && tournament.state !== "pre" && tournament.rating !== null;
+  const hasBroadcast = tournament.broadcasts.length > 0;
+
+  // Decide which name format fits the available column width — measure widths
+  // with a hidden probe so we use the longest tier that actually fits per row.
+  // Tier 1: full ("Rory McIlroy") · Tier 2: ESPN short ("R. McIlroy") · Tier 3: last ("McIlroy")
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const measure = () => {
-      // Card padding (px-2 → 16, sm:px-4 → 32). Use rough rank+flag offset.
-      const w = el.clientWidth;
-      // Approx: card content width minus rank (24 if shown), flag (~20), score (~32), thru (~20), gaps (~20)
-      // Rather than measuring per row, derive a tier from container width.
-      if (w >= 260) setNameTier("full");
-      else if (w >= 200) setNameTier("initial");
+      const containerW = el.clientWidth;
+      if (!containerW) return;
+      const isMobile = window.innerWidth < 640; // sm breakpoint
+      const cardPadding = isMobile ? 16 : 32; // px-2 vs sm:px-4
+      // Score column visible only when ratings revealed
+      const scoreW = showRatings ? 32 : 0;
+      const thruW = showRatings && tournament.state === "in" ? 22 : 0;
+      // Position column hidden on mobile, visible only when ratings shown on desktop
+      const rankW = !isMobile && showRatings ? 28 : 0;
+      const flagW = isMobile ? 18 : 22;
+      const gaps = 6 * 4; // ~6px between each adjacent element
+      const available = containerW - cardPadding - rankW - flagW - thruW - scoreW - gaps;
+
+      const probe = document.createElement("span");
+      probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font-size:${isMobile ? 12 : 14}px;font-family:inherit;`;
+      document.body.appendChild(probe);
+      const measureMax = (names: string[]) => {
+        let max = 0;
+        for (const n of names) {
+          probe.textContent = n;
+          if (probe.offsetWidth > max) max = probe.offsetWidth;
+        }
+        return max;
+      };
+      const sample = sortedPlayers.slice(0, 25);
+      const fullMax = measureMax(sample.map((p) => p.name));
+      const initialMax = measureMax(sample.map((p) => p.shortName));
+      document.body.removeChild(probe);
+
+      if (fullMax <= available) setNameTier("full");
+      else if (initialMax <= available) setNameTier("initial");
       else setNameTier("last");
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [sortedPlayers, showRatings, tournament.state]);
 
-  // Detect status text overflow → abbreviate "After Round X" → "RX"
+  // Detect whether full status ("After Round X") fits — measure with probe.
   useEffect(() => {
-    setStatusOverflow(false); // try full first when content changes
-  }, [tournament.statusDetail, tournament.rating, tournament.broadcasts.length]);
-
-  useEffect(() => {
-    if (statusOverflow) return;
-    const el = statusRef.current;
+    const el = containerRef.current;
     if (!el) return;
-    requestAnimationFrame(() => {
-      if (el.scrollWidth > el.clientWidth + 1) setStatusOverflow(true);
-    });
-  });
+    const measure = () => {
+      const containerW = el.clientWidth;
+      if (!containerW) return;
+      const isMobile = window.innerWidth < 640;
+      const cardPadding = isMobile ? 16 : 32;
+      const badgeW = showRating ? 50 : 0;
+      const broadcastMin = hasBroadcast ? 40 : 0; // approx "ESPN" / "CBS"
+      const gaps = (isMobile ? 8 : 12) * 2;
+      // Grid is 1fr auto 1fr → left & right cells share remaining space equally,
+      // but with broadcastMin on the right we need at least that much there.
+      const available = containerW - cardPadding - badgeW - broadcastMin - gaps;
+
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-size:12px;font-family:inherit;";
+      probe.textContent = tournament.statusDetail;
+      document.body.appendChild(probe);
+      const fullW = probe.offsetWidth;
+      document.body.removeChild(probe);
+
+      setStatusOverflow(fullW > available);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tournament.statusDetail, showRating, hasBroadcast]);
 
   const formatPosition = (pos: number, idx: number) => {
     if (idx > 0 && sortedPlayers[idx - 1]?.position === pos) {
@@ -128,10 +174,6 @@ export default function GolfLeaderboard({
     return "var(--text)";
   };
 
-  const showScore = showRatings;
-  const showRating = showRatings && tournament.state !== "pre" && tournament.rating !== null;
-  const hasBroadcast = tournament.broadcasts.length > 0;
-
   // Show full "After Round X" by default; abbreviate to "RX" only when overflowing
   const displayStatus = (() => {
     const detail = tournament.statusDetail;
@@ -146,9 +188,10 @@ export default function GolfLeaderboard({
   const isActivePlaying = tournament.state === "in" && /^Round \d+$/.test(tournament.statusDetail);
 
   // ── Highlights setup ──
-  // Show round-recap highlights when at least one round is complete and ratings are revealed.
+  // Show round-recap highlights whenever a round is complete — independent of ratings,
+  // so the catch-up button is always available the morning after Round 1, etc.
   const completedRounds = tournament.currentRound;
-  const highlightsAvailable = showRatings && completedRounds > 0 && !!leagueLabel;
+  const highlightsAvailable = completedRounds > 0 && !!leagueLabel;
   const highlightYear = (() => {
     if (selectedDate && /^\d{8}$/.test(selectedDate)) return parseInt(selectedDate.slice(0, 4), 10);
     return new Date().getFullYear();
@@ -184,7 +227,6 @@ export default function GolfLeaderboard({
       {/* Status bar — matches GameCard layout: status | rating | network */}
       <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
         <span
-          ref={statusRef}
           className="truncate"
           style={{ color: isActivePlaying ? "#22c55e" : "var(--text-muted)" }}
         >
@@ -202,7 +244,7 @@ export default function GolfLeaderboard({
                 title={!broadcastExpanded ? tournament.broadcasts.join(", ") : undefined}
                 onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(!broadcastExpanded); }}
               >
-                {broadcastExpanded ? tournament.broadcasts.join(" · ") : `${tournament.broadcasts[0]} +${tournament.broadcasts.length - 1}`}
+                {broadcastExpanded ? tournament.broadcasts.join(" · ") : tournament.broadcasts[0]}
               </span>
             ) : (
               <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
@@ -231,11 +273,12 @@ export default function GolfLeaderboard({
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
               }}
             >
-              {/* Position — only show when scores revealed AND on sm+ screens */}
+              {/* Position — left-aligned under "After Round X" header text.
+                  Hidden on mobile; only meaningful when scores are revealed. */}
               {showScore && (
                 <span
-                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-right flex-shrink-0"
-                  style={{ color: "var(--text-muted)", width: "24px" }}
+                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-left flex-shrink-0"
+                  style={{ color: "var(--text-muted)", width: "26px" }}
                 >
                   {posStr}
                 </span>

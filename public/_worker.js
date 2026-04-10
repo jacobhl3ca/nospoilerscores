@@ -31,6 +31,12 @@ export default {
         const gameNumMatch = query.match(/Game (\d+)/i);
         const queryGameNum = gameNumMatch ? gameNumMatch[1] : null;
 
+        // Golf round number from query (e.g. "Round 1 highlights")
+        const golfRoundMatch = query.match(/Round\s+(\d+)\s+highlights/i);
+        const queryGolfRound = golfRoundMatch ? golfRoundMatch[1] : null;
+        const ROUND_ORDINALS = { "1": "first", "2": "second", "3": "third", "4": "final" };
+        const queryRoundOrdinal = queryGolfRound ? ROUND_ORDINALS[queryGolfRound] : null;
+
         // Team name aliases — ESPN shortDisplayName → common YouTube title variants
         const TEAM_ALIASES = {
           "trail blazers": ["blazers", "trail blazers", "portland"],
@@ -80,10 +86,15 @@ export default {
         let teamsMatchedId = null;
         let teamsGameMatchedId = null;
         let firstHighlightId = null;
+        // Golf-specific tracking
+        let golfRoundYearId = null;
+        let golfRoundId = null;
         // Channel-specific tracking
         let channelBestId = null;
         let channelTeamsYearId = null;
         let channelTeamsId = null;
+        let channelGolfRoundYearId = null;
+        let channelGolfRoundId = null;
         let channelAnyId = null;
         const preferChannelLower = preferChannel ? preferChannel.toLowerCase() : null;
 
@@ -107,6 +118,13 @@ export default {
           // Check if series game number matches (e.g. "Game 2" in title)
           const hasGameNum = queryGameNum && titleLower.includes(`game ${queryGameNum}`);
 
+          // Check if golf round matches in title — accept "Round 1", "First Round", "Day 1"
+          const hasGolfRound = queryGolfRound && (
+            titleLower.includes(`round ${queryGolfRound}`) ||
+            (queryRoundOrdinal && titleLower.includes(`${queryRoundOrdinal} round`)) ||
+            titleLower.includes(`day ${queryGolfRound}`)
+          );
+
           // Track channel-specific matches
           if (isFromChannel) {
             if (hasTeams && hasYear && (!queryGameNum || hasGameNum) && !channelBestId) {
@@ -114,7 +132,15 @@ export default {
             }
             if (hasTeams && hasYear && !channelTeamsYearId) channelTeamsYearId = videoId;
             if (hasTeams && !channelTeamsId) channelTeamsId = videoId;
+            if (hasGolfRound && hasYear && !channelGolfRoundYearId) channelGolfRoundYearId = videoId;
+            if (hasGolfRound && !channelGolfRoundId) channelGolfRoundId = videoId;
             if (!channelAnyId) channelAnyId = videoId;
+          }
+
+          // Golf-specific (no preferred channel) — match round number + year in title
+          if (queryGolfRound) {
+            if (hasGolfRound && hasYear && !golfRoundYearId) golfRoundYearId = videoId;
+            if (hasGolfRound && !golfRoundId) golfRoundId = videoId;
           }
 
           // Best: highlight + both teams + year + game number (playoff series)
@@ -147,10 +173,10 @@ export default {
         let videoId;
         if (preferChannel) {
           // When channel is requested, prefer channel matches, fall back to any match
-          videoId = channelBestId || channelTeamsYearId || channelTeamsId || channelAnyId || null;
+          videoId = channelBestId || channelTeamsYearId || channelGolfRoundYearId || channelGolfRoundId || channelTeamsId || channelAnyId || null;
         } else {
           // General search: best match from any source
-          videoId = bestMatchId || teamsGameMatchedId || teamsMatchedId || yearMatchedId || firstHighlightId;
+          videoId = bestMatchId || teamsGameMatchedId || golfRoundYearId || golfRoundId || teamsMatchedId || yearMatchedId || firstHighlightId;
         }
         if (!videoId) {
           const fallback = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
