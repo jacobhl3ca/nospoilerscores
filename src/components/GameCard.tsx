@@ -194,7 +194,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         const showBar = hasStatusText || hasRating || hasBroadcast || showFinal;
         if (!showBar) return null;
         return (
-          <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1.5 sm:gap-x-2" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
+          <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
             <span>
               {isLive && gameProgress ? (
                 liveUrl ? (

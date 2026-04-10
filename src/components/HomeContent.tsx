@@ -373,35 +373,17 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
             if (showFinalSplit) {
               return (
-                <>
-                  <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
-                    {sortedLeagues.map((league) => (
-                      <LeagueColumn
-                        key={league.sport}
-                        league={league}
-                        {...commonProps}
-                        isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
-                        section="upcoming"
-                      />
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 my-2 sm:my-3 mx-auto w-full" style={{ maxWidth: "calc(280px * 3 + 1rem * 2)", color: "var(--text-muted)", opacity: 0.4 }}>
-                    <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                    <span className="text-[10px] uppercase tracking-wide">Final</span>
-                    <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                  </div>
-                  <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
-                    {sortedLeagues.map((league) => (
-                      <LeagueColumn
-                        key={league.sport}
-                        league={league}
-                        {...commonProps}
-                        isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
-                        section="finished"
-                      />
-                    ))}
-                  </div>
-                </>
+                <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
+                  {sortedLeagues.map((league) => (
+                    <LeagueColumn
+                      key={league.sport}
+                      league={league}
+                      {...commonProps}
+                      isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
+                      showFinalSeparator
+                    />
+                  ))}
+                </div>
               );
             }
 

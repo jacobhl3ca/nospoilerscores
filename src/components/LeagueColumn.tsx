@@ -18,6 +18,7 @@ interface LeagueColumnProps {
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
   selectedDate: string; // YYYYMMDD
   section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
+  showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
 }
 
 // 2025-26 season playoff start dates (update each season)
@@ -138,6 +139,7 @@ export default function LeagueColumn({
   onPlayHighlight,
   selectedDate,
   section,
+  showFinalSeparator,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
@@ -374,6 +376,13 @@ export default function LeagueColumn({
               useAbbreviations={useAbbreviations}
             />
           ))}
+          {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
+            <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              <span className="text-[9px] uppercase tracking-wide">Final</span>
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+            </div>
+          )}
           {renderFinished && postGames.map((game) => (
             <GameCard
               key={game.id}

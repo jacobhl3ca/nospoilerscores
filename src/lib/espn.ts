@@ -48,36 +48,35 @@ const ALL_LEAGUES: LeagueConfig[] = [
 ];
 
 // ═══════════════════════════════════════════════════════════════
-// FULL YEAR SCHEDULE — Max 3 leagues at a time
-// Event leagues (golf/tennis/FIFA) always shown; team leagues fill remaining slots by priority
-// Team priority: NBA > MLB > NHL > NFL > NCAAM > EPL
+// FULL YEAR SCHEDULE — Max 3 leagues, max 1 event at a time
+// Event priority: FIFA > golf > tennis. Team priority: NBA > MLB > NHL > NFL > NCAAM > EPL
 // ═══════════════════════════════════════════════════════════════
-// Apr 7-8:         NHL in, NCAAM out           → [NBA, MLB, NHL]
-// Apr 9-13:        + Masters (event)           → [Masters, NBA, MLB]        ← NHL bumped
-// Apr 14 – May 13:                             → [NBA, MLB, NHL]
-// May 14-18:       + PGA Champ (event)         → [PGA, NBA, MLB]           ← NHL bumped
-// May 19-23:                                   → [NBA, MLB, NHL]
-// May 24 – Jun 8:  + French Open (event)       → [French Open, NBA, MLB]   ← NHL bumped
-// Jun 9-10:                                    → [NBA, MLB, NHL]
-// Jun 11-17:       + World Cup (event)          → [World Cup, NBA, MLB]     ← NHL bumped
-// Jun 18-19:       + US Open Golf (2 events!)   → [World Cup, US Open, NBA] ← MLB+NHL bumped
-// Jun 20-22:       NBA+NHL end                  → [World Cup, US Open, MLB]
-// Jun 23-28:       US Open Golf ends            → [World Cup, MLB] (2 only)
-// Jun 29 – Jul 12: + Wimbledon                  → [World Cup, Wimbledon, MLB]
-// Jul 13-15:       Wimbledon out                → [World Cup, MLB] (2 only)
-// Jul 16-19:       + The Open (golf)            → [World Cup, The Open, MLB]
-// Jul 20:          World Cup + Open end         → [MLB] (1 only)
-// Jul 21 – Aug 15:                              → [MLB] (1 only)
-// Aug 16-24:       + EPL                        → [MLB, EPL] (2 only)
-// Aug 25 – Sep 3:  + US Open Tennis (event)     → [US Open, MLB, EPL]
-// Sep 4-14:        + NFL                        → [US Open, MLB, NFL]       ← EPL bumped
-// Sep 15 – Oct 19:                              → [MLB, NFL] (2 only)
-// Oct 20-31:       + NBA                        → [MLB, NFL, NBA]
-// Nov 1:           + NCAAM, MLB ends next day   → [MLB, NFL, NBA]           ← NCAAM bumped
-// Nov 2 – Feb 9:                                → [NFL, NBA, NCAAM]
-// Feb 10 – Mar 19: NFL ends                     → [NBA, NCAAM] (2 only)
-// Mar 20 – Apr 6:  + MLB                        → [NBA, NCAAM, MLB]
-// Apr 6:           NCAAM championship           → [NCAAM, NBA, MLB]
+// Apr 7-8:         NHL in, NCAAM out            → [NBA, MLB, NHL]
+// Apr 9-13:        + Masters (event)            → [Masters, NBA, MLB]       ← NHL bumped
+// Apr 14 – May 13:                              → [NBA, MLB, NHL]
+// May 14-18:       + PGA Champ (event)          → [PGA, NBA, MLB]          ← NHL bumped
+// May 19-23:                                    → [NBA, MLB, NHL]
+// May 24 – Jun 8:  + French Open (event)        → [French Open, NBA, MLB]  ← NHL bumped
+// Jun 9-10:                                     → [NBA, MLB, NHL]
+// Jun 11-17:       + World Cup (event)           → [World Cup, NBA, MLB]    ← NHL bumped
+// Jun 18-19:       + US Open Golf (FIFA wins)    → [World Cup, NBA, MLB]    ← US Open+NHL bumped
+// Jun 20-22:       NBA+NHL end (room for both)   → [World Cup, US Open, MLB]
+// Jun 23-28:       US Open Golf ends             → [World Cup, MLB] (2)
+// Jun 29 – Jul 12: + Wimbledon (room for both)   → [World Cup, Wimbledon, MLB]
+// Jul 13-15:       Wimbledon out                 → [World Cup, MLB] (2)
+// Jul 16-19:       + The Open (room for both)    → [World Cup, The Open, MLB]
+// Jul 20:          World Cup ends                → [MLB] (1)
+// Jul 21 – Aug 15:                               → [MLB] (1)
+// Aug 16-24:       + EPL                         → [MLB, EPL] (2)
+// Aug 25 – Sep 3:  + US Open Tennis (event)      → [US Open, MLB, EPL]
+// Sep 4-14:        + NFL                         → [US Open, MLB, NFL]      ← EPL bumped
+// Sep 15 – Oct 19:                               → [MLB, NFL] (2)
+// Oct 20-31:       + NBA                         → [MLB, NFL, NBA]
+// Nov 1:           + NCAAM, MLB ends next day    → [MLB, NFL, NBA]          ← NCAAM bumped
+// Nov 2 – Feb 9:                                 → [NFL, NBA, NCAAM]
+// Feb 10 – Mar 19: NFL ends                      → [NBA, NCAAM] (2)
+// Mar 20 – Apr 6:  + MLB                         → [NBA, NCAAM, MLB]
+// Apr 6:           NCAAM championship            → [NCAAM, NBA, MLB]
 // ═══════════════════════════════════════════════════════════════
 
 function toMMDD(d: Date): string {
@@ -129,16 +128,21 @@ function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
   const d = viewDate ?? new Date();
   const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d));
 
-  // Split into event leagues (always shown) and team leagues (fill remaining slots)
+  // Split into event leagues and team leagues
   const events = active.filter((l) => EVENT_SPORTS.has(l.sport));
   const teams = active.filter((l) => !EVENT_SPORTS.has(l.sport));
 
   // Sort teams by priority
   teams.sort((a, b) => (TEAM_PRIORITY[a.sport] ?? 99) - (TEAM_PRIORITY[b.sport] ?? 99));
 
-  // Events always make the cut; fill remaining with top team leagues
-  const teamSlots = Math.max(0, MAX_LEAGUES - events.length);
-  const selected = [...events, ...teams.slice(0, teamSlots)];
+  // Event priority: FIFA > golf > tennis (World Cup is top priority)
+  const EVENT_PRIORITY: Record<string, number> = { fifa: 0, golf: 1, tennis: 2 };
+  events.sort((a, b) => (EVENT_PRIORITY[a.sport] ?? 99) - (EVENT_PRIORITY[b.sport] ?? 99));
+
+  // Fill team sports first, then use remaining slots for events (top event always gets a slot)
+  const teamCount = Math.min(teams.length, MAX_LEAGUES - (events.length > 0 ? 1 : 0));
+  const eventCount = Math.min(events.length, MAX_LEAGUES - teamCount);
+  const selected = [...events.slice(0, eventCount), ...teams.slice(0, teamCount)];
 
   // Sort for display: longest-active leftmost, newest rightmost
   // On championship day, force leftmost

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { GolfTournament } from "@/lib/types";
 
 interface GolfLeaderboardProps {
@@ -13,17 +13,30 @@ const EXPAND_SHOW = 25;
 
 export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderboardProps) {
   const [expanded, setExpanded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [useShortNames, setUseShortNames] = useState(false);
   const players = tournament.players;
   const visible = expanded ? players.slice(0, EXPAND_SHOW) : players.slice(0, INITIAL_SHOW);
-  const hasMore = players.length > (expanded ? EXPAND_SHOW : INITIAL_SHOW);
+
+  // Measure if full names overflow — switch to short names if needed
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const check = () => {
+      // If container is narrow (< 180px), use short names
+      setUseShortNames(el.clientWidth < 180);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Group players by position for tied display
   const formatPosition = (pos: number, idx: number) => {
-    // Check if previous player has same position (tied)
     if (idx > 0 && players[idx - 1]?.position === pos) {
-      return ""; // don't repeat "T3" for every tied player
+      return "";
     }
-    // Check if next player has same position (mark as tie)
     const isTied = idx < players.length - 1 && players[idx + 1]?.position === pos;
     if (isTied) return `T${pos}`;
     return String(pos);
@@ -31,14 +44,15 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
 
   const scoreColor = (score: string) => {
     if (score === "E") return "var(--text-muted)";
-    if (score.startsWith("-")) return "#22c55e"; // green
-    if (score.startsWith("+")) return "#ef4444"; // red
+    if (score.startsWith("-")) return "#22c55e";
+    if (score.startsWith("+")) return "#ef4444";
     return "var(--text)";
   };
 
   return (
     <div
-      className="rounded-lg px-2 sm:px-3 py-2 sm:py-3 transition-colors"
+      ref={containerRef}
+      className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors"
       style={{
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
@@ -47,12 +61,12 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
     >
       {/* Status */}
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] sm:text-xs" style={{ color: tournament.state === "in" ? "#22c55e" : "var(--text-muted)" }}>
+      <div className="flex items-center justify-between mb-1 sm:mb-2">
+        <span className="text-xs" style={{ color: tournament.state === "in" ? "#22c55e" : "var(--text-muted)" }}>
           {tournament.statusDetail}
         </span>
         {tournament.players.length > 0 && (
-          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
             {tournament.players.length} players
           </span>
         )}
@@ -61,8 +75,10 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
       {/* Leaderboard rows */}
       <div className="flex flex-col">
         {visible.map((player, idx) => {
-          const globalIdx = idx; // index in full players array
-          const posStr = formatPosition(player.position, globalIdx);
+          const posStr = formatPosition(player.position, idx);
+          const displayName = useShortNames
+            ? player.shortName.split(". ").pop() ?? player.shortName
+            : player.shortName;
           return (
             <div
               key={`${player.name}-${idx}`}
@@ -84,29 +100,29 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
                 <img
                   src={player.flag}
                   alt=""
-                  className="w-3 h-3 sm:w-3.5 sm:h-3.5 object-contain flex-shrink-0"
+                  className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0"
                 />
               )}
 
-              {/* Name */}
+              {/* Name — matches GameCard team name sizes */}
               <span
-                className="text-[11px] sm:text-xs truncate flex-1 min-w-0"
+                className="text-xs sm:text-sm truncate flex-1 min-w-0"
                 style={{ color: "var(--text)" }}
               >
-                {player.shortName}
+                {displayName}
               </span>
 
               {/* Thru (only during active rounds) */}
               {tournament.state === "in" && player.thru && player.thru !== "F" && (
-                <span className="text-[9px] tabular-nums flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+                <span className="text-[10px] sm:text-xs tabular-nums flex-shrink-0" style={{ color: "var(--text-muted)" }}>
                   {player.thru}
                 </span>
               )}
 
               {/* Score */}
               <span
-                className="text-[11px] sm:text-xs font-medium tabular-nums text-right flex-shrink-0"
-                style={{ color: scoreColor(player.score), minWidth: "26px" }}
+                className="text-xs sm:text-sm font-medium tabular-nums text-right flex-shrink-0"
+                style={{ color: scoreColor(player.score), minWidth: "28px" }}
               >
                 {player.score}
               </span>
@@ -124,7 +140,7 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
           onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
         >
-          {expanded ? "Show less" : `Top ${EXPAND_SHOW}`}
+          {expanded ? "Show less" : "Show top 25"}
         </button>
       )}
     </div>
