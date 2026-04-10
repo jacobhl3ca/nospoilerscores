@@ -61,6 +61,8 @@ export interface GolfTournament {
   broadcasts: string[];  // ["ESPN", "CBS"]
   rating: number | null; // leaderboard competitiveness (0-100)
   currentRound: number;  // number of completed rounds (0–4)
+  startDate?: string;    // tournament startDate "MM-DD" from league config
+  eventDate?: string;    // ESPN event.date ISO — first tee off of current day
 }
 
 export interface LeagueData {

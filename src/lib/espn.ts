@@ -641,6 +641,12 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     rating = Math.min(100, Math.round(spreadScore * 0.6 + top10Score * 0.2 + depthBonus));
   }
 
+  // Look up the tournament's start date (MM-DD) from the league config so the
+  // client can do date-aware round labeling (yesterday=R1, today=R2, etc).
+  const tournamentLabel = ALL_LEAGUES.find(
+    (l) => l.sport === "golf" && new RegExp(l.label, "i").test(event.name ?? "")
+  );
+
   return {
     name: event.name ?? "",
     state,
@@ -649,6 +655,8 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     broadcasts,
     rating,
     currentRound,
+    startDate: tournamentLabel?.startDate,
+    eventDate: event.date ?? competition.date ?? undefined,
   };
 }
 

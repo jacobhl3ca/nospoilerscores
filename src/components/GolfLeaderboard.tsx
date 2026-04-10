@@ -83,6 +83,49 @@ export default function GolfLeaderboard({
   const showRating = showRatings && tournament.state !== "pre" && tournament.rating !== null;
   const hasBroadcast = tournament.broadcasts.length > 0;
 
+  // ── Date-aware round label ──
+  // ESPN returns a single tournament state regardless of which date the user
+  // navigates to, so the raw status says "After Round 2" on Round 2 morning
+  // etc. Override using the selected date vs. today and the tournament's
+  // start date so: yesterday=after R1, today=R2 in progress (green),
+  // tomorrow=R3 upcoming with tee-off time (grey).
+  const dateAware = (() => {
+    if (!selectedDate || !/^\d{8}$/.test(selectedDate) || !tournament.startDate) return null;
+    const selYear = parseInt(selectedDate.slice(0, 4), 10);
+    const selMonth = parseInt(selectedDate.slice(4, 6), 10);
+    const selDay = parseInt(selectedDate.slice(6, 8), 10);
+    const [startMo, startDay] = tournament.startDate.split("-").map((s) => parseInt(s, 10));
+    const selDate = new Date(selYear, selMonth - 1, selDay);
+    const startDateObj = new Date(selYear, startMo - 1, startDay);
+    const dayIndex = Math.round((selDate.getTime() - startDateObj.getTime()) / (24 * 3600 * 1000));
+    if (dayIndex < 0 || dayIndex > 3) return null; // not a round day
+    const roundNum = dayIndex + 1;
+
+    // Today-in-ET comparison
+    const now = new Date();
+    const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const todayMidnight = new Date(todayET.getFullYear(), todayET.getMonth(), todayET.getDate());
+    const selMidnight = new Date(selYear, selMonth - 1, selDay);
+    const todayIndex = Math.round((todayMidnight.getTime() - startDateObj.getTime()) / (24 * 3600 * 1000));
+
+    if (selMidnight.getTime() < todayMidnight.getTime()) {
+      return { statusDetail: `After Round ${roundNum}`, completedRounds: roundNum, inProgress: false };
+    }
+    if (selMidnight.getTime() > todayMidnight.getTime()) {
+      let timeLabel = "";
+      if (tournament.eventDate && dayIndex === todayIndex + 1) {
+        try {
+          const d = new Date(tournament.eventDate);
+          timeLabel = ` · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET`;
+        } catch { /* ignore */ }
+      }
+      return { statusDetail: `Round ${roundNum}${timeLabel}`, completedRounds: roundNum - 1, inProgress: false };
+    }
+    return { statusDetail: `Round ${roundNum}`, completedRounds: roundNum - 1, inProgress: true };
+  })();
+
+  const effectiveStatusDetail = dateAware?.statusDetail ?? tournament.statusDetail;
+
   // Decide which name format fits the available column width — measure widths
   // with a hidden probe so we use the longest tier that actually fits per row.
   // Tier 1: full ("Rory McIlroy") · Tier 2: ESPN short ("R. McIlroy") · Tier 3: last ("McIlroy")
@@ -143,7 +186,7 @@ export default function GolfLeaderboard({
       const cs = getComputedStyle(cell);
       const probe = document.createElement("span");
       probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font};letter-spacing:${cs.letterSpacing};`;
-      probe.textContent = tournament.statusDetail;
+      probe.textContent = effectiveStatusDetail;
       document.body.appendChild(probe);
       const fullW = probe.offsetWidth;
       document.body.removeChild(probe);
@@ -154,7 +197,7 @@ export default function GolfLeaderboard({
     const ro = new ResizeObserver(measure);
     ro.observe(cell);
     return () => ro.disconnect();
-  }, [tournament.statusDetail, showRating, hasBroadcast]);
+  }, [effectiveStatusDetail, showRating, hasBroadcast]);
 
   const formatPosition = (pos: number, idx: number) => {
     if (idx > 0 && sortedPlayers[idx - 1]?.position === pos) {
@@ -174,7 +217,7 @@ export default function GolfLeaderboard({
 
   // Show full "After Round X" by default; abbreviate to "RX" only when overflowing
   const displayStatus = (() => {
-    const detail = tournament.statusDetail;
+    const detail = effectiveStatusDetail;
     if (statusOverflow) {
       const m = detail.match(/^After Round (\d+)$/);
       if (m) return `R${m[1]}`;
@@ -182,13 +225,15 @@ export default function GolfLeaderboard({
     return detail;
   })();
 
-  // Only green during active round play, not between rounds
-  const isActivePlaying = tournament.state === "in" && /^Round \d+$/.test(tournament.statusDetail);
+  // Green = round currently playing. Grey = between rounds / after / upcoming.
+  const isActivePlaying = dateAware
+    ? dateAware.inProgress
+    : tournament.state === "in" && /^Round \d+$/.test(tournament.statusDetail);
 
   // ── Highlights setup ──
   // Show round-recap highlights whenever a round is complete — independent of ratings,
   // so the catch-up button is always available the morning after Round 1, etc.
-  const completedRounds = tournament.currentRound;
+  const completedRounds = dateAware?.completedRounds ?? tournament.currentRound;
   const highlightsAvailable = completedRounds > 0 && !!leagueLabel;
   const highlightYear = (() => {
     if (selectedDate && /^\d{8}$/.test(selectedDate)) return parseInt(selectedDate.slice(0, 4), 10);
@@ -295,13 +340,13 @@ export default function GolfLeaderboard({
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
               }}
             >
-              {/* Position — natural width, flush to the card padding edge, so
-                  there's no empty indent before the digit. Row gap handles
-                  spacing to the flag. Hidden on mobile. */}
+              {/* Position — fixed width text-left so digits sit flush at the
+                  card padding edge AND every row's name aligns at the same
+                  offset (otherwise 1-char vs 2-char ranks shift names). */}
               {showScore && (
                 <span
-                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums flex-shrink-0"
-                  style={{ color: "var(--text-muted)" }}
+                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-left flex-shrink-0"
+                  style={{ color: "var(--text-muted)", width: "18px" }}
                 >
                   {posStr}
                 </span>
