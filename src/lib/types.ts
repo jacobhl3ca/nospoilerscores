@@ -63,6 +63,7 @@ export interface GolfTournament {
   currentRound: number;  // number of completed rounds (0–4)
   startDate?: string;    // tournament startDate "MM-DD" from league config
   eventDate?: string;    // ESPN event.date ISO — first tee off of current day
+  leaderboardUrl?: string; // ESPN tournament leaderboard URL — used for live link
 }
 
 export interface LeagueData {

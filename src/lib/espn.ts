@@ -647,6 +647,12 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     (l) => l.sport === "golf" && new RegExp(l.label, "i").test(event.name ?? "")
   );
 
+  // ESPN tournament leaderboard URL — used for the live link wrapping the
+  // status text (parity with team-sport game cards which link to the gamecast).
+  const leaderboardUrl = event.id
+    ? `https://www.espn.com/golf/leaderboard?tournamentId=${event.id}`
+    : "https://www.espn.com/golf/leaderboard";
+
   return {
     name: event.name ?? "",
     state,
@@ -657,6 +663,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     currentRound,
     startDate: tournamentLabel?.startDate,
     eventDate: event.date ?? competition.date ?? undefined,
+    leaderboardUrl,
   };
 }
 
