@@ -6,6 +6,7 @@ import {
   getGolfHighlightQuery,
   getGolfHighlightUrl,
   getOfficialChannelName,
+  getSecondaryChannelName,
   fetchFirstVideoId,
 } from "@/lib/youtube";
 
@@ -200,15 +201,22 @@ export default function GolfLeaderboard({
     ? getGolfHighlightUrl(leagueLabel!, completedRounds, highlightYear)
     : null;
   const officialChannel = highlightsAvailable ? getOfficialChannelName("golf", leagueLabel) : null;
+  const secondaryChannel = highlightsAvailable ? getSecondaryChannelName("golf", leagueLabel) : null;
 
   useEffect(() => {
     if (!highlightQuery || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    fetchFirstVideoId(highlightQuery).then((id) => { prefetchedSearchId.current = id; });
+    // Prefer the curated secondary channel (e.g. PGA TOUR) so the 2nd button
+    // gets a known-good upload instead of whatever organic search returns.
+    if (secondaryChannel) {
+      fetchFirstVideoId(highlightQuery, secondaryChannel).then((id) => { prefetchedSearchId.current = id; });
+    } else {
+      fetchFirstVideoId(highlightQuery).then((id) => { prefetchedSearchId.current = id; });
+    }
     if (officialChannel) {
       fetchFirstVideoId(highlightQuery, officialChannel).then((id) => { prefetchedOfficialId.current = id; });
     }
-  }, [highlightQuery, officialChannel]);
+  }, [highlightQuery, officialChannel, secondaryChannel]);
 
   return (
     <div
@@ -438,7 +446,9 @@ export default function GolfLeaderboard({
                 return;
               }
               setFetchingHighlight("search");
-              const id = await fetchFirstVideoId(highlightQuery);
+              const id = secondaryChannel
+                ? await fetchFirstVideoId(highlightQuery, secondaryChannel)
+                : await fetchFirstVideoId(highlightQuery);
               setFetchingHighlight(null);
               if (id && id !== officialId) {
                 prefetchedSearchId.current = id;

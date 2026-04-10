@@ -18,6 +18,18 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   tennis_usopen: "US Open Tennis Championships",
 };
 
+// Curated secondary channel per golf major. Picked because PGA TOUR (3.4M
+// subs) reliably uploads "Round X highlights" with consistent production for
+// every PGA-sanctioned major. The Open is R&A-controlled (not PGA TOUR), so
+// Sky Sports Golf is the most consistent alternate. Forcing a channel filter
+// avoids the random/low-quality top organic search result.
+const SECONDARY_CHANNELS: Record<string, string> = {
+  golf_masters: "PGA TOUR",
+  "golf_pga champ": "PGA TOUR",
+  "golf_us open": "PGA TOUR",
+  "golf_the open": "Sky Sports Golf",
+};
+
 export function getYouTubeSearchUrl(
   awayTeam: string,
   homeTeam: string,
@@ -44,6 +56,17 @@ export function getOfficialChannelName(sport: string, label?: string): string | 
     if (OFFICIAL_CHANNELS[labelKey]) return OFFICIAL_CHANNELS[labelKey];
   }
   return OFFICIAL_CHANNELS[sport] ?? null;
+}
+
+// Returns a curated secondary channel for the 2nd highlight button — used to
+// avoid the unreliable top organic YouTube search result. Falls back to null
+// when nothing curated exists; caller should drop back to a generic search.
+export function getSecondaryChannelName(sport: string, label?: string): string | null {
+  if (label) {
+    const labelKey = `${sport}_${label.toLowerCase()}`;
+    if (SECONDARY_CHANNELS[labelKey]) return SECONDARY_CHANNELS[labelKey];
+  }
+  return null;
 }
 
 function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
