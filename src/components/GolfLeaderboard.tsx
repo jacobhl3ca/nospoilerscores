@@ -11,6 +11,29 @@ interface GolfLeaderboardProps {
 const INITIAL_SHOW = 10;
 const EXPAND_SHOW = 25;
 
+function RatingBadge({ rating }: { rating: number }) {
+  let color = "bg-gray-500";
+  let label = "OK";
+  if (rating >= 85) {
+    color = "bg-green-600";
+    label = "GREAT";
+  } else if (rating >= 70) {
+    color = "bg-yellow-600";
+    label = "GOOD";
+  } else if (rating >= 50) {
+    color = "bg-orange-600";
+    label = "MEH";
+  } else {
+    color = "bg-red-700";
+    label = "SKIP";
+  }
+  return (
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}>
+      {label}
+    </span>
+  );
+}
+
 export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderboardProps) {
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -23,7 +46,6 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
     const el = containerRef.current;
     if (!el) return;
     const check = () => {
-      // If container is narrow (< 180px), use short names
       setUseShortNames(el.clientWidth < 180);
     };
     check();
@@ -32,7 +54,6 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
     return () => ro.disconnect();
   }, []);
 
-  // Group players by position for tied display
   const formatPosition = (pos: number, idx: number) => {
     if (idx > 0 && players[idx - 1]?.position === pos) {
       return "";
@@ -49,6 +70,10 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
     return "var(--text)";
   };
 
+  const showScore = showRatings;
+  const showRating = showRatings && tournament.state !== "pre" && tournament.rating !== null;
+  const hasBroadcast = tournament.broadcasts.length > 0;
+
   return (
     <div
       ref={containerRef}
@@ -60,16 +85,21 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
     >
-      {/* Status */}
-      <div className="flex items-center justify-between mb-1 sm:mb-2">
-        <span className="text-xs" style={{ color: tournament.state === "in" ? "#22c55e" : "var(--text-muted)" }}>
+      {/* Status bar — matches GameCard layout: status | rating | network */}
+      <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
+        <span style={{ color: tournament.state === "in" ? "#22c55e" : "var(--text-muted)" }}>
           {tournament.statusDetail}
         </span>
-        {tournament.players.length > 0 && (
-          <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
-            {tournament.players.length} players
-          </span>
-        )}
+        <span>
+          {showRating && <RatingBadge rating={tournament.rating!} />}
+        </span>
+        <span className="truncate text-right">
+          {hasBroadcast && (
+            <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
+              {tournament.broadcasts[0]}
+            </span>
+          )}
+        </span>
       </div>
 
       {/* Leaderboard rows */}
@@ -87,13 +117,15 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
               }}
             >
-              {/* Position */}
-              <span
-                className="text-[10px] sm:text-xs tabular-nums text-right flex-shrink-0"
-                style={{ color: "var(--text-muted)", width: "24px" }}
-              >
-                {posStr}
-              </span>
+              {/* Position — only show when scores revealed */}
+              {showScore && (
+                <span
+                  className="text-[10px] sm:text-xs tabular-nums text-right flex-shrink-0"
+                  style={{ color: "var(--text-muted)", width: "24px" }}
+                >
+                  {posStr}
+                </span>
+              )}
 
               {/* Flag */}
               {player.flag && (
@@ -104,7 +136,7 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
                 />
               )}
 
-              {/* Name — matches GameCard team name sizes */}
+              {/* Name */}
               <span
                 className="text-xs sm:text-sm truncate flex-1 min-w-0"
                 style={{ color: "var(--text)" }}
@@ -112,20 +144,22 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
                 {displayName}
               </span>
 
-              {/* Thru (only during active rounds) */}
-              {tournament.state === "in" && player.thru && player.thru !== "F" && (
+              {/* Thru (only during active rounds and when scores shown) */}
+              {showScore && tournament.state === "in" && player.thru && player.thru !== "F" && (
                 <span className="text-[10px] sm:text-xs tabular-nums flex-shrink-0" style={{ color: "var(--text-muted)" }}>
                   {player.thru}
                 </span>
               )}
 
-              {/* Score */}
-              <span
-                className="text-xs sm:text-sm font-medium tabular-nums text-right flex-shrink-0"
-                style={{ color: scoreColor(player.score), minWidth: "28px" }}
-              >
-                {player.score}
-              </span>
+              {/* Score — hidden by default, shown with monkey toggle */}
+              {showScore && (
+                <span
+                  className="text-xs sm:text-sm font-medium tabular-nums text-right flex-shrink-0"
+                  style={{ color: scoreColor(player.score), minWidth: "28px" }}
+                >
+                  {player.score}
+                </span>
+              )}
             </div>
           );
         })}
@@ -140,7 +174,7 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
           onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
         >
-          {expanded ? "Show less" : "Show top 25"}
+          {expanded ? "Show less" : "Show Top 25"}
         </button>
       )}
     </div>

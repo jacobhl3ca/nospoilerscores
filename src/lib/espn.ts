@@ -23,6 +23,7 @@ interface LeagueConfig {
   startDate?: string;       // MM-DD
   endDate?: string;         // MM-DD (last day league is shown)
   championshipDate?: string; // MM-DD — day the championship game is played
+  firstPref?: boolean;      // Tier 1: always gets a slot when active (bumps lower leagues)
 }
 
 const ALL_LEAGUES: LeagueConfig[] = [
@@ -32,51 +33,53 @@ const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-01", championshipDate: "11-01" },
   { sport: "nhl", label: "NHL", startDate: "04-07", endDate: "06-19", championshipDate: "06-19" },
   { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-09", championshipDate: "02-09" },
-  // ── Golf majors (leaderboard — needs custom UI) ──
-  { sport: "golf", label: "Masters", startDate: "04-09", endDate: "04-13", championshipDate: "04-13" },
+  // ── Golf majors ──
+  { sport: "golf", label: "Masters", startDate: "04-09", endDate: "04-13", championshipDate: "04-13", firstPref: true },
   { sport: "golf", label: "PGA Champ", startDate: "05-14", endDate: "05-18", championshipDate: "05-18" },
-  { sport: "golf", label: "US Open", startDate: "06-18", endDate: "06-22", championshipDate: "06-22" },
+  { sport: "golf", label: "US Open", startDate: "06-18", endDate: "06-22", championshipDate: "06-22", firstPref: true },
   { sport: "golf", label: "The Open", startDate: "07-16", endDate: "07-20", championshipDate: "07-20" },
   // ── Tennis Grand Slams ──
+  { sport: "tennis", label: "Aus Open", startDate: "01-12", endDate: "01-26", championshipDate: "01-26" },
   { sport: "tennis", label: "French Open", startDate: "05-24", endDate: "06-08", championshipDate: "06-08" },
-  { sport: "tennis", label: "Wimbledon", startDate: "06-29", endDate: "07-13", championshipDate: "07-13" },
-  { sport: "tennis", label: "US Open", startDate: "08-25", endDate: "09-14", championshipDate: "09-14" },
+  { sport: "tennis", label: "Wimbledon", startDate: "06-29", endDate: "07-13", championshipDate: "07-13", firstPref: true },
+  { sport: "tennis", label: "US Open", startDate: "08-25", endDate: "09-14", championshipDate: "09-14", firstPref: true },
   // ── FIFA World Cup 2026 (US/Canada/Mexico — one-time) ──
-  { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19" },
+  { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19", firstPref: true },
   // ── Premier League (Aug–May) ──
   { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
 ];
 
 // ═══════════════════════════════════════════════════════════════
-// FULL YEAR SCHEDULE — Max 3 leagues, max 1 event at a time
-// Event priority: FIFA > golf > tennis. Team priority: NBA > MLB > NHL > NFL > NCAAM > EPL
+// FULL YEAR SCHEDULE — Max 3 leagues
+// First preference (always shown): World Cup, Masters, Wimbledon, US Open (golf+tennis), March Madness
+// Regular priority: NBA > MLB > NCAAM > NHL > NFL > PGA/Open/FrOpen/AusOpen > EPL
 // ═══════════════════════════════════════════════════════════════
-// Apr 7-8:         NHL in, NCAAM out            → [NBA, MLB, NHL]
-// Apr 9-13:        + Masters (event)            → [Masters, NBA, MLB]       ← NHL bumped
-// Apr 14 – May 13:                              → [NBA, MLB, NHL]
-// May 14-18:       + PGA Champ (event)          → [PGA, NBA, MLB]          ← NHL bumped
-// May 19-23:                                    → [NBA, MLB, NHL]
-// May 24 – Jun 8:  + French Open (event)        → [French Open, NBA, MLB]  ← NHL bumped
-// Jun 9-10:                                     → [NBA, MLB, NHL]
-// Jun 11-17:       + World Cup (event)           → [World Cup, NBA, MLB]    ← NHL bumped
-// Jun 18-19:       + US Open Golf (FIFA wins)    → [World Cup, NBA, MLB]    ← US Open+NHL bumped
-// Jun 20-22:       NBA+NHL end (room for both)   → [World Cup, US Open, MLB]
+// Jan 12-26:       + Aus Open                   → [NFL, NBA, NCAAM]         ← Aus Open below NCAAM
+// Feb 10 – Mar 16: NFL ends                     → [NBA, NCAAM] (2)
+// Mar 17 – Apr 6:  NCAAM → March Madness (1st!) → [NCAAM, NBA, MLB]
+// Apr 7-8:         NCAAM out, NHL in            → [NBA, MLB, NCAAM]
+// Apr 9-13:        + Masters (1st pref!)         → [Masters, NBA, MLB]      ← NCAAM+NHL bumped
+// Apr 14 – May 13:                              → [NBA, MLB, NCAAM]
+// May 14-18:       + PGA Champ                  → [NBA, MLB, NCAAM]         ← PGA below NCAAM
+// May 19-23:                                    → [NBA, MLB, NCAAM]
+// May 24 – Jun 8:  + French Open               → [NBA, MLB, NCAAM]         ← French Open below NCAAM
+// Jun 9-10:                                     → [NBA, MLB, NCAAM]
+// Jun 11-17:       + World Cup (1st pref!)       → [World Cup, NBA, MLB]    ← NCAAM+NHL bumped
+// Jun 18-19:       + US Open Golf (1st pref!)    → [World Cup, US Open, NBA] ← 2 first-prefs
+// Jun 20-22:       NBA+NHL end                   → [World Cup, US Open, MLB]
 // Jun 23-28:       US Open Golf ends             → [World Cup, MLB] (2)
-// Jun 29 – Jul 12: + Wimbledon (room for both)   → [World Cup, Wimbledon, MLB]
-// Jul 13-15:       Wimbledon out                 → [World Cup, MLB] (2)
-// Jul 16-19:       + The Open (room for both)    → [World Cup, The Open, MLB]
+// Jun 29 – Jul 13: + Wimbledon (1st pref!)       → [World Cup, Wimbledon, MLB]
+// Jul 14-15:       Wimbledon out                 → [World Cup, MLB] (2)
+// Jul 16-19:       + The Open                    → [World Cup, MLB] (2)      ← The Open below MLB
 // Jul 20:          World Cup ends                → [MLB] (1)
 // Jul 21 – Aug 15:                               → [MLB] (1)
 // Aug 16-24:       + EPL                         → [MLB, EPL] (2)
-// Aug 25 – Sep 3:  + US Open Tennis (event)      → [US Open, MLB, EPL]
-// Sep 4-14:        + NFL                         → [US Open, MLB, NFL]      ← EPL bumped
+// Aug 25 – Sep 3:  + US Open Tennis (1st pref!)  → [US Open, MLB, EPL]
+// Sep 4-14:        + NFL                         → [US Open, MLB, NFL]       ← EPL bumped
 // Sep 15 – Oct 19:                               → [MLB, NFL] (2)
 // Oct 20-31:       + NBA                         → [MLB, NFL, NBA]
-// Nov 1:           + NCAAM, MLB ends next day    → [MLB, NFL, NBA]          ← NCAAM bumped
+// Nov 1:           + NCAAM, MLB ends next day    → [MLB, NFL, NBA]           ← NCAAM below NBA
 // Nov 2 – Feb 9:                                 → [NFL, NBA, NCAAM]
-// Feb 10 – Mar 19: NFL ends                      → [NBA, NCAAM] (2)
-// Mar 20 – Apr 6:  + MLB                         → [NBA, NCAAM, MLB]
-// Apr 6:           NCAAM championship            → [NCAAM, NBA, MLB]
 // ═══════════════════════════════════════════════════════════════
 
 function toMMDD(d: Date): string {
@@ -111,38 +114,47 @@ function daysSinceSeasonStart(league: LeagueConfig, viewDate: Date): number {
 
 const MAX_LEAGUES = 3;
 
-// Event leagues (short-lived) get priority over long-running team leagues
-const EVENT_SPORTS = new Set(["golf", "tennis", "fifa"]);
+// March Madness date range (NCAAM tournament — gets first preference)
+const MARCH_MADNESS_START = "03-17";
+const MARCH_MADNESS_END = "04-06";
 
-// Team sport priority — lower number = higher priority
-const TEAM_PRIORITY: Record<string, number> = {
+// Unified priority — lower = higher priority
+// firstPref leagues (World Cup, Masters, Wimbledon, US Open golf/tennis) always get a slot
+// Other leagues ranked: NBA > MLB > NCAAM > NHL > NFL > non-firstPref events > EPL
+const LEAGUE_PRIORITY: Record<string, number> = {
   nba: 1,
   mlb: 2,
-  nhl: 3,
-  nfl: 4,
-  ncaam: 5,
-  epl: 6,
+  ncaam: 3,  // above NHL; March Madness gets firstPref treatment
+  nhl: 4,
+  nfl: 5,
+  // Non-firstPref events ranked here (between NHL and EPL)
+  golf: 6,   // PGA Champ, The Open
+  tennis: 7, // French Open, Aus Open
+  epl: 8,
 };
+
+function isMarchMadness(viewDate: Date): boolean {
+  const mmdd = toMMDD(viewDate);
+  return mmdd >= MARCH_MADNESS_START && mmdd <= MARCH_MADNESS_END;
+}
 
 function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
   const d = viewDate ?? new Date();
   const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d));
+  const madness = isMarchMadness(d);
 
-  // Split into event leagues and team leagues
-  const events = active.filter((l) => EVENT_SPORTS.has(l.sport));
-  const teams = active.filter((l) => !EVENT_SPORTS.has(l.sport));
+  // Separate first-preference leagues (always get a slot when active)
+  // March Madness NCAAM counts as first preference
+  const firstPref = active.filter((l) => l.firstPref || (l.sport === "ncaam" && madness));
+  const rest = active.filter((l) => !l.firstPref && !(l.sport === "ncaam" && madness));
 
-  // Sort teams by priority
-  teams.sort((a, b) => (TEAM_PRIORITY[a.sport] ?? 99) - (TEAM_PRIORITY[b.sport] ?? 99));
+  // Sort rest by unified priority
+  rest.sort((a, b) => (LEAGUE_PRIORITY[a.sport] ?? 99) - (LEAGUE_PRIORITY[b.sport] ?? 99));
 
-  // Event priority: FIFA > golf > tennis (World Cup is top priority)
-  const EVENT_PRIORITY: Record<string, number> = { fifa: 0, golf: 1, tennis: 2 };
-  events.sort((a, b) => (EVENT_PRIORITY[a.sport] ?? 99) - (EVENT_PRIORITY[b.sport] ?? 99));
-
-  // Fill team sports first, then use remaining slots for events (top event always gets a slot)
-  const teamCount = Math.min(teams.length, MAX_LEAGUES - (events.length > 0 ? 1 : 0));
-  const eventCount = Math.min(events.length, MAX_LEAGUES - teamCount);
-  const selected = [...events.slice(0, eventCount), ...teams.slice(0, teamCount)];
+  // First-pref leagues always shown; fill remaining slots with rest
+  const firstPrefCount = Math.min(firstPref.length, MAX_LEAGUES);
+  const restCount = Math.min(rest.length, MAX_LEAGUES - firstPrefCount);
+  const selected = [...firstPref.slice(0, firstPrefCount), ...rest.slice(0, restCount)];
 
   // Sort for display: longest-active leftmost, newest rightmost
   // On championship day, force leftmost
@@ -543,11 +555,50 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     };
   });
 
+  // Gather broadcasts
+  const broadcasts: string[] = [];
+  for (const b of competition?.broadcasts ?? []) {
+    for (const name of b.names ?? []) {
+      if (!broadcasts.includes(name)) broadcasts.push(name);
+    }
+  }
+
+  // Calculate leaderboard competitiveness rating
+  // Based on how tight the top of the leaderboard is
+  let rating: number | null = null;
+  if (state !== "pre" && players.length >= 5) {
+    // Parse numeric scores for top players
+    const parseScore = (s: string): number => {
+      if (s === "E") return 0;
+      return parseInt(s, 10) || 0;
+    };
+    const topScores = players.slice(0, 10).map(p => parseScore(p.score));
+    const leader = topScores[0];
+    // Spread between 1st and 5th
+    const top5spread = Math.abs((topScores[4] ?? leader) - leader);
+    // Spread between 1st and 10th
+    const top10spread = Math.abs((topScores[9] ?? leader) - leader);
+    // Number of players within 2 strokes of lead
+    const within2 = topScores.filter(s => Math.abs(s - leader) <= 2).length;
+
+    // Tight leaderboard = high rating
+    // 0 spread = 100, each stroke of spread reduces by ~12
+    const spreadScore = Math.max(0, 100 - top5spread * 12);
+    // Depth bonus: more players bunched = more exciting
+    const depthBonus = Math.min(15, within2 * 2);
+    // Top 10 tightness (secondary factor)
+    const top10Score = Math.max(0, 50 - top10spread * 5);
+
+    rating = Math.min(100, Math.round(spreadScore * 0.6 + top10Score * 0.2 + depthBonus));
+  }
+
   return {
     name: event.name ?? "",
     state,
     statusDetail,
     players,
+    broadcasts,
+    rating,
   };
 }
 

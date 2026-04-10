@@ -57,6 +57,8 @@ export interface GolfTournament {
   state: "pre" | "in" | "post";
   statusDetail: string;  // "Round 1", "Final", etc.
   players: GolfPlayer[];
+  broadcasts: string[];  // ["ESPN", "CBS"]
+  rating: number | null; // leaderboard competitiveness (0-100)
 }
 
 export interface LeagueData {
