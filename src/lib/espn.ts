@@ -1,4 +1,4 @@
-import { Game, Sport, LeagueData, Team } from "./types";
+import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer } from "./types";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -430,6 +430,97 @@ function espnToMlbAbbrev(espnAbbrev: string): string {
   return ESPN_TO_MLB_ABBREV[espnAbbrev] || espnAbbrev;
 }
 
+async function fetchGolfTournament(date?: string): Promise<GolfTournament | null> {
+  const url = new URL(BASE_URL + SPORT_PATHS.golf);
+  if (date) url.searchParams.set("dates", date);
+
+  let res: Response;
+  try {
+    res = await fetchWithRetry(url.toString());
+  } catch {
+    return null;
+  }
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  const event = data.events?.[0];
+  if (!event) return null;
+
+  const competition = event.competitions?.[0];
+  if (!competition) return null;
+
+  const state = (event.status?.type?.state ?? "pre") as "pre" | "in" | "post";
+  const competitors = competition.competitors ?? [];
+
+  // Determine current round from linescores
+  const currentRound = competitors.length > 0
+    ? (competitors[0].linescores ?? []).filter((r: any) => r.value !== null && r.value !== undefined).length
+    : 0;
+
+  let statusDetail = "Upcoming";
+  if (state === "post") {
+    statusDetail = "Final";
+  } else if (state === "in") {
+    // Check if any player is mid-round (has holes played in current round but round not complete)
+    const anyMidRound = competitors.some((c: any) => {
+      const rounds = c.linescores ?? [];
+      const nextRound = rounds[currentRound]; // 0-indexed: currentRound is the in-progress one
+      if (!nextRound) return false;
+      const holes = nextRound.linescores ?? [];
+      return holes.length > 0 && holes.length < 18;
+    });
+    if (anyMidRound) {
+      statusDetail = `Round ${currentRound + 1}`;
+    } else if (currentRound > 0) {
+      statusDetail = `After Round ${currentRound}`;
+    } else {
+      statusDetail = "Round 1";
+    }
+  }
+
+  const players: GolfPlayer[] = competitors.map((c: any) => {
+    const athlete = c.athlete ?? {};
+    const linescores: any[] = c.linescores ?? [];
+
+    // Completed rounds
+    const rounds = linescores
+      .filter((r: any) => r.value !== null && r.value !== undefined)
+      .map((r: any) => String(Math.round(r.value)));
+
+    // Thru: check if currently mid-round
+    let thru = "";
+    const inProgressRound = linescores[rounds.length]; // next round after completed ones
+    if (inProgressRound) {
+      const holes = (inProgressRound.linescores ?? []).filter((h: any) => h.value !== null && h.value !== undefined);
+      if (holes.length > 0 && holes.length < 18) {
+        thru = String(holes.length);
+      } else if (holes.length === 18) {
+        thru = "F";
+      }
+    }
+    if (!thru && rounds.length > 0) {
+      thru = "F";
+    }
+
+    return {
+      position: c.order ?? 0,
+      name: athlete.displayName ?? "",
+      shortName: athlete.shortName ?? "",
+      score: c.score ?? "E",
+      flag: athlete.flag?.href ?? "",
+      rounds,
+      thru,
+    };
+  });
+
+  return {
+    name: event.name ?? "",
+    state,
+    statusDetail,
+    players,
+  };
+}
+
 export async function fetchGames(
   sport: Sport,
   date?: string
@@ -494,6 +585,11 @@ export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
   const active = getActiveLeagues(viewDate);
   const results = await Promise.all(
     active.map(async ({ sport, label }) => {
+      // Golf uses leaderboard format, not head-to-head games
+      if (sport === "golf") {
+        const golfTournament = await fetchGolfTournament(date);
+        return { sport, label, games: [], golfTournament };
+      }
       const games = await fetchGames(sport, date);
       // Pre-fetch next game day for empty leagues so the UI doesn't need a second round trip
       let nextGameDay: { date: string; games: Game[] } | null = null;

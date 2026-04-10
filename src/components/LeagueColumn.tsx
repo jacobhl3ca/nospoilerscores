@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Game, LeagueData, Sport } from "@/lib/types";
 import GameCard from "./GameCard";
+import GolfLeaderboard from "./GolfLeaderboard";
 
 interface LeagueColumnProps {
   league: LeagueData;
@@ -305,7 +306,9 @@ export default function LeagueColumn({
           <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
         </div>
       )}
-      {sorted.length === 0 ? (
+      {league.golfTournament && section !== "finished" ? (
+        <GolfLeaderboard tournament={league.golfTournament} showRatings={showRatings} />
+      ) : sorted.length === 0 ? (
         renderUpcoming ? (
           isPastDate ? (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>

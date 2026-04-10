@@ -42,9 +42,27 @@ export interface Team {
   record: string;
 }
 
+export interface GolfPlayer {
+  position: number;
+  name: string;
+  shortName: string;
+  score: string;       // e.g. "-5", "E", "+2"
+  flag: string;        // country flag image URL
+  rounds: string[];    // per-round scores e.g. ["67", "70"]
+  thru: string;        // "F", "12", "" (not started)
+}
+
+export interface GolfTournament {
+  name: string;
+  state: "pre" | "in" | "post";
+  statusDetail: string;  // "Round 1", "Final", etc.
+  players: GolfPlayer[];
+}
+
 export interface LeagueData {
   sport: Sport;
   label: string;
   games: Game[];
   nextGameDay?: { date: string; games: Game[] } | null;
+  golfTournament?: GolfTournament | null;
 }
