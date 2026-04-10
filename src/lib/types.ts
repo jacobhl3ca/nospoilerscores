@@ -48,6 +48,7 @@ export interface GolfPlayer {
   shortName: string;
   score: string;       // e.g. "-5", "E", "+2"
   flag: string;        // country flag image URL
+  flagCountry: string; // country name for tooltip
   rounds: string[];    // per-round scores e.g. ["67", "70"]
   thru: string;        // "F", "12", "" (not started)
 }

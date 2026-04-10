@@ -472,6 +472,29 @@ function espnToMlbAbbrev(espnAbbrev: string): string {
   return ESPN_TO_MLB_ABBREV[espnAbbrev] || espnAbbrev;
 }
 
+// Map ESPN country codes (from flag URLs) to display names
+const COUNTRY_NAMES: Record<string, string> = {
+  usa: "United States", can: "Canada", mex: "Mexico",
+  gbr: "Great Britain", eng: "England", sco: "Scotland", wal: "Wales",
+  irl: "Ireland", nir: "Northern Ireland",
+  esp: "Spain", fra: "France", ger: "Germany", ita: "Italy",
+  swe: "Sweden", nor: "Norway", den: "Denmark", fin: "Finland",
+  aus: "Australia", nzl: "New Zealand",
+  jpn: "Japan", kor: "South Korea", chn: "China", tha: "Thailand",
+  ind: "India", phi: "Philippines", twn: "Chinese Taipei",
+  zaf: "South Africa", arg: "Argentina", bra: "Brazil", col: "Colombia",
+  chl: "Chile", ven: "Venezuela", per: "Peru",
+  aut: "Austria", bel: "Belgium", ned: "Netherlands", por: "Portugal",
+  pol: "Poland", sui: "Switzerland", cze: "Czech Republic",
+};
+
+function countryNameFromFlagUrl(url: string): string {
+  const match = url.match(/\/countries\/\d+\/(\w+)\.\w+$/);
+  if (!match) return "";
+  const code = match[1].toLowerCase();
+  return COUNTRY_NAMES[code] ?? code.toUpperCase();
+}
+
 async function fetchGolfTournament(date?: string): Promise<GolfTournament | null> {
   const url = new URL(BASE_URL + SPORT_PATHS.golf);
   if (date) url.searchParams.set("dates", date);
@@ -544,12 +567,16 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
       thru = "F";
     }
 
+    const flagUrl = athlete.flag?.href ?? "";
+    const flagCountry = athlete.flag?.alt ?? countryNameFromFlagUrl(flagUrl);
+
     return {
       position: c.order ?? 0,
       name: athlete.displayName ?? "",
       shortName: athlete.shortName ?? "",
       score: c.score ?? "E",
-      flag: athlete.flag?.href ?? "",
+      flag: flagUrl,
+      flagCountry,
       rounds,
       thru,
     };

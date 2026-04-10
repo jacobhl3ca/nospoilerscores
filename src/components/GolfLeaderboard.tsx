@@ -38,8 +38,10 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
   const [expanded, setExpanded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [useShortNames, setUseShortNames] = useState(false);
-  const players = tournament.players;
-  const visible = expanded ? players.slice(0, EXPAND_SHOW) : players.slice(0, INITIAL_SHOW);
+  const allPlayers = tournament.players;
+  // When scores hidden, alphabetize to prevent position-order spoilers
+  const sortedPlayers = showRatings ? allPlayers : [...allPlayers].sort((a, b) => a.name.localeCompare(b.name));
+  const visible = expanded ? sortedPlayers.slice(0, EXPAND_SHOW) : sortedPlayers.slice(0, INITIAL_SHOW);
 
   // Measure if full names overflow — switch to short names if needed
   useEffect(() => {
@@ -55,10 +57,10 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
   }, []);
 
   const formatPosition = (pos: number, idx: number) => {
-    if (idx > 0 && players[idx - 1]?.position === pos) {
+    if (idx > 0 && sortedPlayers[idx - 1]?.position === pos) {
       return "";
     }
-    const isTied = idx < players.length - 1 && players[idx + 1]?.position === pos;
+    const isTied = idx < sortedPlayers.length - 1 && sortedPlayers[idx + 1]?.position === pos;
     if (isTied) return `T${pos}`;
     return String(pos);
   };
@@ -74,6 +76,19 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
   const showRating = showRatings && tournament.state !== "pre" && tournament.rating !== null;
   const hasBroadcast = tournament.broadcasts.length > 0;
 
+  // Abbreviate "After Round X" → "RX" when rating badge shown (saves space)
+  const displayStatus = (() => {
+    const detail = tournament.statusDetail;
+    if (showRatings) {
+      const m = detail.match(/^After Round (\d+)$/);
+      if (m) return `R${m[1]}`;
+    }
+    return detail;
+  })();
+
+  // Only green during active round play, not between rounds
+  const isActivePlaying = tournament.state === "in" && /^Round \d+$/.test(tournament.statusDetail);
+
   return (
     <div
       ref={containerRef}
@@ -87,8 +102,8 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
     >
       {/* Status bar — matches GameCard layout: status | rating | network */}
       <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
-        <span style={{ color: tournament.state === "in" ? "#22c55e" : "var(--text-muted)" }}>
-          {tournament.statusDetail}
+        <span style={{ color: isActivePlaying ? "#22c55e" : "var(--text-muted)" }}>
+          {displayStatus}
         </span>
         <span>
           {showRating && <RatingBadge rating={tournament.rating!} />}
@@ -131,7 +146,8 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
               {player.flag && (
                 <img
                   src={player.flag}
-                  alt=""
+                  alt={player.flagCountry || ""}
+                  title={player.flagCountry || undefined}
                   className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0"
                 />
               )}
@@ -166,7 +182,7 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
       </div>
 
       {/* Expand/collapse */}
-      {(players.length > INITIAL_SHOW) && (
+      {(allPlayers.length > INITIAL_SHOW) && (
         <button
           onClick={() => setExpanded(!expanded)}
           className="w-full text-center text-[10px] sm:text-xs mt-1.5 py-1 rounded transition-colors cursor-pointer"
@@ -174,7 +190,7 @@ export default function GolfLeaderboard({ tournament, showRatings }: GolfLeaderb
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
           onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
         >
-          {expanded ? "Show less" : "Show Top 25"}
+          {expanded ? "Show less" : `Show Top ${Math.min(EXPAND_SHOW, allPlayers.length)}${allPlayers.length > EXPAND_SHOW ? ` · ${allPlayers.length} in field` : ""}`}
         </button>
       )}
     </div>
