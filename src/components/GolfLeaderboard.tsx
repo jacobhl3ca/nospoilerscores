@@ -99,7 +99,7 @@ export default function GolfLeaderboard({
       const scoreW = showRatings ? 32 : 0;
       const thruW = showRatings && tournament.state === "in" ? 22 : 0;
       // Position column hidden on mobile, visible only when ratings shown on desktop
-      const rankW = !isMobile && showRatings ? 28 : 0;
+      const rankW = !isMobile && showRatings ? 22 : 0;
       const flagW = isMobile ? 18 : 22;
       const gaps = 6 * 4; // ~6px between each adjacent element
       const available = containerW - cardPadding - rankW - flagW - thruW - scoreW - gaps;
@@ -280,12 +280,14 @@ export default function GolfLeaderboard({
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
               }}
             >
-              {/* Position — left-aligned under "After Round X" header text.
+              {/* Position — right-aligned so single/double digits hug the
+                  flag+name on the right, eliminating the gap that pushed
+                  names visually away from their rank.
                   Hidden on mobile; only meaningful when scores are revealed. */}
               {showScore && (
                 <span
-                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-left flex-shrink-0"
-                  style={{ color: "var(--text-muted)", width: "26px" }}
+                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-right flex-shrink-0"
+                  style={{ color: "var(--text-muted)", width: "22px" }}
                 >
                   {posStr}
                 </span>
@@ -301,14 +303,9 @@ export default function GolfLeaderboard({
                 />
               )}
 
-              {/* Spacer — pushes name + score to the right so they sit
-                  adjacent instead of name flush-left / score flush-right. */}
-              <span className="flex-1 min-w-0" />
-
-              {/* Name — right-aligned, natural width (tier system already
-                  picked a name that fits the column). */}
+              {/* Name — flush left next to flag/rank, fills remaining width. */}
               <span
-                className="text-xs sm:text-sm truncate min-w-0 text-right"
+                className="text-xs sm:text-sm truncate flex-1 min-w-0"
                 style={{ color: "var(--text)" }}
               >
                 {displayName}
