@@ -3,6 +3,12 @@
 import { useRef, useState, useEffect } from "react";
 import { GolfTournament } from "@/lib/types";
 import {
+  isGolfLive,
+  getGolfLiveThru,
+  getGolfRecapRound,
+  getGolfDateState,
+} from "@/lib/golf";
+import {
   getGolfHighlightQuery,
   getGolfHighlightUrl,
   getOfficialChannelName,
@@ -60,9 +66,7 @@ export default function GolfLeaderboard({
 }: GolfLeaderboardProps) {
   const [expandLevel, setExpandLevel] = useState<ExpandLevel>("collapsed");
   const containerRef = useRef<HTMLDivElement>(null);
-  const statusCellRef = useRef<HTMLSpanElement>(null);
   const [nameTier, setNameTier] = useState<"full" | "initial" | "last">("full");
-  const [statusOverflow, setStatusOverflow] = useState(false);
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   const [fetchingHighlight, setFetchingHighlight] = useState<"official" | "search" | null>(null);
   const prefetchedOfficialId = useRef<string | null>(null);
@@ -83,61 +87,23 @@ export default function GolfLeaderboard({
   const showRating = showRatings && tournament.state !== "pre" && tournament.rating !== null;
   const hasBroadcast = tournament.broadcasts.length > 0;
 
-  // ── Date-aware round label ──
-  // ESPN returns a single tournament state regardless of which date the user
-  // navigates to, so the raw status says "After Round 2" on Round 2 morning
-  // etc. Override using the selected date vs. today and the tournament's
-  // start date so: yesterday=after R1, today=R2 in progress (green),
-  // tomorrow=R3 upcoming with tee-off time (grey).
-  const dateAware = (() => {
-    if (!selectedDate || !/^\d{8}$/.test(selectedDate) || !tournament.startDate) return null;
-    const selYear = parseInt(selectedDate.slice(0, 4), 10);
-    const selMonth = parseInt(selectedDate.slice(4, 6), 10);
-    const selDay = parseInt(selectedDate.slice(6, 8), 10);
-    const [startMo, startDay] = tournament.startDate.split("-").map((s) => parseInt(s, 10));
-    const selDate = new Date(selYear, selMonth - 1, selDay);
-    const startDateObj = new Date(selYear, startMo - 1, startDay);
-    const dayIndex = Math.round((selDate.getTime() - startDateObj.getTime()) / (24 * 3600 * 1000));
-    if (dayIndex < 0 || dayIndex > 3) return null; // not a round day
-    const roundNum = dayIndex + 1;
-
-    // Today-in-ET comparison
-    const now = new Date();
-    const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-    const todayMidnight = new Date(todayET.getFullYear(), todayET.getMonth(), todayET.getDate());
-    const selMidnight = new Date(selYear, selMonth - 1, selDay);
-    const todayIndex = Math.round((todayMidnight.getTime() - startDateObj.getTime()) / (24 * 3600 * 1000));
-
-    if (selMidnight.getTime() < todayMidnight.getTime()) {
-      return { statusDetail: `After Round ${roundNum}`, completedRounds: roundNum, inProgress: false };
-    }
-    if (selMidnight.getTime() > todayMidnight.getTime()) {
-      let timeLabel = "";
-      if (tournament.eventDate && dayIndex === todayIndex + 1) {
-        try {
-          const d = new Date(tournament.eventDate);
-          timeLabel = ` · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })} ET`;
-        } catch { /* ignore */ }
-      }
-      return { statusDetail: `Round ${roundNum}${timeLabel}`, completedRounds: roundNum - 1, inProgress: false };
-    }
-    return { statusDetail: `Round ${roundNum}`, completedRounds: roundNum - 1, inProgress: true };
-  })();
-
-  const effectiveStatusDetail = dateAware?.statusDetail ?? tournament.statusDetail;
-
-  // A round is *actively* playing only when (a) the user is viewing today,
-  // (b) ESPN reports the tournament as in-progress, and (c) the raw status
-  // is "Round N" (not "After Round N", which means the day's groups all
-  // wrapped). Without the third check, the leaderboard stayed green +
-  // suppressed highlights for the entire 18 hours between R1 finishing
-  // Thursday night and R2 teeing off Friday morning.
-  // Declared up here (rather than next to displayStatus below) so the
-  // statusOverflow useEffect's dep array can see it without a TDZ error.
-  const roundActivelyPlaying =
-    (dateAware?.inProgress ?? false) &&
-    tournament.state === "in" &&
-    /^Round \d+$/.test(tournament.statusDetail);
+  // ── Live state ──
+  // Live = at least one player is mid-hole right now (not "F", 1 ≤ thru ≤ 17).
+  // The previous version trusted ESPN's statusDetail string, which lingers on
+  // "Round N" / "After Round N" for hours past actual play, so the green
+  // indicator never lit up even mid-round. Source-of-truth helpers in
+  // `lib/golf.ts` keep this consistent with the league-header subtitle.
+  const dateState = selectedDate ? getGolfDateState(tournament, selectedDate) : null;
+  const live = isGolfLive(tournament);
+  // The card only shows a live indicator when the *viewed* date is the day
+  // play is happening — otherwise the card is just rating + broadcast.
+  const showLiveIndicator = live && dateState?.relativeDay === "today";
+  const liveThru = showLiveIndicator ? getGolfLiveThru(tournament) : "";
+  const liveLabel = showLiveIndicator
+    ? liveThru
+      ? `R${dateState!.roundNum} · Thru ${liveThru}`
+      : `R${dateState!.roundNum}`
+    : null;
 
   // Decide which name format fits the available column width — measure widths
   // with a hidden probe so we use the longest tier that actually fits per row.
@@ -185,38 +151,6 @@ export default function GolfLeaderboard({
     return () => ro.disconnect();
   }, [sortedPlayers, showRatings, tournament.state]);
 
-  // Detect whether full status ("After Round X") fits — measure the *actual*
-  // grid cell width (after the rating badge + broadcast cells lay out) and
-  // compare against a probe rendered with the same font. Estimating the
-  // available width was unreliable on narrow columns and produced "after roun.."
-  // truncation; measuring the real cell removes the guesswork.
-  useEffect(() => {
-    const cell = statusCellRef.current;
-    if (!cell) return;
-    const measure = () => {
-      const cellW = cell.clientWidth;
-      if (!cellW) return;
-      const cs = getComputedStyle(cell);
-      const probe = document.createElement("span");
-      // Match the rendered style — non-live status renders italic, which is
-      // slightly wider than regular at the same font size, so the probe must
-      // include italic too or "Round 3 · 2:30 PM ET" sneaks past the cutoff
-      // and gets clipped instead of abbreviated.
-      const fontStyle = roundActivelyPlaying ? "normal" : "italic";
-      probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font};letter-spacing:${cs.letterSpacing};font-style:${fontStyle};`;
-      probe.textContent = effectiveStatusDetail;
-      document.body.appendChild(probe);
-      const fullW = probe.offsetWidth;
-      document.body.removeChild(probe);
-      // 6px safety buffer — leaves room for italic glyph overhang
-      setStatusOverflow(fullW > cellW - 6);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(cell);
-    return () => ro.disconnect();
-  }, [effectiveStatusDetail, showRating, hasBroadcast, roundActivelyPlaying]);
-
   // Tied groups: keep the rank only on the top name, leave the rest blank.
   // Drop the "T" prefix — the blank rows below imply the tie, and a clean
   // number reads better when 5+ players sit at the same score with no
@@ -235,50 +169,13 @@ export default function GolfLeaderboard({
     return "var(--text)";
   };
 
-  // Live progress indicator parity with other sports cards (Q3 4:32, ▲5,
-  // P2 8:15). Use the lowest non-F numeric thru in the top 10 — that's the
-  // latest group still on the course, which reflects how far the live
-  // action has progressed. Fall back to round-only if nobody is mid-hole.
-  const liveThru = (() => {
-    if (!roundActivelyPlaying) return "";
-    const top10 = tournament.players.slice(0, 10);
-    let lowest: number | null = null;
-    for (const p of top10) {
-      if (!p.thru || p.thru === "F") continue;
-      const n = parseInt(p.thru, 10);
-      if (!Number.isFinite(n)) continue;
-      if (lowest === null || n < lowest) lowest = n;
-    }
-    return lowest === null ? "" : String(lowest);
-  })();
-
-  // Build the display string. Live = compact "R{N} · Thru {X}" (green,
-  // non-italic, links to the leaderboard). Non-live = italic "Round X" or
-  // "Round X · TIME", abbreviated to "R{X}" if it would overflow the cell.
-  const displayStatus = (() => {
-    if (roundActivelyPlaying) {
-      const m = (dateAware?.statusDetail ?? tournament.statusDetail).match(/^Round (\d+)/);
-      const r = m ? `R${m[1]}` : "Live";
-      return liveThru ? `${r} · Thru ${liveThru}` : r;
-    }
-    const detail = effectiveStatusDetail;
-    if (statusOverflow) {
-      // Strip "Round " → "R" anywhere in the label so the upcoming round
-      // (e.g. "Round 3 · 2:30 PM ET") still fits the narrow column.
-      const afterMatch = detail.match(/^After Round (\d+)$/);
-      if (afterMatch) return `After R${afterMatch[1]}`;
-      return detail.replace(/^Round (\d+)/, "R$1");
-    }
-    return detail;
-  })();
-
   // ── Highlights setup ──
-  // Show round-recap highlights once a round is complete — but suppress them
-  // while a round is still being played on the user's view date, so today's
-  // live coverage isn't preempted by yesterday's recap (parity with team
-  // sports, where highlights only appear after the game is final).
-  const completedRounds = dateAware?.completedRounds ?? tournament.currentRound;
-  const highlightsAvailable = completedRounds > 0 && !!leagueLabel && !roundActivelyPlaying;
+  // Recap for round X only appears on the day round X was played, after the
+  // round is fully complete. R1 recap on Thursday view, R2 recap on Friday
+  // view, etc. — never the previous day's recap on today's tab.
+  const recapRound = selectedDate ? getGolfRecapRound(tournament, selectedDate) : 0;
+  const highlightsAvailable = recapRound > 0 && !!leagueLabel;
+  const completedRounds = recapRound; // alias for the rest of the file
   const highlightYear = (() => {
     if (selectedDate && /^\d{8}$/.test(selectedDate)) return parseInt(selectedDate.slice(0, 4), 10);
     return new Date().getFullYear();
@@ -334,13 +231,14 @@ export default function GolfLeaderboard({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
     >
-      {/* Status bar — matches GameCard layout: status | rating | network */}
+      {/* Status bar — matches GameCard layout: status | rating | network.
+          Round wording lives in the league-header subtitle (italic, like
+          "Playoffs Apr 19" for team sports). Only the live indicator
+          appears on the card itself, and only when viewing the day play
+          is happening — parity with how Q3/▲5/P2 work on other cards. */}
       <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
-        <span
-          ref={statusCellRef}
-          className="truncate min-w-0"
-        >
-          {roundActivelyPlaying ? (
+        <span className="truncate min-w-0">
+          {liveLabel ? (
             tournament.leaderboardUrl ? (
               <a
                 href={tournament.leaderboardUrl}
@@ -348,14 +246,12 @@ export default function GolfLeaderboard({
                 rel="noopener noreferrer"
                 className="text-green-500 font-medium hover:text-green-400 transition-colors"
               >
-                {displayStatus}
+                {liveLabel}
               </a>
             ) : (
-              <span className="text-green-500 font-medium">{displayStatus}</span>
+              <span className="text-green-500 font-medium">{liveLabel}</span>
             )
-          ) : (
-            <span className="italic" style={{ color: "var(--text-muted)" }}>{displayStatus}</span>
-          )}
+          ) : null}
         </span>
         <span>
           {showRating && <RatingBadge rating={tournament.rating!} />}

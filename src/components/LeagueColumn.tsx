@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Game, LeagueData, Sport } from "@/lib/types";
+import { getGolfSubtitle } from "@/lib/golf";
 import GameCard from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 
@@ -107,6 +108,24 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
       style={{ color: result ? "var(--text-muted)" : "transparent" }}
     >
       {result ? (useShort ? result.short : result.full) : "\u00A0"}
+    </span>
+  );
+}
+
+// Italic round-wording subtitle for golf leagues — drops in where
+// PlayoffSubtitle would for team sports. Text comes from getGolfSubtitle
+// which knows how to map a viewed date onto a round and decide whether
+// the live indicator on the card should suppress the subtitle entirely.
+function GolfSubtitle({ league, selectedDate }: { league: LeagueData; selectedDate: string }) {
+  const text = league.golfTournament
+    ? getGolfSubtitle(league.golfTournament, selectedDate)
+    : null;
+  return (
+    <span
+      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center"
+      style={{ color: text ? "var(--text-muted)" : "transparent" }}
+    >
+      {text || "\u00A0"}
     </span>
   );
 }
@@ -305,7 +324,11 @@ export default function LeagueColumn({
               ★
             </button>
           </div>
-          <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
+          {league.golfTournament ? (
+            <GolfSubtitle league={league} selectedDate={selectedDate} />
+          ) : (
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
+          )}
         </div>
       )}
       {league.golfTournament && section !== "finished" ? (
