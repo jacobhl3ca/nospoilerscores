@@ -309,7 +309,13 @@ export default function LeagueColumn({
         </div>
       )}
       {league.golfTournament && section !== "finished" ? (
-        <GolfLeaderboard tournament={league.golfTournament} showRatings={showRatings} />
+        <GolfLeaderboard
+          tournament={league.golfTournament}
+          showRatings={showRatings}
+          leagueLabel={league.label}
+          selectedDate={selectedDate}
+          onPlayHighlight={onPlayHighlight}
+        />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           isPastDate ? (

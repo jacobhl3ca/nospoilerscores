@@ -60,6 +60,7 @@ export interface GolfTournament {
   players: GolfPlayer[];
   broadcasts: string[];  // ["ESPN", "CBS"]
   rating: number | null; // leaderboard competitiveness (0-100)
+  currentRound: number;  // number of completed rounds (0–4)
 }
 
 export interface LeagueData {

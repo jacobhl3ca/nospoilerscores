@@ -590,6 +590,28 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     }
   }
 
+  // Masters broadcast enrichment — ESPN's scoreboard only lists the rights holder
+  // for the current window. The actual coverage is split across networks/streamers.
+  // 2026 Masters: Thu/Fri ESPN + Amazon Prime, Sat/Sun CBS + Paramount+
+  // (Masters.com / Masters app stream all four days)
+  if (/masters/i.test(event.name ?? "")) {
+    const dayDate = date
+      ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`)
+      : new Date();
+    const dow = dayDate.getDay(); // 0=Sun..6=Sat
+    const add = (n: string) => { if (!broadcasts.includes(n)) broadcasts.push(n); };
+    if (dow === 4 || dow === 5) {
+      // Thursday/Friday — Rounds 1-2
+      add("ESPN");
+      add("Amazon Prime");
+    } else if (dow === 6 || dow === 0) {
+      // Saturday/Sunday — Rounds 3-4
+      add("CBS");
+      add("Paramount+");
+    }
+    add("Masters.com");
+  }
+
   // Calculate leaderboard competitiveness rating
   // Based on how tight the top of the leaderboard is
   let rating: number | null = null;
@@ -626,6 +648,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     players,
     broadcasts,
     rating,
+    currentRound,
   };
 }
 

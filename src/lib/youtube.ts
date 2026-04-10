@@ -52,6 +52,16 @@ function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesN
   return parts.join(" ");
 }
 
+// Build a YouTube search query for a specific completed round of a golf major.
+// Example: getGolfHighlightQuery("Masters", 1, 2026) → "Masters 2026 Round 1 highlights"
+export function getGolfHighlightQuery(label: string, round: number, year: number): string {
+  return `${label} ${year} Round ${round} highlights`;
+}
+
+export function getGolfHighlightUrl(label: string, round: number, year: number): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(getGolfHighlightQuery(label, round, year))}`;
+}
+
 export async function fetchFirstVideoId(query: string, channel?: string): Promise<string | null> {
   try {
     let url = `/api/youtube?q=${encodeURIComponent(query)}`;
