@@ -6,6 +6,8 @@ import {
   getGolfHighlightQuery,
   getGolfHighlightUrl,
   getOfficialChannelName,
+  getSecondaryChannelName,
+  getSecondaryChannelLabel,
   fetchFirstVideoId,
 } from "@/lib/youtube";
 
@@ -59,6 +61,7 @@ export default function GolfLeaderboard({
 }: GolfLeaderboardProps) {
   const [expandLevel, setExpandLevel] = useState<ExpandLevel>("collapsed");
   const containerRef = useRef<HTMLDivElement>(null);
+  const statusCellRef = useRef<HTMLSpanElement>(null);
   const [nameTier, setNameTier] = useState<"full" | "initial" | "last">("full");
   const [statusOverflow, setStatusOverflow] = useState(false);
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
@@ -127,34 +130,30 @@ export default function GolfLeaderboard({
     return () => ro.disconnect();
   }, [sortedPlayers, showRatings, tournament.state]);
 
-  // Detect whether full status ("After Round X") fits — measure with probe.
+  // Detect whether full status ("After Round X") fits — measure the *actual*
+  // grid cell width (after the rating badge + broadcast cells lay out) and
+  // compare against a probe rendered with the same font. Estimating the
+  // available width was unreliable on narrow columns and produced "after roun.."
+  // truncation; measuring the real cell removes the guesswork.
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
+    const cell = statusCellRef.current;
+    if (!cell) return;
     const measure = () => {
-      const containerW = el.clientWidth;
-      if (!containerW) return;
-      const isMobile = window.innerWidth < 640;
-      const cardPadding = isMobile ? 16 : 32;
-      const badgeW = showRating ? 50 : 0;
-      const broadcastMin = hasBroadcast ? 40 : 0; // approx "ESPN" / "CBS"
-      const gaps = (isMobile ? 8 : 12) * 2;
-      // Grid is 1fr auto 1fr → left & right cells share remaining space equally,
-      // but with broadcastMin on the right we need at least that much there.
-      const available = containerW - cardPadding - badgeW - broadcastMin - gaps;
-
+      const cellW = cell.clientWidth;
+      if (!cellW) return;
+      const cs = getComputedStyle(cell);
       const probe = document.createElement("span");
-      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-size:12px;font-family:inherit;";
+      probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font};letter-spacing:${cs.letterSpacing};`;
       probe.textContent = tournament.statusDetail;
       document.body.appendChild(probe);
       const fullW = probe.offsetWidth;
       document.body.removeChild(probe);
-
-      setStatusOverflow(fullW > available);
+      // 4px safety buffer — if the full text is within 4px of the cell, abbreviate
+      setStatusOverflow(fullW > cellW - 4);
     };
     measure();
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(cell);
     return () => ro.disconnect();
   }, [tournament.statusDetail, showRating, hasBroadcast]);
 
@@ -203,15 +202,22 @@ export default function GolfLeaderboard({
     ? getGolfHighlightUrl(leagueLabel!, completedRounds, highlightYear)
     : null;
   const officialChannel = highlightsAvailable ? getOfficialChannelName("golf", leagueLabel) : null;
+  const secondaryChannel = highlightsAvailable ? getSecondaryChannelName("golf", leagueLabel) : null;
+  const secondaryLabel = secondaryChannel ? getSecondaryChannelLabel(secondaryChannel) : null;
 
   useEffect(() => {
     if (!highlightQuery || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    fetchFirstVideoId(highlightQuery).then((id) => { prefetchedSearchId.current = id; });
+    // Prefetch the secondary channel if curated, else fall back to generic search
+    if (secondaryChannel) {
+      fetchFirstVideoId(highlightQuery, secondaryChannel).then((id) => { prefetchedSearchId.current = id; });
+    } else {
+      fetchFirstVideoId(highlightQuery).then((id) => { prefetchedSearchId.current = id; });
+    }
     if (officialChannel) {
       fetchFirstVideoId(highlightQuery, officialChannel).then((id) => { prefetchedOfficialId.current = id; });
     }
-  }, [highlightQuery, officialChannel]);
+  }, [highlightQuery, officialChannel, secondaryChannel]);
 
   return (
     <div
@@ -227,7 +233,8 @@ export default function GolfLeaderboard({
       {/* Status bar — matches GameCard layout: status | rating | network */}
       <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
         <span
-          className="truncate"
+          ref={statusCellRef}
+          className="truncate min-w-0"
           style={{ color: isActivePlaying ? "#22c55e" : "var(--text-muted)" }}
         >
           {displayStatus}
@@ -294,9 +301,14 @@ export default function GolfLeaderboard({
                 />
               )}
 
-              {/* Name */}
+              {/* Spacer — pushes name + score to the right so they sit
+                  adjacent instead of name flush-left / score flush-right. */}
+              <span className="flex-1 min-w-0" />
+
+              {/* Name — right-aligned, natural width (tier system already
+                  picked a name that fits the column). */}
               <span
-                className="text-xs sm:text-sm truncate flex-1 min-w-0"
+                className="text-xs sm:text-sm truncate min-w-0 text-right"
                 style={{ color: "var(--text)" }}
               >
                 {displayName}
@@ -430,7 +442,9 @@ export default function GolfLeaderboard({
                 return;
               }
               setFetchingHighlight("search");
-              const id = await fetchFirstVideoId(highlightQuery);
+              const id = secondaryChannel
+                ? await fetchFirstVideoId(highlightQuery, secondaryChannel)
+                : await fetchFirstVideoId(highlightQuery);
               setFetchingHighlight(null);
               if (id) {
                 prefetchedSearchId.current = id;
@@ -440,14 +454,19 @@ export default function GolfLeaderboard({
               }
             }}
             disabled={fetchingHighlight !== null}
-            className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+            className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
             style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingHighlight === "search" ? 0.5 : undefined }}
-            title={`Round ${completedRounds} highlights`}
+            title={secondaryChannel ? `${secondaryChannel} — Round ${completedRounds} highlights` : `Round ${completedRounds} highlights`}
           >
             {fetchingHighlight === "search" ? (
               <span className="text-[10px]">Loading...</span>
             ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                {secondaryLabel && (
+                  <span className="text-[10px] font-medium">{secondaryLabel} R{completedRounds}</span>
+                )}
+              </>
             )}
           </button>
         </div>

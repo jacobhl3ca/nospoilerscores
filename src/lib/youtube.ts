@@ -18,6 +18,22 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   tennis_usopen: "US Open Tennis Championships",
 };
 
+// Consistent secondary source per sport — used when the tournament/league
+// channel is slow or sparse. PGA TOUR uploads "Round X highlights" reliably
+// for Masters / PGA Champ / US Open. The Open is R&A-controlled, so we fall
+// back to Sky Sports Golf for that one.
+const SECONDARY_CHANNELS: Record<string, string> = {
+  golf_masters: "PGA TOUR",
+  "golf_pga champ": "PGA TOUR",
+  "golf_us open": "PGA TOUR",
+  "golf_the open": "Sky Sports Golf",
+};
+
+const SECONDARY_LABELS: Record<string, string> = {
+  "PGA TOUR": "PGA",
+  "Sky Sports Golf": "Sky",
+};
+
 export function getYouTubeSearchUrl(
   awayTeam: string,
   homeTeam: string,
@@ -44,6 +60,21 @@ export function getOfficialChannelName(sport: string, label?: string): string | 
     if (OFFICIAL_CHANNELS[labelKey]) return OFFICIAL_CHANNELS[labelKey];
   }
   return OFFICIAL_CHANNELS[sport] ?? null;
+}
+
+// Returns a consistent secondary channel name (e.g. "PGA TOUR" for Masters).
+// Falls back to null when no curated secondary exists — caller should then
+// drop back to a generic search.
+export function getSecondaryChannelName(sport: string, label?: string): string | null {
+  if (label) {
+    const labelKey = `${sport}_${label.toLowerCase()}`;
+    if (SECONDARY_CHANNELS[labelKey]) return SECONDARY_CHANNELS[labelKey];
+  }
+  return null;
+}
+
+export function getSecondaryChannelLabel(channel: string): string {
+  return SECONDARY_LABELS[channel] ?? channel;
 }
 
 function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
