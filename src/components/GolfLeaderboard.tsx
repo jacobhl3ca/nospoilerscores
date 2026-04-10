@@ -6,7 +6,7 @@ import {
   getGolfHighlightQuery,
   getGolfHighlightUrl,
   getOfficialChannelName,
-  getSecondaryChannelName,
+  getSecondaryChannels,
   fetchFirstVideoId,
 } from "@/lib/youtube";
 
@@ -201,31 +201,38 @@ export default function GolfLeaderboard({
     ? getGolfHighlightUrl(leagueLabel!, completedRounds, highlightYear)
     : null;
   const officialChannel = highlightsAvailable ? getOfficialChannelName("golf", leagueLabel) : null;
-  const secondaryChannel = highlightsAvailable ? getSecondaryChannelName("golf", leagueLabel) : null;
+  const secondaryChannels = highlightsAvailable ? getSecondaryChannels("golf", leagueLabel) : [];
+  const secondaryChannelsKey = secondaryChannels.join("|");
+
+  // Walk the curated channel fallback chain, then a generic search, stopping
+  // at the first video that's (a) non-null and (b) different from the
+  // official-channel video so we never duplicate button 1.
+  const resolveSearchVideo = async (): Promise<string | null> => {
+    if (!highlightQuery) return null;
+    const officialId = prefetchedOfficialId.current;
+    for (const channel of secondaryChannels) {
+      const id = await fetchFirstVideoId(highlightQuery, channel);
+      if (id && id !== officialId) return id;
+    }
+    const generic = await fetchFirstVideoId(highlightQuery);
+    if (generic && generic !== officialId) return generic;
+    return null;
+  };
 
   useEffect(() => {
     if (!highlightQuery || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    // Prefer the curated secondary channel (e.g. PGA TOUR) so the 2nd button
-    // gets a known-good upload — but fall back to a generic YouTube search if
-    // that channel hasn't uploaded a matching video yet (otherwise the click
-    // handler gives up and opens a new tab instead of playing in the modal).
-    if (secondaryChannel) {
-      fetchFirstVideoId(highlightQuery, secondaryChannel).then(async (id) => {
-        if (id) {
-          prefetchedSearchId.current = id;
-        } else {
-          const fallback = await fetchFirstVideoId(highlightQuery);
-          prefetchedSearchId.current = fallback;
-        }
-      });
-    } else {
-      fetchFirstVideoId(highlightQuery).then((id) => { prefetchedSearchId.current = id; });
-    }
-    if (officialChannel) {
-      fetchFirstVideoId(highlightQuery, officialChannel).then((id) => { prefetchedOfficialId.current = id; });
-    }
-  }, [highlightQuery, officialChannel, secondaryChannel]);
+    // Prefetch official first, then walk the curated fallback chain.
+    const prefetchAll = async () => {
+      if (officialChannel) {
+        const oid = await fetchFirstVideoId(highlightQuery, officialChannel);
+        prefetchedOfficialId.current = oid;
+      }
+      prefetchedSearchId.current = await resolveSearchVideo();
+    };
+    prefetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightQuery, officialChannel, secondaryChannelsKey]);
 
   return (
     <div
@@ -288,13 +295,13 @@ export default function GolfLeaderboard({
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
               }}
             >
-              {/* Position — text-right so digits sit flush against the flag.
-                  Narrow 18px box (fits 1-99 and T1-T15) keeps name close.
-                  Hidden on mobile; only meaningful when scores are revealed. */}
+              {/* Position — natural width, flush to the card padding edge, so
+                  there's no empty indent before the digit. Row gap handles
+                  spacing to the flag. Hidden on mobile. */}
               {showScore && (
                 <span
-                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums text-right flex-shrink-0"
-                  style={{ color: "var(--text-muted)", width: "18px" }}
+                  className="hidden sm:inline-block text-[10px] sm:text-xs tabular-nums flex-shrink-0"
+                  style={{ color: "var(--text-muted)" }}
                 >
                   {posStr}
                 </span>
@@ -441,36 +448,22 @@ export default function GolfLeaderboard({
                 window.open(highlightFallbackUrl, "_blank");
                 return;
               }
-              // For golf, the top organic search result is usually the same
-              // video as the official tournament channel (R&A / Augusta dominate
-              // search). When that's the case, fall back to opening the full
-              // YouTube search page so the user can pick a different option.
-              const officialId = prefetchedOfficialId.current;
-              if (prefetchedSearchId.current && prefetchedSearchId.current !== officialId) {
+              // Use the prefetched search ID if it's ready and different from
+              // the official button; otherwise walk the curated fallback
+              // chain (PGA TOUR → Golf Channel → ESPN → generic search) at
+              // click time until we find a playable, distinct video.
+              if (prefetchedSearchId.current) {
                 onPlayHighlight(prefetchedSearchId.current, highlightFallbackUrl);
                 return;
               }
-              if (prefetchedSearchId.current && prefetchedSearchId.current === officialId) {
-                window.open(highlightFallbackUrl, "_blank");
-                return;
-              }
               setFetchingHighlight("search");
-              let id = secondaryChannel
-                ? await fetchFirstVideoId(highlightQuery, secondaryChannel)
-                : await fetchFirstVideoId(highlightQuery);
-              // If the curated channel returned nothing, fall back to a
-              // generic search so the click still autoplays in the modal.
-              if (!id && secondaryChannel) {
-                id = await fetchFirstVideoId(highlightQuery);
-              }
+              const id = await resolveSearchVideo();
               setFetchingHighlight(null);
-              if (id && id !== officialId) {
+              if (id) {
                 prefetchedSearchId.current = id;
                 onPlayHighlight(id, highlightFallbackUrl);
-              } else if (id && id === officialId) {
-                // Last-resort: same video as button 1 — open new tab.
-                window.open(highlightFallbackUrl, "_blank");
               } else {
+                // Every channel + generic search failed or duplicated button 1.
                 window.open(highlightFallbackUrl, "_blank");
               }
             }}

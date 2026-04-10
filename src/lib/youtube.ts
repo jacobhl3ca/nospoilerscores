@@ -18,16 +18,19 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   tennis_usopen: "US Open Tennis Championships",
 };
 
-// Curated secondary channel per golf major. Picked because PGA TOUR (3.4M
-// subs) reliably uploads "Round X highlights" with consistent production for
-// every PGA-sanctioned major. The Open is R&A-controlled (not PGA TOUR), so
-// Sky Sports Golf is the most consistent alternate. Forcing a channel filter
-// avoids the random/low-quality top organic search result.
-const SECONDARY_CHANNELS: Record<string, string> = {
-  golf_masters: "PGA TOUR",
-  "golf_pga champ": "PGA TOUR",
-  "golf_us open": "PGA TOUR",
-  "golf_the open": "Sky Sports Golf",
+// Curated fallback chain for the 2nd golf highlight button — tried in order
+// until one returns a playable video. Picked for consistent "Round X
+// highlights" uploads:
+//   - PGA TOUR (3.4M subs): round recaps for PGA-sanctioned majors
+//   - Golf Channel (700k): NBC-owned, mixes recaps + analysis
+//   - ESPN (19M): editorial daily recaps, sometimes generic
+//   - Sky Sports Golf (800k): best consistent source for The Open (R&A-run)
+// Forcing channel filters avoids the random/low-quality top organic search.
+const SECONDARY_CHANNELS: Record<string, string[]> = {
+  golf_masters: ["PGA TOUR", "Golf Channel", "ESPN"],
+  "golf_pga champ": ["PGA TOUR", "Golf Channel", "ESPN"],
+  "golf_us open": ["PGA TOUR", "Golf Channel", "ESPN"],
+  "golf_the open": ["Sky Sports Golf", "Golf Channel", "ESPN"],
 };
 
 export function getYouTubeSearchUrl(
@@ -58,15 +61,15 @@ export function getOfficialChannelName(sport: string, label?: string): string | 
   return OFFICIAL_CHANNELS[sport] ?? null;
 }
 
-// Returns a curated secondary channel for the 2nd highlight button — used to
-// avoid the unreliable top organic YouTube search result. Falls back to null
-// when nothing curated exists; caller should drop back to a generic search.
-export function getSecondaryChannelName(sport: string, label?: string): string | null {
+// Returns the full curated fallback chain of YouTube channels to try for the
+// 2nd highlight button, in priority order. Empty array means no curated
+// options — caller should drop straight to a generic search.
+export function getSecondaryChannels(sport: string, label?: string): string[] {
   if (label) {
     const labelKey = `${sport}_${label.toLowerCase()}`;
     if (SECONDARY_CHANNELS[labelKey]) return SECONDARY_CHANNELS[labelKey];
   }
-  return null;
+  return [];
 }
 
 function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {

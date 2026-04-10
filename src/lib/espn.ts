@@ -120,17 +120,17 @@ const MARCH_MADNESS_END = "04-06";
 
 // Unified priority — lower = higher priority
 // firstPref leagues (World Cup, Masters, US Open Golf, Wimbledon, US Open Tennis) always get a slot
-// Other leagues ranked: NBA > MLB > NFL > tennis > EPL > NCAAM > NHL > golf
+// Other leagues ranked: NBA > MLB > NFL > tennis > golf > NCAAM > NHL > EPL
 // March Madness gets firstPref treatment so NCAAM still shows during the tournament.
 const LEAGUE_PRIORITY: Record<string, number> = {
   nba: 1,
   mlb: 2,
   nfl: 3,
   tennis: 4, // non-firstPref: French Open, Aus Open
-  epl: 5,
+  golf: 5,   // non-firstPref: PGA Champ, The Open (under tennis)
   ncaam: 6,  // March Madness gets firstPref bump
   nhl: 7,
-  golf: 8,   // non-firstPref: PGA Champ, The Open
+  epl: 8,    // under NHL
 };
 
 function isMarchMadness(viewDate: Date): boolean {
