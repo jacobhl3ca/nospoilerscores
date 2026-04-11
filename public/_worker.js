@@ -135,6 +135,20 @@ export default {
         let playerReelId = null;
         const preferChannelLower = preferChannel ? preferChannel.toLowerCase() : null;
 
+        // If the requested channel is itself tournament-specific
+        // (e.g. "The Masters" for a Masters query), videos from that
+        // channel are implicitly about this tournament — so we waive
+        // the hasGolfTournament title check for that channel's hits.
+        // Without this waiver, The Masters channel's Round 3 uploads
+        // were being excluded because they don't repeat "Masters" in
+        // the title (it's already the channel name), leaving us with
+        // only 3 filled highlight slots instead of 4.
+        const channelImpliesGolfTournament =
+          !!preferChannelLower &&
+          golfTournamentAliases.some((alias) =>
+            preferChannelLower.includes(alias)
+          );
+
         for (const video of videos) {
           const { videoId, title, channel } = video;
           const titleLower = title.toLowerCase();
@@ -199,19 +213,21 @@ export default {
             }
             if (hasTeams && hasYear && !channelTeamsYearId) channelTeamsYearId = videoId;
             if (hasTeams && !channelTeamsId) channelTeamsId = videoId;
-            // Golf round/recap tiers — ALL gated on hasGolfTournament
-            // so a PGA TOUR channel's latest round-highlights video
-            // for a different event (e.g. Heritage, Valero Texas
-            // Open) can't slip into the Masters slot. Player reels
-            // go into their own bucket; non-reels split into recap
-            // and plain-round tiers.
-            if (hasGolfRound && hasGolfTournament && !isLikelyPlayerReel) {
+            // Golf round/recap tiers — gated on tournament match OR
+            // the channel itself implying the tournament (The Masters
+            // channel for a Masters query). Without the waiver, a
+            // tournament-specific channel's own uploads get excluded
+            // just because they don't repeat the tournament name in
+            // the title.
+            const channelTournamentOk =
+              hasGolfTournament || channelImpliesGolfTournament;
+            if (hasGolfRound && channelTournamentOk && !isLikelyPlayerReel) {
               if (hasRecap && hasYear && !channelGolfRecapYearId) channelGolfRecapYearId = videoId;
               if (hasRecap && !channelGolfRecapId) channelGolfRecapId = videoId;
               if (hasYear && !channelGolfRoundYearId) channelGolfRoundYearId = videoId;
               if (!channelGolfRoundId) channelGolfRoundId = videoId;
             }
-            if (hasGolfRound && hasGolfTournament && isLikelyPlayerReel && !channelPlayerReelId) {
+            if (hasGolfRound && channelTournamentOk && isLikelyPlayerReel && !channelPlayerReelId) {
               channelPlayerReelId = videoId;
             }
             if (!channelAnyId) channelAnyId = videoId;
@@ -261,12 +277,14 @@ export default {
 
         let videoId;
         if (preferChannel) {
-          // Channel-filtered priority (highest → lowest). For golf
-          // queries we stop before channelAnyId — that fallback is
-          // only safe for team sports, where a random channel video
-          // is at least from the same league. For golf, falling
-          // through to channelAnyId would let a PGA TOUR channel
-          // upload for a different event win the Masters slot.
+          // Channel-filtered priority (highest → lowest). For a golf
+          // query, channelAnyId is only safe when the channel itself
+          // is tournament-specific (The Masters → implicitly Masters
+          // content); otherwise we'd let a generic PGA TOUR upload
+          // for a different tour stop slip through as the last
+          // resort, which is what we're explicitly preventing.
+          const golfChannelAnyOk =
+            isGolfQuery && channelImpliesGolfTournament;
           videoId =
             channelBestId ||
             channelGolfRecapYearId ||
@@ -276,7 +294,7 @@ export default {
             channelGolfRoundId ||
             channelTeamsId ||
             channelPlayerReelId ||
-            (isGolfQuery ? null : channelAnyId) ||
+            (isGolfQuery ? (golfChannelAnyOk ? channelAnyId : null) : channelAnyId) ||
             null;
         } else {
           // General (non-channel) search: recap tiers first, then
