@@ -89,7 +89,13 @@ export function getGolfSubtitle(
   const ds = getGolfDateState(tournament, selectedDate);
   if (!ds) return null;
 
-  if (ds.relativeDay === "past") return `After Round ${ds.roundNum}`;
+  // Golf stroke-play events are always 4 rounds. We show the round
+  // number out of total ("Round 3 of 4") rather than "After Round N",
+  // because ESPN's roundStatus lags — on the morning of a round day it
+  // can still report the previous round as "post", which used to render
+  // "After Round 3" before round 3 had even teed off. "Round 3 of 4" is
+  // unambiguous in every state.
+  if (ds.relativeDay === "past") return `Round ${ds.roundNum} of 4`;
 
   if (ds.relativeDay === "future") {
     // Show ET tee time only when this future date is exactly tomorrow —
@@ -123,15 +129,15 @@ export function getGolfSubtitle(
         }
       }
     }
-    return `Round ${ds.roundNum}${timeLabel}`;
+    return `Round ${ds.roundNum} of 4${timeLabel}`;
   }
 
-  // Today. roundStatus is ESPN's authoritative per-round state.
-  // "post" → round wrapped (may still be the current calendar day).
-  // "in"   → round in progress; card shows the hole-based live indicator.
-  // "pre"  → tee times not yet; round hasn't started.
-  if (tournament.roundStatus === "post") return `After Round ${ds.roundNum}`;
-  return `Round ${ds.roundNum}`;
+  // Today. Always show "Round N of 4" regardless of roundStatus — ESPN's
+  // flag can lag into the morning of the next round, so we can't safely
+  // emit "After Round N" from it. The card itself renders the live/pre
+  // state (green thru indicator, tee time) so the subtitle doesn't need
+  // to carry that information.
+  return `Round ${ds.roundNum} of 4`;
 }
 
 // The round whose recap should appear on the selected date — or 0 if no

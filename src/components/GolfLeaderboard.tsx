@@ -83,21 +83,36 @@ export default function GolfLeaderboard({
     expandLevel === "all" ? sortedPlayers.length : expandLevel === "top25" ? TOP25_SHOW : INITIAL_SHOW;
   const visible = sortedPlayers.slice(0, visibleCount);
 
-  const showScore = showRatings;
-  const showRating = showRatings && tournament.state !== "pre" && tournament.rating !== null;
-  const hasBroadcast = tournament.broadcasts.length > 0;
-  // Mirror GameCard: when the tournament is wrapped and no rating takes
-  // the center slot, fill the status text with "FINAL" on R4 Sunday so
-  // the card reads like any other post-state card.
-  const showFinalLabel = tournament.state === "post" && !showRating;
-
-  // ── Live state ──
+  // ── Date state + live signal ──
   // Round wording lives in the league-header italic subtitle (see
   // GolfSubtitle in LeagueColumn.tsx), so the card itself only shows a
   // hole-based live indicator — the same pattern team sports use for
   // "Q3 4:32" / "▲5" / "P2 8:15". Source-of-truth helpers in `lib/golf.ts`
   // keep this consistent with the subtitle and the recap toggle.
   const dateState = selectedDate ? getGolfDateState(tournament, selectedDate) : null;
+
+  const showScore = showRatings;
+  // Hide the rating badge before the viewed round has started. Using
+  // `tournament.state` alone wasn't strict enough — on Saturday morning
+  // before R3 tees off, the tournament state is still "in" from R2, so
+  // the rating (which reflects post-R2 leaderboard competitiveness)
+  // leaked onto the R3 card. Gate it on the date state + roundStatus
+  // instead: past days always fine; today only after tee-off; future
+  // dates hidden entirely.
+  const ratingEligibleForDate =
+    dateState?.relativeDay === "past" ||
+    (dateState?.relativeDay === "today" && tournament.roundStatus !== "pre");
+  const showRating =
+    showRatings &&
+    tournament.state !== "pre" &&
+    tournament.rating !== null &&
+    ratingEligibleForDate;
+  const hasBroadcast = tournament.broadcasts.length > 0;
+  // Mirror GameCard: when the tournament is wrapped and no rating takes
+  // the center slot, fill the status text with "FINAL" on R4 Sunday so
+  // the card reads like any other post-state card.
+  const showFinalLabel = tournament.state === "post" && !showRating;
+
   const live = isGolfLive(tournament);
   const showLiveIndicator = live && dateState?.relativeDay === "today";
   const liveThru = showLiveIndicator ? getGolfLiveThru(tournament) : "";
@@ -109,6 +124,29 @@ export default function GolfLeaderboard({
       ? `Thru ${liveThru}`
       : "Live"
     : null;
+
+  // Pre-round tee time — when the viewed date is today but the round
+  // hasn't started yet, surface the first tee-off in the top-left slot
+  // (same spot the live "Thru 14" / "FINAL" labels use). eventDate from
+  // ESPN is the next scheduled tee-off, so it's accurate whenever
+  // roundStatus === "pre".
+  const showTeeTime =
+    dateState?.relativeDay === "today" &&
+    tournament.roundStatus === "pre" &&
+    !!tournament.eventDate;
+  let teeTimeLabel: string | null = null;
+  if (showTeeTime && tournament.eventDate) {
+    try {
+      const d = new Date(tournament.eventDate);
+      teeTimeLabel = d.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: "America/New_York",
+      });
+    } catch {
+      /* ignore */
+    }
+  }
 
   // Decide which name format fits the available column width — measure widths
   // with a hidden probe so we use the longest tier that actually fits per row.
@@ -148,6 +186,10 @@ export default function GolfLeaderboard({
 
       if (fullMax <= available) setNameTier("full");
       else if (initialMax <= available) setNameTier("initial");
+      // On mobile, never drop below the ESPN short name ("R. McIlroy") —
+      // the first-name initial is load-bearing for quick recognition, and
+      // if it doesn't fit we'd rather rely on `truncate` than strip it.
+      else if (isMobile) setNameTier("initial");
       else setNameTier("last");
     };
     measure();
@@ -259,6 +301,8 @@ export default function GolfLeaderboard({
             )
           ) : showFinalLabel ? (
             "FINAL"
+          ) : teeTimeLabel ? (
+            teeTimeLabel
           ) : null}
         </span>
         <span>
