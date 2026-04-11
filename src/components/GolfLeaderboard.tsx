@@ -58,23 +58,6 @@ function lastNameOnly(shortName: string): string {
   return shortName.split(". ").pop() ?? shortName;
 }
 
-// Short label for a YouTube channel used in the highlights row. Kept
-// brief so four buttons can fit in a 2×2 grid on mobile without
-// wrapping. Falls back to the raw channel name for anything unmapped.
-function getChannelShortLabel(channel: string): string {
-  const map: Record<string, string> = {
-    "The Masters": "Masters",
-    "PGA TOUR": "PGA TOUR",
-    "Golf Channel": "Golf Ch",
-    "Sky Sports Golf": "Sky Sports",
-    "PGA Championship": "PGA Ch",
-    "The Open": "The Open",
-    ESPN: "ESPN",
-    USGA: "USGA",
-  };
-  return map[channel] ?? channel;
-}
-
 export default function GolfLeaderboard({
   tournament,
   showRatings,
@@ -86,14 +69,23 @@ export default function GolfLeaderboard({
   const containerRef = useRef<HTMLDivElement>(null);
   const [nameTier, setNameTier] = useState<"full" | "initial" | "last">("full");
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
-  // Per-channel prefetched video ids — each highlight button queries
-  // YouTube filtered to a single channel so the Masters official feed
-  // (button 1, full recap, no spoilers) can sit alongside PGA TOUR,
-  // Golf Channel, and ESPN cuts without one channel drowning out the
-  // others. Channel with value `null` means prefetch failed or hasn't
-  // finished yet; undefined means no prefetch attempted.
-  const [channelVideoIds, setChannelVideoIds] = useState<Record<string, string | null>>({});
-  const [fetchingChannel, setFetchingChannel] = useState<string | null>(null);
+  // Four highlight slots, in Jacob's preferred order:
+  //   0: official channel video (the "main recap" — labeled "ESPN"
+  //      since that's the brand he trusts for the full recap)
+  //   1: walked-fallback-chain result (PGA TOUR → Golf Channel → ESPN
+  //      → generic search), stopping at the first video distinct from
+  //      slot 0. This matches the pre-session-N 2-button behavior that
+  //      Jacob explicitly said returned better videos.
+  //   2–3: two more "top videos" pulled from the remaining channels in
+  //      the fallback chain + a generic search, deduped against the
+  //      earlier slots. Only populate if a distinct video exists.
+  const [highlightSlots, setHighlightSlots] = useState<(string | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ]);
+  const [fetchingSlot, setFetchingSlot] = useState<number | null>(null);
   const prefetchStarted = useRef(false);
 
   const allPlayers = tournament.players;
@@ -263,56 +255,56 @@ export default function GolfLeaderboard({
     : null;
   const officialChannel = highlightsAvailable ? getOfficialChannelName("golf", leagueLabel) : null;
   const secondaryChannels = highlightsAvailable ? getSecondaryChannels("golf", leagueLabel) : [];
-
-  // Full ordered channel list: official first (the "best full recap
-  // without spoilers" slot Jacob locked in), then the curated secondary
-  // chain. Capped at 4 to fit a 2×2 grid on the card. Each channel is
-  // its own button so Par 3 or practice-round cuts that dominate one
-  // channel don't crowd out recaps from the others.
-  const highlightChannels = useMemo(() => {
-    if (!highlightsAvailable) return [] as string[];
-    const list: string[] = [];
-    if (officialChannel) list.push(officialChannel);
-    for (const c of secondaryChannels) {
-      if (!list.includes(c)) list.push(c);
-    }
-    return list.slice(0, 4);
-  }, [highlightsAvailable, officialChannel, secondaryChannels]);
-  const highlightChannelsKey = highlightChannels.join("|");
+  const secondaryChannelsKey = secondaryChannels.join("|");
 
   useEffect(() => {
-    if (!highlightQuery || highlightChannels.length === 0) return;
-    if (prefetchStarted.current) return;
+    if (!highlightQuery || prefetchStarted.current) return;
     prefetchStarted.current = true;
     (async () => {
-      // Fire all channel lookups in parallel — each hits the worker's
-      // /api/youtube with a different `channel=` filter and they're
-      // independent, so there's no reason to serialize them.
-      const entries = await Promise.all(
-        highlightChannels.map(async (ch) => {
-          const id = await fetchFirstVideoId(highlightQuery, ch);
-          return [ch, id] as const;
-        })
-      );
-      setChannelVideoIds(Object.fromEntries(entries));
+      // Slot 0 — official channel (Jacob's "main recap" slot). This
+      // is the same video the old 2-button UI produced as button 1.
+      let slot0: string | null = null;
+      const seen = new Set<string>();
+      if (officialChannel) {
+        slot0 = await fetchFirstVideoId(highlightQuery, officialChannel);
+        if (slot0) seen.add(slot0);
+      }
+
+      // Slots 1–3 — walk the curated fallback chain + a generic search,
+      // collecting up to 3 videos that are distinct from slot 0 and
+      // from each other. Slot 1 matches the old "search" button, and
+      // slots 2/3 are the new "2 extra top videos" Jacob asked for.
+      const rest: string[] = [];
+      for (const channel of secondaryChannels) {
+        if (rest.length >= 3) break;
+        const id = await fetchFirstVideoId(highlightQuery, channel);
+        if (id && !seen.has(id)) {
+          rest.push(id);
+          seen.add(id);
+        }
+      }
+      if (rest.length < 3) {
+        const generic = await fetchFirstVideoId(highlightQuery);
+        if (generic && !seen.has(generic)) {
+          rest.push(generic);
+          seen.add(generic);
+        }
+      }
+
+      setHighlightSlots([slot0, rest[0] ?? null, rest[1] ?? null, rest[2] ?? null]);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [highlightQuery, highlightChannelsKey]);
+  }, [highlightQuery, officialChannel, secondaryChannelsKey]);
 
-  // Dedupe by videoId: if PGA TOUR and Golf Channel happen to surface
-  // the same clip, keep only the earlier button so we don't offer two
-  // buttons that play the same thing. Preserves channel ordering.
-  const visibleHighlightButtons = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { channel: string; id: string | null }[] = [];
-    for (const ch of highlightChannels) {
-      const id = channelVideoIds[ch] ?? null;
-      if (id && seen.has(id)) continue;
-      if (id) seen.add(id);
-      out.push({ channel: ch, id });
-    }
-    return out;
-  }, [highlightChannels, channelVideoIds]);
+  // Which slots to actually render — drop null slots past slot 0 so we
+  // don't show dead play buttons when fewer than 4 videos are found.
+  const visibleHighlightSlots = useMemo(
+    () =>
+      highlightSlots
+        .map((id, index) => ({ id, index }))
+        .filter((s, i) => i === 0 || s.id !== null),
+    [highlightSlots]
+  );
 
   return (
     <div
@@ -500,21 +492,19 @@ export default function GolfLeaderboard({
         </div>
       )}
 
-      {/* Highlights — one button per curated YouTube channel, laid out
-          in a 2-column grid (2×2 when all four fit). Button 1 is the
-          official channel ("best full recap, no spoilers"); the rest
-          are PGA TOUR / Golf Channel / ESPN (or sport-specific chain).
-          Each button independently prefetches its own videoId so Par 3
-          or practice cuts that crowd one channel don't push recaps off
-          the card. */}
-      {highlightsAvailable && highlightQuery && highlightFallbackUrl && visibleHighlightButtons.length > 0 && (
-        <div className="mt-1.5 grid grid-cols-2 gap-1">
-          {visibleHighlightButtons.map(({ channel, id }) => {
-            const label = getChannelShortLabel(channel);
-            const isFetching = fetchingChannel === channel;
+      {/* Highlights row — slot 0 is the main "ESPN" recap button
+          (prefetched from the tournament's official YouTube channel),
+          slots 1–3 are additional top videos pulled from the curated
+          fallback chain. Only slot 0 carries a text label; the rest
+          are bare play icons so the row reads as "main recap + extras". */}
+      {highlightsAvailable && highlightQuery && highlightFallbackUrl && (
+        <div className="mt-1.5 flex gap-1">
+          {visibleHighlightSlots.map(({ id, index }) => {
+            const isMainSlot = index === 0;
+            const isFetching = fetchingSlot === index;
             return (
               <button
-                key={channel}
+                key={index}
                 onClick={async () => {
                   if (!onPlayHighlight) {
                     window.open(highlightFallbackUrl, "_blank");
@@ -524,34 +514,48 @@ export default function GolfLeaderboard({
                     onPlayHighlight(id, highlightFallbackUrl);
                     return;
                   }
-                  // Prefetch missed (or hasn't landed yet) — refetch on
-                  // click, and cache the result so a second click is
-                  // instant.
-                  setFetchingChannel(channel);
-                  const fetched = await fetchFirstVideoId(highlightQuery, channel);
-                  setFetchingChannel(null);
-                  if (fetched) {
-                    setChannelVideoIds((prev) => ({ ...prev, [channel]: fetched }));
-                    onPlayHighlight(fetched, highlightFallbackUrl);
-                  } else {
-                    window.open(highlightFallbackUrl, "_blank");
+                  // Slot 0 prefetch missed — refetch the official
+                  // channel on click. Slots 1–3 can't be individually
+                  // refetched (they're a walked-chain result), so if
+                  // the prefetch produced nothing for them we fall
+                  // through to opening a YouTube search.
+                  if (isMainSlot && officialChannel) {
+                    setFetchingSlot(0);
+                    const fetched = await fetchFirstVideoId(highlightQuery, officialChannel);
+                    setFetchingSlot(null);
+                    if (fetched) {
+                      setHighlightSlots((prev) => {
+                        const next = [...prev];
+                        next[0] = fetched;
+                        return next;
+                      });
+                      onPlayHighlight(fetched, highlightFallbackUrl);
+                      return;
+                    }
                   }
+                  window.open(highlightFallbackUrl, "_blank");
                 }}
-                disabled={fetchingChannel !== null}
-                className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
+                disabled={fetchingSlot !== null}
+                className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
                 style={{
                   background: "var(--bg-card-hover)",
                   color: "var(--accent)",
                   opacity: isFetching ? 0.5 : undefined,
                 }}
-                title={`${channel} — Round ${completedRounds} highlights`}
+                title={
+                  isMainSlot
+                    ? `ESPN — Round ${completedRounds} highlights`
+                    : `Round ${completedRounds} highlights — more on YouTube`
+                }
               >
                 {isFetching ? (
                   <span className="text-[10px]">Loading...</span>
                 ) : (
                   <>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                    <span className="text-[10px] font-medium truncate">{label}</span>
+                    {isMainSlot && (
+                      <span className="text-[10px] font-medium">ESPN</span>
+                    )}
                   </>
                 )}
               </button>
