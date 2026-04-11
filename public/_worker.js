@@ -157,9 +157,23 @@ export default {
           // Check if title contains a highlight-indicator keyword. We
           // accept "recap" in addition to "highlight" because full-day
           // broadcast recaps on ESPN/PGA TOUR sometimes title as
-          // "Round 3 Recap" without "highlights".
+          // "Round 3 Recap" without "highlights". And for tournament-
+          // specific channels (The Masters, USGA, etc.) we also
+          // accept a plain "Round N" title — those channels routinely
+          // post round content without either keyword because the
+          // channel context already implies it.
+          const roundOnlyTitleOk =
+            isFromChannel &&
+            channelImpliesGolfTournament &&
+            queryGolfRound &&
+            (titleLower.includes(`round ${queryGolfRound}`) ||
+              titleLower.includes(`day ${queryGolfRound}`) ||
+              (queryRoundOrdinal &&
+                titleLower.includes(`${queryRoundOrdinal} round`)));
           const isHighlight =
-            titleLower.includes("highlight") || titleLower.includes("recap");
+            titleLower.includes("highlight") ||
+            titleLower.includes("recap") ||
+            roundOnlyTitleOk;
           if (!isHighlight) continue;
 
           // Recap-keyword detection — titles with "recap", "all

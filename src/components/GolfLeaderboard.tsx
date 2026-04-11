@@ -289,13 +289,27 @@ export default function GolfLeaderboard({
           seen.add(id);
         }
       }
-      // Backfill any remaining slot from a generic YouTube search —
-      // last-resort so we can always surface a 4th video if the
-      // curated chain came up short.
-      if (slotIdx < 4) {
-        const generic = await fetchFirstVideoId(highlightQuery);
-        if (generic && !seen.has(generic)) {
-          slots[slotIdx++] = generic;
+      // Backfill remaining slots from multiple generic query
+      // variations. A single generic search often collides with the
+      // channel results we already have (YouTube surfaces the same
+      // top video across similar queries), so we try several phrasing
+      // variations and accept the first distinct hit for each open
+      // slot. Ensures a 2×2 grid whenever at least 4 total distinct
+      // videos exist across all sources.
+      if (slotIdx < 4 && leagueLabel) {
+        const backfillQueries = [
+          highlightQuery,
+          `${leagueLabel} ${highlightYear} Round ${completedRounds} recap`,
+          `${leagueLabel} Round ${completedRounds} ${highlightYear} full round`,
+          `${leagueLabel} ${highlightYear} R${completedRounds} highlights`,
+        ];
+        for (const q of backfillQueries) {
+          if (slotIdx >= 4) break;
+          const id = await fetchFirstVideoId(q);
+          if (id && !seen.has(id)) {
+            slots[slotIdx++] = id;
+            seen.add(id);
+          }
         }
       }
 
