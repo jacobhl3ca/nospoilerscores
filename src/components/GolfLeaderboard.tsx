@@ -261,37 +261,45 @@ export default function GolfLeaderboard({
     if (!highlightQuery || prefetchStarted.current) return;
     prefetchStarted.current = true;
     (async () => {
-      // Slot 0 — official channel (Jacob's "main recap" slot). This
-      // is the same video the old 2-button UI produced as button 1.
-      let slot0: string | null = null;
-      const seen = new Set<string>();
-      if (officialChannel) {
-        slot0 = await fetchFirstVideoId(highlightQuery, officialChannel);
-        if (slot0) seen.add(slot0);
+      // Drive the slot list from the curated secondary chain (ESPN
+      // first — the reliable full-day recap source Jacob flagged).
+      // The tournament-run "official" channel (The Masters, USGA,
+      // etc.) goes LAST because during tournament week those channels
+      // post Par 3 clips and player top-shot reels that were drowning
+      // out the actual round recap in slot 0.
+      const channelsInOrder: string[] = [...secondaryChannels];
+      if (officialChannel && !channelsInOrder.includes(officialChannel)) {
+        channelsInOrder.push(officialChannel);
       }
 
-      // Slots 1–3 — walk the curated fallback chain + a generic search,
-      // collecting up to 3 videos that are distinct from slot 0 and
-      // from each other. Slot 1 matches the old "search" button, and
-      // slots 2/3 are the new "2 extra top videos" Jacob asked for.
-      const rest: string[] = [];
-      for (const channel of secondaryChannels) {
-        if (rest.length >= 3) break;
-        const id = await fetchFirstVideoId(highlightQuery, channel);
+      // Fetch each channel in parallel (independent requests, no need
+      // to serialize) and then walk the ordered list filling the 4
+      // slots, skipping duplicate videoIds.
+      const results = await Promise.all(
+        channelsInOrder.map((ch) => fetchFirstVideoId(highlightQuery, ch))
+      );
+
+      const slots: (string | null)[] = [null, null, null, null];
+      const seen = new Set<string>();
+      let slotIdx = 0;
+      for (let i = 0; i < channelsInOrder.length && slotIdx < 4; i++) {
+        const id = results[i];
         if (id && !seen.has(id)) {
-          rest.push(id);
+          slots[slotIdx++] = id;
           seen.add(id);
         }
       }
-      if (rest.length < 3) {
+      // Backfill any remaining slot from a generic YouTube search —
+      // last-resort so we can always surface a 4th video if the
+      // curated chain came up short.
+      if (slotIdx < 4) {
         const generic = await fetchFirstVideoId(highlightQuery);
         if (generic && !seen.has(generic)) {
-          rest.push(generic);
-          seen.add(generic);
+          slots[slotIdx++] = generic;
         }
       }
 
-      setHighlightSlots([slot0, rest[0] ?? null, rest[1] ?? null, rest[2] ?? null]);
+      setHighlightSlots(slots);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightQuery, officialChannel, secondaryChannelsKey]);
@@ -514,14 +522,16 @@ export default function GolfLeaderboard({
                     onPlayHighlight(id, highlightFallbackUrl);
                     return;
                   }
-                  // Slot 0 prefetch missed — refetch the official
-                  // channel on click. Slots 1–3 can't be individually
-                  // refetched (they're a walked-chain result), so if
-                  // the prefetch produced nothing for them we fall
-                  // through to opening a YouTube search.
-                  if (isMainSlot && officialChannel) {
+                  // Slot 0 prefetch missed — refetch from the first
+                  // curated channel (ESPN for golf majors). Slots 1–3
+                  // can't be individually refetched since they're
+                  // position-based inside the walked chain, so if
+                  // their prefetch produced nothing we fall through
+                  // to opening a YouTube search.
+                  const mainChannel = secondaryChannels[0] ?? officialChannel;
+                  if (isMainSlot && mainChannel) {
                     setFetchingSlot(0);
-                    const fetched = await fetchFirstVideoId(highlightQuery, officialChannel);
+                    const fetched = await fetchFirstVideoId(highlightQuery, mainChannel);
                     setFetchingSlot(null);
                     if (fetched) {
                       setHighlightSlots((prev) => {

@@ -18,19 +18,24 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   tennis_usopen: "US Open Tennis Championships",
 };
 
-// Curated fallback chain for the 2nd golf highlight button — tried in order
-// until one returns a playable video. Picked for consistent "Round X
-// highlights" uploads:
-//   - PGA TOUR (3.4M subs): round recaps for PGA-sanctioned majors
-//   - Golf Channel (700k): NBC-owned, mixes recaps + analysis
-//   - ESPN (19M): editorial daily recaps, sometimes generic
-//   - Sky Sports Golf (800k): best consistent source for The Open (R&A-run)
-// Forcing channel filters avoids the random/low-quality top organic search.
+// Curated channel chain for golf highlight buttons — used directly
+// (not as a fallback) because the tournament-run channels ("The
+// Masters", "USGA", etc.) are unreliable for recaps: they mix in Par
+// 3 Contest, player-specific clips, and practice rounds during
+// tournament week, which was burying the actual day-end recap.
+//
+// Order matters — slot 0 (the "main recap" button) pulls from the
+// first channel, slot 1 from the second, etc. ESPN first because it
+// reliably posts a full-day recap titled "Round X Highlights" during
+// majors they broadcast; PGA TOUR second because it's the best source
+// for player-specific reels ("Rory McIlroy Round 3 highlights").
+// Golf Channel third for analysis/extended recaps. Sky Sports Golf
+// only used for The Open since R&A licenses there.
 const SECONDARY_CHANNELS: Record<string, string[]> = {
-  golf_masters: ["PGA TOUR", "Golf Channel", "ESPN"],
-  "golf_pga champ": ["PGA TOUR", "Golf Channel", "ESPN"],
-  "golf_us open": ["PGA TOUR", "Golf Channel", "ESPN"],
-  "golf_the open": ["Sky Sports Golf", "Golf Channel", "ESPN"],
+  golf_masters: ["ESPN", "PGA TOUR", "Golf Channel"],
+  "golf_pga champ": ["ESPN", "PGA TOUR", "Golf Channel"],
+  "golf_us open": ["ESPN", "PGA TOUR", "Golf Channel"],
+  "golf_the open": ["ESPN", "Sky Sports Golf", "Golf Channel"],
 };
 
 export function getYouTubeSearchUrl(
