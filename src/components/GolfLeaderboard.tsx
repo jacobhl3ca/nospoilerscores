@@ -304,13 +304,17 @@ export default function GolfLeaderboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightQuery, officialChannel, secondaryChannelsKey]);
 
-  // Which slots to actually render — drop null slots past slot 0 so we
-  // don't show dead play buttons when fewer than 4 videos are found.
+  // Which slots to actually render — only slots with a prefetched
+  // videoId. Before prefetch finishes, this yields an empty row and
+  // the highlights block collapses; once slots populate, up to 4
+  // buttons appear. (The old version always showed slot 0, which
+  // produced a dead-play button when ESPN returned nothing and
+  // confused users into thinking fewer than 4 videos existed.)
   const visibleHighlightSlots = useMemo(
     () =>
       highlightSlots
         .map((id, index) => ({ id, index }))
-        .filter((s, i) => i === 0 || s.id !== null),
+        .filter((s) => s.id !== null),
     [highlightSlots]
   );
 

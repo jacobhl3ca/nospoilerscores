@@ -89,13 +89,24 @@ export default {
         // Golf-specific tracking
         let golfRoundYearId = null;
         let golfRoundId = null;
+        let golfRecapYearId = null; // "recap" + round + year
+        let golfRecapId = null;     // "recap" + round
         // Channel-specific tracking
         let channelBestId = null;
         let channelTeamsYearId = null;
         let channelTeamsId = null;
+        let channelGolfRecapYearId = null; // "recap" + round + year (from channel)
+        let channelGolfRecapId = null;     // "recap" + round (from channel)
         let channelGolfRoundYearId = null;
         let channelGolfRoundId = null;
         let channelAnyId = null;
+        // Golf player-reel tracking — videos that match round/year but
+        // look like player-specific cuts (e.g. "Rory McIlroy Round 3
+        // Highlights") get demoted so the full-day recap wins slot 0.
+        // We still remember the best player-reel matches and fall back
+        // to them if no non-reel video is available.
+        let channelPlayerReelId = null;
+        let playerReelId = null;
         const preferChannelLower = preferChannel ? preferChannel.toLowerCase() : null;
 
         for (const video of videos) {
@@ -103,9 +114,31 @@ export default {
           const titleLower = title.toLowerCase();
           const isFromChannel = preferChannelLower && channel.toLowerCase() === preferChannelLower;
 
-          // Check if title contains "highlight"
-          const isHighlight = titleLower.includes("highlight");
+          // Check if title contains a highlight-indicator keyword. We
+          // accept "recap" in addition to "highlight" because full-day
+          // broadcast recaps on ESPN/PGA TOUR sometimes title as
+          // "Round 3 Recap" without "highlights".
+          const isHighlight =
+            titleLower.includes("highlight") || titleLower.includes("recap");
           if (!isHighlight) continue;
+
+          // Recap-keyword detection — titles with "recap", "all
+          // highlights", or "full round" are strongly biased toward
+          // full-day broadcast recaps (vs player reels which rarely
+          // use these words).
+          const hasRecap =
+            titleLower.includes("recap") ||
+            titleLower.includes("all highlights") ||
+            titleLower.includes("full round");
+
+          // Player-reel heuristic — titles that lead with two
+          // capitalized words (typical "First Last" pattern) and
+          // don't start with a tournament/round/year token are
+          // almost certainly player-specific cuts. Used to demote
+          // those entries below the full recap in slot 0.
+          const isLikelyPlayerReel =
+            /^[A-Z][a-zA-Z'\-]+\s+[A-Z][a-zA-Z'\-]+/.test(title) &&
+            !/^(round|final|day|the|first|second|third|fourth|20\d{2}|pga|lpga|masters|us open|the open)\b/i.test(title);
 
           // Check if both team names appear in the title (using aliases)
           const hasTeams =
@@ -132,15 +165,33 @@ export default {
             }
             if (hasTeams && hasYear && !channelTeamsYearId) channelTeamsYearId = videoId;
             if (hasTeams && !channelTeamsId) channelTeamsId = videoId;
-            if (hasGolfRound && hasYear && !channelGolfRoundYearId) channelGolfRoundYearId = videoId;
-            if (hasGolfRound && !channelGolfRoundId) channelGolfRoundId = videoId;
+            // Golf: recap-keyword tier takes priority over plain round/year
+            // tiers, but only for non-player-reel titles. Player reels fall
+            // into the separate channelPlayerReelId bucket below so they
+            // don't crowd out the full recap.
+            if (hasGolfRound && !isLikelyPlayerReel) {
+              if (hasRecap && hasYear && !channelGolfRecapYearId) channelGolfRecapYearId = videoId;
+              if (hasRecap && !channelGolfRecapId) channelGolfRecapId = videoId;
+              if (hasYear && !channelGolfRoundYearId) channelGolfRoundYearId = videoId;
+              if (!channelGolfRoundId) channelGolfRoundId = videoId;
+            }
+            if (hasGolfRound && isLikelyPlayerReel && !channelPlayerReelId) {
+              channelPlayerReelId = videoId;
+            }
             if (!channelAnyId) channelAnyId = videoId;
           }
 
           // Golf-specific (no preferred channel) — match round number + year in title
           if (queryGolfRound) {
-            if (hasGolfRound && hasYear && !golfRoundYearId) golfRoundYearId = videoId;
-            if (hasGolfRound && !golfRoundId) golfRoundId = videoId;
+            if (hasGolfRound && !isLikelyPlayerReel) {
+              if (hasRecap && hasYear && !golfRecapYearId) golfRecapYearId = videoId;
+              if (hasRecap && !golfRecapId) golfRecapId = videoId;
+              if (hasYear && !golfRoundYearId) golfRoundYearId = videoId;
+              if (!golfRoundId) golfRoundId = videoId;
+            }
+            if (hasGolfRound && isLikelyPlayerReel && !playerReelId) {
+              playerReelId = videoId;
+            }
           }
 
           // Best: highlight + both teams + year + game number (playoff series)
@@ -172,11 +223,43 @@ export default {
 
         let videoId;
         if (preferChannel) {
-          // When channel is requested, prefer channel matches, fall back to any match
-          videoId = channelBestId || channelTeamsYearId || channelGolfRoundYearId || channelGolfRoundId || channelTeamsId || channelAnyId || null;
+          // Channel-filtered priority (highest → lowest):
+          //   1. team-sport exact match (unchanged)
+          //   2. golf recap + round + year  ← new, beats round-only
+          //   3. golf recap + round
+          //   4. golf round + year
+          //   5. golf round (plain)
+          //   6. any team match
+          //   7. player-reel (round + year match but named player)
+          //   8. any highlight-titled video from the channel
+          // Player reels are demoted past every other round-matched
+          // bucket so the full-day recap wins slot 0 whenever one
+          // exists on the channel.
+          videoId =
+            channelBestId ||
+            channelGolfRecapYearId ||
+            channelGolfRecapId ||
+            channelTeamsYearId ||
+            channelGolfRoundYearId ||
+            channelGolfRoundId ||
+            channelTeamsId ||
+            channelPlayerReelId ||
+            channelAnyId ||
+            null;
         } else {
-          // General search: best match from any source
-          videoId = bestMatchId || teamsGameMatchedId || golfRoundYearId || golfRoundId || teamsMatchedId || yearMatchedId || firstHighlightId;
+          // General search: recap tiers first, then round tiers, then
+          // team-sport tiers, then player reels as final fallback.
+          videoId =
+            bestMatchId ||
+            teamsGameMatchedId ||
+            golfRecapYearId ||
+            golfRecapId ||
+            golfRoundYearId ||
+            golfRoundId ||
+            teamsMatchedId ||
+            yearMatchedId ||
+            playerReelId ||
+            firstHighlightId;
         }
         if (!videoId) {
           const fallback = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
