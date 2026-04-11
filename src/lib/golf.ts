@@ -44,6 +44,36 @@ export function getGolfDateState(
   return { roundNum, relativeDay };
 }
 
+// Has the round for the viewed date actually started play? We can't
+// trust `roundStatus` alone — on Saturday morning before R3 tees off,
+// ESPN still reports the competition status as "post" (wrapping R2),
+// and `roundStatus !== "pre"` used to leak ratings + bypass the
+// tee-time label. The reliable signal is `currentRound` (count of
+// linescores with values posted, per espn.ts). The viewed round has
+// started when either:
+//   • currentRound >= ds.roundNum — the viewed round has recorded
+//     scores (it's completed, or at least posting), OR
+//   • currentRound === ds.roundNum - 1 AND roundStatus === "in" — the
+//     round immediately after the last completed one is live right
+//     now, and that's the round we're viewing.
+// Anything else (including roundStatus === "post" between rounds)
+// counts as "not started yet".
+export function hasViewedRoundStarted(
+  tournament: GolfTournament,
+  selectedDate: string
+): boolean {
+  const ds = getGolfDateState(tournament, selectedDate);
+  if (!ds) return false;
+  if (ds.roundNum <= tournament.currentRound) return true;
+  if (
+    ds.roundNum === tournament.currentRound + 1 &&
+    tournament.roundStatus === "in"
+  ) {
+    return true;
+  }
+  return false;
+}
+
 // "Live" = today's round is actively in progress. ESPN's
 // `competition.status.type.state` is the authoritative round-level signal
 // — it flips to "post" the moment the last group signs their card, even
