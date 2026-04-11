@@ -44,11 +44,19 @@ export function getGolfDateState(
   return { roundNum, relativeDay };
 }
 
-// "Live" = at least one player is mid-hole right now. Using player thru is
-// far more reliable than ESPN's statusDetail string, which lingers on
-// "Round N" / "After Round N" for hours past the actual play state.
+// "Live" = today's round is actively in progress. ESPN's
+// `competition.status.type.state` is the authoritative round-level signal
+// — it flips to "post" the moment the last group signs their card, even
+// though the tournament itself remains `event.state === "in"` until R4
+// Sunday. Scraping per-player thru (the previous approach) gave false
+// negatives between groups and false positives right after a round
+// wrapped, which is how recap highlights leaked onto live round days.
 export function isGolfLive(tournament: GolfTournament): boolean {
   if (tournament.state !== "in") return false;
+  if (tournament.roundStatus !== "in") return false;
+  // Belt-and-suspenders: roundStatus === "in" is the primary signal, but
+  // require at least one player mid-hole so a stale ESPN status flag can't
+  // light up the green indicator during a weather hold with no play.
   return tournament.players.some((p) => {
     const n = parseInt(p.thru ?? "", 10);
     return Number.isFinite(n) && n > 0 && n < 18;
@@ -70,25 +78,25 @@ export function getGolfLiveThru(tournament: GolfTournament): string {
 }
 
 // Italic round subtitle that renders under the league header (parity with
-// the team-sport "Playoffs Apr 19" subtitle). Returns null when the live
-// indicator on the card should take over instead (today + live).
+// the team-sport "Playoffs Apr 19" subtitle). The card itself never shows
+// round wording anymore — it just mirrors the team-sport live progress
+// pattern ("Thru 14" ≈ "Q3 4:32") — so this subtitle always returns a
+// string, including while play is happening.
 export function getGolfSubtitle(
   tournament: GolfTournament,
   selectedDate: string
 ): string | null {
   const ds = getGolfDateState(tournament, selectedDate);
   if (!ds) return null;
-  const live = isGolfLive(tournament);
-
-  // Today + live → hide subtitle; the card's live indicator says it all
-  if (ds.relativeDay === "today" && live) return null;
 
   if (ds.relativeDay === "past") return `After Round ${ds.roundNum}`;
 
   if (ds.relativeDay === "future") {
     // Show ET tee time only when this future date is exactly tomorrow —
     // the eventDate ESPN ships is the *next* tee-off, so it's only
-    // meaningful when the user is one day ahead of today.
+    // meaningful when the user is one day ahead of today. Dropped the
+    // trailing " ET" because the combined string was overflowing the
+    // column on narrow screens ("Round 3 · 10:30 AM ET" got cut off).
     let timeLabel = "";
     if (tournament.eventDate) {
       const now = new Date();
@@ -109,7 +117,7 @@ export function getGolfSubtitle(
             hour: "numeric",
             minute: "2-digit",
             timeZone: "America/New_York",
-          })} ET`;
+          })}`;
         } catch {
           /* ignore */
         }
@@ -118,19 +126,27 @@ export function getGolfSubtitle(
     return `Round ${ds.roundNum}${timeLabel}`;
   }
 
-  // Today, not live: either the round hasn't started yet or it's already wrapped.
-  // ESPN's currentRound = number of completed rounds, so >=roundNum means done.
-  if (tournament.currentRound >= ds.roundNum) return `After Round ${ds.roundNum}`;
+  // Today. roundStatus is ESPN's authoritative per-round state.
+  // "post" → round wrapped (may still be the current calendar day).
+  // "in"   → round in progress; card shows the hole-based live indicator.
+  // "pre"  → tee times not yet; round hasn't started.
+  if (tournament.roundStatus === "post") return `After Round ${ds.roundNum}`;
   return `Round ${ds.roundNum}`;
 }
 
 // The round whose recap should appear on the selected date — or 0 if no
-// recap should show (round in progress, future date, or viewing a date
-// other than the day the round was played).
+// recap should show.
 //
-// Key rule (Jacob's request 2026-04-10): R1 recap should ONLY appear on
-// the R1 day (Thursday) view, never on Friday. Each day shows that day's
-// round recap, never the previous day's.
+// Rule: only show a recap once the round is unambiguously complete, to
+// match how team-sport cards withhold highlights until the game is FINAL.
+//  • Past dates → always safe to show that day's round recap.
+//  • Today + tournament wrapped → show today's round (R4 Sunday case).
+//  • Today + roundStatus === "post" → today's round has signed off. The
+//    previous implementation leaned on a per-player "is anyone mid-hole?"
+//    check which flipped false during lulls and leaked recaps onto live
+//    round days; `roundStatus` from ESPN's competition.status is the
+//    authoritative round-level signal and doesn't suffer that jitter.
+//  • Future dates → never.
 export function getGolfRecapRound(
   tournament: GolfTournament,
   selectedDate: string
@@ -138,9 +154,13 @@ export function getGolfRecapRound(
   const ds = getGolfDateState(tournament, selectedDate);
   if (!ds) return 0;
   if (ds.relativeDay === "future") return 0;
-  if (ds.relativeDay === "past") return ds.roundNum; // any past round day is done
-  // Today: only show if round is fully wrapped (not live + ESPN has logged it)
-  if (!isGolfLive(tournament) && tournament.currentRound >= ds.roundNum) {
+  if (ds.relativeDay === "past") return ds.roundNum;
+  // Today
+  if (tournament.state === "post") return ds.roundNum;
+  if (
+    tournament.roundStatus === "post" &&
+    tournament.currentRound >= ds.roundNum
+  ) {
     return ds.roundNum;
   }
   return 0;

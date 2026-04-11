@@ -61,6 +61,11 @@ export interface GolfTournament {
   broadcasts: string[];  // ["ESPN", "CBS"]
   rating: number | null; // leaderboard competitiveness (0-100)
   currentRound: number;  // number of completed rounds (0–4)
+  // State of the *current* round per ESPN competition.status. "in" = players
+  // on course; "post" = today's round wrapped (even if the tournament itself
+  // still has rounds to play); "pre" = round hasn't started. Authoritative
+  // round-level live signal — more reliable than scraping player thru.
+  roundStatus: "pre" | "in" | "post";
   startDate?: string;    // tournament startDate "MM-DD" from league config
   eventDate?: string;    // ESPN event.date ISO — first tee off of current day
   leaderboardUrl?: string; // ESPN tournament leaderboard URL — used for live link

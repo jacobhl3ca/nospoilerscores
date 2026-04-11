@@ -86,23 +86,28 @@ export default function GolfLeaderboard({
   const showScore = showRatings;
   const showRating = showRatings && tournament.state !== "pre" && tournament.rating !== null;
   const hasBroadcast = tournament.broadcasts.length > 0;
+  // Mirror GameCard: when the tournament is wrapped and no rating takes
+  // the center slot, fill the status text with "FINAL" on R4 Sunday so
+  // the card reads like any other post-state card.
+  const showFinalLabel = tournament.state === "post" && !showRating;
 
   // ── Live state ──
-  // Live = at least one player is mid-hole right now (not "F", 1 ≤ thru ≤ 17).
-  // The previous version trusted ESPN's statusDetail string, which lingers on
-  // "Round N" / "After Round N" for hours past actual play, so the green
-  // indicator never lit up even mid-round. Source-of-truth helpers in
-  // `lib/golf.ts` keep this consistent with the league-header subtitle.
+  // Round wording lives in the league-header italic subtitle (see
+  // GolfSubtitle in LeagueColumn.tsx), so the card itself only shows a
+  // hole-based live indicator — the same pattern team sports use for
+  // "Q3 4:32" / "▲5" / "P2 8:15". Source-of-truth helpers in `lib/golf.ts`
+  // keep this consistent with the subtitle and the recap toggle.
   const dateState = selectedDate ? getGolfDateState(tournament, selectedDate) : null;
   const live = isGolfLive(tournament);
-  // The card only shows a live indicator when the *viewed* date is the day
-  // play is happening — otherwise the card is just rating + broadcast.
   const showLiveIndicator = live && dateState?.relativeDay === "today";
   const liveThru = showLiveIndicator ? getGolfLiveThru(tournament) : "";
+  // "Thru 14" when we know the leading group's hole, just "Live" as a
+  // last-resort label when ESPN flags round-in-progress but no player has
+  // a mid-round thru yet (e.g. weather delay, between tee times).
   const liveLabel = showLiveIndicator
     ? liveThru
-      ? `R${dateState!.roundNum} · Thru ${liveThru}`
-      : `R${dateState!.roundNum}`
+      ? `Thru ${liveThru}`
+      : "Live"
     : null;
 
   // Decide which name format fits the available column width — measure widths
@@ -152,11 +157,12 @@ export default function GolfLeaderboard({
   }, [sortedPlayers, showRatings, tournament.state]);
 
   // Tied groups: keep the rank only on the top name, leave the rest blank.
-  // Drop the "T" prefix — the blank rows below imply the tie, and a clean
-  // number reads better when 5+ players sit at the same score with no
-  // differentiator (Jacob's request).
+  // Tie detection compares *score* rather than ESPN's `order` field, which
+  // is a running rank (1,2,3…) even across ties — comparing by order
+  // never matches, so the 5+ players bunched at -1 used to each show a
+  // different number. Comparing scores gives us one rank per tied group.
   const formatPosition = (pos: number, idx: number) => {
-    if (idx > 0 && sortedPlayers[idx - 1]?.position === pos) {
+    if (idx > 0 && sortedPlayers[idx - 1]?.score === sortedPlayers[idx]?.score) {
       return "";
     }
     return String(pos);
@@ -251,6 +257,8 @@ export default function GolfLeaderboard({
             ) : (
               <span className="text-green-500 font-medium">{liveLabel}</span>
             )
+          ) : showFinalLabel ? (
+            "FINAL"
           ) : null}
         </span>
         <span>

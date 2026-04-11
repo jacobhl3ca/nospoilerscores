@@ -515,6 +515,12 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
   if (!competition) return null;
 
   const state = (event.status?.type?.state ?? "pre") as "pre" | "in" | "post";
+  // Round-level state: competition.status tracks the *current* round's
+  // state ("in" while players are on course, "post" once play for the round
+  // is complete, even though the tournament itself may still have rounds
+  // left). This is the signal the card uses to decide whether to show the
+  // green live indicator and whether to hide the recap highlights.
+  const roundStatus = (competition.status?.type?.state ?? "pre") as "pre" | "in" | "post";
   const competitors = competition.competitors ?? [];
 
   // Determine current round from linescores
@@ -661,6 +667,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     broadcasts,
     rating,
     currentRound,
+    roundStatus,
     startDate: tournamentLabel?.startDate,
     eventDate: event.date ?? competition.date ?? undefined,
     leaderboardUrl,

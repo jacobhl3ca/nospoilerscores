@@ -113,19 +113,45 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
 }
 
 // Italic round-wording subtitle for golf leagues — drops in where
-// PlayoffSubtitle would for team sports. Text comes from getGolfSubtitle
-// which knows how to map a viewed date onto a round and decide whether
-// the live indicator on the card should suppress the subtitle entirely.
+// PlayoffSubtitle would for team sports. The subtitle is the single
+// place round wording lives (the leaderboard card no longer repeats it),
+// so it must render a value for every day of the tournament. When the
+// tournament is mid-event we wrap the text in a link to ESPN's
+// leaderboard — gives users a clickable "live" anchor even between
+// groups when the card's green indicator is absent.
 function GolfSubtitle({ league, selectedDate }: { league: LeagueData; selectedDate: string }) {
-  const text = league.golfTournament
-    ? getGolfSubtitle(league.golfTournament, selectedDate)
-    : null;
+  const t = league.golfTournament;
+  const text = t ? getGolfSubtitle(t, selectedDate) : null;
+  const href =
+    t && t.state === "in" && t.leaderboardUrl ? t.leaderboardUrl : null;
+  const baseClass =
+    "text-[9px] sm:text-[10px] italic mt-0.5 block max-w-full text-center leading-tight";
+  if (!text) {
+    return (
+      <span
+        className={`${baseClass} whitespace-nowrap overflow-hidden`}
+        style={{ color: "transparent" }}
+      >
+        {"\u00A0"}
+      </span>
+    );
+  }
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${baseClass} hover:underline transition-colors`}
+        style={{ color: "var(--text-muted)" }}
+      >
+        {text}
+      </a>
+    );
+  }
   return (
-    <span
-      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center"
-      style={{ color: text ? "var(--text-muted)" : "transparent" }}
-    >
-      {text || "\u00A0"}
+    <span className={baseClass} style={{ color: "var(--text-muted)" }}>
+      {text}
     </span>
   );
 }
