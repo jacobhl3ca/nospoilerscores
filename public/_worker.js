@@ -37,6 +37,32 @@ export default {
         const ROUND_ORDINALS = { "1": "first", "2": "second", "3": "third", "4": "final" };
         const queryRoundOrdinal = queryGolfRound ? ROUND_ORDINALS[queryGolfRound] : null;
 
+        // Golf tournament label from query — the client sends queries
+        // as `${label} ${year} Round ${n} highlights` (see
+        // getGolfHighlightQuery in lib/youtube.ts). Extracting the
+        // label lets us require it in titles, which is the fix for
+        // PGA TOUR's channel returning a non-Masters event when the
+        // channel's most recent "Round X highlights" upload is from a
+        // different tournament.
+        let queryGolfTournament = null;
+        if (queryGolfRound) {
+          const labelMatch = query.match(/^(.+?)\s+20\d{2}\s+round/i);
+          if (labelMatch) {
+            queryGolfTournament = labelMatch[1].toLowerCase().trim();
+          }
+        }
+        // Short aliases so "Masters" matches "2026 Masters",
+        // "the masters tournament", etc. without needing exact
+        // substring equality. Multi-word labels fall through as-is.
+        const golfTournamentAliases = (() => {
+          if (!queryGolfTournament) return [];
+          const base = [queryGolfTournament];
+          if (queryGolfTournament === "masters") base.push("the masters");
+          if (queryGolfTournament === "us open") base.push("u.s. open");
+          if (queryGolfTournament === "the open") base.push("open championship");
+          return base;
+        })();
+
         // Team name aliases — ESPN shortDisplayName → common YouTube title variants
         const TEAM_ALIASES = {
           "trail blazers": ["blazers", "trail blazers", "portland"],
@@ -158,6 +184,14 @@ export default {
             titleLower.includes(`day ${queryGolfRound}`)
           );
 
+          // Does the title actually mention THIS tournament? Filter
+          // applied across all golf-match tiers so the PGA TOUR
+          // channel's latest "Round 3 highlights" video for a
+          // different tournament stops winning the Masters slot.
+          const hasGolfTournament =
+            golfTournamentAliases.length > 0 &&
+            golfTournamentAliases.some((alias) => titleLower.includes(alias));
+
           // Track channel-specific matches
           if (isFromChannel) {
             if (hasTeams && hasYear && (!queryGameNum || hasGameNum) && !channelBestId) {
@@ -165,17 +199,19 @@ export default {
             }
             if (hasTeams && hasYear && !channelTeamsYearId) channelTeamsYearId = videoId;
             if (hasTeams && !channelTeamsId) channelTeamsId = videoId;
-            // Golf: recap-keyword tier takes priority over plain round/year
-            // tiers, but only for non-player-reel titles. Player reels fall
-            // into the separate channelPlayerReelId bucket below so they
-            // don't crowd out the full recap.
-            if (hasGolfRound && !isLikelyPlayerReel) {
+            // Golf round/recap tiers — ALL gated on hasGolfTournament
+            // so a PGA TOUR channel's latest round-highlights video
+            // for a different event (e.g. Heritage, Valero Texas
+            // Open) can't slip into the Masters slot. Player reels
+            // go into their own bucket; non-reels split into recap
+            // and plain-round tiers.
+            if (hasGolfRound && hasGolfTournament && !isLikelyPlayerReel) {
               if (hasRecap && hasYear && !channelGolfRecapYearId) channelGolfRecapYearId = videoId;
               if (hasRecap && !channelGolfRecapId) channelGolfRecapId = videoId;
               if (hasYear && !channelGolfRoundYearId) channelGolfRoundYearId = videoId;
               if (!channelGolfRoundId) channelGolfRoundId = videoId;
             }
-            if (hasGolfRound && isLikelyPlayerReel && !channelPlayerReelId) {
+            if (hasGolfRound && hasGolfTournament && isLikelyPlayerReel && !channelPlayerReelId) {
               channelPlayerReelId = videoId;
             }
             if (!channelAnyId) channelAnyId = videoId;
@@ -183,13 +219,13 @@ export default {
 
           // Golf-specific (no preferred channel) — match round number + year in title
           if (queryGolfRound) {
-            if (hasGolfRound && !isLikelyPlayerReel) {
+            if (hasGolfRound && hasGolfTournament && !isLikelyPlayerReel) {
               if (hasRecap && hasYear && !golfRecapYearId) golfRecapYearId = videoId;
               if (hasRecap && !golfRecapId) golfRecapId = videoId;
               if (hasYear && !golfRoundYearId) golfRoundYearId = videoId;
               if (!golfRoundId) golfRoundId = videoId;
             }
-            if (hasGolfRound && isLikelyPlayerReel && !playerReelId) {
+            if (hasGolfRound && hasGolfTournament && isLikelyPlayerReel && !playerReelId) {
               playerReelId = videoId;
             }
           }
@@ -221,20 +257,16 @@ export default {
           }
         }
 
+        const isGolfQuery = !!queryGolfRound;
+
         let videoId;
         if (preferChannel) {
-          // Channel-filtered priority (highest → lowest):
-          //   1. team-sport exact match (unchanged)
-          //   2. golf recap + round + year  ← new, beats round-only
-          //   3. golf recap + round
-          //   4. golf round + year
-          //   5. golf round (plain)
-          //   6. any team match
-          //   7. player-reel (round + year match but named player)
-          //   8. any highlight-titled video from the channel
-          // Player reels are demoted past every other round-matched
-          // bucket so the full-day recap wins slot 0 whenever one
-          // exists on the channel.
+          // Channel-filtered priority (highest → lowest). For golf
+          // queries we stop before channelAnyId — that fallback is
+          // only safe for team sports, where a random channel video
+          // is at least from the same league. For golf, falling
+          // through to channelAnyId would let a PGA TOUR channel
+          // upload for a different event win the Masters slot.
           videoId =
             channelBestId ||
             channelGolfRecapYearId ||
@@ -244,11 +276,12 @@ export default {
             channelGolfRoundId ||
             channelTeamsId ||
             channelPlayerReelId ||
-            channelAnyId ||
+            (isGolfQuery ? null : channelAnyId) ||
             null;
         } else {
-          // General search: recap tiers first, then round tiers, then
-          // team-sport tiers, then player reels as final fallback.
+          // General (non-channel) search: recap tiers first, then
+          // round tiers, then team-sport tiers, then player reels.
+          // firstHighlightId is the fallback for non-golf only.
           videoId =
             bestMatchId ||
             teamsGameMatchedId ||
@@ -259,9 +292,12 @@ export default {
             teamsMatchedId ||
             yearMatchedId ||
             playerReelId ||
-            firstHighlightId;
+            (isGolfQuery ? null : firstHighlightId);
         }
-        if (!videoId) {
+        if (!videoId && !isGolfQuery) {
+          // Raw-regex fallback — only for non-golf. For golf we'd
+          // rather return 404 than guess wrong and let a random
+          // PGA TOUR highlight win the Masters slot.
           const fallback = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
           videoId = fallback ? fallback[1] : null;
         }

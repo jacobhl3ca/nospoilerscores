@@ -504,13 +504,15 @@ export default function GolfLeaderboard({
         </div>
       )}
 
-      {/* Highlights row — slot 0 is the main "ESPN" recap button
-          (prefetched from the tournament's official YouTube channel),
-          slots 1–3 are additional top videos pulled from the curated
-          fallback chain. Only slot 0 carries a text label; the rest
-          are bare play icons so the row reads as "main recap + extras". */}
+      {/* Highlights — slot 0 is the main "ESPN" recap button
+          (prefetched from the tournament's YouTube channel chain),
+          slots 1–3 are additional top videos. Laid out as a 2-column
+          grid so buttons match the Show Top / Show All callout width
+          above and wrap cleanly on narrow cards: slots 0–1 on the top
+          row, slots 2–3 underneath. Only slot 0 carries a text label;
+          the rest are bare play icons. */}
       {highlightsAvailable && highlightQuery && highlightFallbackUrl && (
-        <div className="mt-1.5 flex gap-1">
+        <div className="mt-1.5 grid grid-cols-2 gap-1">
           {visibleHighlightSlots.map(({ id, index }) => {
             const isMainSlot = index === 0;
             const isFetching = fetchingSlot === index;
@@ -550,7 +552,7 @@ export default function GolfLeaderboard({
                   window.open(highlightFallbackUrl, "_blank");
                 }}
                 disabled={fetchingSlot !== null}
-                className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+                className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
                 style={{
                   background: "var(--bg-card-hover)",
                   color: "var(--accent)",
