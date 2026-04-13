@@ -272,48 +272,59 @@ export default function GolfLeaderboard({
         channelsInOrder.push(officialChannel);
       }
 
-      // Fetch each channel in parallel (independent requests, no need
-      // to serialize) and then walk the ordered list filling the 4
-      // slots, skipping duplicate videoIds.
-      const results = await Promise.all(
-        channelsInOrder.map((ch) => fetchFirstVideoId(highlightQuery, ch))
-      );
-
-      const slots: (string | null)[] = [null, null, null, null];
+      // Kick off every channel + backfill query in parallel and fill
+      // slots progressively as each promise resolves, instead of
+      // waiting for the slowest one. Slots 1-3 are positional only by
+      // arrival order — first distinct videoId from the channel chain
+      // takes the next open slot, deduped by videoId.
       const seen = new Set<string>();
-      let slotIdx = 0;
-      for (let i = 0; i < channelsInOrder.length && slotIdx < 4; i++) {
-        const id = results[i];
-        if (id && !seen.has(id)) {
-          slots[slotIdx++] = id;
+      const tryFill = (id: string | null) => {
+        if (!id) return;
+        setHighlightSlots((prev) => {
+          if (prev.includes(id) || seen.has(id)) return prev;
+          const nextOpen = prev.findIndex((s, i) => i > 0 && s === null);
+          if (nextOpen === -1) return prev;
           seen.add(id);
-        }
+          const next = [...prev];
+          next[nextOpen] = id;
+          return next;
+        });
+      };
+
+      // Slot 0 keeps using the first curated channel (ESPN for golf
+      // majors) so the labeled "ESPN" main-recap button gets the
+      // right videoId once it resolves.
+      const mainChannel = channelsInOrder[0];
+      if (mainChannel) {
+        fetchFirstVideoId(highlightQuery, mainChannel).then((id) => {
+          if (!id) return;
+          seen.add(id);
+          setHighlightSlots((prev) => {
+            if (prev[0]) return prev;
+            const next = [...prev];
+            next[0] = id;
+            return next;
+          });
+        });
       }
-      // Backfill remaining slots from multiple generic query
-      // variations, fetched in parallel. A single generic search often
-      // collides with the channel results we already have, so we try
-      // several phrasings and accept the first distinct hit for each
-      // open slot.
-      if (slotIdx < 4 && leagueLabel) {
+
+      // Remaining channels feed slots 1-3 progressively.
+      for (let i = 1; i < channelsInOrder.length; i++) {
+        fetchFirstVideoId(highlightQuery, channelsInOrder[i]).then(tryFill);
+      }
+
+      // Backfill queries also race in parallel for any open slot.
+      if (leagueLabel) {
         const backfillQueries = [
           highlightQuery,
           `${leagueLabel} ${highlightYear} Round ${completedRounds} recap`,
           `${leagueLabel} Round ${completedRounds} ${highlightYear} full round`,
           `${leagueLabel} ${highlightYear} R${completedRounds} highlights`,
         ];
-        const backfillResults = await Promise.all(
-          backfillQueries.map((q) => fetchFirstVideoId(q))
-        );
-        for (const id of backfillResults) {
-          if (slotIdx >= 4) break;
-          if (id && !seen.has(id)) {
-            slots[slotIdx++] = id;
-            seen.add(id);
-          }
+        for (const q of backfillQueries) {
+          fetchFirstVideoId(q).then(tryFill);
         }
       }
-
-      setHighlightSlots(slots);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightQuery, officialChannel, secondaryChannelsKey]);
