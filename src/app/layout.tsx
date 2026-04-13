@@ -7,17 +7,34 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
+const SITE_TITLE = "HideScore — No Spoiler Sports Scores | Spoiler-Free NBA, MLB, NHL";
+const SITE_DESC =
+  "Spoiler-free sports scores and highlights. Check NBA, MLB, NHL, NFL, and golf without seeing the score. Game ratings tell you if it's worth watching before you hit play.";
+
 export const metadata: Metadata = {
-  title: "HideScore — Catch Up on Games Without Spoilers",
-  description:
-    "Watch sports highlights and find the best games without spoilers. MLB, NBA, NHL, and more with ratings to show you what's worth watching.",
+  title: SITE_TITLE,
+  description: SITE_DESC,
   metadataBase: new URL("https://hidescore.com"),
+  applicationName: "HideScore",
+  keywords: [
+    "no spoiler scores",
+    "spoiler free sports",
+    "spoiler free scores",
+    "hide sports scores",
+    "sports scores without spoilers",
+    "no spoiler sports",
+    "no spoiler NBA",
+    "no spoiler MLB",
+    "no spoiler NHL",
+    "spoiler free highlights",
+    "HideScore",
+  ],
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "HideScore — Catch Up on Games Without Spoilers",
-    description: "Sports highlights and game ratings without spoilers. Find out what's worth watching.",
+    title: SITE_TITLE,
+    description: SITE_DESC,
     url: "https://hidescore.com",
     siteName: "HideScore",
     type: "website",
@@ -25,10 +42,47 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "HideScore — Catch Up on Games Without Spoilers",
-    description: "Sports highlights and game ratings without spoilers.",
+    title: SITE_TITLE,
+    description: SITE_DESC,
     images: ["https://hidescore.com/og-image.png"],
   },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
+  },
+};
+
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      name: "HideScore",
+      alternateName: ["No Spoiler Scores", "Spoiler Free Sports"],
+      url: "https://hidescore.com",
+      description: SITE_DESC,
+      applicationCategory: "SportsApplication",
+      operatingSystem: "Web",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    },
+    {
+      "@type": "WebSite",
+      name: "HideScore",
+      url: "https://hidescore.com",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: "https://hidescore.com/?q={search_term_string}",
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "Organization",
+      name: "HideScore",
+      url: "https://hidescore.com",
+      logo: "https://hidescore.com/icon-512.png",
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -47,6 +101,12 @@ export default function RootLayout({
         <meta name="theme-color" content="#0a0a0a" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c"),
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('nss-preferences');if(t){var p=JSON.parse(t);if(p.theme==='dark'||p.theme==='light'){document.documentElement.setAttribute('data-theme',p.theme);return}}if(window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})()`,
