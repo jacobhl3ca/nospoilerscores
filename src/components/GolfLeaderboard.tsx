@@ -125,7 +125,12 @@ export default function GolfLeaderboard({
     tournament.state !== "pre" &&
     tournament.rating !== null &&
     ratingEligibleForDate;
-  const hasBroadcast = tournament.broadcasts.length > 0;
+  // Mirror GameCard's `!isFinished` broadcast rule — hide the network
+  // on past dates. Yesterday's Masters shouldn't still show ESPN in
+  // the status row; the round is done and the channel is only useful
+  // for live/upcoming viewing.
+  const hasBroadcast =
+    dateState?.relativeDay !== "past" && tournament.broadcasts.length > 0;
   // Mirror GameCard: when the tournament is wrapped and no rating takes
   // the center slot, fill the status text with "FINAL" on R4 Sunday so
   // the card reads like any other post-state card.
