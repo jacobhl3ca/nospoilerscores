@@ -41,7 +41,7 @@ function shortenPlayoffLabel(headline: string): string {
   return round;
 }
 
-function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): { full: string; short: string } | null {
+function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): { tiers: string[] } | null {
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
   const y = +selectedDate.slice(0, 4);
@@ -57,38 +57,40 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
     const label = games.find(g => g.playoffLabel)?.playoffLabel;
     if (!label) return null;
     const text = shortenPlayoffLabel(label);
-    return { full: text, short: text };
+    return { tiers: [text] };
   }
 
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
   if (days > 30) return null; // only show within 1 month
-  const mm = playoffDate.getMonth() + 1;
   const dd = playoffDate.getDate();
   const monthName = playoffDate.toLocaleDateString("en-US", { month: "short" });
-  const full = days === 1
-    ? `${config.label} start tomorrow`
-    : `${config.label} start ${monthName} ${dd}`;
-  const short = `${config.label} ${monthName} ${dd}`;
-  return { full, short };
+  if (days === 1) {
+    return { tiers: [`${config.label} start tomorrow`] };
+  }
+  const base = `${config.label} start ${monthName} ${dd}`;
+  const baseShort = `${config.label} ${monthName} ${dd}`;
+  return { tiers: [`${base} (${days} days)`, `${baseShort} (${days}d)`, baseShort] };
 }
 
 function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
   const ref = useRef<HTMLSpanElement>(null);
   const result = getPlayoffSubtitle(sport, selectedDate, games);
-  const [useShort, setUseShort] = useState(false);
+  const tiers = result?.tiers ?? [];
+  const [tierIdx, setTierIdx] = useState(0);
 
   useEffect(() => {
-    if (!result) return;
-    setUseShort(false); // try full first
-  }, [result?.full]);
+    setTierIdx(0);
+  }, [tiers.join("|")]);
 
-  // After rendering full text, check if it overflows
+  // After rendering current tier, step down if it overflows
   useEffect(() => {
-    if (useShort || !result) return;
+    if (!tiers.length) return;
     const el = ref.current;
     if (!el) return;
     requestAnimationFrame(() => {
-      if (el.scrollWidth > el.clientWidth + 1) setUseShort(true);
+      if (el.scrollWidth > el.clientWidth + 1 && tierIdx < tiers.length - 1) {
+        setTierIdx(tierIdx + 1);
+      }
     });
   });
 
@@ -96,7 +98,7 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setUseShort(false));
+    const ro = new ResizeObserver(() => setTierIdx(0));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -105,9 +107,9 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
     <span
       ref={ref}
       className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center"
-      style={{ color: result ? "var(--text-muted)" : "transparent" }}
+      style={{ color: tiers.length ? "var(--text-muted)" : "transparent" }}
     >
-      {result ? (useShort ? result.short : result.full) : "\u00A0"}
+      {tiers.length ? tiers[tierIdx] : "\u00A0"}
     </span>
   );
 }
