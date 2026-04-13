@@ -329,17 +329,12 @@ export default function GolfLeaderboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightQuery, officialChannel, secondaryChannelsKey]);
 
-  // Slot 0 (the "main recap") always renders as soon as highlights
-  // are available — its click handler refetches on demand and falls
-  // back to a YouTube search, so it's never a dead button. Painting
-  // it immediately avoids the perceived delay vs other leagues whose
-  // highlight buttons appear synchronously on first render. Slots
-  // 1–3 still wait on prefetch and pop in once resolved.
+  // All 4 slots paint on first render — parity with other leagues
+  // whose highlight buttons appear synchronously. Each slot's click
+  // handler falls back to a YouTube search if its prefetched videoId
+  // hasn't arrived yet, so no button is ever dead.
   const visibleHighlightSlots = useMemo(
-    () =>
-      highlightSlots
-        .map((id, index) => ({ id, index }))
-        .filter((s) => s.index === 0 || s.id !== null),
+    () => highlightSlots.map((id, index) => ({ id, index })),
     [highlightSlots]
   );
 
