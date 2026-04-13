@@ -53,7 +53,7 @@ const ALL_LEAGUES: LeagueConfig[] = [
 // FULL YEAR SCHEDULE — Max 3 leagues
 // First preference (always shown): World Cup, Masters, Wimbledon, US Open (golf+tennis), March Madness
 // Regular priority: NBA > MLB > NFL > PGA/Open/FrOpen/AusOpen > NCAAM > NHL > EPL
-// Backfill rule: empty non-firstPref leagues get bumped by lower-priority leagues that have games today.
+// Empty leagues render with a "next game" message; EPL only appears when fewer than 3 higher-priority leagues are active.
 // ═══════════════════════════════════════════════════════════════
 // Jan 12-26:       + Aus Open                   → [NFL, NBA, NCAAM]         ← Aus Open below NCAAM
 // Feb 10 – Mar 16: NFL ends                     → [NBA, NCAAM] (2)
@@ -789,13 +789,13 @@ export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
     .filter((r): r is LeagueData => r !== null)
     .slice(0, MAX_LEAGUES);
 
-  // Fill remaining slots with rest. Prefer leagues with games today;
-  // fall back to empty leagues only if no candidate with games is available.
+  // Fill remaining slots from rest in strict priority order.
+  // Empty leagues are OK — they render with a "next game" message.
+  // restResults preserves the priority order from getActiveLeagueCandidates.
   const remaining = MAX_LEAGUES - selectedFirstPref.length;
-  const restWithData = restResults.filter((r): r is LeagueData => r !== null);
-  const restWithGames = restWithData.filter((r) => r.games.length > 0);
-  const restEmpty = restWithData.filter((r) => r.games.length === 0);
-  const selectedRest = [...restWithGames, ...restEmpty].slice(0, remaining);
+  const selectedRest = restResults
+    .filter((r): r is LeagueData => r !== null)
+    .slice(0, remaining);
 
   const selected = [...selectedFirstPref, ...selectedRest];
 
