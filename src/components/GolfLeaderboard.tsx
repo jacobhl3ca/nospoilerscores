@@ -577,7 +577,7 @@ export default function GolfLeaderboard({
                   window.open(highlightFallbackUrl, "_blank");
                 }}
                 disabled={fetchingSlot !== null}
-                className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
+                className="highlight-btn flex items-center justify-center gap-1.5 py-1.5 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
                 style={{
                   background: "var(--bg-card-hover)",
                   color: "var(--accent)",
@@ -593,9 +593,9 @@ export default function GolfLeaderboard({
                   <span className="text-[10px]">Loading...</span>
                 ) : (
                   <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                     {isMainSlot && (
-                      <span className="text-[10px] font-medium">ESPN</span>
+                      <span className="text-[11px] font-semibold leading-none">ESPN</span>
                     )}
                   </>
                 )}
