@@ -653,6 +653,25 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     (l) => l.sport === "golf" && new RegExp(l.label, "i").test(event.name ?? "")
   );
 
+  // Drop tournament if the viewed date falls outside its 4-day window.
+  // ESPN's scoreboard will happily return the nearest tournament even when
+  // querying a date after the final round, which leaks a wrapped event into
+  // e.g. tomorrow's view. Rounds run startDate..startDate+3.
+  if (date && tournamentLabel?.startDate) {
+    const selYear = parseInt(date.slice(0, 4), 10);
+    const selMonth = parseInt(date.slice(4, 6), 10);
+    const selDay = parseInt(date.slice(6, 8), 10);
+    const [startMo, startDay] = tournamentLabel.startDate.split("-").map((s) => parseInt(s, 10));
+    if (Number.isFinite(startMo) && Number.isFinite(startDay)) {
+      const selDateObj = new Date(selYear, selMonth - 1, selDay);
+      const startDateObj = new Date(selYear, startMo - 1, startDay);
+      const dayIndex = Math.round(
+        (selDateObj.getTime() - startDateObj.getTime()) / (24 * 3600 * 1000)
+      );
+      if (dayIndex < 0 || dayIndex > 3) return null;
+    }
+  }
+
   // ESPN tournament leaderboard URL — used for the live link wrapping the
   // status text (parity with team-sport game cards which link to the gamecast).
   const leaderboardUrl = event.id

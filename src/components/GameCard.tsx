@@ -114,8 +114,19 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const espnUrl = game.recapUrl || null;
   const liveUrl = game.streamUrl || espnUrl;
   const localTime = isFuture ? cleanStatusDetail(game.statusDetail, true) : null;
-  const awayTBD = game.awayTeam.shortDisplayName === "TBD" || !game.awayTeam.abbreviation;
-  const homeTBD = game.homeTeam.shortDisplayName === "TBD" || !game.homeTeam.abbreviation;
+  // Play-in placeholders arrive with slashed names like "Clippers/Trail Blazers"
+  // (shortDisplayName) and "LAC/POR" (abbreviation). Treat those as TBD too.
+  const isPlaceholderName = (s?: string) => !!s && s.includes("/");
+  const awayTBD =
+    game.awayTeam.shortDisplayName === "TBD" ||
+    !game.awayTeam.abbreviation ||
+    isPlaceholderName(game.awayTeam.shortDisplayName) ||
+    isPlaceholderName(game.awayTeam.abbreviation);
+  const homeTBD =
+    game.homeTeam.shortDisplayName === "TBD" ||
+    !game.homeTeam.abbreviation ||
+    isPlaceholderName(game.homeTeam.shortDisplayName) ||
+    isPlaceholderName(game.homeTeam.abbreviation);
   const gameProgress = isLive ? formatGameProgress(game) : null;
 
   // Per-league buffer (hrs from game start) before showing highlight button
