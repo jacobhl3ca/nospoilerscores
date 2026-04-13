@@ -52,7 +52,8 @@ const ALL_LEAGUES: LeagueConfig[] = [
 // ═══════════════════════════════════════════════════════════════
 // FULL YEAR SCHEDULE — Max 3 leagues
 // First preference (always shown): World Cup, Masters, Wimbledon, US Open (golf+tennis), March Madness
-// Regular priority: NBA > MLB > NCAAM > NHL > NFL > PGA/Open/FrOpen/AusOpen > EPL
+// Regular priority: NBA > MLB > NFL > PGA/Open/FrOpen/AusOpen > NCAAM > NHL > EPL
+// Backfill rule: empty non-firstPref leagues get bumped by lower-priority leagues that have games today.
 // ═══════════════════════════════════════════════════════════════
 // Jan 12-26:       + Aus Open                   → [NFL, NBA, NCAAM]         ← Aus Open below NCAAM
 // Feb 10 – Mar 16: NFL ends                     → [NBA, NCAAM] (2)
@@ -138,20 +139,25 @@ function isMarchMadness(viewDate: Date): boolean {
   return mmdd >= MARCH_MADNESS_START && mmdd <= MARCH_MADNESS_END;
 }
 
-function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
+// Returns ALL active league candidates ordered: firstPref first, then rest by priority.
+// Caller can take the first N and use the remainder as backfill when selected leagues are empty.
+function getActiveLeagueCandidates(viewDate?: Date): {
+  firstPref: LeagueConfig[];
+  rest: LeagueConfig[];
+} {
   const d = viewDate ?? new Date();
   const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d));
   const madness = isMarchMadness(d);
-
-  // Separate first-preference leagues (always get a slot when active)
-  // March Madness NCAAM counts as first preference
   const firstPref = active.filter((l) => l.firstPref || (l.sport === "ncaam" && madness));
-  const rest = active.filter((l) => !l.firstPref && !(l.sport === "ncaam" && madness));
+  const rest = active
+    .filter((l) => !l.firstPref && !(l.sport === "ncaam" && madness))
+    .sort((a, b) => (LEAGUE_PRIORITY[a.sport] ?? 99) - (LEAGUE_PRIORITY[b.sport] ?? 99));
+  return { firstPref, rest };
+}
 
-  // Sort rest by unified priority
-  rest.sort((a, b) => (LEAGUE_PRIORITY[a.sport] ?? 99) - (LEAGUE_PRIORITY[b.sport] ?? 99));
-
-  // First-pref leagues always shown; fill remaining slots with rest
+function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
+  const d = viewDate ?? new Date();
+  const { firstPref, rest } = getActiveLeagueCandidates(d);
   const firstPrefCount = Math.min(firstPref.length, MAX_LEAGUES);
   const restCount = Math.min(rest.length, MAX_LEAGUES - firstPrefCount);
   const selected = [...firstPref.slice(0, firstPrefCount), ...rest.slice(0, restCount)];
@@ -754,25 +760,57 @@ export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
   const viewDate = date
     ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`)
     : new Date();
-  const active = getActiveLeagues(viewDate);
-  const results = await Promise.all(
-    active.map(async ({ sport, label }) => {
-      // Golf uses leaderboard format, not head-to-head games
-      if (sport === "golf") {
-        const golfTournament = await fetchGolfTournament(date);
-        if (!golfTournament) return null;
-        return { sport, label, games: [], golfTournament };
-      }
-      const games = await fetchGames(sport, date);
-      // Pre-fetch next game day for empty leagues so the UI doesn't need a second round trip
-      let nextGameDay: { date: string; games: Game[] } | null = null;
-      if (games.length === 0) {
-        nextGameDay = await fetchNextGameDay(sport, 7, date);
-      }
-      return { sport, label, games, nextGameDay };
-    })
+
+  const { firstPref, rest } = getActiveLeagueCandidates(viewDate);
+
+  // Fetch data for ALL candidates in parallel — needed so we can backfill
+  // empty non-firstPref slots with lower-priority leagues that have games today.
+  const fetchLeague = async ({ sport, label }: LeagueConfig): Promise<LeagueData | null> => {
+    if (sport === "golf") {
+      const golfTournament = await fetchGolfTournament(date);
+      if (!golfTournament) return null;
+      return { sport, label, games: [], golfTournament };
+    }
+    const games = await fetchGames(sport, date);
+    let nextGameDay: { date: string; games: Game[] } | null = null;
+    if (games.length === 0) {
+      nextGameDay = await fetchNextGameDay(sport, 7, date);
+    }
+    return { sport, label, games, nextGameDay };
+  };
+
+  const [firstPrefResults, restResults] = await Promise.all([
+    Promise.all(firstPref.map(fetchLeague)),
+    Promise.all(rest.map(fetchLeague)),
+  ]);
+
+  // First-pref leagues always shown (when data loaded); cap at MAX_LEAGUES
+  const selectedFirstPref = firstPrefResults
+    .filter((r): r is LeagueData => r !== null)
+    .slice(0, MAX_LEAGUES);
+
+  // Fill remaining slots with rest. Prefer leagues with games today;
+  // fall back to empty leagues only if no candidate with games is available.
+  const remaining = MAX_LEAGUES - selectedFirstPref.length;
+  const restWithData = restResults.filter((r): r is LeagueData => r !== null);
+  const restWithGames = restWithData.filter((r) => r.games.length > 0);
+  const restEmpty = restWithData.filter((r) => r.games.length === 0);
+  const selectedRest = [...restWithGames, ...restEmpty].slice(0, remaining);
+
+  const selected = [...selectedFirstPref, ...selectedRest];
+
+  // Display order: longest-active leftmost, newest rightmost
+  return selected.sort(
+    (a, b) =>
+      daysSinceSeasonStart(
+        ALL_LEAGUES.find((l) => l.sport === b.sport && l.label === b.label)!,
+        viewDate
+      ) -
+      daysSinceSeasonStart(
+        ALL_LEAGUES.find((l) => l.sport === a.sport && l.label === a.label)!,
+        viewDate
+      )
   );
-  return results.filter((r) => r !== null) as LeagueData[];
 }
 
 export async function fetchNextGameDay(
