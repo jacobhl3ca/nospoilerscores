@@ -216,7 +216,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               ) : showFinal && !hasRating ? (
                 "FINAL"
               ) : nextGameDate ? (
-                <span className="text-[11px] whitespace-nowrap"><span className="font-bold underline underline-offset-2" style={{ color: "var(--text)" }}>{nextGameDate}</span>{localTime ? ` - ${localTime}` : ""}</span>
+                <span className="text-[11px] whitespace-nowrap">
+                  <span className="font-bold underline underline-offset-2" style={{ color: "var(--text)" }}>
+                    <span className="hidden sm:inline">{nextGameDate}</span>
+                    <span className="sm:hidden">{nextGameDate === "Tomorrow" ? "Tomo" : nextGameDate}</span>
+                  </span>
+                  {localTime ? ` - ${localTime}` : ""}
+                </span>
               ) : isFuture ? (
                 <span className="text-[11px]">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
               ) : null}
