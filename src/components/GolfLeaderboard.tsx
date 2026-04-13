@@ -290,12 +290,10 @@ export default function GolfLeaderboard({
         }
       }
       // Backfill remaining slots from multiple generic query
-      // variations. A single generic search often collides with the
-      // channel results we already have (YouTube surfaces the same
-      // top video across similar queries), so we try several phrasing
-      // variations and accept the first distinct hit for each open
-      // slot. Ensures a 2×2 grid whenever at least 4 total distinct
-      // videos exist across all sources.
+      // variations, fetched in parallel. A single generic search often
+      // collides with the channel results we already have, so we try
+      // several phrasings and accept the first distinct hit for each
+      // open slot.
       if (slotIdx < 4 && leagueLabel) {
         const backfillQueries = [
           highlightQuery,
@@ -303,9 +301,11 @@ export default function GolfLeaderboard({
           `${leagueLabel} Round ${completedRounds} ${highlightYear} full round`,
           `${leagueLabel} ${highlightYear} R${completedRounds} highlights`,
         ];
-        for (const q of backfillQueries) {
+        const backfillResults = await Promise.all(
+          backfillQueries.map((q) => fetchFirstVideoId(q))
+        );
+        for (const id of backfillResults) {
           if (slotIdx >= 4) break;
-          const id = await fetchFirstVideoId(q);
           if (id && !seen.has(id)) {
             slots[slotIdx++] = id;
             seen.add(id);
@@ -318,17 +318,17 @@ export default function GolfLeaderboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightQuery, officialChannel, secondaryChannelsKey]);
 
-  // Which slots to actually render — only slots with a prefetched
-  // videoId. Before prefetch finishes, this yields an empty row and
-  // the highlights block collapses; once slots populate, up to 4
-  // buttons appear. (The old version always showed slot 0, which
-  // produced a dead-play button when ESPN returned nothing and
-  // confused users into thinking fewer than 4 videos existed.)
+  // Slot 0 (the "main recap") always renders as soon as highlights
+  // are available — its click handler refetches on demand and falls
+  // back to a YouTube search, so it's never a dead button. Painting
+  // it immediately avoids the perceived delay vs other leagues whose
+  // highlight buttons appear synchronously on first render. Slots
+  // 1–3 still wait on prefetch and pop in once resolved.
   const visibleHighlightSlots = useMemo(
     () =>
       highlightSlots
         .map((id, index) => ({ id, index }))
-        .filter((s) => s.id !== null),
+        .filter((s) => s.index === 0 || s.id !== null),
     [highlightSlots]
   );
 
