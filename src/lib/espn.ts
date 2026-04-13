@@ -760,6 +760,7 @@ export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
       // Golf uses leaderboard format, not head-to-head games
       if (sport === "golf") {
         const golfTournament = await fetchGolfTournament(date);
+        if (!golfTournament) return null;
         return { sport, label, games: [], golfTournament };
       }
       const games = await fetchGames(sport, date);
@@ -771,7 +772,7 @@ export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
       return { sport, label, games, nextGameDay };
     })
   );
-  return results;
+  return results.filter((r) => r !== null) as LeagueData[];
 }
 
 export async function fetchNextGameDay(
