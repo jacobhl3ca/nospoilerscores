@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface VideoModalProps {
   videoId: string;
@@ -8,9 +8,29 @@ interface VideoModalProps {
   onClose: () => void;
 }
 
+// Pulls the original `search_query=...` out of a YouTube search URL so we can
+// re-query /api/youtube for an alternate videoId when the primary embed fails.
+function extractSearchQuery(fallbackUrl: string): string | null {
+  try {
+    const u = new URL(fallbackUrl);
+    return u.searchParams.get("search_query");
+  } catch {
+    return null;
+  }
+}
+
 export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [currentId, setCurrentId] = useState(videoId);
+  const failedIdsRef = useRef<string[]>([]);
+  const retryingRef = useRef(false);
+
+  // Reset when the modal is opened with a different primary id
+  useEffect(() => {
+    setCurrentId(videoId);
+    failedIdsRef.current = [];
+  }, [videoId]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -24,19 +44,46 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
     };
   }, [onClose]);
 
-  // Use YouTube IFrame Player API to force highest available quality
+  // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
 
-    // Only add if not already loaded
     if (!(window as any).YT) {
       document.head.appendChild(tag);
     }
 
+    const tryFallback = async () => {
+      if (retryingRef.current) return;
+      retryingRef.current = true;
+      const q = extractSearchQuery(fallbackUrl);
+      if (!q) {
+        retryingRef.current = false;
+        return;
+      }
+      // Mark current id as failed and ask the worker for an alternate
+      const failed = [...failedIdsRef.current, currentId];
+      failedIdsRef.current = failed;
+      try {
+        const res = await fetch(
+          `/api/youtube?q=${encodeURIComponent(q)}&exclude=${encodeURIComponent(failed.join(","))}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.videoId && data.videoId !== currentId) {
+            setCurrentId(data.videoId);
+          }
+        }
+      } catch {
+        // swallow — leave the broken player; user still has "Watch on YouTube"
+      } finally {
+        retryingRef.current = false;
+      }
+    };
+
     const initPlayer = () => {
       playerRef.current = new (window as any).YT.Player("yt-player", {
-        videoId,
+        videoId: currentId,
         playerVars: {
           autoplay: 1,
           mute: 1,
@@ -46,12 +93,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
         },
         events: {
           onReady: (event: any) => {
-            // Force highest available quality
             const qualities = event.target.getAvailableQualityLevels();
             if (qualities.length > 0) {
               event.target.setPlaybackQuality(qualities[0]);
             }
             event.target.playVideo();
+          },
+          // YT error codes 100 (removed), 101 / 150 (embed disabled),
+          // 5 (HTML5 issue), 2 (bad param). Any of these → swap to next.
+          onError: () => {
+            tryFallback();
           },
         },
       });
@@ -66,7 +117,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
     return () => {
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
-  }, [videoId]);
+  }, [currentId, fallbackUrl]);
 
   return (
     <div
@@ -103,7 +154,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
         {/* YouTube direct link */}
         <div className="mt-3 text-center">
           <a
-            href={`https://www.youtube.com/watch?v=${videoId}`}
+            href={`https://www.youtube.com/watch?v=${currentId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"

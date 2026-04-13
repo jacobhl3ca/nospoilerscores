@@ -5,6 +5,10 @@ export default {
     if (url.pathname === "/api/youtube") {
       const query = url.searchParams.get("q");
       const preferChannel = url.searchParams.get("channel"); // e.g. "NBA", "MLB"
+      const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
+      const excludeSet = new Set(
+        (excludeParam || "").split(",").map((s) => s.trim()).filter(Boolean)
+      );
       if (!query) {
         return new Response(JSON.stringify({ error: "Missing q param" }), {
           status: 400,
@@ -100,6 +104,7 @@ export default {
           const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
           const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
           if (!idMatch) return null;
+          if (excludeSet.has(idMatch[1])) return null;
           return {
             videoId: idMatch[1],
             title: titleMatch ? titleMatch[1] : "",
@@ -330,8 +335,9 @@ export default {
           // Raw-regex fallback — only for non-golf. For golf we'd
           // rather return 404 than guess wrong and let a random
           // PGA TOUR highlight win the Masters slot.
-          const fallback = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-          videoId = fallback ? fallback[1] : null;
+          const allMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
+          const firstAllowed = allMatches.find((m) => !excludeSet.has(m[1]));
+          videoId = firstAllowed ? firstAllowed[1] : null;
         }
 
         if (!videoId) {

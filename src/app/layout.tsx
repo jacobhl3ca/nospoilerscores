@@ -121,6 +121,12 @@ export default function RootLayout({
           async
           src="//gc.zgo.at/count.js"
         />
+        {/* PWA service worker — registered after first paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}`,
+          }}
+        />
       </body>
     </html>
   );
