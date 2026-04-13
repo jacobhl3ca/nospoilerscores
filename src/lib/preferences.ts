@@ -3,7 +3,7 @@ import { Sport } from "./types";
 const STORAGE_KEY = "nss-preferences";
 
 // Compact encoding for share URLs: mlb→m, nba→n, ncaam→c, nhl→h, nfl→f, golf→g, tennis→t, fifa→w
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", ncaam: "c", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e" };
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", ncaam: "c", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;

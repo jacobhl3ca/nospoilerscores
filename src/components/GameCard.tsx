@@ -139,10 +139,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     nfl: 5,    // ~3.5hr game + highlights up in 1-2hrs
     fifa: 3,   // ~2hr match + highlights up quickly
     epl: 3,    // ~2hr match + highlights up quickly
+    mls: 3,    // ~2hr match + highlights up quickly
     golf: 6,   // ~5hr round + recap upload delay
     tennis: 4, // ~2-3hr match + highlights up in 1-2hrs
   };
-  const regulationPeriods: Record<string, number> = { nba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, golf: 4, tennis: 3 };
+  const regulationPeriods: Record<string, number> = { nba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, golf: 4, tennis: 3 };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();

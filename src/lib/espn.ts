@@ -12,6 +12,7 @@ const SPORT_PATHS: Record<Sport, string> = {
   tennis: "/tennis/atp/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",
   epl: "/soccer/eng.1/scoreboard",
+  mls: "/soccer/usa.1/scoreboard",
 };
 
 // Seasonal league config: show/hide based on date
@@ -47,6 +48,8 @@ const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19", firstPref: true },
   // ── Premier League (Aug–May) ──
   { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
+  // ── MLS (Feb–Dec, MLS Cup early Dec) ──
+  { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -132,6 +135,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   ncaam: 6,  // March Madness gets firstPref bump
   nhl: 7,
   epl: 8,    // under NHL
+  mls: 9,    // under EPL
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -202,6 +206,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   nfl:    { multiplier: 6,   overtimeBonus: 15, scoringDivisor: 10, regulationPeriods: 4 },
   fifa:   { multiplier: 30,  overtimeBonus: 25, scoringDivisor: 1,  regulationPeriods: 2 },
   epl:    { multiplier: 30,  overtimeBonus: 20, scoringDivisor: 1,  regulationPeriods: 2 },
+  mls:    { multiplier: 30,  overtimeBonus: 20, scoringDivisor: 1,  regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,  regulationPeriods: 4 },
   tennis: { multiplier: 8,   overtimeBonus: 15, scoringDivisor: 5,  regulationPeriods: 3 },
 };
