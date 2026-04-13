@@ -418,7 +418,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       {showFavToast && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl shadow-lg animate-fade-in max-w-xs w-[calc(100%-2rem)]"
-          style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+          style={{ background: "linear-gradient(var(--bg-card), var(--bg-card)), var(--bg)", border: "1px solid var(--border)" }}
         >
           <div className="px-4 py-3">
             <div className="flex items-start justify-between gap-2">
