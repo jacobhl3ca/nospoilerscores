@@ -113,7 +113,19 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const isLive = game.state === "in";
   const espnUrl = game.recapUrl || null;
   const liveUrl = game.streamUrl || espnUrl;
-  const localTime = isFuture ? cleanStatusDetail(game.statusDetail, true) : null;
+  const localTime = isFuture ? (() => {
+    const cleaned = cleanStatusDetail(game.statusDetail, true);
+    // ESPN returns "Scheduled" with no time for some leagues (EPL, MLS) — derive from game.date
+    if (!cleaned || cleaned.toLowerCase() === "scheduled") {
+      try {
+        const d = new Date(game.date);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        }
+      } catch { /* fall through */ }
+    }
+    return cleaned;
+  })() : null;
   // Play-in placeholders arrive with slashed names like "Clippers/Trail Blazers"
   // (shortDisplayName) and "LAC/POR" (abbreviation). Treat those as TBD too.
   const isPlaceholderName = (s?: string) => !!s && s.includes("/");
