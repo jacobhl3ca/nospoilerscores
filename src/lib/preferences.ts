@@ -49,6 +49,7 @@ export interface Preferences {
   theme: Theme;
   showRatings: boolean;
   skipExplainer: boolean;
+  thirdLeague?: Sport; // user-chosen 3rd league slot override
 }
 
 const defaults: Preferences = {

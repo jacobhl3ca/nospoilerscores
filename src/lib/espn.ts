@@ -18,7 +18,7 @@ const SPORT_PATHS: Record<Sport, string> = {
 // Seasonal league config: show/hide based on date
 // endDate: day after championship — league hides the day after its final game
 // startDate: when the sport's season starts
-interface LeagueConfig {
+export interface LeagueConfig {
   sport: Sport;
   label: string;
   startDate?: string;       // MM-DD
@@ -27,7 +27,7 @@ interface LeagueConfig {
   firstPref?: boolean;      // Tier 1: always gets a slot when active (bumps lower leagues)
 }
 
-const ALL_LEAGUES: LeagueConfig[] = [
+export const ALL_LEAGUES: LeagueConfig[] = [
   // ── Major team sports ──
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06" },
   { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-19", championshipDate: "06-19" },
@@ -90,7 +90,7 @@ function toMMDD(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
+export function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
   if (!league.startDate || !league.endDate) return true;
   const mmdd = toMMDD(viewDate);
 
@@ -145,7 +145,7 @@ function isMarchMadness(viewDate: Date): boolean {
 
 // Returns ALL active league candidates ordered: firstPref first, then rest by priority.
 // Caller can take the first N and use the remainder as backfill when selected leagues are empty.
-function getActiveLeagueCandidates(viewDate?: Date): {
+export function getActiveLeagueCandidates(viewDate?: Date): {
   firstPref: LeagueConfig[];
   rest: LeagueConfig[];
 } {
@@ -774,7 +774,7 @@ export async function fetchGames(
   return games;
 }
 
-export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
+export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
     ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`)
@@ -798,9 +798,20 @@ export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
     return { sport, label, games, nextGameDay };
   };
 
-  const [firstPrefResults, restResults] = await Promise.all([
+  // If user chose a 3rd league, we also need to fetch it (may not be in firstPref or rest)
+  const allCandidates = [...firstPref, ...rest];
+  const thirdLeagueConfig = thirdLeagueSport
+    ? ALL_LEAGUES.find((l) => l.sport === thirdLeagueSport && isLeagueActive(l, viewDate))
+    : null;
+  // Add to candidates if not already present
+  const extraFetch = thirdLeagueConfig && !allCandidates.some(c => c.sport === thirdLeagueConfig.sport && c.label === thirdLeagueConfig.label)
+    ? [thirdLeagueConfig]
+    : [];
+
+  const [firstPrefResults, restResults, extraResults] = await Promise.all([
     Promise.all(firstPref.map(fetchLeague)),
     Promise.all(rest.map(fetchLeague)),
+    Promise.all(extraFetch.map(fetchLeague)),
   ]);
 
   // First-pref leagues always shown (when data loaded); cap at MAX_LEAGUES
@@ -812,6 +823,41 @@ export async function fetchAllLeagues(date?: string): Promise<LeagueData[]> {
   // Empty leagues are OK — they render with a "next game" message.
   // restResults preserves the priority order from getActiveLeagueCandidates.
   const remaining = MAX_LEAGUES - selectedFirstPref.length;
+
+  // If user chose a 3rd league, reserve the last slot for it
+  // Skip if the chosen sport is already in firstPref (would duplicate)
+  const alreadyInFirstPref = selectedFirstPref.some(l => l.sport === thirdLeagueSport);
+  if (thirdLeagueSport && remaining > 0 && !alreadyInFirstPref) {
+    // Fill slots 1..(remaining-1) from auto rest, then slot 3 = user choice
+    const autoRest = restResults
+      .filter((r): r is LeagueData => r !== null)
+      .filter(r => r.sport !== thirdLeagueSport);
+    const autoSlots = autoRest.slice(0, remaining - 1);
+
+    // Find the user's chosen league from rest results or extra fetch
+    const userLeague = restResults
+      .filter((r): r is LeagueData => r !== null)
+      .find(r => r.sport === thirdLeagueSport)
+      ?? extraResults.filter((r): r is LeagueData => r !== null)[0]
+      ?? null;
+
+    const selected = [...selectedFirstPref, ...autoSlots];
+    if (userLeague) selected.push(userLeague);
+
+    // Display order: longest-active leftmost, newest rightmost
+    return selected.sort(
+      (a, b) =>
+        daysSinceSeasonStart(
+          ALL_LEAGUES.find((l) => l.sport === b.sport && l.label === b.label)!,
+          viewDate
+        ) -
+        daysSinceSeasonStart(
+          ALL_LEAGUES.find((l) => l.sport === a.sport && l.label === a.label)!,
+          viewDate
+        )
+    );
+  }
+
   const selectedRest = restResults
     .filter((r): r is LeagueData => r !== null)
     .slice(0, remaining);

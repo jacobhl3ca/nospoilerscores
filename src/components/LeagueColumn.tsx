@@ -20,6 +20,10 @@ interface LeagueColumnProps {
   selectedDate: string; // YYYYMMDD
   section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
+  // 3rd league slot swapping
+  swappableOptions?: { sport: Sport; label: string }[];
+  selectedThirdLeague?: Sport;
+  onSwapLeague?: (sport: Sport | undefined) => void;
 }
 
 // 2025-26 season playoff start dates (update each season)
@@ -212,9 +216,27 @@ export default function LeagueColumn({
   selectedDate,
   section,
   showFinalSeparator,
+  swappableOptions,
+  selectedThirdLeague,
+  onSwapLeague,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
+  const swapRef = useRef<HTMLDivElement>(null);
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
+  const [swapOpen, setSwapOpen] = useState(false);
+  const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
+
+  // Close swap dropdown on outside click
+  useEffect(() => {
+    if (!swapOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (swapRef.current && !swapRef.current.contains(e.target as Node)) {
+        setSwapOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [swapOpen]);
 
   // Measure whether full names would fit in the available column width
   const checkIfFullNamesFit = () => {
@@ -379,9 +401,66 @@ export default function LeagueColumn({
         <div className="flex flex-col items-center mb-2 sm:mb-3">
           <div className="flex items-center justify-center">
             <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
-            <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-              {league.label}
-            </h2>
+            {isSwappable ? (
+              <div ref={swapRef} className="relative">
+                <button
+                  onClick={() => setSwapOpen(!swapOpen)}
+                  className="flex items-center gap-0.5 cursor-pointer transition-colors hover:opacity-80"
+                  style={{ color: "var(--text)" }}
+                  title="Switch league"
+                >
+                  <h2 className="text-base sm:text-lg font-bold tracking-wide">
+                    {league.label}
+                  </h2>
+                  <svg
+                    width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                    className={`transition-transform duration-150 ${swapOpen ? "rotate-180" : ""}`}
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                {swapOpen && (
+                  <div
+                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[100px]"
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                  >
+                    {/* Auto option — reset to default */}
+                    {selectedThirdLeague && (
+                      <button
+                        onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                        style={{ color: "var(--text-muted)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        Auto
+                      </button>
+                    )}
+                    {swappableOptions!.map((opt) => (
+                      <button
+                        key={opt.sport}
+                        onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
+                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                        style={{
+                          color: opt.sport === league.sport ? "var(--accent)" : "var(--text)",
+                          fontWeight: opt.sport === league.sport ? 600 : 400,
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+                {league.label}
+              </h2>
+            )}
             <button
               onClick={() => onToggleFavoriteLeague(league.sport)}
               className={`text-sm transition-colors ml-1.5 ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}

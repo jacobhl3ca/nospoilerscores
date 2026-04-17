@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { LeagueData, Sport } from "@/lib/types";
+import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
-import { fetchAllLeagues } from "@/lib/espn";
+import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -82,11 +83,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return () => mq.removeEventListener("change", handler);
   }, [prefs.theme]);
 
-  const fetchData = useCallback(async (date: string) => {
+  const fetchData = useCallback(async (date: string, thirdLeague?: Sport) => {
     setLoading(true);
     setError(false);
     try {
-      const data = await fetchAllLeagues(date);
+      const data = await fetchAllLeagues(date, thirdLeague);
       setLeagues(data);
     } catch {
       setLeagues([]);
@@ -96,8 +97,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   }, []);
 
   useEffect(() => {
-    if (selectedDate) fetchData(selectedDate);
-  }, [selectedDate, fetchData]);
+    if (selectedDate) fetchData(selectedDate, prefs.thirdLeague);
+  }, [selectedDate, prefs.thirdLeague, fetchData]);
 
   const updatePrefs = (update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
@@ -210,6 +211,26 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   };
 
   const isToday = selectedDate === getDateString(0);
+
+  // Compute which leagues are available for the 3rd slot dropdown
+  const thirdLeagueOptions = useMemo(() => {
+    if (!selectedDate) return [];
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    // Get all active leagues for this date, deduplicated by sport
+    const seen = new Set<Sport>();
+    const options: { sport: Sport; label: string }[] = [];
+    for (const league of ALL_LEAGUES) {
+      if (seen.has(league.sport)) continue;
+      if (!isLeagueActive(league, viewDate)) continue;
+      seen.add(league.sport);
+      options.push({ sport: league.sport, label: league.label });
+    }
+    return options;
+  }, [selectedDate]);
+
+  const setThirdLeague = (sport: Sport | undefined) => {
+    updatePrefs({ thirdLeague: sport });
+  };
 
   const sortedLeagues = [...leagues].sort((a, b) => {
     const aIdx = prefs.favoriteLeagues.indexOf(a.sport);
@@ -378,17 +399,25 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               onPlayHighlight: (videoId: string, fallbackUrl: string) => setVideoModal({ videoId, fallbackUrl }),
               selectedDate,
             };
+            // Determine which leagues are in slots 1-2 (auto) vs slot 3 (swappable)
+            const autoSports = new Set(sortedLeagues.slice(0, 2).map(l => l.sport));
+            const swappableOptions = thirdLeagueOptions.filter(o => !autoSports.has(o.sport));
 
             if (showFinalSplit) {
               return (
                 <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
-                  {sortedLeagues.map((league) => (
+                  {sortedLeagues.map((league, idx) => (
                     <LeagueColumn
                       key={league.sport}
                       league={league}
                       {...commonProps}
                       isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
                       showFinalSeparator
+                      {...(idx === sortedLeagues.length - 1 && sortedLeagues.length >= 3 ? {
+                        swappableOptions,
+                        selectedThirdLeague: prefs.thirdLeague,
+                        onSwapLeague: setThirdLeague,
+                      } : {})}
                     />
                   ))}
                 </div>
@@ -397,12 +426,17 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
             return (
               <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
-                {sortedLeagues.map((league) => (
+                {sortedLeagues.map((league, idx) => (
                   <LeagueColumn
                     key={league.sport}
                     league={league}
                     {...commonProps}
                     isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
+                    {...(idx === sortedLeagues.length - 1 && sortedLeagues.length >= 3 ? {
+                      swappableOptions,
+                      selectedThirdLeague: prefs.thirdLeague,
+                      onSwapLeague: setThirdLeague,
+                    } : {})}
                   />
                 ))}
               </div>
