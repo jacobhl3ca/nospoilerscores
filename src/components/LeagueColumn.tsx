@@ -398,7 +398,7 @@ export default function LeagueColumn({
   return (
     <div ref={columnRef} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
       {showHeader && (
-        <div className="flex flex-col items-center mb-2 sm:mb-3">
+        <div className="flex flex-col items-center mb-2 sm:mb-3 sticky z-30 pb-1" style={{ top: "calc(env(safe-area-inset-top) + 3.5rem)", background: "var(--bg)" }}>
           <div className="flex items-center justify-center">
             <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
             {isSwappable ? (
