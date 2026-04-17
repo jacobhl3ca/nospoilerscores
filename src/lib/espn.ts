@@ -174,8 +174,8 @@ function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
 function parseTeam(competitor: any, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
   let record = competitor.records?.[0]?.summary ?? "";
-  // MLB spring training records include ties (e.g. "7-9-2") — strip to W-L
-  if (sport === "mlb" && record.split("-").length === 3) {
+  // MLB spring training and NHL records include a 3rd segment (ties / OTL) — strip to W-L
+  if ((sport === "mlb" || sport === "nhl") && record.split("-").length === 3) {
     const parts = record.split("-");
     record = `${parts[0]}-${parts[1]}`;
   }
@@ -303,7 +303,15 @@ function calculateRating(game: any): number | null {
   const overtimeBonus = periods > config.regulationPeriods ? config.overtimeBonus : 0;
   const scoringBonus = Math.min(total / config.scoringDivisor, 10);
 
-  return Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus));
+  // Comeback bonus: reward games where a big deficit was erased late
+  // The bigger the deficit overcome and the closer the final, the bigger the bonus
+  let comebackBonus = 0;
+  if (fpMargin !== null && fpMargin > diff) {
+    const deficitErased = fpMargin - diff; // how many points/runs were clawed back
+    comebackBonus = Math.min(deficitErased * config.multiplier * 0.4, 20);
+  }
+
+  return Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus));
 }
 
 function parseGame(event: any, sport: Sport): Game {
