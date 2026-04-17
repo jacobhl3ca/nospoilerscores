@@ -27,7 +27,7 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   transition: background-color 0.2s, color 0.2s;
 }
 
@@ -70,6 +70,10 @@ body {
 .monkey-toggle {
   box-shadow: 0 0 0 0px var(--accent);
   transition: box-shadow 0.2s, background 0.2s;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+.emoji {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 .monkey-toggle:hover {
   box-shadow: 0 0 0 2px var(--accent);

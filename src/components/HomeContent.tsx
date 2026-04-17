@@ -225,7 +225,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <header className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)" }}>
+      <header className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
         <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
           <a href="/" className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0" style={{ color: "var(--text)" }}>
             <span className="hidden sm:inline text-lg font-bold tracking-tight">HideScore</span>
@@ -265,7 +265,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             )}
             <button
               onClick={handleMonkeyClick}
-              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer text-sm sm:text-lg"
+              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
               style={{
                 background: "var(--bg-card)",
                 border: "1px solid var(--border)",
@@ -279,7 +279,15 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               }}
               title={prefs.showRatings ? "Hide ratings & sort chronologically" : "Show ratings & sort by best games"}
             >
-              {prefs.showRatings ? "\u{1F649}" : "\u{1F648}"}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={prefs.showRatings ? "/monkey-hear-no-evil.svg" : "/monkey-see-no-evil.svg"}
+                alt={prefs.showRatings ? "Hide ratings" : "Show ratings"}
+                width={20}
+                height={20}
+                className="w-4 h-4 sm:w-5 sm:h-5"
+                draggable={false}
+              />
             </button>
             {/* Funnel/sort button removed — monkey now controls both ratings + sort */}
             <div className="relative">
@@ -403,10 +411,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         )}
       </main>
 
-      <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+      <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}>
         <span>Catch up on games without spoilers.</span>
         {/* <span>Select {"\u{1F648}"} to rank by closest games.</span> */}
-        <span>Select {"\u{1F648}"} to show ratings and sort by top records.</span>
+        <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         {/* <span>Live and future games ranked by competitiveness and top teams.</span> */}
         {/* BACKUP — expanded footer copy to revisit later:
         <span style={{ fontSize: "0.8rem", fontWeight: 500 }}>Watch games like they&apos;re live — even when they&apos;re not.</span>
@@ -455,7 +463,13 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-center text-3xl mb-2">{"\u26A0\uFE0F"}</div>
+            <div className="flex justify-center mb-2">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="warning">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
             <h3 className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>Show Game Ratings?</h3>
             {/* Previous wording (finished games only):
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>

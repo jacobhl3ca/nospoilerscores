@@ -174,7 +174,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     !isTBD ? (
       <button
         onClick={(e) => { e.stopPropagation(); onToggleFavoriteTeam(teamId); }}
-        className={`text-[10px] sm:text-xs transition-colors cursor-pointer ${isFav ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+        className={`text-xs sm:text-sm leading-none transition-colors cursor-pointer ${isFav ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
         style={isFav ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
         title={isFav ? "Remove from favorites" : "Add to favorites"}
       >★</button>
@@ -182,9 +182,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
 
   const logo = (team: typeof game.awayTeam, isTBD: boolean) =>
     isTBD ? (
-      <span className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-xs rounded" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>
+      <span className="w-4 h-4 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-xs rounded" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>
     ) : (
-      <img src={team.logo} alt={team.abbreviation} width={24} height={24} className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
+      <img src={team.logo} alt={team.abbreviation} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
     );
 
   return (
@@ -225,7 +225,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   {localTime ? ` - ${localTime}` : ""}
                 </span>
               ) : isFuture ? (
-                <span className="text-[11px]">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
+                <span className="text-[11px] whitespace-nowrap">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
               ) : null}
             </span>
             <span>
@@ -257,31 +257,29 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       })()}
 
       {/* Teams */}
-      <div className="grid gap-y-0.5 items-center" style={{ gridTemplateColumns: "auto 1fr auto" }}>
-        {logo(game.awayTeam, awayTBD)}
-        <span className="team-name-container flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
-          {useAbbreviations ? (
-            <span className="text-xs" style={{ color: "var(--text)" }}>{game.awayTeam.abbreviation}</span>
-          ) : (
-            <span className="text-sm truncate team-name" style={{ color: "var(--text)" }}>{game.awayTeam.shortDisplayName}</span>
-          )}
-          {star(game.awayTeam.id, favoriteTeams.includes(game.awayTeam.id), awayTBD)}
-        </span>
-        {!awayTBD && game.awayTeam.record && !isPastDate ? (
-          <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.awayTeam.record})</span>
-        ) : <span />}
-        {logo(game.homeTeam, homeTBD)}
-        <span className="team-name-container flex items-center gap-1 xl:gap-1.5 pl-2 xl:pl-3 min-w-0">
-          {useAbbreviations ? (
-            <span className="text-xs" style={{ color: "var(--text)" }}>{game.homeTeam.abbreviation}</span>
-          ) : (
-            <span className="text-sm truncate team-name" style={{ color: "var(--text)" }}>{game.homeTeam.shortDisplayName}</span>
-          )}
-          {star(game.homeTeam.id, favoriteTeams.includes(game.homeTeam.id), homeTBD)}
-        </span>
-        {!homeTBD && game.homeTeam.record && !isPastDate ? (
-          <span className="text-[10px] sm:text-xs tabular-nums text-right pl-1" style={{ color: "var(--text-muted)" }}>({game.homeTeam.record})</span>
-        ) : <span />}
+      <div className="flex flex-col gap-y-0.5">
+        {[
+          { team: game.awayTeam, isTBD: awayTBD },
+          { team: game.homeTeam, isTBD: homeTBD },
+        ].map(({ team, isTBD }) => (
+          <div key={team.id || team.abbreviation} className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+            <span className="shrink-0">{logo(team, isTBD)}</span>
+            <span className="team-name-container flex items-center shrink-0">
+              {useAbbreviations ? (
+                <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }}>{team.abbreviation}</span>
+              ) : (
+                <span className="text-sm whitespace-nowrap leading-none team-name" style={{ color: "var(--text)" }}>{team.shortDisplayName}</span>
+              )}
+            </span>
+            <span className="shrink-0 flex items-center">
+              {star(team.id, favoriteTeams.includes(team.id), isTBD)}
+            </span>
+            <span className="flex-1 min-w-0" />
+            {!isTBD && team.record && !isPastDate ? (
+              <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>
+            ) : null}
+          </div>
+        ))}
       </div>
 
       {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}

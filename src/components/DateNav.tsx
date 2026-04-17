@@ -29,6 +29,12 @@ function formatDayName(yyyymmdd: string): string {
   });
 }
 
+function formatDayShort(yyyymmdd: string): string {
+  const d = parseYMD(yyyymmdd);
+  const dow = d.toLocaleDateString("en-US", { weekday: "short" });
+  return `${dow} ${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 // Get current date in ET (America/New_York), shifted so the "day" doesn't roll
 // over until 1AM ET. This keeps late-night games on "today" instead of jumping
 // to "yesterday" at midnight.
@@ -190,12 +196,12 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
 
   const dateButtons = [
     isBefore
-      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayName(selectedDate) }
-      : { date: yesterday, label: "Yesterday", shortLabel: "Yst" },
+      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayShort(selectedDate) }
+      : { date: yesterday, label: "Yesterday", shortLabel: "Yest" },
     { date: today, label: "Today", shortLabel: "Today" },
     isAfter
-      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayName(selectedDate) }
-      : { date: tomorrow, label: "Tomorrow", shortLabel: "Tmrw" },
+      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayShort(selectedDate) }
+      : { date: tomorrow, label: "Tomorrow", shortLabel: "Tomo" },
   ];
 
   const goEarlier = () => {

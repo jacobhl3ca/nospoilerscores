@@ -23,8 +23,8 @@ interface LeagueColumnProps {
 }
 
 // 2025-26 season playoff start dates (update each season)
-const PLAYOFF_START_DATES: Record<string, { date: string; label: string }> = {
-  nba: { date: "2026-04-19", label: "Playoffs" },
+const PLAYOFF_START_DATES: Record<string, { date: string; label: string; preDate?: string; preEndDate?: string; preLabel?: string }> = {
+  nba: { date: "2026-04-18", label: "Playoffs", preDate: "2026-04-14", preEndDate: "2026-04-17", preLabel: "Play-in" },
   nhl: { date: "2026-04-18", label: "Playoffs" },
   mlb: { date: "2026-10-06", label: "Postseason" },
   nfl: { date: "2027-01-09", label: "Playoffs" },
@@ -60,6 +60,18 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
     return { tiers: [text] };
   }
 
+  // Only flag the pre-playoff window (e.g. NBA play-in) DURING the window itself.
+  // Outside it, fall through to the regular "playoffs start" countdown.
+  if (config.preDate && config.preEndDate && config.preLabel) {
+    const [py, pm, pd] = config.preDate.split("-").map(Number);
+    const [ey, em, ed] = config.preEndDate.split("-").map(Number);
+    const preDate = new Date(py, pm - 1, pd);
+    const preEndDate = new Date(ey, em - 1, ed);
+    if (viewDate.getTime() >= preDate.getTime() && viewDate.getTime() <= preEndDate.getTime()) {
+      return { tiers: [`${config.preLabel} tournament`, config.preLabel] };
+    }
+  }
+
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
   if (days > 30) return null; // only show within 1 month
   const dd = playoffDate.getDate();
@@ -88,7 +100,20 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
     const el = ref.current;
     if (!el) return;
     requestAnimationFrame(() => {
-      if (el.scrollWidth > el.clientWidth + 1 && tierIdx < tiers.length - 1) {
+      // italic letters overhang their layout box — scrollWidth measures the layout
+      // box, not the rendered ink, so a visually-clipped trailing ")" doesn't show
+      // up as overflow. Re-measure the text width via a hidden probe with the same
+      // font, and compare to the container's content width.
+      const cs = getComputedStyle(el);
+      const probe = document.createElement("span");
+      probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font};font-style:${cs.fontStyle};`;
+      probe.textContent = el.textContent || "";
+      document.body.appendChild(probe);
+      const textPx = probe.getBoundingClientRect().width;
+      document.body.removeChild(probe);
+      const padX = parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+      const available = el.clientWidth - padX;
+      if (textPx > available - 2 && tierIdx < tiers.length - 1) {
         setTierIdx(tierIdx + 1);
       }
     });
@@ -106,7 +131,7 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
   return (
     <span
       ref={ref}
-      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center"
+      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5"
       style={{ color: tiers.length ? "var(--text-muted)" : "transparent" }}
     >
       {tiers.length ? tiers[tierIdx] : "\u00A0"}
@@ -208,10 +233,24 @@ export default function LeagueColumn({
       ]);
       if (!allNames.length) return;
 
-      // Measure available width from the first name container
+      // The name container's own row holds: logo + name + star + spacer + record.
+      // Available width for the name = row width - everything-else. Read everything-else
+      // from siblings of the first name container so the math stays in sync with the layout.
       const container = nameContainers[0] as HTMLElement;
-      // Available width = container width minus star button (~18px) minus gap (4px)
-      const availableWidth = container.clientWidth - 22;
+      const row = container.parentElement;
+      if (!row) return;
+      const rowWidth = row.clientWidth;
+      let occupied = 0;
+      for (const child of Array.from(row.children)) {
+        if (child === container) continue;
+        // Skip the empty flex spacer — its width *is* the slack the name could grow into
+        const el = child as HTMLElement;
+        if (!el.textContent?.trim() && !el.querySelector("img,svg,button")) continue;
+        occupied += el.getBoundingClientRect().width;
+      }
+      const gapPx = parseFloat(getComputedStyle(row).columnGap || getComputedStyle(row).gap || "0") || 0;
+      const totalGaps = gapPx * (row.children.length - 1);
+      const availableWidth = rowWidth - occupied - totalGaps - 4; // 4px safety
 
       // Measure longest name using a hidden span
       const probe = document.createElement("span");
