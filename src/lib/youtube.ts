@@ -94,9 +94,16 @@ export function getGolfHighlightUrl(label: string, round: number, year: number):
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(getGolfHighlightQuery(label, round, year))}`;
 }
 
+export function getApiBase(): string {
+  if (typeof window === "undefined") return "";
+  const proto = window.location.protocol;
+  if (proto === "capacitor:" || proto === "file:") return "https://hidescore.com";
+  return "";
+}
+
 export async function fetchFirstVideoId(query: string, channel?: string): Promise<string | null> {
   try {
-    let url = `/api/youtube?q=${encodeURIComponent(query)}`;
+    let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
     const res = await fetch(url);
     if (!res.ok) return null;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getApiBase } from "@/lib/youtube";
 
 interface VideoModalProps {
   videoId: string;
@@ -66,7 +67,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
       failedIdsRef.current = failed;
       try {
         const res = await fetch(
-          `/api/youtube?q=${encodeURIComponent(q)}&exclude=${encodeURIComponent(failed.join(","))}`
+          `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${encodeURIComponent(failed.join(","))}`
         );
         if (res.ok) {
           const data = await res.json();
