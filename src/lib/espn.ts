@@ -208,7 +208,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   mls:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
-  tennis: { multiplier: 8,   overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 3 },
+  tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
 };
 
 // Calculate running margin from linescores: average absolute margin across all periods
@@ -317,7 +317,7 @@ function calculateRating(game: any): number | null {
     lowScoringPenalty = (2 - total) * 25; // 0 goals: -50, 1 goal: -25
   }
 
-  return Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus - lowScoringPenalty));
+  return Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus - lowScoringPenalty)));
 }
 
 function parseGame(event: any, sport: Sport): Game {
