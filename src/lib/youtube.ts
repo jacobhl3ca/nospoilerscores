@@ -34,9 +34,9 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // only used for The Open since R&A licenses there.
 const SECONDARY_CHANNELS: Record<string, string[]> = {
   golf_masters: ["ESPN", "PGA TOUR", "Golf Channel"],
-  "golf_pga champ": ["ESPN", "PGA TOUR", "Golf Channel"],
-  "golf_us open": ["ESPN", "PGA TOUR", "Golf Channel"],
-  "golf_the open": ["ESPN", "Sky Sports Golf", "Golf Channel"],
+  golf_pgachamp: ["ESPN", "PGA TOUR", "Golf Channel"],
+  golf_usopen: ["ESPN", "PGA TOUR", "Golf Channel"],
+  golf_theopen: ["ESPN", "Sky Sports Golf", "Golf Channel"],
 };
 
 export function getYouTubeSearchUrl(
@@ -72,7 +72,7 @@ export function getOfficialChannelName(sport: string, label?: string): string | 
 // options — caller should drop straight to a generic search.
 export function getSecondaryChannels(sport: string, label?: string): string[] {
   if (label) {
-    const labelKey = `${sport}_${label.toLowerCase()}`;
+    const labelKey = `${sport}_${label.toLowerCase().replace(/\s+/g, "")}`;
     if (SECONDARY_CHANNELS[labelKey]) return SECONDARY_CHANNELS[labelKey];
   }
   return [];
