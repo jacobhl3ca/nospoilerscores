@@ -51,7 +51,7 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   const y = +selectedDate.slice(0, 4);
   const m = +selectedDate.slice(4, 6) - 1;
   const d = +selectedDate.slice(6, 8);
-  const viewDate = new Date(y, m, d);
+  const viewDate = new Date(y, m, d, 12, 0, 0); // noon to match playoffDate
   const playoffDate = new Date(config.date + "T12:00:00");
   const diff = playoffDate.getTime() - viewDate.getTime();
 
@@ -69,8 +69,8 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   if (config.preDate && config.preEndDate && config.preLabel) {
     const [py, pm, pd] = config.preDate.split("-").map(Number);
     const [ey, em, ed] = config.preEndDate.split("-").map(Number);
-    const preDate = new Date(py, pm - 1, pd);
-    const preEndDate = new Date(ey, em - 1, ed);
+    const preDate = new Date(py, pm - 1, pd, 12, 0, 0);
+    const preEndDate = new Date(ey, em - 1, ed, 12, 0, 0);
     if (viewDate.getTime() >= preDate.getTime() && viewDate.getTime() <= preEndDate.getTime()) {
       return { tiers: [`${config.preLabel} tournament`, config.preLabel] };
     }

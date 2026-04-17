@@ -196,7 +196,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     isTBD ? (
       <span className="w-4 h-4 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-xs rounded" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>
     ) : (
-      <img src={team.logo} alt={team.abbreviation} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
+      <img src={team.logo} alt={team.abbreviation} title={team.displayName} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
     );
 
   return (
@@ -278,9 +278,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             <span className="shrink-0">{logo(team, isTBD)}</span>
             <span className="team-name-container flex items-center shrink-0">
               {useAbbreviations ? (
-                <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }}>{team.abbreviation}</span>
+                <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }} title={team.displayName}>{team.abbreviation}</span>
               ) : (
-                <span className="text-sm whitespace-nowrap leading-none team-name" style={{ color: "var(--text)" }}>{team.shortDisplayName}</span>
+                <span className="text-sm whitespace-nowrap leading-none team-name" style={{ color: "var(--text)" }} title={team.displayName}>{team.shortDisplayName}</span>
               )}
             </span>
             <span className="shrink-0 flex items-center">
