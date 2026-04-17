@@ -55,13 +55,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     const loaded = loadPreferences();
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      if (params.has("f") || params.has("l") || params.has("fl")) {
+      if (params.has("f") || params.has("l") || params.has("fl") || params.has("t")) {
         // Support new compact format (f=m1.n15&l=m.n) and old format (f=mlb-1,mlb-2&fl=mlb,nba)
         const oldTeams = params.get("f")?.includes("-") ? params.get("f")!.split(",").filter(Boolean) : null;
         const oldLeagues = params.get("fl")?.split(",").filter(Boolean) as Sport[] | null;
         const decoded = decodeFavorites(params);
         loaded.favoriteTeams = oldTeams ?? decoded.teams ?? loaded.favoriteTeams;
         loaded.favoriteLeagues = oldLeagues ?? decoded.leagues ?? loaded.favoriteLeagues;
+        if (decoded.thirdLeague) loaded.thirdLeague = decoded.thirdLeague;
         savePreferences(loaded);
         window.history.replaceState({}, "", window.location.pathname);
       }
@@ -150,7 +151,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   }, [prefs.showRatings]);
 
   const shareFavorites = () => {
-    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues);
+    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues, prefs.thirdLeague);
     const url = `${window.location.origin}?${params.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
       setShowShareCopied(true);
@@ -180,7 +181,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   };
 
   const copyFavLink = () => {
-    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues);
+    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues, prefs.thirdLeague);
     const url = `${window.location.origin}?${params.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
       setFavToastCopied(true);

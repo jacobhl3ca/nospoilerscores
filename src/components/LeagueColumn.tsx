@@ -424,7 +424,7 @@ export default function LeagueColumn({
                 {swapOpen && (
                   <div
                     className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[100px]"
-                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                    style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                   >
                     {/* Auto option — reset to default */}
                     {selectedThirdLeague && (

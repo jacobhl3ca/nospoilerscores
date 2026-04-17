@@ -841,11 +841,8 @@ export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): 
       ?? extraResults.filter((r): r is LeagueData => r !== null)[0]
       ?? null;
 
-    const selected = [...selectedFirstPref, ...autoSlots];
-    if (userLeague) selected.push(userLeague);
-
-    // Display order: longest-active leftmost, newest rightmost
-    return selected.sort(
+    // Sort only auto slots (positions 1-2) — user's choice always goes last (position 3)
+    const autoSelected = [...selectedFirstPref, ...autoSlots].sort(
       (a, b) =>
         daysSinceSeasonStart(
           ALL_LEAGUES.find((l) => l.sport === b.sport && l.label === b.label)!,
@@ -856,6 +853,8 @@ export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): 
           viewDate
         )
     );
+    if (userLeague) autoSelected.push(userLeague);
+    return autoSelected;
   }
 
   const selectedRest = restResults

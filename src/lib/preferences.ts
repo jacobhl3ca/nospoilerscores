@@ -24,20 +24,23 @@ function decodeTeamId(short: string): string {
 }
 
 // Encode: ["mlb-1","nba-15"] → "m1.n15"
-export function encodeFavorites(teams: string[], leagues: Sport[]): URLSearchParams {
+export function encodeFavorites(teams: string[], leagues: Sport[], thirdLeague?: Sport): URLSearchParams {
   const params = new URLSearchParams();
   if (teams.length > 0) params.set("f", teams.map(encodeTeamId).join("."));
   if (leagues.length > 0) params.set("l", leagues.map((s) => SPORT_TO_SHORT[s] ?? s).join("."));
+  if (thirdLeague) params.set("t", SPORT_TO_SHORT[thirdLeague] ?? thirdLeague);
   return params;
 }
 
 // Decode: "m1.n15" → ["mlb-1","nba-15"]
-export function decodeFavorites(params: URLSearchParams): { teams?: string[]; leagues?: Sport[] } {
-  const result: { teams?: string[]; leagues?: Sport[] } = {};
+export function decodeFavorites(params: URLSearchParams): { teams?: string[]; leagues?: Sport[]; thirdLeague?: Sport } {
+  const result: { teams?: string[]; leagues?: Sport[]; thirdLeague?: Sport } = {};
   const f = params.get("f");
   const l = params.get("l");
+  const t = params.get("t");
   if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
+  if (t) result.thirdLeague = SHORT_TO_SPORT[t];
   return result;
 }
 
