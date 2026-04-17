@@ -199,16 +199,16 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   scoringDivisor: number;   // normalizes scoring bonus per sport
   regulationPeriods: number; // normal period count (innings for MLB)
 }> = {
-  mlb:    { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,  regulationPeriods: 9 },
-  nba:    { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40, regulationPeriods: 4 },
-  ncaam:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30, regulationPeriods: 2 },
-  nhl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 2,  regulationPeriods: 3 },
-  nfl:    { multiplier: 6,   overtimeBonus: 15, scoringDivisor: 10, regulationPeriods: 4 },
-  fifa:   { multiplier: 30,  overtimeBonus: 25, scoringDivisor: 1,  regulationPeriods: 2 },
-  epl:    { multiplier: 30,  overtimeBonus: 20, scoringDivisor: 1,  regulationPeriods: 2 },
-  mls:    { multiplier: 30,  overtimeBonus: 20, scoringDivisor: 1,  regulationPeriods: 2 },
-  golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,  regulationPeriods: 4 },
-  tennis: { multiplier: 8,   overtimeBonus: 15, scoringDivisor: 5,  regulationPeriods: 3 },
+  mlb:    { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,   regulationPeriods: 9 },
+  nba:    { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40,  regulationPeriods: 4 },
+  ncaam:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 2 },
+  nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
+  nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
+  fifa:   { multiplier: 22,  overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  mls:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
+  tennis: { multiplier: 8,   overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 3 },
 };
 
 // Calculate running margin from linescores: average absolute margin across all periods
@@ -265,10 +265,10 @@ function calculateRating(game: any): number | null {
   const sport = game._sport as Sport;
   const config = SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba;
 
-  // --- Factor 1: Final margin closeness (35%) ---
+  // --- Factor 1: Final margin closeness (45%) ---
   const finalCloseness = Math.max(0, 100 - diff * config.multiplier);
 
-  // --- Factor 2: Running margin throughout game (30%) ---
+  // --- Factor 2: Running margin throughout game (35%) ---
   // Average margin across all periods — rewards games that were close throughout
   // even if the final margin is large
   const runningMargin = calcRunningMargin(competitors);
@@ -281,7 +281,7 @@ function calculateRating(game: any): number | null {
     runningCloseness = finalCloseness;
   }
 
-  // --- Factor 3: Close entering final period (15%) ---
+  // --- Factor 3: Close entering final period (20%) ---
   // Games within striking distance at end are more watchable
   const fpMargin = calcFinalPeriodMargin(competitors);
   let finalPeriodCloseness: number;
@@ -307,11 +307,17 @@ function calculateRating(game: any): number | null {
   // The bigger the deficit overcome and the closer the final, the bigger the bonus
   let comebackBonus = 0;
   if (fpMargin !== null && fpMargin > diff) {
-    const deficitErased = fpMargin - diff; // how many points/runs were clawed back
-    comebackBonus = Math.min(deficitErased * config.multiplier * 0.4, 20);
+    const deficitErased = fpMargin - diff;
+    comebackBonus = Math.min(deficitErased * config.multiplier * 0.4, 30);
   }
 
-  return Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus));
+  // Low-scoring penalty for soccer: a 0-0 draw isn't exciting regardless of "closeness"
+  let lowScoringPenalty = 0;
+  if ((sport === "epl" || sport === "mls" || sport === "fifa") && total < 2) {
+    lowScoringPenalty = (2 - total) * 25; // 0 goals: -50, 1 goal: -25
+  }
+
+  return Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus - lowScoringPenalty));
 }
 
 function parseGame(event: any, sport: Sport): Game {
