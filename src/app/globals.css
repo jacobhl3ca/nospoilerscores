@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 .league-sticky-top {
-  top: calc(env(safe-area-inset-top, 0px) + 3.75rem);
+  top: var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem));
 }
 @media (min-width: 640px) {
   .league-sticky-top {
-    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
+    top: var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem));
   }
 }
 

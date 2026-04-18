@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
@@ -245,9 +245,25 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return 0;
   });
 
+  const headerRef = useRef<HTMLElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const root = rootRef.current;
+    if (!header || !root) return;
+    const measure = () => {
+      const h = header.getBoundingClientRect().height;
+      root.style.setProperty("--header-h", `${h}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(header);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <header className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
+    <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      <header ref={headerRef} className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
         <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
           <a href="/" className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0" style={{ color: "var(--text)" }}>
             <span className="hidden sm:inline text-lg font-bold tracking-tight">HideScore</span>
