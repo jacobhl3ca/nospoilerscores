@@ -402,7 +402,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             {[1, 2, 3].map((i) => (
               <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
-                  <div className="h-[18px] sm:h-5 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
+                  <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
                   <span className="text-[9px] sm:text-[10px] italic mt-0.5 block" style={{ color: "transparent" }}>{"\u00A0"}</span>
                 </div>
                 {[1, 2, 3, 4].map((j) => (
