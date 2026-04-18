@@ -41,11 +41,15 @@ const PLAYOFF_START_DATES: Record<string, { date: string; label: string; preDate
 // Extract short round name from ESPN's long headline
 // e.g. "NCAA Men's Basketball Championship - National Championship" → "National Championship"
 // e.g. "ALWC - Game 2" → "AL Wild Card · Game 2"
+// ESPN sometimes tacks on "Nth Seed Game" as the last segment — strip that so we
+// surface the real round/game label instead.
 function shortenPlayoffLabel(headline: string): string {
-  // Take everything after the last " - " separator
-  const parts = headline.split(" - ");
-  const round = parts[parts.length - 1].trim();
-  return round;
+  const parts = headline
+    .split(" - ")
+    .map(p => p.trim())
+    .filter(p => p && !/^\d+(?:st|nd|rd|th)?\s+seed\s+game$/i.test(p));
+  if (!parts.length) return headline.trim();
+  return parts[parts.length - 1];
 }
 
 function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): { tiers: string[] } | null {
