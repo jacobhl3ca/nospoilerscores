@@ -322,6 +322,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   );
                 };
                 if (game.broadcasts.length > 1) {
+                  // When the overlay is open, hide the inline row so it
+                  // doesn't bleed through behind the expanded list.
+                  if (broadcastExpanded) return null;
                   return (
                     <span className="text-[10px] sm:text-xs">
                       {networkLink(game.broadcasts[0], 0)}
@@ -352,8 +355,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           on the team rows. Click × to collapse back to "+N". */}
       {broadcastExpanded && game.broadcasts.length > 1 && (
         <div
-          className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 rounded-md px-1.5 py-1 max-w-[60%] shadow-sm"
-          style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)" }}
+          className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 rounded-md px-1.5 py-1 max-w-[65%] shadow-md"
+          style={{ background: "var(--bg)", border: "1px solid var(--border-hover)" }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start gap-1.5">

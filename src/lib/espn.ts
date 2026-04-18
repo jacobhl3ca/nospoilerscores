@@ -1059,6 +1059,18 @@ export async function fetchTeamSchedule(
       const data = await res.json();
       const events = data.events ?? data.team?.events ?? [];
       for (const e of events) {
+        // Team-schedule events nest status inside competitions[0] and omit
+        // the flat competitor.team.logo that scoreboard returns. Reshape to
+        // match the scoreboard shape so the shared parseGame works.
+        const comp = (e.competitions ?? [])[0] ?? {};
+        if (!e.status || !e.status.type) e.status = comp.status ?? {};
+        for (const c of comp.competitors ?? []) {
+          const t = c.team;
+          if (t && !t.logo && Array.isArray(t.logos)) {
+            const primary = t.logos.find((l: { rel?: string[] }) => l.rel?.includes("default")) ?? t.logos[0];
+            if (primary?.href) t.logo = primary.href;
+          }
+        }
         const statusName = e.status?.type?.name ?? "";
         if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) continue;
         const seasonType = e.season?.type ?? 0;
