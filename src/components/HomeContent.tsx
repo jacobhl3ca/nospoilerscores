@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
@@ -245,9 +245,20 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return 0;
   });
 
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerH, setHeaderH] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeaderH(el.offsetHeight));
+    ro.observe(el);
+    setHeaderH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <header className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)", "--header-h": `${headerH}px` } as React.CSSProperties}>
+      <header ref={headerRef} className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
         <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
           <a href="/" className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0" style={{ color: "var(--text)" }}>
             <span className="hidden sm:inline text-lg font-bold tracking-tight">HideScore</span>
@@ -351,7 +362,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
       <main className="max-w-6xl mx-auto px-4 py-6 flex-1 w-full">
         {loading ? (
-          <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
+          <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="h-6 w-16 mx-auto mb-3 rounded" style={{ background: "var(--bg-card)" }} />
@@ -406,7 +417,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
             if (showFinalSplit) {
               return (
-                <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
+                <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                   {sortedLeagues.map((league, idx) => (
                     <LeagueColumn
                       key={league.sport}
@@ -426,7 +437,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             }
 
             return (
-              <div className="flex flex-row justify-center items-start gap-2 sm:gap-4">
+              <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                 {sortedLeagues.map((league, idx) => (
                   <LeagueColumn
                     key={league.sport}
