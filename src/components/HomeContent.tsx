@@ -55,6 +55,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     const loaded = loadPreferences();
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
+      const sharedVideoId = params.get("v");
       if (params.has("f") || params.has("l") || params.has("fl") || params.has("t")) {
         // Support new compact format (f=m1.n15&l=m.n) and old format (f=mlb-1,mlb-2&fl=mlb,nba)
         const oldTeams = params.get("f")?.includes("-") ? params.get("f")!.split(",").filter(Boolean) : null;
@@ -64,7 +65,13 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         loaded.favoriteLeagues = oldLeagues ?? decoded.leagues ?? loaded.favoriteLeagues;
         if (decoded.thirdLeague) loaded.thirdLeague = decoded.thirdLeague;
         savePreferences(loaded);
-        window.history.replaceState({}, "", window.location.pathname);
+        const keep = new URLSearchParams();
+        if (sharedVideoId) keep.set("v", sharedVideoId);
+        const qs = keep.toString();
+        window.history.replaceState({}, "", qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+      }
+      if (sharedVideoId) {
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: "" });
       }
     }
     // Before noon ET: always start with ratings hidden (don't persist — just override for this session)
@@ -83,6 +90,30 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, [prefs.theme]);
+
+  const openVideoModal = useCallback((videoId: string, fallbackUrl: string) => {
+    setVideoModal({ videoId, fallbackUrl });
+    const params = new URLSearchParams(window.location.search);
+    params.set("v", videoId);
+    window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
+  }, []);
+
+  const closeVideoModal = useCallback(() => {
+    setVideoModal(null);
+    if (typeof window !== "undefined" && window.history.state?.videoModal) {
+      window.history.back();
+    }
+  }, []);
+
+  // Sync modal with browser back/forward — close if ?v disappears from URL
+  useEffect(() => {
+    const handler = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has("v")) setVideoModal(null);
+    };
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
 
   const fetchData = useCallback(async (date: string, thirdLeague?: Sport) => {
     setLoading(true);
@@ -413,7 +444,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               isPastDate: isPast,
               isToday,
               sortByMatchups: prefs.showRatings,
-              onPlayHighlight: (videoId: string, fallbackUrl: string) => setVideoModal({ videoId, fallbackUrl }),
+              onPlayHighlight: openVideoModal,
               selectedDate,
             };
             // Determine which leagues are in slots 1-2 (auto) vs slot 3 (swappable)
@@ -589,7 +620,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         <VideoModal
           videoId={videoModal.videoId}
           fallbackUrl={videoModal.fallbackUrl}
-          onClose={() => setVideoModal(null)}
+          onClose={closeVideoModal}
         />
       )}
     </div>
