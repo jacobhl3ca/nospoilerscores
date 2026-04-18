@@ -423,35 +423,63 @@ async function fetchWithRetry(url: string, retries = 1, timeoutMs = 10000): Prom
   throw new Error("Fetch failed");
 }
 
-// Build stream deep link for a game based on broadcast + sport
-function buildStreamUrl(game: Game): string | null {
-  const broadcast = game.broadcasts[0]?.toLowerCase() ?? "";
-  const gameId = game.id;
+// Per-sport streamer landing — last-resort destination so the live link
+// always lands on a place to *watch*, never on a score-revealing gamecast.
+export function sportStreamFallback(sport: Sport): string {
+  switch (sport) {
+    case "nba": return "https://www.nba.com/watch";
+    case "ncaam": return "https://www.espn.com/watch/";
+    case "nfl": return "https://www.nfl.com/plus/";
+    case "nhl": return "https://www.nhl.com/tv";
+    case "mlb": return "https://www.mlb.com/tv";
+    case "mls": return "https://tv.apple.com/us/sports/mls";
+    case "epl": return "https://www.peacocktv.com/";
+    case "fifa": return "https://www.foxsports.com/live";
+    case "tennis": return "https://www.tennischannel.com/";
+    case "golf": return "https://www.pgatour.com/live";
+  }
+}
 
+// Map a single broadcast/network name to its streaming destination.
+// Returns null if unknown so caller can try the next broadcast or fall back.
+export function networkStreamUrl(broadcast: string, gameId: string): string | null {
+  const b = broadcast.toLowerCase().trim();
+  if (!b) return null;
   // ESPN family — deep link to specific game stream
-  if (broadcast.includes("espn") || broadcast === "abc") {
-    return `https://www.espn.com/watch/player/_/id/${gameId}`;
-  }
-  // FOX family — deep link includes event ID in some cases, but no public pattern; use live page
-  if (broadcast === "fox" || broadcast === "fs1" || broadcast === "fs2") {
-    return "https://www.foxsports.com/live";
-  }
-  // TNT/TBS/TruTV → Max live TV
-  if (broadcast === "tnt" || broadcast === "tbs" || broadcast === "trutv") {
-    return "https://www.max.com/live-tv";
-  }
-  // NBC/Peacock
-  if (broadcast === "nbc" || broadcast === "usa" || broadcast === "peacock") {
-    return "https://www.peacocktv.com/";
-  }
-  // Sport-specific streaming services (handled by enrichment functions below)
-  // NBA TV, MLB.tv, NHL Network — these get deep links via sport-specific APIs
-  if (broadcast === "nba tv") return "https://www.nba.com/watch/";
-  if (broadcast === "nhl network") return "https://www.nhl.com/tv";
-  // MLB.tv / MLB Network — fallback if enrichment didn't set streamUrl
-  if (broadcast === "mlb.tv" || broadcast === "mlb network") return "https://www.mlb.com/tv";
-
+  if (b.includes("espn") || b === "abc") return `https://www.espn.com/watch/player/_/id/${gameId}`;
+  // FOX family
+  if (b === "fox" || b === "fs1" || b === "fs2" || b === "fox deportes") return "https://www.foxsports.com/live";
+  // WBD → Max
+  if (b === "tnt" || b === "tbs" || b === "trutv" || b === "max") return "https://play.max.com/live";
+  // NBCU → Peacock (incl. Golf Channel which streams there)
+  if (b === "nbc" || b === "usa" || b === "peacock" || b === "nbc sports" || b === "golf channel") return "https://www.peacocktv.com/";
+  // CBS / Paramount+
+  if (b === "cbs" || b === "cbssn" || b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
+  // Amazon Prime Video
+  if (b === "amazon prime" || b === "prime video" || b === "amazon") return "https://www.amazon.com/gp/video/storefront";
+  // Apple TV+ (MLS Season Pass primarily)
+  if (b === "apple tv+" || b === "apple tv") return "https://tv.apple.com/us/sports/mls";
+  // YouTube TV / NFL Sunday Ticket
+  if (b === "youtube tv" || b === "nfl sunday ticket" || b === "youtube") return "https://tv.youtube.com/";
+  // League-specific networks
+  if (b === "nfl network" || b === "nfl+") return "https://www.nfl.com/plus/";
+  if (b === "nba tv") return "https://www.nba.com/watch";
+  if (b === "nhl network") return "https://www.nhl.com/tv";
+  if (b === "mlb.tv" || b === "mlb network") return "https://www.mlb.com/tv";
+  if (b === "tennis channel") return "https://www.tennischannel.com/";
+  // Masters-only streamer — already added during golf broadcast enrichment
+  if (b === "masters.com") return "https://www.masters.com/en_US/watch/index.html";
   return null;
+}
+
+// Build stream link for a game. Prefers a known broadcast → streamer mapping,
+// falling back to the per-sport streamer landing so the result is never null.
+function buildStreamUrl(game: Game): string {
+  for (const broadcast of game.broadcasts) {
+    const url = networkStreamUrl(broadcast, game.id);
+    if (url) return url;
+  }
+  return sportStreamFallback(game.sport);
 }
 
 // MLB Stats API: fetch gamePk values for a date, keyed by home team abbreviation
@@ -697,11 +725,15 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     }
   }
 
-  // ESPN tournament leaderboard URL — used for the live link wrapping the
-  // status text (parity with team-sport game cards which link to the gamecast).
-  const leaderboardUrl = event.id
-    ? `https://www.espn.com/golf/leaderboard?tournamentId=${event.id}`
-    : "https://www.espn.com/golf/leaderboard";
+  // Live-link destination — pick the first known broadcast's streamer, or
+  // fall back to PGA Tour Live. Never link to the ESPN leaderboard, which
+  // would defeat the no-spoiler experience by exposing live scores.
+  let streamUrl: string | undefined;
+  for (const broadcast of broadcasts) {
+    const url = networkStreamUrl(broadcast, event.id ?? "");
+    if (url) { streamUrl = url; break; }
+  }
+  if (!streamUrl) streamUrl = sportStreamFallback("golf");
 
   return {
     name: event.name ?? "",
@@ -714,7 +746,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     roundStatus,
     startDate: tournamentLabel?.startDate,
     eventDate: event.date ?? competition.date ?? undefined,
-    leaderboardUrl,
+    streamUrl,
   };
 }
 
@@ -759,7 +791,7 @@ export async function fetchGames(
       const homeAbbrev = espnToMlbAbbrev(game.homeTeam.abbreviation);
       const gamePk = mlbPks.get(`${awayAbbrev}@${homeAbbrev}`);
       if (gamePk) {
-        game.streamUrl = `https://www.mlb.com/gameday/${gamePk}`;
+        game.streamUrl = `https://www.mlb.com/tv/g${gamePk}`;
       }
     }
   }

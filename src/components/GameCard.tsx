@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
+import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
 import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
 
 interface GameCardProps {
@@ -111,8 +112,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
-  const espnUrl = game.recapUrl || null;
-  const liveUrl = game.streamUrl || espnUrl;
+  const liveUrl = game.streamUrl;
   const localTime = isFuture ? (() => {
     const cleaned = cleanStatusDetail(game.statusDetail, true);
     // ESPN returns "Scheduled" with no time for some leagues (EPL, MLS) — derive from game.date
@@ -244,25 +244,57 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               {hasRating && <RatingBadge rating={game.rating!} />}
             </span>
             <span className="truncate text-right">
-              {hasBroadcast && (
-                game.broadcasts.length > 1 ? (
-                  <span
-                    className="text-[10px] sm:text-xs cursor-pointer hover:underline transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                    title={!broadcastExpanded ? game.broadcasts.join(", ") : undefined}
-                    onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(!broadcastExpanded); }}
-                  >
-                    {broadcastExpanded ? game.broadcasts.join(" · ") : game.broadcasts[0]}
+              {hasBroadcast && (() => {
+                const networkLink = (name: string, key: string | number) => {
+                  const href = networkStreamUrl(name, game.id) ?? sportStreamFallback(game.sport);
+                  return (
+                    <a
+                      key={key}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline transition-colors"
+                      style={{ color: "var(--text-muted)" }}
+                      title={`Watch on ${name}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {name}
+                    </a>
+                  );
+                };
+                if (game.broadcasts.length > 1) {
+                  return (
+                    <span className="text-[10px] sm:text-xs">
+                      {broadcastExpanded ? (
+                        game.broadcasts.map((b, i) => (
+                          <span key={i}>
+                            {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
+                            {networkLink(b, i)}
+                          </span>
+                        ))
+                      ) : (
+                        <>
+                          {networkLink(game.broadcasts[0], 0)}
+                          <button
+                            type="button"
+                            className="ml-1 cursor-pointer hover:underline"
+                            style={{ color: "var(--text-muted)" }}
+                            title={game.broadcasts.slice(1).join(", ")}
+                            onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(true); }}
+                          >
+                            +{game.broadcasts.length - 1}
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  );
+                }
+                return (
+                  <span className="text-[10px] sm:text-xs">
+                    {networkLink(game.broadcasts[0], 0)}
                   </span>
-                ) : (
-                  <span
-                    className="text-[10px] sm:text-xs"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {game.broadcasts[0]}
-                  </span>
-                )
-              )}
+                );
+              })()}
             </span>
           </div>
         );

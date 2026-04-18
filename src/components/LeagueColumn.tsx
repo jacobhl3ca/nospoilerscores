@@ -147,14 +147,15 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
 // PlayoffSubtitle would for team sports. The subtitle is the single
 // place round wording lives (the leaderboard card no longer repeats it),
 // so it must render a value for every day of the tournament. When the
-// tournament is mid-event we wrap the text in a link to ESPN's
-// leaderboard — gives users a clickable "live" anchor even between
-// groups when the card's green indicator is absent.
+// tournament is mid-event we wrap the text in a link to the active
+// streamer (PGA Tour Live / Peacock / etc.) — gives users a clickable
+// "live" anchor even between groups when the card's green indicator
+// is absent. Never link to ESPN leaderboard — that would spoil scores.
 function GolfSubtitle({ league, selectedDate }: { league: LeagueData; selectedDate: string }) {
   const t = league.golfTournament;
   const text = t ? getGolfSubtitle(t, selectedDate) : null;
   const href =
-    t && t.state === "in" && t.leaderboardUrl ? t.leaderboardUrl : null;
+    t && t.state === "in" && t.streamUrl ? t.streamUrl : null;
   const baseClass =
     "text-[9px] sm:text-[10px] italic mt-0.5 block max-w-full text-center leading-tight";
   if (!text) {

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, useMemo } from "react";
 import { GolfTournament } from "@/lib/types";
+import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
 import {
   isGolfLive,
   getGolfLiveThru,
@@ -362,9 +363,9 @@ export default function GolfLeaderboard({
       <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
         <span className="truncate min-w-0">
           {liveLabel ? (
-            tournament.leaderboardUrl ? (
+            tournament.streamUrl ? (
               <a
-                href={tournament.leaderboardUrl}
+                href={tournament.streamUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-green-500 font-medium hover:text-green-400 transition-colors"
@@ -384,22 +385,57 @@ export default function GolfLeaderboard({
           {showRating && <RatingBadge rating={tournament.rating!} />}
         </span>
         <span className="truncate text-right">
-          {hasBroadcast && (
-            tournament.broadcasts.length > 1 ? (
-              <span
-                className="text-[10px] sm:text-xs cursor-pointer hover:underline transition-colors"
-                style={{ color: "var(--text-muted)" }}
-                title={!broadcastExpanded ? tournament.broadcasts.join(", ") : undefined}
-                onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(!broadcastExpanded); }}
-              >
-                {broadcastExpanded ? tournament.broadcasts.join(" · ") : tournament.broadcasts[0]}
+          {hasBroadcast && (() => {
+            const networkLink = (name: string, key: string | number) => {
+              const href = networkStreamUrl(name, "") ?? sportStreamFallback("golf");
+              return (
+                <a
+                  key={key}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline transition-colors"
+                  style={{ color: "var(--text-muted)" }}
+                  title={`Watch on ${name}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {name}
+                </a>
+              );
+            };
+            if (tournament.broadcasts.length > 1) {
+              return (
+                <span className="text-[10px] sm:text-xs">
+                  {broadcastExpanded ? (
+                    tournament.broadcasts.map((b, i) => (
+                      <span key={i}>
+                        {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
+                        {networkLink(b, i)}
+                      </span>
+                    ))
+                  ) : (
+                    <>
+                      {networkLink(tournament.broadcasts[0], 0)}
+                      <button
+                        type="button"
+                        className="ml-1 cursor-pointer hover:underline"
+                        style={{ color: "var(--text-muted)" }}
+                        title={tournament.broadcasts.slice(1).join(", ")}
+                        onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(true); }}
+                      >
+                        +{tournament.broadcasts.length - 1}
+                      </button>
+                    </>
+                  )}
+                </span>
+              );
+            }
+            return (
+              <span className="text-[10px] sm:text-xs">
+                {networkLink(tournament.broadcasts[0], 0)}
               </span>
-            ) : (
-              <span className="text-[10px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
-                {tournament.broadcasts[0]}
-              </span>
-            )
-          )}
+            );
+          })()}
         </span>
       </div>
 

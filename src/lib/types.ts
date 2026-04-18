@@ -68,7 +68,10 @@ export interface GolfTournament {
   roundStatus: "pre" | "in" | "post";
   startDate?: string;    // tournament startDate "MM-DD" from league config
   eventDate?: string;    // ESPN event.date ISO — first tee off of current day
-  leaderboardUrl?: string; // ESPN tournament leaderboard URL — used for live link
+  // Streamer destination for the live-link wrapper. Points at where the
+   // user can actually watch (PGA Tour Live / Peacock / Paramount+ / etc.) —
+   // never at the ESPN leaderboard, which would reveal scores.
+  streamUrl?: string;
 }
 
 export interface LeagueData {
