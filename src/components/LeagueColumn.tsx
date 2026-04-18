@@ -103,11 +103,16 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
     if (!tiers.length) return 0;
     const el = ref.current;
     if (!el) return tiers.length - 1;
+    // The span lives in a flex-col items-center parent, so its own width shrinks
+    // to its text content. Measure the parent (header wrapper) for the true
+    // available width the subtitle can occupy.
+    const host = el.parentElement ?? el;
     const cs = getComputedStyle(el);
-    const padX = parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
-    const available = el.clientWidth - padX;
+    const hostCs = getComputedStyle(host);
+    const padX = parseFloat(hostCs.paddingLeft || "0") + parseFloat(hostCs.paddingRight || "0");
+    const available = host.clientWidth - padX;
     const probe = document.createElement("span");
-    probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font};font-style:${cs.fontStyle};`;
+    probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font-family:${cs.fontFamily};font-size:${cs.fontSize};font-style:${cs.fontStyle};font-weight:${cs.fontWeight};letter-spacing:${cs.letterSpacing};`;
     document.body.appendChild(probe);
     let chosen = tiers.length - 1;
     for (let i = 0; i < tiers.length; i++) {
