@@ -4,10 +4,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
-import { Game, LeagueData, Sport } from "@/lib/types";
+import { Game, LeagueData, Sport, Team } from "@/lib/types";
 import { getGolfSubtitle } from "@/lib/golf";
 import GameCard from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
+import TeamView from "./TeamView";
 
 interface LeagueColumnProps {
   league: LeagueData;
@@ -239,7 +240,11 @@ export default function LeagueColumn({
   const swapRef = useRef<HTMLDivElement>(null);
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   const [swapOpen, setSwapOpen] = useState(false);
+  const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
+
+  // Reset team view when the column's league changes (e.g., swapped via dropdown).
+  useEffect(() => { setTeamViewTeam(null); }, [league.sport, league.label]);
 
   // Close swap dropdown on outside click
   useEffect(() => {
@@ -492,7 +497,22 @@ export default function LeagueColumn({
           )}
         </div>
       )}
-      {league.golfTournament && section !== "finished" ? (
+      {teamViewTeam && !league.golfTournament ? (
+        section === "finished" ? null : (
+          <TeamView
+            sport={league.sport}
+            team={teamViewTeam}
+            leagueLabel={league.label}
+            favoriteTeams={favoriteTeams}
+            onToggleFavoriteTeam={onToggleFavoriteTeam}
+            showRatings={showRatings}
+            onPlayHighlight={onPlayHighlight}
+            onBack={() => setTeamViewTeam(null)}
+            onSelectTeam={setTeamViewTeam}
+            useAbbreviations={useAbbreviations}
+          />
+        )
+      ) : league.golfTournament && section !== "finished" ? (
         <GolfLeaderboard
           tournament={league.golfTournament}
           showRatings={showRatings}
@@ -517,6 +537,7 @@ export default function LeagueColumn({
                   onPlayHighlight={onPlayHighlight}
                   nextGameDate={formatDateCompact(league.nextGameDay!.date)}
                   useAbbreviations={useAbbreviations}
+                  onSelectTeam={setTeamViewTeam}
                 />
               ))}
             </div>
@@ -537,6 +558,7 @@ export default function LeagueColumn({
               isPastDate={isPastDate}
               isToday={isToday}
               useAbbreviations={useAbbreviations}
+              onSelectTeam={setTeamViewTeam}
             />
           ))}
         </div>
@@ -552,6 +574,7 @@ export default function LeagueColumn({
               onPlayHighlight={onPlayHighlight}
               isToday={isToday}
               useAbbreviations={useAbbreviations}
+              onSelectTeam={setTeamViewTeam}
             />
           ))}
           {renderUpcoming && preGames.map((game) => (
@@ -564,6 +587,7 @@ export default function LeagueColumn({
               onPlayHighlight={onPlayHighlight}
               isToday={isToday}
               useAbbreviations={useAbbreviations}
+              onSelectTeam={setTeamViewTeam}
             />
           ))}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
@@ -584,6 +608,7 @@ export default function LeagueColumn({
               isPastDate={false}
               isToday={isToday}
               useAbbreviations={useAbbreviations}
+              onSelectTeam={setTeamViewTeam}
             />
           ))}
         </div>

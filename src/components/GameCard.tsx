@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Game } from "@/lib/types";
-import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Game, Team } from "@/lib/types";
+import { networkStreamUrl, sportStreamFallback, espnGameUrl } from "@/lib/espn";
 import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
 
 interface GameCardProps {
@@ -16,6 +16,12 @@ interface GameCardProps {
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
   leagueLabel?: string;
   useAbbreviations?: boolean;
+  // When true, render the game's own date on the top-left regardless of state,
+  // and treat finished games like past-date cards (hide records, show highlights).
+  // Used by the per-team schedule view.
+  teamView?: boolean;
+  // When set, clicking a team name opens that team's schedule view in the column.
+  onSelectTeam?: (team: Team) => void;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -102,7 +108,7 @@ function cleanStatusDetail(detail: string, stripDate: boolean): string {
   return cleaned.trim();
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, leagueLabel, useAbbreviations }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, leagueLabel, useAbbreviations, teamView, onSelectTeam }: GameCardProps) {
   const prefetchedVideoId = useRef<string | null>(null);
   const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
@@ -113,6 +119,27 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
   const liveUrl = game.streamUrl;
+  // Team-view treats finished games like past-date cards (hide records, show highlights).
+  const effectivePastDate = isPastDate || (teamView && isFinished);
+  const espnUrl = espnGameUrl(game);
+  const teamViewDateLabel = teamView ? (() => {
+    const d = new Date(game.date);
+    if (isNaN(d.getTime())) return "";
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dDay = new Date(d); dDay.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((dDay.getTime() - today.getTime()) / (24 * 3600 * 1000));
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    if (diffDays === -1) return "Yesterday";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  })() : null;
+  const teamViewTime = teamView && isFuture ? (() => {
+    try {
+      const d = new Date(game.date);
+      if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    } catch { /* fall through */ }
+    return null;
+  })() : null;
   const localTime = isFuture ? (() => {
     const cleaned = cleanStatusDetail(game.statusDetail, true);
     // ESPN returns "Scheduled" with no time for some leagues (EPL, MLS) — derive from game.date
@@ -201,7 +228,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
 
   return (
     <div
-      className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors"
+      className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative"
       style={{
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
@@ -211,16 +238,40 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     >
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
-        const hasStatusText = isLive || isFuture || nextGameDate || (!isFinished);
+        const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);
         const hasRating = showRating;
         const hasBroadcast = !isFinished && game.broadcasts.length > 0;
-        const showFinal = isFinished && !isPastDate;
-        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal;
+        const showFinal = isFinished && !isPastDate && !teamView;
+        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView;
         if (!showBar) return null;
+        // Small ESPN link wrapper for upcoming-time / date labels.
+        const withEspn = (node: ReactNode) => (
+          <a
+            href={espnUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline transition-colors"
+            style={{ color: "inherit" }}
+            title="View on ESPN"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {node}
+          </a>
+        );
         return (
           <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
             <span>
-              {isLive && gameProgress ? (
+              {teamView ? (
+                <span className="text-[11px] whitespace-nowrap">
+                  {withEspn(
+                    <>
+                      <span className="font-bold" style={{ color: "var(--text)" }}>{teamViewDateLabel}</span>
+                      {isFuture && teamViewTime ? <span style={{ color: "var(--text-muted)" }}> · {teamViewTime}</span> : null}
+                      {isFinished && !hasRating ? <span style={{ color: "var(--text-muted)" }}> · FINAL</span> : null}
+                    </>
+                  )}
+                </span>
+              ) : isLive && gameProgress ? (
                 liveUrl ? (
                   <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
                 ) : (
@@ -229,15 +280,19 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               ) : showFinal && !hasRating ? (
                 "FINAL"
               ) : nextGameDate ? (
-                <span className="text-[11px] whitespace-nowrap">
-                  <span className="font-bold underline underline-offset-2" style={{ color: "var(--text)" }}>
-                    <span className="hidden sm:inline">{nextGameDate}</span>
-                    <span className="sm:hidden">{nextGameDate === "Tomorrow" ? "Tomo" : nextGameDate}</span>
+                withEspn(
+                  <span className="text-[11px] whitespace-nowrap">
+                    <span className="font-bold underline underline-offset-2" style={{ color: "var(--text)" }}>
+                      <span className="hidden sm:inline">{nextGameDate}</span>
+                      <span className="sm:hidden">{nextGameDate === "Tomorrow" ? "Tomo" : nextGameDate}</span>
+                    </span>
+                    {localTime ? ` - ${localTime}` : ""}
                   </span>
-                  {localTime ? ` - ${localTime}` : ""}
-                </span>
+                )
               ) : isFuture ? (
-                <span className="text-[11px] whitespace-nowrap">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
+                withEspn(
+                  <span className="text-[11px] whitespace-nowrap">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
+                )
               ) : null}
             </span>
             <span>
@@ -269,27 +324,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 if (game.broadcasts.length > 1) {
                   return (
                     <span className="text-[10px] sm:text-xs">
-                      {broadcastExpanded ? (
-                        game.broadcasts.map((b, i) => (
-                          <span key={i}>
-                            {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
-                            {networkLink(b, i)}
-                          </span>
-                        ))
-                      ) : (
-                        <>
-                          {networkLink(game.broadcasts[0], 0)}
-                          <button
-                            type="button"
-                            className="ml-1 cursor-pointer hover:underline"
-                            style={{ color: "var(--text-muted)" }}
-                            title={game.broadcasts.slice(1).join(", ")}
-                            onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(true); }}
-                          >
-                            +{game.broadcasts.length - 1}
-                          </button>
-                        </>
-                      )}
+                      {networkLink(game.broadcasts[0], 0)}
+                      <button
+                        type="button"
+                        className="ml-1 cursor-pointer hover:underline"
+                        style={{ color: "var(--text-muted)" }}
+                        title={game.broadcasts.slice(1).join(", ")}
+                        onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
+                      >
+                        +{game.broadcasts.length - 1}
+                      </button>
                     </span>
                   );
                 }
@@ -304,6 +348,51 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         );
       })()}
 
+      {/* Expanded-networks overlay — anchored top-right, covers the records column
+          on the team rows. Click × to collapse back to "+N". */}
+      {broadcastExpanded && game.broadcasts.length > 1 && (
+        <div
+          className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 rounded-md px-1.5 py-1 max-w-[60%] shadow-sm"
+          style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start gap-1.5">
+            <div className="flex flex-col gap-0.5 text-[10px] sm:text-xs leading-tight">
+              {game.broadcasts.map((b, i) => {
+                const isPrime = /\b(amazon|prime)\b/i.test(b);
+                const href =
+                  (isPrime && game.primeStreamUrl) ||
+                  networkStreamUrl(b, game.id, game.sport) ||
+                  sportStreamFallback(game.sport);
+                return (
+                  <a
+                    key={i}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline whitespace-nowrap"
+                    style={{ color: "var(--text-muted)" }}
+                    title={`Watch on ${b}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {b}
+                  </a>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(false); }}
+              className="text-[11px] leading-none cursor-pointer shrink-0"
+              style={{ color: "var(--text-muted)" }}
+              title="Hide networks"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Teams */}
       <div className="flex flex-col gap-y-0.5">
         {[
@@ -313,17 +402,30 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           <div key={team.id || team.abbreviation} className="flex items-center gap-1 sm:gap-1.5 min-w-0">
             <span className="shrink-0">{logo(team, isTBD)}</span>
             <span className="team-name-container flex items-center shrink-0">
-              {useAbbreviations ? (
-                <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }} title={team.displayName}>{team.abbreviation}</span>
-              ) : (
-                <span className="text-sm whitespace-nowrap leading-none team-name" style={{ color: "var(--text)" }} title={team.displayName}>{team.shortDisplayName}</span>
-              )}
+              {(() => {
+                const nameNode = useAbbreviations ? (
+                  <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }} title={team.displayName}>{team.abbreviation}</span>
+                ) : (
+                  <span className="text-sm whitespace-nowrap leading-none team-name" style={{ color: "var(--text)" }} title={team.displayName}>{team.shortDisplayName}</span>
+                );
+                if (isTBD || !onSelectTeam || !team.id) return nameNode;
+                return (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onSelectTeam(team); }}
+                    className="cursor-pointer hover:underline decoration-dotted underline-offset-2"
+                    title={`View ${team.displayName} schedule`}
+                  >
+                    {nameNode}
+                  </button>
+                );
+              })()}
             </span>
             <span className="shrink-0 flex items-center">
               {star(team.id, favoriteTeams.includes(team.id), isTBD)}
             </span>
             <span className="flex-1 min-w-0" />
-            {!isTBD && team.record && !isPastDate && !isFinished ? (
+            {!isTBD && team.record && !effectivePastDate && !isFinished ? (
               <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>
             ) : null}
           </div>

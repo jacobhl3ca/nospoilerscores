@@ -453,6 +453,25 @@ async function fetchWithRetry(url: string, retries = 1, timeoutMs = 10000): Prom
   throw new Error("Fetch failed");
 }
 
+// ESPN gamecast / match URL for a game. Prefers the API-provided recapUrl,
+// falls back to the sport-specific /game/_/gameId/ or /match/_/gameId/ path.
+export function espnGameUrl(game: Game): string {
+  if (game.recapUrl) return game.recapUrl;
+  switch (game.sport) {
+    case "mlb": return `https://www.espn.com/mlb/game/_/gameId/${game.id}`;
+    case "nba": return `https://www.espn.com/nba/game/_/gameId/${game.id}`;
+    case "ncaam": return `https://www.espn.com/mens-college-basketball/game/_/gameId/${game.id}`;
+    case "nfl": return `https://www.espn.com/nfl/game/_/gameId/${game.id}`;
+    case "nhl": return `https://www.espn.com/nhl/game/_/gameId/${game.id}`;
+    case "epl":
+    case "mls":
+    case "fifa":
+      return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
+    case "golf": return `https://www.espn.com/golf/leaderboard`;
+    case "tennis": return `https://www.espn.com/tennis/scoreboard`;
+  }
+}
+
 // Per-sport streamer landing — last-resort destination so the live link
 // always lands on a place to *watch*, never on a score-revealing gamecast.
 export function sportStreamFallback(sport: Sport): string {
@@ -1008,6 +1027,61 @@ export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): 
         viewDate
       )
   );
+}
+
+// Fetch a team's full season schedule from ESPN. team.id on our Game model is
+// `${sport}-${rawId}` — caller passes the raw ESPN team id here.
+// Returns games parsed via the shared parser, sorted oldest → newest.
+// Pulls requested season(s); for current season defaults to current year.
+export async function fetchTeamSchedule(
+  sport: Sport,
+  espnTeamId: string,
+  seasons?: number[]
+): Promise<Game[]> {
+  const years = seasons && seasons.length > 0 ? seasons : [new Date().getFullYear()];
+  const asinMap = await loadPrimeAsins();
+  const all: Game[] = [];
+  const seen = new Set<string>();
+  await Promise.all(
+    years.map(async (year) => {
+      const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
+      const url = new URL(
+        `${BASE_URL}${sportPath}/teams/${espnTeamId}/schedule`
+      );
+      url.searchParams.set("season", String(year));
+      let res: Response;
+      try {
+        res = await fetchWithRetry(url.toString());
+      } catch {
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json();
+      const events = data.events ?? data.team?.events ?? [];
+      for (const e of events) {
+        const statusName = e.status?.type?.name ?? "";
+        if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) continue;
+        const seasonType = e.season?.type ?? 0;
+        if (seasonType === 1) continue;
+        if (!e.id || seen.has(e.id)) continue;
+        seen.add(e.id);
+        const game = parseGame(e, sport);
+        game.streamUrl = buildStreamUrl(game);
+        if (hasPrimeBroadcast(game)) {
+          const primeUrl = buildPrimeDeepLink(game, asinMap);
+          if (primeUrl) {
+            game.primeStreamUrl = primeUrl;
+            if (game.streamUrl && /primevideo\.com\/sports/.test(game.streamUrl)) {
+              game.streamUrl = primeUrl;
+            }
+          }
+        }
+        all.push(game);
+      }
+    })
+  );
+  all.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return all;
 }
 
 export async function fetchNextGameDay(
