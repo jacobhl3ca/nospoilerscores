@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
+// useLayoutEffect warns in SSR; on the client we want the sync measurement.
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, LeagueData, Sport } from "@/lib/types";
 import { getGolfSubtitle } from "@/lib/golf";
 import GameCard from "./GameCard";
@@ -124,7 +127,7 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
     return chosen;
   };
 
-  useEffect(() => {
+  useIsoLayoutEffect(() => {
     setTierIdx(pickTier());
     setReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
