@@ -48,9 +48,11 @@ async function fetchHtml(url) {
 function extractMatchups(html) {
   const found = new Map();
   // Prime renders each event tile with an aria-label containing the matchup
-  // (e.g. "Raptors vs. Cavaliers") and a sibling link to /detail/{ASIN}.
-  // The aria-label and href can appear in either order within the tile and
-  // sometimes on separate elements, so we scan both directions in a window.
+  // (e.g. "Raptors vs. Cavaliers") and a sibling link to /detail/{id}.
+  // The id comes in two formats: classic ASINs ("B0XXXXXXXX", 10 chars) for
+  // older on-demand content and GTI-style ids (26 alphanumeric chars starting
+  // with "0") for newer live events. Both work under both primevideo.com/detail
+  // and amazon.com/gp/video/detail paths.
   const ariaRegex = /aria-label="([^"]+\s+vs\.\s+[^"]+)"/gi;
   let m;
   while ((m = ariaRegex.exec(html))) {
@@ -58,12 +60,12 @@ function extractMatchups(html) {
     // Skip obvious non-matchups ("More details for …", highlight labels)
     if (/^more details/i.test(matchup)) continue;
     const start = Math.max(0, m.index - 400);
-    const end = Math.min(html.length, m.index + 600);
+    const end = Math.min(html.length, m.index + 2200);
     const window = html.slice(start, end);
-    const asinMatch = window.match(/\/detail\/(B0[A-Z0-9]{8})/);
-    if (!asinMatch) continue;
+    const idMatch = window.match(/\/detail\/((?:B0[A-Z0-9]{8})|[A-Z0-9]{20,40})/);
+    if (!idMatch) continue;
     const key = matchup.toLowerCase();
-    if (!found.has(key)) found.set(key, asinMatch[1]);
+    if (!found.has(key)) found.set(key, idMatch[1]);
   }
   return found;
 }

@@ -427,7 +427,10 @@ function buildPrimeDeepLink(
 ): string | null {
   const key = `${game.awayTeam.shortDisplayName} vs. ${game.homeTeam.shortDisplayName}`.toLowerCase();
   const asin = asinMap[key];
-  return asin ? `https://www.amazon.com/gp/video/detail/${asin}` : null;
+  // primevideo.com/detail/{id} accepts both traditional ASINs (B0XXXXXXXX)
+  // and the longer GTI ids that Prime uses for newer live events. amazon.com
+  // rejects the GTI format, so we standardize on primevideo.com.
+  return asin ? `https://www.primevideo.com/detail/${asin}` : null;
 }
 
 function hasPrimeBroadcast(game: Game): boolean {
@@ -484,12 +487,11 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b === "nbc" || b === "usa" || b === "peacock" || b === "nbc sports" || b === "golf channel") return "https://www.peacocktv.com/";
   // CBS / Paramount+
   if (b === "cbs" || b === "cbssn" || b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
-  // Amazon Prime Video — route to sport-specific Prime page
+  // Amazon Prime Video — fall back to the Prime sports hub. Sport-specific
+  // paths (/sports/nfl etc.) return 404, so we use the generic hub. Per-game
+  // deep links are handled upstream via the scraped ASIN map.
   if (b === "amazon prime" || b === "prime video" || b === "amazon") {
-    if (sport === "nfl") return "https://www.amazon.com/gp/video/sports/nfl";
-    if (sport === "nba") return "https://www.amazon.com/gp/video/sports/nba";
-    if (sport === "mlb") return "https://www.amazon.com/gp/video/sports/mlb";
-    return "https://www.amazon.com/gp/video/sports";
+    return "https://www.primevideo.com/sports";
   }
   // Apple TV+ (MLS Season Pass primarily)
   if (b === "apple tv+" || b === "apple tv") return "https://tv.apple.com/us/sports/mls";
@@ -897,7 +899,7 @@ export async function fetchGames(
     const url = buildPrimeDeepLink(game, asinMap);
     if (!url) continue;
     game.primeStreamUrl = url;
-    if (game.streamUrl && /amazon\.com\/gp\/video\/sports/.test(game.streamUrl)) {
+    if (game.streamUrl && /primevideo\.com\/sports/.test(game.streamUrl)) {
       game.streamUrl = url;
     }
   }
