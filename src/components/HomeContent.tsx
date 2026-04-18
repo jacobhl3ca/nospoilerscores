@@ -360,7 +360,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 pt-2 pb-6 flex-1 w-full">
+      <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
         {loading ? (
           <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
             {[1, 2, 3].map((i) => (
