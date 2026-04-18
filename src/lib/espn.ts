@@ -442,7 +442,9 @@ export function sportStreamFallback(sport: Sport): string {
 
 // Map a single broadcast/network name to its streaming destination.
 // Returns null if unknown so caller can try the next broadcast or fall back.
-export function networkStreamUrl(broadcast: string, gameId: string): string | null {
+// Sport is optional but lets us route multi-sport streamers (e.g., Amazon
+// Prime carries NFL TNF, NBA, MLB Yankees) to the right Prime sport page.
+export function networkStreamUrl(broadcast: string, gameId: string, sport?: Sport): string | null {
   const b = broadcast.toLowerCase().trim();
   if (!b) return null;
   // ESPN family — deep link to specific game stream
@@ -455,8 +457,13 @@ export function networkStreamUrl(broadcast: string, gameId: string): string | nu
   if (b === "nbc" || b === "usa" || b === "peacock" || b === "nbc sports" || b === "golf channel") return "https://www.peacocktv.com/";
   // CBS / Paramount+
   if (b === "cbs" || b === "cbssn" || b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
-  // Amazon Prime Video
-  if (b === "amazon prime" || b === "prime video" || b === "amazon") return "https://www.amazon.com/gp/video/storefront";
+  // Amazon Prime Video — route to sport-specific Prime page
+  if (b === "amazon prime" || b === "prime video" || b === "amazon") {
+    if (sport === "nfl") return "https://www.amazon.com/gp/video/sports/nfl";
+    if (sport === "nba") return "https://www.amazon.com/gp/video/sports/nba";
+    if (sport === "mlb") return "https://www.amazon.com/gp/video/sports/mlb";
+    return "https://www.amazon.com/gp/video/sports";
+  }
   // Apple TV+ (MLS Season Pass primarily)
   if (b === "apple tv+" || b === "apple tv") return "https://tv.apple.com/us/sports/mls";
   // YouTube TV / NFL Sunday Ticket
@@ -476,7 +483,7 @@ export function networkStreamUrl(broadcast: string, gameId: string): string | nu
 // falling back to the per-sport streamer landing so the result is never null.
 function buildStreamUrl(game: Game): string {
   for (const broadcast of game.broadcasts) {
-    const url = networkStreamUrl(broadcast, game.id);
+    const url = networkStreamUrl(broadcast, game.id, game.sport);
     if (url) return url;
   }
   return sportStreamFallback(game.sport);
@@ -510,6 +517,37 @@ async function fetchMLBGamePks(date?: string): Promise<Map<string, string>> {
     }
   } catch {
     // Non-critical — games just won't have deep links
+  }
+  return map;
+}
+
+// NHL public API: fetch the league's own game IDs keyed by "away@home".
+// ESPN's gameId diverges from NHL's, so this lets us deep-link into
+// nhl.com/tv for the specific game when the broadcast isn't ESPN (ESPN
+// games already get a deep link via espn.com/watch).
+async function fetchNHLGameIds(date?: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    let apiDate: string;
+    if (date && date.length === 8) {
+      apiDate = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
+    } else {
+      const now = new Date();
+      apiDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    }
+    const res = await fetchWithRetry(`https://api-web.nhle.com/v1/score/${apiDate}`, 1, 5000);
+    if (!res.ok) return map;
+    const data = await res.json();
+    for (const game of data.games ?? []) {
+      const gameId = String(game.id);
+      const homeAbbrev = game.homeTeam?.abbrev ?? "";
+      const awayAbbrev = game.awayTeam?.abbrev ?? "";
+      if (homeAbbrev && awayAbbrev) {
+        map.set(`${awayAbbrev}@${homeAbbrev}`, gameId);
+      }
+    }
+  } catch {
+    // Non-critical — falls back to generic NHL landing
   }
   return map;
 }
@@ -759,6 +797,9 @@ export async function fetchGames(
 
   // For MLB, fetch game PKs in parallel with ESPN data
   const mlbPksPromise = sport === "mlb" ? fetchMLBGamePks(date) : null;
+  // Same pattern for NHL — fetch NHL's own game IDs so we can deep-link
+  // non-ESPN broadcasts into nhl.com/tv/{id} instead of the generic landing.
+  const nhlIdsPromise = sport === "nhl" ? fetchNHLGameIds(date) : null;
 
   let res: Response;
   try {
@@ -800,6 +841,19 @@ export async function fetchGames(
   for (const game of games) {
     if (!game.streamUrl) {
       game.streamUrl = buildStreamUrl(game);
+    }
+  }
+
+  // Deepen the NHL landing URL (https://www.nhl.com/tv) to a per-game path
+  // when we can resolve NHL's own game ID. ESPN-broadcast NHL games keep
+  // their espn.com/watch deep link — only the generic NHL fallback is
+  // replaced, so we never clobber a closer streamer URL.
+  if (sport === "nhl" && nhlIdsPromise) {
+    const nhlIds = await nhlIdsPromise;
+    for (const game of games) {
+      if (game.streamUrl !== "https://www.nhl.com/tv") continue;
+      const nhlId = nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`);
+      if (nhlId) game.streamUrl = `https://www.nhl.com/tv/${nhlId}`;
     }
   }
 
