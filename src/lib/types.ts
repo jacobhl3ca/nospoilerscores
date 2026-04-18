@@ -28,6 +28,11 @@ export interface Game {
   recapUrl: string | null; // ESPN gamecast URL
   // Direct stream URL for live games (e.g., MLB.tv deep link)
   streamUrl: string | null;
+  // Per-game Prime Video deep link (amazon.com/gp/video/detail/{ASIN}) when
+  // this matchup appears on Prime's scraped sports hub. Null when there's
+  // no Prime ASIN for the matchup — the Prime chip then falls back to the
+  // sport-specific Prime landing page.
+  primeStreamUrl: string | null;
 }
 
 export interface Team {

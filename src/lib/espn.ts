@@ -404,7 +404,34 @@ function parseGame(event: any, sport: Sport): Game {
     highlightUrl,
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports
+    primeStreamUrl: null, // populated from /prime-asins.json when matchup matches
   };
+}
+
+// Lazily load the Prime Video ASIN map scraped by the nightly GH Action.
+// Cached module-wide so multiple fetchGames() calls share one request.
+let primeAsinsPromise: Promise<Record<string, string>> | null = null;
+export function loadPrimeAsins(): Promise<Record<string, string>> {
+  if (!primeAsinsPromise) {
+    primeAsinsPromise = fetch("/prime-asins.json", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => (d?.matchups ?? {}) as Record<string, string>)
+      .catch(() => ({} as Record<string, string>));
+  }
+  return primeAsinsPromise;
+}
+
+function buildPrimeDeepLink(
+  game: Game,
+  asinMap: Record<string, string>
+): string | null {
+  const key = `${game.awayTeam.shortDisplayName} vs. ${game.homeTeam.shortDisplayName}`.toLowerCase();
+  const asin = asinMap[key];
+  return asin ? `https://www.amazon.com/gp/video/detail/${asin}` : null;
+}
+
+function hasPrimeBroadcast(game: Game): boolean {
+  return game.broadcasts.some((b) => /\b(amazon|prime)\b/i.test(b));
 }
 
 async function fetchWithRetry(url: string, retries = 1, timeoutMs = 10000): Promise<Response> {
@@ -800,6 +827,9 @@ export async function fetchGames(
   // Same pattern for NHL — fetch NHL's own game IDs so we can deep-link
   // non-ESPN broadcasts into nhl.com/tv/{id} instead of the generic landing.
   const nhlIdsPromise = sport === "nhl" ? fetchNHLGameIds(date) : null;
+  // Prime ASIN map lookup runs for every sport since Prime carries NFL TNF,
+  // NBA, MLB, and some soccer. The map is cached across fetchGames() calls.
+  const primeAsinsPromise = loadPrimeAsins();
 
   let res: Response;
   try {
@@ -854,6 +884,21 @@ export async function fetchGames(
       if (game.streamUrl !== "https://www.nhl.com/tv") continue;
       const nhlId = nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`);
       if (nhlId) game.streamUrl = `https://www.nhl.com/tv/${nhlId}`;
+    }
+  }
+
+  // Prime Video deep link: when we have an ASIN for the matchup, store it
+  // on the game so the Prime chip always routes there. Also upgrade the
+  // main streamUrl if Prime was the winning broadcast (i.e., streamUrl is
+  // currently a generic Prime sports page).
+  const asinMap = await primeAsinsPromise;
+  for (const game of games) {
+    if (!hasPrimeBroadcast(game)) continue;
+    const url = buildPrimeDeepLink(game, asinMap);
+    if (!url) continue;
+    game.primeStreamUrl = url;
+    if (game.streamUrl && /amazon\.com\/gp\/video\/sports/.test(game.streamUrl)) {
+      game.streamUrl = url;
     }
   }
 

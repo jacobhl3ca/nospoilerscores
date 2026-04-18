@@ -246,7 +246,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             <span className="truncate text-right">
               {hasBroadcast && (() => {
                 const networkLink = (name: string, key: string | number) => {
-                  const href = networkStreamUrl(name, game.id) ?? sportStreamFallback(game.sport);
+                  const isPrime = /\b(amazon|prime)\b/i.test(name);
+                  const href =
+                    (isPrime && game.primeStreamUrl) ||
+                    networkStreamUrl(name, game.id, game.sport) ||
+                    sportStreamFallback(game.sport);
                   return (
                     <a
                       key={key}
@@ -319,7 +323,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               {star(team.id, favoriteTeams.includes(team.id), isTBD)}
             </span>
             <span className="flex-1 min-w-0" />
-            {!isTBD && team.record && !isPastDate ? (
+            {!isTBD && team.record && !isPastDate && !isFinished ? (
               <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>
             ) : null}
           </div>

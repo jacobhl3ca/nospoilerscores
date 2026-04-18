@@ -1,0 +1,30 @@
+name: Refresh Prime Video ASINs
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/scrape-prime-asins.mjs
+      - name: Commit updated ASIN map
+        run: |
+          git config user.name "Jacob HL"
+          git config user.email "jacobhl3ca@gmail.com"
+          if git diff --quiet public/prime-asins.json; then
+            echo "no changes"
+            exit 0
+          fi
+          git add public/prime-asins.json
+          git commit -m "Refresh Prime Video ASIN map"
+          git push
