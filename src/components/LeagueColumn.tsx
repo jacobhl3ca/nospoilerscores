@@ -62,9 +62,13 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   const playoffDate = new Date(config.date + "T12:00:00");
   const diff = playoffDate.getTime() - viewDate.getTime();
 
-  // Playoffs already started — show round name from game data
+  // Playoffs already started — show round name from game data. Prefer the
+  // series game number (e.g. "Game 1") over ESPN's round descriptors, which
+  // can collapse to unhelpful fragments like "East" or "8th Seed Game".
   if (diff <= 0) {
     if (!games?.length) return null;
+    const gameNote = games.find(g => g.seriesNote)?.seriesNote;
+    if (gameNote) return { tiers: [gameNote] };
     const label = games.find(g => g.playoffLabel)?.playoffLabel;
     if (!label) return null;
     const text = shortenPlayoffLabel(label);
