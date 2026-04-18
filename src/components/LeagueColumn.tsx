@@ -92,51 +92,53 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
   const ref = useRef<HTMLSpanElement>(null);
   const result = getPlayoffSubtitle(sport, selectedDate, games);
   const tiers = result?.tiers ?? [];
-  const [tierIdx, setTierIdx] = useState(0);
+  const tiersKey = tiers.join("|");
+  const [tierIdx, setTierIdx] = useState(tiers.length ? tiers.length - 1 : 0);
+  const [ready, setReady] = useState(false);
+
+  // Pick the widest tier that still fits available width. One synchronous pass
+  // via a hidden probe — avoids the render-measure-rerender stutter that made
+  // "Play-in tournament" briefly flash before collapsing to "Play-in".
+  const pickTier = () => {
+    if (!tiers.length) return 0;
+    const el = ref.current;
+    if (!el) return tiers.length - 1;
+    const cs = getComputedStyle(el);
+    const padX = parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+    const available = el.clientWidth - padX;
+    const probe = document.createElement("span");
+    probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font};font-style:${cs.fontStyle};`;
+    document.body.appendChild(probe);
+    let chosen = tiers.length - 1;
+    for (let i = 0; i < tiers.length; i++) {
+      probe.textContent = tiers[i];
+      const w = probe.getBoundingClientRect().width;
+      if (w <= available - 2) { chosen = i; break; }
+    }
+    document.body.removeChild(probe);
+    return chosen;
+  };
 
   useEffect(() => {
-    setTierIdx(0);
-  }, [tiers.join("|")]);
+    setTierIdx(pickTier());
+    setReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiersKey]);
 
-  // After rendering current tier, step down if it overflows
   useEffect(() => {
-    if (!tiers.length) return;
     const el = ref.current;
     if (!el) return;
-    requestAnimationFrame(() => {
-      // italic letters overhang their layout box — scrollWidth measures the layout
-      // box, not the rendered ink, so a visually-clipped trailing ")" doesn't show
-      // up as overflow. Re-measure the text width via a hidden probe with the same
-      // font, and compare to the container's content width.
-      const cs = getComputedStyle(el);
-      const probe = document.createElement("span");
-      probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;font:${cs.font};font-style:${cs.fontStyle};`;
-      probe.textContent = el.textContent || "";
-      document.body.appendChild(probe);
-      const textPx = probe.getBoundingClientRect().width;
-      document.body.removeChild(probe);
-      const padX = parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
-      const available = el.clientWidth - padX;
-      if (textPx > available - 2 && tierIdx < tiers.length - 1) {
-        setTierIdx(tierIdx + 1);
-      }
-    });
-  });
-
-  // Re-check on resize
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setTierIdx(0));
+    const ro = new ResizeObserver(() => setTierIdx(pickTier()));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiersKey]);
 
   return (
     <span
       ref={ref}
       className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5"
-      style={{ color: tiers.length ? "var(--text-muted)" : "transparent" }}
+      style={{ color: tiers.length ? "var(--text-muted)" : "transparent", visibility: ready || !tiers.length ? "visible" : "hidden" }}
     >
       {tiers.length ? tiers[tierIdx] : "\u00A0"}
     </span>
