@@ -110,10 +110,10 @@ function cleanStatusDetail(detail: string, stripDate: boolean): string {
 }
 
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, leagueLabel, useAbbreviations, teamView, onSelectTeam }: GameCardProps) {
-  const prefetchedVideoId = useRef<string | null>(null);
-  const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
-  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | null>(null);
+  // undefined = still fetching, null = no valid same-date video, string = ready videoId
+  const [officialVideoId, setOfficialVideoId] = useState<string | null | undefined>(undefined);
+  const [searchVideoId, setSearchVideoId] = useState<string | null | undefined>(undefined);
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
   const isFinished = game.state === "post";
@@ -199,15 +199,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date)
     : null;
 
-  // Pre-fetch YouTube video IDs in background (official channel + top search)
+  // Pre-fetch YouTube video IDs in background (official channel + top search).
+  // fetchFirstVideoId returns null if the YT title doesn't prove the video is
+  // for this game's date — we hide the button in that case rather than fall
+  // through to a YouTube search tab (which would surface wrong-date results).
   const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
     const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date);
-    fetchFirstVideoId(query, undefined, dateTokens).then((id) => { prefetchedVideoId.current = id; });
+    fetchFirstVideoId(query, undefined, dateTokens).then((id) => setSearchVideoId(id));
     if (officialChannel) {
-      fetchFirstVideoId(query, officialChannel, dateTokens).then((id) => { prefetchedOfficialId.current = id; });
+      fetchFirstVideoId(query, officialChannel, dateTokens).then((id) => setOfficialVideoId(id));
+    } else {
+      setOfficialVideoId(null);
     }
   }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.date, officialChannel, game.seriesNote, dateTokens]);
 
@@ -459,34 +464,23 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ))}
       </div>
 
-      {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}
-      {isFinished && highlightUrl && (
+      {/* Highlights — only render each button if we have a validated same-date
+          video (or we are still fetching). Never open a YouTube search tab:
+          that surfaces wrong-date uploads. */}
+      {isFinished && highlightUrl && (officialVideoId !== null || searchVideoId !== null) && (
         <div className="mt-1 sm:mt-2 flex gap-1">
-          {officialChannel && (
+          {officialChannel && officialVideoId !== null && (
             <button
-              onClick={async () => {
-                if (!onPlayHighlight) return;
-                if (prefetchedOfficialId.current) {
-                  onPlayHighlight(prefetchedOfficialId.current, highlightUrl);
-                  return;
-                }
-                setFetchingOnClick("official");
-                const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date);
-                const id = await fetchFirstVideoId(query, officialChannel, dateTokens);
-                setFetchingOnClick(null);
-                if (id) {
-                  prefetchedOfficialId.current = id;
-                  onPlayHighlight(id, highlightUrl);
-                } else {
-                  openExternal(highlightUrl);
-                }
+              onClick={() => {
+                if (!onPlayHighlight || typeof officialVideoId !== "string") return;
+                onPlayHighlight(officialVideoId, highlightUrl);
               }}
-              disabled={fetchingOnClick !== null}
+              disabled={officialVideoId === undefined}
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: officialVideoId === undefined ? 0.5 : undefined }}
               title={`${officialChannel} highlights`}
             >
-              {fetchingOnClick === "official" ? (
+              {officialVideoId === undefined ? (
                 <span className="text-[10px]">Loading...</span>
               ) : (
                 <>
@@ -496,35 +490,24 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               )}
             </button>
           )}
-          <button
-            onClick={async () => {
-              if (!onPlayHighlight) return;
-              if (prefetchedVideoId.current) {
-                onPlayHighlight(prefetchedVideoId.current, highlightUrl);
-                return;
-              }
-              setFetchingOnClick("search");
-              const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date);
-              const id = await fetchFirstVideoId(query, undefined, dateTokens);
-              setFetchingOnClick(null);
-              if (id) {
-                prefetchedVideoId.current = id;
-                onPlayHighlight(id, highlightUrl);
-              } else {
-                window.open(highlightUrl, "_blank");
-              }
-            }}
-            disabled={fetchingOnClick !== null}
-            className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-            style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-            title="Top search result highlights"
-          >
-            {fetchingOnClick === "search" ? (
-              <span className="text-[10px]">Loading...</span>
-            ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-            )}
-          </button>
+          {searchVideoId !== null && (
+            <button
+              onClick={() => {
+                if (!onPlayHighlight || typeof searchVideoId !== "string") return;
+                onPlayHighlight(searchVideoId, highlightUrl);
+              }}
+              disabled={searchVideoId === undefined}
+              className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: searchVideoId === undefined ? 0.5 : undefined }}
+              title="Top search result highlights"
+            >
+              {searchVideoId === undefined ? (
+                <span className="text-[10px]">Loading...</span>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>
