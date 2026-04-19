@@ -150,10 +150,11 @@ export default function TeamView({
 
   return (
     <div className="flex flex-col gap-1.5 sm:gap-2">
-      {/* Team row: back button absolutely left, team name dead-center mirroring
-          the league label above. Font matches MLB header; falls back to the
+      {/* Team-view replaces the league sticky header. Back button sits absolutely
+          on the left; team name + logo + star is dead-centered, same font and
+          sticky placement as the league header it replaces. Falls back to the
           3-char abbreviation if the full name would overlap the back button. */}
-      <div ref={headerRef} className="relative flex items-center justify-center pb-2 pt-1">
+      <div ref={headerRef} className="league-sticky-top relative flex items-center justify-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
         <button
           ref={backRef}
           type="button"
