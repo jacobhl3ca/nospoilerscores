@@ -132,15 +132,26 @@ export function getHighlightDateTokens(dateISO: string): string[] {
   ];
 }
 
-async function verifyTitleContainsDate(videoId: string, tokens: string[]): Promise<boolean> {
+// Returns:
+//   true  — oembed returned a title and it contains at least one date token
+//   false — oembed returned a title and it does NOT contain any date token
+//           (the video is provably for a different date — reject)
+//   null  — couldn't verify (network error, non-200, empty title). Caller
+//           should trust the video. YouTube oembed rate-limits burst
+//           requests, so a page full of cards will occasionally hit 429 or
+//           similar; rejecting on every transient error would hide valid
+//           videos. Only the provable-mismatch case (false) is a true reject.
+async function verifyTitleContainsDate(videoId: string, tokens: string[]): Promise<boolean | null> {
   try {
     const r = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
-    if (!r.ok) return false;
+    if (!r.ok) return null;
     const data = await r.json();
-    const title = String(data.title ?? "").toLowerCase();
-    return tokens.some((t) => title.includes(t.toLowerCase()));
+    const title = String(data.title ?? "");
+    if (!title) return null;
+    const lower = title.toLowerCase();
+    return tokens.some((t) => lower.includes(t.toLowerCase()));
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -171,8 +182,11 @@ export async function fetchFirstVideoId(query: string, channel?: string, dateTok
     const id = data.videoId ?? null;
     if (!id) return null;
     if (dateTokens && dateTokens.length) {
-      const ok = await verifyTitleContainsDate(id, dateTokens);
-      if (!ok) return null;
+      const result = await verifyTitleContainsDate(id, dateTokens);
+      // false = provably wrong date; null = couldn't verify (trust the API).
+      // Only explicit mismatches reject so transient oembed failures don't
+      // blank out valid highlight buttons.
+      if (result === false) return null;
     }
     return id;
   } catch {
