@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Game, Sport, Team } from "@/lib/types";
 import { fetchTeamSchedule } from "@/lib/espn";
 import GameCard from "./GameCard";
@@ -50,6 +50,9 @@ export default function TeamView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [upcomingLimit, setUpcomingLimit] = useState(PAGE_SIZE);
+  const [headerAbbrev, setHeaderAbbrev] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setUpcomingLimit(PAGE_SIZE);
@@ -88,6 +91,41 @@ export default function TeamView({
   const upcomingShown = upcoming.slice(0, upcomingLimit);
   const moreAvailable = upcoming.length > upcomingLimit;
 
+  // If the full team name would collide with the left-edge back button (the
+  // centered group visually crosses under it), swap to the 3-char abbrev.
+  useEffect(() => {
+    const check = () => {
+      const host = headerRef.current;
+      const back = backRef.current;
+      if (!host || !back) return;
+      // Measure the centered group WITH the full name — do this by temporarily
+      // forcing non-abbrev mode via a probe, or just measure current state and
+      // toggle when needed.
+      const probe = document.createElement("h2");
+      probe.textContent = team.shortDisplayName || team.displayName;
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-size:1.125rem;font-weight:700;letter-spacing:0.025em;";
+      document.body.appendChild(probe);
+      const nameFullW = probe.offsetWidth;
+      document.body.removeChild(probe);
+
+      const hostW = host.clientWidth;
+      const backW = back.getBoundingClientRect().width;
+      // Center group = invisible★ (≈14) + logo (≈20) + name + gaps + ★ (≈14) ≈ name + ~60
+      const centerGroupW = nameFullW + 60;
+      // Need: half the center group (from center outward) must not cross back edge
+      const halfGroup = centerGroupW / 2;
+      const backEdge = backW + 8; // 8px gap buffer
+      const tooWide = halfGroup > (hostW / 2) - backEdge;
+      setHeaderAbbrev(tooWide);
+    };
+    check();
+    const host = headerRef.current;
+    if (!host) return;
+    const ro = new ResizeObserver(check);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [team.shortDisplayName, team.displayName, team.abbreviation, leagueLabel]);
+
   const todayYMD = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -113,10 +151,11 @@ export default function TeamView({
   return (
     <div className="flex flex-col gap-1.5 sm:gap-2">
       {/* Team row: back button absolutely left, team name dead-center mirroring
-          the league label above (invisible star on the left of the centered
-          group balances the star on the right, so the name itself is centered). */}
-      <div className="relative flex items-center justify-center pb-2 pt-1">
+          the league label above. Font matches MLB header; falls back to the
+          3-char abbreviation if the full name would overlap the back button. */}
+      <div ref={headerRef} className="relative flex items-center justify-center pb-2 pt-1">
         <button
+          ref={backRef}
           type="button"
           onClick={onBack}
           className="absolute left-0 flex items-center gap-0.5 text-[11px] sm:text-xs cursor-pointer hover:underline"
@@ -128,18 +167,18 @@ export default function TeamView({
           </svg>
           <span>{leagueLabel}</span>
         </button>
-        <div className="flex items-center justify-center min-w-0 max-w-[70%]">
+        <div className="flex items-center justify-center min-w-0">
           <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
           {team.logo && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={team.logo} alt={team.abbreviation} width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" />
           )}
-          <h3 className="text-sm sm:text-base font-bold truncate" style={{ color: "var(--text)" }} title={team.displayName}>
-            {team.shortDisplayName || team.displayName}
-          </h3>
+          <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }} title={team.displayName}>
+            {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}
+          </h2>
           <button
             onClick={() => onToggleFavoriteTeam(team.id)}
-            className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ml-1 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+            className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ml-1.5 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
             style={favoriteTeams.includes(team.id) ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
             title={favoriteTeams.includes(team.id) ? "Remove from favorites" : "Add to favorites"}
           >★</button>
