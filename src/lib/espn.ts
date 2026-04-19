@@ -1073,6 +1073,46 @@ export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): 
   );
 }
 
+// ESPN standings: { teamId -> "W-L" }. Cached per-sport so one team-view
+// fetch doesn't re-pull for each game. Used to fill records on upcoming
+// games, which the team-schedule endpoint omits.
+const standingsCache = new Map<Sport, Promise<Map<string, string>>>();
+export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>> {
+  const cached = standingsCache.get(sport);
+  if (cached) return cached;
+  const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
+  const url = `https://site.web.api.espn.com/apis/v2/sports${sportPath}/standings`;
+  const p = (async () => {
+    const map = new Map<string, string>();
+    try {
+      const res = await fetchWithRetry(url, 1, 6000);
+      if (!res.ok) return map;
+      const data = await res.json();
+      const children = data.children ?? [];
+      const entries: Array<{ team?: { id?: string }; stats?: Array<{ name?: string; summary?: string; displayValue?: string }> }> = [];
+      for (const child of children) {
+        for (const entry of child.standings?.entries ?? []) entries.push(entry);
+      }
+      // Some sports return a flat standings.entries without children grouping
+      for (const entry of data.standings?.entries ?? []) entries.push(entry);
+      for (const entry of entries) {
+        const id = entry.team?.id;
+        if (!id) continue;
+        const overall = entry.stats?.find((s) => s.name === "overall") ?? entry.stats?.find((s) => s.name === "record");
+        let rec = overall?.summary ?? overall?.displayValue ?? "";
+        if ((sport === "mlb" || sport === "nhl") && rec.split("-").length === 3) {
+          const [w, l] = rec.split("-");
+          rec = `${w}-${l}`;
+        }
+        if (rec) map.set(id, rec);
+      }
+    } catch { /* swallow — records just won't show */ }
+    return map;
+  })();
+  standingsCache.set(sport, p);
+  return p;
+}
+
 // Fetch a team's full season schedule from ESPN. team.id on our Game model is
 // `${sport}-${rawId}` — caller passes the raw ESPN team id here.
 // Returns games parsed via the shared parser, sorted oldest → newest.
@@ -1084,6 +1124,7 @@ export async function fetchTeamSchedule(
 ): Promise<Game[]> {
   const years = seasons && seasons.length > 0 ? seasons : [new Date().getFullYear()];
   const asinMap = await loadPrimeAsins();
+  const standingsPromise = fetchStandingsRecords(sport);
   const all: Game[] = [];
   const seen = new Set<string>();
   await Promise.all(
@@ -1103,16 +1144,30 @@ export async function fetchTeamSchedule(
       const data = await res.json();
       const events = data.events ?? data.team?.events ?? [];
       for (const e of events) {
-        // Team-schedule events nest status inside competitions[0] and omit
-        // the flat competitor.team.logo that scoreboard returns. Reshape to
-        // match the scoreboard shape so the shared parseGame works.
+        // Team-schedule events nest status inside competitions[0] and use
+        // different shapes for broadcasts / records / logos vs scoreboard.
+        // Reshape to match the scoreboard shape so parseGame works uniformly.
         const comp = (e.competitions ?? [])[0] ?? {};
         if (!e.status || !e.status.type) e.status = comp.status ?? {};
+        // Broadcasts: scoreboard uses { names: [] }; schedule uses { media: { shortName } }
+        if (Array.isArray(comp.broadcasts)) {
+          comp.broadcasts = comp.broadcasts.map((b: { names?: string[]; media?: { shortName?: string } }) => {
+            if (b.names && b.names.length) return b;
+            const name = b.media?.shortName;
+            return name ? { names: [name] } : b;
+          });
+        }
         for (const c of comp.competitors ?? []) {
           const t = c.team;
           if (t && !t.logo && Array.isArray(t.logos)) {
             const primary = t.logos.find((l: { rel?: string[] }) => l.rel?.includes("default")) ?? t.logos[0];
             if (primary?.href) t.logo = primary.href;
+          }
+          // Records: scoreboard uses records:[{summary}]; schedule uses record:[{type,displayValue}]
+          // Prefer type==='total' — that's the season overall record.
+          if (!c.records && Array.isArray(c.record)) {
+            const total = c.record.find((r: { type?: string }) => r?.type === "total") ?? c.record[0];
+            if (total?.displayValue) c.records = [{ summary: total.displayValue }];
           }
         }
         const statusName = e.status?.type?.name ?? "";
@@ -1137,6 +1192,17 @@ export async function fetchTeamSchedule(
     })
   );
   all.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  // Fill missing records (mostly future games) from standings lookup.
+  const standings = await standingsPromise;
+  if (standings.size > 0) {
+    const fill = (t: Team) => {
+      if (t.record || !t.id) return;
+      const rawId = t.id.startsWith(`${sport}-`) ? t.id.slice(sport.length + 1) : t.id;
+      const rec = standings.get(rawId);
+      if (rec) t.record = rec;
+    };
+    for (const g of all) { fill(g.homeTeam); fill(g.awayTeam); }
+  }
   return all;
 }
 

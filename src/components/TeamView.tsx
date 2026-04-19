@@ -113,13 +113,14 @@ export default function TeamView({
   return (
     <div className="flex flex-col gap-1.5 sm:gap-2">
       <div
-        className="flex items-center gap-1.5 pb-2"
-        style={{ color: "var(--text-muted)" }}
+        className="league-sticky-top flex items-center justify-center gap-1.5 pb-2 sm:pb-3 sticky z-30"
+        style={{ background: "var(--bg)", paddingTop: "1.75rem" }}
       >
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1 text-[11px] sm:text-xs cursor-pointer hover:underline"
+          className="flex items-center gap-0.5 text-[11px] sm:text-xs cursor-pointer hover:underline shrink-0"
+          style={{ color: "var(--text-muted)" }}
           title={`Back to ${leagueLabel}`}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -127,18 +128,17 @@ export default function TeamView({
           </svg>
           <span>{leagueLabel}</span>
         </button>
-      </div>
-      <div className="flex items-center gap-1.5 mb-1">
+        <span className="shrink-0" style={{ color: "var(--text-muted)", opacity: 0.5 }}>·</span>
         {team.logo && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={team.logo} alt={team.abbreviation} width={20} height={20} className="w-5 h-5 object-contain shrink-0" />
+          <img src={team.logo} alt={team.abbreviation} width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0" />
         )}
         <h3 className="text-sm sm:text-base font-bold truncate" style={{ color: "var(--text)" }} title={team.displayName}>
           {team.shortDisplayName || team.displayName}
         </h3>
         <button
           onClick={() => onToggleFavoriteTeam(team.id)}
-          className={`text-sm leading-none transition-colors cursor-pointer ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+          className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
           style={favoriteTeams.includes(team.id) ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
           title={favoriteTeams.includes(team.id) ? "Remove from favorites" : "Add to favorites"}
         >★</button>
