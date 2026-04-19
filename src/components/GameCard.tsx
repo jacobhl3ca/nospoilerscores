@@ -227,15 +227,22 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       <img src={team.logo} alt={team.abbreviation} title={team.displayName} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
     );
 
+  // Live games: clicking the card body (anywhere except inner buttons/links
+  // that stopPropagation — team names, star, broadcast chip, Q1 link) opens
+  // the stream. Same UUID-aware URL as the Q1 / ABC chip use.
+  const cardClickable = isLive && !!liveUrl;
   return (
     <div
-      className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative"
+      className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${cardClickable ? " cursor-pointer" : ""}`}
       style={{
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+      onClick={cardClickable ? () => window.open(liveUrl!, "_blank", "noopener,noreferrer") : undefined}
+      role={cardClickable ? "link" : undefined}
+      title={cardClickable ? "Watch live" : undefined}
     >
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
@@ -274,7 +281,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 </span>
               ) : isLive && gameProgress ? (
                 liveUrl ? (
-                  <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
+                  <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors" onClick={(e) => e.stopPropagation()}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
                 ) : (
                   <span className="text-green-500 font-medium"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>
                 )
