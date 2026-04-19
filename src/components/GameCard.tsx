@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl } from "@/lib/espn";
+import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName, getHighlightDateTokens } from "@/lib/youtube";
 
 interface GameCardProps {
@@ -240,7 +241,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-      onClick={cardClickable ? () => window.open(liveUrl!, "_blank", "noopener,noreferrer") : undefined}
+      onClick={cardClickable ? () => openExternal(liveUrl!) : undefined}
       role={cardClickable ? "link" : undefined}
       title={cardClickable ? "Watch live" : undefined}
     >
@@ -261,7 +262,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             className="hover:underline transition-colors"
             style={{ color: "inherit" }}
             title="View on ESPN"
-            onClick={(e) => e.stopPropagation()}
+            onClick={handleExternalClick(espnUrl)}
           >
             {node}
           </a>
@@ -281,7 +282,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 </span>
               ) : isLive && gameProgress ? (
                 liveUrl ? (
-                  <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors" onClick={(e) => e.stopPropagation()}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
+                  <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors" onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
                 ) : (
                   <span className="text-green-500 font-medium"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>
                 )
@@ -332,7 +333,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       className="hover:underline transition-colors"
                       style={{ color: "var(--text-muted)" }}
                       title={`Watch on ${name}`}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={handleExternalClick(href)}
                     >
                       {name}
                     </a>
@@ -399,7 +400,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     className="hover:underline whitespace-nowrap"
                     style={{ color: "var(--text-muted)" }}
                     title={`Watch on ${b}`}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={handleExternalClick(href)}
                   >
                     {b}
                   </a>
@@ -477,7 +478,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   prefetchedOfficialId.current = id;
                   onPlayHighlight(id, highlightUrl);
                 } else {
-                  window.open(highlightUrl, "_blank");
+                  openExternal(highlightUrl);
                 }
               }}
               disabled={fetchingOnClick !== null}

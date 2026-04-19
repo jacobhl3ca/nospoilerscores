@@ -516,14 +516,14 @@ export function sportStreamFallback(sport: Sport): string {
 export function networkStreamUrl(broadcast: string, gameId: string, sport?: Sport): string | null {
   const b = broadcast.toLowerCase().trim();
   if (!b) return null;
-  // ESPN family — deep link to specific game stream
+  // ESPN family (incl. ABC, ESPN Unlmtd, ESPN+, ESPNU, SEC/ACC Network, ESPN Deportes)
   if (b.includes("espn") || b === "abc") return `https://www.espn.com/watch/player/_/id/${gameId}`;
   // FOX family
   if (b === "fox" || b === "fs1" || b === "fs2" || b === "fox deportes") return "https://www.foxsports.com/live";
-  // WBD → Max
-  if (b === "tnt" || b === "tbs" || b === "trutv" || b === "max") return "https://play.max.com/live";
-  // NBCU → Peacock (incl. Golf Channel which streams there)
-  if (b === "nbc" || b === "usa" || b === "peacock" || b === "nbc sports" || b === "golf channel") return "https://www.peacocktv.com/";
+  // WBD → Max (incl. "HBO Max", "TNT", "TBS", "TruTV")
+  if (b.includes("max") || b === "tnt" || b === "tbs" || b === "trutv") return "https://play.max.com/live";
+  // NBCU → Peacock (NBC, USA Network, Golf Channel, Telemundo Deportes — all stream here)
+  if (b.includes("nbc") || b.includes("usa") || b === "peacock" || b === "golf channel" || b.startsWith("tele")) return "https://www.peacocktv.com/";
   // CBS / Paramount+
   if (b === "cbs" || b === "cbssn" || b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
   // Amazon Prime Video — fall back to the Prime sports hub. Sport-specific
@@ -544,6 +544,15 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b === "tennis channel") return "https://www.tennischannel.com/";
   // Masters-only streamer — already added during golf broadcast enrichment
   if (b === "masters.com") return "https://www.masters.com/en_US/watch/index.html";
+  // MLB direct-to-consumer team feeds ("Brewers.TV", "YES", "SNY", "NESN",
+  // "MASN", regional Sports Networks, etc.). MLB.tv is the single best
+  // streaming home — most RSNs have black-out caveats but in-market viewers
+  // already know to use the team app, and out-of-market viewers want MLB.tv.
+  if (sport === "mlb") {
+    if (/\.tv$/i.test(b)) return "https://www.mlb.com/tv";
+    if (/^(yes|sny|nesn|masn|chsn|snw|snp|sn1)$/.test(b)) return "https://www.mlb.com/tv";
+    if (b.includes("sportsnet") || b.includes("marquee") || b.includes("fanduel") || b.includes("space city") || b.includes("nbc sports")) return "https://www.mlb.com/tv";
+  }
   return null;
 }
 
