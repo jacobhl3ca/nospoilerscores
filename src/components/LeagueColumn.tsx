@@ -411,7 +411,7 @@ export default function LeagueColumn({
   const preGames = sorted.filter((g) => g.state === "pre");
   const postGames = sorted.filter((g) => g.state === "post");
 
-  const showHeader = section !== "finished" && !teamViewTeam;
+  const showHeader = section !== "finished";
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
 

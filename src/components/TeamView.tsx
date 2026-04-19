@@ -112,14 +112,14 @@ export default function TeamView({
 
   return (
     <div className="flex flex-col gap-1.5 sm:gap-2">
-      <div
-        className="league-sticky-top flex items-center justify-center gap-1.5 pb-2 sm:pb-3 sticky z-30"
-        style={{ background: "var(--bg)", paddingTop: "1.75rem" }}
-      >
+      {/* Team row: back button absolutely left, team name dead-center mirroring
+          the league label above (invisible star on the left of the centered
+          group balances the star on the right, so the name itself is centered). */}
+      <div className="relative flex items-center justify-center pb-2 pt-1">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-0.5 text-[11px] sm:text-xs cursor-pointer hover:underline shrink-0"
+          className="absolute left-0 flex items-center gap-0.5 text-[11px] sm:text-xs cursor-pointer hover:underline"
           style={{ color: "var(--text-muted)" }}
           title={`Back to ${leagueLabel}`}
         >
@@ -128,20 +128,22 @@ export default function TeamView({
           </svg>
           <span>{leagueLabel}</span>
         </button>
-        <span className="shrink-0" style={{ color: "var(--text-muted)", opacity: 0.5 }}>·</span>
-        {team.logo && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={team.logo} alt={team.abbreviation} width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0" />
-        )}
-        <h3 className="text-sm sm:text-base font-bold truncate" style={{ color: "var(--text)" }} title={team.displayName}>
-          {team.shortDisplayName || team.displayName}
-        </h3>
-        <button
-          onClick={() => onToggleFavoriteTeam(team.id)}
-          className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
-          style={favoriteTeams.includes(team.id) ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-          title={favoriteTeams.includes(team.id) ? "Remove from favorites" : "Add to favorites"}
-        >★</button>
+        <div className="flex items-center justify-center min-w-0 max-w-[70%]">
+          <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
+          {team.logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={team.logo} alt={team.abbreviation} width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" />
+          )}
+          <h3 className="text-sm sm:text-base font-bold truncate" style={{ color: "var(--text)" }} title={team.displayName}>
+            {team.shortDisplayName || team.displayName}
+          </h3>
+          <button
+            onClick={() => onToggleFavoriteTeam(team.id)}
+            className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ml-1 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+            style={favoriteTeams.includes(team.id) ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
+            title={favoriteTeams.includes(team.id) ? "Remove from favorites" : "Add to favorites"}
+          >★</button>
+        </div>
       </div>
 
       {loading ? (
