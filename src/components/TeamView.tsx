@@ -170,11 +170,11 @@ export default function TeamView({
 
   return (
     <>
-      {/* Team-view replaces the league sticky header. Back button sits absolutely
-          on the left; team name + logo + star is dead-centered, same font and
-          sticky placement as the league header it replaces. Falls back to the
-          3-char abbreviation if the full name would overlap the back button. */}
-      <div ref={headerRef} className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
+      {/* Team-view sticky header — just the team row (matches the NBA/NHL
+          title row). The subtitle-height spacer lives OUTSIDE the sticky so
+          when the user scrolls, the spacer scrolls away and the Recent/Upcoming
+          divider rises into the italic slot under the pinned team row. */}
+      <div ref={headerRef} className="league-sticky-top flex flex-col items-center sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
         <div className="relative w-full flex items-center justify-center">
           <button
             ref={backRef}
@@ -206,17 +206,17 @@ export default function TeamView({
             >★</button>
           </div>
         </div>
-        {/* Invisible subtitle-height spacer so this sticky header matches the
-            height of PlayoffSubtitle-carrying league headers in adjacent
-            columns. Keeps "NBA"/"NHL" pinned at the same Y while scrolling. */}
-        <span
-          className="text-[9px] sm:text-[10px] italic mt-0.5 block whitespace-nowrap"
-          style={{ color: "transparent" }}
-          aria-hidden="true"
-        >
-          {"\u00A0"}
-        </span>
       </div>
+      {/* Non-sticky subtitle-height spacer — keeps first-card Y aligned with
+          NBA/NHL columns at the top of the page. Scrolls away as the user
+          scrolls, letting the pinned divider rise into the italic slot. */}
+      <span
+        className="text-[9px] sm:text-[10px] italic mt-0.5 pb-2 sm:pb-3 block text-center whitespace-nowrap"
+        style={{ color: "transparent" }}
+        aria-hidden="true"
+      >
+        {"\u00A0"}
+      </span>
 
       {loading ? (
         <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Loading schedule…</p>
