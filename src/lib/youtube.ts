@@ -43,9 +43,10 @@ export function getYouTubeSearchUrl(
   awayTeam: string,
   homeTeam: string,
   dateStr: string,
-  seriesNote?: string | null
+  seriesNote?: string | null,
+  dateISO?: string
 ): string {
-  const query = buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
+  const query = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, dateISO ? shortDateToken(dateISO) : null);
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
@@ -53,9 +54,10 @@ export function getHighlightSearchQuery(
   awayTeam: string,
   homeTeam: string,
   dateStr: string,
-  seriesNote?: string | null
+  seriesNote?: string | null,
+  dateISO?: string
 ): string {
-  return buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
+  return buildQuery(awayTeam, homeTeam, dateStr, seriesNote, dateISO ? shortDateToken(dateISO) : null);
 }
 
 export function getOfficialChannelName(sport: string, label?: string): string | null {
@@ -78,10 +80,50 @@ export function getSecondaryChannels(sport: string, label?: string): string[] {
   return [];
 }
 
-function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
+function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null, shortDate?: string | null): string {
   const parts = [`${awayTeam} vs ${homeTeam} highlights ${dateStr}`];
+  if (shortDate) parts.push(shortDate);
   if (seriesNote) parts.push(seriesNote);
   return parts.join(" ");
+}
+
+function shortDateToken(dateISO: string): string {
+  const d = new Date(dateISO);
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+}
+
+// Tokens that, if any are present in a YouTube video title, prove the video
+// belongs to the same calendar date as the game. Used to reject wrong-date
+// results from channel-scoped searches (e.g. MLB posting the prior day's game
+// higher than today's because the nickname match outranked the date).
+export function getHighlightDateTokens(dateISO: string): string[] {
+  const d = new Date(dateISO);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const yyyy = d.getFullYear();
+  const yy = String(yyyy).slice(2);
+  const abbr = d.toLocaleString("en-US", { month: "short" });
+  const full = d.toLocaleString("en-US", { month: "long" });
+  return [
+    `${m}/${day}/${yy}`,
+    `${m}/${day}/${yyyy}`,
+    `${m}-${day}-${yy}`,
+    `${m}-${day}-${yyyy}`,
+    `${abbr} ${day}, ${yyyy}`,
+    `${full} ${day}, ${yyyy}`,
+  ];
+}
+
+async function verifyTitleContainsDate(videoId: string, tokens: string[]): Promise<boolean> {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+    if (!r.ok) return false;
+    const data = await r.json();
+    const title = String(data.title ?? "").toLowerCase();
+    return tokens.some((t) => title.includes(t.toLowerCase()));
+  } catch {
+    return false;
+  }
 }
 
 // Build a YouTube search query for a specific completed round of a golf major.
@@ -101,14 +143,20 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, dateTokens?: string[]): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    return data.videoId ?? null;
+    const id = data.videoId ?? null;
+    if (!id) return null;
+    if (dateTokens && dateTokens.length) {
+      const ok = await verifyTitleContainsDate(id, dateTokens);
+      if (!ok) return null;
+    }
+    return id;
   } catch {
     return null;
   }

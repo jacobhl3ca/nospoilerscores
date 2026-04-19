@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl } from "@/lib/espn";
-import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName, getHighlightDateTokens } from "@/lib/youtube";
 
 interface GameCardProps {
   game: Game;
@@ -193,8 +193,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   })();
 
   const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const dateTokens = useMemo(() => getHighlightDateTokens(game.date), [game.date]);
   const highlightUrl = highlightsReady
-    ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote)
+    ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date)
     : null;
 
   // Pre-fetch YouTube video IDs in background (official channel + top search)
@@ -202,12 +203,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-    fetchFirstVideoId(query).then((id) => { prefetchedVideoId.current = id; });
+    const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date);
+    fetchFirstVideoId(query, undefined, dateTokens).then((id) => { prefetchedVideoId.current = id; });
     if (officialChannel) {
-      fetchFirstVideoId(query, officialChannel).then((id) => { prefetchedOfficialId.current = id; });
+      fetchFirstVideoId(query, officialChannel, dateTokens).then((id) => { prefetchedOfficialId.current = id; });
     }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, officialChannel]);
+  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.date, officialChannel, game.seriesNote, dateTokens]);
 
   const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
@@ -462,8 +463,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   return;
                 }
                 setFetchingOnClick("official");
-                const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-                const id = await fetchFirstVideoId(query, officialChannel);
+                const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date);
+                const id = await fetchFirstVideoId(query, officialChannel, dateTokens);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -495,8 +496,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 return;
               }
               setFetchingOnClick("search");
-              const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-              const id = await fetchFirstVideoId(query);
+              const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date);
+              const id = await fetchFirstVideoId(query, undefined, dateTokens);
               setFetchingOnClick(null);
               if (id) {
                 prefetchedVideoId.current = id;
