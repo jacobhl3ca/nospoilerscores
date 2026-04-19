@@ -19,6 +19,7 @@ interface TeamViewProps {
 }
 
 const PAGE_SIZE = 10;
+const PAST_INITIAL = 3;
 
 // team.id is "${sport}-${rawId}" — strip the sport prefix to get ESPN's team id.
 function rawEspnTeamId(teamId: string, sport: Sport): string {
@@ -50,12 +51,14 @@ export default function TeamView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [upcomingLimit, setUpcomingLimit] = useState(PAGE_SIZE);
+  const [pastLimit, setPastLimit] = useState(PAST_INITIAL);
   const [headerAbbrev, setHeaderAbbrev] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setUpcomingLimit(PAGE_SIZE);
+    setPastLimit(PAST_INITIAL);
     setAllGames(null);
     setLoading(true);
     setError(false);
@@ -76,8 +79,8 @@ export default function TeamView({
     return () => { cancelled = true; };
   }, [sport, team.id]);
 
-  const { pastThree, upcoming } = useMemo(() => {
-    if (!allGames) return { pastThree: [] as Game[], upcoming: [] as Game[] };
+  const { past, upcoming } = useMemo(() => {
+    if (!allGames) return { past: [] as Game[], upcoming: [] as Game[] };
     const now = Date.now();
     const finished = allGames
       .filter((g) => g.state === "post")
@@ -85,9 +88,11 @@ export default function TeamView({
     const liveAndPre = allGames
       .filter((g) => g.state === "in" || g.state === "pre" || (g.state === "post" && new Date(g.date).getTime() > now))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    return { pastThree: finished.slice(0, 3), upcoming: liveAndPre };
+    return { past: finished, upcoming: liveAndPre };
   }, [allGames]);
 
+  const pastShown = past.slice(0, pastLimit);
+  const morePastAvailable = past.length > pastLimit;
   const upcomingShown = upcoming.slice(0, upcomingLimit);
   const moreAvailable = upcoming.length > upcomingLimit;
 
@@ -194,14 +199,26 @@ export default function TeamView({
         <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
       ) : (
         <>
-          {pastThree.length > 0 && (
+          {pastShown.length > 0 && (
             <>
               <div className="flex items-center gap-1.5 mt-1" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
                 <span className="text-[9px] uppercase tracking-wide">Recent</span>
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
               </div>
-              {pastThree.map(renderCard)}
+              {pastShown.map(renderCard)}
+              {morePastAvailable && (
+                <button
+                  type="button"
+                  onClick={() => setPastLimit((n) => n + PAGE_SIZE)}
+                  className="mt-1 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                >
+                  More
+                </button>
+              )}
             </>
           )}
           {upcomingShown.length > 0 && (
@@ -226,7 +243,7 @@ export default function TeamView({
               )}
             </>
           )}
-          {pastThree.length === 0 && upcomingShown.length === 0 && (
+          {pastShown.length === 0 && upcomingShown.length === 0 && (
             <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
           )}
         </>
