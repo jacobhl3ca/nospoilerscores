@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, Sport, Team } from "@/lib/types";
 import { fetchTeamSchedule } from "@/lib/espn";
 import GameCard from "./GameCard";
@@ -53,10 +55,21 @@ export default function TeamView({
   const [upcomingLimit, setUpcomingLimit] = useState(PAGE_SIZE);
   const [pastLimit, setPastLimit] = useState(PAST_INITIAL);
   const [headerAbbrev, setHeaderAbbrev] = useState(false);
-  const [activeSection, setActiveSection] = useState<"recent" | "upcoming">("recent");
+  const [headerH, setHeaderH] = useState(80);
   const headerRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
-  const upcomingMarkerRef = useRef<HTMLDivElement>(null);
+
+  // Measure the sticky team header height so the section dividers can pin
+  // exactly below it (same idea as the sticky-within-sticky playoff pattern).
+  useIsoLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const measure = () => setHeaderH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     setUpcomingLimit(PAGE_SIZE);
@@ -133,29 +146,6 @@ export default function TeamView({
     return () => ro.disconnect();
   }, [team.shortDisplayName, team.displayName, team.abbreviation, leagueLabel]);
 
-  // Track which section the user is currently in so the sticky subtitle slot
-  // (matching the "Game 1"/playoff-subtitle row other columns render) shows
-  // "Recent" or "Upcoming" — keeps column header heights consistent.
-  useEffect(() => {
-    if (past.length === 0) { setActiveSection("upcoming"); return; }
-    if (upcoming.length === 0) { setActiveSection("recent"); return; }
-    const check = () => {
-      const marker = upcomingMarkerRef.current;
-      const host = headerRef.current;
-      if (!marker || !host) return;
-      const headerBottom = host.getBoundingClientRect().bottom;
-      const markerTop = marker.getBoundingClientRect().top;
-      setActiveSection(markerTop <= headerBottom + 4 ? "upcoming" : "recent");
-    };
-    check();
-    window.addEventListener("scroll", check, { passive: true });
-    window.addEventListener("resize", check);
-    return () => {
-      window.removeEventListener("scroll", check);
-      window.removeEventListener("resize", check);
-    };
-  }, [past.length, upcoming.length, pastLimit]);
-
   const todayYMD = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -216,17 +206,16 @@ export default function TeamView({
             >★</button>
           </div>
         </div>
-        {/* Subtitle slot — `—— Recent ——` / `—— Upcoming ——` divider, replaces
-            the usual italic subtitle. Matches PlayoffSubtitle's vertical space
-            so column header heights stay consistent across all 3 columns. */}
-        <div
-          className="flex items-center gap-1.5 mt-0.5 w-full px-1"
-          style={{ color: "var(--text-muted)", opacity: (past.length === 0 && upcoming.length === 0) ? 0 : 0.6 }}
+        {/* Invisible subtitle-height spacer so this sticky header matches the
+            height of PlayoffSubtitle-carrying league headers in adjacent
+            columns. Keeps "NBA"/"NHL" pinned at the same Y while scrolling. */}
+        <span
+          className="text-[9px] sm:text-[10px] italic mt-0.5 block whitespace-nowrap"
+          style={{ color: "transparent" }}
+          aria-hidden="true"
         >
-          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-          <span className="text-[9px] uppercase tracking-wide">{activeSection === "upcoming" ? "Upcoming" : "Recent"}</span>
-          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-        </div>
+          {"\u00A0"}
+        </span>
       </div>
 
       {loading ? (
@@ -239,7 +228,23 @@ export default function TeamView({
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {pastShown.length > 0 && (
             <>
-              {/* No inline Recent divider — the sticky subtitle carries that label. */}
+              {/* Recent divider — inline at first-card Y, pins below the team
+                  header when scrolled. Upcoming divider below uses the same
+                  sticky top, so CSS stacking naturally pushes Recent out of
+                  view once Upcoming reaches the pinned position. */}
+              <div
+                className="sticky z-20 flex items-center gap-1.5 py-1"
+                style={{
+                  top: `calc(var(--header-h, 60px) + ${headerH - 1}px)`,
+                  background: "var(--bg)",
+                  color: "var(--text-muted)",
+                  opacity: 0.8,
+                }}
+              >
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                <span className="text-[9px] uppercase tracking-wide">Recent</span>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              </div>
               {pastShown.map(renderCard)}
               {morePastAvailable && (
                 <button
@@ -257,8 +262,17 @@ export default function TeamView({
           )}
           {upcomingShown.length > 0 && (
             <>
-              {/* Between-sections divider; also drives the sticky subtitle swap. */}
-              <div ref={upcomingMarkerRef} className="flex items-center gap-1.5" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
+              {/* Upcoming divider — same sticky top as Recent so it replaces it
+                  once scrolled into the pinned slot. */}
+              <div
+                className="sticky z-20 flex items-center gap-1.5 py-1"
+                style={{
+                  top: `calc(var(--header-h, 60px) + ${headerH - 1}px)`,
+                  background: "var(--bg)",
+                  color: "var(--text-muted)",
+                  opacity: 0.8,
+                }}
+              >
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
                 <span className="text-[9px] uppercase tracking-wide">Upcoming</span>
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
