@@ -52,7 +52,9 @@ export interface Preferences {
   theme: Theme;
   showRatings: boolean;
   skipExplainer: boolean;
+  skipNewsExplainer: boolean;
   thirdLeague?: Sport; // user-chosen 3rd league slot override
+  newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
 }
 
 const defaults: Preferences = {
@@ -61,6 +63,7 @@ const defaults: Preferences = {
   theme: "system",
   showRatings: false,
   skipExplainer: false,
+  skipNewsExplainer: false,
 };
 
 export function loadPreferences(): Preferences {

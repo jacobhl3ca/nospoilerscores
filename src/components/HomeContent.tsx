@@ -6,6 +6,7 @@ import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
+import NewsColumn from "@/components/NewsColumn";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
@@ -42,6 +43,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string } | null>(null);
+  const [showNews, setShowNews] = useState(false);
+  const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   // sortByMatchups removed — monkey toggle now controls both ratings visibility AND sort order
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
@@ -49,6 +52,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     theme: "system",
     showRatings: false,
     skipExplainer: false,
+    skipNewsExplainer: false,
   });
 
   useEffect(() => {
@@ -160,6 +164,28 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const confirmRatings = (dontShowAgain: boolean) => {
     setShowRatingsExplainer(false);
     updatePrefs({ showRatings: true, skipExplainer: dontShowAgain });
+  };
+
+  const handleNewsClick = () => {
+    if (showNews) {
+      setShowNews(false);
+      return;
+    }
+    if (prefs.skipNewsExplainer) {
+      setShowNews(true);
+    } else {
+      setShowNewsExplainer(true);
+    }
+  };
+
+  const confirmNews = (dontShowAgain: boolean) => {
+    setShowNewsExplainer(false);
+    setShowNews(true);
+    if (dontShowAgain) updatePrefs({ skipNewsExplainer: true });
+  };
+
+  const setNewsThirdLeague = (sport: Sport | undefined) => {
+    updatePrefs({ newsThirdLeague: sport });
   };
 
   // Update favicon based on ratings toggle
@@ -397,7 +423,47 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       </header>
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
-        {loading ? (
+        <div className="flex justify-center pt-3 pb-1">
+          <button
+            onClick={handleNewsClick}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer"
+            style={{
+              background: showNews ? "var(--accent)" : "var(--bg-card)",
+              border: `1px solid ${showNews ? "var(--accent)" : "var(--border)"}`,
+              color: showNews ? "white" : "var(--text-muted)",
+            }}
+            onMouseEnter={(e) => { if (!showNews) e.currentTarget.style.borderColor = "var(--accent)"; }}
+            onMouseLeave={(e) => { if (!showNews) e.currentTarget.style.borderColor = "var(--border)"; }}
+            title={showNews ? "Back to scores" : "View news (contains spoilers)"}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+              <path d="M18 14h-8" /><path d="M15 18h-5" /><path d="M10 6h8v4h-8V6Z" />
+            </svg>
+            {showNews ? "Back to Scores" : "News"}
+          </button>
+        </div>
+        {showNews ? (
+          <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+            <NewsColumn
+              sport={sortedLeagues[0]?.sport}
+              label={sortedLeagues[0]?.label ?? "News"}
+            />
+            <NewsColumn
+              sport={sortedLeagues[1]?.sport}
+              label={sortedLeagues[1]?.label ?? "News"}
+            />
+            <NewsColumn
+              sport={prefs.newsThirdLeague}
+              label={prefs.newsThirdLeague
+                ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
+                : "News"}
+              swappableOptions={thirdLeagueOptions}
+              selectedThirdLeague={prefs.newsThirdLeague}
+              onSwapLeague={setNewsThirdLeague}
+            />
+          </div>
+        ) : loading ? (
           <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
@@ -613,6 +679,60 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </div>
             <label className="flex items-center gap-2 mt-3 cursor-pointer select-none justify-end">
               <input type="checkbox" id="dont-show-explainer" className="accent-[var(--accent)]" />
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {showNewsExplainer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowNewsExplainer(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center mb-2">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="warning">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+            <h3 className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>
+              Warning
+              <br />
+              FULL OF SPOILERS
+            </h3>
+            <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
+              News headlines and images give away game results, player performance, and outcomes.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowNewsExplainer(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const cb = document.getElementById("dont-show-news-explainer") as HTMLInputElement | null;
+                  confirmNews(cb?.checked ?? false);
+                }}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                style={{ background: "var(--accent)", color: "white" }}
+                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
+              >
+                Show News
+              </button>
+            </div>
+            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none justify-end">
+              <input type="checkbox" id="dont-show-news-explainer" className="accent-[var(--accent)]" />
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
             </label>
           </div>

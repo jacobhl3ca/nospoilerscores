@@ -207,16 +207,14 @@ export default function TeamView({
           </div>
         </div>
       </div>
-      {/* Non-sticky subtitle-height spacer — keeps first-card Y aligned with
-          NBA/NHL columns at the top of the page. Scrolls away as the user
-          scrolls, letting the pinned divider rise into the italic slot. */}
-      <span
-        className="text-[9px] sm:text-[10px] italic mt-0.5 pb-2 sm:pb-3 block text-center whitespace-nowrap"
-        style={{ color: "transparent" }}
-        aria-hidden="true"
-      >
-        {"\u00A0"}
-      </span>
+      {/* Non-sticky whitespace spacer under the team name — mirrors the
+          subtitle + header bottom-padding league columns use so the first
+          Recent divider lands at the same Y as other columns' first card. */}
+      <div className="mt-0.5 pb-5 sm:pb-6" aria-hidden="true">
+        <span className="text-[9px] sm:text-[10px] italic block text-center whitespace-nowrap" style={{ color: "transparent" }}>
+          {"\u00A0"}
+        </span>
+      </div>
 
       {loading ? (
         <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Loading schedule…</p>
