@@ -302,8 +302,17 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               {hasBroadcast && (() => {
                 const networkLink = (name: string, key: string | number) => {
                   const isPrime = /\b(amazon|prime)\b/i.test(name);
+                  const isEspn = /\b(espn|abc)\b/i.test(name);
+                  // ESPN chip should reuse game.streamUrl when it's already
+                  // been upgraded to the airing UUID — networkStreamUrl()
+                  // can only synthesize /watch/player/_/id/{numericId}.
+                  const espnStream =
+                    isEspn && game.streamUrl && /\/watch\/player\/_\/id\//.test(game.streamUrl)
+                      ? game.streamUrl
+                      : null;
                   const href =
                     (isPrime && game.primeStreamUrl) ||
+                    espnStream ||
                     networkStreamUrl(name, game.id, game.sport) ||
                     sportStreamFallback(game.sport);
                   return (
@@ -363,8 +372,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             <div className="flex flex-col gap-0.5 text-[10px] sm:text-xs leading-tight">
               {game.broadcasts.map((b, i) => {
                 const isPrime = /\b(amazon|prime)\b/i.test(b);
+                const isEspn = /\b(espn|abc)\b/i.test(b);
+                const espnStream =
+                  isEspn && game.streamUrl && /\/watch\/player\/_\/id\//.test(game.streamUrl)
+                    ? game.streamUrl
+                    : null;
                 const href =
                   (isPrime && game.primeStreamUrl) ||
+                  espnStream ||
                   networkStreamUrl(b, game.id, game.sport) ||
                   sportStreamFallback(game.sport);
                 return (
