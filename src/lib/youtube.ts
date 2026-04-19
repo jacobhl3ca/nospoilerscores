@@ -39,6 +39,24 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   golf_theopen: ["ESPN", "Sky Sports Golf", "Golf Channel"],
 };
 
+// Nicknames official league YouTube channels sometimes use instead of the
+// team name ESPN returns. Key is ESPN's shortDisplayName; value is a list
+// of alternate spellings to try on the same query. Order matters — first
+// entry is the primary, subsequent ones are retry variants when the first
+// query fails date validation. Add entries as real mismatches surface
+// (verified by the oembed title check rejecting a valid game).
+const TEAM_NICKNAME_ALIASES: Record<string, string[]> = {
+  // MLB — the A's title format flipped from "Athletics" (4/17/26) to
+  // "A's" (4/18/26) so we need both.
+  Athletics: ["A's"],
+  Diamondbacks: ["D-backs"],
+};
+
+export function getTeamQueryVariants(teamName: string): string[] {
+  const alts = TEAM_NICKNAME_ALIASES[teamName] ?? [];
+  return [teamName, ...alts];
+}
+
 export function getYouTubeSearchUrl(
   awayTeam: string,
   homeTeam: string,
@@ -160,6 +178,23 @@ export async function fetchFirstVideoId(query: string, channel?: string, dateTok
   } catch {
     return null;
   }
+}
+
+// Try a list of candidate queries in order and return the first validated
+// videoId. Used when league YT channels use inconsistent nicknames for the
+// same team (e.g. MLB's channel flipped "Athletics" → "A's" between 4/17 and
+// 4/18), so we need to try each spelling until one returns a date-matching
+// upload.
+export async function fetchFirstValidatedVideoId(
+  queries: string[],
+  channel: string | undefined,
+  dateTokens: string[]
+): Promise<string | null> {
+  for (const q of queries) {
+    const id = await fetchFirstVideoId(q, channel, dateTokens);
+    if (id) return id;
+  }
+  return null;
 }
 
 export function getYouTubeEmbedUrl(videoId: string): string {

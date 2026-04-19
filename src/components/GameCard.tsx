@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl } from "@/lib/espn";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
-import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName, getHighlightDateTokens } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstValidatedVideoId, getOfficialChannelName, getHighlightDateTokens, getTeamQueryVariants } from "@/lib/youtube";
 
 interface GameCardProps {
   game: Game;
@@ -200,17 +200,27 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     : null;
 
   // Pre-fetch YouTube video IDs in background (official channel + top search).
-  // fetchFirstVideoId returns null if the YT title doesn't prove the video is
-  // for this game's date — we hide the button in that case rather than fall
-  // through to a YouTube search tab (which would surface wrong-date results).
+  // fetchFirstValidatedVideoId returns null if no query variant produces a
+  // video whose YT title proves it's for this game's date — we hide the
+  // button in that case rather than fall through to a YouTube search tab
+  // (which would surface wrong-date results). Team nickname variants handle
+  // cases like MLB's channel using "A's" in some titles and "Athletics" in
+  // others for the same team.
   const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, game.date);
-    fetchFirstVideoId(query, undefined, dateTokens).then((id) => setSearchVideoId(id));
+    const awayVariants = getTeamQueryVariants(game.awayTeam.shortDisplayName);
+    const homeVariants = getTeamQueryVariants(game.homeTeam.shortDisplayName);
+    const queries: string[] = [];
+    for (const a of awayVariants) {
+      for (const h of homeVariants) {
+        queries.push(getHighlightSearchQuery(a, h, dateStr, game.seriesNote, game.date));
+      }
+    }
+    fetchFirstValidatedVideoId(queries, undefined, dateTokens).then(setSearchVideoId);
     if (officialChannel) {
-      fetchFirstVideoId(query, officialChannel, dateTokens).then((id) => setOfficialVideoId(id));
+      fetchFirstValidatedVideoId(queries, officialChannel, dateTokens).then(setOfficialVideoId);
     } else {
       setOfficialVideoId(null);
     }
