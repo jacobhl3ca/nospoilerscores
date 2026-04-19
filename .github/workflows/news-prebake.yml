@@ -1,0 +1,31 @@
+name: Prebake news feeds
+
+on:
+  schedule:
+    # Every 30 min — official league feeds update throughout the day.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/prebake-news.mjs
+      - name: Commit updated news feeds
+        run: |
+          git config user.name "Jacob HL"
+          git config user.email "jacobhl3ca@gmail.com"
+          if git diff --quiet public/news; then
+            echo "no changes"
+            exit 0
+          fi
+          git add public/news
+          git commit -m "Refresh news feeds"
+          git push

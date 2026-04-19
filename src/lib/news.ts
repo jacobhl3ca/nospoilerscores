@@ -95,6 +95,27 @@ export async function fetchTopHeadlines(limit = 20): Promise<NewsItem[]> {
   }
 }
 
+// Prebaked feeds live at /news/{name}.json — written by scripts/prebake-news.mjs
+// on a schedule and deployed with the static site. Use these for origins that
+// block direct browser fetches (MLB.com, NBA.com, NHL.com).
+export async function fetchPrebaked(name: string): Promise<NewsItem[]> {
+  try {
+    const res = await fetch(`/news/${name}.json`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.items ?? []) as NewsItem[];
+  } catch {
+    return [];
+  }
+}
+
+// Leagues that have a prebaked official-site feed. Add here as new scrapers land.
+export const PREBAKED_FEEDS: Partial<Record<Sport, { name: string; label: string }>> = {
+  mlb: { name: "mlb", label: "MLB.com" },
+  nba: { name: "nba", label: "NBA.com" },
+  nhl: { name: "nhl", label: "NHL.com" },
+};
+
 export function formatPublished(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Sport } from "@/lib/types";
-import { NewsItem, formatPublished } from "@/lib/news";
+import { NewsItem } from "@/lib/news";
 
 export interface NewsSource {
   label: string;
@@ -48,17 +48,10 @@ function SourceCard({ label, items, loading }: { label: string; items: NewsItem[
               href={item.articleUrl || undefined}
               target="_blank"
               rel="noopener noreferrer"
-              className="block px-3 py-2 transition-colors hover:bg-[var(--bg-card-hover)]"
-              style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)" }}
+              className="block px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]"
+              style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)", color: "var(--text)" }}
             >
-              <div className="text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
-                {item.headline}
-              </div>
-              {item.published && (
-                <div className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {formatPublished(item.published)}
-                </div>
-              )}
+              {item.headline}
             </a>
           ))}
         </div>

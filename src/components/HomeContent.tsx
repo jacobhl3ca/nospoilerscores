@@ -7,7 +7,7 @@ import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, 
 import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
 import NewsColumn, { NewsSource } from "@/components/NewsColumn";
-import { fetchLeagueNews, fetchTopHeadlines } from "@/lib/news";
+import { fetchLeagueNews, fetchTopHeadlines, fetchPrebaked, PREBAKED_FEEDS } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
@@ -449,13 +449,17 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         {showNews ? (() => {
           const buildLeagueSources = (sport?: Sport): NewsSource[] => {
             if (!sport) return [];
-            return [
-              { label: `ESPN ${sport.toUpperCase()}`, fetch: () => fetchLeagueNews(sport, 10) },
-            ];
+            const sources: NewsSource[] = [];
+            const prebaked = PREBAKED_FEEDS[sport];
+            if (prebaked) {
+              sources.push({ label: prebaked.label, fetch: () => fetchPrebaked(prebaked.name) });
+            }
+            sources.push({ label: `ESPN ${sport.toUpperCase()}`, fetch: () => fetchLeagueNews(sport, 10) });
+            return sources;
           };
           const col3Sources: NewsSource[] = prefs.newsThirdLeague
-            ? [{ label: `ESPN ${prefs.newsThirdLeague.toUpperCase()}`, fetch: () => fetchLeagueNews(prefs.newsThirdLeague!, 10) }]
-            : [{ label: "ESPN", fetch: () => fetchTopHeadlines(15) }];
+            ? buildLeagueSources(prefs.newsThirdLeague)
+            : [{ label: "ESPN", fetch: () => fetchPrebaked("espn-top") }];
           return (
             <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
               <NewsColumn
