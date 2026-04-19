@@ -179,7 +179,7 @@ export default function TeamView({
   );
 
   return (
-    <div className="flex flex-col gap-1.5 sm:gap-2">
+    <>
       {/* Team-view replaces the league sticky header. Back button sits absolutely
           on the left; team name + logo + star is dead-centered, same font and
           sticky placement as the league header it replaces. Falls back to the
@@ -234,9 +234,14 @@ export default function TeamView({
       ) : allGames && allGames.length === 0 ? (
         <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
       ) : (
-        <>
+        <div className="flex flex-col gap-1.5 sm:gap-2">
           {pastShown.length > 0 && (
             <>
+              <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                <span className="text-[9px] uppercase tracking-wide">Recent</span>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              </div>
               {pastShown.map(renderCard)}
               {morePastAvailable && (
                 <button
@@ -254,9 +259,13 @@ export default function TeamView({
           )}
           {upcomingShown.length > 0 && (
             <>
-              {/* Scroll marker — sticky subtitle flips to "Upcoming" once this
-                  crosses under the sticky header. Invisible 1px spacer. */}
-              <div ref={upcomingMarkerRef} className="h-px" aria-hidden="true" />
+              {/* Divider marker — sticky subtitle flips to "Upcoming" once this
+                  line crosses under the sticky header. */}
+              <div ref={upcomingMarkerRef} className="flex items-center gap-1.5" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                <span className="text-[9px] uppercase tracking-wide">Upcoming</span>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              </div>
               {upcomingShown.map(renderCard)}
               {moreAvailable && (
                 <button
@@ -275,8 +284,8 @@ export default function TeamView({
           {pastShown.length === 0 && upcomingShown.length === 0 && (
             <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
           )}
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 }
