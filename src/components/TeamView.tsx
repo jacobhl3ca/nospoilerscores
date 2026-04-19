@@ -238,7 +238,6 @@ export default function TeamView({
                   top: `calc(var(--header-h, 60px) + ${headerH - 1}px)`,
                   background: "var(--bg)",
                   color: "var(--text-muted)",
-                  opacity: 0.8,
                 }}
               >
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
@@ -270,7 +269,6 @@ export default function TeamView({
                   top: `calc(var(--header-h, 60px) + ${headerH - 1}px)`,
                   background: "var(--bg)",
                   color: "var(--text-muted)",
-                  opacity: 0.8,
                 }}
               >
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />

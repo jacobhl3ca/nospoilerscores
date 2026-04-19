@@ -287,13 +287,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             <span>
               {teamView ? (
                 <span className="text-[11px] whitespace-nowrap">
-                  {withEspn(
-                    <>
-                      <span className="font-bold" style={{ color: "var(--text)" }}>{teamViewDateLabel}</span>
-                      {isFuture && teamViewTime ? <span style={{ color: "var(--text-muted)" }}> · {teamViewTime}</span> : null}
-                      {isFinished && !hasRating ? <span style={{ color: "var(--text-muted)" }}> · FINAL</span> : null}
-                    </>
-                  )}
+                  {(() => {
+                    const content = (
+                      <>
+                        <span className="font-bold" style={{ color: "var(--text)" }}>{teamViewDateLabel}</span>
+                        {isFuture && teamViewTime ? <span style={{ color: "var(--text-muted)" }}> · {teamViewTime}</span> : null}
+                        {isFinished && !hasRating ? <span style={{ color: "var(--text-muted)" }}> · FINAL</span> : null}
+                      </>
+                    );
+                    // Finished-game ESPN link would spoil the score — render
+                    // plain text; only link for pre/live dates.
+                    return isFinished ? content : withEspn(content);
+                  })()}
                 </span>
               ) : isLive && gameProgress ? (
                 liveUrl ? (
