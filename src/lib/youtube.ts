@@ -39,32 +39,13 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   golf_theopen: ["ESPN", "Sky Sports Golf", "Golf Channel"],
 };
 
-// Nicknames official league YouTube channels sometimes use instead of the
-// team name ESPN returns. Key is ESPN's shortDisplayName; value is a list
-// of alternate spellings to try on the same query. Order matters — first
-// entry is the primary, subsequent ones are retry variants when the first
-// query fails date validation. Add entries as real mismatches surface
-// (verified by the oembed title check rejecting a valid game).
-const TEAM_NICKNAME_ALIASES: Record<string, string[]> = {
-  // MLB — the A's title format flipped from "Athletics" (4/17/26) to
-  // "A's" (4/18/26) so we need both.
-  Athletics: ["A's"],
-  Diamondbacks: ["D-backs"],
-};
-
-export function getTeamQueryVariants(teamName: string): string[] {
-  const alts = TEAM_NICKNAME_ALIASES[teamName] ?? [];
-  return [teamName, ...alts];
-}
-
 export function getYouTubeSearchUrl(
   awayTeam: string,
   homeTeam: string,
   dateStr: string,
-  seriesNote?: string | null,
-  dateISO?: string
+  seriesNote?: string | null
 ): string {
-  const query = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, dateISO ? shortDateToken(dateISO) : null);
+  const query = buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
@@ -72,10 +53,9 @@ export function getHighlightSearchQuery(
   awayTeam: string,
   homeTeam: string,
   dateStr: string,
-  seriesNote?: string | null,
-  dateISO?: string
+  seriesNote?: string | null
 ): string {
-  return buildQuery(awayTeam, homeTeam, dateStr, seriesNote, dateISO ? shortDateToken(dateISO) : null);
+  return buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
 }
 
 export function getOfficialChannelName(sport: string, label?: string): string | null {
@@ -98,61 +78,10 @@ export function getSecondaryChannels(sport: string, label?: string): string[] {
   return [];
 }
 
-function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null, shortDate?: string | null): string {
+function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
   const parts = [`${awayTeam} vs ${homeTeam} highlights ${dateStr}`];
-  if (shortDate) parts.push(shortDate);
   if (seriesNote) parts.push(seriesNote);
   return parts.join(" ");
-}
-
-function shortDateToken(dateISO: string): string {
-  const d = new Date(dateISO);
-  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
-}
-
-// Tokens that, if any are present in a YouTube video title, prove the video
-// belongs to the same calendar date as the game. Used to reject wrong-date
-// results from channel-scoped searches (e.g. MLB posting the prior day's game
-// higher than today's because the nickname match outranked the date).
-export function getHighlightDateTokens(dateISO: string): string[] {
-  const d = new Date(dateISO);
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const yyyy = d.getFullYear();
-  const yy = String(yyyy).slice(2);
-  const abbr = d.toLocaleString("en-US", { month: "short" });
-  const full = d.toLocaleString("en-US", { month: "long" });
-  return [
-    `${m}/${day}/${yy}`,
-    `${m}/${day}/${yyyy}`,
-    `${m}-${day}-${yy}`,
-    `${m}-${day}-${yyyy}`,
-    `${abbr} ${day}, ${yyyy}`,
-    `${full} ${day}, ${yyyy}`,
-  ];
-}
-
-// Returns:
-//   true  — oembed returned a title and it contains at least one date token
-//   false — oembed returned a title and it does NOT contain any date token
-//           (the video is provably for a different date — reject)
-//   null  — couldn't verify (network error, non-200, empty title). Caller
-//           should trust the video. YouTube oembed rate-limits burst
-//           requests, so a page full of cards will occasionally hit 429 or
-//           similar; rejecting on every transient error would hide valid
-//           videos. Only the provable-mismatch case (false) is a true reject.
-async function verifyTitleContainsDate(videoId: string, tokens: string[]): Promise<boolean | null> {
-  try {
-    const r = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
-    if (!r.ok) return null;
-    const data = await r.json();
-    const title = String(data.title ?? "");
-    if (!title) return null;
-    const lower = title.toLowerCase();
-    return tokens.some((t) => lower.includes(t.toLowerCase()));
-  } catch {
-    return null;
-  }
 }
 
 // Build a YouTube search query for a specific completed round of a golf major.
@@ -172,43 +101,17 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string, dateTokens?: string[]): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    const id = data.videoId ?? null;
-    if (!id) return null;
-    if (dateTokens && dateTokens.length) {
-      const result = await verifyTitleContainsDate(id, dateTokens);
-      // false = provably wrong date; null = couldn't verify (trust the API).
-      // Only explicit mismatches reject so transient oembed failures don't
-      // blank out valid highlight buttons.
-      if (result === false) return null;
-    }
-    return id;
+    return data.videoId ?? null;
   } catch {
     return null;
   }
-}
-
-// Try a list of candidate queries in order and return the first validated
-// videoId. Used when league YT channels use inconsistent nicknames for the
-// same team (e.g. MLB's channel flipped "Athletics" → "A's" between 4/17 and
-// 4/18), so we need to try each spelling until one returns a date-matching
-// upload.
-export async function fetchFirstValidatedVideoId(
-  queries: string[],
-  channel: string | undefined,
-  dateTokens: string[]
-): Promise<string | null> {
-  for (const q of queries) {
-    const id = await fetchFirstVideoId(q, channel, dateTokens);
-    if (id) return id;
-  }
-  return null;
 }
 
 export function getYouTubeEmbedUrl(videoId: string): string {
