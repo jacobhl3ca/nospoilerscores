@@ -1,0 +1,33 @@
+name: Refresh ESPN airing UUIDs
+
+on:
+  schedule:
+    # Every 2 hours — airings are per-day, so we refresh frequently enough
+    # to catch games that ESPN adds/shifts during the day but not so often
+    # we spam the picker endpoint.
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/scrape-espn-airings.mjs
+      - name: Commit updated airings map
+        run: |
+          git config user.name "Jacob HL"
+          git config user.email "jacobhl3ca@gmail.com"
+          if git diff --quiet public/espn-airings.json; then
+            echo "no changes"
+            exit 0
+          fi
+          git add public/espn-airings.json
+          git commit -m "Refresh ESPN airing UUIDs"
+          git push

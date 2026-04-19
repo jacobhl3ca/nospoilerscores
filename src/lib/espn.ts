@@ -421,6 +421,26 @@ export function loadPrimeAsins(): Promise<Record<string, string>> {
   return primeAsinsPromise;
 }
 
+// ESPN airing UUIDs + NBA gameIds resolved by scripts/scrape-espn-airings.mjs.
+// Keyed by ESPN numeric event id. Same cached-promise pattern as Prime.
+type EspnAiringsData = {
+  airings: Record<string, { uuid: string; network?: string }>;
+  nbaGameIds: Record<string, string>;
+};
+let espnAiringsPromise: Promise<EspnAiringsData> | null = null;
+export function loadEspnAirings(): Promise<EspnAiringsData> {
+  if (!espnAiringsPromise) {
+    espnAiringsPromise = fetch("/espn-airings.json", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => ({
+        airings: d?.airings ?? {},
+        nbaGameIds: d?.nbaGameIds ?? {},
+      }))
+      .catch(() => ({ airings: {}, nbaGameIds: {} }));
+  }
+  return espnAiringsPromise;
+}
+
 function buildPrimeDeepLink(
   game: Game,
   asinMap: Record<string, string>
@@ -851,6 +871,10 @@ export async function fetchGames(
   // Prime ASIN map lookup runs for every sport since Prime carries NFL TNF,
   // NBA, MLB, and some soccer. The map is cached across fetchGames() calls.
   const primeAsinsPromise = loadPrimeAsins();
+  // ESPN airings + NBA League Pass ids — resolved by a nightly cron into
+  // /public/espn-airings.json. Used to upgrade the ESPN watch URL from the
+  // numeric event id (hit-or-miss) to the airing UUID (canonical).
+  const espnAiringsPromise = loadEspnAirings();
 
   let res: Response;
   try {
@@ -920,6 +944,26 @@ export async function fetchGames(
     game.primeStreamUrl = url;
     if (game.streamUrl && /primevideo\.com\/sports/.test(game.streamUrl)) {
       game.streamUrl = url;
+    }
+  }
+
+  // ESPN airing UUIDs: swap the numeric-event-id watch URL for the airing
+  // UUID (the canonical id ESPN's watch player expects). Also upgrade the
+  // generic nba.com/watch landing into nba.com/watch/league-pass-stream/{id}
+  // when we have an NBA gameId — score-safe for both auth'd and anon users
+  // (anon redirects to the League Pass purchase page, no score leaks).
+  const espnData = await espnAiringsPromise;
+  for (const game of games) {
+    const airing = espnData.airings[game.id];
+    if (airing && game.streamUrl) {
+      game.streamUrl = game.streamUrl.replace(
+        /\/watch\/player\/_\/id\/[^/?#]+/,
+        `/watch/player/_/id/${airing.uuid}`
+      );
+    }
+    if (sport === "nba" && game.streamUrl === "https://www.nba.com/watch") {
+      const nbaId = espnData.nbaGameIds[game.id];
+      if (nbaId) game.streamUrl = `https://www.nba.com/watch/league-pass-stream/${nbaId}`;
     }
   }
 
