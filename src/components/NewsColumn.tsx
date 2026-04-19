@@ -2,83 +2,99 @@
 
 import { useEffect, useState } from "react";
 import { Sport } from "@/lib/types";
-import { NewsItem, fetchLeagueNews, fetchTopHeadlines, formatPublished } from "@/lib/news";
+import { NewsItem, formatPublished } from "@/lib/news";
+
+export interface NewsSource {
+  label: string;
+  fetch: () => Promise<NewsItem[]>;
+}
 
 interface NewsColumnProps {
-  label: string;
-  // When sport is undefined, this column shows the generic ESPN homepage feed.
-  sport?: Sport;
+  title: string;
+  sources: NewsSource[];
   // 3rd-column selector — same dropdown UX as the scores view.
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport;
   onSwapLeague?: (sport: Sport | undefined) => void;
 }
 
-function NewsCard({ item }: { item: NewsItem }) {
-  const rel = formatPublished(item.published);
+function SourceCard({ label, items, loading }: { label: string; items: NewsItem[]; loading: boolean }) {
   return (
-    <a
-      href={item.articleUrl || undefined}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="rounded-lg overflow-hidden block transition-colors"
+    <div
+      className="rounded-lg overflow-hidden"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
     >
-      {item.imageUrl && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={item.imageUrl}
-          alt=""
-          loading="lazy"
-          className="w-full h-auto aspect-video object-cover"
-          draggable={false}
-        />
-      )}
-      <div className="px-3 py-2.5">
-        <h3 className="text-xs sm:text-sm font-semibold leading-snug" style={{ color: "var(--text)" }}>
-          {item.headline}
-        </h3>
-        {item.description && (
-          <p className="text-[11px] sm:text-xs mt-1 leading-snug line-clamp-3" style={{ color: "var(--text-muted)" }}>
-            {item.description}
-          </p>
-        )}
-        {rel && (
-          <p className="text-[10px] mt-1.5" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-            {rel}
-          </p>
-        )}
+      <div
+        className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide"
+        style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}
+      >
+        {label}
       </div>
-    </a>
+      {loading ? (
+        <div className="flex flex-col">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="px-3 py-2 animate-pulse" style={{ borderTop: i === 1 ? "none" : "1px solid var(--border)" }}>
+              <div className="h-3 w-full rounded" style={{ background: "var(--bg-card-hover)" }} />
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
+      ) : (
+        <div className="flex flex-col">
+          {items.map((item, idx) => (
+            <a
+              key={item.id}
+              href={item.articleUrl || undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block px-3 py-2 transition-colors hover:bg-[var(--bg-card-hover)]"
+              style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)" }}
+            >
+              <div className="text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
+                {item.headline}
+              </div>
+              {item.published && (
+                <div className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {formatPublished(item.published)}
+                </div>
+              )}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-export default function NewsColumn({
-  label,
-  sport,
-  swappableOptions,
-  selectedThirdLeague,
-  onSwapLeague,
-}: NewsColumnProps) {
+function SourceSection({ source }: { source: NewsSource }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [swapOpen, setSwapOpen] = useState(false);
-  const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const load = sport ? fetchLeagueNews(sport, 20) : fetchTopHeadlines(20);
-    load.then((data) => {
+    source.fetch().then((data) => {
       if (!cancelled) {
         setItems(data);
         setLoading(false);
       }
     });
     return () => { cancelled = true; };
-  }, [sport]);
+  }, [source]);
+
+  return <SourceCard label={source.label} items={items} loading={loading} />;
+}
+
+export default function NewsColumn({
+  title,
+  sources,
+  swappableOptions,
+  selectedThirdLeague,
+  onSwapLeague,
+}: NewsColumnProps) {
+  const [swapOpen, setSwapOpen] = useState(false);
+  const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
 
   return (
     <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]">
@@ -96,7 +112,7 @@ export default function NewsColumn({
                 style={{ color: "var(--text)" }}
                 title="Switch news feed"
               >
-                <h2 className="text-base sm:text-lg font-bold tracking-wide">{label}</h2>
+                <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
                 <svg
                   width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
@@ -111,13 +127,12 @@ export default function NewsColumn({
                   className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[120px]"
                   style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                 >
-                  {/* Generic / homepage news — default state */}
                   <button
                     onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
                     className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                     style={{
-                      color: !sport ? "var(--accent)" : "var(--text)",
-                      fontWeight: !sport ? 600 : 400,
+                      color: !selectedThirdLeague ? "var(--accent)" : "var(--text)",
+                      fontWeight: !selectedThirdLeague ? 600 : 400,
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
@@ -144,39 +159,23 @@ export default function NewsColumn({
             </div>
           ) : (
             <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-              {label}
+              {title}
             </h2>
           )}
           <span className="text-sm invisible ml-1.5" aria-hidden="true">★</span>
         </div>
         <span
           className="text-[9px] sm:text-[10px] italic mt-0.5 block"
-          style={{ color: "var(--text-muted)" }}
+          style={{ color: "transparent" }}
         >
-          via ESPN
+          {"\u00A0"}
         </span>
       </div>
-      {loading ? (
-        <div className="flex flex-col gap-1.5 sm:gap-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-lg animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              <div className="w-full aspect-video" style={{ background: "var(--bg-card-hover)" }} />
-              <div className="px-3 py-2.5">
-                <div className="h-3 w-full rounded mb-2" style={{ background: "var(--bg-card-hover)" }} />
-                <div className="h-2 w-3/4 rounded" style={{ background: "var(--bg-card-hover)" }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No news</p>
-      ) : (
-        <div className="flex flex-col gap-1.5 sm:gap-2">
-          {items.map((item) => (
-            <NewsCard key={item.id} item={item} />
-          ))}
-        </div>
-      )}
+      <div className="flex flex-col gap-1.5 sm:gap-2">
+        {sources.map((source) => (
+          <SourceSection key={source.label} source={source} />
+        ))}
+      </div>
     </div>
   );
 }

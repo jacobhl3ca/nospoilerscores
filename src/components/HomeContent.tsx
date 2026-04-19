@@ -6,7 +6,8 @@ import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
-import NewsColumn from "@/components/NewsColumn";
+import NewsColumn, { NewsSource } from "@/components/NewsColumn";
+import { fetchLeagueNews, fetchTopHeadlines } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
@@ -350,7 +351,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 }}
                 title={showShareCopied ? "Link copied!" : "Copy favorites link"}
               >
-                {showShareCopied ? "\u2713" : (
+                {showShareCopied ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
@@ -384,7 +389,25 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 draggable={false}
               />
             </button>
-            {/* Funnel/sort button removed — monkey now controls both ratings + sort */}
+            <button
+              onClick={handleNewsClick}
+              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+              style={{
+                background: showNews ? "var(--accent)" : "var(--bg-card)",
+                border: `1px solid ${showNews ? "var(--accent)" : "var(--border)"}`,
+                color: showNews ? "white" : "var(--text-muted)",
+              }}
+              onMouseEnter={(e) => { if (!showNews) e.currentTarget.style.borderColor = "var(--accent)"; }}
+              onMouseLeave={(e) => { if (!showNews) e.currentTarget.style.borderColor = "var(--border)"; }}
+              title={showNews ? "Back to scores" : "View news (contains spoilers)"}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+                <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+                <path d="M18 14h-8" />
+                <path d="M15 18h-5" />
+                <path d="M10 6h8v4h-8V6Z" />
+              </svg>
+            </button>
             <div className="relative">
               <button
                 onClick={() => setCalendarOpen(!calendarOpen)}
@@ -423,47 +446,38 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       </header>
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
-        <div className="flex justify-center pt-3 pb-1">
-          <button
-            onClick={handleNewsClick}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer"
-            style={{
-              background: showNews ? "var(--accent)" : "var(--bg-card)",
-              border: `1px solid ${showNews ? "var(--accent)" : "var(--border)"}`,
-              color: showNews ? "white" : "var(--text-muted)",
-            }}
-            onMouseEnter={(e) => { if (!showNews) e.currentTarget.style.borderColor = "var(--accent)"; }}
-            onMouseLeave={(e) => { if (!showNews) e.currentTarget.style.borderColor = "var(--border)"; }}
-            title={showNews ? "Back to scores" : "View news (contains spoilers)"}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
-              <path d="M18 14h-8" /><path d="M15 18h-5" /><path d="M10 6h8v4h-8V6Z" />
-            </svg>
-            {showNews ? "Back to Scores" : "News"}
-          </button>
-        </div>
-        {showNews ? (
-          <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-            <NewsColumn
-              sport={sortedLeagues[0]?.sport}
-              label={sortedLeagues[0]?.label ?? "News"}
-            />
-            <NewsColumn
-              sport={sortedLeagues[1]?.sport}
-              label={sortedLeagues[1]?.label ?? "News"}
-            />
-            <NewsColumn
-              sport={prefs.newsThirdLeague}
-              label={prefs.newsThirdLeague
-                ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
-                : "News"}
-              swappableOptions={thirdLeagueOptions}
-              selectedThirdLeague={prefs.newsThirdLeague}
-              onSwapLeague={setNewsThirdLeague}
-            />
-          </div>
-        ) : loading ? (
+        {showNews ? (() => {
+          const buildLeagueSources = (sport?: Sport): NewsSource[] => {
+            if (!sport) return [];
+            return [
+              { label: `ESPN ${sport.toUpperCase()}`, fetch: () => fetchLeagueNews(sport, 10) },
+            ];
+          };
+          const col3Sources: NewsSource[] = prefs.newsThirdLeague
+            ? [{ label: `ESPN ${prefs.newsThirdLeague.toUpperCase()}`, fetch: () => fetchLeagueNews(prefs.newsThirdLeague!, 10) }]
+            : [{ label: "ESPN", fetch: () => fetchTopHeadlines(15) }];
+          return (
+            <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+              <NewsColumn
+                title={sortedLeagues[0]?.label ?? "News"}
+                sources={buildLeagueSources(sortedLeagues[0]?.sport)}
+              />
+              <NewsColumn
+                title={sortedLeagues[1]?.label ?? "News"}
+                sources={buildLeagueSources(sortedLeagues[1]?.sport)}
+              />
+              <NewsColumn
+                title={prefs.newsThirdLeague
+                  ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
+                  : "News"}
+                sources={col3Sources}
+                swappableOptions={thirdLeagueOptions}
+                selectedThirdLeague={prefs.newsThirdLeague}
+                onSwapLeague={setNewsThirdLeague}
+              />
+            </div>
+          );
+        })() : loading ? (
           <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
