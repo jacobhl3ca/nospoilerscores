@@ -53,8 +53,10 @@ export default function TeamView({
   const [upcomingLimit, setUpcomingLimit] = useState(PAGE_SIZE);
   const [pastLimit, setPastLimit] = useState(PAST_INITIAL);
   const [headerAbbrev, setHeaderAbbrev] = useState(false);
+  const [activeSection, setActiveSection] = useState<"recent" | "upcoming">("recent");
   const headerRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
+  const upcomingMarkerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setUpcomingLimit(PAGE_SIZE);
@@ -131,6 +133,29 @@ export default function TeamView({
     return () => ro.disconnect();
   }, [team.shortDisplayName, team.displayName, team.abbreviation, leagueLabel]);
 
+  // Track which section the user is currently in so the sticky subtitle slot
+  // (matching the "Game 1"/playoff-subtitle row other columns render) shows
+  // "Recent" or "Upcoming" — keeps column header heights consistent.
+  useEffect(() => {
+    if (past.length === 0) { setActiveSection("upcoming"); return; }
+    if (upcoming.length === 0) { setActiveSection("recent"); return; }
+    const check = () => {
+      const marker = upcomingMarkerRef.current;
+      const host = headerRef.current;
+      if (!marker || !host) return;
+      const headerBottom = host.getBoundingClientRect().bottom;
+      const markerTop = marker.getBoundingClientRect().top;
+      setActiveSection(markerTop <= headerBottom + 4 ? "upcoming" : "recent");
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [past.length, upcoming.length, pastLimit]);
+
   const todayYMD = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -159,36 +184,47 @@ export default function TeamView({
           on the left; team name + logo + star is dead-centered, same font and
           sticky placement as the league header it replaces. Falls back to the
           3-char abbreviation if the full name would overlap the back button. */}
-      <div ref={headerRef} className="league-sticky-top relative flex items-center justify-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
-        <button
-          ref={backRef}
-          type="button"
-          onClick={onBack}
-          className="absolute left-0 flex items-center gap-0.5 text-[11px] sm:text-xs cursor-pointer hover:underline"
-          style={{ color: "var(--text-muted)" }}
-          title={`Back to ${leagueLabel}`}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          <span>{leagueLabel}</span>
-        </button>
-        <div className="flex items-center justify-center min-w-0">
-          <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
-          {team.logo && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={team.logo} alt={team.abbreviation} width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" />
-          )}
-          <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }} title={team.displayName}>
-            {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}
-          </h2>
+      <div ref={headerRef} className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
+        <div className="relative w-full flex items-center justify-center">
           <button
-            onClick={() => onToggleFavoriteTeam(team.id)}
-            className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ml-1.5 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
-            style={favoriteTeams.includes(team.id) ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-            title={favoriteTeams.includes(team.id) ? "Remove from favorites" : "Add to favorites"}
-          >★</button>
+            ref={backRef}
+            type="button"
+            onClick={onBack}
+            className="absolute left-0 flex items-center gap-0.5 text-[11px] sm:text-xs cursor-pointer hover:underline"
+            style={{ color: "var(--text-muted)" }}
+            title={`Back to ${leagueLabel}`}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            <span>{leagueLabel}</span>
+          </button>
+          <div className="flex items-center justify-center min-w-0">
+            <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
+            {team.logo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={team.logo} alt={team.abbreviation} width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" />
+            )}
+            <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }} title={team.displayName}>
+              {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}
+            </h2>
+            <button
+              onClick={() => onToggleFavoriteTeam(team.id)}
+              className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ml-1.5 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
+              style={favoriteTeams.includes(team.id) ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
+              title={favoriteTeams.includes(team.id) ? "Remove from favorites" : "Add to favorites"}
+            >★</button>
+          </div>
         </div>
+        {/* Subtitle slot — mirrors PlayoffSubtitle ("Game 1") in other columns
+            so the sticky header block has matching height, keeping league
+            names in other columns pinned at the same Y while scrolling. */}
+        <span
+          className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5"
+          style={{ color: (past.length === 0 && upcoming.length === 0) ? "transparent" : "var(--text-muted)" }}
+        >
+          {activeSection === "upcoming" ? "Upcoming" : "Recent"}
+        </span>
       </div>
 
       {loading ? (
@@ -201,11 +237,6 @@ export default function TeamView({
         <>
           {pastShown.length > 0 && (
             <>
-              <div className="flex items-center gap-1.5 mt-1" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                <span className="text-[9px] uppercase tracking-wide">Recent</span>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-              </div>
               {pastShown.map(renderCard)}
               {morePastAvailable && (
                 <button
@@ -223,11 +254,9 @@ export default function TeamView({
           )}
           {upcomingShown.length > 0 && (
             <>
-              <div className="flex items-center gap-1.5 mt-1" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                <span className="text-[9px] uppercase tracking-wide">Upcoming</span>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-              </div>
+              {/* Scroll marker — sticky subtitle flips to "Upcoming" once this
+                  crosses under the sticky header. Invisible 1px spacer. */}
+              <div ref={upcomingMarkerRef} className="h-px" aria-hidden="true" />
               {upcomingShown.map(renderCard)}
               {moreAvailable && (
                 <button
