@@ -216,15 +216,17 @@ export default function TeamView({
             >★</button>
           </div>
         </div>
-        {/* Subtitle slot — mirrors PlayoffSubtitle ("Game 1") in other columns
-            so the sticky header block has matching height, keeping league
-            names in other columns pinned at the same Y while scrolling. */}
-        <span
-          className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5"
-          style={{ color: (past.length === 0 && upcoming.length === 0) ? "transparent" : "var(--text-muted)" }}
+        {/* Subtitle slot — `—— Recent ——` / `—— Upcoming ——` divider, replaces
+            the usual italic subtitle. Matches PlayoffSubtitle's vertical space
+            so column header heights stay consistent across all 3 columns. */}
+        <div
+          className="flex items-center gap-1.5 mt-0.5 w-full px-1"
+          style={{ color: "var(--text-muted)", opacity: (past.length === 0 && upcoming.length === 0) ? 0 : 0.6 }}
         >
-          {activeSection === "upcoming" ? "Upcoming" : "Recent"}
-        </span>
+          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+          <span className="text-[9px] uppercase tracking-wide">{activeSection === "upcoming" ? "Upcoming" : "Recent"}</span>
+          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+        </div>
       </div>
 
       {loading ? (
@@ -237,17 +239,13 @@ export default function TeamView({
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {pastShown.length > 0 && (
             <>
-              <div className="flex items-center gap-1.5" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                <span className="text-[9px] uppercase tracking-wide">Recent</span>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-              </div>
+              {/* No inline Recent divider — the sticky subtitle carries that label. */}
               {pastShown.map(renderCard)}
               {morePastAvailable && (
                 <button
                   type="button"
                   onClick={() => setPastLimit((n) => n + PAGE_SIZE)}
-                  className="mt-1 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
+                  className="py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -259,8 +257,7 @@ export default function TeamView({
           )}
           {upcomingShown.length > 0 && (
             <>
-              {/* Divider marker — sticky subtitle flips to "Upcoming" once this
-                  line crosses under the sticky header. */}
+              {/* Between-sections divider; also drives the sticky subtitle swap. */}
               <div ref={upcomingMarkerRef} className="flex items-center gap-1.5" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
                 <span className="text-[9px] uppercase tracking-wide">Upcoming</span>
@@ -271,7 +268,7 @@ export default function TeamView({
                 <button
                   type="button"
                   onClick={() => setUpcomingLimit((n) => n + PAGE_SIZE)}
-                  className="mt-1 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
+                  className="py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
