@@ -7,7 +7,7 @@ import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, 
 import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
 import NewsColumn, { NewsSource } from "@/components/NewsColumn";
-import { fetchLeagueNews, fetchTopHeadlines, fetchPrebaked, PREBAKED_FEEDS } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
@@ -447,28 +447,27 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
         {showNews ? (() => {
-          const buildLeagueSources = (sport?: Sport): NewsSource[] => {
-            if (!sport) return [];
-            const sources: NewsSource[] = [];
-            const prebaked = PREBAKED_FEEDS[sport];
-            if (prebaked) {
-              sources.push({ label: prebaked.label, fetch: () => fetchPrebaked(prebaked.name) });
-            }
-            sources.push({ label: `ESPN ${sport.toUpperCase()}`, fetch: () => fetchLeagueNews(sport, 10) });
-            return sources;
-          };
+          const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
+            cascade.map((c) => ({
+              label: c.label,
+              fetch: c.kind === "espn-league" && c.sport
+                ? () => fetchLeagueNews(c.sport!, 10)
+                : () => fetchPrebaked(c.key),
+            }));
+          const buildSources = (sport?: Sport): NewsSource[] =>
+            sport ? cascadeToSources(leagueSourceCascade(sport)) : [];
           const col3Sources: NewsSource[] = prefs.newsThirdLeague
-            ? buildLeagueSources(prefs.newsThirdLeague)
-            : [{ label: "ESPN", fetch: () => fetchPrebaked("espn-top") }];
+            ? buildSources(prefs.newsThirdLeague)
+            : cascadeToSources(GENERIC_CASCADE);
           return (
             <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
               <NewsColumn
                 title={sortedLeagues[0]?.label ?? "News"}
-                sources={buildLeagueSources(sortedLeagues[0]?.sport)}
+                sources={buildSources(sortedLeagues[0]?.sport)}
               />
               <NewsColumn
                 title={sortedLeagues[1]?.label ?? "News"}
-                sources={buildLeagueSources(sortedLeagues[1]?.sport)}
+                sources={buildSources(sortedLeagues[1]?.sport)}
               />
               <NewsColumn
                 title={prefs.newsThirdLeague

@@ -1,14 +1,14 @@
-// Prebake official-site news feeds + ESPN top headlines to /public/news/*.json.
-// Run via GitHub Actions cron (see .github/workflows/news-prebake.yml) — the
-// committed JSON triggers a Cloudflare rebuild so the client gets fresh news
-// without needing a runtime proxy for CORS-locked origins (MLB.com, NBA.com, NHL.com).
+// Prebake news feeds to /public/news/*.json.
+// Runs via GitHub Actions every 30 min (see .github/workflows/news-prebake.yml).
+// Covers origins that block browser CORS (MLB.com, NBA.com, NHL.com, CBS, theScore)
+// plus the ESPN homepage "TOP HEADLINES" widget (scraped from HTML for exact order).
 
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const OUT_DIR = "public/news";
 
-// NBA.com 403s the obvious-bot UA; use a realistic browser string.
+// NBA.com 403s obvious-bot UAs; mirror a real Safari request.
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 
 async function getJson(url) {
@@ -27,6 +27,21 @@ function stripCdata(s) {
   return (s || "").replace(/^<!\[CDATA\[|\]\]>$/g, "").trim();
 }
 
+function decodeEntities(s) {
+  return (s || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ── Official league sites ─────────────────────────────────────────
+
 async function fetchMLB() {
   const xml = await getText("https://www.mlb.com/feeds/news/rss.xml");
   const items = [];
@@ -38,12 +53,11 @@ async function fetchMLB() {
     const link = ((block.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || "").trim();
     const pub = ((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || "").trim();
     if (!title || !link) continue;
-    const isoDate = pub ? new Date(pub).toISOString() : "";
     items.push({
       id: link,
       headline: title,
       description: "",
-      published: isoDate,
+      published: pub ? new Date(pub).toISOString() : "",
       imageUrl: null,
       articleUrl: link,
       byline: "",
@@ -88,20 +102,95 @@ async function fetchNHL() {
   }));
 }
 
-async function fetchESPNTop() {
-  const data = await getJson("https://now.core.api.espn.com/v1/sports/news?limit=20");
-  const raw = data?.headlines || [];
-  return raw.slice(0, 15).map((h) => ({
-    id: String(h.id || h.nowId || h.contentKey || h.links?.web?.href || ""),
-    headline: h.headline || h.title || "",
-    description: h.description || "",
-    published: h.published || h.lastModified || "",
+// ── ESPN homepage TOP HEADLINES (scraped for exact order) ─────────
+
+async function fetchESPNTopHeadlines() {
+  const html = await getText("https://www.espn.com/");
+  const blockMatch = html.match(/<div class="headlineStack top-headlines">([\s\S]{0,30000}?)<\/div>\s*<\/div>/);
+  if (!blockMatch) return [];
+  const block = blockMatch[1];
+  const liRe = /<li[^>]*>([\s\S]*?)<\/li>/g;
+  const items = [];
+  let m;
+  while ((m = liRe.exec(block)) !== null) {
+    const li = m[1];
+    const anchor = li.match(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+    if (!anchor) continue;
+    let url = anchor[1];
+    if (url.startsWith("/")) url = `https://www.espn.com${url}`;
+    const title = decodeEntities(anchor[2].replace(/<[^>]+>/g, ""));
+    if (!title) continue;
+    items.push({
+      id: url,
+      headline: title,
+      description: "",
+      published: "",
+      imageUrl: null,
+      articleUrl: url,
+      byline: "",
+      section: "ESPN",
+    });
+  }
+  return items.slice(0, 15);
+}
+
+// ── CBS Sports RSS (general + per-league) ─────────────────────────
+
+function parseCBSItems(xml, sectionLabel) {
+  const items = [];
+  const itemRe = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = itemRe.exec(xml)) !== null) {
+    const block = m[1];
+    const title = decodeEntities(((block.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "").replace(/^<!\[CDATA\[|\]\]>$/g, ""));
+    const link = ((block.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || "").trim();
+    const pub = ((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || "").trim();
+    if (!title || !link) continue;
+    items.push({
+      id: link,
+      headline: title,
+      description: "",
+      published: pub ? new Date(pub).toISOString() : "",
+      imageUrl: null,
+      articleUrl: link,
+      byline: "",
+      section: sectionLabel,
+    });
+  }
+  return items.slice(0, 12);
+}
+
+async function fetchCBS(pathSlug, sectionLabel) {
+  const url = pathSlug
+    ? `https://www.cbssports.com/rss/headlines/${pathSlug}/`
+    : "https://www.cbssports.com/rss/headlines/";
+  const xml = await getText(url);
+  return parseCBSItems(xml, sectionLabel);
+}
+
+// ── theScore JSON API ─────────────────────────────────────────────
+
+async function fetchTheScore(leagueSlug, sectionLabel) {
+  // Per-league paths actually filter correctly; the top-level ?leagues= query
+  // param is a no-op on this API, so we use the path form when a slug is set.
+  const url = leagueSlug
+    ? `https://api.thescore.com/${leagueSlug}/articles?limit=15`
+    : "https://api.thescore.com/articles?limit=15";
+  const raw = await getJson(url);
+  const items = Array.isArray(raw) ? raw : [];
+  return items.slice(0, 12).map((a) => ({
+    id: String(a.id),
+    headline: a.headline || "",
+    description: a.abstract || "",
+    published: a.posted_at || a.created_at || "",
     imageUrl: null,
-    articleUrl: h.links?.web?.href || h.links?.mobile?.href || "",
-    byline: h.byline || "",
-    section: h.section || h.root || "ESPN",
+    articleUrl: a.share_url || "",
+    byline: a.byline || "",
+    section: sectionLabel,
   }));
 }
+
+// ── Write ─────────────────────────────────────────────────────────
 
 async function writeFeed(name, items) {
   const path = `${OUT_DIR}/${name}.json`;
@@ -112,10 +201,35 @@ async function writeFeed(name, items) {
 }
 
 const jobs = [
+  // Official league sites
   ["mlb", fetchMLB],
   ["nba", fetchNBA],
   ["nhl", fetchNHL],
-  ["espn-top", fetchESPNTop],
+
+  // ESPN homepage top headlines (scraped)
+  ["espn-top", fetchESPNTopHeadlines],
+
+  // CBS Sports
+  ["cbs-general", () => fetchCBS("", "CBS Sports")],
+  ["cbs-nfl", () => fetchCBS("nfl", "CBS Sports")],
+  ["cbs-nba", () => fetchCBS("nba", "CBS Sports")],
+  ["cbs-mlb", () => fetchCBS("mlb", "CBS Sports")],
+  ["cbs-nhl", () => fetchCBS("nhl", "CBS Sports")],
+  ["cbs-ncaam", () => fetchCBS("college-basketball", "CBS Sports")],
+  ["cbs-golf", () => fetchCBS("golf", "CBS Sports")],
+  ["cbs-tennis", () => fetchCBS("tennis", "CBS Sports")],
+  ["cbs-epl", () => fetchCBS("soccer", "CBS Sports")],
+  ["cbs-mls", () => fetchCBS("soccer", "CBS Sports")],
+
+  // theScore — golf and tennis have no dedicated per-league path (API 404s).
+  ["thescore-general", () => fetchTheScore("", "theScore")],
+  ["thescore-nfl", () => fetchTheScore("nfl", "theScore")],
+  ["thescore-nba", () => fetchTheScore("nba", "theScore")],
+  ["thescore-mlb", () => fetchTheScore("mlb", "theScore")],
+  ["thescore-nhl", () => fetchTheScore("nhl", "theScore")],
+  ["thescore-ncaam", () => fetchTheScore("ncaab", "theScore")],
+  ["thescore-epl", () => fetchTheScore("epl", "theScore")],
+  ["thescore-mls", () => fetchTheScore("mls", "theScore")],
 ];
 
 const results = await Promise.allSettled(
@@ -133,6 +247,6 @@ results.forEach((r, i) => {
   }
 });
 
-// Exit non-zero only if ALL jobs failed — partial success still useful and we
-// don't want the cron to skip commits when one feed is flaky.
+// Exit non-zero only if EVERY job failed — partial success still commits useful
+// feeds and prevents one flaky origin from wedging the whole cron.
 if (failed === jobs.length) process.exit(1);

@@ -116,6 +116,44 @@ export const PREBAKED_FEEDS: Partial<Record<Sport, { name: string; label: string
   nhl: { name: "nhl", label: "NHL.com" },
 };
 
+// Which leagues have a CBS Sports RSS + prebaked JSON available.
+const HAS_CBS: Record<Sport, boolean> = {
+  mlb: true, nba: true, nhl: true, nfl: true, ncaam: true,
+  golf: true, tennis: true, epl: true, mls: true, fifa: false,
+};
+
+// Which leagues have a theScore per-league endpoint + prebaked JSON.
+const HAS_THESCORE: Record<Sport, boolean> = {
+  mlb: true, nba: true, nhl: true, nfl: true, ncaam: true,
+  epl: true, mls: true, golf: false, tennis: false, fifa: false,
+};
+
+export interface ColumnSource {
+  label: string;
+  key: string;
+  kind: "prebaked" | "espn-league";
+  sport?: Sport;
+}
+
+// Cascade of news cards for a league column: official → ESPN → CBS → theScore.
+// Sources that have no feed for this league are silently skipped.
+export function leagueSourceCascade(sport: Sport): ColumnSource[] {
+  const out: ColumnSource[] = [];
+  const official = PREBAKED_FEEDS[sport];
+  if (official) out.push({ label: official.label, key: official.name, kind: "prebaked" });
+  out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport });
+  if (HAS_CBS[sport]) out.push({ label: "CBS Sports", key: `cbs-${sport}`, kind: "prebaked" });
+  if (HAS_THESCORE[sport]) out.push({ label: "theScore", key: `thescore-${sport}`, kind: "prebaked" });
+  return out;
+}
+
+// Col 3's default (no league picked) — exact ESPN homepage top headlines order.
+export const GENERIC_CASCADE: ColumnSource[] = [
+  { label: "ESPN", key: "espn-top", kind: "prebaked" },
+  { label: "theScore", key: "thescore-general", kind: "prebaked" },
+  { label: "CBS Sports", key: "cbs-general", kind: "prebaked" },
+];
+
 export function formatPublished(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
