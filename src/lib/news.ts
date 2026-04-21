@@ -128,28 +128,45 @@ const HAS_THESCORE: Record<Sport, boolean> = {
   epl: true, mls: true, golf: false, tennis: false, fifa: false,
 };
 
+// Small league badge — ESPN's CDN serves transparent versions at this path.
+// Only slugs that actually resolve are listed here; NCAAM / golf / tennis / EPL
+// don't have a matching logo on this CDN path, so those cards render without an icon.
+const LEAGUE_LOGO: Partial<Record<Sport, string>> = {
+  mlb: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
+  nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
+  nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
+  nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
+  mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
+  fifa: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
+};
+
 export interface ColumnSource {
   label: string;
   key: string;
   kind: "prebaked" | "espn-league";
   sport?: Sport;
+  logoUrl?: string;
+  variant?: "text" | "video";
 }
 
 // Cascade of news cards for a league column: official → ESPN → CBS → theScore.
 // Sources that have no feed for this league are silently skipped.
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
+  const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
   const official = PREBAKED_FEEDS[sport];
-  if (official) out.push({ label: official.label, key: official.name, kind: "prebaked" });
-  out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport });
-  if (HAS_CBS[sport]) out.push({ label: "CBS Sports", key: `cbs-${sport}`, kind: "prebaked" });
-  if (HAS_THESCORE[sport]) out.push({ label: "theScore", key: `thescore-${sport}`, kind: "prebaked" });
+  if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
+  out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl });
+  if (HAS_CBS[sport]) out.push({ label: "CBS Sports", key: `cbs-${sport}`, kind: "prebaked", logoUrl });
+  if (HAS_THESCORE[sport]) out.push({ label: "theScore", key: `thescore-${sport}`, kind: "prebaked", logoUrl });
   return out;
 }
 
-// Col 3's default (no league picked) — exact ESPN homepage top headlines order.
+// Col 3's default (no league picked) — ESPN homepage top headlines (exact order)
+// + ESPN big-format videos + theScore + CBS Sports aggregators.
 export const GENERIC_CASCADE: ColumnSource[] = [
   { label: "ESPN", key: "espn-top", kind: "prebaked" },
+  { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video" },
   { label: "theScore", key: "thescore-general", kind: "prebaked" },
   { label: "CBS Sports", key: "cbs-general", kind: "prebaked" },
 ];

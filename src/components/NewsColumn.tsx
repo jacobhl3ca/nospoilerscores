@@ -7,6 +7,8 @@ import { NewsItem } from "@/lib/news";
 export interface NewsSource {
   label: string;
   fetch: () => Promise<NewsItem[]>;
+  logoUrl?: string;
+  variant?: "text" | "video";
 }
 
 interface NewsColumnProps {
@@ -18,18 +20,28 @@ interface NewsColumnProps {
   onSwapLeague?: (sport: Sport | undefined) => void;
 }
 
-function SourceCard({ label, items, loading }: { label: string; items: NewsItem[]; loading: boolean }) {
+function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
+  return (
+    <div
+      className="px-3 py-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide"
+      style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}
+    >
+      {logoUrl && (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img src={logoUrl} alt="" width={16} height={16} className="w-4 h-4 object-contain" draggable={false} />
+      )}
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function TextSourceCard({ label, logoUrl, items, loading }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
-      <div
-        className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide"
-        style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}
-      >
-        {label}
-      </div>
+      <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
         <div className="flex flex-col">
           {[1, 2, 3, 4].map((i) => (
@@ -60,6 +72,73 @@ function SourceCard({ label, items, loading }: { label: string; items: NewsItem[
   );
 }
 
+function VideoSourceCard({ label, logoUrl, items, loading }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean }) {
+  return (
+    <div
+      className="rounded-lg overflow-hidden"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    >
+      <SourceHeader label={label} logoUrl={logoUrl} />
+      {loading ? (
+        <div className="flex flex-col gap-px" style={{ background: "var(--border)" }}>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse" style={{ background: "var(--bg-card)" }}>
+              <div className="w-full aspect-video" style={{ background: "var(--bg-card-hover)" }} />
+              <div className="px-3 py-2">
+                <div className="h-3 w-4/5 rounded" style={{ background: "var(--bg-card-hover)" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
+      ) : (
+        <div className="flex flex-col">
+          {items.map((item, idx) => (
+            <a
+              key={item.id}
+              href={item.articleUrl || undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block transition-opacity hover:opacity-90"
+              style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)" }}
+            >
+              {item.imageUrl && (
+                <div className="relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.imageUrl}
+                    alt=""
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                    draggable={false}
+                  />
+                  <div
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    style={{ background: "linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.4))" }}
+                  >
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center"
+                      style={{ background: "rgba(0,0,0,0.6)", color: "white" }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="px-3 py-2 text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
+                {item.headline}
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SourceSection({ source }: { source: NewsSource }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +155,10 @@ function SourceSection({ source }: { source: NewsSource }) {
     return () => { cancelled = true; };
   }, [source]);
 
-  return <SourceCard label={source.label} items={items} loading={loading} />;
+  if (source.variant === "video") {
+    return <VideoSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} />;
+  }
+  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} />;
 }
 
 export default function NewsColumn({

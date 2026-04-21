@@ -450,6 +450,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
               label: c.label,
+              logoUrl: c.logoUrl,
+              variant: c.variant,
               fetch: c.kind === "espn-league" && c.sport
                 ? () => fetchLeagueNews(c.sport!, 10)
                 : () => fetchPrebaked(c.key),

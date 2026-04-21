@@ -104,8 +104,15 @@ async function fetchNHL() {
 
 // ── ESPN homepage TOP HEADLINES (scraped for exact order) ─────────
 
+// Cached homepage HTML so the headlines + videos scrapers share one fetch.
+let _espnHomeHtmlPromise = null;
+function getESPNHomeHtml() {
+  if (!_espnHomeHtmlPromise) _espnHomeHtmlPromise = getText("https://www.espn.com/");
+  return _espnHomeHtmlPromise;
+}
+
 async function fetchESPNTopHeadlines() {
-  const html = await getText("https://www.espn.com/");
+  const html = await getESPNHomeHtml();
   const blockMatch = html.match(/<div class="headlineStack top-headlines">([\s\S]{0,30000}?)<\/div>\s*<\/div>/);
   if (!blockMatch) return [];
   const block = blockMatch[1];
@@ -132,6 +139,68 @@ async function fetchESPNTopHeadlines() {
     });
   }
   return items.slice(0, 15);
+}
+
+// ── ESPN homepage big-format videos (thumbnail + title, in scroll order) ──
+
+// Personality-led segments the user wants filtered out (First Take, Get Up,
+// Pat McAfee, PTI, SportsCenter analyst takes, Stephen A/Schefter specials).
+const VIDEO_BLOCKLIST = [
+  /\bstephen\s*a\b/i,
+  /\bschefter\b/i,
+  /\bfirst\s*take\b/i,
+  /\bget\s*up\b/i,
+  /\bnfl\s*live\b/i,
+  /\bpat\s*mcafee\b/i,
+  /\bpti\b/i,
+  /\bpardon\s+the\s+interruption\b/i,
+  /\baround\s+the\s+horn\b/i,
+  /\bnba\s*today\b/i,
+  /\bthis\s*just\s*in\b/i,
+];
+
+async function fetchESPNTopVideos() {
+  const html = await getESPNHomeHtml();
+  // Each homepage content block lives in <section class="contentItem__content...">.
+  // When it has a video, the block holds a data-popup-href="/video/clip?id=N" on
+  // the video-play-button plus an <h2 class="contentItem__title"> with the article
+  // headline and a data-default-src image used as the thumbnail.
+  const sectionRe = /<section[^>]*class="[^"]*contentItem__content[^"]*"[^>]*>([\s\S]{100,20000}?)(?=<section class="contentItem__content|<\/article>|<\/section>\s*<\/article>)/g;
+  const items = [];
+  const seen = new Set();
+  let m;
+  while ((m = sectionRe.exec(html)) !== null) {
+    const block = m[1];
+    const vidM = block.match(/data-popup-href="\/video\/clip\?id=(\d+)"/) || block.match(/data-video="watch,\d+,\d+,(\d+)/);
+    if (!vidM) continue;
+    const vid = vidM[1];
+    if (seen.has(vid)) continue;
+    const titleM = block.match(/<h\d[^>]*class="[^"]*contentItem__title[^"]*"[^>]*>([\s\S]{5,400}?)<\/h\d>/);
+    if (!titleM) continue;
+    const title = decodeEntities(titleM[1].replace(/<[^>]+>/g, ""));
+    if (!title) continue;
+    const descM = block.match(/<p[^>]*class="[^"]*contentItem__subhead[^"]*"[^>]*>([\s\S]{5,500}?)<\/p>/);
+    const description = descM ? decodeEntities(descM[1].replace(/<[^>]+>/g, "")) : "";
+    const hrefM = block.match(/<a[^>]+href="(\/[^"]+\/(?:story|video\/clip)[^"]+)"/);
+    const articleUrl = hrefM ? `https://www.espn.com${hrefM[1]}` : `https://www.espn.com/video/clip?id=${vid}`;
+    const imgM = block.match(/data-default-src="(https?:\/\/[^"]+\.jpg)"/);
+    const imageUrl = imgM ? imgM[1] : null;
+    const haystack = `${title} ${description}`;
+    if (VIDEO_BLOCKLIST.some((re) => re.test(haystack))) continue;
+    seen.add(vid);
+    items.push({
+      id: vid,
+      headline: title,
+      description,
+      published: "",
+      imageUrl,
+      articleUrl,
+      byline: "",
+      section: "ESPN Video",
+    });
+    if (items.length >= 10) break;
+  }
+  return items;
 }
 
 // ── CBS Sports RSS (general + per-league) ─────────────────────────
@@ -206,8 +275,9 @@ const jobs = [
   ["nba", fetchNBA],
   ["nhl", fetchNHL],
 
-  // ESPN homepage top headlines (scraped)
+  // ESPN homepage top headlines + big-format videos (both scraped from espn.com)
   ["espn-top", fetchESPNTopHeadlines],
+  ["espn-videos", fetchESPNTopVideos],
 
   // CBS Sports
   ["cbs-general", () => fetchCBS("", "CBS Sports")],
