@@ -117,13 +117,15 @@ export default {
         let teamsMatchedId = null;
         let teamsGameMatchedId = null;
         let firstHighlightId = null;
-        // Extended-highlight fallbacks — leagues (esp. NBA) post both a
-        // standard recap and a longer "EXTENDED HIGHLIGHTS" version.
-        // We prefer the standard one for the primary button, keeping
-        // extended as a secondary fallback at the same match tier.
+        // Extended-highlight fallbacks — leagues (esp. NBA/MLB) post
+        // both a standard recap and a longer "EXTENDED HIGHLIGHTS"
+        // version. Standard is preferred everywhere; extended only
+        // wins when no standard video matches at any tier.
         let bestMatchExtendedId = null;
         let teamsGameExtendedId = null;
         let teamsExtendedId = null;
+        let yearMatchedExtendedId = null;
+        let firstHighlightExtendedId = null;
         // Golf-specific tracking
         let golfRoundYearId = null;
         let golfRoundId = null;
@@ -141,6 +143,7 @@ export default {
         let channelGolfRoundYearId = null;
         let channelGolfRoundId = null;
         let channelAnyId = null;
+        let channelAnyExtendedId = null;
         // Golf player-reel tracking — videos that match round/year but
         // look like player-specific cuts (e.g. "Rory McIlroy Round 3
         // Highlights") get demoted so the full-day recap wins slot 0.
@@ -271,7 +274,8 @@ export default {
             if (hasGolfRound && channelTournamentOk && isLikelyPlayerReel && !channelPlayerReelId) {
               channelPlayerReelId = videoId;
             }
-            if (!channelAnyId) channelAnyId = videoId;
+            if (!isExtended && !channelAnyId) channelAnyId = videoId;
+            if (isExtended && !channelAnyExtendedId) channelAnyExtendedId = videoId;
           }
 
           // Golf-specific (no preferred channel) — match round number + year in title
@@ -312,20 +316,24 @@ export default {
             if (isExtended && !teamsExtendedId) teamsExtendedId = videoId;
           }
           // Weak: highlight + year (teams might be abbreviated differently)
-          if (hasYear && !yearMatchedId) {
-            yearMatchedId = videoId;
+          if (hasYear) {
+            if (!isExtended && !yearMatchedId) yearMatchedId = videoId;
+            if (isExtended && !yearMatchedExtendedId) yearMatchedExtendedId = videoId;
           }
           // Fallback: any highlight
-          if (!firstHighlightId) {
-            firstHighlightId = videoId;
-          }
+          if (!isExtended && !firstHighlightId) firstHighlightId = videoId;
+          if (isExtended && !firstHighlightExtendedId) firstHighlightExtendedId = videoId;
         }
 
         const isGolfQuery = !!queryGolfRound;
 
         let videoId;
         if (preferChannel) {
-          // Channel-filtered priority (highest → lowest). For a golf
+          // Channel-filtered priority (highest → lowest). Length is
+          // the dominant preference: every standard-highlight tier
+          // (channel OR non-channel) is exhausted before any
+          // extended tier, so a random-channel standard recap beats
+          // the official channel's extended upload. For a golf
           // query, channelAnyId is only safe when the channel itself
           // is tournament-specific (The Masters → implicitly Masters
           // content); otherwise we'd let a generic PGA TOUR upload
@@ -334,37 +342,63 @@ export default {
           const golfChannelAnyOk =
             isGolfQuery && channelImpliesGolfTournament;
           videoId =
+            // Standard: channel first
             channelBestId ||
-            channelBestExtendedId ||
             channelGolfRecapYearId ||
             channelGolfRecapId ||
             channelTeamsYearId ||
-            channelTeamsYearExtendedId ||
             channelGolfRoundYearId ||
             channelGolfRoundId ||
             channelTeamsId ||
-            channelTeamsExtendedId ||
-            channelPlayerReelId ||
-            (isGolfQuery ? (golfChannelAnyOk ? channelAnyId : null) : channelAnyId) ||
-            null;
-        } else {
-          // General (non-channel) search: recap tiers first, then
-          // round tiers, then team-sport tiers, then player reels.
-          // firstHighlightId is the fallback for non-golf only.
-          videoId =
+            // Standard: non-channel (length beats channel preference)
             bestMatchId ||
-            bestMatchExtendedId ||
             teamsGameMatchedId ||
-            teamsGameExtendedId ||
             golfRecapYearId ||
             golfRecapId ||
             golfRoundYearId ||
             golfRoundId ||
             teamsMatchedId ||
-            teamsExtendedId ||
             yearMatchedId ||
+            // Extended: channel first
+            channelBestExtendedId ||
+            channelTeamsYearExtendedId ||
+            channelTeamsExtendedId ||
+            // Extended: non-channel
+            bestMatchExtendedId ||
+            teamsGameExtendedId ||
+            teamsExtendedId ||
+            yearMatchedExtendedId ||
+            // Weakest: player reels, any-from-channel, any highlight
+            channelPlayerReelId ||
             playerReelId ||
-            (isGolfQuery ? null : firstHighlightId);
+            (isGolfQuery ? (golfChannelAnyOk ? channelAnyId : null) : channelAnyId) ||
+            (isGolfQuery ? null : firstHighlightId) ||
+            (isGolfQuery ? (golfChannelAnyOk ? channelAnyExtendedId : null) : channelAnyExtendedId) ||
+            (isGolfQuery ? null : firstHighlightExtendedId) ||
+            null;
+        } else {
+          // General (non-channel) search: standard everywhere first,
+          // then extended, then weakest fallbacks. firstHighlightId
+          // is the fallback for non-golf only.
+          videoId =
+            // Standard
+            bestMatchId ||
+            teamsGameMatchedId ||
+            golfRecapYearId ||
+            golfRecapId ||
+            golfRoundYearId ||
+            golfRoundId ||
+            teamsMatchedId ||
+            yearMatchedId ||
+            // Extended
+            bestMatchExtendedId ||
+            teamsGameExtendedId ||
+            teamsExtendedId ||
+            yearMatchedExtendedId ||
+            // Weakest
+            playerReelId ||
+            (isGolfQuery ? null : firstHighlightId) ||
+            (isGolfQuery ? null : firstHighlightExtendedId);
         }
         if (!videoId && !isGolfQuery) {
           // Raw-regex fallback — only for non-golf. For golf we'd

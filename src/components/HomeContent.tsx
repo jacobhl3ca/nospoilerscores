@@ -781,8 +781,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         className={`fixed z-40 w-11 h-11 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 shadow-lg ${showScrollTop ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         style={{
-          right: "1rem",
-          bottom: "calc(env(safe-area-inset-bottom) + 1rem)",
+          right: "2rem",
+          bottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
           background: "var(--bg-card)",
           border: "1px solid var(--border)",
           color: "var(--text-muted)",
@@ -790,7 +790,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="18 15 12 9 6 15" />
         </svg>
       </button>
