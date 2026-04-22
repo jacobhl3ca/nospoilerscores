@@ -149,13 +149,21 @@ export interface ColumnSource {
   variant?: "text" | "video";
 }
 
-// Cascade of news cards for a league column: official → ESPN → CBS → theScore.
-// Sources that have no feed for this league are silently skipped.
+// Leagues with a prebaked video feed (big-format highlights).
+const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string }>> = {
+  mlb: { key: "mlb-videos", label: "MLB Most Popular" },
+  nba: { key: "nba-videos", label: "NBA Top Videos" },
+};
+
+// Cascade of news cards for a league column: official news → official videos →
+// ESPN news → CBS → theScore. Sources with no feed are silently skipped.
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
   const official = PREBAKED_FEEDS[sport];
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
+  const officialVideos = PREBAKED_VIDEOS[sport];
+  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video" });
   out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl });
   if (HAS_CBS[sport]) out.push({ label: "CBS Sports", key: `cbs-${sport}`, kind: "prebaked", logoUrl });
   if (HAS_THESCORE[sport]) out.push({ label: "theScore", key: `thescore-${sport}`, kind: "prebaked", logoUrl });

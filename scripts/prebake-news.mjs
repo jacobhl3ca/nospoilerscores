@@ -42,6 +42,71 @@ function decodeEntities(s) {
 
 // ── Official league sites ─────────────────────────────────────────
 
+// MLB's StatsAPI schedule with a `highlights.highlights` hydrate exposes every
+// game's clip reel — title, thumbnail, slug, duration. That's the closest thing
+// to "Most Popular" we can pull without reverse-engineering mlb.com's GraphQL.
+async function fetchMLBVideos() {
+  // ET day — baseball is ET-anchored and UTC drifts into the next day during
+  // evening games. Pull today + yesterday and merge so early-morning runs (when
+  // today has no games yet) still have recap highlights from last night.
+  const toET = (d) => {
+    const s = d.toLocaleDateString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+    const [m, day, y] = s.split("/");
+    return `${y}-${m}-${day}`;
+  };
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86400000);
+  const fetchDate = async (date) => {
+    try {
+      const data = await getJson(
+        `https://statsapi.mlb.com/api/v1/schedule?date=${date}&sportId=1&hydrate=game(content(highlights(highlights)))`
+      );
+      const out = [];
+      for (const dt of data?.dates || []) {
+        for (const g of dt?.games || []) {
+          for (const h of g?.content?.highlights?.highlights?.items || []) out.push(h);
+        }
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  };
+  const raw = [...(await fetchDate(toET(today))), ...(await fetchDate(toET(yesterday)))];
+  return raw
+    .filter((h) => {
+      const t = (h.title || "").toLowerCase();
+      // Drop condensed-game replays (10+ min) and generic "full game" clips —
+      // they give up much more than a single-play highlight.
+      if (t.includes("condensed game")) return false;
+      if (t.includes("full game")) return false;
+      // Pre-game matchup ads aren't what "Most Popular" is supposed to be.
+      if (t.startsWith("probable pitchers")) return false;
+      const dur = h.duration || "";
+      const parts = dur.split(":").map((x) => parseInt(x, 10) || 0);
+      // duration format "HH:MM:SS" or "MM:SS"
+      const seconds = parts.length === 3
+        ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+        : parts[0] * 60 + (parts[1] || 0);
+      if (seconds > 300) return false; // >5min = long-form, skip
+      return true;
+    })
+    .slice(0, 10)
+    .map((h) => {
+      const cut = (h.image?.cuts || []).find((c) => c.width >= 640) || h.image?.cuts?.[0];
+      return {
+        id: h.slug || String(h.id),
+        headline: h.title || h.headline || "",
+        description: h.blurb || "",
+        published: h.date || "",
+        imageUrl: cut?.src || null,
+        articleUrl: h.slug ? `https://www.mlb.com/video/${h.slug}` : "",
+        byline: "",
+        section: "MLB Most Popular",
+      };
+    });
+}
+
 async function fetchMLB() {
   const xml = await getText("https://www.mlb.com/feeds/news/rss.xml");
   const items = [];
@@ -65,6 +130,43 @@ async function fetchMLB() {
     });
   }
   return items.slice(0, 15);
+}
+
+// NBA.com has a /content/videos-path-less content-type=video endpoint; pull
+// the league-wide videos feed and filter to real highlights. Blocks betting,
+// press conferences, and analyst segments via the shared VIDEO_BLOCKLIST.
+async function fetchNBAVideos() {
+  const data = await getJson(
+    "https://content-api-prod.nba.com/public/1/leagues/nba/content?count=40&type=video"
+  );
+  const raw = (data?.results?.items || []).filter((i) => i.type === "video");
+  const out = [];
+  for (const i of raw) {
+    const title = i.title || "";
+    const desc = i.excerpt || "";
+    const haystack = `${title} ${desc}`;
+    // Skip non-English broadcast streams, pregame intros, non-highlight content.
+    // No \b around these because NBA slug-titles use underscores (word chars),
+    // breaking word-boundary matching.
+    if (/(?:spanish|portuguese|french|japanese|italian|deutsch|german|prime video|ai-generated)/i.test(haystack)) continue;
+    if (/\b(?:post[-\s]?game|all possessions|best plays|nightly recap|mobile view)\b/i.test(haystack)) continue;
+    if (/^vod_|^VOD_/.test(title)) continue;
+    // Broadcast stream listings like "HOU @ LAL on 2026-04-21-NBC-" — whole-game streams
+    if (/ on \d{4}-\d{2}-\d{2}/.test(title)) continue;
+    if (VIDEO_BLOCKLIST.some((re) => re.test(haystack))) continue;
+    out.push({
+      id: String(i.id),
+      headline: title,
+      description: desc,
+      published: i.date || "",
+      imageUrl: i.featuredImage || null,
+      articleUrl: i.permalink || "",
+      byline: "",
+      section: "NBA Top Videos",
+    });
+    if (out.length >= 10) break;
+  }
+  return out;
 }
 
 async function fetchNBA() {
@@ -143,9 +245,11 @@ async function fetchESPNTopHeadlines() {
 
 // ── ESPN homepage big-format videos (thumbnail + title, in scroll order) ──
 
-// Personality-led segments the user wants filtered out (First Take, Get Up,
-// Pat McAfee, PTI, SportsCenter analyst takes, Stephen A/Schefter specials).
+// Skip talking-heads + betting-promo content. First block = personality shows;
+// second block = interview/reaction content that looks like analysis rather than
+// actual play highlights; third block = sportsbook sponsorships.
 const VIDEO_BLOCKLIST = [
+  // Personality-led ESPN shows
   /\bstephen\s*a\b/i,
   /\bschefter\b/i,
   /\bfirst\s*take\b/i,
@@ -157,20 +261,54 @@ const VIDEO_BLOCKLIST = [
   /\baround\s+the\s+horn\b/i,
   /\bnba\s*today\b/i,
   /\bthis\s*just\s*in\b/i,
+  /\bsportscenter\b/i,
+  /\binsiders?\b/i,
+  // Interview / talking-head / analysis content
+  /\binterview\b/i,
+  /\bpress\s+conference\b/i,
+  /\bmedia\s+availability\b/i,
+  /\bpostgame\b/i,
+  /\bpost[-\s]?game\s+react/i,
+  /\breact(?:s|ion|ing)?\b/i,
+  /\bexplains?\b/i,
+  /\banaly(?:sis|zes|ze|st)\b/i,
+  /\bbreakdown\b/i,
+  /\bweigh(?:s|ed)\s+in\b/i,
+  /\btalks\b/i,
+  // Betting / sportsbook content
+  /\bbetting\b/i,
+  /\bdraftkings\b/i,
+  /\bfanduel\b/i,
+  /\bprizepicks\b/i,
+  /\bsportsbook\b/i,
+  /\bodds\b/i,
+  /\bparlay\b/i,
+  /\bprops?\s+bet\b/i,
+  /\bpicks?\s+(?:and|&)\s+props?\b/i,
 ];
 
 async function fetchESPNTopVideos() {
   const html = await getESPNHomeHtml();
-  // Each homepage content block lives in <section class="contentItem__content...">.
-  // When it has a video, the block holds a data-popup-href="/video/clip?id=N" on
-  // the video-play-button plus an <h2 class="contentItem__title"> with the article
-  // headline and a data-default-src image used as the thumbnail.
-  const sectionRe = /<section[^>]*class="[^"]*contentItem__content[^"]*"[^>]*>([\s\S]{100,20000}?)(?=<section class="contentItem__content|<\/article>|<\/section>\s*<\/article>)/g;
+  // Only scrape "big format" blocks — these are <section class="contentItem__content--fullWidth">
+  // variants (hero + enhanced video modules). Small horizontal strips like "Top Plays" 4-wide
+  // carousels don't carry --fullWidth and get skipped, which matches ESPN's visual hierarchy.
+  const sectionRe = /<section[^>]*class="([^"]*contentItem__content[^"]*)"[^>]*>([\s\S]{100,20000}?)(?=<section class="contentItem__content|<\/article>|<\/section>\s*<\/article>)/g;
   const items = [];
   const seen = new Set();
   let m;
   while ((m = sectionRe.exec(html)) !== null) {
-    const block = m[1];
+    const cls = m[1];
+    if (!/contentItem__content--fullWidth/.test(cls)) continue;
+    if (!/has-video|contentItem__content--video/.test(cls)) continue;
+    // miniCard + bloom modifiers are how ESPN marks the 4-wide horizontal
+    // strips of small highlight thumbnails tucked below a big video module.
+    // Those look like "Robert Williams slam / Luke Kornet / Toumani Camara" —
+    // user explicitly doesn't want them.
+    if (/\b(?:miniCard|module_bloom_behavior|onefeed-bloom)\b/.test(cls)) continue;
+    // --collection wrappers are story roundups (takeaways / draft preview /
+    // "8 stats") — not actual video features, even when they embed a clip.
+    if (/contentItem__content--collection/.test(cls)) continue;
+    const block = m[2];
     const vidM = block.match(/data-popup-href="\/video\/clip\?id=(\d+)"/) || block.match(/data-video="watch,\d+,\d+,(\d+)/);
     if (!vidM) continue;
     const vid = vidM[1];
@@ -272,7 +410,9 @@ async function writeFeed(name, items) {
 const jobs = [
   // Official league sites
   ["mlb", fetchMLB],
+  ["mlb-videos", fetchMLBVideos],
   ["nba", fetchNBA],
+  ["nba-videos", fetchNBAVideos],
   ["nhl", fetchNHL],
 
   // ESPN homepage top headlines + big-format videos (both scraped from espn.com)

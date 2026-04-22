@@ -23,12 +23,19 @@ interface NewsColumnProps {
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   return (
     <div
-      className="px-3 py-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide"
-      style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)" }}
+      className="px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
+      style={{ color: "var(--text)", borderBottom: "1px solid var(--border)" }}
     >
       {logoUrl && (
         /* eslint-disable-next-line @next/next/no-img-element */
-        <img src={logoUrl} alt="" width={16} height={16} className="w-4 h-4 object-contain" draggable={false} />
+        <img
+          src={logoUrl}
+          alt=""
+          width={20}
+          height={20}
+          className="w-5 h-5 object-contain shrink-0"
+          draggable={false}
+        />
       )}
       <span>{label}</span>
     </div>
