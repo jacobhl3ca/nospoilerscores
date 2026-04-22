@@ -213,6 +213,38 @@ function getESPNHomeHtml() {
   return _espnHomeHtmlPromise;
 }
 
+// ESPN homepage "ICYMI" widget — single curated video, always present in the
+// <article class="sub-module editorial"> block. Used as the headline video in
+// the col-3 ESPN Videos card.
+async function fetchESPNICYMI() {
+  const html = await getESPNHomeHtml();
+  const blockM = html.match(/<article class="sub-module editorial"[\s\S]{0,10000}?<\/article>/);
+  if (!blockM) return null;
+  const block = blockM[0];
+  // ESPN serves ICYMI with and without the data-video attribute (depends on auth
+  // state / region flags). Fall back to the clip?id= URL that's always in the
+  // thumbnail anchor.
+  const vidM = block.match(/data-video="watch,\d+,\d+,(\d+)/) || block.match(/clip\?id=(\d+)/);
+  if (!vidM) return null;
+  const vid = vidM[1];
+  const imgM = block.match(/data-default-src="(https?:\/\/[^"]+\.jpg)"/);
+  // Headline is the <h2><a>...</a></h2> under the text-container <li>.
+  const titleM = block.match(/<h2[^>]*><a[^>]+href="[^"]*clip\?id=\d+"[^>]*>([\s\S]{5,300}?)<\/a><\/h2>/);
+  const descM = block.match(/<p[^>]*>([\s\S]{5,500}?)<\/p>/);
+  const title = titleM ? decodeEntities(titleM[1].replace(/<[^>]+>/g, "")) : "";
+  if (!title) return null;
+  return {
+    id: vid,
+    headline: title,
+    description: descM ? decodeEntities(descM[1].replace(/<[^>]+>/g, "")) : "",
+    published: "",
+    imageUrl: imgM ? imgM[1] : null,
+    articleUrl: `https://www.espn.com/video/clip?id=${vid}`,
+    byline: "",
+    section: "ICYMI",
+  };
+}
+
 async function fetchESPNTopHeadlines() {
   const html = await getESPNHomeHtml();
   const blockMatch = html.match(/<div class="headlineStack top-headlines">([\s\S]{0,30000}?)<\/div>\s*<\/div>/);
@@ -263,6 +295,22 @@ const VIDEO_BLOCKLIST = [
   /\bthis\s*just\s*in\b/i,
   /\bsportscenter\b/i,
   /\binsiders?\b/i,
+  // Common ESPN/sports-media personalities whose videos are takes, not plays
+  /\bperk(?:\s|:)/i,       // Kendrick Perkins
+  /\brex ryan\b/i,
+  /\brob parker\b/i,
+  /\bryan clark\b/i,
+  /\bdan orlovsky\b/i,
+  /\bmina kimes\b/i,
+  /\bdomonique foxworth\b/i,
+  /\bwindhorst\b/i,         // Brian Windhorst
+  /\bkanell\b/i,            // Danny Kanell
+  /\bherbstreit\b/i,
+  /\blouis riddick\b/i,
+  /\bmcfarland\b/i,         // Booger McFarland
+  /\bwoj\b/i,               // Shams/Woj insider drops
+  /\bshams\b/i,
+  /\bleft the table\b/i,    // "X got left the table" etc. segment filler
   // Interview / talking-head / analysis content
   /\binterview\b/i,
   /\bpress\s+conference\b/i,
@@ -288,6 +336,8 @@ const VIDEO_BLOCKLIST = [
 ];
 
 async function fetchESPNTopVideos() {
+  // ICYMI is ESPN's hand-picked headline video — always goes first if present.
+  const icymi = await fetchESPNICYMI().catch(() => null);
   const html = await getESPNHomeHtml();
   // Only scrape "big format" blocks — these are <section class="contentItem__content--fullWidth">
   // variants (hero + enhanced video modules). Small horizontal strips like "Top Plays" 4-wide
@@ -295,6 +345,10 @@ async function fetchESPNTopVideos() {
   const sectionRe = /<section[^>]*class="([^"]*contentItem__content[^"]*)"[^>]*>([\s\S]{100,20000}?)(?=<section class="contentItem__content|<\/article>|<\/section>\s*<\/article>)/g;
   const items = [];
   const seen = new Set();
+  if (icymi) {
+    items.push(icymi);
+    seen.add(icymi.id);
+  }
   let m;
   while ((m = sectionRe.exec(html)) !== null) {
     const cls = m[1];
@@ -339,6 +393,40 @@ async function fetchESPNTopVideos() {
     if (items.length >= 10) break;
   }
   return items;
+}
+
+// ── Reddit top posts (per-league + general /r/sports) ────────────
+// Reddit requires a descriptive UA or returns 429. Public JSON is rate-limited
+// to ~60 req/min unauthenticated, which is plenty for a 30-min cron.
+async function fetchReddit(subreddit, sectionLabel) {
+  const url = `https://www.reddit.com/r/${subreddit}/hot.json?limit=25`;
+  const res = await fetch(url, { headers: { "User-Agent": "hidescore-prebake/1.0 (https://hidescore.com)" } });
+  if (!res.ok) throw new Error(`${url} → ${res.status}`);
+  const data = await res.json();
+  const posts = (data?.data?.children || []).map((c) => c.data).filter(Boolean);
+  const out = [];
+  for (const p of posts) {
+    // Skip sticky meta/rules threads and any post flaired as rules/meta.
+    if (p.stickied) continue;
+    const flair = (p.link_flair_text || "").toLowerCase();
+    if (/rule|mod|meta|pinned/.test(flair)) continue;
+    // Skip NSFW/removed.
+    if (p.over_18 || p.removed_by_category) continue;
+    const title = decodeEntities(p.title || "");
+    if (!title) continue;
+    out.push({
+      id: p.id || p.permalink,
+      headline: title,
+      description: "",
+      published: p.created_utc ? new Date(p.created_utc * 1000).toISOString() : "",
+      imageUrl: null,
+      articleUrl: p.permalink ? `https://www.reddit.com${p.permalink}` : (p.url || ""),
+      byline: p.author ? `u/${p.author}` : "",
+      section: sectionLabel,
+    });
+    if (out.length >= 12) break;
+  }
+  return out;
 }
 
 // ── CBS Sports RSS (general + per-league) ─────────────────────────
@@ -430,6 +518,18 @@ const jobs = [
   ["cbs-tennis", () => fetchCBS("tennis", "CBS Sports")],
   ["cbs-epl", () => fetchCBS("soccer", "CBS Sports")],
   ["cbs-mls", () => fetchCBS("soccer", "CBS Sports")],
+
+  // Reddit — per-league subreddits + r/sports for the general News column.
+  ["reddit-general", () => fetchReddit("sports", "r/sports")],
+  ["reddit-mlb", () => fetchReddit("baseball", "r/baseball")],
+  ["reddit-nba", () => fetchReddit("nba", "r/nba")],
+  ["reddit-nhl", () => fetchReddit("hockey", "r/hockey")],
+  ["reddit-nfl", () => fetchReddit("nfl", "r/nfl")],
+  ["reddit-ncaam", () => fetchReddit("CollegeBasketball", "r/CollegeBasketball")],
+  ["reddit-golf", () => fetchReddit("golf", "r/golf")],
+  ["reddit-tennis", () => fetchReddit("tennis", "r/tennis")],
+  ["reddit-epl", () => fetchReddit("PremierLeague", "r/PremierLeague")],
+  ["reddit-mls", () => fetchReddit("MLS", "r/MLS")],
 
   // theScore — golf and tennis have no dedicated per-league path (API 404s).
   ["thescore-general", () => fetchTheScore("", "theScore")],
