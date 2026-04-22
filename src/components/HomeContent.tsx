@@ -46,6 +46,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string } | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   // sortByMatchups removed — monkey toggle now controls both ratings visibility AND sort order
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
@@ -319,18 +320,25 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return () => ro.disconnect();
   }, []);
 
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 400);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       <header ref={headerRef} className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
         <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
           <a href="/" className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0" style={{ color: "var(--text)" }}>
-            <span className="hidden sm:inline text-lg font-bold tracking-tight">HideScore</span>
-            <svg className="sm:hidden w-6 h-6 header-logo" viewBox="0 0 32 32" fill="none">
+            <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
+            <svg className="xl:hidden w-6 h-6 header-logo" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="6" className="header-logo-bg" />
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
           </a>
-          <div className="flex-1 flex justify-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
+          <div className="flex-1 flex justify-center xl:absolute xl:left-1/2 xl:-translate-x-1/2">
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
           <div className="justify-self-end flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -765,6 +773,27 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           onClose={closeVideoModal}
         />
       )}
+
+      <button
+        type="button"
+        aria-label="Scroll to top"
+        title="Scroll to top"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        className={`fixed z-40 w-11 h-11 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 shadow-lg ${showScrollTop ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        style={{
+          right: "1rem",
+          bottom: "calc(env(safe-area-inset-bottom) + 1rem)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          color: "var(--text-muted)",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </button>
     </div>
   );
 }

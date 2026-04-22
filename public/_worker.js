@@ -117,6 +117,13 @@ export default {
         let teamsMatchedId = null;
         let teamsGameMatchedId = null;
         let firstHighlightId = null;
+        // Extended-highlight fallbacks — leagues (esp. NBA) post both a
+        // standard recap and a longer "EXTENDED HIGHLIGHTS" version.
+        // We prefer the standard one for the primary button, keeping
+        // extended as a secondary fallback at the same match tier.
+        let bestMatchExtendedId = null;
+        let teamsGameExtendedId = null;
+        let teamsExtendedId = null;
         // Golf-specific tracking
         let golfRoundYearId = null;
         let golfRoundId = null;
@@ -124,8 +131,11 @@ export default {
         let golfRecapId = null;     // "recap" + round
         // Channel-specific tracking
         let channelBestId = null;
+        let channelBestExtendedId = null;
         let channelTeamsYearId = null;
+        let channelTeamsYearExtendedId = null;
         let channelTeamsId = null;
+        let channelTeamsExtendedId = null;
         let channelGolfRecapYearId = null; // "recap" + round + year (from channel)
         let channelGolfRecapId = null;     // "recap" + round (from channel)
         let channelGolfRoundYearId = null;
@@ -181,6 +191,11 @@ export default {
             roundOnlyTitleOk;
           if (!isHighlight) continue;
 
+          // "EXTENDED HIGHLIGHTS" variants (common on NBA/MLB official
+          // channels) — still valid highlights, but demoted so the
+          // standard recap wins the primary slot when both exist.
+          const isExtended = /\bextended\b/i.test(titleLower);
+
           // Recap-keyword detection — titles with "recap", "all
           // highlights", or "full round" are strongly biased toward
           // full-day broadcast recaps (vs player reels which rarely
@@ -227,11 +242,18 @@ export default {
 
           // Track channel-specific matches
           if (isFromChannel) {
-            if (hasTeams && hasYear && (!queryGameNum || hasGameNum) && !channelBestId) {
-              channelBestId = videoId;
+            if (hasTeams && hasYear && (!queryGameNum || hasGameNum)) {
+              if (!isExtended && !channelBestId) channelBestId = videoId;
+              if (isExtended && !channelBestExtendedId) channelBestExtendedId = videoId;
             }
-            if (hasTeams && hasYear && !channelTeamsYearId) channelTeamsYearId = videoId;
-            if (hasTeams && !channelTeamsId) channelTeamsId = videoId;
+            if (hasTeams && hasYear) {
+              if (!isExtended && !channelTeamsYearId) channelTeamsYearId = videoId;
+              if (isExtended && !channelTeamsYearExtendedId) channelTeamsYearExtendedId = videoId;
+            }
+            if (hasTeams) {
+              if (!isExtended && !channelTeamsId) channelTeamsId = videoId;
+              if (isExtended && !channelTeamsExtendedId) channelTeamsExtendedId = videoId;
+            }
             // Golf round/recap tiers — gated on tournament match OR
             // the channel itself implying the tournament (The Masters
             // channel for a Masters query). Without the waiver, a
@@ -267,20 +289,27 @@ export default {
 
           // Best: highlight + both teams + year + game number (playoff series)
           if (hasTeams && hasYear && queryGameNum && hasGameNum) {
-            bestMatchId = videoId;
-            if (!preferChannel) break;
+            if (!isExtended) {
+              if (!bestMatchId) bestMatchId = videoId;
+              if (!preferChannel) break;
+            } else if (!bestMatchExtendedId) {
+              bestMatchExtendedId = videoId;
+            }
           }
           // Great: highlight + both teams + year (no series or series matched)
-          if (hasTeams && hasYear && !queryGameNum && !bestMatchId) {
-            bestMatchId = videoId;
+          if (hasTeams && hasYear && !queryGameNum) {
+            if (!isExtended && !bestMatchId) bestMatchId = videoId;
+            if (isExtended && !bestMatchExtendedId) bestMatchExtendedId = videoId;
           }
           // Good: highlight + both teams + game number (no year)
-          if (hasTeams && hasGameNum && !teamsGameMatchedId) {
-            teamsGameMatchedId = videoId;
+          if (hasTeams && hasGameNum) {
+            if (!isExtended && !teamsGameMatchedId) teamsGameMatchedId = videoId;
+            if (isExtended && !teamsGameExtendedId) teamsGameExtendedId = videoId;
           }
           // OK: highlight + both teams (no year/game check)
-          if (hasTeams && !teamsMatchedId) {
-            teamsMatchedId = videoId;
+          if (hasTeams) {
+            if (!isExtended && !teamsMatchedId) teamsMatchedId = videoId;
+            if (isExtended && !teamsExtendedId) teamsExtendedId = videoId;
           }
           // Weak: highlight + year (teams might be abbreviated differently)
           if (hasYear && !yearMatchedId) {
@@ -306,12 +335,15 @@ export default {
             isGolfQuery && channelImpliesGolfTournament;
           videoId =
             channelBestId ||
+            channelBestExtendedId ||
             channelGolfRecapYearId ||
             channelGolfRecapId ||
             channelTeamsYearId ||
+            channelTeamsYearExtendedId ||
             channelGolfRoundYearId ||
             channelGolfRoundId ||
             channelTeamsId ||
+            channelTeamsExtendedId ||
             channelPlayerReelId ||
             (isGolfQuery ? (golfChannelAnyOk ? channelAnyId : null) : channelAnyId) ||
             null;
@@ -321,12 +353,15 @@ export default {
           // firstHighlightId is the fallback for non-golf only.
           videoId =
             bestMatchId ||
+            bestMatchExtendedId ||
             teamsGameMatchedId ||
+            teamsGameExtendedId ||
             golfRecapYearId ||
             golfRecapId ||
             golfRoundYearId ||
             golfRoundId ||
             teamsMatchedId ||
+            teamsExtendedId ||
             yearMatchedId ||
             playerReelId ||
             (isGolfQuery ? null : firstHighlightId);
