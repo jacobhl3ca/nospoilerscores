@@ -198,15 +198,24 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote)
     : null;
 
-  // Pre-fetch YouTube video IDs in background (official channel + top search)
+  // Pre-fetch YouTube video IDs in background (official channel + top search).
+  // When both buttons exist, the secondary prefetch waits for the primary so
+  // it can exclude the primary's videoId — guaranteeing the secondary never
+  // duplicates the primary result.
   const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
     const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-    fetchFirstVideoId(query).then((id) => { prefetchedVideoId.current = id; });
     if (officialChannel) {
-      fetchFirstVideoId(query, officialChannel).then((id) => { prefetchedOfficialId.current = id; });
+      (async () => {
+        const officialId = await fetchFirstVideoId(query, officialChannel);
+        prefetchedOfficialId.current = officialId;
+        const id = await fetchFirstVideoId(query, undefined, [officialId]);
+        prefetchedVideoId.current = id;
+      })();
+    } else {
+      fetchFirstVideoId(query).then((id) => { prefetchedVideoId.current = id; });
     }
   }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, officialChannel]);
 
@@ -509,7 +518,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               }
               setFetchingOnClick("search");
               const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-              const id = await fetchFirstVideoId(query);
+              // Dedup against primary so the two buttons never play the same video.
+              const id = await fetchFirstVideoId(query, undefined, [prefetchedOfficialId.current]);
               setFetchingOnClick(null);
               if (id) {
                 prefetchedVideoId.current = id;

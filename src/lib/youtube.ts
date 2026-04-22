@@ -101,10 +101,12 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[]): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
+    const excludeIds = (exclude ?? []).filter((id): id is string => !!id);
+    if (excludeIds.length) url += `&exclude=${encodeURIComponent(excludeIds.join(","))}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
