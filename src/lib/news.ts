@@ -27,6 +27,9 @@ export interface NewsItem {
   articleUrl: string;
   byline: string;
   section: string;
+  // Small sport badge shown before the headline in text cards (ESPN top
+  // headlines uses this to tag each article with its league).
+  leagueLogo?: string | null;
 }
 
 interface RawImage { url?: string; height?: number; width?: number }
@@ -147,12 +150,17 @@ export interface ColumnSource {
   sport?: Sport;
   logoUrl?: string;
   variant?: "text" | "video";
+  // YouTube channel hint for video cards — ensures the in-app player plays the
+  // actual league highlight rather than a random search result.
+  youtubeChannel?: string;
 }
 
-// Leagues with a prebaked video feed (big-format highlights).
-const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string }>> = {
-  mlb: { key: "mlb-videos", label: "MLB Most Popular" },
-  nba: { key: "nba-videos", label: "NBA Top Videos" },
+// Leagues with a prebaked video feed (big-format highlights). `channel` is the
+// official YouTube channel name passed to the /api/youtube lookup so the modal
+// player finds the exact clip instead of a generic search hit.
+const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string; channel?: string }>> = {
+  mlb: { key: "mlb-videos", label: "MLB Most Popular", channel: "MLB" },
+  nba: { key: "nba-videos", label: "NBA Top Videos", channel: "NBA" },
 };
 
 // Per-league subreddit card — pinned just below the official news link since
@@ -176,7 +184,7 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
   const officialVideos = PREBAKED_VIDEOS[sport];
-  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video" });
+  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
   const official = PREBAKED_FEEDS[sport];
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
   const reddit = REDDIT_SUB[sport];
@@ -190,7 +198,7 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 // Col 3's default (no league picked) — videos pinned first (ICYMI leads), then
 // ESPN top headlines + r/sports + theScore + CBS Sports aggregators.
 export const GENERIC_CASCADE: ColumnSource[] = [
-  { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video" },
+  { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN" },
   { label: "ESPN", key: "espn-top", kind: "prebaked" },
   { label: "r/sports", key: "reddit-general", kind: "prebaked" },
   { label: "theScore", key: "thescore-general", kind: "prebaked" },

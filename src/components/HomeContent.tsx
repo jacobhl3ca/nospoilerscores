@@ -56,6 +56,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     showRatings: false,
     skipExplainer: false,
     skipNewsExplainer: false,
+    showNews: false,
   });
 
   useEffect(() => {
@@ -87,6 +88,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       loaded.showRatings = false;
     }
     setPrefs(loaded);
+    // Restore the News/Scores view from the last session so a refresh doesn't
+    // flip the user back to scores — they accepted the spoiler warning already.
+    if (loaded.showNews) setShowNews(true);
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
   }, []);
 
@@ -108,9 +112,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // News video card click → YouTube-lookup the headline, open in the same
   // VideoModal used by game highlights. Falls back to the article URL when
   // no YouTube result is found so the click still goes somewhere useful.
-  const playNewsVideo = useCallback(async (query: string, fallbackUrl: string) => {
+  const playNewsVideo = useCallback(async (query: string, fallbackUrl: string, channel?: string) => {
     const fallback = fallbackUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    const videoId = await fetchFirstVideoId(query);
+    // First try the league's official YouTube channel so highlight clips match
+    // the source feed; fall back to a generic search if the channel scope misses.
+    let videoId = channel ? await fetchFirstVideoId(query, channel) : null;
+    if (!videoId) videoId = await fetchFirstVideoId(query);
     if (videoId) {
       openVideoModal(videoId, fallback);
     } else if (typeof window !== "undefined") {
@@ -185,10 +192,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const handleNewsClick = () => {
     if (showNews) {
       setShowNews(false);
+      updatePrefs({ showNews: false });
       return;
     }
     if (prefs.skipNewsExplainer) {
       setShowNews(true);
+      updatePrefs({ showNews: true });
     } else {
       setShowNewsExplainer(true);
     }
@@ -197,7 +206,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const confirmNews = (dontShowAgain: boolean) => {
     setShowNewsExplainer(false);
     setShowNews(true);
-    if (dontShowAgain) updatePrefs({ skipNewsExplainer: true });
+    updatePrefs({ showNews: true, skipNewsExplainer: dontShowAgain || prefs.skipNewsExplainer });
   };
 
   const setNewsThirdLeague = (sport: Sport | undefined) => {

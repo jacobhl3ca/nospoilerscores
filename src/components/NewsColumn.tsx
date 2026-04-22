@@ -9,6 +9,7 @@ export interface NewsSource {
   fetch: () => Promise<NewsItem[]>;
   logoUrl?: string;
   variant?: "text" | "video";
+  youtubeChannel?: string;
 }
 
 interface NewsColumnProps {
@@ -18,8 +19,9 @@ interface NewsColumnProps {
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport;
   onSwapLeague?: (sport: Sport | undefined) => void;
-  // Video card click → open inline YouTube player. Same hook used by GameCard.
-  onPlayVideo?: (query: string, fallbackUrl: string) => void;
+  // Video card click → open inline YouTube player. Channel (optional) steers
+  // the search to the league's official YouTube feed.
+  onPlayVideo?: (query: string, fallbackUrl: string, channel?: string) => void;
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
@@ -72,7 +74,7 @@ function TextSourceCard({ label, logoUrl, items, loading }: { label: string; log
               className="flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]"
               style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)", color: "var(--text)" }}
             >
-              {item.imageUrl && (
+              {item.imageUrl ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={item.imageUrl}
@@ -81,7 +83,18 @@ function TextSourceCard({ label, logoUrl, items, loading }: { label: string; log
                   className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded shrink-0"
                   draggable={false}
                 />
-              )}
+              ) : item.leagueLogo ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={item.leagueLogo}
+                  alt=""
+                  loading="lazy"
+                  width={18}
+                  height={18}
+                  className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
+                  draggable={false}
+                />
+              ) : null}
               <span className="min-w-0">{item.headline}</span>
             </a>
           ))}
@@ -179,10 +192,12 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
   );
 }
 
-function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: (query: string, fallbackUrl: string) => void }) {
+function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: (query: string, fallbackUrl: string, channel?: string) => void }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Key the fetch on stable strings so parent re-renders that produce a new
+  // `source` object with identical contents don't re-trigger the fetch.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -193,10 +208,19 @@ function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVide
       }
     });
     return () => { cancelled = true; };
-  }, [source]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source.label]);
 
   if (source.variant === "video") {
-    return <VideoSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} onPlay={onPlayVideo} />;
+    return (
+      <VideoSourceCard
+        label={source.label}
+        logoUrl={source.logoUrl}
+        items={items}
+        loading={loading}
+        onPlay={onPlayVideo ? (q, f) => onPlayVideo(q, f, source.youtubeChannel) : undefined}
+      />
+    );
   }
   return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} />;
 }

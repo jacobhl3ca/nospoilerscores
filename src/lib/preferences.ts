@@ -53,6 +53,7 @@ export interface Preferences {
   showRatings: boolean;
   skipExplainer: boolean;
   skipNewsExplainer: boolean;
+  showNews: boolean; // persist last view across refreshes
   thirdLeague?: Sport; // user-chosen 3rd league slot override
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
 }
@@ -64,6 +65,7 @@ const defaults: Preferences = {
   showRatings: false,
   skipExplainer: false,
   skipNewsExplainer: false,
+  showNews: false,
 };
 
 export function loadPreferences(): Preferences {

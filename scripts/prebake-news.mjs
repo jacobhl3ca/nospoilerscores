@@ -53,19 +53,63 @@ function decodeEntities(s) {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
+    .replace(/&#039;|&#x27;/gi, "'")
     .replace(/&apos;/g, "'")
     .replace(/&nbsp;/g, " ")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
     .replace(/\s+/g, " ")
     .trim();
 }
 
 // ── Official league sites ─────────────────────────────────────────
 
-// MLB's StatsAPI schedule with a `highlights.highlights` hydrate exposes every
-// game's clip reel — title, thumbnail, slug, duration. That's the closest thing
-// to "Most Popular" we can pull without reverse-engineering mlb.com's GraphQL.
+// MLB.com's /video/topic/most-popular page is server-rendered with ContentCards.
+// That's the exact list that appears in the video-detail page's right sidebar.
 async function fetchMLBVideos() {
+  try {
+    const html = await getText("https://www.mlb.com/video/topic/most-popular");
+    const items = [];
+    const seen = new Set();
+    // Each entry: <a href="/video/{slug}"...> ... <img alt="..." src="..."> ...
+    //             <h3 class="ContentCard__Title...">Title</h3>
+    //             <p class="ContentCard__Duration...">0:59</p> (inside card)
+    const cardRe = /<a[^>]+href="(\/video\/[^"?]+)"[^>]*>([\s\S]{100,8000}?)<\/a>/g;
+    let m;
+    while ((m = cardRe.exec(html)) !== null) {
+      const slug = m[1].replace(/^\/video\//, "");
+      if (!slug || seen.has(slug)) continue;
+      if (slug.startsWith("topic/") || slug.startsWith("search") || slug.startsWith("?")) continue;
+      const body = m[2];
+      const titleM = body.match(/<h\d[^>]*class="[^"]*ContentCard__Title[^"]*"[^>]*>([\s\S]{3,300}?)<\/h\d>/);
+      if (!titleM) continue;
+      const title = decodeEntities(titleM[1].replace(/<[^>]+>/g, ""));
+      if (!title) continue;
+      const imgM = body.match(/<img[^>]+src="(https:\/\/img\.mlbstatic\.com\/[^"]+)"/);
+      const dateM = body.match(/<p[^>]*class="[^"]*ContentCard__Date[^"]*"[^>]*>([^<]{3,30})<\/p>/);
+      seen.add(slug);
+      items.push({
+        id: slug,
+        headline: title,
+        description: "",
+        published: dateM ? dateM[1].trim() : "",
+        imageUrl: imgM ? imgM[1] : null,
+        articleUrl: `https://www.mlb.com/video/${slug}`,
+        byline: "",
+        section: "MLB Most Popular",
+      });
+      if (items.length >= 10) break;
+    }
+    if (items.length > 0) return items;
+  } catch {
+    // Fall through to StatsAPI fallback
+  }
+  return fetchMLBHighlightsFallback();
+}
+
+// Fallback: StatsAPI highlights (game-by-game clip reel). Used only if the
+// mlb.com topic page scrape fails or comes back empty.
+async function fetchMLBHighlightsFallback() {
   // ET day — baseball is ET-anchored and UTC drifts into the next day during
   // evening games. Pull today + yesterday and merge so early-morning runs (when
   // today has no games yet) still have recap highlights from last night.
@@ -270,6 +314,31 @@ async function fetchESPNICYMI() {
   };
 }
 
+// Map ESPN article URL path → sport-logo URL for the small badge shown left of
+// each headline in the col-3 ESPN Top card. Parses the first segment after the
+// domain. Returns null for sports without a CDN logo (NCAAM/golf/tennis/EPL).
+const ESPN_PATH_SPORT_LOGO = {
+  nba: "mlb", // dummy key so TS doesn't complain — replaced below
+};
+const PATH_TO_LOGO = {
+  nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
+  mlb: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
+  nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
+  nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
+  mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
+  fifa: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
+};
+
+function espnArticleLogo(articleUrl) {
+  try {
+    const u = new URL(articleUrl);
+    const seg = u.pathname.split("/").filter(Boolean)[0] || "";
+    return PATH_TO_LOGO[seg.toLowerCase()] || null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchESPNTopHeadlines() {
   const html = await getESPNHomeHtml();
   const blockMatch = html.match(/<div class="headlineStack top-headlines">([\s\S]{0,30000}?)<\/div>\s*<\/div>/);
@@ -293,6 +362,7 @@ async function fetchESPNTopHeadlines() {
       description: "",
       published: "",
       imageUrl: null,
+      leagueLogo: espnArticleLogo(url),
       articleUrl: url,
       byline: "",
       section: "ESPN",
