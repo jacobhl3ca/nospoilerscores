@@ -169,29 +169,30 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   mls: { key: "reddit-mls", label: "r/MLS" },
 };
 
-// Cascade of news cards for a league column: official news → subreddit →
-// official videos → ESPN → CBS → theScore. Sources with no feed are skipped.
+// Cascade of news cards for a league column: official videos pinned first,
+// then official news → subreddit → ESPN → CBS → theScore. Sources with no feed
+// are silently skipped.
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
+  const officialVideos = PREBAKED_VIDEOS[sport];
+  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video" });
   const official = PREBAKED_FEEDS[sport];
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
   const reddit = REDDIT_SUB[sport];
   if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
-  const officialVideos = PREBAKED_VIDEOS[sport];
-  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video" });
   out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl });
   if (HAS_CBS[sport]) out.push({ label: "CBS Sports", key: `cbs-${sport}`, kind: "prebaked", logoUrl });
   if (HAS_THESCORE[sport]) out.push({ label: "theScore", key: `thescore-${sport}`, kind: "prebaked", logoUrl });
   return out;
 }
 
-// Col 3's default (no league picked) — ESPN homepage top headlines + r/sports
-// (top cross-sport subreddit) + ESPN big-format videos + theScore + CBS Sports.
+// Col 3's default (no league picked) — videos pinned first (ICYMI leads), then
+// ESPN top headlines + r/sports + theScore + CBS Sports aggregators.
 export const GENERIC_CASCADE: ColumnSource[] = [
+  { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video" },
   { label: "ESPN", key: "espn-top", kind: "prebaked" },
   { label: "r/sports", key: "reddit-general", kind: "prebaked" },
-  { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video" },
   { label: "theScore", key: "thescore-general", kind: "prebaked" },
   { label: "CBS Sports", key: "cbs-general", kind: "prebaked" },
 ];

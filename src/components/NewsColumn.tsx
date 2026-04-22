@@ -18,6 +18,8 @@ interface NewsColumnProps {
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport;
   onSwapLeague?: (sport: Sport | undefined) => void;
+  // Video card click → open inline YouTube player. Same hook used by GameCard.
+  onPlayVideo?: (query: string, fallbackUrl: string) => void;
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
@@ -67,10 +69,20 @@ function TextSourceCard({ label, logoUrl, items, loading }: { label: string; log
               href={item.articleUrl || undefined}
               target="_blank"
               rel="noopener noreferrer"
-              className="block px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]"
+              className="flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]"
               style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)", color: "var(--text)" }}
             >
-              {item.headline}
+              {item.imageUrl && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={item.imageUrl}
+                  alt=""
+                  loading="lazy"
+                  className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded shrink-0"
+                  draggable={false}
+                />
+              )}
+              <span className="min-w-0">{item.headline}</span>
             </a>
           ))}
         </div>
@@ -79,7 +91,7 @@ function TextSourceCard({ label, logoUrl, items, loading }: { label: string; log
   );
 }
 
-function VideoSourceCard({ label, logoUrl, items, loading }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean }) {
+function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (query: string, fallbackUrl: string) => void }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -101,15 +113,11 @@ function VideoSourceCard({ label, logoUrl, items, loading }: { label: string; lo
         <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
       ) : (
         <div className="flex flex-col">
-          {items.map((item, idx) => (
-            <a
-              key={item.id}
-              href={item.articleUrl || undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block transition-opacity hover:opacity-90"
-              style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)" }}
-            >
+          {items.map((item, idx) => {
+            const commonCls = "block w-full text-left transition-opacity hover:opacity-90 cursor-pointer";
+            const commonStyle = { borderTop: idx === 0 ? "none" : "1px solid var(--border)" };
+            const body = (
+              <>
               {item.imageUrl && (
                 <div className="relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -138,15 +146,40 @@ function VideoSourceCard({ label, logoUrl, items, loading }: { label: string; lo
               <div className="px-3 py-2 text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
                 {item.headline}
               </div>
-            </a>
-          ))}
+              </>
+            );
+            if (onPlay) {
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onPlay(item.headline, item.articleUrl)}
+                  className={commonCls}
+                  style={commonStyle}
+                >
+                  {body}
+                </button>
+              );
+            }
+            return (
+              <a
+                key={item.id}
+                href={item.articleUrl || undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={commonCls}
+                style={commonStyle}
+              >
+                {body}
+              </a>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-function SourceSection({ source }: { source: NewsSource }) {
+function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: (query: string, fallbackUrl: string) => void }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -163,7 +196,7 @@ function SourceSection({ source }: { source: NewsSource }) {
   }, [source]);
 
   if (source.variant === "video") {
-    return <VideoSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} />;
+    return <VideoSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} onPlay={onPlayVideo} />;
   }
   return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} />;
 }
@@ -174,6 +207,7 @@ export default function NewsColumn({
   swappableOptions,
   selectedThirdLeague,
   onSwapLeague,
+  onPlayVideo,
 }: NewsColumnProps) {
   const [swapOpen, setSwapOpen] = useState(false);
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
@@ -255,7 +289,7 @@ export default function NewsColumn({
       </div>
       <div className="flex flex-col gap-1.5 sm:gap-2">
         {sources.map((source) => (
-          <SourceSection key={source.label} source={source} />
+          <SourceSection key={source.label} source={source} onPlayVideo={onPlayVideo} />
         ))}
       </div>
     </div>

@@ -3,7 +3,7 @@
 // Covers origins that block browser CORS (MLB.com, NBA.com, NHL.com, CBS, theScore)
 // plus the ESPN homepage "TOP HEADLINES" widget (scraped from HTML for exact order).
 
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const OUT_DIR = "public/news";
@@ -25,6 +25,26 @@ async function getText(url) {
 
 function stripCdata(s) {
   return (s || "").replace(/^<!\[CDATA\[|\]\]>$/g, "").trim();
+}
+
+// Sportsbook promos + pure betting content that leak into news feeds — applied
+// to every text feed (ESPN/CBS/theScore/Reddit). Brand names use an optional
+// space so "draft kings" and "draftkings" both match.
+const ARTICLE_BLOCKLIST = [
+  /\bdraft[\s-]?kings\b/i,
+  /\bfan[\s-]?duel\b/i,
+  /\bprize[\s-]?picks\b/i,
+  /\bsportsbook\b/i,
+  /\bparlay\b/i,
+  /\bbest\s+bets?\b/i,
+  /\bbetting\s+(?:odds|line|trends|preview|picks?)\b/i,
+  /\bodds,?\s+picks?\b/i,
+  /\bpicks?,?\s+predictions?\b/i,
+];
+
+function passesArticleBlocklist(headline, description = "") {
+  const t = `${headline} ${description}`;
+  return !ARTICLE_BLOCKLIST.some((re) => re.test(t));
 }
 
 function decodeEntities(s) {
@@ -118,6 +138,7 @@ async function fetchMLB() {
     const link = ((block.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || "").trim();
     const pub = ((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || "").trim();
     if (!title || !link) continue;
+    if (!passesArticleBlocklist(title)) continue;
     items.push({
       id: link,
       headline: title,
@@ -170,10 +191,11 @@ async function fetchNBAVideos() {
 }
 
 async function fetchNBA() {
-  const data = await getJson("https://content-api-prod.nba.com/public/1/content/news?count=20");
+  const data = await getJson("https://content-api-prod.nba.com/public/1/content/news?count=25");
   const raw = data?.results?.items || [];
   return raw
     .filter((i) => i.type === "post" && (i.permalink || "").includes("/news/"))
+    .filter((i) => passesArticleBlocklist(i.title || "", i.excerpt || ""))
     .slice(0, 15)
     .map((i) => ({
       id: String(i.id),
@@ -192,16 +214,19 @@ async function fetchNHL() {
     "https://forge-dapi.d3.nhle.com/v2/content/en-us/stories?tags.slug=news&context.slug=nhl&%24limit=20"
   );
   const raw = data?.items || [];
-  return raw.slice(0, 15).map((i) => ({
-    id: i._entityId || i.slug,
-    headline: i.title || "",
-    description: i.summary || "",
-    published: i.contentDate || "",
-    imageUrl: i.fields?.thumbnail?.thumbnailUrl || null,
-    articleUrl: `https://www.nhl.com/news/${i.slug}`,
-    byline: "",
-    section: "NHL.com",
-  }));
+  return raw
+    .filter((i) => passesArticleBlocklist(i.title || "", i.summary || ""))
+    .slice(0, 15)
+    .map((i) => ({
+      id: i._entityId || i.slug,
+      headline: i.title || "",
+      description: i.summary || "",
+      published: i.contentDate || "",
+      imageUrl: i.fields?.thumbnail?.thumbnailUrl || null,
+      articleUrl: `https://www.nhl.com/news/${i.slug}`,
+      byline: "",
+      section: "NHL.com",
+    }));
 }
 
 // ── ESPN homepage TOP HEADLINES (scraped for exact order) ─────────
@@ -261,6 +286,7 @@ async function fetchESPNTopHeadlines() {
     if (url.startsWith("/")) url = `https://www.espn.com${url}`;
     const title = decodeEntities(anchor[2].replace(/<[^>]+>/g, ""));
     if (!title) continue;
+    if (!passesArticleBlocklist(title)) continue;
     items.push({
       id: url,
       headline: title,
@@ -390,9 +416,45 @@ async function fetchESPNTopVideos() {
       byline: "",
       section: "ESPN Video",
     });
-    if (items.length >= 10) break;
+    if (items.length >= 20) break; // over-collect; merge+cap below
   }
-  return items;
+  return await persistVideos("espn-videos", items, icymi?.id);
+}
+
+// Merge freshly-scraped videos with what we wrote earlier today so the full top
+// 10 "big videos that hit the frontpage" builds up across the day. Rolls over
+// at ET midnight (a fresh day starts fresh). ICYMI stays pinned to position 0.
+async function persistVideos(name, fresh, pinnedId) {
+  const path = `${OUT_DIR}/${name}.json`;
+  let existing = null;
+  try {
+    existing = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    existing = null;
+  }
+  const nowMs = Date.now();
+  const currentETDay = new Date().toLocaleDateString("en-US", { timeZone: "America/New_York" });
+  const existingETDay = existing?.fetchedAt
+    ? new Date(existing.fetchedAt).toLocaleDateString("en-US", { timeZone: "America/New_York" })
+    : null;
+  // Fresh day → drop yesterday's list. Same day → carry forward.
+  const carry = existingETDay === currentETDay ? (existing?.items || []) : [];
+  const byId = new Map();
+  // Preserve existing firstSeenAt for items we've seen before; assign now for new ones.
+  for (const item of carry) {
+    byId.set(item.id, { ...item, firstSeenAt: item.firstSeenAt || nowMs });
+  }
+  for (const item of fresh) {
+    if (!byId.has(item.id)) byId.set(item.id, { ...item, firstSeenAt: nowMs });
+  }
+  // Order: pinned ICYMI first (always top), then everything else by firstSeenAt
+  // ascending so the morning videos anchor the top of the list.
+  const all = [...byId.values()];
+  const pinned = pinnedId ? all.filter((i) => i.id === pinnedId) : [];
+  const rest = all
+    .filter((i) => i.id !== pinnedId)
+    .sort((a, b) => (a.firstSeenAt || 0) - (b.firstSeenAt || 0));
+  return [...pinned, ...rest].slice(0, 10);
 }
 
 // ── Reddit top posts (per-league + general /r/sports) ────────────
@@ -414,12 +476,22 @@ async function fetchReddit(subreddit, sectionLabel) {
     if (p.over_18 || p.removed_by_category) continue;
     const title = decodeEntities(p.title || "");
     if (!title) continue;
+    if (!passesArticleBlocklist(title)) continue;
+    // Pick the best inline preview — Reddit's preview image first (high-res),
+    // then the thumbnail field. Skip "self"/"default" placeholders for text posts.
+    const preview = p.preview?.images?.[0]?.source?.url;
+    let imageUrl = null;
+    if (preview) {
+      imageUrl = preview.replace(/&amp;/g, "&");
+    } else if (p.thumbnail && /^https?:\/\//.test(p.thumbnail)) {
+      imageUrl = p.thumbnail;
+    }
     out.push({
       id: p.id || p.permalink,
       headline: title,
       description: "",
       published: p.created_utc ? new Date(p.created_utc * 1000).toISOString() : "",
-      imageUrl: null,
+      imageUrl,
       articleUrl: p.permalink ? `https://www.reddit.com${p.permalink}` : (p.url || ""),
       byline: p.author ? `u/${p.author}` : "",
       section: sectionLabel,
@@ -441,6 +513,7 @@ function parseCBSItems(xml, sectionLabel) {
     const link = ((block.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || "").trim();
     const pub = ((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || "").trim();
     if (!title || !link) continue;
+    if (!passesArticleBlocklist(title)) continue;
     items.push({
       id: link,
       headline: title,
@@ -473,7 +546,10 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
     : "https://api.thescore.com/articles?limit=15";
   const raw = await getJson(url);
   const items = Array.isArray(raw) ? raw : [];
-  return items.slice(0, 12).map((a) => ({
+  return items
+    .filter((a) => passesArticleBlocklist(a.headline || "", a.abstract || ""))
+    .slice(0, 12)
+    .map((a) => ({
     id: String(a.id),
     headline: a.headline || "",
     description: a.abstract || "",

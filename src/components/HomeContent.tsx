@@ -11,6 +11,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, C
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
+import { fetchFirstVideoId } from "@/lib/youtube";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -103,6 +104,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     params.set("v", videoId);
     window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
   }, []);
+
+  // News video card click → YouTube-lookup the headline, open in the same
+  // VideoModal used by game highlights. Falls back to the article URL when
+  // no YouTube result is found so the click still goes somewhere useful.
+  const playNewsVideo = useCallback(async (query: string, fallbackUrl: string) => {
+    const fallback = fallbackUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const videoId = await fetchFirstVideoId(query);
+    if (videoId) {
+      openVideoModal(videoId, fallback);
+    } else if (typeof window !== "undefined") {
+      window.open(fallback, "_blank", "noopener,noreferrer");
+    }
+  }, [openVideoModal]);
 
   const closeVideoModal = useCallback(() => {
     setVideoModal(null);
@@ -474,10 +488,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <NewsColumn
                 title={sortedLeagues[0]?.label ?? "News"}
                 sources={buildSources(sortedLeagues[0]?.sport)}
+                onPlayVideo={playNewsVideo}
               />
               <NewsColumn
                 title={sortedLeagues[1]?.label ?? "News"}
                 sources={buildSources(sortedLeagues[1]?.sport)}
+                onPlayVideo={playNewsVideo}
               />
               <NewsColumn
                 title={prefs.newsThirdLeague
@@ -487,6 +503,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 swappableOptions={thirdLeagueOptions}
                 selectedThirdLeague={prefs.newsThirdLeague}
                 onSwapLeague={setNewsThirdLeague}
+                onPlayVideo={playNewsVideo}
               />
             </div>
           );
