@@ -11,7 +11,6 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, C
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
-import { fetchFirstVideoId } from "@/lib/youtube";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -82,15 +81,18 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         setVideoModal({ videoId: sharedVideoId, fallbackUrl: "" });
       }
     }
-    // Before noon ET: always start with ratings hidden (don't persist — just override for this session)
+    // Before noon ET: force a fresh-day reset — ratings hidden AND News view
+    // collapsed back to Scores. Don't persist either override; the toggles still
+    // work the rest of the day, but a morning refresh lands on the clean
+    // homepage (no spoilers, no news feed up).
     const hour = getETHour();
-    if (hour < 12) {
+    const morningReset = hour < 12;
+    if (morningReset) {
       loaded.showRatings = false;
+      loaded.showNews = false;
     }
     setPrefs(loaded);
-    // Restore the News/Scores view from the last session so a refresh doesn't
-    // flip the user back to scores — they accepted the spoiler warning already.
-    if (loaded.showNews) setShowNews(true);
+    if (!morningReset && loaded.showNews) setShowNews(true);
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
   }, []);
 
@@ -112,18 +114,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // News video card click → YouTube-lookup the headline, open in the same
   // VideoModal used by game highlights. Falls back to the article URL when
   // no YouTube result is found so the click still goes somewhere useful.
-  const playNewsVideo = useCallback(async (query: string, fallbackUrl: string, channel?: string) => {
-    const fallback = fallbackUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    // First try the league's official YouTube channel so highlight clips match
-    // the source feed; fall back to a generic search if the channel scope misses.
-    let videoId = channel ? await fetchFirstVideoId(query, channel) : null;
-    if (!videoId) videoId = await fetchFirstVideoId(query);
-    if (videoId) {
-      openVideoModal(videoId, fallback);
-    } else if (typeof window !== "undefined") {
-      window.open(fallback, "_blank", "noopener,noreferrer");
-    }
-  }, [openVideoModal]);
+  // News video cards now open the source URL directly (ESPN/MLB/NBA player
+  // pages). We previously routed through a YouTube lookup + modal but the
+  // matches were only approximate — the source URL is always the exact clip.
+  // Leaving NewsColumn's onPlayVideo unset makes VideoSourceCard fall back to
+  // a plain `<a target="_blank">` which is what we want.
 
   const closeVideoModal = useCallback(() => {
     setVideoModal(null);
@@ -362,7 +357,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </svg>
           </a>
           <div className="flex-1 flex justify-center xl:absolute xl:left-1/2 xl:-translate-x-1/2">
-            <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+            {!showNews && <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />}
           </div>
           <div className="justify-self-end flex items-center gap-1 sm:gap-2 flex-shrink-0">
             {hasFavorites && (
@@ -439,7 +434,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 <path d="M10 6h8v4h-8V6Z" />
               </svg>
             </button>
-            <div className="relative">
+            <div className={`relative ${showNews ? "hidden" : ""}`}>
               <button
                 onClick={() => setCalendarOpen(!calendarOpen)}
                 className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
@@ -497,12 +492,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <NewsColumn
                 title={sortedLeagues[0]?.label ?? "News"}
                 sources={buildSources(sortedLeagues[0]?.sport)}
-                onPlayVideo={playNewsVideo}
               />
               <NewsColumn
                 title={sortedLeagues[1]?.label ?? "News"}
                 sources={buildSources(sortedLeagues[1]?.sport)}
-                onPlayVideo={playNewsVideo}
               />
               <NewsColumn
                 title={prefs.newsThirdLeague
@@ -512,7 +505,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 swappableOptions={thirdLeagueOptions}
                 selectedThirdLeague={prefs.newsThirdLeague}
                 onSwapLeague={setNewsThirdLeague}
-                onPlayVideo={playNewsVideo}
               />
             </div>
           );
