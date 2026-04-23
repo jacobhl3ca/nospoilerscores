@@ -11,6 +11,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, C
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
+import { fetchFirstVideoId } from "@/lib/youtube";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -111,14 +112,24 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
   }, []);
 
-  // News video card click → YouTube-lookup the headline, open in the same
-  // VideoModal used by game highlights. Falls back to the article URL when
-  // no YouTube result is found so the click still goes somewhere useful.
-  // News video cards now open the source URL directly (ESPN/MLB/NBA player
-  // pages). We previously routed through a YouTube lookup + modal but the
-  // matches were only approximate — the source URL is always the exact clip.
-  // Leaving NewsColumn's onPlayVideo unset makes VideoSourceCard fall back to
-  // a plain `<a target="_blank">` which is what we want.
+  // News video card click → YouTube search restricted to the source's official
+  // channel (MLB / NBA / ESPN). The channel scope is what matters — it keeps
+  // unrelated fan uploads out of the result so the clip we play matches the
+  // card. If no channel-scoped match exists we just open the source URL in a
+  // new tab rather than falling back to a generic search (which was mismatching
+  // too often in practice).
+  const playNewsVideo = useCallback(async (query: string, fallbackUrl: string, channel?: string) => {
+    if (channel) {
+      const videoId = await fetchFirstVideoId(query, channel);
+      if (videoId) {
+        openVideoModal(videoId, fallbackUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(`${query} ${channel}`)}`);
+        return;
+      }
+    }
+    if (typeof window !== "undefined" && fallbackUrl) {
+      window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+    }
+  }, [openVideoModal]);
 
   const closeVideoModal = useCallback(() => {
     setVideoModal(null);
@@ -492,10 +503,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <NewsColumn
                 title={sortedLeagues[0]?.label ?? "News"}
                 sources={buildSources(sortedLeagues[0]?.sport)}
+                onPlayVideo={playNewsVideo}
               />
               <NewsColumn
                 title={sortedLeagues[1]?.label ?? "News"}
                 sources={buildSources(sortedLeagues[1]?.sport)}
+                onPlayVideo={playNewsVideo}
               />
               <NewsColumn
                 title={prefs.newsThirdLeague
@@ -505,6 +518,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 swappableOptions={thirdLeagueOptions}
                 selectedThirdLeague={prefs.newsThirdLeague}
                 onSwapLeague={setNewsThirdLeague}
+                onPlayVideo={playNewsVideo}
               />
             </div>
           );
