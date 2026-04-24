@@ -27,4 +27,5 @@ jobs:
           fi
           git add public/prime-asins.json
           git commit -m "Refresh Prime Video ASIN map"
+          git pull --rebase
           git push

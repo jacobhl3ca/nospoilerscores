@@ -28,4 +28,5 @@ jobs:
           fi
           git add public/news
           git commit -m "Refresh news feeds"
+          git pull --rebase
           git push
