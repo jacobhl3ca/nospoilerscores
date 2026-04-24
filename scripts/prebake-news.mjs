@@ -162,9 +162,49 @@ function decodeEntities(s) {
 
 // MLB.com's /video/topic/most-popular page is server-rendered with ContentCards.
 // That's the exact list that appears in the video-detail page's right sidebar.
+// Fetches today + yesterday's MLB highlights via StatsAPI and returns a
+// slug → playback HLS URL map. Used to enrich the /video/topic/most-popular
+// scrape with direct streams so the in-app modal can play the exact clip.
+async function fetchMLBPlaybackMap() {
+  const toET = (d) => {
+    const s = d.toLocaleDateString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+    const [m, day, y] = s.split("/");
+    return `${y}-${m}-${day}`;
+  };
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86400000);
+  const map = new Map();
+  const fetchDate = async (date) => {
+    try {
+      const data = await getJson(
+        `https://statsapi.mlb.com/api/v1/schedule?date=${date}&sportId=1&hydrate=game(content(highlights(highlights)))`
+      );
+      for (const dt of data?.dates || []) {
+        for (const g of dt?.games || []) {
+          for (const h of g?.content?.highlights?.highlights?.items || []) {
+            const slug = h.slug;
+            if (!slug) continue;
+            // Prefer the HLS manifest (`hlsCloud`); fall back to any playback URL.
+            const hls = (h.playbacks || []).find((p) => p.name === "hlsCloud") || (h.playbacks || [])[0];
+            if (hls?.url) map.set(slug, hls.url);
+          }
+        }
+      }
+    } catch {
+      // Non-fatal — we just won't have inline playback for items on this date.
+    }
+  };
+  await fetchDate(toET(today));
+  await fetchDate(toET(yesterday));
+  return map;
+}
+
 async function fetchMLBVideos() {
   try {
-    const html = await getText("https://www.mlb.com/video/topic/most-popular");
+    const [html, playbackMap] = await Promise.all([
+      getText("https://www.mlb.com/video/topic/most-popular"),
+      fetchMLBPlaybackMap(),
+    ]);
     const items = [];
     const seen = new Set();
     // Each entry: <a href="/video/{slug}"...> ... <img alt="..." src="..."> ...
@@ -193,6 +233,7 @@ async function fetchMLBVideos() {
         articleUrl: `https://www.mlb.com/video/${slug}`,
         byline: "",
         section: "MLB Most Popular",
+        playbackUrl: playbackMap.get(slug) || null,
       });
       if (items.length >= 10) break;
     }

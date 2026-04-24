@@ -19,10 +19,10 @@ interface NewsColumnProps {
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport;
   onSwapLeague?: (sport: Sport | undefined) => void;
-  // Video card click → open inline YouTube player. Called only when the item
-  // has a prebake-validated `youtubeVideoId` — so this hook receives the
-  // already-known videoId, not a query.
-  onPlayVideo?: (videoId: string, fallbackUrl: string) => void;
+  // Video card click → open inline player modal. Called only when the item
+  // has either a direct HLS stream (MLB) or a prebake-validated YouTube ID.
+  // Receives the full playback payload so the modal can pick the right player.
+  onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void;
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
@@ -105,7 +105,7 @@ function TextSourceCard({ label, logoUrl, items, loading }: { label: string; log
   );
 }
 
-function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (query: string, fallbackUrl: string) => void }) {
+function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -162,15 +162,21 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
               </div>
               </>
             );
-            // Only fire the in-app YouTube modal when the prebake found and
-            // validated a match on the league's official channel. Otherwise the
-            // click is a plain anchor to the source URL so the user always gets
-            // the exact clip (just in a new tab instead of in-app).
-            if (onPlay && item.youtubeVideoId) {
+            // Fire the in-app modal when we have either a direct HLS stream
+            // (MLB) OR a prebake-validated YouTube ID on the league's official
+            // channel. HLS is preferred since it plays the exact source clip.
+            // Otherwise fall through to a plain anchor to the source URL.
+            const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.youtubeVideoId);
+            if (canPlayInline) {
               return (
                 <button
                   key={item.id}
-                  onClick={() => onPlay(item.youtubeVideoId!, item.articleUrl)}
+                  onClick={() => onPlay!({
+                    videoId: item.youtubeVideoId || undefined,
+                    playbackUrl: item.playbackUrl || null,
+                    fallbackUrl: item.articleUrl,
+                    poster: item.imageUrl || null,
+                  })}
                   className={commonCls}
                   style={commonStyle}
                 >
@@ -197,7 +203,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
   );
 }
 
-function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: (videoId: string, fallbackUrl: string) => void }) {
+function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 

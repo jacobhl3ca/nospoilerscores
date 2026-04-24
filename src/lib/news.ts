@@ -35,6 +35,10 @@ export interface NewsItem {
   // the videoId goes here so the client can play it in the in-app modal.
   // When null/undefined, clicking the video opens the source URL in a new tab.
   youtubeVideoId?: string | null;
+  // Direct HLS (or MP4) stream URL from the source itself — e.g. MLB's
+  // statsapi serves per-highlight m3u8 playbacks that play in a native <video>.
+  // When set, the modal plays this directly (bypassing YouTube entirely).
+  playbackUrl?: string | null;
 }
 
 interface RawImage { url?: string; height?: number; width?: number }

@@ -7,6 +7,13 @@ interface VideoModalProps {
   videoId: string;
   fallbackUrl: string;
   onClose: () => void;
+  // When set, the modal plays this HLS (or MP4) stream directly via <video> +
+  // hls.js instead of embedding a YouTube iframe. Used for MLB clips where the
+  // source's own stream is accessible (gives us the exact clip, not a YouTube
+  // reupload that may be a different cut).
+  playbackUrl?: string | null;
+  // Poster image for the <video> element while HLS loads.
+  poster?: string | null;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -20,12 +27,14 @@ function extractSearchQuery(fallbackUrl: string): string | null {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [currentId, setCurrentId] = useState(videoId);
   const failedIdsRef = useRef<string[]>([]);
   const retryingRef = useRef(false);
+  const hlsMode = !!playbackUrl;
 
   // Reset when the modal is opened with a different primary id
   useEffect(() => {
@@ -45,8 +54,41 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
     };
   }, [onClose]);
 
+  // HLS playback branch — runs only when a direct stream URL is provided.
+  // Safari plays the manifest natively; everyone else uses hls.js (lazy-loaded
+  // so it's excluded from the main bundle when the modal isn't open).
+  useEffect(() => {
+    if (!hlsMode) return;
+    const video = videoRef.current;
+    if (!video || !playbackUrl) return;
+    // Native HLS support (Safari, iOS WebKit)
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = playbackUrl;
+      video.play().catch(() => {});
+      return;
+    }
+    // hls.js fallback for Chrome/Firefox/etc.
+    let hls: any = null;
+    let cancelled = false;
+    import("hls.js").then(({ default: Hls }) => {
+      if (cancelled) return;
+      if (!Hls.isSupported()) return;
+      hls = new Hls();
+      hls.loadSource(playbackUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {});
+      });
+    });
+    return () => {
+      cancelled = true;
+      if (hls) hls.destroy();
+    };
+  }, [hlsMode, playbackUrl]);
+
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
+    if (hlsMode) return; // HLS branch handles playback instead
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
 
@@ -118,7 +160,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
     return () => {
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
-  }, [currentId, fallbackUrl]);
+  }, [currentId, fallbackUrl, hlsMode]);
 
   return (
     <div
@@ -147,20 +189,32 @@ export default function VideoModal({ videoId, fallbackUrl, onClose }: VideoModal
           </svg>
         </button>
 
-        {/* 16:9 YouTube player */}
+        {/* 16:9 player — HLS <video> when a direct stream is provided, else YouTube */}
         <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }}>
-          <div id="yt-player" className="absolute inset-0 w-full h-full" />
+          {hlsMode ? (
+            <video
+              ref={videoRef}
+              className="absolute inset-0 w-full h-full"
+              controls
+              autoPlay
+              muted
+              playsInline
+              poster={poster ?? undefined}
+            />
+          ) : (
+            <div id="yt-player" className="absolute inset-0 w-full h-full" />
+          )}
         </div>
 
-        {/* YouTube direct link */}
+        {/* Direct link — source page for HLS clips, YouTube for iframe clips */}
         <div className="mt-3 text-center">
           <a
-            href={`https://www.youtube.com/watch?v=${currentId}`}
+            href={hlsMode ? (fallbackUrl || "#") : `https://www.youtube.com/watch?v=${currentId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
           >
-            Watch on YouTube
+            {hlsMode ? "Open on source" : "Watch on YouTube"}
           </a>
         </div>
       </div>

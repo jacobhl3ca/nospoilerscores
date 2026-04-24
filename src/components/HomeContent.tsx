@@ -43,7 +43,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; poster?: string | null } | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -111,14 +111,24 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
   }, []);
 
-  // News video card click → play the prebake-validated YouTube clip in the
-  // in-app modal. No runtime /api/youtube call — the prebake already confirmed
-  // this videoId is on the league's official channel and matches the source
-  // headline. Cards without a validated videoId render as plain anchors and
-  // never reach this handler (they just open the source URL in a new tab).
-  const playNewsVideo = useCallback((videoId: string, fallbackUrl: string) => {
-    openVideoModal(videoId, fallbackUrl);
-  }, [openVideoModal]);
+  // News video card click → open the in-app modal. The card passes either a
+  // prebake-matched YouTube videoId OR a direct HLS stream URL (MLB). If the
+  // stream is available we play it directly; otherwise we fall back to the
+  // YouTube iframe path. Cards with no inline option skip this handler and
+  // render as plain anchors to the source URL.
+  const playNewsVideo = useCallback((opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => {
+    setVideoModal({
+      videoId: opts.videoId || "",
+      playbackUrl: opts.playbackUrl || null,
+      poster: opts.poster || null,
+      fallbackUrl: opts.fallbackUrl,
+    });
+    if (opts.videoId) {
+      const params = new URLSearchParams(window.location.search);
+      params.set("v", opts.videoId);
+      window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
+    }
+  }, []);
 
   const closeVideoModal = useCallback(() => {
     setVideoModal(null);
@@ -791,6 +801,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         <VideoModal
           videoId={videoModal.videoId}
           fallbackUrl={videoModal.fallbackUrl}
+          playbackUrl={videoModal.playbackUrl}
+          poster={videoModal.poster}
           onClose={closeVideoModal}
         />
       )}
