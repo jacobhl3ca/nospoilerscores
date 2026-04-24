@@ -27,6 +27,102 @@ function stripCdata(s) {
   return (s || "").replace(/^<!\[CDATA\[|\]\]>$/g, "").trim();
 }
 
+// ── YouTube lookup + validation + cache ───────────────────────────
+// Strategy: call the site's /api/youtube?q=&channel= worker for each news
+// video, then confirm the candidate via YouTube's public oEmbed — both the
+// `author_name` must equal our expected channel AND the title must share a
+// strong token overlap with our source title. Everything is memoised in
+// public/news/_yt-cache.json so we only burn a lookup on first appearance.
+
+const YT_CACHE_PATH = `${OUT_DIR}/_yt-cache.json`;
+
+async function loadYTCache() {
+  try { return JSON.parse(await readFile(YT_CACHE_PATH, "utf8")); } catch { return {}; }
+}
+
+async function saveYTCache(cache) {
+  await mkdir(OUT_DIR, { recursive: true });
+  await writeFile(YT_CACHE_PATH, JSON.stringify(cache));
+}
+
+const YT_STOPWORDS = new Set([
+  "the","and","for","with","from","that","this","will","has","had","have","was","were","are","its",
+  "out","not","but","after","into","over","under","than","then","now","new","one","two","three",
+  "highlight","highlights","game","games","vs","at","on","to","of","in","a","an","is","as","it",
+  "mlb","nba","nhl","nfl","espn","—","|","recap","plays","play",
+]);
+
+function ytTokens(s) {
+  return new Set(
+    (s || "")
+      .toLowerCase()
+      .replace(/['’.,!?()\[\]|—–-]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length > 2 && !YT_STOPWORDS.has(t))
+  );
+}
+
+function ytTitleSimilarity(source, candidate) {
+  const A = ytTokens(source);
+  const B = ytTokens(candidate);
+  if (A.size === 0) return 0;
+  let match = 0;
+  for (const t of A) if (B.has(t)) match++;
+  return match / A.size;
+}
+
+async function ytSearch(query, channel) {
+  try {
+    const url = `https://hidescore.com/api/youtube?q=${encodeURIComponent(query)}&channel=${encodeURIComponent(channel)}`;
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d?.videoId || null;
+  } catch { return null; }
+}
+
+async function ytOEmbed(videoId) {
+  try {
+    const url = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+// Returns a verified YouTube video ID (same channel, high title overlap) or null.
+async function lookupAndValidate(query, channel) {
+  const vid = await ytSearch(query, channel);
+  if (!vid) return null;
+  const meta = await ytOEmbed(vid);
+  if (!meta) return null;
+  // Exact channel match — filters out false positives like "NBC Chicago" or
+  // random aggregator uploads that the worker sometimes surfaces.
+  if ((meta.author_name || "").trim() !== channel) return null;
+  // Title overlap — rejects same-channel but wrong-clip matches (e.g. "Elly's
+  // 7th homer" when we asked about her "two-homer five-RBI performance").
+  if (ytTitleSimilarity(query, meta.title || "") < 0.55) return null;
+  return vid;
+}
+
+// Walks the items and attaches youtubeVideoId where a verified match exists.
+// New lookups are cached (including null results) so we don't retry forever.
+async function attachYouTubeIds(items, channel, cache) {
+  const out = [];
+  for (const item of items) {
+    const key = `${channel}|${item.id}`;
+    let vid;
+    if (key in cache) {
+      vid = cache[key];
+    } else {
+      vid = await lookupAndValidate(item.headline, channel);
+      cache[key] = vid;
+    }
+    out.push(vid ? { ...item, youtubeVideoId: vid } : item);
+  }
+  return out;
+}
+
 // Sportsbook promos + pure betting content that leak into news feeds — applied
 // to every text feed (ESPN/CBS/theScore/Reddit). Brand names use an optional
 // space so "draft kings" and "draftkings" both match.
@@ -688,12 +784,27 @@ const jobs = [
   ["thescore-mls", () => fetchTheScore("mls", "theScore")],
 ];
 
+// Load the YouTube lookup cache once per run so all video feeds share it and
+// we only save it back to disk at the end (a single write, not one per job).
+const ytCache = await loadYTCache();
+const YT_CHANNEL_BY_FEED = {
+  "mlb-videos": "MLB",
+  "nba-videos": "NBA",
+  "espn-videos": "ESPN",
+};
+
 const results = await Promise.allSettled(
   jobs.map(async ([name, fn]) => {
-    const items = await fn();
+    let items = await fn();
+    const channel = YT_CHANNEL_BY_FEED[name];
+    if (channel && Array.isArray(items)) {
+      items = await attachYouTubeIds(items, channel, ytCache);
+    }
     await writeFeed(name, items);
   })
 );
+
+await saveYTCache(ytCache);
 
 let failed = 0;
 results.forEach((r, i) => {

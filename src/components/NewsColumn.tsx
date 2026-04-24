@@ -19,9 +19,10 @@ interface NewsColumnProps {
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport;
   onSwapLeague?: (sport: Sport | undefined) => void;
-  // Video card click → open inline YouTube player. Channel (optional) steers
-  // the search to the league's official YouTube feed.
-  onPlayVideo?: (query: string, fallbackUrl: string, channel?: string) => void;
+  // Video card click → open inline YouTube player. Called only when the item
+  // has a prebake-validated `youtubeVideoId` — so this hook receives the
+  // already-known videoId, not a query.
+  onPlayVideo?: (videoId: string, fallbackUrl: string) => void;
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
@@ -161,11 +162,15 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
               </div>
               </>
             );
-            if (onPlay) {
+            // Only fire the in-app YouTube modal when the prebake found and
+            // validated a match on the league's official channel. Otherwise the
+            // click is a plain anchor to the source URL so the user always gets
+            // the exact clip (just in a new tab instead of in-app).
+            if (onPlay && item.youtubeVideoId) {
               return (
                 <button
                   key={item.id}
-                  onClick={() => onPlay(item.headline, item.articleUrl)}
+                  onClick={() => onPlay(item.youtubeVideoId!, item.articleUrl)}
                   className={commonCls}
                   style={commonStyle}
                 >
@@ -192,7 +197,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
   );
 }
 
-function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: (query: string, fallbackUrl: string, channel?: string) => void }) {
+function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: (videoId: string, fallbackUrl: string) => void }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -218,7 +223,7 @@ function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVide
         logoUrl={source.logoUrl}
         items={items}
         loading={loading}
-        onPlay={onPlayVideo ? (q, f) => onPlayVideo(q, f, source.youtubeChannel) : undefined}
+        onPlay={onPlayVideo}
       />
     );
   }

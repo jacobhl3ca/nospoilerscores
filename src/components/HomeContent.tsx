@@ -11,7 +11,6 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, C
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
-import { fetchFirstVideoId } from "@/lib/youtube";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -112,23 +111,13 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
   }, []);
 
-  // News video card click → YouTube search restricted to the source's official
-  // channel (MLB / NBA / ESPN). The channel scope is what matters — it keeps
-  // unrelated fan uploads out of the result so the clip we play matches the
-  // card. If no channel-scoped match exists we just open the source URL in a
-  // new tab rather than falling back to a generic search (which was mismatching
-  // too often in practice).
-  const playNewsVideo = useCallback(async (query: string, fallbackUrl: string, channel?: string) => {
-    if (channel) {
-      const videoId = await fetchFirstVideoId(query, channel);
-      if (videoId) {
-        openVideoModal(videoId, fallbackUrl || `https://www.youtube.com/results?search_query=${encodeURIComponent(`${query} ${channel}`)}`);
-        return;
-      }
-    }
-    if (typeof window !== "undefined" && fallbackUrl) {
-      window.open(fallbackUrl, "_blank", "noopener,noreferrer");
-    }
+  // News video card click → play the prebake-validated YouTube clip in the
+  // in-app modal. No runtime /api/youtube call — the prebake already confirmed
+  // this videoId is on the league's official channel and matches the source
+  // headline. Cards without a validated videoId render as plain anchors and
+  // never reach this handler (they just open the source URL in a new tab).
+  const playNewsVideo = useCallback((videoId: string, fallbackUrl: string) => {
+    openVideoModal(videoId, fallbackUrl);
   }, [openVideoModal]);
 
   const closeVideoModal = useCallback(() => {

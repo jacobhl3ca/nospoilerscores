@@ -30,6 +30,11 @@ export interface NewsItem {
   // Small sport badge shown before the headline in text cards (ESPN top
   // headlines uses this to tag each article with its league).
   leagueLogo?: string | null;
+  // When the prebake finds the exact same clip uploaded to the league's
+  // official YouTube channel (validated by channel author + title overlap),
+  // the videoId goes here so the client can play it in the in-app modal.
+  // When null/undefined, clicking the video opens the source URL in a new tab.
+  youtubeVideoId?: string | null;
 }
 
 interface RawImage { url?: string; height?: number; width?: number }
