@@ -2,7 +2,7 @@
 // Goals: faster repeat visits (precache shell), graceful offline fallback,
 // never cache /api/youtube responses long-term (results stale fast).
 
-const CACHE_VERSION = "hidescore-v1";
+const CACHE_VERSION = "hidescore-v2";
 const PRECACHE_URLS = [
   "/",
   "/today",
@@ -54,6 +54,25 @@ self.addEventListener("fetch", (event) => {
   // serving yesterday's highlight for a game played today.
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(fetch(req).catch(() => new Response("", { status: 504 })));
+    return;
+  }
+
+  // /news/*.json — prebake refreshes every 30 min and the React code passes
+  // `cache: "no-store"`. Without a network-first branch here the SW's static
+  // stale-while-revalidate served yesterday's prebake on first load each
+  // session, which mobile users saw as "wrong day" news.
+  if (url.pathname.startsWith("/news/") && url.pathname.endsWith(".json")) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === "basic") {
+            const copy = res.clone();
+            caches.open(CACHE_VERSION).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((hit) => hit || new Response("", { status: 504 })))
+    );
     return;
   }
 
