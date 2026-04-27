@@ -490,37 +490,65 @@ async function fetchESPNICYMI() {
   };
 }
 
-// Map ESPN article URL path → sport-logo URL for the small badge shown left of
-// each headline in the col-3 ESPN Top card. Parses the first segment after the
-// domain. Returns null for sports without a CDN logo (NCAAM/golf/tennis/EPL).
-const ESPN_PATH_SPORT_LOGO = {
-  nba: "mlb", // dummy key so TS doesn't complain — replaced below
-};
-// ESPN's CDN at /leagues/500/{slug}.png only resolves for slugs they actually
-// publish. Verified slugs: nba, mlb, nhl, nfl, mls, fifa, lpga, pgatour, f1,
-// ufc, wnba. Other path segments map to one of these where the brand fits
-// (golf → pgatour) or render no badge.
+// Map ESPN article URL path → sport-logo URL for the small badge shown left
+// of each headline in the col-3 ESPN Top card. Parses the first segment
+// after the domain. Two CDN paths cover every sport — `teamlogos/leagues`
+// for the leagues with a real logo there (NBA / MLB / NHL / etc.), and
+// `redesign/assets/img/icons/ESPN-icon-*` for the rest (college basketball,
+// college football, tennis, soccer, racing). Every known ESPN path slug
+// must resolve so a new sport never ships logo-less.
+const TEAMLOGOS = (slug) =>
+  `https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/${slug}.png&w=40&h=40&transparent=true`;
+const SPORT_ICON = (slug) =>
+  `https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-${slug}.png`;
+
 const PATH_TO_LOGO = {
-  nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
-  mlb: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
-  nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
-  nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
-  mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
-  fifa: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
-  golf: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
-  pga: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
-  lpga: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/lpga.png&w=40&h=40&transparent=true",
-  wnba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
-  f1: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/f1.png&w=40&h=40&transparent=true",
-  ufc: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
-  mma: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
+  nba: TEAMLOGOS("nba"),
+  mlb: TEAMLOGOS("mlb"),
+  nhl: TEAMLOGOS("nhl"),
+  nfl: TEAMLOGOS("nfl"),
+  mls: TEAMLOGOS("mls"),
+  fifa: TEAMLOGOS("fifa"),
+  golf: TEAMLOGOS("pgatour"),
+  pga: TEAMLOGOS("pgatour"),
+  lpga: TEAMLOGOS("lpga"),
+  wnba: TEAMLOGOS("wnba"),
+  f1: TEAMLOGOS("f1"),
+  racing: TEAMLOGOS("f1"),
+  ufc: TEAMLOGOS("ufc"),
+  mma: TEAMLOGOS("ufc"),
+  boxing: TEAMLOGOS("ufc"),
+  // ESPN article paths for college sports + tennis + soccer fall back to
+  // ESPN's redesign sport-icon set.
+  "mens-college-basketball": SPORT_ICON("basketball"),
+  "womens-college-basketball": SPORT_ICON("basketball"),
+  "college-basketball": SPORT_ICON("basketball"),
+  "college-football": SPORT_ICON("football-college"),
+  ncaaf: SPORT_ICON("football-college"),
+  ncaab: SPORT_ICON("basketball"),
+  ncaa: SPORT_ICON("basketball"),
+  tennis: SPORT_ICON("tennis"),
+  soccer: SPORT_ICON("soccer"),
+  cricket: SPORT_ICON("cricket"),
+  rugby: SPORT_ICON("rugby"),
+  olympics: SPORT_ICON("olympics"),
+  // Plain "basketball" / "football" land mostly on college recruiting +
+  // generic sport pages — fall back to the redesign sport icons.
+  basketball: SPORT_ICON("basketball"),
+  football: SPORT_ICON("football"),
 };
 
+// Walk up to two URL segments so /recruiting/basketball/... still resolves
+// to the basketball icon (first-segment "recruiting" isn't a sport).
 function espnArticleLogo(articleUrl) {
   try {
     const u = new URL(articleUrl);
-    const seg = u.pathname.split("/").filter(Boolean)[0] || "";
-    return PATH_TO_LOGO[seg.toLowerCase()] || null;
+    const segs = u.pathname.split("/").filter(Boolean).slice(0, 2);
+    for (const seg of segs) {
+      const hit = PATH_TO_LOGO[seg.toLowerCase()];
+      if (hit) return hit;
+    }
+    return null;
   } catch {
     return null;
   }

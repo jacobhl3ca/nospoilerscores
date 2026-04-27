@@ -135,29 +135,29 @@ export const PREBAKED_FEEDS: Partial<Record<Sport, { name: string; label: string
   nhl: { name: "nhl", label: "NHL.com" },
 };
 
-// Which leagues have a CBS Sports RSS + prebaked JSON available.
-const HAS_CBS: Record<Sport, boolean> = {
-  mlb: true, nba: true, nhl: true, nfl: true, ncaam: true,
-  golf: true, tennis: true, epl: true, mls: true, fifa: false,
-};
-
-// Which leagues have a theScore per-league endpoint + prebaked JSON.
-const HAS_THESCORE: Record<Sport, boolean> = {
-  mlb: true, nba: true, nhl: true, nfl: true, ncaam: true,
-  epl: true, mls: true, golf: false, tennis: false, fifa: false,
-};
-
-// Small league badge — ESPN's CDN serves transparent versions at this path.
-// Only slugs that actually resolve are listed here; NCAAM / golf / tennis / EPL
-// don't have a matching logo on this CDN path, so those cards render without an icon.
-const LEAGUE_LOGO: Partial<Record<Sport, string>> = {
+// Small league badge shown left of the source label and the per-article
+// headline. Two CDN paths cover every sport we surface — the
+// `teamlogos/leagues` set for the leagues that have a proper logo there
+// (MLB / NBA / NHL / etc.), and ESPN's redesign sport-icon set for the rest
+// (NCAAM / golf / tennis / etc.). Every Sport must resolve so a new column
+// never ships logo-less. EPL has its own slug under `leaguelogos/soccer`.
+const LEAGUE_LOGO: Record<Sport, string> = {
   mlb: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
   nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
   nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
   nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
   mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
   fifa: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
+  ncaam: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-basketball.png",
+  golf: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
+  tennis: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-tennis.png",
+  epl: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
 };
+
+// ESPN brand mark — used as the source-card logo for ESPN-branded feeds
+// (ESPN Videos, ESPN top headlines, ESPN <league>) so those headers don't
+// inherit the league logo and look identical to MLB.com / NBA.com cards.
+export const ESPN_BRAND_LOGO = "https://a.espncdn.com/i/espn/misc_logos/500/espn.png";
 
 export interface ColumnSource {
   label: string;
@@ -194,8 +194,9 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
 };
 
 // Cascade of news cards for a league column: official videos pinned first,
-// then official news → subreddit → ESPN → CBS → theScore. Sources with no feed
-// are silently skipped.
+// then official news → subreddit → ESPN. CBS Sports and theScore were
+// dropped at Jacob's request — their headlines duplicated ESPN coverage and
+// the cards couldn't be hidden. Add them back here if we ever want them.
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
@@ -205,20 +206,16 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
   const reddit = REDDIT_SUB[sport];
   if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
-  out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl });
-  if (HAS_CBS[sport]) out.push({ label: "CBS Sports", key: `cbs-${sport}`, kind: "prebaked", logoUrl });
-  if (HAS_THESCORE[sport]) out.push({ label: "theScore", key: `thescore-${sport}`, kind: "prebaked", logoUrl });
+  out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
   return out;
 }
 
-// Col 3's default (no league picked) — videos pinned first (ICYMI leads), then
-// ESPN top headlines + r/sports + theScore + CBS Sports aggregators.
+// Col 3's default (no league picked) — ESPN videos lead, then ESPN top
+// headlines and r/sports. CBS / theScore removed at Jacob's request.
 export const GENERIC_CASCADE: ColumnSource[] = [
-  { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN" },
-  { label: "ESPN", key: "espn-top", kind: "prebaked" },
+  { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: ESPN_BRAND_LOGO },
+  { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: ESPN_BRAND_LOGO },
   { label: "r/sports", key: "reddit-general", kind: "prebaked" },
-  { label: "theScore", key: "thescore-general", kind: "prebaked" },
-  { label: "CBS Sports", key: "cbs-general", kind: "prebaked" },
 ];
 
 export function formatPublished(iso: string): string {
