@@ -347,6 +347,9 @@ async function fetchMLB() {
     const title = stripCdata((block.match(/<title>([\s\S]*?)<\/title>/) || [])[1]);
     const link = ((block.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || "").trim();
     const pub = ((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || "").trim();
+    // MLB RSS embeds <image href="https://img.mlbstatic.com/..."/> per item —
+    // 16:9 hero crop, perfect for the news card thumbnail (matches NBA.com).
+    const imgMatch = block.match(/<image\s+href="([^"]+)"/);
     if (!title || !link) continue;
     if (!passesArticleBlocklist(title)) continue;
     items.push({
@@ -354,7 +357,7 @@ async function fetchMLB() {
       headline: title,
       description: "",
       published: pub ? new Date(pub).toISOString() : "",
-      imageUrl: null,
+      imageUrl: imgMatch ? imgMatch[1] : null,
       articleUrl: link,
       byline: "",
       section: "MLB.com",
@@ -382,15 +385,22 @@ async function fetchNBAVideos() {
     if (/(?:spanish|portuguese|french|japanese|italian|deutsch|german|prime video|ai-generated)/i.test(haystack)) continue;
     if (/\b(?:post[-\s]?game|all possessions|best plays|nightly recap|mobile view)\b/i.test(haystack)) continue;
     if (/^vod_|^VOD_/.test(title)) continue;
-    // Broadcast stream listings like "HOU @ LAL on 2026-04-21-NBC-" — whole-game streams
+    // Broadcast stream listings — match BOTH ISO ("HOU @ LAL on 2026-04-21-NBC-")
+    // and American slash ("BOS @ PHI on 04/26/2026-NBC-national") date formats.
     if (/ on \d{4}-\d{2}-\d{2}/.test(title)) continue;
+    if (/ on \d{1,2}\/\d{1,2}\/\d{4}/.test(title)) continue;
     if (VIDEO_BLOCKLIST.some((re) => re.test(haystack))) continue;
+    // No-thumb items break the aligned video strip's row alignment (a cell
+    // with just a title is much shorter than its image-bearing siblings).
+    // NBA's API occasionally returns full-game-highlight entries without a
+    // featuredImage — drop them so every visible cell has consistent content.
+    if (!i.featuredImage) continue;
     out.push({
       id: String(i.id),
       headline: title,
       description: desc,
       published: i.date || "",
-      imageUrl: i.featuredImage || null,
+      imageUrl: i.featuredImage,
       articleUrl: i.permalink || "",
       byline: "",
       section: "NBA Top Videos",

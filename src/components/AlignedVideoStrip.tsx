@@ -32,9 +32,14 @@ export default function AlignedVideoStrip({ sources, onPlay }: Props) {
     sources.forEach((source, idx) => {
       source.fetch().then((items) => {
         if (cancelled) return;
+        // Defensive: drop items without a thumbnail so every cell in the strip
+        // has consistent image+title content. Without this, a cell with just a
+        // title (when one feed returns a no-thumb item) gets stretched to the
+        // tallest sibling row's height, leaving big visual blank space.
+        const filtered = items.filter((i) => !!i.imageUrl);
         setColItems((prev) => {
           const next = [...prev];
-          next[idx] = items;
+          next[idx] = filtered;
           return next;
         });
       });
