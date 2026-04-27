@@ -17,6 +17,10 @@ interface VideoModalProps {
   // When set, the modal renders an image lightbox instead of any video. Used
   // for i.redd.it image posts so they pop in-context like videos do.
   imageUrl?: string | null;
+  // Friendly source name for the footer link — overrides the hostname-derived
+  // default (e.g. "r/baseball" instead of "Reddit", "MLB Most Popular" instead
+  // of "MLB.com"). Falls back to URL-host inference when null.
+  sourceLabel?: string | null;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -50,7 +54,7 @@ function sourceLabelFromUrl(url: string): string {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, sourceLabel }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -253,7 +257,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             rel="noopener noreferrer"
             className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
           >
-            {(hlsMode || imageMode) ? sourceLabelFromUrl(fallbackUrl) : "Watch on YouTube"}
+            {(hlsMode || imageMode) ? (sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl)) : "Watch on YouTube"}
           </a>
         </div>
       </div>

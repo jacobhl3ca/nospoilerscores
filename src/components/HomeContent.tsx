@@ -43,7 +43,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; poster?: string | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; poster?: string | null; sourceLabel?: string | null } | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -81,18 +81,16 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         setVideoModal({ videoId: sharedVideoId, fallbackUrl: "" });
       }
     }
-    // Before noon ET: force a fresh-day reset — ratings hidden AND News view
-    // collapsed back to Scores. Don't persist either override; the toggles still
-    // work the rest of the day, but a morning refresh lands on the clean
-    // homepage (no spoilers, no news feed up).
+    // Morning reset: force ratings hidden so a clean refresh doesn't spoil
+    // last night's scores. News view explicitly does NOT reset — it's a
+    // viewer choice, not a spoiler surface, so it persists across refresh.
     const hour = getETHour();
     const morningReset = hour < 12;
     if (morningReset) {
       loaded.showRatings = false;
-      loaded.showNews = false;
     }
     setPrefs(loaded);
-    if (!morningReset && loaded.showNews) setShowNews(true);
+    if (loaded.showNews) setShowNews(true);
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
   }, []);
 
@@ -116,13 +114,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // stream is available we play it directly; otherwise we fall back to the
   // YouTube iframe path. Cards with no inline option skip this handler and
   // render as plain anchors to the source URL.
-  const playNewsVideo = useCallback((opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null }) => {
+  const playNewsVideo = useCallback((opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => {
     setVideoModal({
       videoId: opts.videoId || "",
       playbackUrl: opts.playbackUrl || null,
       imageUrl: opts.imageUrl || null,
       poster: opts.poster || null,
       fallbackUrl: opts.fallbackUrl,
+      sourceLabel: opts.sourceLabel || null,
     });
     if (opts.videoId) {
       const params = new URLSearchParams(window.location.search);
@@ -805,6 +804,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           playbackUrl={videoModal.playbackUrl}
           imageUrl={videoModal.imageUrl}
           poster={videoModal.poster}
+          sourceLabel={videoModal.sourceLabel}
           onClose={closeVideoModal}
         />
       )}

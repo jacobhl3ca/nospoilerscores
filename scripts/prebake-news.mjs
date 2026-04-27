@@ -486,6 +486,10 @@ async function fetchESPNICYMI() {
 const ESPN_PATH_SPORT_LOGO = {
   nba: "mlb", // dummy key so TS doesn't complain — replaced below
 };
+// ESPN's CDN at /leagues/500/{slug}.png only resolves for slugs they actually
+// publish. Verified slugs: nba, mlb, nhl, nfl, mls, fifa, lpga, pgatour, f1,
+// ufc, wnba. Other path segments map to one of these where the brand fits
+// (golf → pgatour) or render no badge.
 const PATH_TO_LOGO = {
   nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
   mlb: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
@@ -493,6 +497,13 @@ const PATH_TO_LOGO = {
   nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
   mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
   fifa: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
+  golf: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
+  pga: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
+  lpga: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/lpga.png&w=40&h=40&transparent=true",
+  wnba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
+  f1: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/f1.png&w=40&h=40&transparent=true",
+  ufc: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
+  mma: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
 };
 
 function espnArticleLogo(articleUrl) {
@@ -505,10 +516,41 @@ function espnArticleLogo(articleUrl) {
   }
 }
 
+// Fallback when the homepage scrape misses the headlineStack block (ESPN A/B
+// tests + occasional region-specific layouts ship variants without it). The
+// `now.core` API is JSON and stable; matches "Top Headlines" closely enough.
+async function fetchESPNTopHeadlinesViaApi() {
+  try {
+    const data = await getJson("https://now.core.api.espn.com/v1/sports/news?limit=20");
+    const items = [];
+    for (const a of data?.headlines || []) {
+      const url = a?.links?.web?.href || a?.links?.mobile?.href || "";
+      const title = a?.headline || a?.title || "";
+      if (!url || !title) continue;
+      if (!passesArticleBlocklist(title)) continue;
+      items.push({
+        id: url,
+        headline: title,
+        description: "",
+        published: a?.published || a?.lastModified || "",
+        imageUrl: null,
+        leagueLogo: espnArticleLogo(url),
+        articleUrl: url,
+        byline: "",
+        section: "ESPN",
+      });
+      if (items.length >= 15) break;
+    }
+    return items;
+  } catch {
+    return [];
+  }
+}
+
 async function fetchESPNTopHeadlines() {
   const html = await getESPNHomeHtml();
   const blockMatch = html.match(/<div class="headlineStack top-headlines">([\s\S]{0,30000}?)<\/div>\s*<\/div>/);
-  if (!blockMatch) return [];
+  if (!blockMatch) return fetchESPNTopHeadlinesViaApi();
   const block = blockMatch[1];
   const liRe = /<li[^>]*>([\s\S]*?)<\/li>/g;
   const items = [];
@@ -534,7 +576,7 @@ async function fetchESPNTopHeadlines() {
       section: "ESPN",
     });
   }
-  return items.slice(0, 15);
+  return items.length > 0 ? items.slice(0, 15) : fetchESPNTopHeadlinesViaApi();
 }
 
 // ── ESPN homepage big-format videos (thumbnail + title, in scroll order) ──

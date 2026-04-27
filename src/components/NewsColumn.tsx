@@ -22,7 +22,7 @@ interface NewsColumnProps {
   // Video card click → open inline player modal. Called only when the item
   // has either a direct HLS stream (MLB) or a prebake-validated YouTube ID.
   // Receives the full playback payload so the modal can pick the right player.
-  onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void;
+  onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void;
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
@@ -47,7 +47,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   );
 }
 
-function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
+function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -121,6 +121,10 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
                     imageUrl: item.videoUrl ? null : item.imageFullUrl!,
                     fallbackUrl: item.articleUrl,
                     poster: item.imageUrl || null,
+                    // Pass the section ("r/baseball", "MLB Most Popular", etc.)
+                    // so the modal footer can read "Open on r/baseball" instead
+                    // of the generic hostname-derived "Open on Reddit".
+                    sourceLabel: item.section || null,
                   })}
                   className={`${rowCls} w-full text-left cursor-pointer`}
                   style={rowStyle}
@@ -150,7 +154,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
   );
 }
 
-function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
+function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -202,7 +206,10 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                   </div>
                 </div>
               )}
-              <div className="px-3 py-2 text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
+              {/* line-clamp-2 keeps each row a fixed 2-line height so the
+                  first video card lines up vertically across columns even
+                  when one headline is short and the next is long. */}
+              <div className="px-3 py-2 text-xs sm:text-sm leading-snug line-clamp-2" style={{ color: "var(--text)", minHeight: "2.5rem" }}>
                 {item.headline}
               </div>
               </>
@@ -221,6 +228,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     playbackUrl: item.playbackUrl || null,
                     fallbackUrl: item.articleUrl,
                     poster: item.imageUrl || null,
+                    sourceLabel: item.section || null,
                   })}
                   className={commonCls}
                   style={commonStyle}
