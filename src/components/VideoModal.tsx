@@ -54,20 +54,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
   }, [onClose]);
 
-  // HLS playback branch — runs only when a direct stream URL is provided.
-  // Safari plays the manifest natively; everyone else uses hls.js (lazy-loaded
-  // so it's excluded from the main bundle when the modal isn't open).
+  // Direct-stream playback branch — handles two URL shapes:
+  //   • .m3u8 manifests (MLB highlights) — Safari natively, hls.js elsewhere
+  //   • plain MP4 (e.g. v.redd.it CMAF fallback) — every browser natively
+  // hls.js is lazy-loaded only when needed so it stays out of the main bundle.
   useEffect(() => {
     if (!hlsMode) return;
     const video = videoRef.current;
     if (!video || !playbackUrl) return;
-    // Native HLS support (Safari, iOS WebKit)
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    const isHls = /\.m3u8(\?|$)/i.test(playbackUrl);
+    // Plain MP4 / Safari native HLS — set src and play.
+    if (!isHls || video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playbackUrl;
       video.play().catch(() => {});
       return;
     }
-    // hls.js fallback for Chrome/Firefox/etc.
+    // hls.js fallback for Chrome/Firefox/etc. on .m3u8 only.
     let hls: any = null;
     let cancelled = false;
     import("hls.js").then(({ default: Hls }) => {

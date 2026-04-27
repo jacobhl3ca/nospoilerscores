@@ -47,7 +47,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   );
 }
 
-function TextSourceCard({ label, logoUrl, items, loading }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean }) {
+function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -66,39 +66,73 @@ function TextSourceCard({ label, logoUrl, items, loading }: { label: string; log
         <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
       ) : (
         <div className="flex flex-col">
-          {items.map((item, idx) => (
-            <a
-              key={item.id}
-              href={item.articleUrl || undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]"
-              style={{ borderTop: idx === 0 ? "none" : "1px solid var(--border)", color: "var(--text)" }}
-            >
-              {item.imageUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
+          {items.map((item, idx) => {
+            const rowCls = "flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]";
+            const rowStyle = { borderTop: idx === 0 ? "none" : "1px solid var(--border)", color: "var(--text)" };
+            const thumb = item.imageUrl ? (
+              <div className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={item.imageUrl}
                   alt=""
                   loading="lazy"
-                  className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded shrink-0"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover rounded"
                   draggable={false}
                 />
-              ) : item.leagueLogo ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={item.leagueLogo}
-                  alt=""
-                  loading="lazy"
-                  width={18}
-                  height={18}
-                  className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
-                  draggable={false}
-                />
-              ) : null}
-              <span className="min-w-0">{item.headline}</span>
-            </a>
-          ))}
+                {item.videoUrl && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded" style={{ background: "rgba(0,0,0,0.25)" }}>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : item.leagueLogo ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={item.leagueLogo}
+                alt=""
+                loading="lazy"
+                width={18}
+                height={18}
+                className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
+                draggable={false}
+              />
+            ) : null;
+            // v.redd.it videos route through the in-app modal so playback stays
+            // in-context. Posts without a videoUrl still link out to Reddit.
+            if (item.videoUrl && onPlay) {
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onPlay({
+                    playbackUrl: item.videoUrl!,
+                    fallbackUrl: item.articleUrl,
+                    poster: item.imageUrl || null,
+                  })}
+                  className={`${rowCls} w-full text-left cursor-pointer`}
+                  style={rowStyle}
+                >
+                  {thumb}
+                  <span className="min-w-0">{item.headline}</span>
+                </button>
+              );
+            }
+            return (
+              <a
+                key={item.id}
+                href={item.articleUrl || undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={rowCls}
+                style={rowStyle}
+              >
+                {thumb}
+                <span className="min-w-0">{item.headline}</span>
+              </a>
+            );
+          })}
         </div>
       )}
     </div>
@@ -233,7 +267,7 @@ function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVide
       />
     );
   }
-  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} />;
+  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} onPlay={onPlayVideo} />;
 }
 
 export default function NewsColumn({

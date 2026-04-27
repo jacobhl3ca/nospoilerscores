@@ -722,6 +722,14 @@ async function fetchReddit(subreddit, sectionLabel) {
     } else if (p.thumbnail && /^https?:\/\//.test(p.thumbnail)) {
       imageUrl = p.thumbnail;
     }
+    // v.redd.it videos: CMAF fallback_url is a single muxed MP4 that plays in
+    // a plain <video> tag — no DASH/HLS parsing needed. Skip gif previews and
+    // non-Reddit-hosted media for now (imgur/streamable have their own quirks).
+    let videoUrl = null;
+    const rv = p.media?.reddit_video || p.secure_media?.reddit_video;
+    if (rv?.fallback_url && /^https:\/\/v\.redd\.it\//.test(rv.fallback_url)) {
+      videoUrl = rv.fallback_url.replace(/&amp;/g, "&");
+    }
     out.push({
       id: p.id || p.permalink,
       headline: title,
@@ -731,6 +739,7 @@ async function fetchReddit(subreddit, sectionLabel) {
       articleUrl: p.permalink ? `https://www.reddit.com${p.permalink}` : (p.url || ""),
       byline: p.author ? `u/${p.author}` : "",
       section: sectionLabel,
+      videoUrl,
     });
     if (out.length >= 12) break;
   }

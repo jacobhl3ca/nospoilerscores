@@ -40,6 +40,9 @@ export interface NewsItem {
   // statsapi serves per-highlight m3u8 playbacks that play in a native <video>.
   // When set, the modal plays this directly (bypassing YouTube entirely).
   playbackUrl?: string | null;
+  // v.redd.it CMAF fallback URL — single muxed MP4 that plays in <video>
+  // without hls.js. Set on Reddit posts where Reddit hosts the clip directly.
+  videoUrl?: string | null;
 }
 
 interface RawImage { url?: string; height?: number; width?: number }
