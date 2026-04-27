@@ -19,10 +19,108 @@ interface NewsColumnProps {
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport;
   onSwapLeague?: (sport: Sport | undefined) => void;
+  // When true, the column renders only its source cards — the title row is
+  // rendered separately above (e.g. as part of the page-level TitleStrip
+  // that sits above AlignedVideoStrip). Keeps the league title above the
+  // big-format video strip instead of buried below it.
+  hideTitle?: boolean;
   // Video card click → open inline player modal. Called only when the item
   // has either a direct HLS stream (MLB) or a prebake-validated YouTube ID.
   // Receives the full playback payload so the modal can pick the right player.
   onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void;
+}
+
+// Sticky league title (with optional swap dropdown for the 3rd column).
+// Extracted so HomeContent can render a row of these above AlignedVideoStrip
+// — keeps "MLB / NBA / News" above the big video strip instead of below it.
+export function NewsColumnTitle({
+  title,
+  swappableOptions,
+  selectedThirdLeague,
+  onSwapLeague,
+}: {
+  title: string;
+  swappableOptions?: { sport: Sport; label: string }[];
+  selectedThirdLeague?: Sport;
+  onSwapLeague?: (sport: Sport | undefined) => void;
+}) {
+  const [swapOpen, setSwapOpen] = useState(false);
+  const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
+  return (
+    <div
+      className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30"
+      style={{ background: "var(--bg)", paddingTop: "1.75rem" }}
+    >
+      <div className="flex items-center justify-center">
+        <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
+        {isSwappable ? (
+          <div className="relative">
+            <button
+              onClick={() => setSwapOpen(!swapOpen)}
+              className="flex items-center gap-0.5 cursor-pointer transition-colors hover:opacity-80"
+              style={{ color: "var(--text)" }}
+              title="Switch news feed"
+            >
+              <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
+              <svg
+                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                className={`transition-transform duration-150 ${swapOpen ? "rotate-180" : ""}`}
+                style={{ color: "var(--text-muted)" }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {swapOpen && (
+              <div
+                className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[120px]"
+                style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+              >
+                <button
+                  onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
+                  className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                  style={{
+                    color: !selectedThirdLeague ? "var(--accent)" : "var(--text)",
+                    fontWeight: !selectedThirdLeague ? 600 : 400,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  Top Headlines
+                </button>
+                {swappableOptions!.map((opt) => (
+                  <button
+                    key={opt.sport}
+                    onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
+                    className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                    style={{
+                      color: opt.sport === selectedThirdLeague ? "var(--accent)" : "var(--text)",
+                      fontWeight: opt.sport === selectedThirdLeague ? 600 : 400,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+            {title}
+          </h2>
+        )}
+        <span className="text-sm invisible ml-1.5" aria-hidden="true">★</span>
+      </div>
+      <span
+        className="text-[9px] sm:text-[10px] italic mt-0.5 block"
+        style={{ color: "transparent" }}
+      >
+        {"\u00A0"}
+      </span>
+    </div>
+  );
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
@@ -69,33 +167,44 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
           {items.map((item, idx) => {
             const rowCls = "flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]";
             const rowStyle = { borderTop: idx === 0 ? "none" : "1px solid var(--border)", color: "var(--text)" };
+            // Treat the row as media-bearing only when there's a real video or
+            // a Reddit-hosted full-res image. External link posts (ESPN / BBC
+            // articles) only carry a small preview imageUrl — opening that in a
+            // lightbox just shows a low-res thumbnail blown up, which looks
+            // broken. Anchor those rows out to the source article instead.
+            const hasInlineMedia = !!(item.videoUrl || item.imageFullUrl);
             const thumb = item.imageUrl ? (
-              <div className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0">
+              <div
+                className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden"
+                style={{ background: "var(--bg-card-hover)" }}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={item.imageUrl}
                   alt=""
                   loading="lazy"
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover rounded"
+                  className="w-full h-full object-cover"
                   draggable={false}
                 />
-                {/* Affordance overlay — play icon for video posts, expand
-                    icon for any other thumbnail that pops in the modal. */}
-                <div className="absolute inset-0 flex items-center justify-center rounded" style={{ background: "rgba(0,0,0,0.25)" }}>
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-                    {item.videoUrl ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                    ) : (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="15 3 21 3 21 9" />
-                        <polyline points="9 21 3 21 3 15" />
-                        <line x1="21" y1="3" x2="14" y2="10" />
-                        <line x1="3" y1="21" x2="10" y2="14" />
-                      </svg>
-                    )}
+                {/* Overlay only on media-bearing rows so plain link posts don't
+                    advertise an "expand" affordance they can't deliver. */}
+                {hasInlineMedia && (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
+                      {item.videoUrl ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                      ) : (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="15 3 21 3 21 9" />
+                          <polyline points="9 21 3 21 3 15" />
+                          <line x1="21" y1="3" x2="14" y2="10" />
+                          <line x1="3" y1="21" x2="10" y2="14" />
+                        </svg>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ) : item.leagueLogo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
@@ -109,22 +218,15 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
                 draggable={false}
               />
             ) : null;
-            // Pop the modal whenever there's a video, a full-res image, OR a
-            // preview image worth enlarging. Reddit link posts (ESPN/BBC
-            // articles) only have a preview imageUrl and would otherwise just
-            // anchor out — but Jacob wants the thumb to enlarge inline. The
-            // modal's "Open on r/baseball" footer keeps the discussion 1 tap
-            // away. Items without any image stay as plain link rows.
-            const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
-            if (onPlay && hasMedia) {
+            if (onPlay && hasInlineMedia) {
               return (
                 <button
                   key={item.id}
                   onClick={() => onPlay({
                     playbackUrl: item.videoUrl || null,
-                    // Prefer full-res Reddit-hosted image; fall back to the
-                    // preview URL Reddit serves for link posts.
-                    imageUrl: item.videoUrl ? null : (item.imageFullUrl || item.imageUrl),
+                    // Reddit-hosted full-res image only; preview thumbnails get
+                    // anchored to the article above.
+                    imageUrl: item.videoUrl ? null : item.imageFullUrl,
                     fallbackUrl: item.articleUrl,
                     poster: item.imageUrl || null,
                     // Pass the section ("r/baseball", "MLB.com", etc.) so the
@@ -304,86 +406,19 @@ export default function NewsColumn({
   swappableOptions,
   selectedThirdLeague,
   onSwapLeague,
+  hideTitle,
   onPlayVideo,
 }: NewsColumnProps) {
-  const [swapOpen, setSwapOpen] = useState(false);
-  const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
-
   return (
     <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]">
-      <div
-        className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30"
-        style={{ background: "var(--bg)", paddingTop: "1.75rem" }}
-      >
-        <div className="flex items-center justify-center">
-          <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
-          {isSwappable ? (
-            <div className="relative">
-              <button
-                onClick={() => setSwapOpen(!swapOpen)}
-                className="flex items-center gap-0.5 cursor-pointer transition-colors hover:opacity-80"
-                style={{ color: "var(--text)" }}
-                title="Switch news feed"
-              >
-                <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
-                <svg
-                  width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                  className={`transition-transform duration-150 ${swapOpen ? "rotate-180" : ""}`}
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              {swapOpen && (
-                <div
-                  className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[120px]"
-                  style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
-                >
-                  <button
-                    onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
-                    className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                    style={{
-                      color: !selectedThirdLeague ? "var(--accent)" : "var(--text)",
-                      fontWeight: !selectedThirdLeague ? 600 : 400,
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    Top Headlines
-                  </button>
-                  {swappableOptions!.map((opt) => (
-                    <button
-                      key={opt.sport}
-                      onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
-                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                      style={{
-                        color: opt.sport === selectedThirdLeague ? "var(--accent)" : "var(--text)",
-                        fontWeight: opt.sport === selectedThirdLeague ? 600 : 400,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-              {title}
-            </h2>
-          )}
-          <span className="text-sm invisible ml-1.5" aria-hidden="true">★</span>
-        </div>
-        <span
-          className="text-[9px] sm:text-[10px] italic mt-0.5 block"
-          style={{ color: "transparent" }}
-        >
-          {"\u00A0"}
-        </span>
-      </div>
+      {!hideTitle && (
+        <NewsColumnTitle
+          title={title}
+          swappableOptions={swappableOptions}
+          selectedThirdLeague={selectedThirdLeague}
+          onSwapLeague={onSwapLeague}
+        />
+      )}
       <div className="flex flex-col gap-1.5 sm:gap-2">
         {sources.map((source) => (
           <SourceSection key={source.label} source={source} onPlayVideo={onPlayVideo} />

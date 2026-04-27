@@ -6,7 +6,7 @@ import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
-import NewsColumn, { NewsSource } from "@/components/NewsColumn";
+import NewsColumn, { NewsColumnTitle, NewsSource } from "@/components/NewsColumn";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -510,33 +510,58 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           const col1Rest = allFirstAreVideo ? col1All.slice(1) : col1All;
           const col2Rest = allFirstAreVideo ? col2All.slice(1) : col2All;
           const col3Rest = allFirstAreVideo ? col3All.slice(1) : col3All;
+          const col3Title = prefs.newsThirdLeague
+            ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
+            : "News";
           return (
             <>
               {allFirstAreVideo && (
-                <AlignedVideoStrip
-                  sources={[col1All[0], col2All[0], col3All[0]]}
-                  onPlay={playNewsVideo}
-                />
+                <>
+                  {/* League titles render above AlignedVideoStrip so MLB / NBA /
+                      News sit at the top — otherwise the video strip pushes the
+                      titles below it. */}
+                  <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                      <NewsColumnTitle title={sortedLeagues[0]?.label ?? "News"} />
+                    </div>
+                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                      <NewsColumnTitle title={sortedLeagues[1]?.label ?? "News"} />
+                    </div>
+                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                      <NewsColumnTitle
+                        title={col3Title}
+                        swappableOptions={thirdLeagueOptions}
+                        selectedThirdLeague={prefs.newsThirdLeague}
+                        onSwapLeague={setNewsThirdLeague}
+                      />
+                    </div>
+                  </div>
+                  <AlignedVideoStrip
+                    sources={[col1All[0], col2All[0], col3All[0]]}
+                    onPlay={playNewsVideo}
+                  />
+                </>
               )}
               <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                 <NewsColumn
                   title={sortedLeagues[0]?.label ?? "News"}
                   sources={col1Rest}
+                  hideTitle={allFirstAreVideo}
                   onPlayVideo={playNewsVideo}
                 />
                 <NewsColumn
                   title={sortedLeagues[1]?.label ?? "News"}
                   sources={col2Rest}
+                  hideTitle={allFirstAreVideo}
                   onPlayVideo={playNewsVideo}
                 />
                 <NewsColumn
-                  title={prefs.newsThirdLeague
-                    ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
-                    : "News"}
+                  title={col3Title}
                   sources={col3Rest}
                   swappableOptions={thirdLeagueOptions}
                   selectedThirdLeague={prefs.newsThirdLeague}
                   onSwapLeague={setNewsThirdLeague}
+                  hideTitle={allFirstAreVideo}
                   onPlayVideo={playNewsVideo}
                 />
               </div>
