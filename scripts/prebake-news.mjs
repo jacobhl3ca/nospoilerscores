@@ -27,6 +27,23 @@ function stripCdata(s) {
   return (s || "").replace(/^<!\[CDATA\[|\]\]>$/g, "").trim();
 }
 
+// Streamable.com link posts on Reddit (especially r/nba, which bans direct
+// uploads) only expose an embed iframe in the Reddit JSON. Streamable's public
+// API returns a signed CDN MP4 URL we can drop straight into a <video> tag —
+// signature is good for ~4 days, well past our same-day carry window.
+async function fetchStreamableMp4(id) {
+  try {
+    const res = await fetch(`https://api.streamable.com/videos/${id}`, {
+      headers: { "User-Agent": UA },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.files?.mp4?.url || data?.files?.["mp4-mobile"]?.url || null;
+  } catch {
+    return null;
+  }
+}
+
 // ── YouTube lookup + validation + cache ───────────────────────────
 // Strategy: call the site's /api/youtube?q=&channel= worker for each news
 // video, then confirm the candidate via YouTube's public oEmbed — both the
@@ -803,12 +820,16 @@ async function fetchReddit(subreddit, sectionLabel) {
       imageUrl = p.thumbnail;
     }
     // v.redd.it videos: CMAF fallback_url is a single muxed MP4 that plays in
-    // a plain <video> tag — no DASH/HLS parsing needed. Skip gif previews and
-    // non-Reddit-hosted media for now (imgur/streamable have their own quirks).
+    // a plain <video> tag — no DASH/HLS parsing needed. Streamable.com link
+    // posts (most r/nba videos) need a side-trip to the Streamable API to
+    // resolve the signed CDN MP4 URL.
     let videoUrl = null;
     const rv = p.media?.reddit_video || p.secure_media?.reddit_video;
     if (rv?.fallback_url && /^https:\/\/v\.redd\.it\//.test(rv.fallback_url)) {
       videoUrl = rv.fallback_url.replace(/&amp;/g, "&");
+    } else if (p.domain === "streamable.com") {
+      const m = (p.url || "").match(/^https?:\/\/streamable\.com\/([a-zA-Z0-9]+)/);
+      if (m) videoUrl = await fetchStreamableMp4(m[1]);
     }
     // i.redd.it image posts: surface the original full-res URL so the client
     // can pop a lightbox instead of bouncing out to reddit.com to view a JPEG.
