@@ -11,6 +11,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, C
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
+import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -494,32 +495,52 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             }));
           const buildSources = (sport?: Sport): NewsSource[] =>
             sport ? cascadeToSources(leagueSourceCascade(sport)) : [];
-          const col3Sources: NewsSource[] = prefs.newsThirdLeague
+          const col1All = buildSources(sortedLeagues[0]?.sport);
+          const col2All = buildSources(sortedLeagues[1]?.sport);
+          const col3All: NewsSource[] = prefs.newsThirdLeague
             ? buildSources(prefs.newsThirdLeague)
             : cascadeToSources(GENERIC_CASCADE);
+          // When all 3 columns lead with a video source, lift those into the
+          // aligned strip so video N in every column is the same vertical
+          // size. Otherwise let each column render its own first card.
+          const allFirstAreVideo =
+            col1All[0]?.variant === "video" &&
+            col2All[0]?.variant === "video" &&
+            col3All[0]?.variant === "video";
+          const col1Rest = allFirstAreVideo ? col1All.slice(1) : col1All;
+          const col2Rest = allFirstAreVideo ? col2All.slice(1) : col2All;
+          const col3Rest = allFirstAreVideo ? col3All.slice(1) : col3All;
           return (
-            <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-              <NewsColumn
-                title={sortedLeagues[0]?.label ?? "News"}
-                sources={buildSources(sortedLeagues[0]?.sport)}
-                onPlayVideo={playNewsVideo}
-              />
-              <NewsColumn
-                title={sortedLeagues[1]?.label ?? "News"}
-                sources={buildSources(sortedLeagues[1]?.sport)}
-                onPlayVideo={playNewsVideo}
-              />
-              <NewsColumn
-                title={prefs.newsThirdLeague
-                  ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
-                  : "News"}
-                sources={col3Sources}
-                swappableOptions={thirdLeagueOptions}
-                selectedThirdLeague={prefs.newsThirdLeague}
-                onSwapLeague={setNewsThirdLeague}
-                onPlayVideo={playNewsVideo}
-              />
-            </div>
+            <>
+              {allFirstAreVideo && (
+                <AlignedVideoStrip
+                  sources={[col1All[0], col2All[0], col3All[0]]}
+                  onPlay={playNewsVideo}
+                />
+              )}
+              <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                <NewsColumn
+                  title={sortedLeagues[0]?.label ?? "News"}
+                  sources={col1Rest}
+                  onPlayVideo={playNewsVideo}
+                />
+                <NewsColumn
+                  title={sortedLeagues[1]?.label ?? "News"}
+                  sources={col2Rest}
+                  onPlayVideo={playNewsVideo}
+                />
+                <NewsColumn
+                  title={prefs.newsThirdLeague
+                    ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
+                    : "News"}
+                  sources={col3Rest}
+                  swappableOptions={thirdLeagueOptions}
+                  selectedThirdLeague={prefs.newsThirdLeague}
+                  onSwapLeague={setNewsThirdLeague}
+                  onPlayVideo={playNewsVideo}
+                />
+              </div>
+            </>
           );
         })() : loading ? (
           <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">

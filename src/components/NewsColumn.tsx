@@ -80,22 +80,22 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
                   className="w-full h-full object-cover rounded"
                   draggable={false}
                 />
-                {(item.videoUrl || item.imageFullUrl) && (
-                  <div className="absolute inset-0 flex items-center justify-center rounded" style={{ background: "rgba(0,0,0,0.25)" }}>
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-                      {item.videoUrl ? (
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                      ) : (
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="15 3 21 3 21 9" />
-                          <polyline points="9 21 3 21 3 15" />
-                          <line x1="21" y1="3" x2="14" y2="10" />
-                          <line x1="3" y1="21" x2="10" y2="14" />
-                        </svg>
-                      )}
-                    </div>
+                {/* Affordance overlay — play icon for video posts, expand
+                    icon for any other thumbnail that pops in the modal. */}
+                <div className="absolute inset-0 flex items-center justify-center rounded" style={{ background: "rgba(0,0,0,0.25)" }}>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
+                    {item.videoUrl ? (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                    ) : (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 3 21 3 21 9" />
+                        <polyline points="9 21 3 21 3 15" />
+                        <line x1="21" y1="3" x2="14" y2="10" />
+                        <line x1="3" y1="21" x2="10" y2="14" />
+                      </svg>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             ) : item.leagueLogo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
@@ -109,21 +109,27 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
                 draggable={false}
               />
             ) : null;
-            // v.redd.it videos and i.redd.it image posts both route through the
-            // in-app modal so the user stays in-context. Link/text posts and
-            // anything we can't preview still anchor out to the source URL.
-            if (onPlay && (item.videoUrl || item.imageFullUrl)) {
+            // Pop the modal whenever there's a video, a full-res image, OR a
+            // preview image worth enlarging. Reddit link posts (ESPN/BBC
+            // articles) only have a preview imageUrl and would otherwise just
+            // anchor out — but Jacob wants the thumb to enlarge inline. The
+            // modal's "Open on r/baseball" footer keeps the discussion 1 tap
+            // away. Items without any image stay as plain link rows.
+            const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
+            if (onPlay && hasMedia) {
               return (
                 <button
                   key={item.id}
                   onClick={() => onPlay({
                     playbackUrl: item.videoUrl || null,
-                    imageUrl: item.videoUrl ? null : item.imageFullUrl!,
+                    // Prefer full-res Reddit-hosted image; fall back to the
+                    // preview URL Reddit serves for link posts.
+                    imageUrl: item.videoUrl ? null : (item.imageFullUrl || item.imageUrl),
                     fallbackUrl: item.articleUrl,
                     poster: item.imageUrl || null,
-                    // Pass the section ("r/baseball", "MLB Most Popular", etc.)
-                    // so the modal footer can read "Open on r/baseball" instead
-                    // of the generic hostname-derived "Open on Reddit".
+                    // Pass the section ("r/baseball", "MLB.com", etc.) so the
+                    // modal footer can read "Open on r/baseball" instead of
+                    // the generic hostname-derived "Open on Reddit".
                     sourceLabel: item.section || null,
                   })}
                   className={`${rowCls} w-full text-left cursor-pointer`}
@@ -228,7 +234,10 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     playbackUrl: item.playbackUrl || null,
                     fallbackUrl: item.articleUrl,
                     poster: item.imageUrl || null,
-                    sourceLabel: item.section || null,
+                    // No sourceLabel — URL-derived label gives "Open on MLB.com",
+                    // "Open on NBA.com", "Open on ESPN" which is what we want
+                    // here. Passing item.section would show the verbose column
+                    // label ("MLB Most Popular") which Jacob doesn't want.
                   })}
                   className={commonCls}
                   style={commonStyle}
