@@ -57,8 +57,12 @@ export default function AlignedVideoStrip({ sources, onPlay }: Props) {
   const totalRows = maxItems + 1;
 
   return (
+    // Width capped to match NewsColumn's max-w-[225px] xl:max-w-[280px] below
+    // — without this the strip blows out to full container width while the
+    // rest of the news view stays narrow, producing the size mismatch Jacob
+    // flagged. 691px = 3×225 + 2×8 (gap-2). 872px xl: = 3×280 + 2×16 (gap-4).
     <div
-      className="grid gap-2 sm:gap-4 mb-1.5 sm:mb-2"
+      className="grid gap-2 sm:gap-4 mb-1.5 sm:mb-2 mx-auto w-full max-w-[691px] xl:max-w-[872px]"
       style={{
         gridTemplateColumns: `repeat(${sources.length}, minmax(0, 1fr))`,
         gridTemplateRows: `repeat(${totalRows}, auto)`,
