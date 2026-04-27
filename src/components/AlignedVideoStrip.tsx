@@ -2,20 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { NewsItem } from "@/lib/news";
-import { NewsSource } from "./NewsColumn";
-
-interface PlayOpts {
-  videoId?: string;
-  playbackUrl?: string | null;
-  imageUrl?: string | null;
-  fallbackUrl: string;
-  poster?: string | null;
-  sourceLabel?: string | null;
-}
+import { NewsSource, PlayHandler } from "./NewsColumn";
 
 interface Props {
   sources: NewsSource[];
-  onPlay?: (opts: PlayOpts) => void;
+  onPlay?: PlayHandler;
 }
 
 // Aligned 3-column video strip — each row across columns is sized to the
@@ -123,7 +114,7 @@ function SkeletonRow({ isFirst }: { isFirst: boolean }) {
   );
 }
 
-function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: (opts: PlayOpts) => void }) {
+function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
   const body = (
     <>
       {item.imageUrl && (
@@ -169,6 +160,9 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
             poster: item.imageUrl || null,
             // No sourceLabel — URL-derivation gives "Open on MLB.com" /
             // "Open on NBA.com" / "Open on ESPN" which is what we want here.
+            headline: item.headline,
+            byline: item.byline || null,
+            published: item.published || null,
           })
         }
         className={commonCls}

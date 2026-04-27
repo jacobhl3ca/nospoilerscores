@@ -6,7 +6,7 @@ import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
-import NewsColumn, { NewsColumnTitle, NewsSource } from "@/components/NewsColumn";
+import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -44,7 +44,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; poster?: string | null; sourceLabel?: string | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null } | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -115,7 +115,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // stream is available we play it directly; otherwise we fall back to the
   // YouTube iframe path. Cards with no inline option skip this handler and
   // render as plain anchors to the source URL.
-  const playNewsVideo = useCallback((opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => {
+  const playNewsVideo = useCallback<PlayHandler>((opts) => {
     setVideoModal({
       videoId: opts.videoId || "",
       playbackUrl: opts.playbackUrl || null,
@@ -123,6 +123,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       poster: opts.poster || null,
       fallbackUrl: opts.fallbackUrl,
       sourceLabel: opts.sourceLabel || null,
+      headline: opts.headline || null,
+      byline: opts.byline || null,
+      published: opts.published || null,
     });
     if (opts.videoId) {
       const params = new URLSearchParams(window.location.search);
@@ -867,6 +870,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           imageUrl={videoModal.imageUrl}
           poster={videoModal.poster}
           sourceLabel={videoModal.sourceLabel}
+          headline={videoModal.headline}
+          byline={videoModal.byline}
+          published={videoModal.published}
           onClose={closeVideoModal}
         />
       )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
+import { formatPublished } from "@/lib/news";
 
 interface VideoModalProps {
   videoId: string;
@@ -21,6 +22,14 @@ interface VideoModalProps {
   // default (e.g. "r/baseball" instead of "Reddit", "MLB Most Popular" instead
   // of "MLB.com"). Falls back to URL-host inference when null.
   sourceLabel?: string | null;
+  // Post metadata — surfaced in a card layout so the modal is a useful
+  // preview of the post (headline / author / time / subreddit) instead of
+  // just an unframed image lightbox. When no media (no video, no image)
+  // these turn the modal into a text-post preview card with an "Open on …"
+  // button for click-out.
+  headline?: string | null;
+  byline?: string | null;
+  published?: string | null;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -54,15 +63,22 @@ function sourceLabelFromUrl(url: string): string {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, sourceLabel }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, sourceLabel, headline, byline, published }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentId, setCurrentId] = useState(videoId);
   const failedIdsRef = useRef<string[]>([]);
   const retryingRef = useRef(false);
+  // imgFailed flips when the lightbox image errors out — at that point we
+  // collapse to text-card mode so the user sees the headline + open button
+  // instead of an empty modal (Firefox + Reddit external-preview is the
+  // current offender).
+  const [imgFailed, setImgFailed] = useState(false);
   const hlsMode = !!playbackUrl;
-  const imageMode = !!imageUrl && !playbackUrl && !videoId;
+  const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !videoId;
+  const textMode = !hlsMode && !imageMode && !videoId;
+  const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
 
   // Reset when the modal is opened with a different primary id
   useEffect(() => {
@@ -118,7 +134,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
-    if (hlsMode || imageMode) return; // HLS / image branches handle rendering instead
+    if (hlsMode || imageMode || textMode) return; // HLS / image / text branches handle rendering instead
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
 
@@ -190,7 +206,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     return () => {
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
-  }, [currentId, fallbackUrl, hlsMode]);
+  }, [currentId, fallbackUrl, hlsMode, imageMode, textMode]);
 
   return (
     <div
@@ -228,7 +244,26 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               alt=""
               className="max-w-full max-h-[85vh] object-contain"
               draggable={false}
+              onError={() => setImgFailed(true)}
             />
+          </div>
+        ) : textMode ? (
+          // Text-post preview card — Reddit headline-only posts (or any item
+          // whose image failed to load) get a clean card layout instead of
+          // an empty lightbox. Everything stays on hidescore until the user
+          // hits the "Open on …" button at the bottom.
+          <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            {sourceLabel && (
+              <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
+            )}
+            {headline && (
+              <h2 className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</h2>
+            )}
+            {(byline || published) && (
+              <p className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
+                {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
+              </p>
+            )}
           </div>
         ) : (
           <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }}>
@@ -248,15 +283,32 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           </div>
         )}
 
+        {/* Headline + byline below media — for image / video modes, gives
+            context without filling the modal. textMode renders these inside
+            the card itself, so skip them here. */}
+        {!textMode && headline && (
+          <div className="mt-3 text-center px-2">
+            <p className="text-sm sm:text-base text-white/90 leading-snug">{headline}</p>
+            {(byline || published) && (
+              <p className="text-xs text-white/40 mt-1">
+                {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Direct link — branded per source so users know where they're going */}
-        <div className="mt-3 text-center">
+        <div className={`${textMode ? "mt-4" : "mt-3"} text-center`}>
           <a
-            href={(hlsMode || imageMode) ? (fallbackUrl || "#") : `https://www.youtube.com/watch?v=${currentId}`}
+            href={(hlsMode || imageMode || textMode) ? (fallbackUrl || "#") : `https://www.youtube.com/watch?v=${currentId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
+            className={textMode
+              ? "inline-block px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              : "text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"}
+            style={textMode ? { background: "var(--accent)", color: "white" } : undefined}
           >
-            {(hlsMode || imageMode) ? (sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl)) : "Watch on YouTube"}
+            {(hlsMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
           </a>
         </div>
       </div>

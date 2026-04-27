@@ -12,6 +12,22 @@ export interface NewsSource {
   youtubeChannel?: string;
 }
 
+// Single source of truth for the modal-trigger payload — used by TextRow,
+// VideoSourceCard, AlignedVideoStrip, and HomeContent so adding a field
+// doesn't require fanning out a 6-place rename.
+export interface PlayOpts {
+  videoId?: string;
+  playbackUrl?: string | null;
+  imageUrl?: string | null;
+  fallbackUrl: string;
+  poster?: string | null;
+  sourceLabel?: string | null;
+  headline?: string | null;
+  byline?: string | null;
+  published?: string | null;
+}
+export type PlayHandler = (opts: PlayOpts) => void;
+
 interface NewsColumnProps {
   title: string;
   sources: NewsSource[];
@@ -27,7 +43,7 @@ interface NewsColumnProps {
   // Video card click → open inline player modal. Called only when the item
   // has either a direct HLS stream (MLB) or a prebake-validated YouTube ID.
   // Receives the full playback payload so the modal can pick the right player.
-  onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void;
+  onPlayVideo?: PlayHandler;
 }
 
 // Sticky league title (with optional swap dropdown for the 3rd column).
@@ -145,7 +161,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   );
 }
 
-function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void }) {
+function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -179,10 +195,17 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
 // `Content-Type: image/jpeg` and Firefox sometimes refuses to render the
 // mismatch) we drop the thumb container entirely so the row degrades to
 // clean text instead of showing an empty grey placeholder box.
-function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void }) {
+function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
   const [imgFailed, setImgFailed] = useState(false);
   const rowCls = "flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
+  // Reddit posts always pop the modal so the user can read the post (and any
+  // attached photo / video) without leaving hidescore. Other sources (ESPN
+  // top headlines, MLB.com etc.) only pop the modal when there's actual
+  // media — text-only article rows still anchor straight to the source.
+  const isReddit = !!item.section?.startsWith("r/");
+  const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
+  const shouldPopModal = !!onPlay && (isReddit || hasMedia);
   const hasInlineMedia = !!(item.videoUrl || item.imageFullUrl);
   const showThumb = !!item.imageUrl && !imgFailed;
   const thumb = showThumb ? (
@@ -232,15 +255,21 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
       draggable={false}
     />
   ) : null;
-  if (onPlay && hasInlineMedia) {
+  if (shouldPopModal) {
     return (
       <button
-        onClick={() => onPlay({
+        onClick={() => onPlay!({
           playbackUrl: item.videoUrl || null,
-          imageUrl: item.videoUrl ? null : item.imageFullUrl,
+          // Prefer Reddit-hosted full-res, fall back to preview for image-bearing
+          // posts. Text-only Reddit posts pass null and the modal renders its
+          // text-card layout off the headline metadata below.
+          imageUrl: item.videoUrl ? null : (item.imageFullUrl || (isReddit && item.imageUrl) || null),
           fallbackUrl: item.articleUrl,
           poster: item.imageUrl || null,
           sourceLabel: item.section || null,
+          headline: item.headline,
+          byline: item.byline || null,
+          published: item.published || null,
         })}
         className={`${rowCls} w-full text-left cursor-pointer`}
         style={rowStyle}
@@ -264,7 +293,7 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
   );
 }
 
-function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void }) {
+function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -342,6 +371,9 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     // "Open on NBA.com", "Open on ESPN" which is what we want
                     // here. Passing item.section would show the verbose column
                     // label ("MLB Most Popular") which Jacob doesn't want.
+                    headline: item.headline,
+                    byline: item.byline || null,
+                    published: item.published || null,
                   })}
                   className={commonCls}
                   style={commonStyle}
@@ -369,7 +401,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
   );
 }
 
-function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
+function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: PlayHandler }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
