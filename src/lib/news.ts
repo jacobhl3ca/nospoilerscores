@@ -148,9 +148,15 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
   mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
   fifa: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
-  ncaam: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-basketball.png",
+  // ESPN's CDN doesn't host real league logos for NCAAM or tennis — even
+  // their own scoreboard API serves the generic ESPN-icon-* assets that look
+  // like ESPN branding rather than league branding. Wikipedia hosts the
+  // canonical NCAA and ITF (international governing body, neutral between
+  // ATP/WTA) marks via upload.wikimedia.org, which allows hotlinking with a
+  // browser UA and is fronted by Wikimedia's CDN.
+  ncaam: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
   golf: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
-  tennis: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-tennis.png",
+  tennis: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/International_Tennis_Federation_Logo.svg/250px-International_Tennis_Federation_Logo.svg.png",
   epl: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
 };
 
