@@ -218,6 +218,20 @@ export const GENERIC_CASCADE: ColumnSource[] = [
   { label: "r/sports", key: "reddit-general", kind: "prebaked" },
 ];
 
+// Reddit's preview.redd.it / external-preview.redd.it images get blocked by
+// Safari's anti-tracking and Firefox's strict mode when loaded as third-party
+// from hidescore.com — the request silently fails and onError fires, so the
+// thumbnail container is dropped and the row collapses to text. Proxying the
+// URL through a first-party-looking image proxy bypasses both. weserv.nl is
+// a stable, widely-used free image proxy (Cloudflare-fronted, IIIF-compatible)
+// that returns the image with permissive CORS and re-encodes WebP→JPEG so
+// older clients are happy. No-op for non-redd.it URLs.
+export function proxyImage(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  if (!/\.redd\.it\//.test(url)) return url;
+  return `https://images.weserv.nl/?url=${encodeURIComponent(url.replace(/^https?:\/\//, ""))}`;
+}
+
 export function formatPublished(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);

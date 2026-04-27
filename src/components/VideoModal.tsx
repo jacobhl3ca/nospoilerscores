@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
-import { formatPublished } from "@/lib/news";
+import { formatPublished, proxyImage } from "@/lib/news";
 
 interface VideoModalProps {
   videoId: string;
@@ -240,7 +240,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black flex items-center justify-center" style={{ maxHeight: "85vh" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={imageUrl!}
+              src={proxyImage(imageUrl!)}
               alt=""
               className="max-w-full max-h-[85vh] object-contain"
               draggable={false}
@@ -275,7 +275,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
-                poster={poster ?? undefined}
+                poster={proxyImage(poster) ?? undefined}
               />
             ) : (
               <div id="yt-player" className="absolute inset-0 w-full h-full" />

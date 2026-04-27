@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Sport } from "@/lib/types";
-import { NewsItem } from "@/lib/news";
+import { NewsItem, proxyImage } from "@/lib/news";
 
 export interface NewsSource {
   label: string;
@@ -215,13 +215,9 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={item.imageUrl!}
+        src={proxyImage(item.imageUrl!)}
         alt=""
         loading="lazy"
-        // Default referrer policy (strict-origin-when-cross-origin) sends just
-        // the origin, which Reddit's external-preview accepts. The previous
-        // `no-referrer` value triggered Firefox's tracking-protection-friendly
-        // path and the image silently never decoded, leaving an empty box.
         className="w-full h-full object-cover"
         draggable={false}
         onError={() => setImgFailed(true)}
@@ -324,7 +320,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                 <div className="relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={item.imageUrl}
+                    src={proxyImage(item.imageUrl)}
                     alt=""
                     loading="lazy"
                     className="w-full h-full object-cover"

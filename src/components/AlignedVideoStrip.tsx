@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { NewsItem } from "@/lib/news";
+import { NewsItem, proxyImage } from "@/lib/news";
 import { NewsSource, PlayHandler } from "./NewsColumn";
 
 interface Props {
@@ -121,7 +121,7 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
         <div className="relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={item.imageUrl}
+            src={proxyImage(item.imageUrl)}
             alt=""
             loading="lazy"
             className="w-full h-full object-cover"
