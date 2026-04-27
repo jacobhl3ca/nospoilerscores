@@ -199,6 +199,28 @@ async function fetchMLBPlaybackMap() {
   return map;
 }
 
+// Per-slug fallback: each MLB video detail page embeds a JSON-LD VideoObject
+// whose `contentUrl` is the canonical HLS manifest. Compilations like
+// "Top 10 Plays of the Week" / "Real Fast" don't appear in statsapi highlights
+// (no game association), so the playback map misses them — this fills the gap.
+async function fetchMLBPlaybackForSlug(slug) {
+  try {
+    const html = await getText(`https://www.mlb.com/video/${slug}`);
+    const m = html.match(/<script type="application\/ld\+json">([\s\S]+?)<\/script>/g);
+    if (!m) return null;
+    for (const block of m) {
+      const txt = block.replace(/^<script[^>]*>/, "").replace(/<\/script>$/, "").trim();
+      if (!txt.includes("VideoObject")) continue;
+      try {
+        const data = JSON.parse(txt);
+        const url = typeof data.contentUrl === "string" ? data.contentUrl : null;
+        if (url && url.includes(".m3u8")) return url;
+      } catch { /* try next block */ }
+    }
+  } catch { /* swallow — caller treats null as "no inline playback" */ }
+  return null;
+}
+
 async function fetchMLBVideos() {
   try {
     const [html, playbackMap] = await Promise.all([
@@ -236,6 +258,13 @@ async function fetchMLBVideos() {
         playbackUrl: playbackMap.get(slug) || null,
       });
       if (items.length >= 10) break;
+    }
+    // Backfill compilations the statsapi map doesn't know about by scraping
+    // each detail page's JSON-LD. Done in parallel; failures stay null.
+    const needs = items.filter((it) => !it.playbackUrl);
+    if (needs.length > 0) {
+      const filled = await Promise.all(needs.map((it) => fetchMLBPlaybackForSlug(it.id)));
+      needs.forEach((it, i) => { if (filled[i]) it.playbackUrl = filled[i]; });
     }
     if (items.length > 0) return items;
   } catch {
