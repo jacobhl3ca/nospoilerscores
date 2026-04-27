@@ -133,7 +133,6 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
             src={item.imageUrl}
             alt=""
             loading="lazy"
-            referrerPolicy="no-referrer"
             className="w-full h-full object-cover"
             draggable={false}
           />

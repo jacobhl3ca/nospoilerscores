@@ -360,7 +360,23 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       <header ref={headerRef} className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
         <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
-          <a href="/" className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0" style={{ color: "var(--text)" }}>
+          <a
+            href="/"
+            onClick={(e) => {
+              // In the news view, the logo acts as "back to scores" — toggle
+              // news off in place instead of navigating, since "/" would
+              // just rehydrate news from prefs.showNews and bounce the user
+              // right back into the news view.
+              if (showNews) {
+                e.preventDefault();
+                setShowNews(false);
+                updatePrefs({ showNews: false });
+                window.scrollTo({ top: 0, behavior: "auto" });
+              }
+            }}
+            className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0"
+            style={{ color: "var(--text)" }}
+          >
             <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
             <svg className="xl:hidden w-6 h-6 header-logo" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="6" className="header-logo-bg" />

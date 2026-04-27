@@ -226,7 +226,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             <img
               src={imageUrl!}
               alt=""
-              referrerPolicy="no-referrer"
               className="max-w-full max-h-[85vh] object-contain"
               draggable={false}
             />

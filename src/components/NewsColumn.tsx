@@ -164,101 +164,103 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
         <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
       ) : (
         <div className="flex flex-col">
-          {items.map((item, idx) => {
-            const rowCls = "flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]";
-            const rowStyle = { borderTop: idx === 0 ? "none" : "1px solid var(--border)", color: "var(--text)" };
-            // Treat the row as media-bearing only when there's a real video or
-            // a Reddit-hosted full-res image. External link posts (ESPN / BBC
-            // articles) only carry a small preview imageUrl — opening that in a
-            // lightbox just shows a low-res thumbnail blown up, which looks
-            // broken. Anchor those rows out to the source article instead.
-            const hasInlineMedia = !!(item.videoUrl || item.imageFullUrl);
-            const thumb = item.imageUrl ? (
-              <div
-                className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden"
-                style={{ background: "var(--bg-card-hover)" }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.imageUrl}
-                  alt=""
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
-                {/* Overlay only on media-bearing rows so plain link posts don't
-                    advertise an "expand" affordance they can't deliver. */}
-                {hasInlineMedia && (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-                      {item.videoUrl ? (
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                      ) : (
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="15 3 21 3 21 9" />
-                          <polyline points="9 21 3 21 3 15" />
-                          <line x1="21" y1="3" x2="14" y2="10" />
-                          <line x1="3" y1="21" x2="10" y2="14" />
-                        </svg>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : item.leagueLogo ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={item.leagueLogo}
-                alt=""
-                loading="lazy"
-                width={18}
-                height={18}
-                className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
-                draggable={false}
-              />
-            ) : null;
-            if (onPlay && hasInlineMedia) {
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onPlay({
-                    playbackUrl: item.videoUrl || null,
-                    // Reddit-hosted full-res image only; preview thumbnails get
-                    // anchored to the article above.
-                    imageUrl: item.videoUrl ? null : item.imageFullUrl,
-                    fallbackUrl: item.articleUrl,
-                    poster: item.imageUrl || null,
-                    // Pass the section ("r/baseball", "MLB.com", etc.) so the
-                    // modal footer can read "Open on r/baseball" instead of
-                    // the generic hostname-derived "Open on Reddit".
-                    sourceLabel: item.section || null,
-                  })}
-                  className={`${rowCls} w-full text-left cursor-pointer`}
-                  style={rowStyle}
-                >
-                  {thumb}
-                  <span className="min-w-0">{item.headline}</span>
-                </button>
-              );
-            }
-            return (
-              <a
-                key={item.id}
-                href={item.articleUrl || undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={rowCls}
-                style={rowStyle}
-              >
-                {thumb}
-                <span className="min-w-0">{item.headline}</span>
-              </a>
-            );
-          })}
+          {items.map((item, idx) => (
+            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} />
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+// One row in a TextSourceCard — encapsulated so it can hold an image-failed
+// useState. When the thumbnail fails to load (Firefox + Reddit
+// external-preview image is the live offender — Reddit serves WebP with
+// `Content-Type: image/jpeg` and Firefox sometimes refuses to render the
+// mismatch) we drop the thumb container entirely so the row degrades to
+// clean text instead of showing an empty grey placeholder box.
+function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null; sourceLabel?: string | null }) => void }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const rowCls = "flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)]";
+  const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
+  const hasInlineMedia = !!(item.videoUrl || item.imageFullUrl);
+  const showThumb = !!item.imageUrl && !imgFailed;
+  const thumb = showThumb ? (
+    <div
+      className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden"
+      style={{ background: "var(--bg-card-hover)" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={item.imageUrl!}
+        alt=""
+        loading="lazy"
+        // Default referrer policy (strict-origin-when-cross-origin) sends just
+        // the origin, which Reddit's external-preview accepts. The previous
+        // `no-referrer` value triggered Firefox's tracking-protection-friendly
+        // path and the image silently never decoded, leaving an empty box.
+        className="w-full h-full object-cover"
+        draggable={false}
+        onError={() => setImgFailed(true)}
+      />
+      {hasInlineMedia && (
+        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
+          <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
+            {item.videoUrl ? (
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+            ) : (
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 3 21 3 21 9" />
+                <polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : item.leagueLogo ? (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={item.leagueLogo}
+      alt=""
+      loading="lazy"
+      width={18}
+      height={18}
+      className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
+      draggable={false}
+    />
+  ) : null;
+  if (onPlay && hasInlineMedia) {
+    return (
+      <button
+        onClick={() => onPlay({
+          playbackUrl: item.videoUrl || null,
+          imageUrl: item.videoUrl ? null : item.imageFullUrl,
+          fallbackUrl: item.articleUrl,
+          poster: item.imageUrl || null,
+          sourceLabel: item.section || null,
+        })}
+        className={`${rowCls} w-full text-left cursor-pointer`}
+        style={rowStyle}
+      >
+        {thumb}
+        <span className="min-w-0">{item.headline}</span>
+      </button>
+    );
+  }
+  return (
+    <a
+      href={item.articleUrl || undefined}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={rowCls}
+      style={rowStyle}
+    >
+      {thumb}
+      <span className="min-w-0">{item.headline}</span>
+    </a>
   );
 }
 
