@@ -207,64 +207,54 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
   const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
   const shouldPopModal = !!onPlay && (isReddit || hasMedia);
   const hasInlineMedia = !!(item.videoUrl || item.imageFullUrl);
-  const showImage = !!item.imageUrl && !imgFailed;
-  // Always render a thumb-sized container so rows align visually whether or
-  // not the post has a working image. Empty / failed-image / text-only rows
-  // get a centered icon that hints at the row type (play / expand / quote)
-  // — keeps the column rhythmic instead of leaving text rows floating
-  // headline-only beside neighbours that have full thumbnails.
-  const overlayIcon = item.videoUrl ? (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-  ) : hasInlineMedia ? (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 3 21 3 21 9" />
-      <polyline points="9 21 3 21 3 15" />
-      <line x1="21" y1="3" x2="14" y2="10" />
-      <line x1="3" y1="21" x2="10" y2="14" />
-    </svg>
-  ) : (
-    // Speech-bubble for text posts (Reddit comments, headline-only ESPN
-    // articles, etc.) — gives the cell a visual anchor without pretending
-    // there's media to expand.
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-  const thumb = (
+  const showThumb = !!item.imageUrl && !imgFailed;
+  const thumb = showThumb ? (
     <div
       className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden"
       style={{ background: "var(--bg-card-hover)" }}
     >
-      {showImage && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={item.imageUrl!}
-          alt=""
-          loading="lazy"
-          className="w-full h-full object-cover"
-          draggable={false}
-          onError={() => setImgFailed(true)}
-        />
-      )}
-      {/* Always overlay an icon. When there's a successful image the icon
-          sits over a 25%-black gradient (current "expand"/"play" affordance);
-          when there's no image the same icon centres on the placeholder bg. */}
-      <div
-        className="absolute inset-0 flex items-center justify-center"
-        style={{ background: showImage ? "rgba(0,0,0,0.25)" : "transparent" }}
-      >
-        <div
-          className="w-6 h-6 rounded-full flex items-center justify-center"
-          style={{
-            background: showImage ? "rgba(0,0,0,0.7)" : "var(--bg-card)",
-            color: showImage ? "white" : "var(--text-muted)",
-          }}
-        >
-          {overlayIcon}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={item.imageUrl!}
+        alt=""
+        loading="lazy"
+        // Default referrer policy (strict-origin-when-cross-origin) sends just
+        // the origin, which Reddit's external-preview accepts. The previous
+        // `no-referrer` value triggered Firefox's tracking-protection-friendly
+        // path and the image silently never decoded, leaving an empty box.
+        className="w-full h-full object-cover"
+        draggable={false}
+        onError={() => setImgFailed(true)}
+      />
+      {hasInlineMedia && (
+        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
+          <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
+            {item.videoUrl ? (
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+            ) : (
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 3 21 3 21 9" />
+                <polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
-  );
+  ) : item.leagueLogo ? (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={item.leagueLogo}
+      alt=""
+      loading="lazy"
+      width={18}
+      height={18}
+      className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
+      draggable={false}
+    />
+  ) : null;
   if (shouldPopModal) {
     return (
       <button
