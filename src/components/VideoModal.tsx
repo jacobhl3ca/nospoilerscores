@@ -14,6 +14,9 @@ interface VideoModalProps {
   playbackUrl?: string | null;
   // Poster image for the <video> element while HLS loads.
   poster?: string | null;
+  // When set, the modal renders an image lightbox instead of any video. Used
+  // for i.redd.it image posts so they pop in-context like videos do.
+  imageUrl?: string | null;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -27,7 +30,27 @@ function extractSearchQuery(fallbackUrl: string): string | null {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster }: VideoModalProps) {
+// Per-source label for the modal's "Open on …" link. The footer used to read
+// "Open on source" generically — this maps the URL host to the actual brand so
+// users know whether they're heading to Reddit, MLB, ESPN, etc. before tapping.
+function sourceLabelFromUrl(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    if (host.endsWith("reddit.com") || host === "redd.it" || host.endsWith(".redd.it")) return "Open on Reddit";
+    if (host.endsWith("mlb.com")) return "Open on MLB.com";
+    if (host.endsWith("espn.com") || host.endsWith("espn.go.com")) return "Open on ESPN";
+    if (host.endsWith("nba.com")) return "Open on NBA.com";
+    if (host.endsWith("nhl.com")) return "Open on NHL.com";
+    if (host.endsWith("nfl.com")) return "Open on NFL.com";
+    if (host.endsWith("cbssports.com")) return "Open on CBS Sports";
+    if (host.endsWith("thescore.com")) return "Open on theScore";
+    return `Open on ${host}`;
+  } catch {
+    return "Open source";
+  }
+}
+
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -35,6 +58,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const failedIdsRef = useRef<string[]>([]);
   const retryingRef = useRef(false);
   const hlsMode = !!playbackUrl;
+  const imageMode = !!imageUrl && !playbackUrl && !videoId;
 
   // Reset when the modal is opened with a different primary id
   useEffect(() => {
@@ -90,7 +114,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
-    if (hlsMode) return; // HLS branch handles playback instead
+    if (hlsMode || imageMode) return; // HLS / image branches handle rendering instead
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
 
@@ -191,32 +215,45 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           </svg>
         </button>
 
-        {/* 16:9 player — HLS <video> when a direct stream is provided, else YouTube */}
-        <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }}>
-          {hlsMode ? (
-            <video
-              ref={videoRef}
-              className="absolute inset-0 w-full h-full"
-              controls
-              autoPlay
-              muted
-              playsInline
-              poster={poster ?? undefined}
+        {/* Player area — image lightbox (no aspect lock), 16:9 video, or YouTube iframe */}
+        {imageMode ? (
+          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black flex items-center justify-center" style={{ maxHeight: "85vh" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl!}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="max-w-full max-h-[85vh] object-contain"
+              draggable={false}
             />
-          ) : (
-            <div id="yt-player" className="absolute inset-0 w-full h-full" />
-          )}
-        </div>
+          </div>
+        ) : (
+          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }}>
+            {hlsMode ? (
+              <video
+                ref={videoRef}
+                className="absolute inset-0 w-full h-full"
+                controls
+                autoPlay
+                muted
+                playsInline
+                poster={poster ?? undefined}
+              />
+            ) : (
+              <div id="yt-player" className="absolute inset-0 w-full h-full" />
+            )}
+          </div>
+        )}
 
-        {/* Direct link — source page for HLS clips, YouTube for iframe clips */}
+        {/* Direct link — branded per source so users know where they're going */}
         <div className="mt-3 text-center">
           <a
-            href={hlsMode ? (fallbackUrl || "#") : `https://www.youtube.com/watch?v=${currentId}`}
+            href={(hlsMode || imageMode) ? (fallbackUrl || "#") : `https://www.youtube.com/watch?v=${currentId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
           >
-            {hlsMode ? "Open on source" : "Watch on YouTube"}
+            {(hlsMode || imageMode) ? sourceLabelFromUrl(fallbackUrl) : "Watch on YouTube"}
           </a>
         </div>
       </div>

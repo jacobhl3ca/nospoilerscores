@@ -43,7 +43,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; poster?: string | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; poster?: string | null } | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -116,10 +116,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // stream is available we play it directly; otherwise we fall back to the
   // YouTube iframe path. Cards with no inline option skip this handler and
   // render as plain anchors to the source URL.
-  const playNewsVideo = useCallback((opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => {
+  const playNewsVideo = useCallback((opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null }) => {
     setVideoModal({
       videoId: opts.videoId || "",
       playbackUrl: opts.playbackUrl || null,
+      imageUrl: opts.imageUrl || null,
       poster: opts.poster || null,
       fallbackUrl: opts.fallbackUrl,
     });
@@ -802,6 +803,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           videoId={videoModal.videoId}
           fallbackUrl={videoModal.fallbackUrl}
           playbackUrl={videoModal.playbackUrl}
+          imageUrl={videoModal.imageUrl}
           poster={videoModal.poster}
           onClose={closeVideoModal}
         />
@@ -816,7 +818,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         style={{
           right: "2rem",
           bottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
-          background: "var(--bg-card)",
+          // var(--bg) instead of --bg-card so the button stays opaque over
+          // arbitrary scrolled content — bg-card is rgba(.., .05) in dark mode
+          // and would make the button nearly invisible over a Reddit thumbnail.
+          background: "var(--bg)",
           border: "1px solid var(--border)",
           color: "var(--text-muted)",
         }}

@@ -43,6 +43,9 @@ export interface NewsItem {
   // v.redd.it CMAF fallback URL — single muxed MP4 that plays in <video>
   // without hls.js. Set on Reddit posts where Reddit hosts the clip directly.
   videoUrl?: string | null;
+  // i.redd.it full-res image URL — set when the post is an image post hosted
+  // on Reddit. Lets the client pop a lightbox instead of bouncing out.
+  imageFullUrl?: string | null;
 }
 
 interface RawImage { url?: string; height?: number; width?: number }

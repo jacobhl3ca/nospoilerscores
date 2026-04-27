@@ -730,6 +730,12 @@ async function fetchReddit(subreddit, sectionLabel) {
     if (rv?.fallback_url && /^https:\/\/v\.redd\.it\//.test(rv.fallback_url)) {
       videoUrl = rv.fallback_url.replace(/&amp;/g, "&");
     }
+    // i.redd.it image posts: surface the original full-res URL so the client
+    // can pop a lightbox instead of bouncing out to reddit.com to view a JPEG.
+    let imageFullUrl = null;
+    if (p.post_hint === "image" && /^https:\/\/i\.redd\.it\//.test(p.url || "")) {
+      imageFullUrl = p.url;
+    }
     out.push({
       id: p.id || p.permalink,
       headline: title,
@@ -740,6 +746,7 @@ async function fetchReddit(subreddit, sectionLabel) {
       byline: p.author ? `u/${p.author}` : "",
       section: sectionLabel,
       videoUrl,
+      imageFullUrl,
     });
     if (out.length >= 12) break;
   }

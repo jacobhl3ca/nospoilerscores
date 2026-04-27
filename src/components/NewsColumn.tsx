@@ -22,7 +22,7 @@ interface NewsColumnProps {
   // Video card click → open inline player modal. Called only when the item
   // has either a direct HLS stream (MLB) or a prebake-validated YouTube ID.
   // Receives the full playback payload so the modal can pick the right player.
-  onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void;
+  onPlayVideo?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void;
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
@@ -47,7 +47,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   );
 }
 
-function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
+function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -80,10 +80,19 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
                   className="w-full h-full object-cover rounded"
                   draggable={false}
                 />
-                {item.videoUrl && (
+                {(item.videoUrl || item.imageFullUrl) && (
                   <div className="absolute inset-0 flex items-center justify-center rounded" style={{ background: "rgba(0,0,0,0.25)" }}>
                     <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                      {item.videoUrl ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                      ) : (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="15 3 21 3 21 9" />
+                          <polyline points="9 21 3 21 3 15" />
+                          <line x1="21" y1="3" x2="14" y2="10" />
+                          <line x1="3" y1="21" x2="10" y2="14" />
+                        </svg>
+                      )}
                     </div>
                   </div>
                 )}
@@ -100,14 +109,16 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
                 draggable={false}
               />
             ) : null;
-            // v.redd.it videos route through the in-app modal so playback stays
-            // in-context. Posts without a videoUrl still link out to Reddit.
-            if (item.videoUrl && onPlay) {
+            // v.redd.it videos and i.redd.it image posts both route through the
+            // in-app modal so the user stays in-context. Link/text posts and
+            // anything we can't preview still anchor out to the source URL.
+            if (onPlay && (item.videoUrl || item.imageFullUrl)) {
               return (
                 <button
                   key={item.id}
                   onClick={() => onPlay({
-                    playbackUrl: item.videoUrl!,
+                    playbackUrl: item.videoUrl || null,
+                    imageUrl: item.videoUrl ? null : item.imageFullUrl!,
                     fallbackUrl: item.articleUrl,
                     poster: item.imageUrl || null,
                   })}
@@ -139,7 +150,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
   );
 }
 
-function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
+function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: (opts: { videoId?: string; playbackUrl?: string | null; imageUrl?: string | null; fallbackUrl: string; poster?: string | null }) => void }) {
   return (
     <div
       className="rounded-lg overflow-hidden"
