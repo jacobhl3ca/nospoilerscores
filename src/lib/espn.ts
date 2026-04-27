@@ -1,4 +1,5 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer } from "./types";
+import { getApiBase } from "./youtube";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -413,7 +414,7 @@ function parseGame(event: any, sport: Sport): Game {
 let primeAsinsPromise: Promise<Record<string, string>> | null = null;
 export function loadPrimeAsins(): Promise<Record<string, string>> {
   if (!primeAsinsPromise) {
-    primeAsinsPromise = fetch("/prime-asins.json", { cache: "no-store" })
+    primeAsinsPromise = fetch(`${getApiBase()}/prime-asins.json`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => (d?.matchups ?? {}) as Record<string, string>)
       .catch(() => ({} as Record<string, string>));
@@ -430,7 +431,7 @@ type EspnAiringsData = {
 let espnAiringsPromise: Promise<EspnAiringsData> | null = null;
 export function loadEspnAirings(): Promise<EspnAiringsData> {
   if (!espnAiringsPromise) {
-    espnAiringsPromise = fetch("/espn-airings.json", { cache: "no-store" })
+    espnAiringsPromise = fetch(`${getApiBase()}/espn-airings.json`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => ({
         airings: d?.airings ?? {},

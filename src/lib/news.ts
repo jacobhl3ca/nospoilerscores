@@ -1,4 +1,5 @@
 import { Sport } from "./types";
+import { getApiBase } from "./youtube";
 
 // League-specific news (articles) — CORS-open, same origin as scoreboard API.
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
@@ -112,7 +113,7 @@ export async function fetchTopHeadlines(limit = 20): Promise<NewsItem[]> {
 // block direct browser fetches (MLB.com, NBA.com, NHL.com).
 export async function fetchPrebaked(name: string): Promise<NewsItem[]> {
   try {
-    const res = await fetch(`/news/${name}.json`, { cache: "no-store" });
+    const res = await fetch(`${getApiBase()}/news/${name}.json`, { cache: "no-store" });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.items ?? []) as NewsItem[];
