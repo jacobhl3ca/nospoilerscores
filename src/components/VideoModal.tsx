@@ -170,6 +170,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       }
     };
 
+    // Highest → lowest. Only request qualities we know YT advertises.
+    const QUALITY_PREF = ["highres", "hd2160", "hd1440", "hd1080", "hd720"];
+    const pickBest = (levels: string[]): string | null => {
+      for (const q of QUALITY_PREF) if (levels.includes(q)) return q;
+      return null;
+    };
+    const forceBest = (player: any) => {
+      const levels: string[] = player.getAvailableQualityLevels?.() || [];
+      const best = pickBest(levels);
+      if (best) player.setPlaybackQuality?.(best);
+    };
     const initPlayer = () => {
       playerRef.current = new (window as any).YT.Player("yt-player", {
         videoId: currentId,
@@ -179,14 +190,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
+          // vq is deprecated but still hinted by some clients.
+          vq: "hd1080",
         },
         events: {
           onReady: (event: any) => {
-            const qualities = event.target.getAvailableQualityLevels();
-            if (qualities.length > 0) {
-              event.target.setPlaybackQuality(qualities[0]);
-            }
             event.target.playVideo();
+          },
+          // PLAYING (1) is the first state where getAvailableQualityLevels()
+          // returns the real list — onReady gives []. setPlaybackQuality is
+          // a deprecated suggestion, but it's the only knob we have.
+          onStateChange: (event: any) => {
+            if (event.data === 1) forceBest(event.target);
+          },
+          // If YT auto-quality downgrades us, push back up to the best level.
+          onPlaybackQualityChange: (event: any) => {
+            const levels: string[] = event.target.getAvailableQualityLevels?.() || [];
+            const best = pickBest(levels);
+            if (best && event.data !== best) event.target.setPlaybackQuality?.(best);
           },
           // YT error codes 100 (removed), 101 / 150 (embed disabled),
           // 5 (HTML5 issue), 2 (bad param). Any of these → swap to next.

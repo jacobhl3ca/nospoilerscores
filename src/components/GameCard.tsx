@@ -5,6 +5,7 @@ import { Game, Team } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl } from "@/lib/espn";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
+import { getETHour } from "@/components/DateNav";
 
 interface GameCardProps {
   game: Game;
@@ -107,6 +108,12 @@ function cleanStatusDetail(detail: string, stripDate: boolean): string {
   let cleaned = detail.replace(/\s*(EDT|EST|CDT|CST|MDT|MST|PDT|PST|ET|CT|MT|PT)\s*$/i, "");
   if (stripDate) cleaned = cleaned.replace(/^\d{1,2}\/\d{1,2}\s*-\s*/, "");
   return cleaned.trim();
+}
+
+// "BOS leads series 3-1" → "BOS leads 3-1"; "Series tied 2-2" → "Tied 2-2"
+function formatSeriesStatus(s: string): string {
+  const stripped = s.replace(/\bseries\s+/gi, "").trim();
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, leagueLabel, useAbbreviations, teamView, onSelectTeam }: GameCardProps) {
@@ -471,6 +478,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           </div>
         ))}
       </div>
+
+      {/* Playoff series state — pre/live games only, today only, after the
+          noon-ET morning reset. Hidden on finished games so the post-game
+          series score doesn't reveal tonight's outcome. */}
+      {game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && (
+        <div
+          className="mt-1 sm:mt-1.5 text-[10px] sm:text-[11px] text-center italic"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {formatSeriesStatus(game.seriesStatus)}
+        </div>
+      )}
 
       {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}
       {isFinished && highlightUrl && (

@@ -23,6 +23,9 @@ export interface Game {
   isPlayoff: boolean;
   // Full playoff round label (e.g. "Sweet 16", "ALWC - Game 2", "Conference Finals")
   playoffLabel: string | null;
+  // ESPN playoff-series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
+  // Only set when competition.series.type === "playoff".
+  seriesStatus: string | null;
   // Highlight/recap links
   highlightUrl: string | null; // ESPN video clip URL
   recapUrl: string | null; // ESPN gamecast URL

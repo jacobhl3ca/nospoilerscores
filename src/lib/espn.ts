@@ -374,6 +374,13 @@ function parseGame(event: any, sport: Sport): Game {
     isPlayoff = true; // type 3 = postseason, type 4 = off-season/all-star but sometimes playoff
   }
 
+  // Playoff series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
+  // Only present on playoff competitions; regular-season series has no field.
+  const seriesStatus: string | null =
+    competition?.series?.type === "playoff"
+      ? (competition.series.summary ?? null)
+      : null;
+
   // Extract gamecast/recap URL from event links
   let recapUrl: string | null = null;
   for (const link of event.links ?? []) {
@@ -402,6 +409,7 @@ function parseGame(event: any, sport: Sport): Game {
     seriesNote,
     isPlayoff,
     playoffLabel,
+    seriesStatus,
     highlightUrl,
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports
