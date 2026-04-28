@@ -262,8 +262,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     >
       {/* Playoff series state — pre/live games only, today only, after the
           noon-ET morning reset. Hidden on finished games so the post-game
-          series score doesn't reveal tonight's outcome. */}
-      {game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && (
+          series score doesn't reveal tonight's outcome. When a rating is
+          also showing in the middle cell, fall back to a standalone top
+          line; otherwise the line slots into the status bar's middle cell
+          alongside the time and network. */}
+      {game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && showRating && (
         <div
           className="mb-1 text-[10px] sm:text-[11px] text-center italic"
           style={{ color: "var(--text-muted)" }}
@@ -278,7 +281,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         const hasRating = showRating;
         const hasBroadcast = !isFinished && game.broadcasts.length > 0;
         const showFinal = isFinished && !isPastDate && !teamView;
-        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView;
+        const seriesInMiddle =
+          !!game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && !hasRating;
+        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView || seriesInMiddle;
         if (!showBar) return null;
         // Small ESPN link wrapper for upcoming-time / date labels.
         const withEspn = (node: ReactNode) => (
@@ -336,8 +341,17 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 )
               ) : null}
             </span>
-            <span>
-              {hasRating && <RatingBadge rating={game.rating!} />}
+            <span className="min-w-0">
+              {hasRating ? (
+                <RatingBadge rating={game.rating!} />
+              ) : seriesInMiddle ? (
+                <span
+                  className="text-[10px] sm:text-[11px] italic whitespace-nowrap truncate block"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {formatSeriesStatus(game.seriesStatus!)}
+                </span>
+              ) : null}
             </span>
             <span className="truncate text-right">
               {hasBroadcast && (() => {
