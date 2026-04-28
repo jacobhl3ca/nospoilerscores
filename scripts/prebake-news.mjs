@@ -497,7 +497,7 @@ async function fetchESPNICYMI() {
   if (!title) return null;
   return {
     id: vid,
-    headline: title,
+    headline: `icymi: ${title}`,
     description: descM ? decodeEntities(descM[1].replace(/<[^>]+>/g, "")) : "",
     published: "",
     imageUrl: imgM ? imgM[1] : null,
@@ -604,9 +604,18 @@ async function fetchESPNTopHeadlinesViaApi() {
 
 async function fetchESPNTopHeadlines() {
   const html = await getESPNHomeHtml();
-  const blockMatch = html.match(/<div class="headlineStack top-headlines">([\s\S]{0,30000}?)<\/div>\s*<\/div>/);
-  if (!blockMatch) return fetchESPNTopHeadlinesViaApi();
-  const block = blockMatch[1];
+  // ESPN occasionally swaps the inner wrapper element (div ↔ section) inside
+  // the top-headlines block, and splits the headline list across two adjacent
+  // <ul class="headlineStack__list"> elements (5 + 4 today). Anchor on the
+  // parent class, then concat every headline UL found until the section closes.
+  const topIdx = html.indexOf('class="headlineStack top-headlines"');
+  if (topIdx < 0) return fetchESPNTopHeadlinesViaApi();
+  // Grab the listContainer's full inner HTML — it wraps every UL of headlines
+  // for this block. Falls back to a 30 KB slice if the markup ever drops the
+  // listContainer wrapper entirely.
+  const tail = html.slice(topIdx, topIdx + 30000);
+  const containerM = tail.match(/headlineStack__listContainer"[^>]*>([\s\S]*?)<\/section>/);
+  const block = containerM ? containerM[1] : tail;
   const liRe = /<li[^>]*>([\s\S]*?)<\/li>/g;
   const items = [];
   let m;
@@ -695,7 +704,9 @@ const VIDEO_BLOCKLIST = [
 ];
 
 async function fetchESPNTopVideos() {
-  // ICYMI is ESPN's hand-picked headline video — always goes first if present.
+  // ICYMI is ESPN's hand-picked headline video — pinned to slot 2 so the day's
+  // newest big-format video leads and ICYMI sits below it as a clearly-labeled
+  // "in case you missed it" anchor.
   const icymi = await fetchESPNICYMI().catch(() => null);
   const html = await getESPNHomeHtml();
   // Only scrape "big format" blocks — these are <section class="contentItem__content--fullWidth">
@@ -756,7 +767,8 @@ async function fetchESPNTopVideos() {
 
 // Merge freshly-scraped videos with what we wrote earlier today so the full top
 // 10 "big videos that hit the frontpage" builds up across the day. Rolls over
-// at ET midnight (a fresh day starts fresh). ICYMI stays pinned to position 0.
+// at ET midnight (a fresh day starts fresh). ICYMI is pinned to slot 2 (index
+// 1) so the day's newest hero video leads and ICYMI sits below it.
 async function persistVideos(name, fresh, pinnedId) {
   const path = `${OUT_DIR}/${name}.json`;
   let existing = null;
@@ -773,21 +785,25 @@ async function persistVideos(name, fresh, pinnedId) {
   // Fresh day → drop yesterday's list. Same day → carry forward.
   const carry = existingETDay === currentETDay ? (existing?.items || []) : [];
   const byId = new Map();
-  // Preserve existing firstSeenAt for items we've seen before; assign now for new ones.
+  // Seed with carry so unseen items survive the merge; fresh items overwrite
+  // (so headline/description/imageUrl edits propagate) while preserving the
+  // earliest firstSeenAt we've ever recorded for that id.
   for (const item of carry) {
     byId.set(item.id, { ...item, firstSeenAt: item.firstSeenAt || nowMs });
   }
   for (const item of fresh) {
-    if (!byId.has(item.id)) byId.set(item.id, { ...item, firstSeenAt: nowMs });
+    const prior = byId.get(item.id);
+    byId.set(item.id, { ...item, firstSeenAt: prior?.firstSeenAt || item.firstSeenAt || nowMs });
   }
-  // Order: pinned ICYMI first (always top), then everything else by firstSeenAt
-  // ascending so the morning videos anchor the top of the list.
+  // Order: newest big-format video first, ICYMI second, then the rest by
+  // firstSeenAt ascending so morning videos anchor the body of the list.
   const all = [...byId.values()];
   const pinned = pinnedId ? all.filter((i) => i.id === pinnedId) : [];
   const rest = all
     .filter((i) => i.id !== pinnedId)
     .sort((a, b) => (a.firstSeenAt || 0) - (b.firstSeenAt || 0));
-  return [...pinned, ...rest].slice(0, 10);
+  const ordered = rest.length > 0 ? [rest[0], ...pinned, ...rest.slice(1)] : pinned;
+  return ordered.slice(0, 10);
 }
 
 // ── Reddit top posts (per-league + general /r/sports) ────────────
