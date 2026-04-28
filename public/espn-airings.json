@@ -1,8 +1,16 @@
 {
-  "generatedAt": "2026-04-28T00:16:57.149Z",
+  "generatedAt": "2026-04-28T02:59:55.982Z",
   "airings": {
+    "401815117": {
+      "uuid": "c1f66f4a-18eb-4ebe-acee-98dcda6cebab",
+      "network": "ESPN Unlimited"
+    },
+    "401869760": {
+      "uuid": "ca7616e3-2af9-41bf-8f93-9a1035ae1e75",
+      "network": "ESPN"
+    },
     "401869801": {
-      "uuid": "5a044900-3a66-42c9-bce5-363f4c22dfbc",
+      "uuid": "a238243e-5ca5-4f52-a843-371f4e50bfc8",
       "network": "ESPN"
     }
   },
