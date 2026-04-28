@@ -807,11 +807,51 @@ async function persistVideos(name, fresh, pinnedId) {
 }
 
 // ── Reddit top posts (per-league + general /r/sports) ────────────
-// Reddit requires a descriptive UA or returns 429. Public JSON is rate-limited
-// to ~60 req/min unauthenticated, which is plenty for a 30-min cron.
+// Reddit started 403'ing GitHub Actions datacenter IPs on the public
+// www.reddit.com JSON endpoints in late April 2026. OAuth (oauth.reddit.com)
+// is unaffected because the bearer token is the auth signal, not the IP. When
+// REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET are set we run app-only OAuth ("web
+// app" type with client_credentials grant); without them we fall back to the
+// public path so local runs keep working without any setup.
+const REDDIT_UA = "hidescore-prebake/1.0 (+https://hidescore.com)";
+let _redditTokenPromise = null;
+async function getRedditToken() {
+  const id = process.env.REDDIT_CLIENT_ID;
+  const secret = process.env.REDDIT_CLIENT_SECRET;
+  if (!id || !secret) return null;
+  if (_redditTokenPromise) return _redditTokenPromise;
+  _redditTokenPromise = (async () => {
+    const basic = Buffer.from(`${id}:${secret}`).toString("base64");
+    const res = await fetch("https://www.reddit.com/api/v1/access_token", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "User-Agent": REDDIT_UA,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials",
+    });
+    if (!res.ok) throw new Error(`Reddit token → ${res.status} ${await res.text().catch(() => "")}`);
+    const data = await res.json();
+    if (!data?.access_token) throw new Error(`Reddit token: missing access_token in response`);
+    return data.access_token;
+  })().catch((err) => {
+    // Reset so the next call retries; otherwise one bad token request poisons
+    // every subreddit fetch in this script run.
+    _redditTokenPromise = null;
+    throw err;
+  });
+  return _redditTokenPromise;
+}
+
 async function fetchReddit(subreddit, sectionLabel) {
-  const url = `https://www.reddit.com/r/${subreddit}/hot.json?limit=25`;
-  const res = await fetch(url, { headers: { "User-Agent": "hidescore-prebake/1.0 (https://hidescore.com)" } });
+  const token = await getRedditToken().catch(() => null);
+  const url = token
+    ? `https://oauth.reddit.com/r/${subreddit}/hot?limit=25&raw_json=1`
+    : `https://www.reddit.com/r/${subreddit}/hot.json?limit=25`;
+  const headers = { "User-Agent": REDDIT_UA };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(url, { headers });
   if (!res.ok) throw new Error(`${url} → ${res.status}`);
   const data = await res.json();
   const posts = (data?.data?.children || []).map((c) => c.data).filter(Boolean);
