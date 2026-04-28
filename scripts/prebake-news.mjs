@@ -497,7 +497,7 @@ async function fetchESPNICYMI() {
   if (!title) return null;
   return {
     id: vid,
-    headline: `icymi: ${title}`,
+    headline: `ICYMI: ${title}`,
     description: descM ? decodeEntities(descM[1].replace(/<[^>]+>/g, "")) : "",
     published: "",
     imageUrl: imgM ? imgM[1] : null,
@@ -743,8 +743,11 @@ async function fetchESPNTopVideos() {
     if (!title) continue;
     const descM = block.match(/<p[^>]*class="[^"]*contentItem__subhead[^"]*"[^>]*>([\s\S]{5,500}?)<\/p>/);
     const description = descM ? decodeEntities(descM[1].replace(/<[^>]+>/g, "")) : "";
-    const hrefM = block.match(/<a[^>]+href="(\/[^"]+\/(?:story|video\/clip)[^"]+)"/);
-    const articleUrl = hrefM ? `https://www.espn.com${hrefM[1]}` : `https://www.espn.com/video/clip?id=${vid}`;
+    // The first <a href> in a video block is often a sibling-story link (a
+    // "read more" bumper module with its own /story/_/id/<other-id>/...) and
+    // doesn't lead to the highlighted clip. Anchor on the canonical clip URL
+    // so the link always plays the actual video the headline describes.
+    const articleUrl = `https://www.espn.com/video/clip?id=${vid}`;
     const imgM = block.match(/data-default-src="(https?:\/\/[^"]+\.jpg)"/);
     const imageUrl = imgM ? imgM[1] : null;
     const haystack = `${title} ${description}`;
@@ -794,6 +797,17 @@ async function persistVideos(name, fresh, pinnedId) {
   for (const item of fresh) {
     const prior = byId.get(item.id);
     byId.set(item.id, { ...item, firstSeenAt: prior?.firstSeenAt || item.firstSeenAt || nowMs });
+  }
+  // Repair carry-forward items written before commit ce??? — earlier scrapes
+  // captured a sibling-story href as articleUrl on some videos (SGA, Rocky).
+  // The id is the canonical clip id, so rebuild articleUrl from it for the
+  // ESPN feed only (where ids are numeric clip ids).
+  if (name === "espn-videos") {
+    for (const [id, item] of byId) {
+      if (/^\d+$/.test(id)) {
+        item.articleUrl = `https://www.espn.com/video/clip?id=${id}`;
+      }
+    }
   }
   // Order: newest big-format video first, ICYMI second, then the rest by
   // firstSeenAt ascending so morning videos anchor the body of the list.
