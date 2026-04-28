@@ -813,7 +813,7 @@ async function persistVideos(name, fresh, pinnedId) {
 // REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET are set we run app-only OAuth ("web
 // app" type with client_credentials grant); without them we fall back to the
 // public path so local runs keep working without any setup.
-const REDDIT_UA = "hidescore-prebake/1.0 (+https://hidescore.com)";
+const REDDIT_UA = "web:com.hidescore.prebake:v1.0 (by /u/Reasonable_Stick_329)";
 let _redditTokenPromise = null;
 async function getRedditToken() {
   const id = process.env.REDDIT_CLIENT_ID;
