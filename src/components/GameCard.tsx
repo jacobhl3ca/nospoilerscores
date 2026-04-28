@@ -260,6 +260,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       role={cardClickable ? "link" : undefined}
       title={cardClickable ? "Watch live" : undefined}
     >
+      {/* Playoff series state — pre/live games only, today only, after the
+          noon-ET morning reset. Hidden on finished games so the post-game
+          series score doesn't reveal tonight's outcome. */}
+      {game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && (
+        <div
+          className="mb-1 text-[10px] sm:text-[11px] text-center italic"
+          style={{ color: "var(--text-muted)" }}
+        >
+          {formatSeriesStatus(game.seriesStatus)}
+        </div>
+      )}
+
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
         const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);
@@ -478,18 +490,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           </div>
         ))}
       </div>
-
-      {/* Playoff series state — pre/live games only, today only, after the
-          noon-ET morning reset. Hidden on finished games so the post-game
-          series score doesn't reveal tonight's outcome. */}
-      {game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && (
-        <div
-          className="mt-1 sm:mt-1.5 text-[10px] sm:text-[11px] text-center italic"
-          style={{ color: "var(--text-muted)" }}
-        >
-          {formatSeriesStatus(game.seriesStatus)}
-        </div>
-      )}
 
       {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}
       {isFinished && highlightUrl && (
