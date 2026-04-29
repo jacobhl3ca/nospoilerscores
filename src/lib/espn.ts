@@ -531,8 +531,10 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b === "fox" || b === "fs1" || b === "fs2" || b === "fox deportes") return "https://www.foxsports.com/live";
   // WBD → Max (incl. "HBO Max", "TNT", "TBS", "TruTV")
   if (b.includes("max") || b === "tnt" || b === "tbs" || b === "trutv") return "https://play.max.com/live";
-  // NBCU → Peacock (NBC, USA Network, Golf Channel, Telemundo Deportes — all stream here)
-  if (b.includes("nbc") || b.includes("usa") || b === "peacock" || b === "golf channel" || b.startsWith("tele")) return "https://www.peacocktv.com/";
+  // NBC / NBC Sports → NBCSports live page (NBC-branded, sports-focused)
+  if (b.includes("nbc")) return "https://www.nbcsports.com/live";
+  // Other NBCU streamers (USA Network, Peacock, Golf Channel, Telemundo Deportes) → Peacock
+  if (b.includes("usa") || b === "peacock" || b === "golf channel" || b.startsWith("tele")) return "https://www.peacocktv.com/";
   // CBS / Paramount+
   if (b === "cbs" || b === "cbssn" || b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
   // Amazon Prime Video — fall back to the Prime sports hub. Sport-specific
