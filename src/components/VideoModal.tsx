@@ -75,10 +75,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // instead of an empty modal (Firefox + Reddit external-preview is the
   // current offender).
   const [imgFailed, setImgFailed] = useState(false);
+  // Captions: default OFF, custom toggle button surfaces them prominently
+  // instead of leaving the user to dig through Safari's "more" overflow menu.
+  // hasCaptionTrack hides the button on streams with no CC track at all
+  // (e.g., v.redd.it MP4s).
+  const [showCC, setShowCC] = useState(false);
+  const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
   const hlsMode = !!playbackUrl;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !videoId;
   const textMode = !hlsMode && !imageMode && !videoId;
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
+
+  // Reset caption state any time the modal swaps to a different stream
+  useEffect(() => {
+    setShowCC(false);
+    setHasCaptionTrack(false);
+  }, [playbackUrl]);
 
   // Reset when the modal is opened with a different primary id
   useEffect(() => {
@@ -106,23 +118,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (!hlsMode) return;
     const video = videoRef.current;
     if (!video || !playbackUrl) return;
-    // MLB's HLS manifests mark their CC track DEFAULT=YES, so Safari and
-    // hls.js both auto-enable captions on attach. Flip every text track to
-    // "disabled" whenever one is added so playback starts clean — the native
-    // player's CC button still lets viewers turn them on.
-    const disableTextTracks = () => {
-      for (const t of Array.from(video.textTracks)) t.mode = "disabled";
+    // Flip detection — show the custom CC button only when the source
+    // actually carries a captions/subtitles track.
+    const refreshHasCaptionTrack = () => {
+      const has = Array.from(video.textTracks).some(
+        (t) => t.kind === "captions" || t.kind === "subtitles"
+      );
+      setHasCaptionTrack((prev) => (prev === has ? prev : has));
     };
-    video.textTracks.addEventListener("addtrack", disableTextTracks);
-    video.addEventListener("loadedmetadata", disableTextTracks);
+    video.textTracks.addEventListener("addtrack", refreshHasCaptionTrack);
+    video.addEventListener("loadedmetadata", refreshHasCaptionTrack);
     const isHls = /\.m3u8(\?|$)/i.test(playbackUrl);
     // Plain MP4 / Safari native HLS — set src and play.
     if (!isHls || video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playbackUrl;
       video.play().catch(() => {});
       return () => {
-        video.textTracks.removeEventListener("addtrack", disableTextTracks);
-        video.removeEventListener("loadedmetadata", disableTextTracks);
+        video.textTracks.removeEventListener("addtrack", refreshHasCaptionTrack);
+        video.removeEventListener("loadedmetadata", refreshHasCaptionTrack);
       };
     }
     // hls.js fallback for Chrome/Firefox/etc. on .m3u8 only.
@@ -131,9 +144,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
       if (!Hls.isSupported()) return;
-      // subtitleDisplay:false stops the SubtitleTrackController from auto-
-      // promoting a track to "showing" when the manifest tags one DEFAULT.
-      hls = new Hls({ subtitleDisplay: false });
+      hls = new Hls();
+      // Stop the SubtitleTrackController from auto-promoting a DEFAULT=YES
+      // track. Setter, not config — this version's HlsConfig doesn't expose
+      // subtitleDisplay. The enforce loop below is the real source of truth;
+      // this just keeps hls.js from fighting it during init.
+      try { hls.subtitleDisplay = false; } catch {}
       hls.loadSource(playbackUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -142,11 +158,48 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     });
     return () => {
       cancelled = true;
-      video.textTracks.removeEventListener("addtrack", disableTextTracks);
-      video.removeEventListener("loadedmetadata", disableTextTracks);
+      video.textTracks.removeEventListener("addtrack", refreshHasCaptionTrack);
+      video.removeEventListener("loadedmetadata", refreshHasCaptionTrack);
       if (hls) hls.destroy();
     };
   }, [hlsMode, playbackUrl]);
+
+  // Caption mode enforcer — keeps every captions/subtitles track in sync with
+  // showCC. Safari's native HLS path will auto-promote a DEFAULT=YES track to
+  // "showing" repeatedly during the load handshake (especially with the macOS
+  // system CC accessibility pref on), so a one-shot disable isn't enough; we
+  // re-assert across every load milestone AND poll for the first ~2s. After
+  // playback settles the polling stops so the custom toggle stays responsive.
+  useEffect(() => {
+    if (!hlsMode) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const target: TextTrackMode = showCC ? "showing" : "disabled";
+    const enforce = () => {
+      for (const t of Array.from(video.textTracks)) {
+        if (t.kind === "captions" || t.kind === "subtitles") {
+          if (t.mode !== target) t.mode = target;
+        }
+      }
+    };
+    enforce();
+    video.textTracks.addEventListener("addtrack", enforce);
+    video.addEventListener("loadedmetadata", enforce);
+    video.addEventListener("loadeddata", enforce);
+    video.addEventListener("canplay", enforce);
+    video.addEventListener("playing", enforce);
+    const pollId = window.setInterval(enforce, 100);
+    const stopPoll = window.setTimeout(() => window.clearInterval(pollId), 2000);
+    return () => {
+      video.textTracks.removeEventListener("addtrack", enforce);
+      video.removeEventListener("loadedmetadata", enforce);
+      video.removeEventListener("loadeddata", enforce);
+      video.removeEventListener("canplay", enforce);
+      video.removeEventListener("playing", enforce);
+      window.clearInterval(pollId);
+      window.clearTimeout(stopPoll);
+    };
+  }, [hlsMode, playbackUrl, showCC]);
 
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
@@ -271,6 +324,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
+
+        {/* Captions toggle — only when the source carries a CC track. Sits
+            beside the close button so it's always reachable instead of buried
+            in Safari's overflow menu. */}
+        {hlsMode && hasCaptionTrack && (
+          <button
+            onClick={() => setShowCC((v) => !v)}
+            aria-pressed={showCC}
+            className="absolute -top-10 right-10 h-8 px-2 flex items-center justify-center rounded-md text-xs font-bold transition-colors cursor-pointer"
+            style={{
+              color: showCC ? "white" : "rgba(255,255,255,0.6)",
+              background: showCC ? "var(--accent)" : "transparent",
+              border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.3)",
+            }}
+            title={showCC ? "Hide captions" : "Show captions"}
+          >
+            CC
+          </button>
+        )}
 
         {/* Player area — image lightbox (no aspect lock), 16:9 video, or YouTube iframe */}
         {imageMode ? (
