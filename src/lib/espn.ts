@@ -182,6 +182,9 @@ function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
 const DISPLAY_SHORT_NAME_OVERRIDES: Record<string, string> = {
   Diamondbacks: "D-backs",
   Timberwolves: "T-Wolves",
+  "Golden Knights": "Knights",
+  "Maple Leafs": "Leafs",
+  "Blue Jackets": "Jackets",
 };
 export function displayShortName(team: Team): string {
   return DISPLAY_SHORT_NAME_OVERRIDES[team.shortDisplayName] ?? team.shortDisplayName;
