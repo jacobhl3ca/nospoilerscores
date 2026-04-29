@@ -172,6 +172,21 @@ function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
   return selected.sort((a, b) => daysSinceSeasonStart(b, d) - daysSinceSeasonStart(a, d));
 }
 
+// ESPN's `shortDisplayName` is usually compact ("Yankees", "Celtics"), but a
+// few outliers ("Diamondbacks" at 12 chars, "Timberwolves" at 12) blow out the
+// 3-column layout and force the whole league column to fall back to 3-letter
+// abbreviations even though every other team would have fit. Override those
+// specific names with the broadcast-standard compact form so column-fit
+// measurement only sees reasonable widths. Untouched team data still uses
+// `shortDisplayName` for YouTube searches and Prime ASIN lookups.
+const DISPLAY_SHORT_NAME_OVERRIDES: Record<string, string> = {
+  Diamondbacks: "D-backs",
+  Timberwolves: "T-Wolves",
+};
+export function displayShortName(team: Team): string {
+  return DISPLAY_SHORT_NAME_OVERRIDES[team.shortDisplayName] ?? team.shortDisplayName;
+}
+
 function parseTeam(competitor: any, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
   let record = competitor.records?.[0]?.summary ?? "";

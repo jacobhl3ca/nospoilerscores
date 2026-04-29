@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, LeagueData, Sport, Team } from "@/lib/types";
+import { displayShortName } from "@/lib/espn";
 import { getGolfSubtitle } from "@/lib/golf";
 import GameCard from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
@@ -270,8 +271,8 @@ export default function LeagueColumn({
 
       // Get the longest team name from the rendered games
       const allNames = league.games.flatMap(g => [
-        g.awayTeam.shortDisplayName,
-        g.homeTeam.shortDisplayName,
+        displayShortName(g.awayTeam),
+        displayShortName(g.homeTeam),
       ]);
       if (!allNames.length) return;
 

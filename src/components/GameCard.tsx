@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
-import { networkStreamUrl, sportStreamFallback, espnGameUrl } from "@/lib/espn";
+import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
 import { getETHour } from "@/components/DateNav";
@@ -479,7 +479,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 const nameNode = useAbbreviations ? (
                   <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }} title={team.displayName}>{team.abbreviation}</span>
                 ) : (
-                  <span className="text-sm whitespace-nowrap leading-none team-name" style={{ color: "var(--text)" }} title={team.displayName}>{team.shortDisplayName}</span>
+                  <span className="text-sm whitespace-nowrap leading-none team-name" style={{ color: "var(--text)" }} title={team.displayName}>{displayShortName(team)}</span>
                 );
                 if (isTBD || !onSelectTeam || !team.id) return nameNode;
                 return (
