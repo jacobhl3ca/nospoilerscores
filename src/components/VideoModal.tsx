@@ -106,12 +106,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (!hlsMode) return;
     const video = videoRef.current;
     if (!video || !playbackUrl) return;
+    // MLB's HLS manifests mark their CC track DEFAULT=YES, so Safari and
+    // hls.js both auto-enable captions on attach. Flip every text track to
+    // "disabled" whenever one is added so playback starts clean — the native
+    // player's CC button still lets viewers turn them on.
+    const disableTextTracks = () => {
+      for (const t of Array.from(video.textTracks)) t.mode = "disabled";
+    };
+    video.textTracks.addEventListener("addtrack", disableTextTracks);
+    video.addEventListener("loadedmetadata", disableTextTracks);
     const isHls = /\.m3u8(\?|$)/i.test(playbackUrl);
     // Plain MP4 / Safari native HLS — set src and play.
     if (!isHls || video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playbackUrl;
       video.play().catch(() => {});
-      return;
+      return () => {
+        video.textTracks.removeEventListener("addtrack", disableTextTracks);
+        video.removeEventListener("loadedmetadata", disableTextTracks);
+      };
     }
     // hls.js fallback for Chrome/Firefox/etc. on .m3u8 only.
     let hls: any = null;
@@ -119,7 +131,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
       if (!Hls.isSupported()) return;
-      hls = new Hls();
+      // subtitleDisplay:false stops the SubtitleTrackController from auto-
+      // promoting a track to "showing" when the manifest tags one DEFAULT.
+      hls = new Hls({ subtitleDisplay: false });
       hls.loadSource(playbackUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -128,6 +142,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     });
     return () => {
       cancelled = true;
+      video.textTracks.removeEventListener("addtrack", disableTextTracks);
+      video.removeEventListener("loadedmetadata", disableTextTracks);
       if (hls) hls.destroy();
     };
   }, [hlsMode, playbackUrl]);
