@@ -401,6 +401,12 @@ async function fetchNBAVideos() {
     // breaking word-boundary matching.
     if (/(?:spanish|portuguese|french|japanese|italian|deutsch|german|prime video|ai-generated)/i.test(haystack)) continue;
     if (/\b(?:post[-\s]?game|all possessions|best plays|nightly recap|mobile view)\b/i.test(haystack)) continue;
+    // NBA's in-house talk show "The Association" / "Post Up" — analysts talking,
+    // not play highlights. Jacob explicitly rejected.
+    if (/\bthe association\b/i.test(haystack)) continue;
+    if (/\bpost up\b/i.test(haystack)) continue;
+    // BAL = Basketball Africa League — not NBA; the API mixes it in.
+    if (/^BAL\b/.test(title)) continue;
     if (/^vod_|^VOD_/.test(title)) continue;
     // Broadcast stream listings — match BOTH ISO ("HOU @ LAL on 2026-04-21-NBC-")
     // and American slash ("BOS @ PHI on 04/26/2026-NBC-national") date formats.
