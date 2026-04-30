@@ -60,7 +60,24 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   }, [tailFetch ? "set" : "unset"]);
 
   const allLoaded = colItems.every(Boolean);
-  const maxItems = allLoaded ? Math.max(...colItems.map((c) => c?.length || 0)) : 5;
+  const tailHasItems = tailColIdx !== undefined && !!tailItems && tailItems.length > 0;
+  // Reserve 2 pad rows in the tail column so the ESPN-top tail always has
+  // somewhere to span — otherwise when the tail col's video count ties the
+  // others (e.g. ESPN videos = MLB videos = 10) padCount drops to 0 and the
+  // tail silently disappears. 2 video-row heights fit ~9 compact text rows.
+  const TAIL_RESERVE_ROWS = 2;
+  // maxItems uses the non-tail cols only when a tail is set, so the tail col's
+  // own count can't push the grid taller than necessary. We then cap the tail
+  // col below so it leaves room for the tail.
+  const maxItems = allLoaded
+    ? Math.max(
+        ...colItems.map((c, idx) => {
+          if (tailHasItems && idx === tailColIdx) return 0;
+          return c?.length || 0;
+        }),
+        tailHasItems ? TAIL_RESERVE_ROWS + 1 : 1,
+      )
+    : 5;
   // gridRow span = header(1) + every item row. Subgrid inherits these tracks.
   const totalRows = maxItems + 1;
 
@@ -75,9 +92,15 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
     >
       {sources.map((source, colIdx) => {
         const items = colItems[colIdx];
-        const itemCount = items?.length || 0;
+        const isTailCol = tailHasItems && colIdx === tailColIdx;
+        // Cap the tail col's video count so the tail always has TAIL_RESERVE_ROWS
+        // pad rows. Loses up to 2 ESPN videos but keeps the news headlines visible.
+        const capped = isTailCol
+          ? Math.min(items?.length || 0, Math.max(0, maxItems - TAIL_RESERVE_ROWS))
+          : Math.min(items?.length || 0, maxItems);
+        const itemCount = items === null ? 0 : capped;
         const padCount = Math.max(0, maxItems - itemCount);
-        const tail = colIdx === tailColIdx && tailItems ? tailItems : [];
+        const tail = isTailCol && tailItems ? tailItems : [];
         const hasTail = tail.length > 0 && padCount > 0;
         return (
           <div
@@ -93,7 +116,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
             <SourceHeader label={source.label} logoUrl={source.logoUrl} />
             {items === null
               ? Array.from({ length: maxItems }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)
-              : items.slice(0, maxItems).map((item, rowIdx) => (
+              : items.slice(0, itemCount).map((item, rowIdx) => (
                   <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} />
                 ))}
             {hasTail ? (
@@ -173,10 +196,12 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
           </div>
         </div>
       )}
-      {/* Headline grows to fit content; subgrid sizes the row to the tallest
-          cell across cols, so row N stays aligned across cols even when one
-          headline wraps to 3 lines and another fits on 1. */}
-      <div className="px-3 py-2 text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
+      {/* Headline clamped at 3 lines so a runaway 4+ line wrap (e.g. "Alexandre
+          Texier scores winning goal as Canadiens takes series lead over Lightning")
+          doesn't push the whole subgrid row tall and leave huge blank space below
+          the captions in the other 2 cols. Subgrid still sizes each row to the
+          tallest cell across cols — usually 3 lines, sometimes 2. */}
+      <div className="px-3 py-2 text-xs sm:text-sm leading-snug line-clamp-3" style={{ color: "var(--text)" }}>
         {item.headline}
       </div>
     </>
