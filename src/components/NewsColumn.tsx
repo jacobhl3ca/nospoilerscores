@@ -271,7 +271,7 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
         style={rowStyle}
       >
         {thumb}
-        <span className="min-w-0">{item.headline}</span>
+        <span className="min-w-0 line-clamp-2">{item.headline}</span>
       </button>
     );
   }

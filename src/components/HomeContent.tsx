@@ -6,13 +6,12 @@ import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
-import { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
+import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
-import AlignedSubredditStrip from "@/components/AlignedSubredditStrip";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -504,102 +503,99 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
         {showNews ? (() => {
-          const col1Sport = sortedLeagues[0]?.sport;
-          const col2Sport = sortedLeagues[1]?.sport;
-          const col3Sport = prefs.newsThirdLeague;
-          const col1Label = sortedLeagues[0]?.label ?? "News";
-          const col2Label = sortedLeagues[1]?.label ?? "News";
-          const col3Label = col3Sport
-            ? (thirdLeagueOptions.find((o) => o.sport === col3Sport)?.label ?? "News")
-            : "News";
-
-          const cascadeFor = (sport: Sport | undefined): ColumnSource[] =>
-            sport ? leagueSourceCascade(sport) : GENERIC_CASCADE;
-          const c1 = cascadeFor(col1Sport);
-          const c2 = cascadeFor(col2Sport);
-          const c3 = cascadeFor(col3Sport);
-
-          const pickVideo = (cascade: ColumnSource[]) =>
-            cascade.find((c) => c.variant === "video") ?? null;
-          const pickReddit = (cascade: ColumnSource[]) =>
-            cascade.find((c) => c.label.startsWith("r/")) ?? null;
-
-          const toSource = (c: ColumnSource | null): NewsSource | null => {
-            if (!c) return null;
-            return {
+          const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
+            cascade.map((c) => ({
               label: c.label,
               logoUrl: c.logoUrl,
               variant: c.variant,
               fetch: c.kind === "espn-league" && c.sport
                 ? () => fetchLeagueNews(c.sport!, 10)
                 : () => fetchPrebaked(c.key),
-            };
-          };
-
-          const col1Video = toSource(pickVideo(c1));
-          const col2Video = toSource(pickVideo(c2));
-          const col3Video = toSource(pickVideo(c3));
-          const videoStripSources: NewsSource[] = [col1Video, col2Video, col3Video].filter((s): s is NewsSource => !!s);
-          const allThreeHaveVideo = videoStripSources.length === 3;
-
-          // ESPN top fills col 3's empty pad cells beneath the videos (col 3
-          // has 8 espn-videos vs col 1/2's 10 mlb-/nba-videos today, so 2
-          // pad slots get text rows). Only kicks in when col 3 is the generic
-          // cascade — pinning a 3rd league swaps col 3's video to that
-          // league's videos, and ESPN top would feel out of place.
-          const tailFetch = !col3Sport ? () => fetchPrebaked("espn-top") : undefined;
-          const tailColIdx = !col3Sport ? 2 : undefined;
-
-          const col1Reddit = toSource(pickReddit(c1));
-          const col2Reddit = toSource(pickReddit(c2));
-          const col3Reddit = toSource(pickReddit(c3));
-          const subredditSources: NewsSource[] = [col1Reddit, col2Reddit, col3Reddit].filter((s): s is NewsSource => !!s);
-          const allThreeHaveReddit = subredditSources.length === 3;
-
-          const cellCls = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
-          const rowCls = "flex flex-row justify-center gap-2 sm:gap-4 mx-auto w-full max-w-[691px] xl:max-w-[872px]";
-
+            }));
+          const buildSources = (sport?: Sport): NewsSource[] =>
+            sport ? cascadeToSources(leagueSourceCascade(sport)) : [];
+          const col1All = buildSources(sortedLeagues[0]?.sport);
+          const col2All = buildSources(sortedLeagues[1]?.sport);
+          const col3All: NewsSource[] = prefs.newsThirdLeague
+            ? buildSources(prefs.newsThirdLeague)
+            : cascadeToSources(GENERIC_CASCADE);
+          // When all 3 columns lead with a video source, lift those into the
+          // aligned strip so video N in every column is the same vertical
+          // size. Otherwise let each column render its own first card.
+          const allFirstAreVideo =
+            col1All[0]?.variant === "video" &&
+            col2All[0]?.variant === "video" &&
+            col3All[0]?.variant === "video";
+          const col1Rest = allFirstAreVideo ? col1All.slice(1) : col1All;
+          const col2Rest = allFirstAreVideo ? col2All.slice(1) : col2All;
+          // ESPN top headlines slot into col 3's empty pad cells inside the
+          // video strip (via `tailFetch`) when col 3 is generic — fills the
+          // open space below espn-videos without changing the videos' heights.
+          // Pull it out of col3Rest so we don't render the same card twice.
+          const useEspnTopTail = allFirstAreVideo && !prefs.newsThirdLeague;
+          const col3Rest = allFirstAreVideo
+            ? (useEspnTopTail
+                ? col3All.slice(1).filter((s) => s.label !== "ESPN")
+                : col3All.slice(1))
+            : col3All;
+          const col3Title = prefs.newsThirdLeague
+            ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
+            : "News";
           return (
-            <div className="flex flex-col gap-2 sm:gap-3">
-              {/* Title row — sticky league names (col 3 has the swap dropdown). */}
-              <div className={`${rowCls} items-stretch`}>
-                <div className={cellCls}>
-                  <NewsColumnTitle title={col1Label} />
-                </div>
-                <div className={cellCls}>
-                  <NewsColumnTitle title={col2Label} />
-                </div>
-                <div className={cellCls}>
-                  <NewsColumnTitle
-                    title={col3Label}
-                    swappableOptions={thirdLeagueOptions}
-                    selectedThirdLeague={col3Sport}
-                    onSwapLeague={setNewsThirdLeague}
+            <>
+              {allFirstAreVideo && (
+                <>
+                  {/* League titles render above AlignedVideoStrip so MLB / NBA /
+                      News sit at the top — otherwise the video strip pushes the
+                      titles below it. */}
+                  <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                      <NewsColumnTitle title={sortedLeagues[0]?.label ?? "News"} />
+                    </div>
+                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                      <NewsColumnTitle title={sortedLeagues[1]?.label ?? "News"} />
+                    </div>
+                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                      <NewsColumnTitle
+                        title={col3Title}
+                        swappableOptions={thirdLeagueOptions}
+                        selectedThirdLeague={prefs.newsThirdLeague}
+                        onSwapLeague={setNewsThirdLeague}
+                      />
+                    </div>
+                  </div>
+                  <AlignedVideoStrip
+                    sources={[col1All[0], col2All[0], col3All[0]]}
+                    onPlay={playNewsVideo}
+                    tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
+                    tailColIdx={useEspnTopTail ? 2 : undefined}
                   />
-                </div>
+                </>
+              )}
+              <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                <NewsColumn
+                  title={sortedLeagues[0]?.label ?? "News"}
+                  sources={col1Rest}
+                  hideTitle={allFirstAreVideo}
+                  onPlayVideo={playNewsVideo}
+                />
+                <NewsColumn
+                  title={sortedLeagues[1]?.label ?? "News"}
+                  sources={col2Rest}
+                  hideTitle={allFirstAreVideo}
+                  onPlayVideo={playNewsVideo}
+                />
+                <NewsColumn
+                  title={col3Title}
+                  sources={col3Rest}
+                  swappableOptions={thirdLeagueOptions}
+                  selectedThirdLeague={prefs.newsThirdLeague}
+                  onSwapLeague={setNewsThirdLeague}
+                  hideTitle={allFirstAreVideo}
+                  onPlayVideo={playNewsVideo}
+                />
               </div>
-
-              {/* Video strip — subgrid alignment so video N has the same row
-                  height across cols. ESPN top text rows ride the col 3 tail,
-                  filling the empty pad cells inline (no separate ESPN card). */}
-              {allThreeHaveVideo && (
-                <AlignedVideoStrip
-                  sources={videoStripSources}
-                  onPlay={playNewsVideo}
-                  tailFetch={tailFetch}
-                  tailColIdx={tailColIdx}
-                />
-              )}
-
-              {/* Subreddit strip — same subgrid pattern, line-clamp-2 ellipsis
-                  on long titles so post N stays a fixed row height across cols. */}
-              {allThreeHaveReddit && (
-                <AlignedSubredditStrip
-                  sources={subredditSources}
-                  onPlay={playNewsVideo}
-                />
-              )}
-            </div>
+            </>
           );
         })() : loading ? (
           <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
