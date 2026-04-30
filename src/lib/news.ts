@@ -208,10 +208,14 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const out: ColumnSource[] = [];
   const officialVideos = PREBAKED_VIDEOS[sport];
   if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
-  const official = PREBAKED_FEEDS[sport];
-  if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
+  // Reddit before official-site feed for cols 1/2 — Jacob's preferred order
+  // post-2026-04-30. r/baseball / r/nba / etc. surface story-of-the-hour
+  // discussion that the official feeds (MLB.com Most Popular / NBA.com) are
+  // slower to pick up.
   const reddit = REDDIT_SUB[sport];
   if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
+  const official = PREBAKED_FEEDS[sport];
+  if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
   out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
   return out;
 }
