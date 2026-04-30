@@ -6,11 +6,13 @@ import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
-import { NewsColumnTitle, NewsSource, PlayHandler, SourceSection } from "@/components/NewsColumn";
+import { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
+import AlignedVideoStrip from "@/components/AlignedVideoStrip";
+import AlignedSubredditStrip from "@/components/AlignedSubredditStrip";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -521,8 +523,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             cascade.find((c) => c.variant === "video") ?? null;
           const pickReddit = (cascade: ColumnSource[]) =>
             cascade.find((c) => c.label.startsWith("r/")) ?? null;
-          const pickOfficial = (cascade: ColumnSource[]) =>
-            cascade.find((c) => c.kind === "prebaked" && c.variant !== "video" && !c.label.startsWith("r/")) ?? null;
 
           const toSource = (c: ColumnSource | null): NewsSource | null => {
             if (!c) return null;
@@ -539,22 +539,22 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           const col1Video = toSource(pickVideo(c1));
           const col2Video = toSource(pickVideo(c2));
           const col3Video = toSource(pickVideo(c3));
-          // ESPN top text card sits under the ESPN-videos card in col 3 only
-          // when col 3 is the generic (non-league-pinned) cascade, since that's
-          // when it shows ESPN videos at the top. When the user pins a league
-          // to col 3, the column follows that league's cascade and ESPN top is
-          // suppressed (otherwise it'd clutter NHL/NFL/etc. selections).
-          const espnTopSource = !col3Sport
-            ? toSource(GENERIC_CASCADE.find((c) => c.key === "espn-top") ?? null)
-            : null;
+          const videoStripSources: NewsSource[] = [col1Video, col2Video, col3Video].filter((s): s is NewsSource => !!s);
+          const allThreeHaveVideo = videoStripSources.length === 3;
+
+          // ESPN top fills col 3's empty pad cells beneath the videos (col 3
+          // has 8 espn-videos vs col 1/2's 10 mlb-/nba-videos today, so 2
+          // pad slots get text rows). Only kicks in when col 3 is the generic
+          // cascade — pinning a 3rd league swaps col 3's video to that
+          // league's videos, and ESPN top would feel out of place.
+          const tailFetch = !col3Sport ? () => fetchPrebaked("espn-top") : undefined;
+          const tailColIdx = !col3Sport ? 2 : undefined;
 
           const col1Reddit = toSource(pickReddit(c1));
           const col2Reddit = toSource(pickReddit(c2));
           const col3Reddit = toSource(pickReddit(c3));
-
-          const col1Official = toSource(pickOfficial(c1));
-          const col2Official = toSource(pickOfficial(c2));
-          const col3Official = toSource(pickOfficial(c3));
+          const subredditSources: NewsSource[] = [col1Reddit, col2Reddit, col3Reddit].filter((s): s is NewsSource => !!s);
+          const allThreeHaveReddit = subredditSources.length === 3;
 
           const cellCls = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
           const rowCls = "flex flex-row justify-center gap-2 sm:gap-4 mx-auto w-full max-w-[691px] xl:max-w-[872px]";
@@ -579,50 +579,26 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 </div>
               </div>
 
-              {/* Section 1: video strip + (col 3 only) ESPN top text. Cells use
-                  items-start so cols 1+2 stop at their video card while col 3
-                  extends downward with ESPN top headlines — fills the blank
-                  space the previous subgrid layout left underneath col 3. */}
-              <div className={`${rowCls} items-start`}>
-                <div className={`${cellCls} flex flex-col gap-1.5 sm:gap-2`}>
-                  {col1Video && <SourceSection source={col1Video} onPlayVideo={playNewsVideo} />}
-                </div>
-                <div className={`${cellCls} flex flex-col gap-1.5 sm:gap-2`}>
-                  {col2Video && <SourceSection source={col2Video} onPlayVideo={playNewsVideo} />}
-                </div>
-                <div className={`${cellCls} flex flex-col gap-1.5 sm:gap-2`}>
-                  {col3Video && <SourceSection source={col3Video} onPlayVideo={playNewsVideo} />}
-                  {espnTopSource && <SourceSection source={espnTopSource} onPlayVideo={playNewsVideo} />}
-                </div>
-              </div>
+              {/* Video strip — subgrid alignment so video N has the same row
+                  height across cols. ESPN top text rows ride the col 3 tail,
+                  filling the empty pad cells inline (no separate ESPN card). */}
+              {allThreeHaveVideo && (
+                <AlignedVideoStrip
+                  sources={videoStripSources}
+                  onPlay={playNewsVideo}
+                  tailFetch={tailFetch}
+                  tailColIdx={tailColIdx}
+                />
+              )}
 
-              {/* Section 2: subreddit row — items-stretch so all 3 cards take
-                  the same vertical space across cols. */}
-              <div className={`${rowCls} items-stretch`}>
-                <div className={cellCls}>
-                  {col1Reddit && <SourceSection source={col1Reddit} onPlayVideo={playNewsVideo} />}
-                </div>
-                <div className={cellCls}>
-                  {col2Reddit && <SourceSection source={col2Reddit} onPlayVideo={playNewsVideo} />}
-                </div>
-                <div className={cellCls}>
-                  {col3Reddit && <SourceSection source={col3Reddit} onPlayVideo={playNewsVideo} />}
-                </div>
-              </div>
-
-              {/* Section 3: official news row — MLB.com / NBA.com / (3rd-league
-                  feed if user pinned one with PREBAKED_FEEDS, else blank cell). */}
-              <div className={`${rowCls} items-stretch`}>
-                <div className={cellCls}>
-                  {col1Official && <SourceSection source={col1Official} onPlayVideo={playNewsVideo} />}
-                </div>
-                <div className={cellCls}>
-                  {col2Official && <SourceSection source={col2Official} onPlayVideo={playNewsVideo} />}
-                </div>
-                <div className={cellCls}>
-                  {col3Official && <SourceSection source={col3Official} onPlayVideo={playNewsVideo} />}
-                </div>
-              </div>
+              {/* Subreddit strip — same subgrid pattern, line-clamp-2 ellipsis
+                  on long titles so post N stays a fixed row height across cols. */}
+              {allThreeHaveReddit && (
+                <AlignedSubredditStrip
+                  sources={subredditSources}
+                  onPlay={playNewsVideo}
+                />
+              )}
             </div>
           );
         })() : loading ? (

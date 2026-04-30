@@ -7,6 +7,15 @@ import { NewsSource, PlayHandler } from "./NewsColumn";
 interface Props {
   sources: NewsSource[];
   onPlay?: PlayHandler;
+  // Optional text-row tail for one column (col index in `sources`). When the
+  // strip's row count exceeds the column's video count, the empty subgrid
+  // cells beneath the videos are filled with text rows from `tailFetch()`,
+  // sharing the same bordered card. ESPN top headlines slot into col 3 this
+  // way — fills "the open space at the bottom" without breaking the video
+  // alignment above. Tail items are silently capped to the available slot
+  // count, so col heights stay tied to the tallest video column.
+  tailFetch?: () => Promise<NewsItem[]>;
+  tailColIdx?: number;
 }
 
 // Aligned 3-column video strip — each row across columns is sized to the
@@ -15,8 +24,9 @@ interface Props {
 // Implemented with CSS subgrid: outer grid declares row tracks, each column
 // inherits them via subgrid so direct children (header + items) participate
 // in the parent rows.
-export default function AlignedVideoStrip({ sources, onPlay }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
+  const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +52,19 @@ export default function AlignedVideoStrip({ sources, onPlay }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sources.map((s) => s.label).join(",")]);
 
+  useEffect(() => {
+    if (!tailFetch) {
+      setTailItems(null);
+      return;
+    }
+    let cancelled = false;
+    tailFetch().then((items) => {
+      if (!cancelled) setTailItems(items);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tailFetch ? "set" : "unset"]);
+
   const allLoaded = colItems.every(Boolean);
   const maxItems = allLoaded ? Math.max(...colItems.map((c) => c?.length || 0)) : 5;
   // gridRow span = header(1) + every item row. Subgrid inherits these tracks.
@@ -59,31 +82,44 @@ export default function AlignedVideoStrip({ sources, onPlay }: Props) {
         gridTemplateRows: `repeat(${totalRows}, auto)`,
       }}
     >
-      {sources.map((source, colIdx) => (
-        <div
-          key={source.label}
-          className="rounded-lg overflow-hidden grid"
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            gridRow: `1 / span ${totalRows}`,
-            gridTemplateRows: "subgrid",
-          }}
-        >
-          <SourceHeader label={source.label} logoUrl={source.logoUrl} />
-          {colItems[colIdx] === null
-            ? Array.from({ length: maxItems }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)
-            : (colItems[colIdx] || []).slice(0, maxItems).map((item, rowIdx) => (
-                <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} />
-              ))}
-          {/* Pad short columns with empty cells so subgrid rows align. */}
-          {colItems[colIdx] !== null &&
-            (colItems[colIdx]?.length || 0) < maxItems &&
-            Array.from({ length: maxItems - (colItems[colIdx]?.length || 0) }).map((_, i) => (
-              <div key={`pad-${i}`} style={{ borderTop: "1px solid var(--border)" }} />
+      {sources.map((source, colIdx) => {
+        const items = colItems[colIdx];
+        const itemCount = items?.length || 0;
+        const padCount = Math.max(0, maxItems - itemCount);
+        // Tail text rows fill col3's pad cells (when configured). Cap at the
+        // pad-slot count so tail never extends the column past the tallest
+        // video col — keeps "video sections" identical heights as before.
+        const tail = colIdx === tailColIdx && tailItems ? tailItems.slice(0, padCount) : [];
+        const remainingPad = padCount - tail.length;
+        return (
+          <div
+            key={source.label}
+            className="rounded-lg overflow-hidden grid"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              gridRow: `1 / span ${totalRows}`,
+              gridTemplateRows: "subgrid",
+            }}
+          >
+            <SourceHeader label={source.label} logoUrl={source.logoUrl} />
+            {items === null
+              ? Array.from({ length: maxItems }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)
+              : items.slice(0, maxItems).map((item, rowIdx) => (
+                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} />
+                ))}
+            {tail.map((item, i) => (
+              <TextTailRow key={`tail-${item.id}`} item={item} isFirst={itemCount === 0 && i === 0} onPlay={onPlay} />
             ))}
-        </div>
-      ))}
+            {/* Pad short columns with empty cells so subgrid rows align. */}
+            {items !== null &&
+              remainingPad > 0 &&
+              Array.from({ length: remainingPad }).map((_, i) => (
+                <div key={`pad-${i}`} style={{ borderTop: "1px solid var(--border)" }} />
+              ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -175,6 +211,67 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
   return (
     <a key={item.id} href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" className={commonCls} style={commonStyle}>
       {body}
+    </a>
+  );
+}
+
+// Text-row variant for the col3 tail (ESPN top headlines filling the empty
+// space below the videos). Visually consistent with TextRow in NewsColumn —
+// optional thumbnail/league-logo on the left, line-clamp-2 headline — but
+// shares the strip's bordered card so it reads as part of col3 instead of a
+// separate card.
+function TextTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
+  const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
+  const shouldPopModal = !!onPlay && hasMedia;
+  const showThumb = !!item.imageUrl;
+  const thumb = showThumb ? (
+    <div
+      className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden"
+      style={{ background: "var(--bg-card-hover)" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={proxyImage(item.imageUrl!)} alt="" loading="lazy" className="w-full h-full object-cover" draggable={false} />
+    </div>
+  ) : item.leagueLogo ? (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={item.leagueLogo}
+      alt=""
+      loading="lazy"
+      width={18}
+      height={18}
+      className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
+      draggable={false}
+    />
+  ) : null;
+  const rowCls = "flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] w-full text-left";
+  const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)", alignSelf: "start" as const };
+  const headlineCls = "min-w-0 line-clamp-2";
+  if (shouldPopModal) {
+    return (
+      <button
+        onClick={() => onPlay!({
+          playbackUrl: item.videoUrl || null,
+          imageUrl: item.imageFullUrl || null,
+          fallbackUrl: item.articleUrl,
+          poster: item.imageUrl || null,
+          sourceLabel: item.section || null,
+          headline: item.headline,
+          byline: item.byline || null,
+          published: item.published || null,
+        })}
+        className={`${rowCls} cursor-pointer`}
+        style={rowStyle}
+      >
+        {thumb}
+        <span className={headlineCls}>{item.headline}</span>
+      </button>
+    );
+  }
+  return (
+    <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" className={rowCls} style={rowStyle}>
+      {thumb}
+      <span className={headlineCls}>{item.headline}</span>
     </a>
   );
 }
