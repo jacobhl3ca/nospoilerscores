@@ -7,23 +7,21 @@ import { NewsSource, PlayHandler } from "./NewsColumn";
 interface Props {
   sources: NewsSource[];
   onPlay?: PlayHandler;
-  // Optional text-row tail for one column (col index in `sources`). When the
-  // strip's row count exceeds the column's video count, the empty subgrid
-  // cells beneath the videos are filled with text rows from `tailFetch()`,
-  // sharing the same bordered card. ESPN top headlines slot into col 3 this
-  // way — fills "the open space at the bottom" without breaking the video
-  // alignment above. Tail items are silently capped to the available slot
-  // count, so col heights stay tied to the tallest video column.
+  // Optional text-row tail for one column. ESPN top headlines live here when
+  // col 3 is the generic cascade — fills the empty space beneath col 3's
+  // shorter video count without a separate ESPN card. All tail items render
+  // (no cap); compact text rows let 9-10 headlines fit in the area beneath
+  // col 3's videos. Cols without a tail just stop at their last video.
   tailFetch?: () => Promise<NewsItem[]>;
   tailColIdx?: number;
 }
 
-// Aligned 3-column video strip — each row across columns is sized to the
-// tallest cell in that row so video N in every column is the same vertical
-// size, even when one headline wraps to 3 lines and another fits on 1.
-// Implemented with CSS subgrid: outer grid declares row tracks, each column
-// inherits them via subgrid so direct children (header + items) participate
-// in the parent rows.
+// 3-column video strip — independent flex columns instead of CSS subgrid so
+// col 3 can extend below its videos with ESPN top text rows without forcing
+// cols 1+2 to grow with empty pad cells. Per-row alignment across cols comes
+// from each VideoRow having a fixed-shape body (aspect-video image + 2-line
+// clamped headline at minHeight 2.5rem), which produces identical per-row
+// heights when the columns are equal width.
 export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
@@ -34,9 +32,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
       source.fetch().then((items) => {
         if (cancelled) return;
         // Defensive: drop items without a thumbnail so every cell in the strip
-        // has consistent image+title content. Without this, a cell with just a
-        // title (when one feed returns a no-thumb item) gets stretched to the
-        // tallest sibling row's height, leaving big visual blank space.
+        // has consistent image+title content.
         const filtered = items.filter((i) => !!i.imageUrl);
         setColItems((prev) => {
           const next = [...prev];
@@ -48,7 +44,6 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
     return () => {
       cancelled = true;
     };
-    // Re-fetch only when the source identity changes (label is stable).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sources.map((s) => s.label).join(",")]);
 
@@ -65,58 +60,40 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tailFetch ? "set" : "unset"]);
 
-  const allLoaded = colItems.every(Boolean);
-  const maxItems = allLoaded ? Math.max(...colItems.map((c) => c?.length || 0)) : 5;
-  // gridRow span = header(1) + every item row. Subgrid inherits these tracks.
-  const totalRows = maxItems + 1;
-
   return (
-    // Width capped to match NewsColumn's max-w-[225px] xl:max-w-[280px] below
-    // — without this the strip blows out to full container width while the
-    // rest of the news view stays narrow, producing the size mismatch Jacob
-    // flagged. 691px = 3×225 + 2×8 (gap-2). 872px xl: = 3×280 + 2×16 (gap-4).
-    <div
-      className="grid gap-2 sm:gap-4 mb-1.5 sm:mb-2 mx-auto w-full max-w-[691px] xl:max-w-[872px]"
-      style={{
-        gridTemplateColumns: `repeat(${sources.length}, minmax(0, 1fr))`,
-        gridTemplateRows: `repeat(${totalRows}, auto)`,
-      }}
-    >
+    // Width capped to match NewsColumn's max-w-[225px] xl:max-w-[280px] below.
+    // 691px = 3×225 + 2×8 (gap-2). 872px xl: = 3×280 + 2×16 (gap-4).
+    // items-start so cols 1+2 stop at their last video instead of stretching
+    // to col 3's height when col 3 carries an ESPN-top tail.
+    <div className="flex flex-row gap-2 sm:gap-4 mb-1.5 sm:mb-2 mx-auto w-full max-w-[691px] xl:max-w-[872px] items-start">
       {sources.map((source, colIdx) => {
         const items = colItems[colIdx];
-        const itemCount = items?.length || 0;
-        const padCount = Math.max(0, maxItems - itemCount);
-        // Tail text rows fill col3's pad cells (when configured). Cap at the
-        // pad-slot count so tail never extends the column past the tallest
-        // video col — keeps "video sections" identical heights as before.
-        const tail = colIdx === tailColIdx && tailItems ? tailItems.slice(0, padCount) : [];
-        const remainingPad = padCount - tail.length;
+        const tail = colIdx === tailColIdx && tailItems ? tailItems : [];
         return (
           <div
             key={source.label}
-            className="rounded-lg overflow-hidden grid"
+            className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] rounded-lg overflow-hidden flex flex-col"
             style={{
               background: "var(--bg-card)",
               border: "1px solid var(--border)",
-              gridRow: `1 / span ${totalRows}`,
-              gridTemplateRows: "subgrid",
             }}
           >
             <SourceHeader label={source.label} logoUrl={source.logoUrl} />
             {items === null
-              ? Array.from({ length: maxItems }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)
-              : items.slice(0, maxItems).map((item, rowIdx) => (
+              ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)
+              : items.map((item, rowIdx) => (
                   <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} />
                 ))}
-            {tail.map((item, i) => (
-              <TextTailRow key={`tail-${item.id}`} item={item} isFirst={itemCount === 0 && i === 0} onPlay={onPlay} />
-            ))}
-            {/* Pad short columns with empty cells so subgrid rows align. */}
-            {items !== null &&
-              remainingPad > 0 &&
-              Array.from({ length: remainingPad }).map((_, i) => (
-                <div key={`pad-${i}`} style={{ borderTop: "1px solid var(--border)" }} />
-              ))}
+            {tail.length > 0 && (
+              <>
+                {/* Visual divider between videos and ESPN-top tail so it's
+                    clear where the video block ends within col 3's card. */}
+                <div style={{ borderTop: "2px solid var(--border)" }} />
+                {tail.map((item, i) => (
+                  <CompactTailRow key={`tail-${item.id}`} item={item} isFirst={i === 0} onPlay={onPlay} />
+                ))}
+              </>
+            )}
           </div>
         );
       })}
@@ -175,16 +152,17 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
           </div>
         </div>
       )}
-      <div className="px-3 py-2 text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
+      {/* line-clamp-2 + minHeight 2.5rem keeps every row a fixed two-line text
+          block, which (combined with aspect-video on the image) gives identical
+          per-row heights across cols without needing CSS subgrid. */}
+      <div className="px-3 py-2 text-xs sm:text-sm leading-snug line-clamp-2" style={{ color: "var(--text)", minHeight: "2.5rem" }}>
         {item.headline}
       </div>
     </>
   );
   const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.youtubeVideoId);
   const commonCls = "block w-full text-left transition-opacity hover:opacity-90 cursor-pointer";
-  // align-self: start anchors content to the top of its (potentially taller)
-  // grid row, leaving any extra space at the bottom — Jacob's spec.
-  const commonStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", alignSelf: "start" as const };
+  const commonStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)" };
   if (canPlayInline) {
     return (
       <button
@@ -194,8 +172,6 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
             playbackUrl: item.playbackUrl || null,
             fallbackUrl: item.articleUrl,
             poster: item.imageUrl || null,
-            // No sourceLabel — URL-derivation gives "Open on MLB.com" /
-            // "Open on NBA.com" / "Open on ESPN" which is what we want here.
             headline: item.headline,
             byline: item.byline || null,
             published: item.published || null,
@@ -215,18 +191,17 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
   );
 }
 
-// Text-row variant for the col3 tail (ESPN top headlines filling the empty
-// space below the videos). Visually consistent with TextRow in NewsColumn —
-// optional thumbnail/league-logo on the left, line-clamp-2 headline — but
-// shares the strip's bordered card so it reads as part of col3 instead of a
-// separate card.
-function TextTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
+// Compact text row for the col 3 tail (ESPN top headlines). Tighter padding +
+// smaller thumb than NewsColumn's TextRow so 9-10 ESPN top items fit in
+// roughly the vertical space of 2 video rows — keeping col 3's total height
+// close to cols 1+2's video count without dropping headlines.
+function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
   const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
   const shouldPopModal = !!onPlay && hasMedia;
   const showThumb = !!item.imageUrl;
   const thumb = showThumb ? (
     <div
-      className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden"
+      className="relative w-9 h-9 shrink-0 rounded overflow-hidden"
       style={{ background: "var(--bg-card-hover)" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -238,15 +213,14 @@ function TextTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boole
       src={item.leagueLogo}
       alt=""
       loading="lazy"
-      width={18}
-      height={18}
-      className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
+      width={16}
+      height={16}
+      className="w-4 h-4 object-contain shrink-0 mt-0.5"
       draggable={false}
     />
   ) : null;
-  const rowCls = "flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] w-full text-left";
-  const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)", alignSelf: "start" as const };
-  const headlineCls = "min-w-0 line-clamp-2";
+  const rowCls = "flex items-start gap-2 px-3 py-1.5 text-[11px] sm:text-xs leading-snug transition-colors hover:bg-[var(--bg-card-hover)] w-full text-left";
+  const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   if (shouldPopModal) {
     return (
       <button
@@ -264,14 +238,14 @@ function TextTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boole
         style={rowStyle}
       >
         {thumb}
-        <span className={headlineCls}>{item.headline}</span>
+        <span className="min-w-0 line-clamp-2">{item.headline}</span>
       </button>
     );
   }
   return (
     <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" className={rowCls} style={rowStyle}>
       {thumb}
-      <span className={headlineCls}>{item.headline}</span>
+      <span className="min-w-0 line-clamp-2">{item.headline}</span>
     </a>
   );
 }
