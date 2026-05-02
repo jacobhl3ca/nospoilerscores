@@ -525,31 +525,40 @@ const TEAMLOGOS = (slug) =>
 const SPORT_ICON = (slug) =>
   `https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-${slug}.png`;
 
-// Use SPORT_ICON (the ball / equipment) consistently for ball sports — mixing
-// brand-shield team logos (NBA silhouette, NFL shield) with plain ball icons
-// for college / soccer / tennis read poorly side-by-side. Result: every row
-// gets the same visual weight regardless of league prestige. Non-ball sports
-// keep their own iconography (F1 wordmark, MMA gloves, jockey emoji).
+// League-shield logos for the majors (NBA silhouette, NFL shield, etc.) —
+// per Jacob's preference 2026-05-02. Tried SPORT_ICON (the ball / equipment)
+// for visual consistency but he preferred the brand-shields back. The
+// SPORT_ICON alternative is kept as an inline `// alt:` comment next to
+// each line so we can flip back fast if he changes his mind.
 const TWEMOJI = (hex) =>
   `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${hex}.png`;
 
 const PATH_TO_LOGO = {
-  // Ball sports — show the ball
-  nba: SPORT_ICON("basketball"),
-  wnba: TEAMLOGOS("wnba"),
-  mlb: SPORT_ICON("baseball"),
-  nhl: SPORT_ICON("hockey"),
-  nfl: SPORT_ICON("football"),
-  mls: SPORT_ICON("soccer"),
-  fifa: SPORT_ICON("soccer"),
+  // Major leagues — brand shield (alt: ball/equipment via SPORT_ICON)
+  nba: TEAMLOGOS("nba"),         // alt: SPORT_ICON("basketball")
+  wnba: TEAMLOGOS("wnba"),       // alt: SPORT_ICON("basketball")
+  mlb: TEAMLOGOS("mlb"),         // alt: SPORT_ICON("baseball")
+  nhl: TEAMLOGOS("nhl"),         // alt: SPORT_ICON("hockey")
+  nfl: TEAMLOGOS("nfl"),         // alt: SPORT_ICON("football")
+  mls: TEAMLOGOS("mls"),         // alt: SPORT_ICON("soccer")
+  fifa: TEAMLOGOS("fifa"),       // alt: SPORT_ICON("soccer")
+  golf: TEAMLOGOS("pgatour"),    // alt: SPORT_ICON("golf")
+  pga: TEAMLOGOS("pgatour"),     // alt: SPORT_ICON("golf")
+  lpga: TEAMLOGOS("lpga"),       // alt: SPORT_ICON("golf")
+  f1: TEAMLOGOS("f1"),           // alt: TWEMOJI("1f3ce") racing car
+  ufc: TEAMLOGOS("ufc"),         // alt: SPORT_ICON("mma")
+  mma: TEAMLOGOS("ufc"),         // alt: SPORT_ICON("mma")
+  boxing: TEAMLOGOS("ufc"),      // alt: SPORT_ICON("boxing")
+  racing: TEAMLOGOS("f1"),       // alt: SPORT_ICON("nascar")
+  // Sports without a clean league shield — fall back to ESPN's redesign
+  // sport-icon set (just the ball / equipment).
   soccer: SPORT_ICON("soccer"),
-  golf: SPORT_ICON("golf"),
-  pga: SPORT_ICON("golf"),
-  lpga: SPORT_ICON("golf"),
   tennis: SPORT_ICON("tennis"),
   cricket: SPORT_ICON("cricket"),
   rugby: SPORT_ICON("rugby"),
   badminton: SPORT_ICON("badminton"),
+  nascar: SPORT_ICON("nascar"),
+  olympics: SPORT_ICON("olympics"),
   // College + generic-sport URL slugs
   "mens-college-basketball": SPORT_ICON("basketball"),
   "womens-college-basketball": SPORT_ICON("basketball"),
@@ -560,17 +569,8 @@ const PATH_TO_LOGO = {
   ncaa: SPORT_ICON("basketball"),
   basketball: SPORT_ICON("basketball"),
   football: SPORT_ICON("football"),
-  olympics: SPORT_ICON("olympics"),
-  // Combat sports — gloves
-  ufc: SPORT_ICON("mma"),
-  mma: SPORT_ICON("mma"),
-  boxing: SPORT_ICON("boxing"),
-  // Motorsports — keep F1 wordmark, NASCAR sport-icon. No generic ball.
-  f1: TEAMLOGOS("f1"),
-  racing: SPORT_ICON("nascar"),
-  nascar: SPORT_ICON("nascar"),
-  // Horse racing — Twemoji jockey 🏇 (ESPN's equestrian icon is Olympic
-  // show-jumping, not racing).
+  // Horse racing — Twemoji jockey 🏇. Jacob explicitly liked this one
+  // 2026-05-02 (ESPN equestrian icon is Olympic show-jumping, wrong sport).
   "horse-racing": TWEMOJI("1f3c7"),
   equestrian: TWEMOJI("1f3c7"),
 };
