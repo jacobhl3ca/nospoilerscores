@@ -895,14 +895,19 @@ async function fetchReddit(subreddit, sectionLabel) {
     } else if (p.thumbnail && /^https?:\/\//.test(p.thumbnail)) {
       imageUrl = p.thumbnail;
     }
-    // v.redd.it videos: CMAF fallback_url is a single muxed MP4 that plays in
-    // a plain <video> tag — no DASH/HLS parsing needed. Streamable.com link
-    // posts (most r/nba videos) need a side-trip to the Streamable API to
-    // resolve the signed CDN MP4 URL.
+    // v.redd.it videos: prefer hls_url (HLS playlist with both audio + video
+    // tracks) when the post has audio. fallback_url is CMAF_*.mp4 — video only,
+    // no audio track — so unmuting does nothing. Keep fallback_url for is_gif
+    // posts (genuinely silent). VideoModal already loads .m3u8 via hls.js
+    // (Chrome/Firefox) or Safari native HLS.
     let videoUrl = null;
     const rv = p.media?.reddit_video || p.secure_media?.reddit_video;
     if (rv?.fallback_url && /^https:\/\/v\.redd\.it\//.test(rv.fallback_url)) {
-      videoUrl = rv.fallback_url.replace(/&amp;/g, "&");
+      if (rv.has_audio && rv.hls_url) {
+        videoUrl = rv.hls_url.replace(/&amp;/g, "&");
+      } else {
+        videoUrl = rv.fallback_url.replace(/&amp;/g, "&");
+      }
     } else if (p.domain === "streamable.com") {
       const m = (p.url || "").match(/^https?:\/\/streamable\.com\/([a-zA-Z0-9]+)/);
       if (m) videoUrl = await fetchStreamableMp4(m[1]);
