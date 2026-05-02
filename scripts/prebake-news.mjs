@@ -1074,10 +1074,13 @@ if (ONLY_REDDIT) console.log(`--only-reddit: running ${activeJobs.length}/${jobs
 const results = await Promise.allSettled(
   activeJobs.map(async ([name, fn]) => {
     let items = await fn();
-    const channel = YT_CHANNEL_BY_FEED[name];
-    if (channel && Array.isArray(items)) {
-      items = await attachYouTubeIds(items, channel, ytCache);
-    }
+    // YouTube ID lookup disabled 2026-05-02: matches were unreliable, sending
+    // users to wrong videos. With no youtubeVideoId, the player falls through
+    // to the article URL (ESPN / MLB.com / NBA.com) which is the right home.
+    // const channel = YT_CHANNEL_BY_FEED[name];
+    // if (channel && Array.isArray(items)) {
+    //   items = await attachYouTubeIds(items, channel, ytCache);
+    // }
     await writeFeed(name, items);
   })
 );
