@@ -141,9 +141,11 @@ export function NewsColumnTitle({
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   return (
+    // borderTop lives on the header (not the card) so when the header pins,
+    // its top edge travels with it. The card uses border-x + border-b only.
     <div
       className="news-source-sticky-top sticky z-20 px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
-      style={{ color: "var(--text)", background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
+      style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
     >
       {logoUrl && (
         /* eslint-disable-next-line @next/next/no-img-element */
@@ -168,7 +170,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
     // scroll container; overflow-clip doesn't.
     <div
       className="rounded-lg overflow-clip"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      style={{ background: "var(--bg-card)", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
@@ -305,7 +307,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
     // window as the scroll container).
     <div
       className="rounded-lg overflow-clip"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      style={{ background: "var(--bg-card)", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (

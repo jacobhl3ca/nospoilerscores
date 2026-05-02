@@ -104,7 +104,11 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
             className="rounded-lg overflow-clip grid"
             style={{
               background: "var(--bg-card)",
-              border: "1px solid var(--border)",
+              // border-top lives on the sticky SourceHeader so it travels
+              // when the header pins. Card keeps left/right/bottom only.
+              borderLeft: "1px solid var(--border)",
+              borderRight: "1px solid var(--border)",
+              borderBottom: "1px solid var(--border)",
               gridRow: `1 / span ${totalRows}`,
               gridTemplateRows: "subgrid",
             }}
@@ -147,7 +151,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
     // league title row while you scroll through the strip.
     <div
       className="news-source-sticky-top sticky z-20 px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
-      style={{ color: "var(--text)", background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
+      style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
     >
       {logoUrl && (
         /* eslint-disable-next-line @next/next/no-img-element */
