@@ -1000,6 +1000,11 @@ async function writeFeed(name, items) {
   console.log(`wrote ${path} (${items.length} items)`);
 }
 
+// --only-reddit: scoped run for the Mac mini cron (residential IP, can reach
+// Reddit when GH Actions can't). Filters jobs to reddit-* and skips the
+// YouTube cache I/O entirely so the two crons never fight over the same files.
+const ONLY_REDDIT = process.argv.includes("--only-reddit");
+
 const jobs = [
   // Official league sites
   ["mlb", fetchMLB],
@@ -1049,15 +1054,20 @@ const jobs = [
 
 // Load the YouTube lookup cache once per run so all video feeds share it and
 // we only save it back to disk at the end (a single write, not one per job).
-const ytCache = await loadYTCache();
+// Skip in --only-reddit mode (no YT-needing jobs run, avoids cache file churn
+// that would conflict with the GH Actions cron's writes).
+const ytCache = ONLY_REDDIT ? {} : await loadYTCache();
 const YT_CHANNEL_BY_FEED = {
   "mlb-videos": "MLB",
   "nba-videos": "NBA",
   "espn-videos": "ESPN",
 };
 
+const activeJobs = ONLY_REDDIT ? jobs.filter(([name]) => name.startsWith("reddit-")) : jobs;
+if (ONLY_REDDIT) console.log(`--only-reddit: running ${activeJobs.length}/${jobs.length} jobs (reddit-* only)`);
+
 const results = await Promise.allSettled(
-  jobs.map(async ([name, fn]) => {
+  activeJobs.map(async ([name, fn]) => {
     let items = await fn();
     const channel = YT_CHANNEL_BY_FEED[name];
     if (channel && Array.isArray(items)) {
@@ -1067,16 +1077,16 @@ const results = await Promise.allSettled(
   })
 );
 
-await saveYTCache(ytCache);
+if (!ONLY_REDDIT) await saveYTCache(ytCache);
 
 let failed = 0;
 results.forEach((r, i) => {
   if (r.status === "rejected") {
-    console.error(`${jobs[i][0]} FAILED:`, r.reason?.message || r.reason);
+    console.error(`${activeJobs[i][0]} FAILED:`, r.reason?.message || r.reason);
     failed++;
   }
 });
 
 // Exit non-zero only if EVERY job failed — partial success still commits useful
 // feeds and prevents one flaky origin from wedging the whole cron.
-if (failed === jobs.length) process.exit(1);
+if (failed === activeJobs.length) process.exit(1);
