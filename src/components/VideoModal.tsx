@@ -307,11 +307,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       {/* Backdrop */}
       <div className="absolute inset-0" style={{ background: "rgba(0, 0, 0, 0.92)" }} />
 
-      {/* Content */}
+      {/* Content — clicks bubble to onClose so tapping the image, headline,
+          or any whitespace around them dismisses. The video player and CC
+          button stop propagation themselves so playback controls keep working. */}
       <div
         className="relative w-full max-w-5xl"
         style={{ zIndex: 1 }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
         <button
@@ -330,7 +331,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             in Safari's overflow menu. */}
         {hlsMode && hasCaptionTrack && (
           <button
-            onClick={() => setShowCC((v) => !v)}
+            onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
             aria-pressed={showCC}
             className="absolute -top-10 right-10 h-8 px-2 flex items-center justify-center rounded-md text-xs font-bold transition-colors cursor-pointer"
             style={{
@@ -375,7 +376,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             )}
           </div>
         ) : (
-          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }}>
+          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }} onClick={(e) => e.stopPropagation()}>
             {hlsMode ? (
               <video
                 ref={videoRef}
