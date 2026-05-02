@@ -525,24 +525,31 @@ const TEAMLOGOS = (slug) =>
 const SPORT_ICON = (slug) =>
   `https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-${slug}.png`;
 
+// Use SPORT_ICON (the ball / equipment) consistently for ball sports — mixing
+// brand-shield team logos (NBA silhouette, NFL shield) with plain ball icons
+// for college / soccer / tennis read poorly side-by-side. Result: every row
+// gets the same visual weight regardless of league prestige. Non-ball sports
+// keep their own iconography (F1 wordmark, MMA gloves, jockey emoji).
+const TWEMOJI = (hex) =>
+  `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/72x72/${hex}.png`;
+
 const PATH_TO_LOGO = {
-  nba: TEAMLOGOS("nba"),
-  mlb: TEAMLOGOS("mlb"),
-  nhl: TEAMLOGOS("nhl"),
-  nfl: TEAMLOGOS("nfl"),
-  mls: TEAMLOGOS("mls"),
-  fifa: TEAMLOGOS("fifa"),
-  golf: TEAMLOGOS("pgatour"),
-  pga: TEAMLOGOS("pgatour"),
-  lpga: TEAMLOGOS("lpga"),
-  wnba: TEAMLOGOS("wnba"),
-  f1: TEAMLOGOS("f1"),
-  racing: TEAMLOGOS("f1"),
-  ufc: TEAMLOGOS("ufc"),
-  mma: TEAMLOGOS("ufc"),
-  boxing: TEAMLOGOS("ufc"),
-  // ESPN article paths for college sports + tennis + soccer fall back to
-  // ESPN's redesign sport-icon set.
+  // Ball sports — show the ball
+  nba: SPORT_ICON("basketball"),
+  wnba: SPORT_ICON("basketball"),
+  mlb: SPORT_ICON("baseball"),
+  nhl: SPORT_ICON("hockey"),
+  nfl: SPORT_ICON("football"),
+  mls: SPORT_ICON("soccer"),
+  fifa: SPORT_ICON("soccer"),
+  soccer: SPORT_ICON("soccer"),
+  golf: SPORT_ICON("golf"),
+  pga: SPORT_ICON("golf"),
+  lpga: SPORT_ICON("golf"),
+  tennis: SPORT_ICON("tennis"),
+  cricket: SPORT_ICON("cricket"),
+  rugby: SPORT_ICON("rugby"),
+  // College + generic-sport URL slugs
   "mens-college-basketball": SPORT_ICON("basketball"),
   "womens-college-basketball": SPORT_ICON("basketball"),
   "college-basketball": SPORT_ICON("basketball"),
@@ -550,17 +557,21 @@ const PATH_TO_LOGO = {
   ncaaf: SPORT_ICON("football-college"),
   ncaab: SPORT_ICON("basketball"),
   ncaa: SPORT_ICON("basketball"),
-  tennis: SPORT_ICON("tennis"),
-  soccer: SPORT_ICON("soccer"),
-  cricket: SPORT_ICON("cricket"),
-  rugby: SPORT_ICON("rugby"),
-  olympics: SPORT_ICON("olympics"),
-  "horse-racing": SPORT_ICON("equestrian"),
-  equestrian: SPORT_ICON("equestrian"),
-  // Plain "basketball" / "football" land mostly on college recruiting +
-  // generic sport pages — fall back to the redesign sport icons.
   basketball: SPORT_ICON("basketball"),
   football: SPORT_ICON("football"),
+  olympics: SPORT_ICON("olympics"),
+  // Combat sports — gloves
+  ufc: SPORT_ICON("mma"),
+  mma: SPORT_ICON("mma"),
+  boxing: SPORT_ICON("boxing"),
+  // Motorsports — keep F1 wordmark, NASCAR sport-icon. No generic ball.
+  f1: TEAMLOGOS("f1"),
+  racing: SPORT_ICON("nascar"),
+  nascar: SPORT_ICON("nascar"),
+  // Horse racing — Twemoji jockey 🏇 (ESPN's equestrian icon is Olympic
+  // show-jumping, not racing).
+  "horse-racing": TWEMOJI("1f3c7"),
+  equestrian: TWEMOJI("1f3c7"),
 };
 
 // Walk up to two URL segments so /recruiting/basketball/... still resolves
