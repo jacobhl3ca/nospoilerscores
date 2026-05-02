@@ -536,7 +536,7 @@ const TWEMOJI = (hex) =>
 const PATH_TO_LOGO = {
   // Ball sports — show the ball
   nba: SPORT_ICON("basketball"),
-  wnba: SPORT_ICON("basketball"),
+  wnba: TEAMLOGOS("wnba"),
   mlb: SPORT_ICON("baseball"),
   nhl: SPORT_ICON("hockey"),
   nfl: SPORT_ICON("football"),
@@ -549,6 +549,7 @@ const PATH_TO_LOGO = {
   tennis: SPORT_ICON("tennis"),
   cricket: SPORT_ICON("cricket"),
   rugby: SPORT_ICON("rugby"),
+  badminton: SPORT_ICON("badminton"),
   // College + generic-sport URL slugs
   "mens-college-basketball": SPORT_ICON("basketball"),
   "womens-college-basketball": SPORT_ICON("basketball"),
@@ -574,15 +575,25 @@ const PATH_TO_LOGO = {
   equestrian: TWEMOJI("1f3c7"),
 };
 
-// Walk up to two URL segments so /recruiting/basketball/... still resolves
-// to the basketball icon (first-segment "recruiting" isn't a sport).
+// Walk all URL path segments first (catches /recruiting/basketball/...,
+// /soccer/..., etc.). If nothing matches, fall back to scanning the URL
+// id-slug for a known sport keyword — picks up /espn/betting/.../id/.../
+// espn-mlb-betting-tips-... which has no sport directory but mentions "mlb"
+// in the slug. Last resort returns null.
 function espnArticleLogo(articleUrl) {
   try {
     const u = new URL(articleUrl);
-    const segs = u.pathname.split("/").filter(Boolean).slice(0, 2);
+    const segs = u.pathname.split("/").filter(Boolean);
     for (const seg of segs) {
       const hit = PATH_TO_LOGO[seg.toLowerCase()];
       if (hit) return hit;
+    }
+    // Fallback: scan the full path for a hyphen-bounded sport keyword.
+    const lower = u.pathname.toLowerCase();
+    for (const key of Object.keys(PATH_TO_LOGO)) {
+      if (lower.includes(`-${key}-`) || lower.includes(`/${key}-`) || lower.includes(`-${key}/`)) {
+        return PATH_TO_LOGO[key];
+      }
     }
     return null;
   } catch {
