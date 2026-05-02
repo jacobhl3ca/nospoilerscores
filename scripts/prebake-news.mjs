@@ -580,7 +580,10 @@ const PATH_TO_LOGO = {
 // /soccer/..., etc.). If nothing matches, fall back to scanning the URL
 // id-slug for a known sport keyword — picks up /espn/betting/.../id/.../
 // espn-mlb-betting-tips-... which has no sport directory but mentions "mlb"
-// in the slug. Last resort returns null.
+// in the slug. Last resort returns the ESPN brand mark so no row ever
+// ships without an icon (Jacob 2026-05-02: "ensure there will always be
+// correct icons" — empty thumb box looks broken).
+const ESPN_FALLBACK_LOGO = "https://a.espncdn.com/i/espn/misc_logos/500/espn.png";
 function espnArticleLogo(articleUrl) {
   try {
     const u = new URL(articleUrl);
@@ -596,9 +599,9 @@ function espnArticleLogo(articleUrl) {
         return PATH_TO_LOGO[key];
       }
     }
-    return null;
+    return ESPN_FALLBACK_LOGO;
   } catch {
-    return null;
+    return ESPN_FALLBACK_LOGO;
   }
 }
 
@@ -1010,6 +1013,14 @@ async function writeFeed(name, items) {
 // Reddit when GH Actions can't). Filters jobs to reddit-* and skips the
 // YouTube cache I/O entirely so the two crons never fight over the same files.
 const ONLY_REDDIT = process.argv.includes("--only-reddit");
+// --only=<feed>[,<feed>] — one-off manual refresh of a single feed (e.g.
+// --only=espn-top after fixing the scrape regex). Skips the YT cache too.
+const ONLY_LIST = process.argv
+  .find((a) => a.startsWith("--only="))
+  ?.slice("--only=".length)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean) ?? [];
 
 const jobs = [
   // Official league sites
@@ -1069,8 +1080,13 @@ const YT_CHANNEL_BY_FEED = {
   "espn-videos": "ESPN",
 };
 
-const activeJobs = ONLY_REDDIT ? jobs.filter(([name]) => name.startsWith("reddit-")) : jobs;
+const activeJobs = ONLY_LIST.length > 0
+  ? jobs.filter(([name]) => ONLY_LIST.includes(name))
+  : ONLY_REDDIT
+    ? jobs.filter(([name]) => name.startsWith("reddit-"))
+    : jobs;
 if (ONLY_REDDIT) console.log(`--only-reddit: running ${activeJobs.length}/${jobs.length} jobs (reddit-* only)`);
+if (ONLY_LIST.length > 0) console.log(`--only=${ONLY_LIST.join(",")}: running ${activeJobs.length}/${jobs.length} jobs`);
 
 const results = await Promise.allSettled(
   activeJobs.map(async ([name, fn]) => {

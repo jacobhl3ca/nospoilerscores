@@ -124,7 +124,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
               // Inside, render every ESPN top item in flex-col so 9 compact
               // text rows fit in roughly 2 video rows of height.
               <div
-                style={{ gridRow: `${itemCount + 2} / span ${padCount}`, borderTop: "2px solid var(--border)" }}
+                style={{ gridRow: `${itemCount + 2} / span ${padCount}`, borderTop: "1px solid var(--border)" }}
                 className="flex flex-col overflow-hidden"
               >
                 {tail.map((item, i) => (
