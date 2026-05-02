@@ -141,24 +141,32 @@ export function NewsColumnTitle({
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   return (
-    // borderTop lives on the header (not the card) so when the header pins,
-    // its top edge travels with it. The card uses border-x + border-b only.
+    // Outer wrapper carries sticky + page bg so the corner triangles outside
+    // the inner div's rounded-t-lg curve fill with var(--bg) (matching the
+    // title row above) instead of showing scrolling content through. At
+    // non-sticky state the card's rounded-lg overflow-clip masks the wrapper
+    // corners so the page bg never bleeds into the card visual.
     <div
-      className="news-source-sticky-top sticky z-20 rounded-t-lg px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
-      style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+      className="news-source-sticky-top sticky z-20"
+      style={{ background: "var(--bg)" }}
     >
-      {logoUrl && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={logoUrl}
-          alt=""
-          width={20}
-          height={20}
-          className="w-5 h-5 object-contain shrink-0"
-          draggable={false}
-        />
-      )}
-      <span>{label}</span>
+      <div
+        className="rounded-t-lg px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
+        style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+      >
+        {logoUrl && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={logoUrl}
+            alt=""
+            width={20}
+            height={20}
+            className="w-5 h-5 object-contain shrink-0"
+            draggable={false}
+          />
+        )}
+        <span>{label}</span>
+      </div>
     </div>
   );
 }

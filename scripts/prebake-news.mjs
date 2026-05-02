@@ -150,9 +150,10 @@ const ARTICLE_BLOCKLIST = [
   /\bsportsbook\b/i,
   /\bparlay\b/i,
   /\bbest\s+bets?\b/i,
-  /\bbetting\s+(?:odds|line|trends|preview|picks?)\b/i,
+  /\bbetting\s+(?:odds|line|trends|preview|picks?|tips?)\b/i,
   /\bodds,?\s+picks?\b/i,
   /\bpicks?,?\s+predictions?\b/i,
+  /\bfantasy\s+(?:baseball|basketball|football|hockey|lineup)\b/i,
 ];
 
 function passesArticleBlocklist(headline, description = "") {
@@ -601,36 +602,12 @@ function espnArticleLogo(articleUrl) {
   }
 }
 
-// Fallback when the homepage scrape misses the headlineStack block (ESPN A/B
-// tests + occasional region-specific layouts ship variants without it). The
-// `now.core` API is JSON and stable; matches "Top Headlines" closely enough.
-async function fetchESPNTopHeadlinesViaApi() {
-  try {
-    const data = await getJson("https://now.core.api.espn.com/v1/sports/news?limit=20");
-    const items = [];
-    for (const a of data?.headlines || []) {
-      const url = a?.links?.web?.href || a?.links?.mobile?.href || "";
-      const title = a?.headline || a?.title || "";
-      if (!url || !title) continue;
-      if (!passesArticleBlocklist(title)) continue;
-      items.push({
-        id: url,
-        headline: title,
-        description: "",
-        published: a?.published || a?.lastModified || "",
-        imageUrl: null,
-        leagueLogo: espnArticleLogo(url),
-        articleUrl: url,
-        byline: "",
-        section: "ESPN",
-      });
-      if (items.length >= 15) break;
-    }
-    return items;
-  } catch {
-    return [];
-  }
-}
+// Previously fell back to `https://now.core.api.espn.com/v1/sports/news?limit=20`
+// when the homepage scrape missed the headlineStack block — but that endpoint
+// is the broad multi-sport "now" feed (fantasy advice, betting tips, F1,
+// cricket, EPL filler) NOT the top-headlines list, so users saw garbage on
+// every prebake run that hit the fallback path. Removed: better to ship an
+// empty espn-top than the wrong one.
 
 async function fetchESPNTopHeadlines() {
   const html = await getESPNHomeHtml();
@@ -639,7 +616,7 @@ async function fetchESPNTopHeadlines() {
   // <ul class="headlineStack__list"> elements (5 + 4 today). Anchor on the
   // parent class, then concat every headline UL found until the section closes.
   const topIdx = html.indexOf('class="headlineStack top-headlines"');
-  if (topIdx < 0) return fetchESPNTopHeadlinesViaApi();
+  if (topIdx < 0) return [];
   // Grab the listContainer's full inner HTML — it wraps every UL of headlines
   // for this block. Falls back to a 30 KB slice if the markup ever drops the
   // listContainer wrapper entirely.
@@ -670,7 +647,7 @@ async function fetchESPNTopHeadlines() {
       section: "ESPN",
     });
   }
-  return items.length > 0 ? items.slice(0, 15) : fetchESPNTopHeadlinesViaApi();
+  return items.slice(0, 15);
 }
 
 // ── ESPN homepage big-format videos (thumbnail + title, in scroll order) ──

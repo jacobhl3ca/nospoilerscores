@@ -146,18 +146,21 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   return (
-    // Matches NewsColumn's SourceHeader so the AlignedVideoStrip's per-card
-    // labels (NBA TOP VIDEOS / MLB MOST POPULAR / ESPN VIDEOS) pin under the
-    // league title row while you scroll through the strip.
+    // See NewsColumn.SourceHeader for the wrapper rationale.
     <div
-      className="news-source-sticky-top sticky z-20 rounded-t-lg px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
-      style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+      className="news-source-sticky-top sticky z-20"
+      style={{ background: "var(--bg)" }}
     >
-      {logoUrl && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img src={logoUrl} alt="" width={20} height={20} className="w-5 h-5 object-contain shrink-0" draggable={false} />
-      )}
-      <span>{label}</span>
+      <div
+        className="rounded-t-lg px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
+        style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+      >
+        {logoUrl && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={logoUrl} alt="" width={20} height={20} className="w-5 h-5 object-contain shrink-0" draggable={false} />
+        )}
+        <span>{label}</span>
+      </div>
     </div>
   );
 }
