@@ -150,7 +150,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
     // labels (NBA TOP VIDEOS / MLB MOST POPULAR / ESPN VIDEOS) pin under the
     // league title row while you scroll through the strip.
     <div
-      className="news-source-sticky-top sticky z-20 px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
+      className="news-source-sticky-top sticky z-20 rounded-t-lg px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
       style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
     >
       {logoUrl && (

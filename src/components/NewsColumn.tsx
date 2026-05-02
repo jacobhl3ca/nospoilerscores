@@ -144,7 +144,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
     // borderTop lives on the header (not the card) so when the header pins,
     // its top edge travels with it. The card uses border-x + border-b only.
     <div
-      className="news-source-sticky-top sticky z-20 px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
+      className="news-source-sticky-top sticky z-20 rounded-t-lg px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
       style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
     >
       {logoUrl && (
