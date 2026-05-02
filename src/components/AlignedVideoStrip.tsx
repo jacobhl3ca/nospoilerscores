@@ -98,7 +98,10 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
         return (
           <div
             key={source.label}
-            className="rounded-lg overflow-hidden grid"
+            // overflow-clip (not overflow-hidden) so the sticky SourceHeader
+            // below pins to window scroll instead of being trapped inside this
+            // card. See feedback_overflow_clip_for_sticky.md.
+            className="rounded-lg overflow-clip grid"
             style={{
               background: "var(--bg-card)",
               border: "1px solid var(--border)",
@@ -139,9 +142,12 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   return (
+    // Matches NewsColumn's SourceHeader so the AlignedVideoStrip's per-card
+    // labels (NBA TOP VIDEOS / MLB MOST POPULAR / ESPN VIDEOS) pin under the
+    // league title row while you scroll through the strip.
     <div
-      className="px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
-      style={{ color: "var(--text)", borderBottom: "1px solid var(--border)" }}
+      className="news-source-sticky-top sticky z-20 px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
+      style={{ color: "var(--text)", background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
     >
       {logoUrl && (
         /* eslint-disable-next-line @next/next/no-img-element */
