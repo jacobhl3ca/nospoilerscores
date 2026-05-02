@@ -338,6 +338,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
   const headerRef = useRef<HTMLElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const newsTitleRowRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const header = headerRef.current;
     const root = rootRef.current;
@@ -351,6 +352,32 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     ro.observe(header);
     return () => ro.disconnect();
   }, []);
+
+  // Measure the news-view league-title strip so per-source sticky headers
+  // can pin directly below it (top: header-h + news-titlebar-h). The ref
+  // attaches to the title row only when news view is showing the
+  // AlignedVideoStrip layout — otherwise the column-internal title is the
+  // sticky element and the CSS fallback (4.5rem) is close enough.
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const row = newsTitleRowRef.current;
+    if (!row) {
+      root.style.removeProperty("--news-titlebar-h");
+      return;
+    }
+    const measure = () => {
+      const h = row.getBoundingClientRect().height;
+      root.style.setProperty("--news-titlebar-h", `${h}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--news-titlebar-h");
+    };
+  }, [showNews]);
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);
@@ -547,8 +574,15 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 <>
                   {/* League titles render above AlignedVideoStrip so MLB / NBA /
                       News sit at the top — otherwise the video strip pushes the
-                      titles below it. */}
-                  <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                      titles below it. The row itself is sticky (matching the
+                      home page's per-column title pinning) so titles stay under
+                      the main header as you scroll. Ref drives --news-titlebar-h
+                      which positions per-source sticky headers below it. */}
+                  <div
+                    ref={newsTitleRowRef}
+                    className="flex flex-row justify-center items-stretch gap-2 sm:gap-4 league-sticky-top sticky z-30"
+                    style={{ background: "var(--bg)" }}
+                  >
                     <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                       <NewsColumnTitle title={sortedLeagues[0]?.label ?? "News"} />
                     </div>

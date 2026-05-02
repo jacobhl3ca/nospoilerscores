@@ -142,8 +142,8 @@ export function NewsColumnTitle({
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
   return (
     <div
-      className="px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
-      style={{ color: "var(--text)", borderBottom: "1px solid var(--border)" }}
+      className="news-source-sticky-top sticky z-20 px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
+      style={{ color: "var(--text)", background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
     >
       {logoUrl && (
         /* eslint-disable-next-line @next/next/no-img-element */

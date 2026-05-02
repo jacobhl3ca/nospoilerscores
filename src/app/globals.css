@@ -9,6 +9,15 @@
   }
 }
 
+/* News view: per-source header (ESPN, MLB Most Popular, r/baseball, etc.)
+   pins below the main app header + the league title strip while you scroll
+   through that source's items, then scrolls away with its card when the
+   next source comes into view. --news-titlebar-h is the measured height
+   of the league-title row. */
+.news-source-sticky-top {
+  top: calc(var(--header-h, 0px) + var(--news-titlebar-h, 4.5rem));
+}
+
 :root {
   --bg: #ffffff;
   --bg-card: #f5f5f5;
