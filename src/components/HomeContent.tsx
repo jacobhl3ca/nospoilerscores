@@ -338,7 +338,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
   const headerRef = useRef<HTMLElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const newsTitleRowRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const header = headerRef.current;
     const root = rootRef.current;
@@ -354,14 +353,18 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   }, []);
 
   // Measure the news-view league-title strip so per-source sticky headers
-  // can pin directly below it (top: header-h + news-titlebar-h). The ref
-  // attaches to the title row only when news view is showing the
-  // AlignedVideoStrip layout — otherwise the column-internal title is the
-  // sticky element and the CSS fallback (4.5rem) is close enough.
-  useLayoutEffect(() => {
+  // pin flush against its bottom edge (top: header-h + news-titlebar-h).
+  // Callback ref instead of useEffect because the title row only mounts
+  // after `allFirstAreVideo` flips true (which depends on async data) —
+  // a deps-based effect on [showNews] fires too early and finds null.
+  const newsTitleRowRoRef = useRef<ResizeObserver | null>(null);
+  const newsTitleRowRef = useCallback((row: HTMLDivElement | null) => {
     const root = rootRef.current;
+    if (newsTitleRowRoRef.current) {
+      newsTitleRowRoRef.current.disconnect();
+      newsTitleRowRoRef.current = null;
+    }
     if (!root) return;
-    const row = newsTitleRowRef.current;
     if (!row) {
       root.style.removeProperty("--news-titlebar-h");
       return;
@@ -373,11 +376,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(row);
-    return () => {
-      ro.disconnect();
-      root.style.removeProperty("--news-titlebar-h");
-    };
-  }, [showNews]);
+    newsTitleRowRoRef.current = ro;
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);
