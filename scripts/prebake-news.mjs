@@ -555,6 +555,8 @@ const PATH_TO_LOGO = {
   cricket: SPORT_ICON("cricket"),
   rugby: SPORT_ICON("rugby"),
   olympics: SPORT_ICON("olympics"),
+  "horse-racing": SPORT_ICON("equestrian"),
+  equestrian: SPORT_ICON("equestrian"),
   // Plain "basketball" / "football" land mostly on college recruiting +
   // generic sport pages — fall back to the redesign sport icons.
   basketball: SPORT_ICON("basketball"),
