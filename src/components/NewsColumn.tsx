@@ -163,8 +163,11 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
 
 function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {
   return (
+    // overflow-clip (not overflow-hidden) so position: sticky on SourceHeader
+    // pins to the window, not to this card. overflow-hidden establishes a
+    // scroll container; overflow-clip doesn't.
     <div
-      className="rounded-lg overflow-hidden"
+      className="rounded-lg overflow-clip"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
@@ -298,8 +301,10 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
 
 function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {
   return (
+    // overflow-clip — see TextSourceCard for why (sticky SourceHeader needs
+    // window as the scroll container).
     <div
-      className="rounded-lg overflow-hidden"
+      className="rounded-lg overflow-clip"
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
