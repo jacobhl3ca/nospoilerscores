@@ -167,7 +167,10 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
   const body = (
     <>
       {item.imageUrl && (
-        <div className="relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
+        // flex-1 + min-h-0 lets the image grow beyond aspect-video to absorb
+        // any extra row-track height when this cell's headline is shorter
+        // than the row's tallest. No blank between image and headline.
+        <div className="relative w-full aspect-video flex-1 min-h-0" style={{ background: "var(--bg-card-hover)" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={proxyImage(item.imageUrl)}
@@ -188,21 +191,19 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
           </div>
         </div>
       )}
-      {/* line-clamp-3 + minHeight = every cell exactly 3 lines tall. Caps
-          long titles at 3 lines (rare 4-liner gets ellipsis), and pads short
-          ones up to 3 so each row is uniform across cols and cells end at
-          the same Y — no blank space below cards in shorter cells. */}
-      <div
-        className="px-3 py-2 text-xs sm:text-sm leading-snug line-clamp-3"
-        style={{ color: "var(--text)", minHeight: "calc(4.125em + 1rem)" }}
-      >
+      {/* line-clamp-3 caps headlines at 3 lines (rare 4-liner ellipsis-truncates).
+          No minHeight — short headlines stay short; the image above grows to
+          absorb the row track's extra height instead of leaving blank below. */}
+      <div className="px-3 py-2 text-xs sm:text-sm leading-snug line-clamp-3" style={{ color: "var(--text)" }}>
         {item.headline}
       </div>
     </>
   );
   const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.youtubeVideoId);
-  const commonCls = "block w-full text-left transition-opacity hover:opacity-90 cursor-pointer";
-  const commonStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", alignSelf: "start" as const };
+  // flex flex-col + align-self: stretch makes the cell fill its subgrid row
+  // track; the image's flex-1 then absorbs the extra space.
+  const commonCls = "flex flex-col w-full text-left transition-opacity hover:opacity-90 cursor-pointer";
+  const commonStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", alignSelf: "stretch" as const };
   if (canPlayInline) {
     return (
       <button
