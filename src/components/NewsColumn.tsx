@@ -150,18 +150,21 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
       className="news-source-sticky-top sticky z-20"
       style={{ background: "var(--bg)" }}
     >
+      {/* No borderTop — parent card now provides full 4-side border so the
+          rounded curve closes at top corners; an extra borderTop here would
+          stack and render as a 2px line at natural state. */}
       <div
-        className="rounded-t-lg px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
-        style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+        className="rounded-t-lg px-3 py-2.5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-wide"
+        style={{ color: "var(--text)", background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
       >
         {logoUrl && (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={logoUrl}
             alt=""
-            width={20}
-            height={20}
-            className="w-5 h-5 object-contain shrink-0"
+            width={24}
+            height={24}
+            className="w-6 h-6 object-contain shrink-0"
             draggable={false}
           />
         )}
@@ -176,9 +179,10 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
     // overflow-clip (not overflow-hidden) so position: sticky on SourceHeader
     // pins to the window, not to this card. overflow-hidden establishes a
     // scroll container; overflow-clip doesn't.
+    // Full 4-side border so rounded-lg curve closes at top corners.
     <div
       className="rounded-lg overflow-clip"
-      style={{ background: "var(--bg-card)", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
@@ -315,7 +319,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
     // window as the scroll container).
     <div
       className="rounded-lg overflow-clip"
-      style={{ background: "var(--bg-card)", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (

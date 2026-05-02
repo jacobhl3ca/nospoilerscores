@@ -40,21 +40,33 @@ const PLAYOFF_START_DATES: Record<string, { date: string; label: string; preDate
   ncaam: { date: "2026-03-17", label: "March Madness" },
 };
 
-// Extract short round name from ESPN's long headline
+// Strip generic "Stanley Cup Playoffs" / "NBA Playoffs" / "NCAA … Championship"
+// prefix segments so a label like "Stanley Cup Playoffs - First Round" reads
+// "First Round". Real round info (e.g. "East 1st Round" for NBA/NHL playoffs)
+// gets preserved and joined with the game number when both are present.
+const GENERIC_LABEL_SEGMENT = /^(?:stanley cup playoffs?|nba playoffs?|nhl playoffs?|playoffs?|postseason|ncaa (?:men'?s|women'?s)?\s*basketball championship|ncaa basketball championship)$/i;
+
+// Extract round + game info from ESPN's playoff headline.
+// e.g. "East 1st Round - Game 7" → "East 1st Round · Game 7"
+// e.g. "Stanley Cup Playoffs - First Round" → "First Round"
 // e.g. "NCAA Men's Basketball Championship - National Championship" → "National Championship"
-// e.g. "ALWC - Game 2" → "AL Wild Card · Game 2"
-// ESPN sometimes tacks on "Nth Seed Game" as the last segment — strip that so we
-// surface the real round/game label instead.
+// ESPN sometimes tacks on "Nth Seed Game" as the last segment — strip that.
 function shortenPlayoffLabel(headline: string): string {
   const parts = headline
     .split(" - ")
     .map(p => p.trim())
-    .filter(p => p && !/^\d+(?:st|nd|rd|th)?\s+seed\s+game$/i.test(p));
+    .filter(p => p && !/^\d+(?:st|nd|rd|th)?\s+seed\s+game$/i.test(p))
+    .filter(p => !GENERIC_LABEL_SEGMENT.test(p));
   if (!parts.length) return headline.trim();
-  return parts[parts.length - 1];
+  return parts.join(" · ");
 }
 
-function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): { tiers: string[] } | null {
+interface SubtitleResult {
+  tiers: string[];
+  href?: string;
+}
+
+function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): SubtitleResult | null {
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
   const y = +selectedDate.slice(0, 4);
@@ -64,13 +76,27 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   const playoffDate = new Date(config.date + "T12:00:00");
   const diff = playoffDate.getTime() - viewDate.getTime();
 
-  // Playoffs already started — show round name from game data
+  // Playoffs already started — show round + game number from game data
   if (diff <= 0) {
     if (!games?.length) return null;
     const label = games.find(g => g.playoffLabel)?.playoffLabel;
     if (!label) return null;
     const text = shortenPlayoffLabel(label);
-    return { tiers: [text] };
+    // Compact fallback: "Game 7" → "G7" so a long round + game tag still fits
+    // narrow columns when the full version overflows.
+    const short = text.replace(/Game (\d+)/g, "G$1");
+    const tiers = short !== text ? [text, short] : [text];
+    return { tiers };
+  }
+
+  // MLB regular season: link to MLB Network's nightly Big Inning whip-around
+  // show in place of the (still-far-off) postseason countdown. Italic +
+  // clickable, matches the GolfSubtitle live-stream pattern.
+  if (sport === "mlb" && games?.length) {
+    return {
+      tiers: ["Big Inning · 7pm ET", "Big Inning · 7pm"],
+      href: "https://www.mlb.com/network/big-inning",
+    };
   }
 
   // Only flag the pre-playoff window (e.g. NBA play-in) DURING the window itself.
@@ -98,9 +124,10 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
 }
 
 function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
-  const ref = useRef<HTMLSpanElement>(null);
+  const ref = useRef<HTMLElement>(null);
   const result = getPlayoffSubtitle(sport, selectedDate, games);
   const tiers = result?.tiers ?? [];
+  const href = result?.href;
   const tiersKey = tiers.join("|");
   const [tierIdx, setTierIdx] = useState(tiers.length ? tiers.length - 1 : 0);
   const [ready, setReady] = useState(false);
@@ -148,13 +175,29 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tiersKey]);
 
+  const baseCls = "text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5";
+  const baseStyle = {
+    color: tiers.length ? "var(--text-muted)" : "transparent",
+    visibility: ready || !tiers.length ? ("visible" as const) : ("hidden" as const),
+  };
+  const text = tiers.length ? tiers[tierIdx] : "\u00A0";
+  if (href && tiers.length) {
+    return (
+      <a
+        ref={ref as React.RefObject<HTMLAnchorElement>}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${baseCls} hover:underline transition-colors`}
+        style={baseStyle}
+      >
+        {text}
+      </a>
+    );
+  }
   return (
-    <span
-      ref={ref}
-      className="text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5"
-      style={{ color: tiers.length ? "var(--text-muted)" : "transparent", visibility: ready || !tiers.length ? "visible" : "hidden" }}
-    >
-      {tiers.length ? tiers[tierIdx] : "\u00A0"}
+    <span ref={ref as React.RefObject<HTMLSpanElement>} className={baseCls} style={baseStyle}>
+      {text}
     </span>
   );
 }

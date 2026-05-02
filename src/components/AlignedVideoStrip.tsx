@@ -101,14 +101,13 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
             // overflow-clip (not overflow-hidden) so the sticky SourceHeader
             // below pins to window scroll instead of being trapped inside this
             // card. See feedback_overflow_clip_for_sticky.md.
+            // Full 4-side border so the rounded-lg curve closes cleanly at
+            // the top corners — with only left+right+bottom the borders
+            // curved up and ended mid-air, leaving visible 1px stubs.
             className="rounded-lg overflow-clip grid"
             style={{
               background: "var(--bg-card)",
-              // border-top lives on the sticky SourceHeader so it travels
-              // when the header pins. Card keeps left/right/bottom only.
-              borderLeft: "1px solid var(--border)",
-              borderRight: "1px solid var(--border)",
-              borderBottom: "1px solid var(--border)",
+              border: "1px solid var(--border)",
               gridRow: `1 / span ${totalRows}`,
               gridTemplateRows: "subgrid",
             }}
@@ -125,7 +124,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
               // text rows fit in roughly 2 video rows of height.
               <div
                 style={{ gridRow: `${itemCount + 2} / span ${padCount}`, borderTop: "1px solid var(--border)" }}
-                className="flex flex-col overflow-hidden"
+                className="flex flex-col h-full overflow-hidden"
               >
                 {tail.map((item, i) => (
                   <CompactTailRow key={`tail-${item.id}`} item={item} isFirst={i === 0} onPlay={onPlay} />
@@ -151,13 +150,18 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
       className="news-source-sticky-top sticky z-20"
       style={{ background: "var(--bg)" }}
     >
+      {/* No borderTop here — the parent card now provides a full 4-side
+          border, so adding one here would render a 2px doubled line at
+          natural state. When pinned to viewport, bg contrast (var(--bg)
+          outside the rounded-t-lg curve vs var(--bg-card) inside) is what
+          delineates the top edge. */}
       <div
-        className="rounded-t-lg px-3 py-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide"
-        style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
+        className="rounded-t-lg px-3 py-2.5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-wide"
+        style={{ color: "var(--text)", background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
       >
         {logoUrl && (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={logoUrl} alt="" width={20} height={20} className="w-5 h-5 object-contain shrink-0" draggable={false} />
+          <img src={logoUrl} alt="" width={24} height={24} className="w-6 h-6 object-contain shrink-0" draggable={false} />
         )}
         <span>{label}</span>
       </div>
@@ -240,15 +244,16 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
   );
 }
 
-// Compact text row for the col 3 tail (ESPN top headlines). Tighter padding +
-// smaller thumb than NewsColumn's TextRow so 9-10 ESPN top items fit in
-// roughly the vertical space of 2 video rows.
+// Compact text row for the col 3 tail (ESPN top headlines). Larger padding +
+// thumb than the older 9px-thumb version so the tail visually fills the col 3
+// pad-row space rather than ending with blank tail at the bottom — when fewer
+// items than reserved rows, taller rows distribute the available height.
 function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
   const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
   const shouldPopModal = !!onPlay && hasMedia;
   const thumb = item.imageUrl ? (
     <div
-      className="relative w-9 h-9 shrink-0 rounded overflow-hidden"
+      className="relative w-11 h-11 shrink-0 rounded overflow-hidden"
       style={{ background: "var(--bg-card-hover)" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -260,13 +265,15 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
       src={item.leagueLogo}
       alt=""
       loading="lazy"
-      width={16}
-      height={16}
-      className="w-4 h-4 object-contain shrink-0 mt-0.5"
+      width={20}
+      height={20}
+      className="w-5 h-5 object-contain shrink-0 mt-0.5"
       draggable={false}
     />
   ) : null;
-  const rowCls = "flex items-start gap-2 px-3 py-1.5 text-[11px] sm:text-xs leading-snug transition-colors hover:bg-[var(--bg-card-hover)] w-full text-left";
+  // flex-1 + items-center spreads the rows vertically when we have fewer
+  // items than the pad-row budget, so the tail card fills col 3's space.
+  const rowCls = "flex flex-1 items-center gap-2.5 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] w-full text-left";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   if (shouldPopModal) {
     return (
