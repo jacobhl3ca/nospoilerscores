@@ -1,6 +1,11 @@
 {
-  "generatedAt": "2026-05-02T22:10:36.475Z",
-  "airings": {},
+  "generatedAt": "2026-05-03T00:15:50.660Z",
+  "airings": {
+    "401871166": {
+      "uuid": "ceddedf5-fb7d-421d-a49d-78a79e260056",
+      "network": "ESPN on ABC"
+    }
+  },
   "nbaGameIds": {
     "401869412": "0042500117"
   }
