@@ -1133,7 +1133,13 @@ export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): 
     const games = await fetchGames(cfg.sport, date);
     let nextGameDay: { date: string; games: Game[] } | null = null;
     if (games.length === 0) {
-      nextGameDay = await fetchNextGameDay(cfg.sport, 7, date);
+      // NBA + NHL publish playoff games only as the prior round wraps. During
+      // their playoff months (May/Jun) ESPN's "next 7 days" can be a flat zero
+      // even though Conf Finals / Cup Final games will be added soon. Look 21
+      // days out for those leagues so once a series posts, we surface it.
+      const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
+      const lookahead = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth ? 21 : 7;
+      nextGameDay = await fetchNextGameDay(cfg.sport, lookahead, date);
     }
     return { sport: cfg.sport, label, games, nextGameDay };
   };

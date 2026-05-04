@@ -662,7 +662,7 @@ export default function LeagueColumn({
               ))}
             </div>
           ) : (
-            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No upcoming games</p>
+            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Upcoming Schedule TBD</p>
           )
         ) : null
       ) : isPastDate ? (
