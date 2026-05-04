@@ -66,6 +66,25 @@ interface SubtitleResult {
   href?: string;
 }
 
+// Big Inning live window in ET. Hardcoded for now — Big Inning typically
+// airs nightly during the regular season starting ~7pm ET and running for
+// ~3 hours. Replace with per-night data once we accumulate observations of
+// real start/end times from mlb.com/network/shows/big-inning and the MLB
+// Network linear schedule.
+const BIG_INNING_LIVE_START_HOUR_ET = 19;
+const BIG_INNING_LIVE_END_HOUR_ET = 22;
+function isInBigInningLiveWindow(): boolean {
+  // toLocaleString in America/New_York gives us ET regardless of viewer TZ
+  const etStr = new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    hour12: false,
+  });
+  const m = etStr.match(/(\d{1,2}):(\d{2}):(\d{2})/);
+  if (!m) return false;
+  const hours = parseInt(m[1], 10);
+  return hours >= BIG_INNING_LIVE_START_HOUR_ET && hours < BIG_INNING_LIVE_END_HOUR_ET;
+}
+
 function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): SubtitleResult | null {
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
@@ -90,12 +109,20 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   }
 
   // MLB regular season: link to MLB Network's nightly Big Inning whip-around
-  // show in place of the (still-far-off) postseason countdown. Italic +
-  // clickable, matches the GolfSubtitle live-stream pattern.
+  // show in place of the (still-far-off) postseason countdown. During the
+  // live window we point at mlb.com/network/live (the linear stream); the
+  // rest of the day we point at the show landing page. The bare /big-inning
+  // path 404s — /network/shows/big-inning is the canonical reference page.
   if (sport === "mlb" && games?.length) {
+    if (isInBigInningLiveWindow()) {
+      return {
+        tiers: ["Big Inning · LIVE", "Big Inning"],
+        href: "https://www.mlb.com/network/live",
+      };
+    }
     return {
       tiers: ["Big Inning · 7pm ET", "Big Inning · 7pm"],
-      href: "https://www.mlb.com/network/big-inning",
+      href: "https://www.mlb.com/network/shows/big-inning",
     };
   }
 
