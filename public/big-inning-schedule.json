@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-04T11:39:45.172Z",
+  "generatedAt": "2026-05-04T18:30:23.474Z",
   "source": "https://www.mlb.com/network/modules/shows/mlbn-big-inning",
   "schedule": {
     "2026-05-04": {
@@ -31,6 +31,9 @@
     },
     "2026-05-17": {
       "timeET": "2:00 PM"
+    },
+    "2026-05-18": {
+      "timeET": "9:00 PM"
     }
   }
 }
