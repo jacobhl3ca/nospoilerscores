@@ -568,6 +568,16 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           const col3Title = prefs.newsThirdLeague
             ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
             : "News";
+          // Cols 1 and 2 are already showing sortedLeagues[0] and [1]'s news,
+          // so hide them from the col-3 swap dropdown — listing them is
+          // redundant since they're permanently exposed.
+          const newsExposedSports = new Set([
+            sortedLeagues[0]?.sport,
+            sortedLeagues[1]?.sport,
+          ].filter((s): s is Sport => !!s));
+          const newsThirdLeagueOptions = thirdLeagueOptions.filter(
+            (o) => !newsExposedSports.has(o.sport),
+          );
           return (
             <>
               {allFirstAreVideo && (
@@ -592,7 +602,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                     <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                       <NewsColumnTitle
                         title={col3Title}
-                        swappableOptions={thirdLeagueOptions}
+                        swappableOptions={newsThirdLeagueOptions}
                         selectedThirdLeague={prefs.newsThirdLeague}
                         onSwapLeague={setNewsThirdLeague}
                       />
@@ -622,7 +632,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 <NewsColumn
                   title={col3Title}
                   sources={col3Rest}
-                  swappableOptions={thirdLeagueOptions}
+                  swappableOptions={newsThirdLeagueOptions}
                   selectedThirdLeague={prefs.newsThirdLeague}
                   onSwapLeague={setNewsThirdLeague}
                   hideTitle={allFirstAreVideo}

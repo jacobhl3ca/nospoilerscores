@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-05-04T11:39:45.172Z",
+  "source": "https://www.mlb.com/network/modules/shows/mlbn-big-inning",
+  "schedule": {
+    "2026-05-04": {
+      "timeET": "9:00 PM"
+    },
+    "2026-05-05": {
+      "timeET": "7:00 PM"
+    },
+    "2026-05-08": {
+      "timeET": "9:00 PM"
+    },
+    "2026-05-09": {
+      "timeET": "7:30 PM"
+    },
+    "2026-05-10": {
+      "timeET": "2:00 PM"
+    },
+    "2026-05-11": {
+      "timeET": "8:00 PM"
+    },
+    "2026-05-12": {
+      "timeET": "7:00 PM"
+    },
+    "2026-05-13": {
+      "timeET": "9:30 PM"
+    },
+    "2026-05-16": {
+      "timeET": "7:30 PM"
+    },
+    "2026-05-17": {
+      "timeET": "2:00 PM"
+    }
+  }
+}

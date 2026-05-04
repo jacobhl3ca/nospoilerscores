@@ -468,6 +468,20 @@ export function loadEspnAirings(): Promise<EspnAiringsData> {
   return espnAiringsPromise;
 }
 
+// Big Inning schedule scraped daily by scripts/scrape-big-inning.mjs from
+// mlb.com/network/modules/shows/mlbn-big-inning. Keyed by ISO date.
+export type BigInningSchedule = Record<string, { timeET: string }>;
+let bigInningPromise: Promise<BigInningSchedule> | null = null;
+export function loadBigInningSchedule(): Promise<BigInningSchedule> {
+  if (!bigInningPromise) {
+    bigInningPromise = fetch(`${getApiBase()}/big-inning-schedule.json`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => (d?.schedule ?? {}) as BigInningSchedule)
+      .catch(() => ({}));
+  }
+  return bigInningPromise;
+}
+
 function buildPrimeDeepLink(
   game: Game,
   asinMap: Record<string, string>

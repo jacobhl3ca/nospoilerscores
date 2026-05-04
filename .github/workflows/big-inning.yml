@@ -1,0 +1,34 @@
+name: Refresh Big Inning schedule
+
+on:
+  schedule:
+    # Twice daily — MLB updates the upcoming list as games are scheduled and
+    # broadcasters confirm. 6am ET and 2pm ET catches morning/afternoon edits.
+    - cron: "0 10 * * *"
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/scrape-big-inning.mjs
+      - name: Commit updated schedule
+        run: |
+          git config user.name "Jacob HL"
+          git config user.email "jacobhl3ca@gmail.com"
+          if git diff --quiet public/big-inning-schedule.json; then
+            echo "no changes"
+            exit 0
+          fi
+          git add public/big-inning-schedule.json
+          git commit -m "Refresh Big Inning schedule"
+          git pull --rebase
+          git push

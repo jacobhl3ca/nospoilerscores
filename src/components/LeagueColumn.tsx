@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, LeagueData, Sport, Team } from "@/lib/types";
-import { displayShortName } from "@/lib/espn";
+import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/lib/espn";
 import { getGolfSubtitle } from "@/lib/golf";
 import GameCard from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
@@ -66,7 +66,44 @@ interface SubtitleResult {
   href?: string;
 }
 
-function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]): SubtitleResult | null {
+// Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
+function parseEtTime(s: string): { h: number; m: number } | null {
+  const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10) % 12;
+  if (m[3].toUpperCase() === "PM") h += 12;
+  return { h, m: parseInt(m[2], 10) };
+}
+
+// Current ET wall-clock as {y,mo,d,h,m} via toLocaleString — works in any TZ.
+function nowInEt(): { y: number; mo: number; d: number; h: number; m: number } {
+  const s = new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  // s like "05/04/2026, 09:30" (or "05/04/2026, 24:30" on midnight in some locales)
+  const m = s.match(/(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2})/);
+  if (!m) return { y: 0, mo: 0, d: 0, h: 0, m: 0 };
+  return {
+    y: +m[3],
+    mo: +m[1],
+    d: +m[2],
+    h: +m[4] % 24,
+    m: +m[5],
+  };
+}
+
+function getPlayoffSubtitle(
+  sport: Sport,
+  selectedDate: string,
+  games: Game[] | undefined,
+  bigInningSchedule: BigInningSchedule | null,
+): SubtitleResult | null {
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
   const y = +selectedDate.slice(0, 4);
@@ -90,20 +127,35 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   }
 
   // MLB regular season: nod to MLB Network's nightly Big Inning whip-around
-  // show in place of the (still-far-off) postseason countdown. We can't
-  // verify the show's exact start/end without scraping mlb.com, so use
-  // actual game state as the live signal — Big Inning airs *during* live
-  // games, so any in-progress MLB game ≈ show is on air. Only attach the
-  // /network/live link when live; otherwise plain italic, no link.
-  if (sport === "mlb" && games?.length) {
-    const anyLive = games.some(g => g.state === "in");
-    if (anyLive) {
+  // show in place of the (still-far-off) postseason countdown. Per-night
+  // start times come from the schedule scraped daily by scripts/scrape-
+  // big-inning.mjs. Only show the subtitle on dates the schedule lists
+  // (Big Inning skips some days). Only attach the /network/live link once
+  // we've crossed the scheduled ET start time on today's date.
+  if (sport === "mlb" && bigInningSchedule) {
+    // selectedDate is YYYYMMDD — schedule is keyed YYYY-MM-DD.
+    const isoDate = `${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}`;
+    const entry = bigInningSchedule[isoDate];
+    if (!entry) return null;
+
+    const parsed = parseEtTime(entry.timeET);
+    const now = nowInEt();
+    const isToday =
+      now.y === +selectedDate.slice(0, 4) &&
+      now.mo === +selectedDate.slice(4, 6) &&
+      now.d === +selectedDate.slice(6, 8);
+    const past = !!parsed && isToday && (now.h > parsed.h || (now.h === parsed.h && now.m >= parsed.m));
+
+    if (past) {
       return {
         tiers: ["Big Inning · LIVE", "Big Inning"],
         href: "https://www.mlb.com/network/live",
       };
     }
-    return { tiers: ["Big Inning"] };
+    // Show the scheduled time as plain italic (no link until we hit start).
+    return {
+      tiers: [`Big Inning · ${entry.timeET} ET`, `Big Inning · ${entry.timeET}`, "Big Inning"],
+    };
   }
 
   // Only flag the pre-playoff window (e.g. NBA play-in) DURING the window itself.
@@ -130,9 +182,26 @@ function getPlayoffSubtitle(sport: Sport, selectedDate: string, games?: Game[]):
   return { tiers: [`${base} (${days} days)`, `${baseShort} (${days}d)`, baseShort] };
 }
 
+// Module-level cache so every column shares one fetch.
+let cachedBigInningSchedule: BigInningSchedule | null = null;
+
 function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
   const ref = useRef<HTMLElement>(null);
-  const result = getPlayoffSubtitle(sport, selectedDate, games);
+  const [bigInningSchedule, setBigInningSchedule] = useState<BigInningSchedule | null>(cachedBigInningSchedule);
+
+  // Lazy-load Big Inning schedule once per session. Only MLB columns need it,
+  // but cheap enough to fetch unconditionally — the request is cached.
+  useEffect(() => {
+    if (sport !== "mlb" || cachedBigInningSchedule) return;
+    let cancelled = false;
+    loadBigInningSchedule().then((s) => {
+      cachedBigInningSchedule = s;
+      if (!cancelled) setBigInningSchedule(s);
+    });
+    return () => { cancelled = true; };
+  }, [sport]);
+
+  const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
   const tiers = result?.tiers ?? [];
   const href = result?.href;
   const tiersKey = tiers.join("|");
