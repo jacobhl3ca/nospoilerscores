@@ -150,8 +150,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   })() : null;
   const localTime = isFuture ? (() => {
     const cleaned = cleanStatusDetail(game.statusDetail, true);
-    // ESPN returns "Scheduled" with no time for some leagues (EPL, MLS) — derive from game.date
-    if (!cleaned || cleaned.toLowerCase() === "scheduled") {
+    // ESPN sometimes omits a time (EPL/MLS "Scheduled") or returns a date-only string
+    // like "Starts 5/3" — if there's no HH:MM in the cleaned text, derive from game.date.
+    if (!cleaned || cleaned.toLowerCase() === "scheduled" || !/\d{1,2}:\d{2}/.test(cleaned)) {
       try {
         const d = new Date(game.date);
         if (!isNaN(d.getTime())) {
