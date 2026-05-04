@@ -140,6 +140,7 @@ export function NewsColumnTitle({
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
+  const mobileLabel = stripLeaguePrefixForMobile(label);
   return (
     // Outer wrapper carries sticky + page bg so the corner triangles outside
     // the inner div's rounded-t-lg curve fill with var(--bg) (matching the
@@ -150,12 +151,13 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
       className="news-source-sticky-top sticky z-20"
       style={{ background: "var(--bg)" }}
     >
-      {/* No borderTop — parent card now provides full 4-side border so the
-          rounded curve closes at top corners; an extra borderTop here would
-          stack and render as a 2px line at natural state. */}
+      {/* borderTop renders the pinned-bar top edge once the parent card's own
+          borderTop has scrolled off-screen. At natural state both borderTops
+          stack adjacent — 2px line on a faint rgba(...,0.1) border, accepted
+          as the lesser evil vs. an unbordered pinned bar at scroll. */}
       <div
         className="rounded-t-lg px-3 py-2.5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-wide"
-        style={{ color: "var(--text)", background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
+        style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
       >
         {logoUrl && (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -168,10 +170,31 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
             draggable={false}
           />
         )}
-        <span>{label}</span>
+        {mobileLabel !== label ? (
+          <>
+            <span className="sm:hidden">{mobileLabel}</span>
+            <span className="hidden sm:inline">{label}</span>
+          </>
+        ) : (
+          <span>{label}</span>
+        )}
       </div>
     </div>
   );
+}
+
+// Strip league/network tokens from the source label on narrow screens so the
+// logo + remaining text isn't redundant. Repeats so "ESPN NBA" → "" → keep
+// original. Empty after strip falls back to the full label.
+function stripLeaguePrefixForMobile(label: string): string {
+  let s = label;
+  for (let i = 0; i < 3; i++) {
+    const m = s.match(/^(?:NBA|MLB|NHL|NFL|EPL|MLS|NCAAM|NCAAF|ESPN|GOLF|TENNIS|F1|WNBA)\s+/i);
+    if (!m) break;
+    s = s.slice(m[0].length);
+  }
+  s = s.trim();
+  return s || label;
 }
 
 function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {

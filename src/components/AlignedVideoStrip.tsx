@@ -144,29 +144,52 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
 }
 
 function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
+  const mobileLabel = stripLeaguePrefixForMobile(label);
   return (
     // See NewsColumn.SourceHeader for the wrapper rationale.
     <div
       className="news-source-sticky-top sticky z-20"
       style={{ background: "var(--bg)" }}
     >
-      {/* No borderTop here — the parent card now provides a full 4-side
-          border, so adding one here would render a 2px doubled line at
-          natural state. When pinned to viewport, bg contrast (var(--bg)
-          outside the rounded-t-lg curve vs var(--bg-card) inside) is what
-          delineates the top edge. */}
+      {/* borderTop here is what the user sees as the top edge when this bar
+          is pinned to the viewport (parent card's borderTop has scrolled
+          off-screen by then). At natural state it sits 1px below parent's
+          borderTop — slight 2px-line visual on a faint var(--border), which
+          is the lesser evil vs. an unbordered pinned bar. */}
       <div
         className="rounded-t-lg px-3 py-2.5 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-wide"
-        style={{ color: "var(--text)", background: "var(--bg-card)", borderBottom: "1px solid var(--border)" }}
+        style={{ color: "var(--text)", background: "var(--bg-card)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}
       >
         {logoUrl && (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={logoUrl} alt="" width={24} height={24} className="w-6 h-6 object-contain shrink-0" draggable={false} />
         )}
-        <span>{label}</span>
+        {mobileLabel !== label ? (
+          <>
+            <span className="sm:hidden">{mobileLabel}</span>
+            <span className="hidden sm:inline">{label}</span>
+          </>
+        ) : (
+          <span>{label}</span>
+        )}
       </div>
     </div>
   );
+}
+
+// Strip league/network tokens from the source label on narrow screens so the
+// logo + remaining text isn't redundant ("MLB MLB MOST POPULAR" effect when
+// the logo already conveys the league). Repeats so "ESPN NBA" → "" → keep
+// original. Empty after strip falls back to the full label.
+function stripLeaguePrefixForMobile(label: string): string {
+  let s = label;
+  for (let i = 0; i < 3; i++) {
+    const m = s.match(/^(?:NBA|MLB|NHL|NFL|EPL|MLS|NCAAM|NCAAF|ESPN|GOLF|TENNIS|F1|WNBA)\s+/i);
+    if (!m) break;
+    s = s.slice(m[0].length);
+  }
+  s = s.trim();
+  return s || label;
 }
 
 function SkeletonRow({ isFirst }: { isFirst: boolean }) {
