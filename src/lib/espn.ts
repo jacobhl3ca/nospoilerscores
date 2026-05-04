@@ -22,31 +22,45 @@ const SPORT_PATHS: Record<Sport, string> = {
 export interface LeagueConfig {
   sport: Sport;
   label: string;
-  startDate?: string;       // MM-DD
-  endDate?: string;         // MM-DD (last day league is shown)
+  startDate?: string;        // MM-DD
+  endDate?: string;          // MM-DD (last day league is shown)
   championshipDate?: string; // MM-DD — day the championship game is played
-  firstPref?: boolean;      // Tier 1: always gets a slot when active (bumps lower leagues)
+  firstPref?: boolean;       // Tier 1: always gets a slot when active (bumps lower leagues)
+  mustInclude?: boolean;     // NBA/MLB/NHL/NFL — always picked when active
+  excludeFromAuto?: boolean; // Skipped from auto-pick; still selectable via slot-3 dropdown
+  backfillOnly?: boolean;    // NFL Preseason — only added when fewer than 3 active picks
+  displaySlot?: "left" | "center" | "right"; // pinned slot preference
+  slotPrecedence?: number;   // tiebreak within a pinned slot — lower wins
+  // World Cup is every 4 years. yearCycle.anchor matches the championship year.
+  yearCycle?: { mod: number; anchor: number };
+  marchMadnessLabel?: boolean; // NCAAM swaps to "March Madness" during the tourney window
 }
 
 export const ALL_LEAGUES: LeagueConfig[] = [
   // ── Major team sports ──
-  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06" },
-  { sport: "nba", label: "NBA", startDate: "10-20", endDate: "06-19", championshipDate: "06-19" },
-  { sport: "mlb", label: "MLB", startDate: "03-20", endDate: "11-01", championshipDate: "11-01" },
-  { sport: "nhl", label: "NHL", startDate: "04-07", endDate: "06-19", championshipDate: "06-19" },
-  { sport: "nfl", label: "NFL", startDate: "09-04", endDate: "02-09", championshipDate: "02-09" },
+  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", marchMadnessLabel: true },
+  { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
+  { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", championshipDate: "11-01", mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
+  { sport: "nhl",   label: "NHL",   startDate: "04-07", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
+  { sport: "nfl",   label: "NFL",   startDate: "09-04", endDate: "02-09", championshipDate: "02-09", mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
+  // NFL Preseason backfills the Jul 21 – Aug 15 thin window where only MLB + MLS are active.
+  // Window ends Sep 3 (regular NFL takes over Sep 4) — but EPL kickoff Aug 16 already fills
+  // the third slot, so backfillOnly ensures preseason only shows when slot 3 would be empty.
+  { sport: "nfl",   label: "NFL Preseason", startDate: "07-21", endDate: "09-03", backfillOnly: true, displaySlot: "center", slotPrecedence: 7 },
   // ── Golf majors ──
-  { sport: "golf", label: "Masters", startDate: "04-09", endDate: "04-13", championshipDate: "04-13", firstPref: true },
-  { sport: "golf", label: "PGA Champ", startDate: "05-14", endDate: "05-18", championshipDate: "05-18" },
-  { sport: "golf", label: "US Open", startDate: "06-18", endDate: "06-22", championshipDate: "06-22", firstPref: true },
-  { sport: "golf", label: "The Open", startDate: "07-16", endDate: "07-20", championshipDate: "07-20" },
+  // Masters takes the right slot when active (Jacob's pref) — bumps NHL during Apr 9-13.
+  { sport: "golf",  label: "Masters",  startDate: "04-09", endDate: "04-13", championshipDate: "04-13", firstPref: true, displaySlot: "right",  slotPrecedence: 1 },
+  // PGA Champ + French Open never auto-pick (still selectable via slot-3 swap dropdown).
+  { sport: "golf",  label: "PGA Champ", startDate: "05-14", endDate: "05-18", championshipDate: "05-18", excludeFromAuto: true },
+  { sport: "golf",  label: "US Open",   startDate: "06-18", endDate: "06-22", championshipDate: "06-22", firstPref: true, displaySlot: "center", slotPrecedence: 5 },
+  { sport: "golf",  label: "The Open",  startDate: "07-16", endDate: "07-20", championshipDate: "07-20", displaySlot: "center", slotPrecedence: 6 },
   // ── Tennis Grand Slams ──
-  { sport: "tennis", label: "Aus Open", startDate: "01-12", endDate: "01-26", championshipDate: "01-26" },
-  { sport: "tennis", label: "French Open", startDate: "05-24", endDate: "06-08", championshipDate: "06-08" },
-  { sport: "tennis", label: "Wimbledon", startDate: "06-29", endDate: "07-13", championshipDate: "07-13", firstPref: true },
-  { sport: "tennis", label: "US Open", startDate: "08-25", endDate: "09-14", championshipDate: "09-14", firstPref: true },
-  // ── FIFA World Cup 2026 (US/Canada/Mexico — one-time) ──
-  { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19", firstPref: true },
+  { sport: "tennis", label: "Aus Open",     startDate: "01-12", endDate: "01-26", championshipDate: "01-26" },
+  { sport: "tennis", label: "French Open",  startDate: "05-24", endDate: "06-08", championshipDate: "06-08", excludeFromAuto: true },
+  { sport: "tennis", label: "Wimbledon",    startDate: "06-29", endDate: "07-13", championshipDate: "07-13", firstPref: true, displaySlot: "center", slotPrecedence: 4 },
+  { sport: "tennis", label: "US Open",      startDate: "08-25", endDate: "09-14", championshipDate: "09-14", firstPref: true, displaySlot: "center", slotPrecedence: 3 },
+  // ── FIFA World Cup (every 4 years; 2026 was the most recent anchor) ──
+  { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19", firstPref: true, displaySlot: "center", slotPrecedence: 2, yearCycle: { mod: 4, anchor: 2026 } },
   // ── Premier League (Aug–May) ──
   { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
@@ -54,37 +68,47 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 ];
 
 // ═══════════════════════════════════════════════════════════════
-// FULL YEAR SCHEDULE — Max 3 leagues
-// First preference (always shown): World Cup, Masters, Wimbledon, US Open (golf+tennis), March Madness
-// Regular priority: NBA > MLB > NFL > PGA/Open/FrOpen/AusOpen > NCAAM > NHL > EPL
-// Empty leagues render with a "next game" message; EPL only appears when fewer than 3 higher-priority leagues are active.
+// FULL YEAR SCHEDULE — Max 3 leagues, slots = [left, center, right]
+//
+// Slot pinning:
+//   left  : NBA (precedence 1) > MLB (2)
+//   center: NFL (1) > World Cup (2) > US Open Tennis (3) > Wimbledon (4)
+//           > US Open Golf (5) > The Open (6) > NFL Preseason (7)
+//           NCAAM dynamically pins to center during March Madness (Mar 17 – Apr 6).
+//   right : Masters (1) > NHL (2)
+//
+// Picks: mustInclude (NBA/MLB/NHL/NFL) + firstPref always picked when active;
+// regular leagues fill remaining slots by LEAGUE_PRIORITY; backfillOnly
+// (NFL Preseason) only joins when fewer than 3 picks otherwise. excludeFromAuto
+// (PGA Champ, French Open) never auto-picked but remain in the slot-3 swap menu.
 // ═══════════════════════════════════════════════════════════════
-// Jan 12-26:       + Aus Open                   → [NFL, NBA, NCAAM]         ← Aus Open below NCAAM
-// Feb 10 – Mar 16: NFL ends                     → [NBA, NCAAM] (2)
-// Mar 17 – Apr 6:  NCAAM → March Madness (1st!) → [NCAAM, NBA, MLB]
-// Apr 7-8:         NCAAM out, NHL in            → [NBA, MLB, NCAAM]
-// Apr 9-13:        + Masters (1st pref!)         → [Masters, NBA, MLB]      ← NCAAM+NHL bumped
-// Apr 14 – May 13:                              → [NBA, MLB, NCAAM]
-// May 14-18:       + PGA Champ                  → [NBA, MLB, NCAAM]         ← PGA below NCAAM
-// May 19-23:                                    → [NBA, MLB, NCAAM]
-// May 24 – Jun 8:  + French Open               → [NBA, MLB, NCAAM]         ← French Open below NCAAM
-// Jun 9-10:                                     → [NBA, MLB, NCAAM]
-// Jun 11-17:       + World Cup (1st pref!)       → [World Cup, NBA, MLB]    ← NCAAM+NHL bumped
-// Jun 18-19:       + US Open Golf (1st pref!)    → [World Cup, US Open, NBA] ← 2 first-prefs
-// Jun 20-22:       NBA+NHL end                   → [World Cup, US Open, MLB]
-// Jun 23-28:       US Open Golf ends             → [World Cup, MLB] (2)
-// Jun 29 – Jul 13: + Wimbledon (1st pref!)       → [World Cup, Wimbledon, MLB]
-// Jul 14-15:       Wimbledon out                 → [World Cup, MLB] (2)
-// Jul 16-19:       + The Open                    → [World Cup, MLB] (2)      ← The Open below MLB
-// Jul 20:          World Cup ends                → [MLB] (1)
-// Jul 21 – Aug 15:                               → [MLB] (1)
-// Aug 16-24:       + EPL                         → [MLB, EPL] (2)
-// Aug 25 – Sep 3:  + US Open Tennis (1st pref!)  → [US Open, MLB, EPL]
-// Sep 4-14:        + NFL                         → [US Open, MLB, NFL]       ← EPL bumped
-// Sep 15 – Oct 19:                               → [MLB, NFL] (2)
-// Oct 20-31:       + NBA                         → [MLB, NFL, NBA]
-// Nov 1:           + NCAAM, MLB ends next day    → [MLB, NFL, NBA]           ← NCAAM below NBA
-// Nov 2 – Feb 9:                                 → [NFL, NBA, NCAAM]
+// Jan 1 – Jan 11:   NBA/NFL/NCAAM/MLS/EPL          → [NBA, NFL, NCAAM]
+// Jan 12 – Jan 26:  + Aus Open                     → [NBA, NFL, Aus Open]
+// Jan 27 – Feb 9:   Aus Open ends                  → [NBA, NFL, NCAAM]
+// Feb 10 – Mar 16:  NFL ends                       → [NBA, NCAAM, EPL]
+// Mar 17 – Mar 19:  NCAAM → March Madness          → [NBA, March Madness, EPL]
+// Mar 20 – Apr 6:   + MLB                           → [NBA, March Madness, MLB]
+// Apr 7 – Apr 8:    NCAAM done; + NHL              → [NBA, MLB, NHL]
+// Apr 9 – Apr 13:   + Masters (right pin)          → [NBA, MLB, Masters]    ← NHL bumped
+// Apr 14 – May 13:                                  → [NBA, MLB, NHL]
+// May 14 – May 18:  PGA Champ excluded             → [NBA, MLB, NHL]
+// May 19 – May 23:                                  → [NBA, MLB, NHL]
+// May 24 – Jun 8:   French Open excluded            → [NBA, MLB, NHL]
+// Jun 9 – Jun 10:                                   → [NBA, MLB, NHL]
+// Jun 11 – Jun 19:  + World Cup (yearCycle)         → [NBA, World Cup, NHL]  ← MLB bumped (NHL pin wins)
+// Jun 20 – Jun 22:  NBA + NHL end; + US Open Golf  → [MLB, World Cup, US Open Golf]
+// Jun 23 – Jun 28:  US Open Golf ends              → [MLB, World Cup, MLS]
+// Jun 29 – Jul 13:  + Wimbledon                    → [MLB, World Cup, Wimbledon]
+// Jul 14 – Jul 15:  Wimbledon ends                 → [MLB, World Cup, MLS]
+// Jul 16 – Jul 19:  + The Open                     → [MLB, World Cup, The Open]
+// Jul 20:           World Cup ends                 → [MLB, The Open, MLS]
+// Jul 21 – Aug 15:  NFL Preseason backfill         → [MLB, NFL Preseason, MLS]
+// Aug 16 – Aug 24:  + EPL (Preseason bumped)       → [MLB, EPL, MLS]
+// Aug 25 – Sep 3:   + US Open Tennis               → [MLB, US Open Tennis, EPL]
+// Sep 4 – Sep 14:   + NFL                           → [MLB, NFL, US Open Tennis]
+// Sep 15 – Oct 19:  US Open Tennis ends            → [MLB, NFL, EPL]
+// Oct 20 – Nov 1:   + NBA                           → [NBA, NFL, MLB]
+// Nov 2 – Dec 31:   MLB ends; + NCAAM              → [NBA, NFL, NCAAM]
 // ═══════════════════════════════════════════════════════════════
 
 function toMMDD(d: Date): string {
@@ -92,6 +116,13 @@ function toMMDD(d: Date): string {
 }
 
 export function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
+  // World Cup runs every 4 years — gate on viewDate's year before the date window check.
+  // For wrap-around windows (Aug → May), the championship anchor is the year the
+  // window ends, so use the year that matches the championshipDate side of the window.
+  if (league.yearCycle) {
+    const { mod, anchor } = league.yearCycle;
+    if ((viewDate.getFullYear() - anchor) % mod !== 0) return false;
+  }
   if (!league.startDate || !league.endDate) return true;
   const mmdd = toMMDD(viewDate);
 
@@ -102,41 +133,26 @@ export function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
   }
 }
 
-// Days since this league's current season started — newest leagues sort rightmost.
-// On championship day, the league gets max priority (leftmost).
-function daysSinceSeasonStart(league: LeagueConfig, viewDate: Date): number {
-  if (!league.startDate) return 365;
-  const mmdd = toMMDD(viewDate);
-  // Championship day — force leftmost
-  if (league.championshipDate && mmdd === league.championshipDate) return 999;
-  const year = viewDate.getFullYear();
-  const [m, d] = league.startDate.split("-").map(Number);
-  let start = new Date(year, m - 1, d);
-  // For wrap-around or if start hasn't happened yet this year, use last year
-  if (start > viewDate) start = new Date(year - 1, m - 1, d);
-  return Math.floor((viewDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-}
-
 const MAX_LEAGUES = 3;
 
-// March Madness date range (NCAAM tournament — gets first preference)
+// March Madness date range — NCAAM dynamically becomes a firstPref / center pin.
 const MARCH_MADNESS_START = "03-17";
 const MARCH_MADNESS_END = "04-06";
 
-// Unified priority — lower = higher priority
-// firstPref leagues (World Cup, Masters, US Open Golf, Wimbledon, US Open Tennis) always get a slot
-// Other leagues ranked: NBA > MLB > NFL > tennis > golf > NCAAM > NHL > EPL
-// March Madness gets firstPref treatment so NCAAM still shows during the tournament.
+// Tiebreak when a regular (non-pinned, non-firstPref) league fills a leftover slot.
+// Lower number = picked first. Used only after pin assignment has consumed mustIncludes
+// and firstPrefs; everyone else competes by this priority.
 const LEAGUE_PRIORITY: Record<string, number> = {
   nba: 1,
   mlb: 2,
   nfl: 3,
-  tennis: 4, // non-firstPref: French Open, Aus Open
-  golf: 5,   // non-firstPref: PGA Champ, The Open (under tennis)
-  ncaam: 6,  // March Madness gets firstPref bump
+  tennis: 4,
+  golf: 5,
+  ncaam: 6,
   nhl: 7,
-  epl: 8,    // under NHL
-  mls: 9,    // under EPL
+  epl: 8,
+  mls: 9,
+  fifa: 10,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -144,32 +160,95 @@ function isMarchMadness(viewDate: Date): boolean {
   return mmdd >= MARCH_MADNESS_START && mmdd <= MARCH_MADNESS_END;
 }
 
-// Returns ALL active league candidates ordered: firstPref first, then rest by priority.
-// Caller can take the first N and use the remainder as backfill when selected leagues are empty.
+// During March Madness, NCAAM acts as a firstPref center pin.
+function effectiveFirstPref(league: LeagueConfig, viewDate: Date): boolean {
+  if (league.firstPref) return true;
+  if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) return true;
+  return false;
+}
+function effectiveDisplaySlot(league: LeagueConfig, viewDate: Date): "left" | "center" | "right" | undefined {
+  if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) return "center";
+  return league.displaySlot;
+}
+function effectiveSlotPrecedence(league: LeagueConfig, viewDate: Date): number {
+  if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) return 0; // beats NFL for center during MM
+  return league.slotPrecedence ?? 99;
+}
+
+// Public for callers that just want the active set (e.g. swap dropdowns).
+// Returns leagues ordered by their final slot positions (left → center → right).
 export function getActiveLeagueCandidates(viewDate?: Date): {
   firstPref: LeagueConfig[];
   rest: LeagueConfig[];
 } {
   const d = viewDate ?? new Date();
-  const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d));
-  const madness = isMarchMadness(d);
-  const firstPref = active.filter((l) => l.firstPref || (l.sport === "ncaam" && madness));
+  const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d) && !l.excludeFromAuto && !l.backfillOnly);
+  const firstPref = active.filter((l) => effectiveFirstPref(l, d));
   const rest = active
-    .filter((l) => !l.firstPref && !(l.sport === "ncaam" && madness))
+    .filter((l) => !effectiveFirstPref(l, d))
     .sort((a, b) => (LEAGUE_PRIORITY[a.sport] ?? 99) - (LEAGUE_PRIORITY[b.sport] ?? 99));
   return { firstPref, rest };
 }
 
-function getActiveLeagues(viewDate?: Date): LeagueConfig[] {
-  const d = viewDate ?? new Date();
-  const { firstPref, rest } = getActiveLeagueCandidates(d);
-  const firstPrefCount = Math.min(firstPref.length, MAX_LEAGUES);
-  const restCount = Math.min(rest.length, MAX_LEAGUES - firstPrefCount);
-  const selected = [...firstPref.slice(0, firstPrefCount), ...rest.slice(0, restCount)];
+// Pick the 3 active leagues + assign slot positions according to the documented rules.
+// Returns leagues in slot order [left, center, right] (length 1-3).
+export function pickAndAssignLeagues(viewDate: Date): LeagueConfig[] {
+  const eligible = ALL_LEAGUES.filter((l) => isLeagueActive(l, viewDate) && !l.excludeFromAuto);
 
-  // Sort for display: longest-active leftmost, newest rightmost
-  // On championship day, force leftmost
-  return selected.sort((a, b) => daysSinceSeasonStart(b, d) - daysSinceSeasonStart(a, d));
+  const mustInclude = eligible.filter((l) => l.mustInclude && !l.backfillOnly);
+  const firstPref   = eligible.filter((l) => effectiveFirstPref(l, viewDate) && !l.mustInclude && !l.backfillOnly);
+  const regular     = eligible.filter((l) => !l.mustInclude && !effectiveFirstPref(l, viewDate) && !l.backfillOnly);
+  const backfill    = eligible.filter((l) => l.backfillOnly);
+
+  // Build the candidate pool: hard-required leagues first, then top regulars to reach 3.
+  const candidates: LeagueConfig[] = [...mustInclude, ...firstPref];
+  const sortedRegular = regular.sort(
+    (a, b) => (LEAGUE_PRIORITY[a.sport] ?? 99) - (LEAGUE_PRIORITY[b.sport] ?? 99)
+  );
+  for (const l of sortedRegular) {
+    if (candidates.length >= MAX_LEAGUES) break;
+    candidates.push(l);
+  }
+  // Backfill (NFL Preseason) only joins if we still have an empty slot.
+  if (candidates.length < MAX_LEAGUES) {
+    for (const l of backfill) {
+      if (candidates.length >= MAX_LEAGUES) break;
+      candidates.push(l);
+    }
+  }
+
+  // Assign pinned slots first; losers fall back into a generic pool to fill empty slots.
+  const slots: (LeagueConfig | null)[] = [null, null, null];
+  const slotIndex: Record<"left" | "center" | "right", 0 | 1 | 2> = { left: 0, center: 1, right: 2 };
+
+  for (const slotName of ["left", "center", "right"] as const) {
+    const contenders = candidates.filter((c) => effectiveDisplaySlot(c, viewDate) === slotName);
+    if (contenders.length === 0) continue;
+    contenders.sort((a, b) => effectiveSlotPrecedence(a, viewDate) - effectiveSlotPrecedence(b, viewDate));
+    slots[slotIndex[slotName]] = contenders[0];
+  }
+
+  const placed = new Set(slots.filter(Boolean) as LeagueConfig[]);
+  const fallbackPool = candidates
+    .filter((c) => !placed.has(c))
+    .sort((a, b) => (LEAGUE_PRIORITY[a.sport] ?? 99) - (LEAGUE_PRIORITY[b.sport] ?? 99));
+
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i] !== null) continue;
+    const next = fallbackPool.shift();
+    if (next) slots[i] = next;
+  }
+
+  return slots.filter((l): l is LeagueConfig => l !== null);
+}
+
+// Resolves the display label for a league at a given date — NCAAM swaps to
+// "March Madness" during the tournament window; everything else passes through.
+export function effectiveLeagueLabel(league: LeagueConfig, viewDate: Date): string {
+  if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) {
+    return "March Madness";
+  }
+  return league.label;
 }
 
 // ESPN's `shortDisplayName` is usually compact ("Yankees", "Celtics"), but a
@@ -1028,101 +1107,39 @@ export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): 
     ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`)
     : new Date();
 
-  const { firstPref, rest } = getActiveLeagueCandidates(viewDate);
+  // Resolved slot order from the layout rules. Returns 1-3 LeagueConfigs in
+  // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top.
+  const auto = pickAndAssignLeagues(viewDate);
 
-  // Fetch data for ALL candidates in parallel — needed so we can backfill
-  // empty non-firstPref slots with lower-priority leagues that have games today.
-  const fetchLeague = async ({ sport, label }: LeagueConfig): Promise<LeagueData | null> => {
-    if (sport === "golf") {
-      const golfTournament = await fetchGolfTournament(date);
-      if (!golfTournament) return null;
-      return { sport, label, games: [], golfTournament };
-    }
-    const games = await fetchGames(sport, date);
-    let nextGameDay: { date: string; games: Game[] } | null = null;
-    if (games.length === 0) {
-      nextGameDay = await fetchNextGameDay(sport, 7, date);
-    }
-    return { sport, label, games, nextGameDay };
-  };
-
-  // If user chose a 3rd league, we also need to fetch it (may not be in firstPref or rest)
-  const allCandidates = [...firstPref, ...rest];
+  // Slot 3 swap: user can replace the rightmost slot with any other active league.
+  // If the chosen league is already in the auto picks (e.g. user re-picked the
+  // default), skip the override. Otherwise drop slot 2 and append the user's
+  // choice — preserving the existing "user choice always last" contract.
+  let final: LeagueConfig[] = auto;
   const thirdLeagueConfig = thirdLeagueSport
     ? ALL_LEAGUES.find((l) => l.sport === thirdLeagueSport && isLeagueActive(l, viewDate))
     : null;
-  // Add to candidates if not already present
-  const extraFetch = thirdLeagueConfig && !allCandidates.some(c => c.sport === thirdLeagueConfig.sport && c.label === thirdLeagueConfig.label)
-    ? [thirdLeagueConfig]
-    : [];
-
-  const [firstPrefResults, restResults, extraResults] = await Promise.all([
-    Promise.all(firstPref.map(fetchLeague)),
-    Promise.all(rest.map(fetchLeague)),
-    Promise.all(extraFetch.map(fetchLeague)),
-  ]);
-
-  // First-pref leagues always shown (when data loaded); cap at MAX_LEAGUES
-  const selectedFirstPref = firstPrefResults
-    .filter((r): r is LeagueData => r !== null)
-    .slice(0, MAX_LEAGUES);
-
-  // Fill remaining slots from rest in strict priority order.
-  // Empty leagues are OK — they render with a "next game" message.
-  // restResults preserves the priority order from getActiveLeagueCandidates.
-  const remaining = MAX_LEAGUES - selectedFirstPref.length;
-
-  // If user chose a 3rd league, reserve the last slot for it
-  // Skip if the chosen sport is already in firstPref (would duplicate)
-  const alreadyInFirstPref = selectedFirstPref.some(l => l.sport === thirdLeagueSport);
-  if (thirdLeagueSport && remaining > 0 && !alreadyInFirstPref) {
-    // Fill slots 1..(remaining-1) from auto rest, then slot 3 = user choice
-    const autoRest = restResults
-      .filter((r): r is LeagueData => r !== null)
-      .filter(r => r.sport !== thirdLeagueSport);
-    const autoSlots = autoRest.slice(0, remaining - 1);
-
-    // Find the user's chosen league from rest results or extra fetch
-    const userLeague = restResults
-      .filter((r): r is LeagueData => r !== null)
-      .find(r => r.sport === thirdLeagueSport)
-      ?? extraResults.filter((r): r is LeagueData => r !== null)[0]
-      ?? null;
-
-    // Sort only auto slots (positions 1-2) — user's choice always goes last (position 3)
-    const autoSelected = [...selectedFirstPref, ...autoSlots].sort(
-      (a, b) =>
-        daysSinceSeasonStart(
-          ALL_LEAGUES.find((l) => l.sport === b.sport && l.label === b.label)!,
-          viewDate
-        ) -
-        daysSinceSeasonStart(
-          ALL_LEAGUES.find((l) => l.sport === a.sport && l.label === a.label)!,
-          viewDate
-        )
-    );
-    if (userLeague) autoSelected.push(userLeague);
-    return autoSelected;
+  if (thirdLeagueConfig && !auto.some((l) => l.sport === thirdLeagueConfig.sport && l.label === thirdLeagueConfig.label)) {
+    final = [...auto.slice(0, MAX_LEAGUES - 1), thirdLeagueConfig];
   }
 
-  const selectedRest = restResults
-    .filter((r): r is LeagueData => r !== null)
-    .slice(0, remaining);
+  const fetchLeague = async (cfg: LeagueConfig): Promise<LeagueData | null> => {
+    const label = effectiveLeagueLabel(cfg, viewDate);
+    if (cfg.sport === "golf") {
+      const golfTournament = await fetchGolfTournament(date);
+      if (!golfTournament) return null;
+      return { sport: cfg.sport, label, games: [], golfTournament };
+    }
+    const games = await fetchGames(cfg.sport, date);
+    let nextGameDay: { date: string; games: Game[] } | null = null;
+    if (games.length === 0) {
+      nextGameDay = await fetchNextGameDay(cfg.sport, 7, date);
+    }
+    return { sport: cfg.sport, label, games, nextGameDay };
+  };
 
-  const selected = [...selectedFirstPref, ...selectedRest];
-
-  // Display order: longest-active leftmost, newest rightmost
-  return selected.sort(
-    (a, b) =>
-      daysSinceSeasonStart(
-        ALL_LEAGUES.find((l) => l.sport === b.sport && l.label === b.label)!,
-        viewDate
-      ) -
-      daysSinceSeasonStart(
-        ALL_LEAGUES.find((l) => l.sport === a.sport && l.label === a.label)!,
-        viewDate
-      )
-  );
+  const results = await Promise.all(final.map(fetchLeague));
+  return results.filter((r): r is LeagueData => r !== null);
 }
 
 // ESPN standings: { teamId -> "W-L" }. Cached per-sport so one team-view

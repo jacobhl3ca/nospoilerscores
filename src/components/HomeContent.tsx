@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } fr
 import { LeagueData, Sport } from "@/lib/types";
 import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
-import { fetchAllLeagues, getActiveLeagueCandidates, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
+import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import LeagueColumn from "@/components/LeagueColumn";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
