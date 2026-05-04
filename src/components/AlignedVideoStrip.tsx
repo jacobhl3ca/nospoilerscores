@@ -101,13 +101,15 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
             // overflow-clip (not overflow-hidden) so the sticky SourceHeader
             // below pins to window scroll instead of being trapped inside this
             // card. See feedback_overflow_clip_for_sticky.md.
-            // Full 4-side border so the rounded-lg curve closes cleanly at
-            // the top corners — with only left+right+bottom the borders
-            // curved up and ended mid-air, leaving visible 1px stubs.
+            // box-shadow inset (not real borders) for the card outline so the
+            // inner SourceHeader's rounded-t-lg + borderTop overlaps the
+            // parent's top edge as a single 1px line — real borders on the
+            // parent would push the inner 1px inward, producing a 2px nested-
+            // curve at the top corners.
             className="rounded-lg overflow-clip grid"
             style={{
               background: "var(--bg-card)",
-              border: "1px solid var(--border)",
+              boxShadow: "inset 0 0 0 1px var(--border)",
               gridRow: `1 / span ${totalRows}`,
               gridTemplateRows: "subgrid",
             }}

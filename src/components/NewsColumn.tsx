@@ -202,10 +202,12 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
     // overflow-clip (not overflow-hidden) so position: sticky on SourceHeader
     // pins to the window, not to this card. overflow-hidden establishes a
     // scroll container; overflow-clip doesn't.
-    // Full 4-side border so rounded-lg curve closes at top corners.
+    // box-shadow inset (not actual borders) so the SourceHeader's rounded-t-lg
+    // + borderTop overlaps the parent's top edge as a single 1px line —
+    // real borders push the inner 1px inward, creating nested curves at top.
     <div
       className="rounded-lg overflow-clip"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
@@ -339,10 +341,11 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
 function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {
   return (
     // overflow-clip — see TextSourceCard for why (sticky SourceHeader needs
-    // window as the scroll container).
+    // window as the scroll container). box-shadow inset for the card outline
+    // (see TextSourceCard for the alignment rationale).
     <div
       className="rounded-lg overflow-clip"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
