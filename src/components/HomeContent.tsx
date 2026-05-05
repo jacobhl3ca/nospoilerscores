@@ -740,7 +740,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         )}
       </main>
 
-      <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}>
+      <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
         <span>Catch up on games without spoilers.</span>
         {/* <span>Select {"\u{1F648}"} to rank by closest games.</span> */}
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
