@@ -201,6 +201,34 @@ function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selecte
     return () => { cancelled = true; };
   }, [sport]);
 
+  // The Big Inning subtitle decides "scheduled-time vs LIVE" based on the local
+  // ET clock at render. Without a tick, a session sitting on the page through
+  // the start time would never flip. Run a 60s tick ONLY while we're waiting
+  // for that flip — MLB column, schedule loaded, today's entry exists, start
+  // time not yet reached. Once the start time passes, this effect's dep flips
+  // to false and the interval is cleared.
+  const needsBigInningTick = (() => {
+    if (sport !== "mlb" || !bigInningSchedule) return false;
+    const isoDate = `${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}`;
+    const entry = bigInningSchedule[isoDate];
+    if (!entry) return false;
+    const parsed = parseEtTime(entry.timeET);
+    if (!parsed) return false;
+    const now = nowInEt();
+    const isToday =
+      now.y === +selectedDate.slice(0, 4) &&
+      now.mo === +selectedDate.slice(4, 6) &&
+      now.d === +selectedDate.slice(6, 8);
+    if (!isToday) return false;
+    return now.h < parsed.h || (now.h === parsed.h && now.m < parsed.m);
+  })();
+  const [, bumpTick] = useState(0);
+  useEffect(() => {
+    if (!needsBigInningTick) return;
+    const id = setInterval(() => bumpTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, [needsBigInningTick]);
+
   const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
   const tiers = result?.tiers ?? [];
   const href = result?.href;
