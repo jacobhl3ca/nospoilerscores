@@ -86,7 +86,11 @@ body {
 }
 
 .monkey-toggle {
-  box-shadow: 0 0 0 0px var(--accent);
+  /* Replace the 1px inline border with a 1px box-shadow ring so rest/hover
+     share the same drawing model — avoids the 1px-border + 2px-shadow seam
+     that rendered as a fuzzy double-edged ring on hover. */
+  border-color: transparent !important;
+  box-shadow: 0 0 0 1px var(--border);
   transition: box-shadow 0.2s, background 0.2s;
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
