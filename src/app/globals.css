@@ -86,16 +86,17 @@ body {
 }
 
 .monkey-toggle {
-  /* Use outline (not box-shadow) for the ring — box-shadow at circular curves
-     anti-aliases asymmetrically, making horizontal rows look thinner than
-     vertical, so the ring appears flat at top/bottom. Outline keeps a uniform
-     stroke thickness around the rounded border. Border kept transparent so
-     the inline 1px var(--border) doesn't compete with the outline. */
+  /* Outline (not box-shadow) so the ring stays uniform around rounded corners
+     instead of AA-flattening at top/bottom. Inline 1px var(--border) is
+     suppressed so it doesn't compete with the outline. */
   border-color: transparent !important;
   outline: 1px solid var(--border);
   outline-offset: 0;
   box-shadow: none;
-  transition: outline-color 0.2s, outline-width 0.2s, background 0.2s;
+  /* Snappy hover: outline transitions in 80ms (color + width together). Don't
+     transition the rest of `all` from the Tailwind class — that overrode the
+     outline timing and made the ring feel laggy. */
+  transition: outline 0.08s ease-out, transform 0.15s, background 0.15s;
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 .emoji {
