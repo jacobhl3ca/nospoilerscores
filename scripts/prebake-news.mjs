@@ -619,38 +619,96 @@ async function fetchESPNTopHeadlines() {
   // <ul class="headlineStack__list"> elements (5 + 4 today). Anchor on the
   // parent class, then concat every headline UL found until the section closes.
   const topIdx = html.indexOf('class="headlineStack top-headlines"');
-  if (topIdx < 0) return [];
-  // Grab the listContainer's full inner HTML — it wraps every UL of headlines
-  // for this block. Falls back to a 30 KB slice if the markup ever drops the
-  // listContainer wrapper entirely.
-  const tail = html.slice(topIdx, topIdx + 30000);
-  const containerM = tail.match(/headlineStack__listContainer"[^>]*>([\s\S]*?)<\/section>/);
-  const block = containerM ? containerM[1] : tail;
-  const liRe = /<li[^>]*>([\s\S]*?)<\/li>/g;
-  const items = [];
-  let m;
-  while ((m = liRe.exec(block)) !== null) {
-    const li = m[1];
-    const anchor = li.match(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
-    if (!anchor) continue;
-    let url = anchor[1];
-    if (url.startsWith("/")) url = `https://www.espn.com${url}`;
-    const title = decodeEntities(anchor[2].replace(/<[^>]+>/g, ""));
-    if (!title) continue;
-    if (!passesArticleBlocklist(title)) continue;
-    items.push({
-      id: url,
-      headline: title,
-      description: "",
-      published: "",
-      imageUrl: null,
-      leagueLogo: espnArticleLogo(url),
-      articleUrl: url,
-      byline: "",
-      section: "ESPN",
-    });
+  if (topIdx >= 0) {
+    // Grab the listContainer's full inner HTML — it wraps every UL of headlines
+    // for this block. Falls back to a 30 KB slice if the markup ever drops the
+    // listContainer wrapper entirely.
+    const tail = html.slice(topIdx, topIdx + 30000);
+    const containerM = tail.match(/headlineStack__listContainer"[^>]*>([\s\S]*?)<\/section>/);
+    const block = containerM ? containerM[1] : tail;
+    const liRe = /<li[^>]*>([\s\S]*?)<\/li>/g;
+    const items = [];
+    let m;
+    while ((m = liRe.exec(block)) !== null) {
+      const li = m[1];
+      const anchor = li.match(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+      if (!anchor) continue;
+      let url = anchor[1];
+      if (url.startsWith("/")) url = `https://www.espn.com${url}`;
+      const title = decodeEntities(anchor[2].replace(/<[^>]+>/g, ""));
+      if (!title) continue;
+      if (!passesArticleBlocklist(title)) continue;
+      items.push({
+        id: url,
+        headline: title,
+        description: "",
+        published: "",
+        imageUrl: null,
+        leagueLogo: espnArticleLogo(url),
+        articleUrl: url,
+        byline: "",
+        section: "ESPN",
+      });
+    }
+    if (items.length > 0) return items.slice(0, 15);
   }
-  return items.slice(0, 15);
+  // Fallback: GH Actions IPs consistently get a homepage variant without the
+  // headlineStack block (works fine from local Mac runs). Aggregate top news
+  // from the per-league JSON API instead — reliable, IP-agnostic, real API.
+  // Mix one or two from each big league so the tail mirrors a multi-sport
+  // top-stories feed instead of leaning on a single league.
+  return fetchESPNTopFromSiteApi();
+}
+
+async function fetchESPNTopFromSiteApi() {
+  const SPORT_PATHS = [
+    "/baseball/mlb",
+    "/basketball/nba",
+    "/hockey/nhl",
+    "/football/nfl",
+    "/soccer/eng.1",
+    "/tennis",
+  ];
+  const perLeagueLimit = 3;
+  const buckets = await Promise.all(
+    SPORT_PATHS.map(async (path) => {
+      try {
+        const data = await getJson(`https://site.api.espn.com/apis/site/v2/sports${path}/news?limit=${perLeagueLimit}`);
+        return (data.articles || [])
+          .filter((a) => passesArticleBlocklist(a.headline || "", a.description || ""))
+          .map((a) => {
+            const url = a.links?.web?.href || a.links?.mobile?.href || "";
+            return {
+              id: String(a.id || a.contentKey || url),
+              headline: a.headline || a.title || "",
+              description: "",
+              published: a.published || a.lastModified || "",
+              imageUrl: null,
+              leagueLogo: espnArticleLogo(url),
+              articleUrl: url,
+              byline: "",
+              section: "ESPN",
+            };
+          })
+          .filter((it) => it.headline && it.articleUrl);
+      } catch {
+        return [];
+      }
+    }),
+  );
+  // Round-robin across leagues so the first 6 items are one-per-league instead
+  // of all 3 MLB items first. Preserves recency-within-league ordering.
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < perLeagueLimit; i++) {
+    for (const bucket of buckets) {
+      const it = bucket[i];
+      if (!it || seen.has(it.id)) continue;
+      seen.add(it.id);
+      out.push(it);
+    }
+  }
+  return out.slice(0, 15);
 }
 
 // ── ESPN homepage big-format videos (thumbnail + title, in scroll order) ──
