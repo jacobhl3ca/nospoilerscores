@@ -86,19 +86,23 @@ body {
 }
 
 .monkey-toggle {
-  /* Replace the 1px inline border with a 1px box-shadow ring so rest/hover
-     share the same drawing model — avoids the 1px-border + 2px-shadow seam
-     that rendered as a fuzzy double-edged ring on hover. */
+  /* Use outline (not box-shadow) for the ring — box-shadow at circular curves
+     anti-aliases asymmetrically, making horizontal rows look thinner than
+     vertical, so the ring appears flat at top/bottom. Outline keeps a uniform
+     stroke thickness around the rounded border. Border kept transparent so
+     the inline 1px var(--border) doesn't compete with the outline. */
   border-color: transparent !important;
-  box-shadow: 0 0 0 1px var(--border);
-  transition: box-shadow 0.2s, background 0.2s;
+  outline: 1px solid var(--border);
+  outline-offset: 0;
+  box-shadow: none;
+  transition: outline-color 0.2s, outline-width 0.2s, background 0.2s;
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 .emoji {
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 .monkey-toggle:hover {
-  box-shadow: 0 0 0 2px var(--accent);
+  outline: 2px solid var(--accent);
 }
 
 
