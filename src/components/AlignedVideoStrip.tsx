@@ -298,7 +298,7 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
   ) : null;
   // flex-1 + items-center spreads the rows vertically when we have fewer
   // items than the pad-row budget, so the tail card fills col 3's space.
-  const rowCls = "flex flex-1 items-center gap-2 px-2.5 py-2 text-[11px] sm:text-[13px] font-semibold leading-tight transition-colors hover:bg-[var(--bg-card-hover)] w-full text-left";
+  const rowCls = "flex flex-1 items-center gap-2 px-2.5 py-2 text-[11px] sm:text-[13px] font-medium leading-snug transition-colors hover:bg-[var(--bg-card-hover)] w-full text-left";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   if (shouldPopModal) {
     return (
