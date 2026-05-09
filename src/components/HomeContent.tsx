@@ -744,9 +744,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <a href="mailto:hi@hidescore.com" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>hi@hidescore.com</a>
-        <span className="mt-2" style={{ maxWidth: "30rem", lineHeight: 1.45 }}>
-          Scores, schedules, and links sourced from ESPN, MLB, NBA, NHL, and others. HideScore is not affiliated with any team, league, or broadcaster.
-        </span>
         <a href="/privacy" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>Privacy</a>
       </footer>
 
