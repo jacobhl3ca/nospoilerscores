@@ -149,7 +149,7 @@ function getPlayoffSubtitle(
     if (past) {
       return {
         tiers: ["Big Inning · LIVE", "Big Inning"],
-        href: "https://www.mlb.com/network/live",
+        href: entry.selectionUrl ?? "https://www.mlb.com/network/live",
       };
     }
     // Show the scheduled time as plain italic (no link until we hit start).

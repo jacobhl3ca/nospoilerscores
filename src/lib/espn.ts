@@ -549,14 +549,49 @@ export function loadEspnAirings(): Promise<EspnAiringsData> {
 
 // Big Inning schedule scraped daily by scripts/scrape-big-inning.mjs from
 // mlb.com/network/modules/shows/mlbn-big-inning. Keyed by ISO date.
-export type BigInningSchedule = Record<string, { timeET: string }>;
+// `selectionUrl` is the deep link to tonight's airing on MLB.TV; merged in
+// at runtime from the "Featured on MLB.TV" rail (see below).
+export type BigInningSchedule = Record<
+  string,
+  { timeET: string; selectionUrl?: string }
+>;
 let bigInningPromise: Promise<BigInningSchedule> | null = null;
 export function loadBigInningSchedule(): Promise<BigInningSchedule> {
   if (!bigInningPromise) {
-    bigInningPromise = fetch(`${getApiBase()}/big-inning-schedule.json`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => (d?.schedule ?? {}) as BigInningSchedule)
-      .catch(() => ({}));
+    bigInningPromise = (async () => {
+      // The static schedule (per-night start times) and the "Featured on MLB.TV"
+      // rail (per-night selection slug) are independent — fetch in parallel and
+      // merge. Rail failures fall through to the /network/live href.
+      const [scheduleRes, railRes] = await Promise.allSettled([
+        fetch(`${getApiBase()}/big-inning-schedule.json`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null)),
+        fetch(
+          "https://dapi.cms.mlbinfra.com/v2/content/en-us/sel-mlbtv-featured-svod-video-list",
+          { cache: "no-store" }
+        ).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      const scheduleDoc = scheduleRes.status === "fulfilled" ? scheduleRes.value : null;
+      const railDoc = railRes.status === "fulfilled" ? railRes.value : null;
+      const schedule = (scheduleDoc?.schedule ?? {}) as BigInningSchedule;
+      const items: Array<{ slug?: string }> = railDoc?.items ?? [];
+      const match = items.find(
+        (it) => typeof it?.slug === "string" && it.slug.toLowerCase().includes("big-inning")
+      );
+      if (match?.slug) {
+        // en-CA locale formats as YYYY-MM-DD, matching the schedule's ISO key.
+        const isoToday = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/New_York",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date());
+        const todayEntry = schedule[isoToday];
+        if (todayEntry) {
+          todayEntry.selectionUrl = `https://www.mlb.com/tv/shows/selection/${match.slug}`;
+        }
+      }
+      return schedule;
+    })().catch(() => ({} as BigInningSchedule));
   }
   return bigInningPromise;
 }
