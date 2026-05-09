@@ -276,9 +276,9 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
 function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
   const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
   const shouldPopModal = !!onPlay && hasMedia;
-  // Match espn.com's Top Headlines: no league badge, full-width headline.
-  // Real article thumbs (item.imageUrl) still render — only the leagueLogo
-  // placeholder gets dropped so text-only rows aren't truncated by a 20px badge.
+  // Real article thumbs win when present; otherwise fall back to the league
+  // sport-icon (mirrors TextRow's 18px badge) so cross-league rows always
+  // have a visual anchor instead of a wall of plain text.
   const thumb = item.imageUrl ? (
     <div
       className="relative w-11 h-11 shrink-0 rounded overflow-hidden"
@@ -287,6 +287,17 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={proxyImage(item.imageUrl)} alt="" loading="lazy" className="w-full h-full object-cover" draggable={false} />
     </div>
+  ) : item.leagueLogo ? (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={item.leagueLogo}
+      alt=""
+      loading="lazy"
+      width={18}
+      height={18}
+      className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
+      draggable={false}
+    />
   ) : null;
   // flex-1 + items-center spreads the rows vertically when we have fewer
   // items than the pad-row budget, so the tail card fills col 3's space.
