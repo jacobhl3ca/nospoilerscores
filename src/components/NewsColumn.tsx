@@ -393,10 +393,10 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                   </div>
                 </div>
               )}
-              {/* line-clamp-2 keeps each row a fixed 2-line height so the
-                  first video card lines up vertically across columns even
-                  when one headline is short and the next is long. */}
-              <div className="px-3 py-2 text-xs sm:text-sm leading-snug line-clamp-2" style={{ color: "var(--text)", minHeight: "2.5rem" }}>
+              {/* minHeight 2.5rem floors each row at ~2 lines so first cards
+                  line up across columns; line-clamp-3 lets long headlines
+                  use a third line instead of truncating. */}
+              <div className="px-3 py-2 text-xs sm:text-sm leading-snug line-clamp-3" style={{ color: "var(--text)", minHeight: "2.5rem" }}>
                 {item.headline}
               </div>
               </>
