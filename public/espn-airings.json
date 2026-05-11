@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-05-10T22:13:21.838Z",
+  "generatedAt": "2026-05-11T00:18:22.615Z",
   "airings": {
     "401815296": {
       "uuid": "b359dad8-b424-436c-ae1a-5edbe9d98cca",
       "network": "ESPN Unlimited"
     },
-    "401871162": {
-      "uuid": "aad8aaa7-c1c5-42b4-8126-f3d332ecbd24",
-      "network": "ESPN on ABC"
+    "401871406": {
+      "uuid": "ea4b5002-e72d-4347-8309-f26dd9cd3f0a",
+      "network": "ESPN"
     }
   },
   "nbaGameIds": {}
