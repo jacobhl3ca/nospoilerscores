@@ -652,63 +652,11 @@ async function fetchESPNTopHeadlines() {
     }
     if (items.length > 0) return items.slice(0, 15);
   }
-  // Fallback: GH Actions IPs consistently get a homepage variant without the
-  // headlineStack block (works fine from local Mac runs). Aggregate top news
-  // from the per-league JSON API instead — reliable, IP-agnostic, real API.
-  // Mix one or two from each big league so the tail mirrors a multi-sport
-  // top-stories feed instead of leaning on a single league.
-  return fetchESPNTopFromSiteApi();
-}
-
-async function fetchESPNTopFromSiteApi() {
-  const SPORT_PATHS = [
-    "/baseball/mlb",
-    "/basketball/nba",
-    "/hockey/nhl",
-    "/football/nfl",
-    "/soccer/eng.1",
-    "/tennis",
-  ];
-  const perLeagueLimit = 3;
-  const buckets = await Promise.all(
-    SPORT_PATHS.map(async (path) => {
-      try {
-        const data = await getJson(`https://site.api.espn.com/apis/site/v2/sports${path}/news?limit=${perLeagueLimit}`);
-        return (data.articles || [])
-          .filter((a) => passesArticleBlocklist(a.headline || "", a.description || ""))
-          .map((a) => {
-            const url = a.links?.web?.href || a.links?.mobile?.href || "";
-            return {
-              id: String(a.id || a.contentKey || url),
-              headline: a.headline || a.title || "",
-              description: "",
-              published: a.published || a.lastModified || "",
-              imageUrl: null,
-              leagueLogo: espnArticleLogo(url),
-              articleUrl: url,
-              byline: "",
-              section: "ESPN",
-            };
-          })
-          .filter((it) => it.headline && it.articleUrl);
-      } catch {
-        return [];
-      }
-    }),
-  );
-  // Round-robin across leagues so the first 6 items are one-per-league instead
-  // of all 3 MLB items first. Preserves recency-within-league ordering.
-  const out = [];
-  const seen = new Set();
-  for (let i = 0; i < perLeagueLimit; i++) {
-    for (const bucket of buckets) {
-      const it = bucket[i];
-      if (!it || seen.has(it.id)) continue;
-      seen.add(it.id);
-      out.push(it);
-    }
-  }
-  return out.slice(0, 15);
+  // Scrape missed (typically GH Actions IPs get a homepage variant without the
+  // headlineStack block). Return [] — `writeFeed`'s empty-guard then preserves
+  // the prior good file instead of letting wrong content overwrite it. The
+  // residential-IP Mac mini cron is the authoritative source for this feed.
+  return [];
 }
 
 // ── ESPN homepage big-format videos (thumbnail + title, in scroll order) ──
@@ -1062,6 +1010,13 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
 async function writeFeed(name, items) {
   const path = `${OUT_DIR}/${name}.json`;
   await mkdir(dirname(path), { recursive: true });
+  // Empty-guard: a 0-item result almost always means the scrape failed (wrong
+  // IP variant, markup change, transient fetch error). Skip the write so the
+  // previous good file stays live until a successful run replaces it.
+  if (items.length === 0) {
+    console.log(`skipped ${path} (0 items — preserving prior file)`);
+    return;
+  }
   const payload = { fetchedAt: new Date().toISOString(), items };
   await writeFile(path, JSON.stringify(payload));
   console.log(`wrote ${path} (${items.length} items)`);
@@ -1076,6 +1031,15 @@ const ONLY_REDDIT = process.argv.includes("--only-reddit");
 const ONLY_LIST = process.argv
   .find((a) => a.startsWith("--only="))
   ?.slice("--only=".length)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean) ?? [];
+// --skip=<feed>[,<feed>] — exclude specific feeds from the run. Used by the
+// GH Actions workflow to skip espn-top (GHA IPs miss the headlineStack block;
+// the residential-IP Mac mini cron owns this feed instead).
+const SKIP_LIST = process.argv
+  .find((a) => a.startsWith("--skip="))
+  ?.slice("--skip=".length)
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean) ?? [];
@@ -1138,13 +1102,15 @@ const YT_CHANNEL_BY_FEED = {
   "espn-videos": "ESPN",
 };
 
-const activeJobs = ONLY_LIST.length > 0
+const activeJobs = (ONLY_LIST.length > 0
   ? jobs.filter(([name]) => ONLY_LIST.includes(name))
   : ONLY_REDDIT
     ? jobs.filter(([name]) => name.startsWith("reddit-"))
-    : jobs;
+    : jobs
+).filter(([name]) => !SKIP_LIST.includes(name));
 if (ONLY_REDDIT) console.log(`--only-reddit: running ${activeJobs.length}/${jobs.length} jobs (reddit-* only)`);
 if (ONLY_LIST.length > 0) console.log(`--only=${ONLY_LIST.join(",")}: running ${activeJobs.length}/${jobs.length} jobs`);
+if (SKIP_LIST.length > 0) console.log(`--skip=${SKIP_LIST.join(",")}: ${activeJobs.length}/${jobs.length} jobs after skip`);
 
 const results = await Promise.allSettled(
   activeJobs.map(async ([name, fn]) => {
