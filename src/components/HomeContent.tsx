@@ -446,32 +446,34 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 )}
               </button>
             )}
-            <button
-              onClick={handleMonkeyClick}
-              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-              style={{
-                background: "var(--bg-card)",
-                border: "1px solid var(--border)",
-                color: "var(--text-muted)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--accent)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
-              title={prefs.showRatings ? "Hide ratings & sort chronologically" : "Show ratings & sort by best games"}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={prefs.showRatings ? "/monkey-hear-no-evil.svg" : "/monkey-see-no-evil.svg"}
-                alt={prefs.showRatings ? "Hide ratings" : "Show ratings"}
-                width={20}
-                height={20}
-                className="w-4 h-4 sm:w-5 sm:h-5"
-                draggable={false}
-              />
-            </button>
+            {!showNews && (
+              <button
+                onClick={handleMonkeyClick}
+                className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                style={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-muted)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                }}
+                title={prefs.showRatings ? "Hide ratings & sort chronologically" : "Show ratings & sort by best games"}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={prefs.showRatings ? "/monkey-hear-no-evil.svg" : "/monkey-see-no-evil.svg"}
+                  alt={prefs.showRatings ? "Hide ratings" : "Show ratings"}
+                  width={20}
+                  height={20}
+                  className="w-4 h-4 sm:w-5 sm:h-5"
+                  draggable={false}
+                />
+              </button>
+            )}
             <button
               onClick={handleNewsClick}
               className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
