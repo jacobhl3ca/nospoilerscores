@@ -154,6 +154,8 @@ const ARTICLE_BLOCKLIST = [
   /\bodds,?\s+picks?\b/i,
   /\bpicks?,?\s+predictions?\b/i,
   /\bfantasy\s+(?:baseball|basketball|football|hockey|lineup)\b/i,
+  /\btransfer\s+rumors?\b/i,
+  /\bdaily\b.*\b(?:playoffs?|schedule|bracket)\b/i,
 ];
 
 function passesArticleBlocklist(headline, description = "") {
