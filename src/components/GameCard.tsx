@@ -142,6 +142,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   })() : null;
   const teamViewTime = teamView && isFuture ? (() => {
+    const cleaned = cleanStatusDetail(game.statusDetail, true);
+    if (cleaned && /\bTBD\b/i.test(cleaned)) return "TBD";
     try {
       const d = new Date(game.date);
       if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -150,6 +152,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   })() : null;
   const localTime = isFuture ? (() => {
     const cleaned = cleanStatusDetail(game.statusDetail, true);
+    // Playoff "If Necessary" games come back with date = midnight ET and
+    // statusDetail "TBD" / "M/D - TBD". Falling through to game.date would
+    // render "12:00 AM" — short-circuit to TBD so the user sees ESPN's label.
+    if (cleaned && /\bTBD\b/i.test(cleaned)) return "TBD";
     // ESPN sometimes omits a time (EPL/MLS "Scheduled"), returns a date-only string
     // like "Starts 5/3", or prefixes the time with "Starts M/D" (e.g. "Starts 5/5 7:00 PM").
     // In any of those cases derive the local tip-off from game.date.
