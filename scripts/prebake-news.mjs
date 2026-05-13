@@ -614,8 +614,7 @@ function espnArticleLogo(articleUrl) {
 // every prebake run that hit the fallback path. Removed: better to ship an
 // empty espn-top than the wrong one.
 
-async function fetchESPNTopHeadlines() {
-  const html = await getESPNHomeHtml();
+async function fetchESPNTopHeadlinesFromHtml(html) {
   // ESPN occasionally swaps the inner wrapper element (div ↔ section) inside
   // the top-headlines block, and splits the headline list across two adjacent
   // <ul class="headlineStack__list"> elements (5 + 4 today). Anchor on the
@@ -654,10 +653,33 @@ async function fetchESPNTopHeadlines() {
     }
     if (items.length > 0) return items.slice(0, 15);
   }
-  // Scrape missed (typically GH Actions IPs get a homepage variant without the
-  // headlineStack block). Return [] — `writeFeed`'s empty-guard then preserves
-  // the prior good file instead of letting wrong content overwrite it. The
-  // residential-IP Mac mini cron is the authoritative source for this feed.
+  return [];
+}
+
+async function fetchESPNTopHeadlines() {
+  // First try the shared cached homepage HTML — most jobs hit the same fetch.
+  let html = await getESPNHomeHtml();
+  let items = await fetchESPNTopHeadlinesFromHtml(html);
+  if (items.length > 0) return items;
+  // ESPN intermittently serves a homepage variant *without* the
+  // headlineStack block. Verified 2026-05-13: same Mac mini residential IP,
+  // 5 minutes apart, opposite results. Retry with fresh fetches; a different
+  // request often lands on the variant that does have the block.
+  for (let i = 0; i < 3; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    try {
+      html = await getText("https://www.espn.com/");
+      items = await fetchESPNTopHeadlinesFromHtml(html);
+      if (items.length > 0) {
+        // Refresh shared cache so subsequent jobs (videos) hit the same
+        // headline-bearing variant we just successfully scraped.
+        _espnHomeHtmlPromise = Promise.resolve(html);
+        return items;
+      }
+    } catch {
+      // Treat as retry — fall through to next attempt.
+    }
+  }
   return [];
 }
 
