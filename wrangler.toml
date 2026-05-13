@@ -1,3 +1,7 @@
 name = "nospoilerscores"
 compatibility_date = "2026-03-31"
 pages_build_output_dir = "out"
+
+[[r2_buckets]]
+binding = "DATA"
+bucket_name = "hidescore-data"

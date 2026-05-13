@@ -6,9 +6,6 @@ on:
     - cron: "0 * * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -24,15 +21,12 @@ jobs:
         env:
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
-      - name: Commit updated news feeds
+      - name: Upload news feeds to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          git config user.name "Jacob HL"
-          git config user.email "jacobhl3ca@gmail.com"
-          if git diff --quiet public/news; then
-            echo "no changes"
-            exit 0
-          fi
-          git add public/news
-          git commit -m "Refresh news feeds"
-          git pull --rebase
-          git push
+          npm install -g wrangler@latest
+          for f in public/news/*.json; do
+            wrangler r2 object put "hidescore-data/news/$(basename "$f")" --file "$f" --remote --content-type application/json
+          done

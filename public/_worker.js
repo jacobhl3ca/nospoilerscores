@@ -430,6 +430,27 @@ export default {
       }
     }
 
+    // R2-backed data feeds (news prebake + 3 root JSONs). Decouples cron data
+    // refresh from the deploy pipeline. If the bucket binding is missing or
+    // the object isn't there yet, fall through to the static asset on main —
+    // safe-by-default during the initial cutover window.
+    const R2_ROOT_PATHS = new Set([
+      "/espn-airings.json",
+      "/prime-asins.json",
+      "/big-inning-schedule.json",
+    ]);
+    if (env.DATA && (url.pathname.startsWith("/news/") || R2_ROOT_PATHS.has(url.pathname))) {
+      const obj = await env.DATA.get(url.pathname.replace(/^\//, ""));
+      if (obj) {
+        return new Response(obj.body, {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=60",
+          },
+        });
+      }
+    }
+
     // Fall through to static assets
     return env.ASSETS.fetch(request);
   },
