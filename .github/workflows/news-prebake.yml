@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       # Skip espn-top: GHA datacenter IPs get served an espn.com homepage
       # variant without the `headlineStack top-headlines` block, so the scrape
       # always misses. The residential-IP Mac mini cron owns this feed.
