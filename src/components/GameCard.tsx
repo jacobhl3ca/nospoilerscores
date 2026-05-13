@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
+import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
 import { getETHour } from "@/components/DateNav";
@@ -545,7 +546,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               ) : (
                 <>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{game.sport.toUpperCase()}</span>
+                  <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : game.sport.toUpperCase()}</span>
                 </>
               )}
             </button>

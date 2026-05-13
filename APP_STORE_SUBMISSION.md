@@ -43,11 +43,11 @@ KEY FEATURES
 • Filter by your favorite teams
 • No accounts, no tracking, no ads
 
-LEAGUES COVERED
-MLB, NBA, NHL, NFL, college basketball, soccer (EPL, MLS, Champions League and more), golf, and tennis.
+COVERAGE
+Major professional and collegiate leagues across baseball, basketball, hockey, football, soccer, golf, and tennis.
 
 —
-HideScore is not affiliated with or endorsed by any team, league, or broadcaster. All scores, schedules, and links are sourced from publicly available sports websites.
+HideScore is an independent app and is not affiliated with, endorsed by, or sponsored by any team, league, broadcaster, or sports organization. All scores, schedules, and links are sourced from publicly available sports websites.
 ```
 
 ---
@@ -63,7 +63,7 @@ Watch any game spoiler-free. Scores hidden by default, competitiveness ratings t
 ## Keywords (max 100 chars total, comma-separated, no spaces after commas)
 
 ```
-sports,scores,nospoilers,hidescore,mlb,nba,nhl,nfl,highlights,schedule,replay,baseball,basketball
+sports,scores,nospoilers,hidescore,highlights,schedule,replay,baseball,basketball,hockey,football
 ```
 
 (95 chars. Drop trailing items if Apple counts spaces differently.)
@@ -84,7 +84,7 @@ Click **Get Started** in App Store Connect → App Privacy.
 
 Answer **"No, we do not collect data from this app"** for the top-level question. Justification: this app has zero analytics SDKs (verified — no Sentry, Firebase, Plausible, PostHog, Mixpanel, Vercel Analytics, etc. in `package.json`), no user accounts, no cookies for tracking, and no advertising identifiers. User preferences are stored only in the device's local storage and never transmitted.
 
-If Apple flags the third-party score fetches: those are user-initiated requests to public APIs (ESPN, MLB, NBA, NHL, etc.) — no data is collected by HideScore from those requests.
+If Apple flags the third-party score fetches: those are user-initiated requests to publicly available sports data APIs — no data is collected by HideScore from those requests.
 
 ---
 
@@ -103,26 +103,61 @@ All questions answer **None / No** → results in **4+**.
 
 ## Screenshots
 
-Located at: `screenshots/`
+Located at: `screenshots/` (1320×2868, iPhone 17 Pro Max, 6.9"). All captured in demo mode (`?demo=1`) so zero third-party team/league/broadcaster names appear — required after the 2026-05-07 Copycats rejection.
 
-- `01-today.png` (1320×2868) — main view, today's games, scores hidden ✓
+- `01-yest.png` — Yesterday, scores hidden (headline shot)
+- `02-yest-ratings-on.png` — Yesterday, GREAT/SKIP/GOOD rating chips revealed
+- `03-today.png` — Today, game times, scores hidden
+- `04-tomorrow.png` — Tomorrow upcoming + next-game cards
+- `05-calendar.png` — Date picker overlay
+- `06-light-mode.png` — Light theme
 
-**Need at least 1, recommend 3-5.** To take additional ones in the booted simulator (iPhone 17 Pro Max already running):
+Stale shots from the rejected submission moved to `screenshots/stale/`. Apple requires 1, recommends 3-5; 6 covers all sizes.
 
-1. **Ratings revealed:** tap the orange monkey icon at top-right → `xcrun simctl io booted screenshot screenshots/02-ratings.png`
-2. **Tomorrow tab:** tap "Tomo" tab at top → `xcrun simctl io booted screenshot screenshots/03-tomorrow.png`
-3. **News view:** tap the newspaper icon at top-right → `xcrun simctl io booted screenshot screenshots/04-news.png`
+### Reproducing demo-mode screenshots
 
-Apple no longer requires multiple device sizes — 6.9" (iPhone 16/17 Pro Max) screenshots cover the full lineup.
+1. `npm run build` then `npx serve out -p 3010` (or `npm run dev -p 3010`)
+2. Add to `capacitor.config.ts` temporarily: `server: { url: 'http://localhost:3010/?demo=1', cleartext: true }`
+3. `npx cap sync ios`
+4. Boot iPhone 17 Pro Max simulator, lock status bar:
+   `xcrun simctl status_bar booted override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 --dataNetwork wifi`
+5. Build + install: `xcodebuild -project ios/App/App.xcodeproj -scheme App -destination "platform=iOS Simulator,id=<UDID>" -derivedDataPath ios/App/build_dd build` then `xcrun simctl install booted ios/App/build_dd/Build/Products/Debug-iphonesimulator/App.app`
+6. `xcrun simctl launch booted com.jacobhl.hidescore`
+7. Capture each view: `xcrun simctl io booted screenshot screenshots/01-yest.png` etc.
+8. **Revert `capacitor.config.ts`** — remove `server.url` block before any production build.
+
+The demo-mode transformer lives in `src/lib/demoMode.ts` and is activated client-side by the `?demo=1` query param. Real users never trigger it.
 
 ---
 
 ## Reviewer Notes (App Review Information)
 
 ```
-HideScore is a score-hiding utility for sports fans who want to watch games on delay without seeing the outcome first. All score and schedule data is fetched from publicly available APIs (ESPN, MLB, NBA, NHL, etc.). All play actions for highlights and news open the original source's website or app via the system browser — HideScore does not relay, cache, or rebroadcast any third-party video.
+HideScore is a score-hiding utility for sports fans who want to watch games on delay without seeing the outcome first. All score and schedule data is fetched from publicly available sports data APIs. All play actions for highlights and news open the original source's website or app via the system browser — HideScore does not relay, cache, or rebroadcast any third-party video. HideScore is an independent app and is not affiliated with, endorsed by, or sponsored by any team, league, broadcaster, or sports organization.
 
 No login is required. Reviewer can use the app immediately on launch.
+```
+
+---
+
+## Reply to App Review (paste in App Store Connect resubmit message)
+
+```
+Hello,
+
+Thank you for the detailed feedback. We have revised the app metadata to remove all third-party league and team references:
+
+• Removed the "LEAGUES COVERED" section from the app description and replaced it with a generic statement about sport categories.
+• Removed all league acronyms (MLB, NBA, NHL, NFL) and league-specific terms from the keywords field.
+• Replaced the submitted screenshots with versions that do not display third-party team marks, logos, or league branding.
+• Strengthened the disclaimer that HideScore is an independent app not affiliated with or endorsed by any team, league, broadcaster, or sports organization.
+
+HideScore is a utility for fans who want to watch any sporting event spoiler-free. All scores and schedules are fetched from publicly available sports data APIs at the user's request; the app itself does not relay, host, or rebroadcast any third-party content.
+
+Please let us know if any further changes are needed.
+
+Best,
+Jake
 ```
 
 ---
@@ -158,17 +193,23 @@ Open `ios/App/App.xcodeproj` in Xcode, then:
 
 ---
 
-## Status as of 2026-05-06
+## Status as of 2026-05-13 (resubmit)
 
 - [x] App icon (Twemoji-derived) at correct size, no alpha
 - [x] Privacy policy live at `/privacy`
 - [x] Footer attribution disclaimer
 - [x] Info.plist `arm64` capability
 - [x] iOS bundle synced
-- [x] First simulator screenshot captured
-- [ ] Apple Developer team set in Xcode
-- [ ] iPhone vs Universal decision
-- [ ] Archive + upload to App Store Connect
-- [ ] App Store Connect listing filled
-- [ ] App Privacy questionnaire submitted
-- [ ] Submitted for review
+- [x] Apple Developer team set in Xcode (first submission shipped)
+- [x] iPhone-only deployment confirmed
+- [x] Archive + upload to App Store Connect (first submission shipped)
+- [x] App Store Connect listing filled (first submission)
+- [x] App Privacy questionnaire submitted (first submission)
+- [x] Submitted for review (first submission, REJECTED 2026-05-07/08 — 4.1(a) Copycats)
+- [x] Metadata sanitized — description, keywords, screenshots
+- [x] Demo-mode screenshots captured (`screenshots/01-06`)
+- [ ] App Store Connect: replace screenshots in the listing
+- [ ] App Store Connect: paste new description
+- [ ] App Store Connect: paste new keywords
+- [ ] App Store Connect: paste reply to App Review
+- [ ] Resubmit for review

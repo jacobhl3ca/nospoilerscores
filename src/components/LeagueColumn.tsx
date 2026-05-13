@@ -7,6 +7,7 @@ const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : use
 import { Game, LeagueData, Sport, Team } from "@/lib/types";
 import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/lib/espn";
 import { getGolfSubtitle } from "@/lib/golf";
+import { isDemoModeActive } from "@/lib/demoMode";
 import GameCard from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import TeamView from "./TeamView";
@@ -186,6 +187,11 @@ function getPlayoffSubtitle(
 let cachedBigInningSchedule: BigInningSchedule | null = null;
 
 function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
+  if (isDemoModeActive()) return null;
+  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} />;
+}
+
+function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
   const ref = useRef<HTMLElement>(null);
   const [bigInningSchedule, setBigInningSchedule] = useState<BigInningSchedule | null>(cachedBigInningSchedule);
 

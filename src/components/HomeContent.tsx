@@ -5,6 +5,7 @@ import { LeagueData, Sport } from "@/lib/types";
 import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
+import { isDemoModeActive, applyDemoMode } from "@/lib/demoMode";
 import LeagueColumn from "@/components/LeagueColumn";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
@@ -155,7 +156,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     setLoading(true);
     setError(false);
     try {
-      const data = await fetchAllLeagues(date, thirdLeague);
+      let data = await fetchAllLeagues(date, thirdLeague);
+      if (isDemoModeActive()) data = applyDemoMode(data);
       setLeagues(data);
     } catch {
       setLeagues([]);
