@@ -1,0 +1,18 @@
+name: Check feed staleness
+
+on:
+  schedule:
+    # Every 30 min — catches Mac mini death, token revocation, R2 outage,
+    # silent scrape regressions. Cheap (~30s × 48/day = 24 min/day).
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-staleness.mjs
