@@ -14,10 +14,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Skip espn-top: GHA datacenter IPs get served an espn.com homepage
-      # variant without the `headlineStack top-headlines` block, so the scrape
-      # always misses. The residential-IP Mac mini cron owns this feed.
-      - run: node scripts/prebake-news.mjs --skip=espn-top
+      # Skip espn-top + espn-videos: ESPN's CloudFront WAF challenges GHA
+      # datacenter IPs (HTTP 202 + empty body, `x-amzn-waf-action: challenge`),
+      # so any homepage scrape returns 0 items. The residential-IP Mac mini
+      # cron owns both these feeds.
+      - run: node scripts/prebake-news.mjs --skip=espn-top,espn-videos
         env:
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}

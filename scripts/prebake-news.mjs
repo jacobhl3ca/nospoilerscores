@@ -748,7 +748,34 @@ async function fetchESPNTopVideos() {
   // newest big-format video leads and ICYMI sits below it as a clearly-labeled
   // "in case you missed it" anchor.
   const icymi = await fetchESPNICYMI().catch(() => null);
-  const html = await getESPNHomeHtml();
+  // ICYMI-only counts as a miss: ICYMI is a fallback addition, not real video
+  // module content. Floor is icymi ? 1 : 0.
+  const floor = icymi ? 1 : 0;
+  let html = await getESPNHomeHtml();
+  let scraped = scrapeESPNTopVideosFromHtml(html, icymi);
+  // Same ESPN homepage-variant flakiness as fetchESPNTopHeadlines: occasionally
+  // the served HTML lacks the video blocks entirely. news-prebake.yml runs with
+  // --skip=espn-top, so the headlines retry never refreshes the shared HTML
+  // cache for us — videos has to retry independently.
+  if (scraped.length <= floor) {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        html = await getText("https://www.espn.com/");
+        scraped = scrapeESPNTopVideosFromHtml(html, icymi);
+        if (scraped.length > floor) {
+          _espnHomeHtmlPromise = Promise.resolve(html);
+          break;
+        }
+      } catch {
+        // Treat as retry — fall through to next attempt.
+      }
+    }
+  }
+  return await persistVideos("espn-videos", scraped, icymi?.id);
+}
+
+function scrapeESPNTopVideosFromHtml(html, icymi) {
   // Only scrape "big format" blocks — these are <section class="contentItem__content--fullWidth">
   // variants (hero + enhanced video modules). Small horizontal strips like "Top Plays" 4-wide
   // carousels don't carry --fullWidth and get skipped, which matches ESPN's visual hierarchy.
@@ -805,7 +832,7 @@ async function fetchESPNTopVideos() {
     });
     if (items.length >= 20) break; // over-collect; merge+cap below
   }
-  return await persistVideos("espn-videos", items, icymi?.id);
+  return items;
 }
 
 // Merge freshly-scraped videos with what we wrote earlier today so the full top
