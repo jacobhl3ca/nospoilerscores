@@ -567,7 +567,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 prefetchedVideoId.current = id;
                 onPlayHighlight(id, highlightUrl);
               } else {
-                window.open(highlightUrl, "_blank");
+                openExternal(highlightUrl);
               }
             }}
             disabled={fetchingOnClick !== null}

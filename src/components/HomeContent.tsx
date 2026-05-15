@@ -8,6 +8,7 @@ import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode } from "@/lib/demoMode";
 import LeagueColumn from "@/components/LeagueColumn";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
+import SettingsPanel from "@/components/SettingsPanel";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -29,16 +30,25 @@ function getSmartDefaultOffset(): number {
   return (hour < 10 || (hour === 10 && minutes < 30)) ? -1 : 0;
 }
 
+function resolveDefaultOffset(mode: "smart" | "today" | "yesterday" | undefined): number {
+  if (mode === "today") return 0;
+  if (mode === "yesterday") return -1;
+  return getSmartDefaultOffset();
+}
+
 export default function HomeContent({ initialOffset }: { initialOffset?: number }) {
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
 
-  // Compute smart default date client-side only to avoid SSG hydration mismatch
+  // Compute smart default date client-side only to avoid SSG hydration mismatch.
+  // Reads the persisted defaultDateMode pref so "always today" / "always yesterday"
+  // overrides win over the smart-time logic.
   useEffect(() => {
     if (selectedDate === "") {
-      setSelectedDate(getDateString(initialOffset ?? getSmartDefaultOffset()));
+      const stored = loadPreferences();
+      setSelectedDate(getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode)));
     }
   }, [initialOffset, selectedDate]);
   const [showRatingsExplainer, setShowRatingsExplainer] = useState(false);
@@ -97,7 +107,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       loaded.showRatings = false;
     }
     setPrefs(loaded);
-    if (loaded.showNews) setShowNews(true);
+    // Landing view: defaultLandingView pref decides whether to honor the
+    // remembered showNews state, force scores, or force news on launch.
+    const landing = loaded.defaultLandingView ?? "remember";
+    if (landing === "news") setShowNews(true);
+    else if (landing === "scores") setShowNews(false);
+    else if (loaded.showNews) setShowNews(true);
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
   }, []);
 
@@ -422,6 +437,26 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     setIsNativeApp(!!cap?.isNativePlatform?.());
   }, []);
 
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Aggregate teams seen across loaded leagues so the settings panel can map
+  // favorite-team IDs to display names + logos. Teams favorited but not
+  // currently in any loaded game fall through to "id-only" rendering.
+  const knownTeams = useMemo(() => {
+    const seen = new Map<string, { id: string; sport: Sport; displayName: string; logo?: string }>();
+    for (const league of leagues) {
+      for (const game of league.games) {
+        for (const team of [game.homeTeam, game.awayTeam]) {
+          if (!seen.has(team.id)) {
+            seen.set(team.id, { id: team.id, sport: league.sport, displayName: team.displayName, logo: team.logo });
+          }
+        }
+      }
+    }
+    return Array.from(seen.values());
+  }, [leagues]);
+
+  const resolvedTheme = getResolvedTheme(prefs.theme);
+
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       <header ref={headerRef} className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
@@ -562,6 +597,24 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               )}
             </div>
             <ThemeToggle theme={prefs.theme} onToggle={toggleTheme} />
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+              style={{
+                background: settingsOpen ? "var(--accent)" : "var(--bg-card)",
+                border: `1px solid ${settingsOpen ? "var(--accent)" : "var(--border)"}`,
+                color: settingsOpen ? "white" : "var(--text-muted)",
+              }}
+              onMouseEnter={(e) => { if (!settingsOpen) e.currentTarget.style.borderColor = "var(--accent)"; }}
+              onMouseLeave={(e) => { if (!settingsOpen) e.currentTarget.style.borderColor = "var(--border)"; }}
+              title="Settings"
+              aria-label="Open settings"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
           </div>
         </div>
       </header>
@@ -782,8 +835,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
-        <span className="inline-flex items-center gap-3">
+        <span className="inline-flex items-center gap-1.5">
           <a href="mailto:hi@hidescore.com" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>hi@hidescore.com</a>
+          <span aria-hidden style={{ opacity: 0.5 }}>·</span>
           <a href="/privacy" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>Privacy</a>
         </span>
         {!isNativeApp && (
@@ -979,6 +1033,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           onClose={closeVideoModal}
         />
       )}
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        prefs={prefs}
+        updatePrefs={updatePrefs}
+        resolvedTheme={resolvedTheme}
+        thirdLeagueOptions={thirdLeagueOptions}
+        displayedLeagues={sortedLeagues}
+        knownTeams={knownTeams}
+        onShareFavorites={shareFavorites}
+        shareCopied={showShareCopied}
+      />
 
       <button
         type="button"

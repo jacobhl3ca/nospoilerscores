@@ -62,6 +62,8 @@ export function decodeFavorites(params: URLSearchParams): {
 }
 
 export type Theme = "dark" | "light" | "system";
+export type DefaultDateMode = "smart" | "today" | "yesterday";
+export type DefaultLandingView = "remember" | "scores" | "news";
 
 export interface Preferences {
   favoriteLeagues: Sport[]; // ordered by priority (first = highest)
@@ -75,6 +77,11 @@ export interface Preferences {
   firstLeague?: Sport; // user-chosen 1st league slot override
   secondLeague?: Sport; // user-chosen 2nd league slot override
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
+  // Default date on launch: smart (yesterday before 10:30 AM ET, today after),
+  // always today, or always yesterday.
+  defaultDateMode?: DefaultDateMode;
+  // Landing view on launch: remember last (default), always scores, always news.
+  defaultLandingView?: DefaultLandingView;
 }
 
 const defaults: Preferences = {
@@ -85,6 +92,8 @@ const defaults: Preferences = {
   skipExplainer: false,
   skipNewsExplainer: false,
   showNews: false,
+  defaultDateMode: "smart",
+  defaultLandingView: "remember",
 };
 
 export function loadPreferences(): Preferences {
