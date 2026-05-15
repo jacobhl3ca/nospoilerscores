@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Sport } from "@/lib/types";
 import { NewsItem, proxyImage } from "@/lib/news";
+import { handleExternalClick } from "@/lib/openExternal";
 
 export interface NewsSource {
   label: string;
@@ -329,6 +330,7 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
       href={item.articleUrl || undefined}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={handleExternalClick(item.articleUrl)}
       className={rowCls}
       style={rowStyle}
     >
@@ -436,6 +438,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                 href={item.articleUrl || undefined}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={handleExternalClick(item.articleUrl)}
                 className={commonCls}
                 style={commonStyle}
               >

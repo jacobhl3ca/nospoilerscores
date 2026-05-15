@@ -440,12 +440,25 @@ export default {
       "/big-inning-schedule.json",
     ]);
     if (env.DATA && (url.pathname.startsWith("/news/") || R2_ROOT_PATHS.has(url.pathname))) {
+      // CORS: Capacitor iOS WebView runs at `capacitor://localhost`, so fetches
+      // to hidescore.com are cross-origin and blocked without ACAO. Same applies
+      // to Android (`https://localhost`) and any future native shell.
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
       const obj = await env.DATA.get(url.pathname.replace(/^\//, ""));
       if (obj) {
         return new Response(obj.body, {
           headers: {
             "Content-Type": "application/json",
             "Cache-Control": "public, max-age=60",
+            "Access-Control-Allow-Origin": "*",
           },
         });
       }
