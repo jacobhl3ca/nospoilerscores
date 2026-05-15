@@ -1136,7 +1136,11 @@ export async function fetchGames(
   return games;
 }
 
-export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): Promise<LeagueData[]> {
+export async function fetchAllLeagues(
+  date?: string,
+  thirdLeagueSport?: Sport,
+  slotOverrides?: { first?: Sport; second?: Sport; third?: Sport },
+): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
     ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`)
@@ -1146,16 +1150,48 @@ export async function fetchAllLeagues(date?: string, thirdLeagueSport?: Sport): 
   // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top.
   const auto = pickAndAssignLeagues(viewDate);
 
-  // Slot 3 swap: user can replace the rightmost slot with any other active league.
-  // If the chosen league is already in the auto picks (e.g. user re-picked the
-  // default), skip the override. Otherwise drop slot 2 and append the user's
-  // choice — preserving the existing "user choice always last" contract.
-  let final: LeagueConfig[] = auto;
-  const thirdLeagueConfig = thirdLeagueSport
-    ? ALL_LEAGUES.find((l) => l.sport === thirdLeagueSport && isLeagueActive(l, viewDate))
-    : null;
-  if (thirdLeagueConfig && !auto.some((l) => l.sport === thirdLeagueConfig.sport && l.label === thirdLeagueConfig.label)) {
-    final = [...auto.slice(0, MAX_LEAGUES - 1), thirdLeagueConfig];
+  // Per-slot overrides: each slot independently swappable to any active league.
+  // Falls back to legacy thirdLeagueSport when slotOverrides.third is unset to
+  // preserve old shareable favorites links that only encode `t=`.
+  const resolveSlot = (sport: Sport | undefined): LeagueConfig | null => {
+    if (!sport) return null;
+    return ALL_LEAGUES.find((l) => l.sport === sport && isLeagueActive(l, viewDate)) ?? null;
+  };
+  const slot1Cfg = resolveSlot(slotOverrides?.first);
+  const slot2Cfg = resolveSlot(slotOverrides?.second);
+  const slot3Cfg = resolveSlot(slotOverrides?.third) ?? resolveSlot(thirdLeagueSport);
+
+  let final: LeagueConfig[];
+  if (slot1Cfg || slot2Cfg || (slotOverrides?.third && slot3Cfg)) {
+    // Any per-slot override → user is in full manual control. Build slot-by-slot:
+    // each set slot uses its override; each unset slot falls back to the auto pick
+    // EXCLUDING leagues already chosen for other slots — otherwise picking a sport
+    // that's also an auto pick would dedup down to fewer than 3 columns.
+    const chosen = new Set<Sport>(
+      [slot1Cfg?.sport, slot2Cfg?.sport, slot3Cfg?.sport].filter((s): s is Sport => !!s),
+    );
+    const autoQueue = auto.filter((cfg) => !chosen.has(cfg.sport));
+    let autoIdx = 0;
+    const nextAuto = (): LeagueConfig | null => autoQueue[autoIdx++] ?? null;
+    const slots: (LeagueConfig | null)[] = [
+      slot1Cfg ?? nextAuto(),
+      slot2Cfg ?? nextAuto(),
+      slot3Cfg ?? nextAuto(),
+    ];
+    const seen = new Set<string>();
+    final = [];
+    for (const cfg of slots) {
+      if (!cfg) continue;
+      const key = `${cfg.sport}::${cfg.label}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      final.push(cfg);
+    }
+  } else if (slot3Cfg && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
+    // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen league.
+    final = [...auto.slice(0, MAX_LEAGUES - 1), slot3Cfg];
+  } else {
+    final = auto;
   }
 
   const fetchLeague = async (cfg: LeagueConfig): Promise<LeagueData | null> => {

@@ -24,23 +24,40 @@ function decodeTeamId(short: string): string {
 }
 
 // Encode: ["mlb-1","nba-15"] → "m1.n15"
-export function encodeFavorites(teams: string[], leagues: Sport[], thirdLeague?: Sport): URLSearchParams {
+// slotLeagues encodes per-slot overrides as `s1.s2.s3`, with "_" for unset slots.
+// e.g. ["nba", undefined, "mlb"] → "n._.m"
+export function encodeFavorites(
+  teams: string[],
+  leagues: Sport[],
+  thirdLeague?: Sport,
+  slotLeagues?: (Sport | undefined)[],
+): URLSearchParams {
   const params = new URLSearchParams();
   if (teams.length > 0) params.set("f", teams.map(encodeTeamId).join("."));
   if (leagues.length > 0) params.set("l", leagues.map((s) => SPORT_TO_SHORT[s] ?? s).join("."));
   if (thirdLeague) params.set("t", SPORT_TO_SHORT[thirdLeague] ?? thirdLeague);
+  if (slotLeagues && slotLeagues.some(Boolean)) {
+    params.set("s", slotLeagues.map((s) => (s ? (SPORT_TO_SHORT[s] ?? s) : "_")).join("."));
+  }
   return params;
 }
 
 // Decode: "m1.n15" → ["mlb-1","nba-15"]
-export function decodeFavorites(params: URLSearchParams): { teams?: string[]; leagues?: Sport[]; thirdLeague?: Sport } {
-  const result: { teams?: string[]; leagues?: Sport[]; thirdLeague?: Sport } = {};
+export function decodeFavorites(params: URLSearchParams): {
+  teams?: string[];
+  leagues?: Sport[];
+  thirdLeague?: Sport;
+  slotLeagues?: (Sport | undefined)[];
+} {
+  const result: { teams?: string[]; leagues?: Sport[]; thirdLeague?: Sport; slotLeagues?: (Sport | undefined)[] } = {};
   const f = params.get("f");
   const l = params.get("l");
   const t = params.get("t");
+  const s = params.get("s");
   if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
   if (t) result.thirdLeague = SHORT_TO_SPORT[t];
+  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : SHORT_TO_SPORT[tok]));
   return result;
 }
 
@@ -55,6 +72,8 @@ export interface Preferences {
   skipNewsExplainer: boolean;
   showNews: boolean; // persist last view across refreshes
   thirdLeague?: Sport; // user-chosen 3rd league slot override
+  firstLeague?: Sport; // user-chosen 1st league slot override
+  secondLeague?: Sport; // user-chosen 2nd league slot override
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
 }
 

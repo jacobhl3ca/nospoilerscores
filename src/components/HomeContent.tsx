@@ -73,6 +73,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         loaded.favoriteTeams = oldTeams ?? decoded.teams ?? loaded.favoriteTeams;
         loaded.favoriteLeagues = oldLeagues ?? decoded.leagues ?? loaded.favoriteLeagues;
         if (decoded.thirdLeague) loaded.thirdLeague = decoded.thirdLeague;
+        if (decoded.slotLeagues) {
+          loaded.firstLeague = decoded.slotLeagues[0];
+          loaded.secondLeague = decoded.slotLeagues[1];
+          if (decoded.slotLeagues[2]) loaded.thirdLeague = decoded.slotLeagues[2];
+        }
         savePreferences(loaded);
         const keep = new URLSearchParams();
         if (sharedVideoId) keep.set("v", sharedVideoId);
@@ -152,11 +157,15 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return () => window.removeEventListener("popstate", handler);
   }, []);
 
-  const fetchData = useCallback(async (date: string, thirdLeague?: Sport) => {
+  const fetchData = useCallback(async (
+    date: string,
+    thirdLeague?: Sport,
+    slotOverrides?: { first?: Sport; second?: Sport; third?: Sport },
+  ) => {
     setLoading(true);
     setError(false);
     try {
-      let data = await fetchAllLeagues(date, thirdLeague);
+      let data = await fetchAllLeagues(date, thirdLeague, slotOverrides);
       if (isDemoModeActive()) data = applyDemoMode(data);
       setLeagues(data);
     } catch {
@@ -167,8 +176,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   }, []);
 
   useEffect(() => {
-    if (selectedDate) fetchData(selectedDate, prefs.thirdLeague);
-  }, [selectedDate, prefs.thirdLeague, fetchData]);
+    if (selectedDate) {
+      fetchData(selectedDate, prefs.thirdLeague, {
+        first: prefs.firstLeague,
+        second: prefs.secondLeague,
+        third: prefs.thirdLeague,
+      });
+    }
+  }, [selectedDate, prefs.thirdLeague, prefs.firstLeague, prefs.secondLeague, fetchData]);
 
   const updatePrefs = (update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
@@ -244,7 +259,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   }, [prefs.showRatings]);
 
   const shareFavorites = () => {
-    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues, prefs.thirdLeague);
+    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues, prefs.thirdLeague, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
     const url = `${window.location.origin}?${params.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
       setShowShareCopied(true);
@@ -274,7 +289,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   };
 
   const copyFavLink = () => {
-    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues, prefs.thirdLeague);
+    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues, prefs.thirdLeague, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
     const url = `${window.location.origin}?${params.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
       setFavToastCopied(true);
@@ -325,6 +340,18 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const setThirdLeague = (sport: Sport | undefined) => {
     updatePrefs({ thirdLeague: sport });
   };
+
+  const setSlotLeague = (slotIdx: number, sport: Sport | undefined) => {
+    if (slotIdx === 0) updatePrefs({ firstLeague: sport });
+    else if (slotIdx === 1) updatePrefs({ secondLeague: sport });
+    else if (slotIdx === 2) updatePrefs({ thirdLeague: sport });
+  };
+
+  const selectedSlotLeagues: (Sport | undefined)[] = [
+    prefs.firstLeague,
+    prefs.secondLeague,
+    prefs.thirdLeague,
+  ];
 
   const sortedLeagues = [...leagues].sort((a, b) => {
     const aIdx = prefs.favoriteLeagues.indexOf(a.sport);
@@ -386,6 +413,13 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const [isNativeApp, setIsNativeApp] = useState(false);
+  useEffect(() => {
+    type CapacitorGlobal = { Capacitor?: { isNativePlatform?: () => boolean } };
+    const cap = (window as unknown as CapacitorGlobal).Capacitor;
+    setIsNativeApp(!!cap?.isNativePlatform?.());
   }, []);
 
   return (
@@ -698,9 +732,18 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               onPlayHighlight: openVideoModal,
               selectedDate,
             };
-            // Determine which leagues are in slots 1-2 (auto) vs slot 3 (swappable)
-            const autoSports = new Set(sortedLeagues.slice(0, 2).map(l => l.sport));
-            const swappableOptions = thirdLeagueOptions.filter(o => !autoSports.has(o.sport));
+            // Per-slot swap dropdowns: each column's dropdown excludes leagues
+            // already shown in the OTHER slots so the user never picks a duplicate.
+            const displayedSports = sortedLeagues.map(l => l.sport);
+            const swapPropsForSlot = (idx: number) => {
+              const others = new Set(displayedSports.filter((_, i) => i !== idx));
+              const options = thirdLeagueOptions.filter(o => !others.has(o.sport));
+              return {
+                swappableOptions: options,
+                selectedThirdLeague: selectedSlotLeagues[idx],
+                onSwapLeague: (s: Sport | undefined) => setSlotLeague(idx, s),
+              };
+            };
 
             if (showFinalSplit) {
               return (
@@ -712,11 +755,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                       {...commonProps}
                       isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
                       showFinalSeparator
-                      {...(idx === sortedLeagues.length - 1 && sortedLeagues.length >= 3 ? {
-                        swappableOptions,
-                        selectedThirdLeague: prefs.thirdLeague,
-                        onSwapLeague: setThirdLeague,
-                      } : {})}
+                      {...swapPropsForSlot(idx)}
                     />
                   ))}
                 </div>
@@ -731,11 +770,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                     league={league}
                     {...commonProps}
                     isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
-                    {...(idx === sortedLeagues.length - 1 && sortedLeagues.length >= 3 ? {
-                      swappableOptions,
-                      selectedThirdLeague: prefs.thirdLeague,
-                      onSwapLeague: setThirdLeague,
-                    } : {})}
+                    {...swapPropsForSlot(idx)}
                   />
                 ))}
               </div>
@@ -747,8 +782,22 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
-        <a href="mailto:hi@hidescore.com" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>hi@hidescore.com</a>
-        <a href="/privacy" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>Privacy</a>
+        <span className="inline-flex items-center gap-3">
+          <a href="mailto:hi@hidescore.com" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>hi@hidescore.com</a>
+          <a href="/privacy" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>Privacy</a>
+        </span>
+        {!isNativeApp && (
+          <a
+            href="https://apps.apple.com/app/hidescore/id6766885311"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-2 leading-none transition-opacity hover:opacity-80"
+            aria-label="Download HideScore on the App Store"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+          </a>
+        )}
       </footer>
 
       {showFavToast && (
