@@ -98,13 +98,21 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         setVideoModal({ videoId: sharedVideoId, fallbackUrl: "" });
       }
     }
-    // Morning reset: force ratings hidden so a clean refresh doesn't spoil
-    // last night's scores. News view explicitly does NOT reset — it's a
-    // viewer choice, not a spoiler surface, so it persists across refresh.
-    const hour = getETHour();
-    const morningReset = hour < 12;
-    if (morningReset) {
+    // Ratings on launch: respect defaultRatings pref.
+    //   auto (default) → keep the morning-safety reset (off before noon ET)
+    //   off            → always off on launch
+    //   on             → always on on launch
+    // News view explicitly does NOT reset — it's a viewer choice, not a
+    // spoiler surface, so it persists across refresh.
+    const ratingsMode = loaded.defaultRatings ?? "auto";
+    if (ratingsMode === "on") {
+      loaded.showRatings = true;
+    } else if (ratingsMode === "off") {
       loaded.showRatings = false;
+    } else {
+      const hour = getETHour();
+      const morningReset = hour < 12;
+      if (morningReset) loaded.showRatings = false;
     }
     setPrefs(loaded);
     // Landing view: defaultLandingView pref decides whether to honor the
@@ -835,9 +843,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
-        <span className="inline-flex items-center gap-1.5">
+        <span>
           <a href="mailto:hi@hidescore.com" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>hi@hidescore.com</a>
-          <span aria-hidden style={{ opacity: 0.5 }}>·</span>
+          {" "}
           <a href="/privacy" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>Privacy</a>
         </span>
         {!isNativeApp && (

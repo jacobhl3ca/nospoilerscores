@@ -7,6 +7,7 @@ import {
   Theme,
   DefaultDateMode,
   DefaultLandingView,
+  DefaultRatings,
 } from "@/lib/preferences";
 
 interface LeagueOption { sport: Sport; label: string }
@@ -30,14 +31,20 @@ interface SettingsPanelProps {
 
 const DATE_MODE_OPTIONS: { value: DefaultDateMode; label: string; hint: string }[] = [
   { value: "smart", label: "Smart", hint: "Yesterday before 10:30 AM ET, today after" },
-  { value: "today", label: "Today", hint: "Always start on today" },
   { value: "yesterday", label: "Yesterday", hint: "Always start on yesterday" },
+  { value: "today", label: "Today", hint: "Always start on today" },
 ];
 
 const LANDING_VIEW_OPTIONS: { value: DefaultLandingView; label: string; hint: string }[] = [
-  { value: "remember", label: "Remember", hint: "Pick up where you left off" },
+  { value: "remember", label: "Last opened", hint: "Pick up where you left off" },
   { value: "scores", label: "Scores", hint: "Always start on scores" },
   { value: "news", label: "News", hint: "Always start on news (spoilers)" },
+];
+
+const DEFAULT_RATINGS_OPTIONS: { value: DefaultRatings; label: string; hint: string }[] = [
+  { value: "auto", label: "Auto", hint: "Off in morning, last state after noon ET" },
+  { value: "off", label: "Off", hint: "Always start with ratings hidden" },
+  { value: "on", label: "On", hint: "Always start with ratings shown" },
 ];
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
@@ -171,6 +178,7 @@ export default function SettingsPanel({
       newsThirdLeague: undefined,
       defaultDateMode: "smart",
       defaultLandingView: "remember",
+      defaultRatings: "auto",
     });
   };
 
@@ -235,6 +243,13 @@ export default function SettingsPanel({
                 value={prefs.defaultLandingView ?? "remember"}
                 options={LANDING_VIEW_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultLandingView: v })}
+              />
+            </Field>
+            <Field label="Ratings on launch" hint="Show or hide game ratings + best-games sort">
+              <RadioGroup
+                value={prefs.defaultRatings ?? "auto"}
+                options={DEFAULT_RATINGS_OPTIONS}
+                onChange={(v) => updatePrefs({ defaultRatings: v })}
               />
             </Field>
           </Section>
