@@ -46,6 +46,10 @@ export interface NewsItem {
   // i.redd.it full-res image URL — set when the post is an image post hosted
   // on Reddit. Lets the client pop a lightbox instead of bouncing out.
   imageFullUrl?: string | null;
+  // Reddit selftext for text posts (no image/video). Raw markdown — rendered
+  // by the modal with minimal formatting (paragraph breaks + autolinking).
+  // Null for non-text posts so the modal layout stays a clean lightbox.
+  body?: string | null;
 }
 
 interface RawImage { url?: string; height?: number; width?: number }

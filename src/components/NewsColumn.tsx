@@ -26,6 +26,9 @@ export interface PlayOpts {
   headline?: string | null;
   byline?: string | null;
   published?: string | null;
+  // Selftext body (Reddit text posts). Only populated when there's no media
+  // — rendered in the modal's textMode card below the headline.
+  body?: string | null;
 }
 export type PlayHandler = (opts: PlayOpts) => void;
 
@@ -304,19 +307,37 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
   if (shouldPopModal) {
     return (
       <button
-        onClick={() => onPlay!({
-          playbackUrl: item.videoUrl || null,
-          // Prefer Reddit-hosted full-res, fall back to preview for image-bearing
-          // posts. Text-only Reddit posts pass null and the modal renders its
-          // text-card layout off the headline metadata below.
-          imageUrl: item.videoUrl ? null : (item.imageFullUrl || (isReddit && item.imageUrl) || null),
-          fallbackUrl: item.articleUrl,
-          poster: item.imageUrl || null,
-          sourceLabel: item.section || null,
-          headline: item.headline,
-          byline: item.byline || null,
-          published: item.published || null,
-        })}
+        onClick={(e) => {
+          // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
+          // later" — never blow away the currently-open modal. Without this
+          // the button just re-pops the modal with new content and the user
+          // loses the video/image they were watching.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            return;
+          }
+          onPlay!({
+            playbackUrl: item.videoUrl || null,
+            // Prefer Reddit-hosted full-res, fall back to preview for image-bearing
+            // posts. Text-only Reddit posts pass null and the modal renders its
+            // text-card layout off the headline metadata below.
+            imageUrl: item.videoUrl ? null : (item.imageFullUrl || (isReddit && item.imageUrl) || null),
+            fallbackUrl: item.articleUrl,
+            poster: item.imageUrl || null,
+            sourceLabel: item.section || null,
+            headline: item.headline,
+            byline: item.byline || null,
+            published: item.published || null,
+            body: item.body || null,
+          });
+        }}
+        onAuxClick={(e) => {
+          // Middle-click fires onAuxClick, not onClick. Mirror the modifier
+          // path so wheel-click also opens in a background tab.
+          if (e.button === 1 && item.articleUrl) {
+            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+          }
+        }}
         className={`${rowCls} w-full text-left cursor-pointer`}
         style={rowStyle}
       >
@@ -412,19 +433,32 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
               return (
                 <button
                   key={item.id}
-                  onClick={() => onPlay!({
-                    videoId: item.youtubeVideoId || undefined,
-                    playbackUrl: item.playbackUrl || null,
-                    fallbackUrl: item.articleUrl,
-                    poster: item.imageUrl || null,
-                    // No sourceLabel — URL-derived label gives "Open on MLB.com",
-                    // "Open on NBA.com", "Open on ESPN" which is what we want
-                    // here. Passing item.section would show the verbose column
-                    // label ("MLB Most Popular") which Jacob doesn't want.
-                    headline: item.headline,
-                    byline: item.byline || null,
-                    published: item.published || null,
-                  })}
+                  onClick={(e) => {
+                    // Modifier-click → open the source article in a background
+                    // tab instead of replacing the currently-open modal.
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+                      if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                      return;
+                    }
+                    onPlay!({
+                      videoId: item.youtubeVideoId || undefined,
+                      playbackUrl: item.playbackUrl || null,
+                      fallbackUrl: item.articleUrl,
+                      poster: item.imageUrl || null,
+                      // No sourceLabel — URL-derived label gives "Open on MLB.com",
+                      // "Open on NBA.com", "Open on ESPN" which is what we want
+                      // here. Passing item.section would show the verbose column
+                      // label ("MLB Most Popular") which Jacob doesn't want.
+                      headline: item.headline,
+                      byline: item.byline || null,
+                      published: item.published || null,
+                    });
+                  }}
+                  onAuxClick={(e) => {
+                    if (e.button === 1 && item.articleUrl) {
+                      window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                    }
+                  }}
                   className={commonCls}
                   style={commonStyle}
                 >

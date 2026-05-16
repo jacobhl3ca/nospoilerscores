@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
+import { fetchSportTeams, SportTeam } from "@/lib/espn";
 import {
   Preferences,
   Theme,
@@ -104,6 +105,52 @@ export default function SettingsPanel({
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
+  // Shared per-sport team cache. The TeamPicker writes into this when the
+  // user opens a tab / searches; the favorites display reads from it so
+  // every favorited team gets a friendly name + logo. On mount we eagerly
+  // load sports represented in the persisted favorites list so names appear
+  // immediately even before the user interacts with the picker.
+  const [teamsBySportCache, setTeamsBySportCache] = useState<Map<Sport, SportTeam[]>>(new Map());
+  const [loadingTeamSports, setLoadingTeamSports] = useState<Set<Sport>>(new Set());
+  const loadTeamSport = useCallback((sport: Sport) => {
+    setTeamsBySportCache((prev) => {
+      if (prev.has(sport)) return prev;
+      setLoadingTeamSports((ls) => {
+        if (ls.has(sport)) return ls;
+        const next = new Set(ls);
+        next.add(sport);
+        return next;
+      });
+      fetchSportTeams(sport).then((list) => {
+        setTeamsBySportCache((p) => {
+          const next = new Map(p);
+          next.set(sport, list);
+          return next;
+        });
+        setLoadingTeamSports((ls) => {
+          if (!ls.has(sport)) return ls;
+          const next = new Set(ls);
+          next.delete(sport);
+          return next;
+        });
+      });
+      return prev;
+    });
+  }, []);
+
+  // Eagerly fetch teams for sports the user already has favorites in, so the
+  // favorites list shows friendly names on settings-open instead of "nba-8".
+  // Skip when the picker drawer isn't open (no point fetching ahead of view).
+  useEffect(() => {
+    if (!open) return;
+    const sportsToLoad = new Set<Sport>();
+    for (const id of prefs.favoriteTeams) {
+      const sport = teamSportFromId(id);
+      if (sport) sportsToLoad.add(sport);
+    }
+    for (const sport of sportsToLoad) loadTeamSport(sport);
+  }, [open, prefs.favoriteTeams, loadTeamSport]);
+
   // Per-slot dropdown options exclude leagues currently in OTHER slots so the
   // user can't pick a duplicate (matches the in-header dropdown behavior).
   const displayedSports = useMemo(
@@ -127,10 +174,23 @@ export default function SettingsPanel({
     prefs.thirdLeague,
   ];
 
-  // Group favorited teams by sport, attaching display name when we've seen
-  // the team in the loaded leagues data — otherwise show "<sport> #<id>".
+  // Group favorited teams by sport, attaching display name + logo from
+  // (a) currently-loaded games (knownTeams) and (b) the picker's per-sport
+  // team cache, so favorites get friendly names even when the team isn't
+  // playing today. Group order matches displayedLeagues (the main page's
+  // column order), so a favorited Tigers row sits in the same lane as the
+  // MLB column on the home view.
   const teamsBySport = useMemo(() => {
-    const teamLookup = new Map(knownTeams.map((t) => [t.id, t]));
+    const teamLookup = new Map<string, { id: string; displayName: string; logo?: string }>();
+    for (const t of knownTeams) teamLookup.set(t.id, t);
+    // Picker cache wins as a backup since it's the canonical full team list.
+    for (const [, list] of teamsBySportCache) {
+      for (const t of list) {
+        if (!teamLookup.has(t.id)) {
+          teamLookup.set(t.id, { id: t.id, displayName: t.displayName, logo: t.logo });
+        }
+      }
+    }
     const grouped = new Map<Sport, { id: string; displayName: string; logo?: string }[]>();
     for (const id of prefs.favoriteTeams) {
       const sport = teamSportFromId(id);
@@ -145,8 +205,20 @@ export default function SettingsPanel({
       arr.push(entry);
       grouped.set(sport, arr);
     }
-    return grouped;
-  }, [prefs.favoriteTeams, knownTeams]);
+    // Reorder to match the main page's column lineup. Sports that are
+    // currently displayed go first in column order; remaining sports
+    // (favorites whose league isn't on screen today) come after.
+    const ordered = new Map<Sport, { id: string; displayName: string; logo?: string }[]>();
+    for (const sport of displayedSports) {
+      const arr = grouped.get(sport);
+      if (arr) {
+        ordered.set(sport, arr);
+        grouped.delete(sport);
+      }
+    }
+    for (const [sport, arr] of grouped) ordered.set(sport, arr);
+    return ordered;
+  }, [prefs.favoriteTeams, knownTeams, teamsBySportCache, displayedSports]);
 
   const removeTeam = (id: string) => {
     updatePrefs({ favoriteTeams: prefs.favoriteTeams.filter((t) => t !== id) });
@@ -161,6 +233,14 @@ export default function SettingsPanel({
   const clearAllTeams = () => {
     if (prefs.favoriteTeams.length === 0) return;
     updatePrefs({ favoriteTeams: [] });
+  };
+
+  const toggleTeamFavorite = (teamId: string) => {
+    if (prefs.favoriteTeams.includes(teamId)) {
+      updatePrefs({ favoriteTeams: prefs.favoriteTeams.filter((id) => id !== teamId) });
+    } else {
+      updatePrefs({ favoriteTeams: [...prefs.favoriteTeams, teamId] });
+    }
   };
 
   const resetAll = () => {
@@ -284,11 +364,20 @@ export default function SettingsPanel({
             })}
           </Section>
 
-          {/* Favorite teams */}
+          {/* Favorite teams — picker first so adding a team doesn't push the
+              picker off-screen, then the favorited-teams readout below. */}
           <Section title="Favorite teams">
+            <TeamPicker
+              sports={thirdLeagueOptions}
+              favorites={prefs.favoriteTeams}
+              onToggle={toggleTeamFavorite}
+              teamsBySport={teamsBySportCache}
+              loadingSports={loadingTeamSports}
+              loadSport={loadTeamSport}
+            />
             {prefs.favoriteTeams.length === 0 ? (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Tap the star next to a team in any game card to add it here.
+                Pick a team above, or tap the star next to a team in any game card.
               </p>
             ) : (
               <>
@@ -479,6 +568,207 @@ function RadioGroup<T extends string>({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// Always-visible team picker. Sport tab pills sit directly in the Favorite
+// teams section; the active tab's team list lazy-loads via fetchSportTeams
+// and is cached per-sport in lib/espn.ts so re-selecting a tab is instant.
+// Sports without a per-team concept (golf, tennis) are filtered out.
+// Cache + loader are hoisted to SettingsPanel so the favorites display can
+// also read team names from them (otherwise favorited teams that aren't in
+// today's loaded games would show "nba-8" instead of "Atlanta Hawks").
+const TEAM_PICKER_SKIP: Sport[] = ["golf", "tennis"];
+function TeamPicker({
+  sports,
+  favorites,
+  onToggle,
+  teamsBySport,
+  loadingSports,
+  loadSport,
+}: {
+  sports: LeagueOption[];
+  favorites: string[];
+  onToggle: (teamId: string) => void;
+  teamsBySport: Map<Sport, SportTeam[]>;
+  loadingSports: Set<Sport>;
+  loadSport: (sport: Sport) => void;
+}) {
+  const tabSports = useMemo(
+    () => sports.filter((s) => !TEAM_PICKER_SKIP.includes(s.sport)),
+    [sports],
+  );
+  // Start with no league selected — search across all leagues until the user
+  // picks one to narrow the list.
+  const [activeSport, setActiveSport] = useState<Sport | null>(null);
+  const [query, setQuery] = useState("");
+  const favSet = useMemo(() => new Set(favorites), [favorites]);
+  const trimmedQuery = query.trim().toLowerCase();
+
+  // If the active sport disappears from the active-leagues list (e.g., season
+  // ended while the picker was open), clear it back to "nothing selected"
+  // instead of jumping to another sport.
+  useEffect(() => {
+    if (activeSport && !tabSports.some((s) => s.sport === activeSport)) {
+      setActiveSport(null);
+    }
+  }, [tabSports, activeSport]);
+
+  // Fetch the active sport's teams when one is picked.
+  useEffect(() => {
+    if (!activeSport) return;
+    loadSport(activeSport);
+  }, [activeSport, loadSport]);
+
+  // Cross-league search: as soon as the user types into search WITHOUT a
+  // sport selected, kick off fetches for every available sport in parallel.
+  // Results stream in as each promise resolves; lib/espn's per-sport cache
+  // keeps re-typing cheap.
+  useEffect(() => {
+    if (activeSport) return;
+    if (!trimmedQuery) return;
+    for (const s of tabSports) loadSport(s.sport);
+  }, [trimmedQuery, activeSport, tabSports, loadSport]);
+
+  // currentTeams is sport-scoped when a tab is active, otherwise the union
+  // across every loaded sport (used by cross-league search). Each entry
+  // carries its sport so the row can render a small league badge in the
+  // cross-league results view.
+  const currentTeams = useMemo<(SportTeam & { sport: Sport })[]>(() => {
+    if (activeSport) {
+      const list = teamsBySport.get(activeSport) ?? [];
+      return list.map((t) => ({ ...t, sport: activeSport }));
+    }
+    const out: (SportTeam & { sport: Sport })[] = [];
+    for (const s of tabSports) {
+      const list = teamsBySport.get(s.sport);
+      if (!list) continue;
+      for (const t of list) out.push({ ...t, sport: s.sport });
+    }
+    return out;
+  }, [activeSport, teamsBySport, tabSports]);
+
+  const filtered = useMemo(() => {
+    if (!trimmedQuery) return currentTeams;
+    return currentTeams.filter(
+      (t) =>
+        t.displayName.toLowerCase().includes(trimmedQuery) ||
+        t.abbreviation.toLowerCase().includes(trimmedQuery),
+    );
+  }, [currentTeams, trimmedQuery]);
+
+  // Aggregate loading: spinner when the focused scope is loading. For
+  // single-sport view, that's just the active sport. For cross-league
+  // search, show the spinner only until AT LEAST ONE sport has results —
+  // staged display feels faster than blocking on every sport.
+  const anySportLoaded = currentTeams.length > 0;
+  const showSkeleton = activeSport
+    ? loadingSports.has(activeSport) && !teamsBySport.has(activeSport)
+    : !!trimmedQuery && !anySportLoaded && loadingSports.size > 0;
+
+  if (tabSports.length === 0) return null;
+
+  return (
+    <div className="pt-3 mt-3 space-y-2" style={{ borderTop: "1px solid var(--border)" }}>
+      <div className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
+        Browse teams
+      </div>
+      {/* Sport tabs — always visible. Clicking the active tab again clears
+          the filter (back to cross-league search). */}
+      <div className="flex flex-wrap gap-1.5">
+        {tabSports.map((s) => {
+          const active = s.sport === activeSport;
+          return (
+            <button
+              key={s.sport}
+              onClick={() => setActiveSport(active ? null : s.sport)}
+              className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
+              style={{
+                background: active ? "var(--accent)" : "var(--bg-card)",
+                border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                color: active ? "white" : "var(--text)",
+              }}
+              title={active ? "Click to clear filter" : `Show ${s.label} teams`}
+            >
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Search box — always visible. With no league picked it queries every
+          loaded sport; first keystroke triggers parallel lazy-loads. */}
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
+        className="w-full px-3 py-1.5 rounded-md text-sm"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+      />
+
+      {/* Team grid */}
+      <div className="max-h-72 overflow-y-auto -mx-1 px-1">
+        {showSkeleton ? (
+          <div className="grid grid-cols-2 gap-1.5">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                className="h-8 rounded-md animate-pulse"
+                style={{ background: "var(--bg-card)" }}
+              />
+            ))}
+          </div>
+        ) : !activeSport && !trimmedQuery ? (
+          <p className="text-xs py-3 text-center" style={{ color: "var(--text-muted)" }}>
+            Type to search across all leagues, or pick a league above.
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="text-xs py-3 text-center" style={{ color: "var(--text-muted)" }}>
+            {trimmedQuery
+              ? loadingSports.size > 0
+                ? "Searching…"
+                : "No matches"
+              : "No teams available"}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-1.5">
+            {filtered.map((t) => {
+              const isFav = favSet.has(t.id);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onToggle(t.id)}
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-colors text-left"
+                  style={{
+                    background: isFav ? "var(--accent)" : "var(--bg-card)",
+                    border: `1px solid ${isFav ? "var(--accent)" : "var(--border)"}`,
+                    color: isFav ? "white" : "var(--text)",
+                  }}
+                  title={isFav ? "Remove from favorites" : `Add ${t.displayName} to favorites`}
+                >
+                  {t.logo && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={t.logo} alt="" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" />
+                  )}
+                  <span className="min-w-0 truncate flex-1">{t.shortDisplayName}</span>
+                  {/* Sport badge — only in cross-league view so the user can
+                      tell Yankees (MLB) from Yankees-named results elsewhere */}
+                  {!activeSport && (
+                    <span
+                      className="text-[9px] font-bold uppercase tracking-wide shrink-0 opacity-70"
+                      style={{ color: isFav ? "white" : "var(--text-muted)" }}
+                    >
+                      {t.sport}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

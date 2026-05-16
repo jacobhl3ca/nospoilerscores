@@ -1136,6 +1136,88 @@ export async function fetchGames(
   return games;
 }
 
+// Full team list for a league — used by the Settings team picker so users can
+// browse all teams without having to find their team in a game card first.
+// Caches per-sport since the team list is effectively static within a season.
+//
+// Endpoint note: the obvious choice `site.api.espn.com/.../teams` returns 200
+// for curl but does NOT send `Access-Control-Allow-Origin: *`, so the browser
+// CORS check blocks it (the scoreboard endpoint on the same host DOES send
+// CORS — undocumented per-endpoint policy). We use `sports.core.api.espn.com`
+// which is fully CORS-open. Its response shape is flat (`items[]`) instead of
+// the nested `sports[0].leagues[0].teams[]` of the site host, and items lack
+// the `logos` array — we synthesize logo URLs from ESPN's CDN conventions.
+export interface SportTeam {
+  id: string;           // "${sport}-${rawId}" — same shape as Team.id elsewhere
+  rawId: string;        // ESPN's numeric id, useful for schedule fetches
+  displayName: string;
+  shortDisplayName: string;
+  abbreviation: string;
+  logo?: string;
+}
+
+function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string | undefined {
+  const abbr = abbreviation.toLowerCase();
+  // ESPN CDN team-logo path conventions, verified empirically. The major US
+  // leagues use abbreviation; NCAAM uses team id; soccer uses team id under
+  // a shared /soccer/ path.
+  switch (sport) {
+    case "mlb":
+    case "nba":
+    case "nhl":
+    case "nfl":
+      return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
+    case "ncaam":
+      return `https://a.espncdn.com/i/teamlogos/ncaa/500/${rawId}.png`;
+    case "epl":
+    case "mls":
+    case "fifa":
+      return `https://a.espncdn.com/i/teamlogos/soccer/500/${rawId}.png`;
+    default:
+      return undefined;
+  }
+}
+
+const sportTeamsCache = new Map<Sport, Promise<SportTeam[]>>();
+export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
+  const cached = sportTeamsCache.get(sport);
+  if (cached) return cached;
+  const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
+  const url = `https://sports.core.api.espn.com/v3/sports${sportPath}/teams?limit=400`;
+  const p = (async (): Promise<SportTeam[]> => {
+    try {
+      const res = await fetchWithRetry(url, 1, 8000);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const items = Array.isArray(data?.items) ? data.items : [];
+      const out: SportTeam[] = [];
+      for (const t of items) {
+        if (!t?.id || !t?.displayName) continue;
+        if (t.active === false) continue;
+        const rawId = String(t.id);
+        const abbreviation = String(t.abbreviation || "");
+        out.push({
+          id: `${sport}-${rawId}`,
+          rawId,
+          displayName: t.displayName,
+          shortDisplayName: t.shortDisplayName || t.displayName,
+          abbreviation,
+          logo: logoForTeam(sport, rawId, abbreviation),
+        });
+      }
+      out.sort((a, b) => a.displayName.localeCompare(b.displayName));
+      return out;
+    } catch {
+      return [];
+    }
+  })();
+  // Don't cache empty results — first-fetch CORS or network blips would
+  // otherwise stick "No teams available" forever.
+  p.then((r) => { if (r.length === 0) sportTeamsCache.delete(sport); });
+  sportTeamsCache.set(sport, p);
+  return p;
+}
+
 export async function fetchAllLeagues(
   date?: string,
   thirdLeagueSport?: Sport,

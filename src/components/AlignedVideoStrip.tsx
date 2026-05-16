@@ -244,7 +244,11 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
   if (canPlayInline) {
     return (
       <button
-        onClick={() =>
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            return;
+          }
           onPlay!({
             videoId: item.youtubeVideoId || undefined,
             playbackUrl: item.playbackUrl || null,
@@ -253,8 +257,13 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
             headline: item.headline,
             byline: item.byline || null,
             published: item.published || null,
-          })
-        }
+          });
+        }}
+        onAuxClick={(e) => {
+          if (e.button === 1 && item.articleUrl) {
+            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+          }
+        }}
         className={commonCls}
         style={commonStyle}
       >
@@ -306,16 +315,27 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
   if (shouldPopModal) {
     return (
       <button
-        onClick={() => onPlay!({
-          playbackUrl: item.videoUrl || null,
-          imageUrl: item.imageFullUrl || null,
-          fallbackUrl: item.articleUrl,
-          poster: item.imageUrl || null,
-          sourceLabel: item.section || null,
-          headline: item.headline,
-          byline: item.byline || null,
-          published: item.published || null,
-        })}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            return;
+          }
+          onPlay!({
+            playbackUrl: item.videoUrl || null,
+            imageUrl: item.imageFullUrl || null,
+            fallbackUrl: item.articleUrl,
+            poster: item.imageUrl || null,
+            sourceLabel: item.section || null,
+            headline: item.headline,
+            byline: item.byline || null,
+            published: item.published || null,
+          });
+        }}
+        onAuxClick={(e) => {
+          if (e.button === 1 && item.articleUrl) {
+            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+          }
+        }}
         className={`${rowCls} cursor-pointer`}
         style={rowStyle}
       >

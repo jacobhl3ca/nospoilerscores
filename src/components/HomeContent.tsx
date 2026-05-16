@@ -55,7 +55,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null } | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -75,7 +75,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const sharedVideoId = params.get("v");
-      if (params.has("f") || params.has("l") || params.has("fl") || params.has("t")) {
+      if (
+        params.has("f") || params.has("l") || params.has("fl") || params.has("t") ||
+        params.has("th") || params.has("dd") || params.has("dv") || params.has("dr") || params.has("n")
+      ) {
         // Support new compact format (f=m1.n15&l=m.n) and old format (f=mlb-1,mlb-2&fl=mlb,nba)
         const oldTeams = params.get("f")?.includes("-") ? params.get("f")!.split(",").filter(Boolean) : null;
         const oldLeagues = params.get("fl")?.split(",").filter(Boolean) as Sport[] | null;
@@ -88,6 +91,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           loaded.secondLeague = decoded.slotLeagues[1];
           if (decoded.slotLeagues[2]) loaded.thirdLeague = decoded.slotLeagues[2];
         }
+        if (decoded.theme) loaded.theme = decoded.theme;
+        if (decoded.defaultDateMode) loaded.defaultDateMode = decoded.defaultDateMode;
+        if (decoded.defaultLandingView) loaded.defaultLandingView = decoded.defaultLandingView;
+        if (decoded.defaultRatings) loaded.defaultRatings = decoded.defaultRatings;
+        if (decoded.newsThirdLeague) loaded.newsThirdLeague = decoded.newsThirdLeague;
         savePreferences(loaded);
         const keep = new URLSearchParams();
         if (sharedVideoId) keep.set("v", sharedVideoId);
@@ -155,6 +163,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       headline: opts.headline || null,
       byline: opts.byline || null,
       published: opts.published || null,
+      body: opts.body || null,
     });
     if (opts.videoId) {
       const params = new URLSearchParams(window.location.search);
@@ -184,8 +193,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     date: string,
     thirdLeague?: Sport,
     slotOverrides?: { first?: Sport; second?: Sport; third?: Sport },
+    silent = false,
   ) => {
-    setLoading(true);
+    // silent=true skips the global skeleton — used when only one slot changed
+    // (header dropdown or settings panel). Old data stays visible until the
+    // new pull resolves, which prevents the "all 3 columns flash gray" effect.
+    if (!silent) setLoading(true);
     setError(false);
     try {
       let data = await fetchAllLeagues(date, thirdLeague, slotOverrides);
@@ -195,18 +208,34 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       setLeagues([]);
       setError(true);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
 
+  // Two-effect split so slot/league pref changes don't flash the global
+  // skeleton: the date-driven effect shows loading (initial mount + day swap
+  // genuinely need the placeholder); the prefs-driven effect runs silently.
+  // mountedRef gates the prefs effect so it doesn't double-fire on mount.
+  const mountedRef = useRef(false);
   useEffect(() => {
-    if (selectedDate) {
-      fetchData(selectedDate, prefs.thirdLeague, {
-        first: prefs.firstLeague,
-        second: prefs.secondLeague,
-        third: prefs.thirdLeague,
-      });
-    }
-  }, [selectedDate, prefs.thirdLeague, prefs.firstLeague, prefs.secondLeague, fetchData]);
+    if (!selectedDate) return;
+    fetchData(selectedDate, prefs.thirdLeague, {
+      first: prefs.firstLeague,
+      second: prefs.secondLeague,
+      third: prefs.thirdLeague,
+    }, false);
+    mountedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
+
+  useEffect(() => {
+    if (!mountedRef.current || !selectedDate) return;
+    fetchData(selectedDate, prefs.thirdLeague, {
+      first: prefs.firstLeague,
+      second: prefs.secondLeague,
+      third: prefs.thirdLeague,
+    }, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
 
   const updatePrefs = (update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
@@ -282,7 +311,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   }, [prefs.showRatings]);
 
   const shareFavorites = () => {
-    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues, prefs.thirdLeague, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
+    const params = encodeFavorites(
+      prefs.favoriteTeams,
+      prefs.favoriteLeagues,
+      prefs.thirdLeague,
+      [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague],
+      {
+        theme: prefs.theme,
+        defaultDateMode: prefs.defaultDateMode,
+        defaultLandingView: prefs.defaultLandingView,
+        defaultRatings: prefs.defaultRatings,
+        newsThirdLeague: prefs.newsThirdLeague,
+      },
+    );
     const url = `${window.location.origin}?${params.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
       setShowShareCopied(true);
@@ -312,7 +353,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   };
 
   const copyFavLink = () => {
-    const params = encodeFavorites(prefs.favoriteTeams, prefs.favoriteLeagues, prefs.thirdLeague, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
+    const params = encodeFavorites(
+      prefs.favoriteTeams,
+      prefs.favoriteLeagues,
+      prefs.thirdLeague,
+      [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague],
+      {
+        theme: prefs.theme,
+        defaultDateMode: prefs.defaultDateMode,
+        defaultLandingView: prefs.defaultLandingView,
+        defaultRatings: prefs.defaultRatings,
+        newsThirdLeague: prefs.newsThirdLeague,
+      },
+    );
     const url = `${window.location.origin}?${params.toString()}`;
     navigator.clipboard.writeText(url).then(() => {
       setFavToastCopied(true);
@@ -364,10 +417,20 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     updatePrefs({ thirdLeague: sport });
   };
 
+  // When the user swaps one column, lock the other two to whatever's currently
+  // displayed so the auto-picker doesn't shuffle them. Without this, picking
+  // NCAAM for slot 2 (with slots 1+3 unset) re-runs auto-pick for the others
+  // and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
   const setSlotLeague = (slotIdx: number, sport: Sport | undefined) => {
-    if (slotIdx === 0) updatePrefs({ firstLeague: sport });
-    else if (slotIdx === 1) updatePrefs({ secondLeague: sport });
-    else if (slotIdx === 2) updatePrefs({ thirdLeague: sport });
+    const displayed = sortedLeagues.map((l) => l.sport);
+    const resolved: (Sport | undefined)[] = [0, 1, 2].map((i) =>
+      i === slotIdx ? sport : (selectedSlotLeagues[i] ?? displayed[i]),
+    );
+    updatePrefs({
+      firstLeague: resolved[0],
+      secondLeague: resolved[1],
+      thirdLeague: resolved[2],
+    });
   };
 
   const selectedSlotLeagues: (Sport | undefined)[] = [
@@ -438,6 +501,98 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // ── Pull-to-refresh ────────────────────────────────────────────────
+  // Touch-only gesture. iOS WKWebView's native bounce sits on top of this so
+  // the visual feedback during pull is the spinner we render here, while the
+  // page itself bounces underneath — feels native on iOS and works on Safari
+  // mobile + Chrome Android where the browser has no built-in PTR.
+  //
+  // Trigger reaches both the scoreboard (re-call fetchData) and the news view
+  // (bump newsRefreshKey → SourceSection + AlignedVideoStrip components see a
+  // new key and remount, which re-runs their fetch effects). Cleaner than
+  // wiring imperative refresh signals through every news component.
+  const [newsRefreshKey, setNewsRefreshKey] = useState(0);
+  const [pullDelta, setPullDelta] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullDeltaRef = useRef(0);
+  const refreshingRef = useRef(false);
+  // doRefresh closes over the latest selectedDate/prefs/showNews. We stash
+  // the current callable in a ref so the touch handler (bound once below)
+  // always calls today's logic without re-binding the listeners on every
+  // state change — pull events fire faster than React re-renders.
+  const doRefreshRef = useRef<() => void>(() => {});
+  doRefreshRef.current = async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    try {
+      if (showNews) {
+        // News view → remount sources to re-fetch their feeds.
+        setNewsRefreshKey((k) => k + 1);
+      } else if (selectedDate) {
+        await fetchData(selectedDate, prefs.thirdLeague, {
+          first: prefs.firstLeague,
+          second: prefs.secondLeague,
+          third: prefs.thirdLeague,
+        });
+      }
+    } finally {
+      // Min spinner display so the refresh feels confirmed even on instant
+      // cache hits — otherwise it'd flash off in <50ms.
+      window.setTimeout(() => {
+        refreshingRef.current = false;
+        setRefreshing(false);
+      }, 500);
+    }
+  };
+
+  useEffect(() => {
+    const PULL_THRESHOLD = 70;
+    const MAX_VISUAL = 110;
+    const DAMP = 0.5;
+    const onTouchStart = (e: TouchEvent) => {
+      if (refreshingRef.current) return;
+      if (window.scrollY > 0) return;
+      pullStartYRef.current = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (pullStartYRef.current === null) return;
+      const delta = e.touches[0].clientY - pullStartYRef.current;
+      if (delta < 0) {
+        // User pulled up → cancel. Don't reset start so they can re-pull from
+        // the new position by inverting direction; simpler to fully cancel.
+        pullStartYRef.current = null;
+        pullDeltaRef.current = 0;
+        setPullDelta(0);
+        return;
+      }
+      const damped = Math.min(delta * DAMP, MAX_VISUAL);
+      pullDeltaRef.current = damped;
+      setPullDelta(damped);
+    };
+    const onTouchEnd = () => {
+      if (pullStartYRef.current === null) return;
+      const finalDelta = pullDeltaRef.current;
+      pullStartYRef.current = null;
+      pullDeltaRef.current = 0;
+      setPullDelta(0);
+      if (finalDelta >= PULL_THRESHOLD) {
+        doRefreshRef.current();
+      }
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
+
   const [isNativeApp, setIsNativeApp] = useState(false);
   useEffect(() => {
     type CapacitorGlobal = { Capacitor?: { isNativePlatform?: () => boolean } };
@@ -465,8 +620,55 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
   const resolvedTheme = getResolvedTheme(prefs.theme);
 
+  // Pull-to-refresh visual: a small spinner pill that descends from below the
+  // header proportional to pullDelta, latches into a spinning state during
+  // refresh, then fades out. translate3d so it composites on the GPU and
+  // doesn't drop frames on iOS during the pull gesture.
+  const ptrProgress = Math.min(pullDelta / 70, 1);
+  const ptrVisible = pullDelta > 0 || refreshing;
+  const ptrTranslateY = refreshing ? 28 : Math.max(0, pullDelta - 12);
+
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      {ptrVisible && (
+        <div
+          aria-hidden="true"
+          className="fixed left-1/2 z-50 pointer-events-none"
+          style={{
+            top: "calc(env(safe-area-inset-top) + var(--header-h, 4rem))",
+            transform: `translate3d(-50%, ${ptrTranslateY}px, 0)`,
+            transition: refreshing ? "transform 200ms ease-out" : "none",
+            opacity: refreshing ? 1 : ptrProgress,
+          }}
+        >
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center shadow-md"
+            style={{
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              color: "var(--accent)",
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transform: refreshing ? undefined : `rotate(${ptrProgress * 270}deg)`,
+                animation: refreshing ? "ptr-spin 700ms linear infinite" : undefined,
+              }}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+          </div>
+        </div>
+      )}
       <header ref={headerRef} className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
         <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
           <a
@@ -604,6 +806,27 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 />
               )}
             </div>
+            {!isNativeApp && (
+              <a
+                href="https://apps.apple.com/app/hidescore/id6766885311"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                style={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-muted)",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                title="Get the iOS app"
+                aria-label="Get the iOS app on the App Store"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="sm:w-4 sm:h-4">
+                  <path d="M17.05 12.04c-.03-3.02 2.47-4.47 2.58-4.54-1.41-2.06-3.6-2.34-4.38-2.37-1.86-.19-3.64 1.1-4.59 1.1-.96 0-2.41-1.07-3.97-1.04-2.04.03-3.93 1.19-4.98 3.02-2.13 3.69-.54 9.13 1.52 12.12 1.01 1.46 2.21 3.1 3.78 3.04 1.52-.06 2.09-.98 3.93-.98 1.83 0 2.36.98 3.97.95 1.64-.03 2.68-1.49 3.69-2.96 1.16-1.69 1.64-3.34 1.66-3.42-.04-.02-3.19-1.22-3.21-4.84zM14.05 3.27c.83-1.01 1.39-2.41 1.24-3.81-1.2.05-2.65.8-3.51 1.81-.77.89-1.45 2.32-1.27 3.69 1.34.1 2.71-.68 3.54-1.69z" />
+                </svg>
+              </a>
+            )}
             <ThemeToggle theme={prefs.theme} onToggle={toggleTheme} />
             <button
               onClick={() => setSettingsOpen(true)}
@@ -708,6 +931,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                     </div>
                   </div>
                   <AlignedVideoStrip
+                    key={`avs-${newsRefreshKey}`}
                     sources={[col1All[0], col2All[0], col3All[0]]}
                     onPlay={playNewsVideo}
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
@@ -717,18 +941,21 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               )}
               <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                 <NewsColumn
+                  key={`nc1-${newsRefreshKey}`}
                   title={sortedLeagues[0]?.label ?? "News"}
                   sources={col1Rest}
                   hideTitle={allFirstAreVideo}
                   onPlayVideo={playNewsVideo}
                 />
                 <NewsColumn
+                  key={`nc2-${newsRefreshKey}`}
                   title={sortedLeagues[1]?.label ?? "News"}
                   sources={col2Rest}
                   hideTitle={allFirstAreVideo}
                   onPlayVideo={playNewsVideo}
                 />
                 <NewsColumn
+                  key={`nc3-${newsRefreshKey}`}
                   title={col3Title}
                   sources={col3Rest}
                   swappableOptions={newsThirdLeagueOptions}
@@ -1038,6 +1265,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           headline={videoModal.headline}
           byline={videoModal.byline}
           published={videoModal.published}
+          body={videoModal.body}
           onClose={closeVideoModal}
         />
       )}

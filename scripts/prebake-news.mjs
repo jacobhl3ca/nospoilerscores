@@ -979,6 +979,15 @@ async function fetchReddit(subreddit, sectionLabel) {
     if (p.post_hint === "image" && /^https:\/\/i\.redd\.it\//.test(p.url || "")) {
       imageFullUrl = p.url;
     }
+    // Selftext body — only for true text posts. Skip when the post carries
+    // image/video media (the lightbox already shows the visual). Cap length
+    // so a 10k-char rant doesn't bloat the prebake JSON; the modal links out
+    // for the full read.
+    let body = null;
+    if (!videoUrl && !imageFullUrl && !imageUrl && p.is_self && p.selftext) {
+      const raw = decodeEntities(String(p.selftext)).trim();
+      if (raw) body = raw.length > 1500 ? raw.slice(0, 1500) + "…" : raw;
+    }
     out.push({
       id: p.id || p.permalink,
       headline: title,
@@ -990,6 +999,7 @@ async function fetchReddit(subreddit, sectionLabel) {
       section: sectionLabel,
       videoUrl,
       imageFullUrl,
+      body,
     });
     if (out.length >= 12) break;
   }

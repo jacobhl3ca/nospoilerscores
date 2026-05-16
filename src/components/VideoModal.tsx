@@ -30,6 +30,9 @@ interface VideoModalProps {
   headline?: string | null;
   byline?: string | null;
   published?: string | null;
+  // Selftext body for Reddit text posts. Raw markdown — rendered with
+  // paragraph breaks + autolinking. Only shown in textMode (no media).
+  body?: string | null;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -41,6 +44,66 @@ function extractSearchQuery(fallbackUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+// Minimal Reddit selftext renderer. Reddit selftext is markdown but we only
+// care about the structural bits that matter for readability — paragraphs,
+// line breaks, and autolinked URLs. Full markdown (headings, bold, code
+// fences) is rare in posts and not worth pulling marked/markdown-it for.
+// Escapes HTML first so a post with literal "<script>" is safe.
+function renderRedditBody(raw: string): React.ReactNode {
+  const escape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Split on blank-line gaps into paragraphs. Inside a paragraph, single
+  // newlines become <br/>.
+  const paragraphs = raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  return paragraphs.map((para, pi) => {
+    // Linkify URLs (http/https). Build a mixed array of strings + anchors so
+    // each piece can be rendered safely without dangerouslySetInnerHTML.
+    const urlRe = /\bhttps?:\/\/[^\s<>"')]+/g;
+    const parts: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+    while ((match = urlRe.exec(para)) !== null) {
+      const before = para.slice(lastIdx, match.index);
+      if (before) parts.push(escape(before));
+      const url = match[0];
+      parts.push(
+        <a
+          key={`u-${pi}-${match.index}`}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:opacity-80"
+          style={{ color: "var(--accent)" }}
+        >
+          {url}
+        </a>
+      );
+      lastIdx = match.index + url.length;
+    }
+    const tail = para.slice(lastIdx);
+    if (tail) parts.push(escape(tail));
+    // Handle intra-paragraph single newlines → <br/>. Walk parts and split
+    // each string segment on \n, interleaving <br/> elements.
+    const withBreaks: React.ReactNode[] = [];
+    parts.forEach((part, idx) => {
+      if (typeof part === "string") {
+        const lines = part.split("\n");
+        lines.forEach((line, li) => {
+          if (line) withBreaks.push(line);
+          if (li < lines.length - 1) withBreaks.push(<br key={`br-${pi}-${idx}-${li}`} />);
+        });
+      } else {
+        withBreaks.push(part);
+      }
+    });
+    return (
+      <p key={`p-${pi}`} className={pi === 0 ? "" : "mt-3"}>
+        {withBreaks}
+      </p>
+    );
+  });
 }
 
 // Per-source label for the modal's "Open on …" link. The footer used to read
@@ -63,7 +126,7 @@ function sourceLabelFromUrl(url: string): string {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, sourceLabel, headline, byline, published }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, sourceLabel, headline, byline, published, body }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -345,6 +408,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           </button>
         )}
 
+
         {/* Player area — image lightbox (no aspect lock), 16:9 video, or YouTube iframe */}
         {imageMode ? (
           <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black flex items-center justify-center" style={{ maxHeight: "85vh" }}>
@@ -362,7 +426,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // whose image failed to load) get a clean card layout instead of
           // an empty lightbox. Everything stays on hidescore until the user
           // hits the "Open on …" button at the bottom.
-          <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8 max-h-[85vh] overflow-y-auto" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             {sourceLabel && (
               <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
             )}
@@ -373,6 +437,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               <p className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
                 {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
               </p>
+            )}
+            {body && (
+              <div
+                className="text-sm sm:text-base leading-relaxed mt-4 pt-4"
+                style={{ color: "var(--text)", borderTop: "1px solid var(--border)" }}
+              >
+                {renderRedditBody(body)}
+              </div>
             )}
           </div>
         ) : (

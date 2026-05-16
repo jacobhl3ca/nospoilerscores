@@ -122,3 +122,8 @@ body {
 .animate-fade-in {
   animation: fade-in 0.25s ease forwards;
 }
+
+@keyframes ptr-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
