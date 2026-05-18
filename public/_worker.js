@@ -3,6 +3,21 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/youtube") {
+      // CORS: Capacitor native shells (capacitor://localhost on iOS,
+      // https://localhost on Android) fetch this cross-origin. Without
+      // Access-Control-Allow-Origin the WebView blocks the response, the
+      // highlight video-ID lookup silently fails, and every highlight
+      // button falls back to opening a YouTube search in the browser
+      // instead of playing in the in-app modal. Mirrors the /news/* block.
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
       const query = url.searchParams.get("q");
       const preferChannel = url.searchParams.get("channel"); // e.g. "NBA", "MLB"
       const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
@@ -12,7 +27,10 @@ export default {
       if (!query) {
         return new Response(JSON.stringify({ error: "Missing q param" }), {
           status: 400,
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
         });
       }
 
@@ -412,7 +430,10 @@ export default {
         if (!videoId) {
           return new Response(JSON.stringify({ error: "No results" }), {
             status: 404,
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
           });
         }
 
@@ -420,12 +441,16 @@ export default {
           headers: {
             "Content-Type": "application/json",
             "Cache-Control": "public, max-age=300",
+            "Access-Control-Allow-Origin": "*",
           },
         });
       } catch {
         return new Response(JSON.stringify({ error: "Search failed" }), {
           status: 500,
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
         });
       }
     }
