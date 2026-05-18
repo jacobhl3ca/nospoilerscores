@@ -184,9 +184,35 @@ async function main() {
     const prevAirings = Object.keys(prev.airings ?? {}).length;
     const prevNba = Object.keys(prev.nbaGameIds ?? {}).length;
     if (prevAirings > 0 || prevNba > 0) {
-      console.log(
-        `scrape returned nothing; keeping previous (${prevAirings} airings, ${prevNba} nba)`
-      );
+      if (allGames.length > 0) {
+        // Scoreboards read fine — there just are no ESPN-family broadcasts
+        // right now (common on quiet mid-week days). That's a healthy
+        // refresh, not a failure: rewrite the file with the previous map
+        // and a fresh generatedAt so the staleness monitor doesn't
+        // false-alarm. The airings map is preserved exactly.
+        console.log(
+          `no ESPN broadcasts today; refreshing timestamp on previous (${prevAirings} airings, ${prevNba} nba)`
+        );
+        writeFileSync(
+          OUT_PATH,
+          JSON.stringify(
+            {
+              generatedAt: new Date().toISOString(),
+              airings: prev.airings ?? {},
+              nbaGameIds: prev.nbaGameIds ?? {},
+            },
+            null,
+            2
+          ) + "\n"
+        );
+      } else {
+        // Every scoreboard fetch failed — a real outage. Leave the previous
+        // file untouched so its generatedAt ages out and the staleness
+        // check fires the alert it's supposed to.
+        console.log(
+          `all scoreboards failed; keeping previous untouched (${prevAirings} airings, ${prevNba} nba)`
+        );
+      }
       process.exit(0);
     }
   }
