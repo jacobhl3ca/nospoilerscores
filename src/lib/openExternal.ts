@@ -14,10 +14,17 @@
 //
 // YouTube exception: SFSafariViewController renders youtube.com in-app
 // instead of handing off to the YouTube app. We bypass it for youtube URLs
-// by extracting the video ID and attempting `youtube://watch?v=ID` through
+// by mapping them to the `youtube://` app scheme and launching via
 // @capacitor/app-launcher (which calls UIApplication.openURL and respects
-// registered app URL schemes). Falls back to Browser.open if YouTube isn't
-// installed.
+// registered app URL schemes). This covers both video links (/watch,
+// youtu.be, /shorts) and search-results pages (/results) — the highlight
+// buttons fall back to a YouTube search URL when no specific video
+// resolves, and those were still landing in the in-app browser.
+// Falls back to Browser.open if YouTube isn't installed.
+//
+// Note: this is only a fallback. The primary path plays highlights in
+// HideScore's own embedded player (VideoModal) — see fetchFirstVideoId in
+// lib/youtube.ts. openExternal only runs when no specific video resolves.
 
 const isCapacitorNative = (): boolean => {
   if (typeof window === "undefined") return false;
@@ -26,23 +33,29 @@ const isCapacitorNative = (): boolean => {
   return !!cap?.isNativePlatform?.();
 };
 
-// Match youtube.com/watch?v=ID, youtu.be/ID, youtube.com/shorts/ID, m.youtube.com/*.
-// Returns the 11-char video ID or null.
-function extractYouTubeVideoId(url: string): string | null {
+// Map a youtube.com / youtu.be web URL to its `youtube://` app-scheme
+// equivalent so @capacitor/app-launcher can hand off to the native app.
+// Covers video links (youtube.com/watch?v=ID, youtu.be/ID, /shorts/ID,
+// m.youtube.com/*) and search-results pages (youtube.com/results?
+// search_query=Q). Returns null for any non-YouTube or unrecognized URL.
+function youTubeAppUrl(url: string): string | null {
   try {
     const u = new URL(url);
     const host = u.hostname.replace(/^(www\.|m\.)/, "");
     if (host === "youtu.be") {
       const id = u.pathname.slice(1).split("/")[0];
-      return /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+      return /^[a-zA-Z0-9_-]{11}$/.test(id) ? `youtube://watch?v=${id}` : null;
     }
-    if (host === "youtube.com") {
-      if (u.pathname === "/watch") {
-        const id = u.searchParams.get("v") || "";
-        return /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
-      }
-      const shortsMatch = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{11})/);
-      if (shortsMatch) return shortsMatch[1];
+    if (host !== "youtube.com") return null;
+    if (u.pathname === "/watch") {
+      const id = u.searchParams.get("v") || "";
+      return /^[a-zA-Z0-9_-]{11}$/.test(id) ? `youtube://watch?v=${id}` : null;
+    }
+    const shortsMatch = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{11})/);
+    if (shortsMatch) return `youtube://watch?v=${shortsMatch[1]}`;
+    if (u.pathname === "/results") {
+      const q = u.searchParams.get("search_query") || "";
+      return q ? `youtube://results?search_query=${encodeURIComponent(q)}` : null;
     }
     return null;
   } catch {
@@ -50,13 +63,12 @@ function extractYouTubeVideoId(url: string): string | null {
   }
 }
 
-async function tryOpenInYouTubeApp(videoId: string): Promise<boolean> {
+async function tryOpenInYouTubeApp(appUrl: string): Promise<boolean> {
   try {
     const { AppLauncher } = await import("@capacitor/app-launcher");
-    const target = `youtube://watch?v=${videoId}`;
-    const { value: canOpen } = await AppLauncher.canOpenUrl({ url: target });
+    const { value: canOpen } = await AppLauncher.canOpenUrl({ url: appUrl });
     if (!canOpen) return false;
-    await AppLauncher.openUrl({ url: target });
+    await AppLauncher.openUrl({ url: appUrl });
     return true;
   } catch {
     return false;
@@ -74,9 +86,9 @@ function openInBrowser(url: string): void {
 export function openExternal(url: string): void {
   if (!url) return;
   if (isCapacitorNative()) {
-    const videoId = extractYouTubeVideoId(url);
-    if (videoId) {
-      tryOpenInYouTubeApp(videoId).then((opened) => {
+    const ytApp = youTubeAppUrl(url);
+    if (ytApp) {
+      tryOpenInYouTubeApp(ytApp).then((opened) => {
         if (!opened) openInBrowser(url);
       });
       return;
