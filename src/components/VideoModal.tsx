@@ -133,6 +133,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [currentId, setCurrentId] = useState(videoId);
   const failedIdsRef = useRef<string[]>([]);
   const retryingRef = useRef(false);
+  // Some YouTube errors render inside the iframe without firing the JS
+  // API's onError event — Error 153 ("Video player configuration error")
+  // on certain MLB/restricted content is the offender. We start a timer
+  // when onReady fires and force tryFallback() if playback never starts.
+  const watchdogRef = useRef<number | null>(null);
   // imgFailed flips when the lightbox image errors out — at that point we
   // collapse to text-card mode so the user sees the headline + open button
   // instead of an empty modal (Firefox + Reddit external-preview is the
@@ -328,11 +333,26 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         events: {
           onReady: (event: any) => {
             event.target.playVideo();
+            // Watchdog: if we never reach PLAYING or BUFFERING within
+            // 10s, assume the iframe is stuck on a silent error screen
+            // (e.g. YT Error 153 on MLB content) and try the next
+            // candidate. Bounded by failedIdsRef + the worker's exclude
+            // param, so retries terminate when no more candidates exist.
+            if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
+            watchdogRef.current = window.setTimeout(() => {
+              const state = playerRef.current?.getPlayerState?.();
+              if (state !== 1 && state !== 3) tryFallback();
+            }, 10000);
           },
           // PLAYING (1) is the first state where getAvailableQualityLevels()
           // returns the real list — onReady gives []. setPlaybackQuality is
           // a deprecated suggestion, but it's the only knob we have.
           onStateChange: (event: any) => {
+            // Playback actually started — kill the watchdog.
+            if ((event.data === 1 || event.data === 3) && watchdogRef.current) {
+              window.clearTimeout(watchdogRef.current);
+              watchdogRef.current = null;
+            }
             if (event.data === 1) forceBest(event.target);
           },
           // If YT auto-quality downgrades us, push back up to the best level.
@@ -357,6 +377,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
 
     return () => {
+      if (watchdogRef.current) {
+        window.clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
   }, [currentId, fallbackUrl, hlsMode, imageMode, textMode]);
