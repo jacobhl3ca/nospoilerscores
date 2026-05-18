@@ -82,10 +82,20 @@ const JSON_LD = {
       },
     },
     {
+      "@type": "MobileApplication",
+      name: "HideScore",
+      operatingSystem: "iOS",
+      applicationCategory: "SportsApplication",
+      url: "https://apps.apple.com/app/hidescore/id6766885311",
+      installUrl: "https://apps.apple.com/app/hidescore/id6766885311",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    },
+    {
       "@type": "Organization",
       name: "HideScore",
       url: "https://hidescore.com",
       logo: "https://hidescore.com/icon-512.png",
+      sameAs: ["https://apps.apple.com/app/hidescore/id6766885311"],
     },
   ],
 };
