@@ -464,7 +464,30 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(header);
-    return () => ro.disconnect();
+    // On iOS the safe-area inset (env(safe-area-inset-top)) settles a frame
+    // or two AFTER orientationchange/visualViewport-resize fire, so a measure
+    // taken on the ResizeObserver tick reads the stale pre-rotation header
+    // height — which left the sticky column titles pinned mid-screen in
+    // landscape. Re-measure explicitly after rotation, two frames later, to
+    // catch the settled inset.
+    let raf1 = 0;
+    let raf2 = 0;
+    const remeasureSoon = () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(measure);
+      });
+    };
+    window.addEventListener("orientationchange", remeasureSoon);
+    window.visualViewport?.addEventListener("resize", remeasureSoon);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      window.removeEventListener("orientationchange", remeasureSoon);
+      window.visualViewport?.removeEventListener("resize", remeasureSoon);
+    };
   }, []);
 
   // Measure the news-view league-title strip so per-source sticky headers
