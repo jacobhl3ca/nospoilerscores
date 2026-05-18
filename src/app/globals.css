@@ -127,3 +127,13 @@ body {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-pulse-dot {
+  display: inline-block;
+  animation: live-pulse 1.6s ease-in-out 2;
+}
+

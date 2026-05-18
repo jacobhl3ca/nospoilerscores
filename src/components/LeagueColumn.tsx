@@ -32,6 +32,11 @@ interface LeagueColumnProps {
   onSwapLeague?: (sport: Sport | undefined) => void;
 }
 
+// DEV preview: force the Big Inning subtitle to render in the LIVE state
+// regardless of the current ET clock, so the styling shows before tonight's
+// scheduled start time. Set to false before shipping.
+const FORCE_BIG_INNING_LIVE_PREVIEW = false;
+
 // 2025-26 season playoff start dates (update each season)
 const PLAYOFF_START_DATES: Record<string, { date: string; label: string; preDate?: string; preEndDate?: string; preLabel?: string }> = {
   nba: { date: "2026-04-18", label: "Playoffs", preDate: "2026-04-14", preEndDate: "2026-04-17", preLabel: "Play-in" },
@@ -145,11 +150,11 @@ function getPlayoffSubtitle(
       now.y === +selectedDate.slice(0, 4) &&
       now.mo === +selectedDate.slice(4, 6) &&
       now.d === +selectedDate.slice(6, 8);
-    const past = !!parsed && isToday && (now.h > parsed.h || (now.h === parsed.h && now.m >= parsed.m));
+    const past = FORCE_BIG_INNING_LIVE_PREVIEW || (!!parsed && isToday && (now.h > parsed.h || (now.h === parsed.h && now.m >= parsed.m)));
 
     if (past) {
       return {
-        tiers: ["Big Inning · LIVE", "Big Inning"],
+        tiers: ["● Big Inning · LIVE", "● Big Inning live", "● Big Inning"],
         href: entry.selectionUrl ?? "https://www.mlb.com/network/live",
       };
     }
@@ -214,6 +219,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; se
   // time not yet reached. Once the start time passes, this effect's dep flips
   // to false and the interval is cleared.
   const needsBigInningTick = (() => {
+    if (FORCE_BIG_INNING_LIVE_PREVIEW) return false;
     if (sport !== "mlb" || !bigInningSchedule) return false;
     const isoDate = `${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}`;
     const entry = bigInningSchedule[isoDate];
@@ -285,12 +291,32 @@ function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; se
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tiersKey]);
 
-  const baseCls = "text-[9px] sm:text-[10px] italic mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5";
+  // Within PlayoffSubtitle, `href` is only set when Big Inning is live \u2014
+  // safe trigger for the "green & clickable" live treatment that mirrors
+  // the GameCard live-progress indicator.
+  const isLive = !!href && tiers.length > 0;
+  const baseCls = "text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5";
+  const liveCls = `${baseCls} text-green-500 font-medium hover:text-green-400 transition-colors hover:underline`;
+  const linkCls = `${baseCls} italic hover:underline transition-colors`;
+  const spanCls = `${baseCls} italic`;
   const baseStyle = {
-    color: tiers.length ? "var(--text-muted)" : "transparent",
     visibility: ready || !tiers.length ? ("visible" as const) : ("hidden" as const),
+    color: isLive ? undefined : (tiers.length ? "var(--text-muted)" : "transparent"),
   };
   const text = tiers.length ? tiers[tierIdx] : "\u00A0";
+  // When live, peel the leading "\u25CF" off so we can animate just the dot.
+  // The probe still measures the full string (including "\u25CF"), so layout
+  // math stays accurate.
+  const renderText = (t: string) => {
+    if (isLive && t.startsWith("\u25CF")) {
+      // Put the trailing space INSIDE the dot span. Since `.live-pulse-dot`
+      // is `display: inline-block`, the parent's hover:underline won't
+      // draw a line under the dot or the gap \u2014 only under the text that
+      // follows.
+      return <><span className="live-pulse-dot" aria-hidden="true">{"\u25CF\u00A0"}</span>{t.slice(2)}</>;
+    }
+    return t;
+  };
   if (href && tiers.length) {
     return (
       <a
@@ -298,16 +324,16 @@ function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; se
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className={`${baseCls} hover:underline transition-colors`}
+        className={isLive ? liveCls : linkCls}
         style={baseStyle}
       >
-        {text}
+        {renderText(text)}
       </a>
     );
   }
   return (
-    <span ref={ref as React.RefObject<HTMLSpanElement>} className={baseCls} style={baseStyle}>
-      {text}
+    <span ref={ref as React.RefObject<HTMLSpanElement>} className={spanCls} style={baseStyle}>
+      {renderText(text)}
     </span>
   );
 }
