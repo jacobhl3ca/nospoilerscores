@@ -1042,17 +1042,20 @@ export async function fetchGames(
   // numeric event id (hit-or-miss) to the airing UUID (canonical).
   const espnAiringsPromise = loadEspnAirings();
 
-  let res: Response;
+  // A failed/non-OK fetch OR a non-JSON body (ESPN's CDN occasionally serves
+  // a 200 HTML interstitial during incidents) degrades this league to an
+  // empty column — it must never throw, or one bad league blanks the whole
+  // board via the Promise.all in fetchAllLeagues.
+  let data: { events?: unknown[] } | null;
   try {
-    res = await fetchWithRetry(url.toString());
+    const res = await fetchWithRetry(url.toString());
+    if (!res.ok) return [];
+    data = await res.json();
   } catch {
     return [];
   }
 
-  if (!res.ok) return [];
-
-  const data = await res.json();
-  const events = data.events ?? [];
+  const events = data?.events ?? [];
   const games: Game[] = events
     .filter((e: any) => {
       // Filter out postponed/canceled/suspended games
@@ -1063,7 +1066,15 @@ export async function fetchGames(
       if (seasonType === 1) return false;
       return true;
     })
-    .map((e: any) => parseGame(e, sport));
+    // A single malformed event must not take down the whole league.
+    .map((e: any) => {
+      try {
+        return parseGame(e, sport);
+      } catch {
+        return null;
+      }
+    })
+    .filter((g: Game | null): g is Game => g !== null);
 
   // Enrich MLB games with direct MLB.tv stream links
   if (sport === "mlb" && mlbPksPromise) {
@@ -1297,8 +1308,15 @@ export async function fetchAllLeagues(
     return { sport: cfg.sport, label, games, nextGameDay };
   };
 
-  const results = await Promise.all(final.map(fetchLeague));
-  return results.filter((r): r is LeagueData => r !== null);
+  // allSettled, not all: a single league throwing must not blank the whole
+  // board. fetchLeague's helpers are already failure-tolerant (fetchGames
+  // returns [] on any error), so this is defense-in-depth against a future
+  // enrichment step reintroducing a throw — one bad column drops out, the
+  // rest still render.
+  const settled = await Promise.allSettled(final.map(fetchLeague));
+  return settled
+    .map((r) => (r.status === "fulfilled" ? r.value : null))
+    .filter((r): r is LeagueData => r !== null);
 }
 
 // ESPN standings: { teamId -> "W-L" }. Cached per-sport so one team-view
