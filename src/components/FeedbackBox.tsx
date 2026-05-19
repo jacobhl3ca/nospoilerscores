@@ -28,21 +28,41 @@ export default function FeedbackBox() {
     }
   };
 
-  if (sent) {
-    return <span>thanks for the feedback 🙏</span>;
-  }
-
+  // The outer box has a fixed width (w-full) AND a fixed height, and the
+  // states render in an absolutely-positioned layer on top — so the box's
+  // footprint is completely independent of which state is showing. The
+  // footer can't reflow on submit; nothing above or below moves.
   return (
-    <form onSubmit={submit} className="inline-flex items-center gap-1.5">
-      <span className="shrink-0">feedback:</span>
-      <input
-        type="text"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        aria-label="Feedback"
-        className="w-32 text-xs px-2 py-0.5 rounded-md outline-none"
-        style={{ background: "#fff", color: "#111", border: "1px solid var(--border)" }}
-      />
-    </form>
+    <div className="relative w-full" style={{ height: 18 }}>
+      <div className="absolute inset-0 flex items-center justify-center">
+      {sent ? (
+        <div className="inline-flex items-center gap-1.5">
+          <span>thanks for the feedback 🙏</span>
+          <button
+            type="button"
+            onClick={() => setSent(false)}
+            aria-label="Add more feedback"
+            title="Add more feedback"
+            className="w-4 h-4 flex items-center justify-center rounded-full text-xs leading-none cursor-pointer transition-opacity hover:opacity-70"
+            style={{ background: "#fff", color: "#111", border: "1px solid var(--border)" }}
+          >
+            +
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="inline-flex items-center gap-1.5">
+          <span className="shrink-0">feedback:</span>
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            aria-label="Feedback"
+            className="w-32 text-xs px-1.5 py-0 leading-none rounded outline-none"
+            style={{ background: "#fff", color: "#111", border: "1px solid var(--border)" }}
+          />
+        </form>
+      )}
+      </div>
+    </div>
   );
 }
