@@ -1090,23 +1090,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         )}
       </main>
 
-      {!isNativeApp && (
-        <section
-          className="mx-auto w-full max-w-2xl px-4 pt-8 pb-10 text-[15px] leading-relaxed"
-          style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}
-        >
-          <h1 className="text-xl font-bold mb-3" style={{ color: "var(--text)" }}>
-            Spoiler-free sports scores
-          </h1>
-          <p className="mb-6">
-            HideScore shows NBA, MLB, NHL, NFL, and golf scores without spoilers.
-            Every game starts hidden — reveal it when you are ready, or turn on
-            ratings to see which games are worth watching first.
-          </p>
-
-        </section>
-      )}
-
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
