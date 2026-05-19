@@ -15,32 +15,6 @@ import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 
-// SEO content — rendered statically (web only) so search engines have real,
-// crawlable text on a site whose game data otherwise loads client-side.
-// Hidden in the native app via the isNativeApp gate.
-const SEO_FAQ: { q: string; a: string }[] = [
-  {
-    q: "What is HideScore?",
-    a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
-  },
-  {
-    q: "How do HideScore's game ratings work?",
-    a: "Game ratings tell you how exciting a finished game was without revealing the score. Turn on ratings to sort by the best games and decide what is worth watching before you press play.",
-  },
-  {
-    q: "Which sports and leagues does HideScore cover?",
-    a: "HideScore covers the NBA, MLB, NHL, NFL, and golf, plus soccer and college basketball, with spoiler-free scores, schedules, highlights, and news.",
-  },
-  {
-    q: "Is HideScore free?",
-    a: "Yes. HideScore is completely free, with no ads, no accounts, and no tracking. Your favorite teams and preferences are stored only on your device.",
-  },
-  {
-    q: "Is there a HideScore app?",
-    a: "Yes. HideScore is a free iOS app on the App Store, and it also works in any web browser at hidescore.com.",
-  },
-];
-
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
     if (typeof window === "undefined") return "dark";
@@ -1124,60 +1098,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           <h1 className="text-xl font-bold mb-3" style={{ color: "var(--text)" }}>
             Spoiler-free sports scores
           </h1>
-          <p className="mb-4">
-            HideScore lets you check NBA, MLB, NHL, NFL, and golf scores without
-            seeing the result. Every game starts hidden — reveal one when you are
-            ready, or turn on ratings to find out which games are worth watching
-            before you press play.
-          </p>
           <p className="mb-6">
-            Scores, highlights, and headlines stay hidden until you choose to see
-            them, so you can catch up on games hours or days later without anyone
-            — or any app — spoiling the ending.
+            HideScore shows NBA, MLB, NHL, NFL, and golf scores without spoilers.
+            Every game starts hidden — reveal it when you are ready, or turn on
+            ratings to see which games are worth watching first.
           </p>
 
-          <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--text)" }}>
-            Frequently asked questions
-          </h2>
-          <dl>
-            {SEO_FAQ.map((item) => (
-              <div key={item.q} className="mb-4">
-                <dt className="font-semibold mb-1" style={{ color: "var(--text)" }}>
-                  {item.q}
-                </dt>
-                <dd className="m-0">{item.a}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <p className="mt-2 text-sm">
-            <a href="/today" className="underline underline-offset-2 hover:opacity-70">
-              Today&apos;s games
-            </a>
-            {" · "}
-            <a href="/tomorrow" className="underline underline-offset-2 hover:opacity-70">
-              Tomorrow&apos;s schedule
-            </a>
-            {" · "}
-            <a href="/privacy" className="underline underline-offset-2 hover:opacity-70">
-              Privacy
-            </a>
-          </p>
-
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
-                "@context": "https://schema.org",
-                "@type": "FAQPage",
-                mainEntity: SEO_FAQ.map((item) => ({
-                  "@type": "Question",
-                  name: item.q,
-                  acceptedAnswer: { "@type": "Answer", text: item.a },
-                })),
-              }).replace(/</g, "\\u003c"),
-            }}
-          />
         </section>
       )}
 
@@ -1186,6 +1112,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <span>
           <a href="mailto:hi@hidescore.com" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>hi@hidescore.com</a>
+          {" "}
+          <a href="/faq" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>FAQ</a>
           {" "}
           <a href="/privacy" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>Privacy</a>
         </span>
