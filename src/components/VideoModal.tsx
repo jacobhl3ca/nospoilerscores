@@ -320,6 +320,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     const initPlayer = () => {
       playerRef.current = new (window as any).YT.Player("yt-player", {
+        // YouTube picks playback quality from the iframe's HTML width/height
+        // attributes, not its rendered CSS size. setPlaybackQuality and the
+        // vq playerVar are deprecated and ignored. Declaring 1920x1080 here
+        // makes YT serve a 1080p stream; CSS in the modal wrapper scales the
+        // iframe back down to the phone's modal box. Net effect: a
+        // downscaled-from-1080p video, which beats 720p upscaled on retina.
+        width: 1920,
+        height: 1080,
         videoId: currentId,
         playerVars: {
           autoplay: 1,
