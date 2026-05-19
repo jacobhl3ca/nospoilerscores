@@ -7,6 +7,7 @@ import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, 
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode } from "@/lib/demoMode";
 import LeagueColumn from "@/components/LeagueColumn";
+import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
@@ -55,7 +56,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null } | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -145,6 +146,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     const params = new URLSearchParams(window.location.search);
     params.set("v", videoId);
     window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
+  }, []);
+
+  // Game-card click → play a non-YouTube embed (NHL recaps via Brightcove)
+  // inside the same modal. No ?v= param: the embed URL isn't a shareable
+  // YouTube id, so we just push a history entry so Back / Esc dismiss it.
+  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string) => {
+    setVideoModal({ videoId: "", fallbackUrl, embedUrl, sourceLabel });
+    window.history.pushState({ videoModal: true }, "", window.location.href);
   }, []);
 
   // News video card click → open the in-app modal. The card passes either a
@@ -468,25 +477,38 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     // or two AFTER orientationchange/visualViewport-resize fire, so a measure
     // taken on the ResizeObserver tick reads the stale pre-rotation header
     // height — which left the sticky column titles pinned mid-screen in
-    // landscape. Re-measure explicitly after rotation, two frames later, to
-    // catch the settled inset.
+    // landscape. Two RAFs proved too short on real devices (the inset can
+    // take a few hundred ms to settle through the rotation animation), so
+    // we fan out a burst of re-measures: two animation frames plus several
+    // timeouts spanning ~600ms to catch whenever the inset finally lands.
     let raf1 = 0;
     let raf2 = 0;
+    const timers: ReturnType<typeof setTimeout>[] = [];
     const remeasureSoon = () => {
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
+      timers.forEach(clearTimeout);
+      timers.length = 0;
       raf1 = requestAnimationFrame(() => {
         raf2 = requestAnimationFrame(measure);
       });
+      for (const ms of [60, 150, 300, 500]) {
+        timers.push(setTimeout(measure, ms));
+      }
     };
     window.addEventListener("orientationchange", remeasureSoon);
+    window.addEventListener("resize", remeasureSoon);
     window.visualViewport?.addEventListener("resize", remeasureSoon);
+    screen.orientation?.addEventListener("change", remeasureSoon);
     return () => {
       ro.disconnect();
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
+      timers.forEach(clearTimeout);
       window.removeEventListener("orientationchange", remeasureSoon);
+      window.removeEventListener("resize", remeasureSoon);
       window.visualViewport?.removeEventListener("resize", remeasureSoon);
+      screen.orientation?.removeEventListener("change", remeasureSoon);
     };
   }, []);
 
@@ -1041,6 +1063,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               isToday,
               sortByMatchups: prefs.showRatings,
               onPlayHighlight: openVideoModal,
+              onPlayEmbed: openEmbedModal,
               selectedDate,
             };
             // Per-slot swap dropdowns: each column's dropdown excludes leagues
@@ -1091,6 +1114,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       </main>
 
       <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
+        <FeedbackBox />
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <span>
@@ -1285,6 +1309,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           fallbackUrl={videoModal.fallbackUrl}
           playbackUrl={videoModal.playbackUrl}
           imageUrl={videoModal.imageUrl}
+          embedUrl={videoModal.embedUrl}
           poster={videoModal.poster}
           sourceLabel={videoModal.sourceLabel}
           headline={videoModal.headline}

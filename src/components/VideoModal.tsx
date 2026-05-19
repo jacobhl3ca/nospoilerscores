@@ -18,6 +18,10 @@ interface VideoModalProps {
   // When set, the modal renders an image lightbox instead of any video. Used
   // for i.redd.it image posts so they pop in-context like videos do.
   imageUrl?: string | null;
+  // When set, the modal renders this URL in a plain <iframe> — used for
+  // Brightcove-hosted NHL recaps, which aren't YouTube and so bypass the
+  // YouTube player API / watchdog / fallback-retry machinery entirely.
+  embedUrl?: string | null;
   // Friendly source name for the footer link — overrides the hostname-derived
   // default (e.g. "r/baseball" instead of "Reddit", "MLB Most Popular" instead
   // of "MLB.com"). Falls back to URL-host inference when null.
@@ -126,7 +130,7 @@ function sourceLabelFromUrl(url: string): string {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, sourceLabel, headline, byline, published, body }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -150,8 +154,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [showCC, setShowCC] = useState(false);
   const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
   const hlsMode = !!playbackUrl;
-  const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !videoId;
-  const textMode = !hlsMode && !imageMode && !videoId;
+  const embedMode = !!embedUrl && !playbackUrl;
+  const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
+  const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
 
   // Reset caption state any time the modal swaps to a different stream
@@ -271,7 +276,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
-    if (hlsMode || imageMode || textMode) return; // HLS / image / text branches handle rendering instead
+    if (hlsMode || embedMode || imageMode || textMode) return; // HLS / iframe / image / text branches handle rendering instead
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
 
@@ -383,7 +388,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       }
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
-  }, [currentId, fallbackUrl, hlsMode, imageMode, textMode]);
+  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode]);
 
   return (
     <div
@@ -483,6 +488,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 playsInline
                 poster={proxyImage(poster) ?? undefined}
               />
+            ) : embedMode ? (
+              <iframe
+                src={embedUrl!}
+                className="absolute inset-0 w-full h-full"
+                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                allowFullScreen
+              />
             ) : (
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
             )}
@@ -506,7 +518,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         {/* Direct link — branded per source so users know where they're going */}
         <div className={`${textMode ? "mt-4" : "mt-3"} text-center`}>
           <a
-            href={(hlsMode || imageMode || textMode) ? (fallbackUrl || "#") : `https://www.youtube.com/watch?v=${currentId}`}
+            href={(hlsMode || embedMode || imageMode || textMode) ? (fallbackUrl || "#") : `https://www.youtube.com/watch?v=${currentId}`}
             target="_blank"
             rel="noopener noreferrer"
             className={textMode
@@ -514,7 +526,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               : "text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"}
             style={textMode ? { background: "var(--accent)", color: "white" } : undefined}
           >
-            {(hlsMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
+            {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
           </a>
         </div>
       </div>

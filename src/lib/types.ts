@@ -29,6 +29,14 @@ export interface Game {
   // Highlight/recap links
   highlightUrl: string | null; // ESPN video clip URL
   recapUrl: string | null; // ESPN gamecast URL
+  // NHL.com condensed-game + recap videos (finished NHL games only). Sourced
+  // from the NHL API via the /api/nhl-videos worker proxy. Each has a *Url
+  // (the nhl.com page — modal "Open on NHL.com" fallback) and a *Embed
+  // (Brightcove iframe src — played inside the in-app VideoModal).
+  nhlRecapUrl?: string | null;
+  nhlRecapEmbed?: string | null;
+  nhlCondensedUrl?: string | null;
+  nhlCondensedEmbed?: string | null;
   // Direct stream URL for live games (e.g., MLB.tv deep link)
   streamUrl: string | null;
   // Per-game Prime Video deep link (amazon.com/gp/video/detail/{ASIN}) when

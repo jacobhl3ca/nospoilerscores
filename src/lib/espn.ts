@@ -473,10 +473,16 @@ function parseGame(event: any, sport: Sport): Game {
 
   // Playoff series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
   // Only present on playoff competitions; regular-season series has no field.
-  const seriesStatus: string | null =
+  const rawSeriesSummary: string | null =
     competition?.series?.type === "playoff"
       ? (competition.series.summary ?? null)
       : null;
+  // Before Game 1 ESPN sets series.summary to a schedule note like
+  // "Series starts 5/19" — not an actual series score. Rendered as-is it
+  // showed up as a stray "Starts 5/19" in the card's status bar. Drop it;
+  // only keep summaries that describe a real series state (leads/tied).
+  const seriesStatus: string | null =
+    rawSeriesSummary && /\bstarts?\b/i.test(rawSeriesSummary) ? null : rawSeriesSummary;
 
   // Extract gamecast/recap URL from event links
   let recapUrl: string | null = null;
@@ -1229,6 +1235,57 @@ export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
   return p;
 }
 
+// NHL.com videos play through Brightcove (account 6415718365001, player
+// EXtG1xJ7H_default). Every nhl.com/video/ path ends in "-{brightcoveId}";
+// turn that into an iframe embed src so recaps play inside the app's modal.
+function nhlBrightcoveEmbed(pageUrl: string | null): string | null {
+  if (!pageUrl) return null;
+  const m = pageUrl.match(/-(\d+)\/?$/);
+  // autoplay+muted so the recap starts on its own when the modal opens —
+  // muted is required for browsers to honor autoplay (matches the YouTube
+  // highlight modal, which also autoplays muted).
+  return m
+    ? `https://players.brightcove.net/6415718365001/EXtG1xJ7H_default/index.html?videoId=${m[1]}&autoplay&muted`
+    : null;
+}
+
+// Attach NHL.com Recap + Condensed-Game videos to finished NHL games. Pulls
+// from the /api/nhl-videos worker proxy (the NHL API itself sends no CORS
+// headers, so it can't be hit directly from the browser/WebView) and matches
+// NHL's common team names ("Canadiens") against ESPN's full displayName
+// ("Montreal Canadiens") — the two sources' abbreviations differ.
+async function enrichNhlVideos(games: Game[], date: string): Promise<void> {
+  if (!date || !games.some((g) => g.state === "post")) return;
+  try {
+    const res = await fetch(`${getApiBase()}/api/nhl-videos?date=${date}`);
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      games?: { away: string; home: string; recap: string | null; condensed: string | null }[];
+    };
+    const entries = data.games ?? [];
+    if (!entries.length) return;
+    for (const game of games) {
+      if (game.state !== "post") continue;
+      const home = game.homeTeam.displayName.toLowerCase();
+      const away = game.awayTeam.displayName.toLowerCase();
+      const match = entries.find(
+        (e) =>
+          !!e.home && !!e.away &&
+          home.endsWith(e.home.toLowerCase()) &&
+          away.endsWith(e.away.toLowerCase()),
+      );
+      if (match) {
+        game.nhlRecapUrl = match.recap;
+        game.nhlRecapEmbed = nhlBrightcoveEmbed(match.recap);
+        game.nhlCondensedUrl = match.condensed;
+        game.nhlCondensedEmbed = nhlBrightcoveEmbed(match.condensed);
+      }
+    }
+  } catch {
+    // Best-effort enrichment — leave games unchanged on any failure.
+  }
+}
+
 export async function fetchAllLeagues(
   date?: string,
   thirdLeagueSport?: Sport,
@@ -1295,6 +1352,7 @@ export async function fetchAllLeagues(
       return { sport: cfg.sport, label, games: [], golfTournament };
     }
     const games = await fetchGames(cfg.sport, date);
+    if (cfg.sport === "nhl" && date) await enrichNhlVideos(games, date);
     let nextGameDay: { date: string; games: Game[] } | null = null;
     if (games.length === 0) {
       // NBA + NHL publish playoff games only as the prior round wraps. During

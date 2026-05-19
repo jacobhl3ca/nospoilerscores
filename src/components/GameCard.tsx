@@ -17,6 +17,8 @@ interface GameCardProps {
   isPastDate?: boolean;
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  // Plays a non-YouTube embed (NHL recaps via Brightcove) in the same modal.
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string) => void;
   leagueLabel?: string;
   useAbbreviations?: boolean;
   // When true, render the game's own date on the top-left regardless of state,
@@ -117,7 +119,7 @@ function formatSeriesStatus(s: string): string {
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, leagueLabel, useAbbreviations, teamView, onSelectTeam }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, onSelectTeam }: GameCardProps) {
   const prefetchedVideoId = useRef<string | null>(null);
   const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
@@ -337,7 +339,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               ) : nextGameDate ? (
                 withEspn(
                   <span className="text-[11px] whitespace-nowrap">
-                    <span className="font-bold underline underline-offset-2" style={{ color: "var(--text)" }}>
+                    <span className="font-bold" style={{ color: "var(--text)" }}>
                       <span className="hidden sm:inline">{nextGameDate}</span>
                       <span className="sm:hidden">{nextGameDate === "Tomorrow" ? "Tomo" : nextGameDate}</span>
                     </span>
@@ -581,6 +583,50 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
             )}
           </button>
+        </div>
+      )}
+
+      {/* NHL-only: full-game videos straight from NHL.com — the short recap
+          (~5 min) and the longer condensed game (~10 min). Sits below the
+          YouTube highlight buttons. Plays in the same in-app modal as every
+          other clip (Brightcove embed); the modal's footer link still opens
+          the NHL.com page. */}
+      {isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed) && (
+        <div className="mt-1 flex gap-1">
+          {game.nhlRecapEmbed && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const embed = game.nhlRecapEmbed!;
+                const page = game.nhlRecapUrl || embed;
+                if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com");
+                else openExternal(page);
+              }}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              title="NHL.com recap (~5 min)"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium">5 min</span>
+            </button>
+          )}
+          {game.nhlCondensedEmbed && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const embed = game.nhlCondensedEmbed!;
+                const page = game.nhlCondensedUrl || embed;
+                if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com");
+                else openExternal(page);
+              }}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              title="NHL.com condensed game (~10 min)"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium">10 min</span>
+            </button>
+          )}
         </div>
       )}
     </div>

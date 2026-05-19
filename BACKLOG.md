@@ -50,6 +50,7 @@ Tier key:
 
 ## T4 — Polish / low priority
 
+- [ ] **News toggle icon looks broken** — the header News toggle uses Lucide's `newspaper` glyph; at 14–16px the folded-corner detail collapses into what reads as a stray smudge/doubled line on the lower-left. Swap for a simpler document/feed icon (`HomeContent.tsx:815-820`). _src: session 2026-05-19_
 - [ ] **Big Inning auto-tick timer** — subtitle doesn't flip "9:00 PM ET" → "LIVE" mid-session without page render. Add 60s timer in PlayoffSubtitle. _src: session104_hidescore_2026_05_08_to_13.md_
 - [ ] **Clean dead code** — `next.config.ts` rewrites, commented ESPN button at `GameCard.tsx:44-55`, backup footer at `HomeContent.tsx:419-422`. _src: project_hidescore_backlog_2026_04_13.md_
 - [ ] **Ratings popup copy precision** — `HomeContent.tsx:529` says "reordered by top records and best matchups" but actually live/finished sort by rating, only upcoming sort by records. Suggested rewrite: "Games are also reordered by best matchups — live and finished by rating, upcoming by team records." _src: project_hidescore_backlog_2026_04_13.md_

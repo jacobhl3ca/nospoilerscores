@@ -455,6 +455,63 @@ export default {
       }
     }
 
+    // NHL condensed-game + recap video links. The NHL API (api-web.nhle.com)
+    // sends no CORS headers, so a browser/Capacitor WebView can't hit it
+    // directly — proxy it here. Returns each finished game's "Recap" (~3-4min)
+    // and "Condensed Game" (~10min) NHL.com video URLs, keyed by common team
+    // names so espn.ts can match them onto ESPN-sourced games.
+    if (url.pathname === "/api/nhl-videos") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const corsJson = (body, status = 200, maxAge = 600) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      // date param is YYYYMMDD (the app's selectedDate); NHL wants YYYY-MM-DD.
+      const raw = url.searchParams.get("date") || "";
+      const iso = /^\d{8}$/.test(raw)
+        ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+        : raw;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+        return corsJson({ error: "Bad date" }, 400, 0);
+      }
+      try {
+        const res = await fetch(`https://api-web.nhle.com/v1/score/${iso}`, {
+          headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+        });
+        if (!res.ok) return corsJson({ games: [] }, 200, 60);
+        const data = await res.json();
+        const nameOf = (t) => {
+          const n = t && t.name;
+          return (n && (n.default || n)) || "";
+        };
+        const toUrl = (path) => (path ? `https://www.nhl.com${path}` : null);
+        const games = (data.games || [])
+          .map((g) => ({
+            away: nameOf(g.awayTeam),
+            home: nameOf(g.homeTeam),
+            recap: toUrl(g.threeMinRecap),
+            condensed: toUrl(g.condensedGame),
+          }))
+          .filter((g) => g.away && g.home && (g.recap || g.condensed));
+        return corsJson({ games });
+      } catch {
+        return corsJson({ games: [] }, 200, 60);
+      }
+    }
+
     // R2-backed data feeds (news prebake + 3 root JSONs). Decouples cron data
     // refresh from the deploy pipeline. If the bucket binding is missing or
     // the object isn't there yet, fall through to the static asset on main —

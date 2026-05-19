@@ -43,3 +43,6 @@ public/news/*.json
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# wrangler local dev state
+.wrangler/
