@@ -138,15 +138,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // on certain MLB/restricted content is the offender. We start a timer
   // when onReady fires and force tryFallback() if playback never starts.
   const watchdogRef = useRef<number | null>(null);
-  // Wraps the YT player iframe in a 1920x1080 box scaled to fit. YouTube
-  // picks streaming quality from the iframe's *internal* viewport size
-  // (window.innerWidth inside the iframe, set by HTML width/height
-  // attributes). At a phone-sized player it caps at 720p — but if the
-  // iframe is intrinsically 1920x1080 and we visually shrink the box
-  // via CSS transform, YT serves 1080p while the user still sees a
-  // phone-sized video. CSS transform doesn't affect the iframe's
-  // internal viewport, so YT's measurement stays at 1920x1080.
-  const ytScaleRef = useRef<HTMLDivElement>(null);
   // imgFailed flips when the lightbox image errors out — at that point we
   // collapse to text-card mode so the user sees the headline + open button
   // instead of an empty modal (Firefox + Reddit external-preview is the
@@ -278,26 +269,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
   }, [hlsMode, playbackUrl, showCC]);
 
-  // Keep the 1920x1080 YT wrapper visually fit to its container by
-  // recomputing transform scale = containerWidth / 1920 on resize. The
-  // wrapper's intrinsic size stays 1920x1080 (so the iframe's internal
-  // viewport stays at that size and YT serves 1080p); only its visual
-  // presentation shrinks.
-  useEffect(() => {
-    if (hlsMode || imageMode || textMode) return;
-    const container = containerRef.current;
-    const wrapper = ytScaleRef.current;
-    if (!container || !wrapper) return;
-    const updateScale = () => {
-      const w = container.clientWidth;
-      if (w > 0) wrapper.style.transform = `scale(${w / 1920})`;
-    };
-    updateScale();
-    const ro = new ResizeObserver(updateScale);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [hlsMode, imageMode, textMode]);
-
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
     if (hlsMode || imageMode || textMode) return; // HLS / image / text branches handle rendering instead
@@ -349,15 +320,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     const initPlayer = () => {
       playerRef.current = new (window as any).YT.Player("yt-player", {
-        // YouTube selects quality from the iframe's *internal* viewport
-        // size (window.innerWidth inside the iframe). Setting HTML
-        // width/height attributes to 1920x1080 makes the iframe's
-        // internal viewport 1920x1080 — YT serves up to 1080p. The
-        // ytScaleRef wrapper visually shrinks the box via CSS transform
-        // (which doesn't affect the iframe's internal viewport), so the
-        // user still sees a phone-sized player.
-        width: 1920,
-        height: 1080,
         videoId: currentId,
         playerVars: {
           autoplay: 1,
@@ -522,17 +484,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (
-              <div
-                ref={ytScaleRef}
-                className="absolute top-0 left-0"
-                style={{
-                  width: "1920px",
-                  height: "1080px",
-                  transformOrigin: "top left",
-                }}
-              >
-                <div id="yt-player" className="w-full h-full" />
-              </div>
+              <div id="yt-player" className="absolute inset-0 w-full h-full" />
             )}
           </div>
         )}
