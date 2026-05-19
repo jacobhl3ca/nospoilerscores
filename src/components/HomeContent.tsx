@@ -1020,16 +1020,22 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                   <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
                   <span className="text-[9px] sm:text-[10px] italic mt-0.5 block" style={{ color: "transparent" }}>{"\u00A0"}</span>
                 </div>
-                {[1, 2, 3, 4].map((j) => (
-                  <div key={j} className="rounded-lg px-4 py-3 mb-2 animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-                    <div className="h-3 w-20 rounded mb-3" style={{ background: "var(--bg-card-hover)" }} />
-                    <div className="flex items-center gap-3 py-1.5">
-                      <div className="w-6 h-6 rounded-full" style={{ background: "var(--bg-card-hover)" }} />
-                      <div className="h-3 w-32 rounded" style={{ background: "var(--bg-card-hover)" }} />
+                {/* Skeleton cards mirror GameCard's geometry — same padding,
+                    a status-bar slot, and two team rows sized to the logo —
+                    so live cards land where the placeholders sat and the
+                    grid doesn't reflow when data arrives (keeps CLS low). */}
+                {[1, 2, 3, 4, 5, 6].map((j) => (
+                  <div key={j} className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 mb-2 animate-pulse" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+                    <div className="h-[18px] mb-1 sm:mb-2 flex items-center">
+                      <div className="h-2.5 w-12 rounded" style={{ background: "var(--bg-card-hover)" }} />
                     </div>
-                    <div className="flex items-center gap-3 py-1.5">
-                      <div className="w-6 h-6 rounded-full" style={{ background: "var(--bg-card-hover)" }} />
-                      <div className="h-3 w-28 rounded" style={{ background: "var(--bg-card-hover)" }} />
+                    <div className="flex flex-col gap-y-0.5">
+                      {[0, 1].map((row) => (
+                        <div key={row} className="flex items-center gap-1 sm:gap-1.5">
+                          <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-full shrink-0" style={{ background: "var(--bg-card-hover)" }} />
+                          <div className="h-3 rounded" style={{ width: row === 0 ? "8rem" : "7rem", background: "var(--bg-card-hover)" }} />
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
