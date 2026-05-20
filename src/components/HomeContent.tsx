@@ -1127,27 +1127,27 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           <a href="mailto:hi@hidescore.com" className="underline underline-offset-2 transition-colors hover:opacity-70" style={{ color: "var(--text-muted)" }}>hi@hidescore.com</a>
         </span>
         {!isNativeApp && (
-          <a
-            href="https://apps.apple.com/app/hidescore/id6766885311"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block mt-2 leading-none transition-opacity hover:opacity-80"
-            aria-label="Download HideScore on the App Store"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
-          </a>
-        )}
-        {!isNativeApp && (
-          <a
-            href="/HideScore.apk"
-            download="HideScore.apk"
-            className="inline-block mt-1 leading-none transition-opacity hover:opacity-80"
-            aria-label="Download HideScore Android APK"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/android-download-badge.svg" alt="Download Android APK" height={40} className="block h-10 w-auto" />
-          </a>
+          <div className="flex items-center gap-2 mt-2">
+            <a
+              href="https://apps.apple.com/app/hidescore/id6766885311"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block leading-none transition-opacity hover:opacity-80"
+              aria-label="Download HideScore on the App Store"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+            </a>
+            <a
+              href="/HideScore.apk"
+              download="HideScore.apk"
+              className="inline-block leading-none transition-opacity hover:opacity-80"
+              aria-label="Download HideScore Android APK"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/android-download-badge.svg" alt="Download Android APK" height={40} className="block h-10 w-auto" />
+            </a>
+          </div>
         )}
       </footer>
 
