@@ -265,6 +265,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       style={{
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
+        boxShadow: isLive ? "inset 3px 0 0 #22c55e" : undefined,
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
