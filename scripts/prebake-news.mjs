@@ -489,22 +489,41 @@ async function fetchWNBAVideos() {
 }
 
 async function fetchWNBA() {
-  const data = await getJson("https://content-api-prod.nba.com/public/1/leagues/wnba/content?count=25&type=post");
-  const raw = data?.results?.items || [];
-  return raw
-    .filter((i) => i.type === "post" && (i.permalink || "").includes("/news/"))
-    .filter((i) => passesArticleBlocklist(i.title || "", i.excerpt || ""))
-    .slice(0, 15)
-    .map((i) => ({
-      id: String(i.id),
-      headline: i.title || "",
-      description: i.excerpt || "",
-      published: i.date || "",
-      imageUrl: i.featuredImage || null,
-      articleUrl: i.permalink || "",
-      byline: i.author?.name || "",
-      section: "WNBA.com",
-    }));
+  // WNBA.com publishes ~94% video / 6% post — page 1 alone yields only ~3 news
+  // articles. Paginate the mixed-content feed to fill the same ~15-item target
+  // as MLB / NBA. Bounded at 5 pages so a slow API never wedges the prebake.
+  const out = [];
+  const seen = new Set();
+  for (let page = 1; page <= 5 && out.length < 15; page++) {
+    let raw;
+    try {
+      const data = await getJson(`https://content-api-prod.nba.com/public/1/leagues/wnba/content?count=100&page=${page}`);
+      raw = data?.results?.items || [];
+    } catch {
+      break;
+    }
+    if (raw.length === 0) break;
+    for (const i of raw) {
+      if (i.type !== "post") continue;
+      if (!(i.permalink || "").includes("/news/")) continue;
+      if (!passesArticleBlocklist(i.title || "", i.excerpt || "")) continue;
+      const id = String(i.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({
+        id,
+        headline: i.title || "",
+        description: i.excerpt || "",
+        published: i.date || "",
+        imageUrl: i.featuredImage || null,
+        articleUrl: i.permalink || "",
+        byline: i.author?.name || "",
+        section: "WNBA.com",
+      });
+      if (out.length >= 15) break;
+    }
+  }
+  return out;
 }
 
 async function fetchNHL() {
