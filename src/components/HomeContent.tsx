@@ -1137,15 +1137,16 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
             </a>
+            {/* Android pill tabled until ready
             <a
               href="/HideScore.apk"
               download="HideScore.apk"
               className="inline-block leading-none transition-opacity hover:opacity-80"
               aria-label="Download HideScore Android APK"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/android-download-badge.svg" alt="Download Android APK" height={40} className="block h-10 w-auto" />
             </a>
+            */}
           </div>
         )}
       </footer>
