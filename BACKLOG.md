@@ -56,6 +56,7 @@ Tier key:
 - [ ] **Clean dead code** — `next.config.ts` rewrites, commented ESPN button at `GameCard.tsx:44-55`, backup footer at `HomeContent.tsx:419-422`. _src: project_hidescore_backlog_2026_04_13.md_
 - [ ] **Revisit short-column pinning** — added 5/19 (commit `ed02abca`) to pin a column's cards when it had ≤3 games; removed 5/20 (felt off in practice). Decide if/when to bring back, possibly with different criteria — e.g. pin only when _every_ column has ≤3, or trigger on viewport-height vs total-card-height instead of count. Reference impl lives in the `LeagueColumn.tsx` diff of `ed02abca` (headerStripRef + ResizeObserver + `stickyGamesStyle`). _src: session 2026-05-20_
 - [ ] **Footer pinning consideration** — explore sticky-to-viewport-bottom footer (FeedbackBox + captions + App Store badge stay visible while scrolling games). Open Qs: mobile real-estate cost, iOS safe-area handling, whether to pin only on tall-content days or always. Sibling decision to short-column pinning above. _src: session 2026-05-20_
+- [ ] **Live-card green accent bar** — shipped 5/20 (commit `96126cab`) as a 3px inset box-shadow `#22c55e` on the left edge of live GameCards; reverted 5/20 ("like it but don't love it anymore"). Revisit if live games need a stronger scan signal beyond the existing red LIVE pill — possibly a thinner bar, a different color tied to `--text-live`, or a subtle border-color shift instead of an inset shadow. _src: session 2026-05-20_
 - [ ] **Ratings popup copy precision** — `HomeContent.tsx:529` says "reordered by top records and best matchups" but actually live/finished sort by rating, only upcoming sort by records. Suggested rewrite: "Games are also reordered by best matchups — live and finished by rating, upcoming by team records." _src: project_hidescore_backlog_2026_04_13.md_
 - [x] **Wrangler version pinning** — ✅ DONE 2026-05-13 commit `0e1f4618`. Pinned `wrangler@^4` in all 4 GHA workflows. Mac mini install still TODO — needs ssh command Jacob can paste.
 - [ ] **Delete stale `public/` JSON copies** — after R2 stable ~30 days (~6/13), 39 fallback files in `public/` deletable. Cosmetic. _src: project_hidescore_deploy_cap.md_
@@ -68,6 +69,7 @@ Tier key:
 - [ ] **iOS splash screen simplification** — current `LaunchScreen.storyboard` scales a 1366×1366 Splash image via `scaleAspectFill`. Apple HIG prefers near-empty launch screens (background color only, or tiny logo). Looks stretched on different devices and feels slow. Swap for plain dark background to match app theme. _src: ios audit 2026-05-20_
 - [ ] **Buttons too small to interact with on mobile** — star, broadcast chip, +N network expander, highlight play buttons are below Apple's recommended 44×44pt hit target. Audit interactive elements for tap-target size on mobile. _src: session 2026-05-20_
   - **Reconsider clickable card elements** — whole-card click-to-stream (live cards w/ `cardClickable` at `GameCard.tsx:261`) competes with inner buttons that `stopPropagation`. If buttons get bigger, accidental whole-card hits rise. Decide: keep card clickable + bigger buttons, or move the stream affordance to a single dedicated chip and un-click the card body.
+- [ ] **Scrub Co-Authored-By trailers from recent commits** — Project CLAUDE.md `## Git` rule says "No Co-Authored-By lines", but AI-assisted commits added trailers anyway. Affected commits already on `main`: `8cc564b4` (5/20 ThemeToggle mobile-hide), `cdbdc55f` / `0bfa8465` / `da2693f4` / `2d47e332` (5/20 WNBA add), `ed02abca` / `c853502d` (5/19). Decide: amend each via interactive rebase + force-push to main, OR leave history dirty and just enforce the rule going forward. Force-push to `main` is destructive — only run if Jacob explicitly approves. _src: session 2026-05-20 iphone toolbar overflow_
 
 ## T5 — Strategic reminders (not action items)
 
@@ -106,8 +108,8 @@ For reference — these were on past lists but are done.
 | T1 time-sensitive | 5 |
 | T2 deferred-with-plan | 11 |
 | T3 backlog | 12 |
-| T4 polish | 12 |
+| T4 polish | 13 |
 | T5 strategic | 2 |
-| **Total open** | **42** |
+| **Total open** | **43** |
 
 Recently shipped (~5 weeks): 14 items.
