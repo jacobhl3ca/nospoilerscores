@@ -6,6 +6,7 @@ const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 const SPORT_PATHS: Record<Sport, string> = {
   mlb: "/baseball/mlb/scoreboard",
   nba: "/basketball/nba/scoreboard",
+  wnba: "/basketball/wnba/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
   nfl: "/football/nfl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
@@ -40,6 +41,10 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // ── Major team sports ──
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", marchMadnessLabel: true },
   { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
+  // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Swap-only
+  // (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot rotation —
+  // selectable from the slot-3 dropdown when in season.
+  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", excludeFromAuto: true },
   { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", championshipDate: "11-01", mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
   { sport: "nhl",   label: "NHL",   startDate: "04-07", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
   { sport: "nfl",   label: "NFL",   startDate: "09-04", endDate: "02-09", championshipDate: "02-09", mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
@@ -153,6 +158,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   epl: 8,
   mls: 9,
   fifa: 10,
+  wnba: 11,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -299,6 +305,9 @@ const SPORT_RATING_CONFIG: Record<Sport, {
 }> = {
   mlb:    { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,   regulationPeriods: 9 },
   nba:    { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40,  regulationPeriods: 4 },
+  // WNBA: same quarter structure as NBA but lower totals (~80 vs ~115); divisor
+  // scaled down so scoring bonus normalizes the same way.
+  wnba:   { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 28,  regulationPeriods: 4 },
   ncaam:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 2 },
   nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
@@ -641,6 +650,7 @@ export function espnGameUrl(game: Game): string {
   switch (game.sport) {
     case "mlb": return `https://www.espn.com/mlb/game/_/gameId/${game.id}`;
     case "nba": return `https://www.espn.com/nba/game/_/gameId/${game.id}`;
+    case "wnba": return `https://www.espn.com/wnba/game/_/gameId/${game.id}`;
     case "ncaam": return `https://www.espn.com/mens-college-basketball/game/_/gameId/${game.id}`;
     case "nfl": return `https://www.espn.com/nfl/game/_/gameId/${game.id}`;
     case "nhl": return `https://www.espn.com/nhl/game/_/gameId/${game.id}`;
@@ -658,6 +668,7 @@ export function espnGameUrl(game: Game): string {
 export function sportStreamFallback(sport: Sport): string {
   switch (sport) {
     case "nba": return "https://www.nba.com/watch";
+    case "wnba": return "https://www.wnba.com/watch";
     case "ncaam": return "https://www.espn.com/watch/";
     case "nfl": return "https://www.nfl.com/plus/";
     case "nhl": return "https://www.nhl.com/tv";
@@ -702,6 +713,7 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   // League-specific networks
   if (b === "nfl network" || b === "nfl+") return "https://www.nfl.com/plus/";
   if (b === "nba tv") return "https://www.nba.com/watch";
+  if (b === "wnba league pass" || b === "wnba tv") return "https://www.wnba.com/watch";
   if (b === "nhl network") return "https://www.nhl.com/tv";
   if (b === "mlb.tv" || b === "mlb network") return "https://www.mlb.com/tv";
   if (b === "tennis channel") return "https://www.tennischannel.com/";
@@ -1181,6 +1193,7 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
   switch (sport) {
     case "mlb":
     case "nba":
+    case "wnba":
     case "nhl":
     case "nfl":
       return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;

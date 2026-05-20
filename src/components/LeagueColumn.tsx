@@ -41,6 +41,7 @@ const FORCE_BIG_INNING_LIVE_PREVIEW = false;
 // 2025-26 season playoff start dates (update each season)
 const PLAYOFF_START_DATES: Record<string, { date: string; label: string; preDate?: string; preEndDate?: string; preLabel?: string }> = {
   nba: { date: "2026-04-18", label: "Playoffs", preDate: "2026-04-14", preEndDate: "2026-04-17", preLabel: "Play-in" },
+  wnba: { date: "2026-09-14", label: "Playoffs" },
   nhl: { date: "2026-04-18", label: "Playoffs" },
   mlb: { date: "2026-10-06", label: "Postseason" },
   nfl: { date: "2027-01-09", label: "Playoffs" },
@@ -51,7 +52,7 @@ const PLAYOFF_START_DATES: Record<string, { date: string; label: string; preDate
 // prefix segments so a label like "Stanley Cup Playoffs - First Round" reads
 // "First Round". Real round info (e.g. "East 1st Round" for NBA/NHL playoffs)
 // gets preserved and joined with the game number when both are present.
-const GENERIC_LABEL_SEGMENT = /^(?:stanley cup playoffs?|nba playoffs?|nhl playoffs?|playoffs?|postseason|ncaa (?:men'?s|women'?s)?\s*basketball championship|ncaa basketball championship)$/i;
+const GENERIC_LABEL_SEGMENT = /^(?:stanley cup playoffs?|nba playoffs?|wnba playoffs?|nhl playoffs?|playoffs?|postseason|ncaa (?:men'?s|women'?s)?\s*basketball championship|ncaa basketball championship)$/i;
 
 // Extract round + game info from ESPN's playoff headline.
 // e.g. "East 1st Round - Game 7" → "East 1st Round · Game 7"

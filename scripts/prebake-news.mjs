@@ -455,6 +455,58 @@ async function fetchNBA() {
     }));
 }
 
+// WNBA shares NBA.com's content-api host — same payload shape, just /leagues/wnba.
+async function fetchWNBAVideos() {
+  const data = await getJson(
+    "https://content-api-prod.nba.com/public/1/leagues/wnba/content?count=40&type=video"
+  );
+  const raw = (data?.results?.items || []).filter((i) => i.type === "video");
+  const out = [];
+  for (const i of raw) {
+    const title = i.title || "";
+    const desc = i.excerpt || "";
+    const haystack = `${title} ${desc}`;
+    if (/(?:spanish|portuguese|french|japanese|italian|deutsch|german|prime video|ai-generated)/i.test(haystack)) continue;
+    if (/\b(?:post[-\s]?game|all possessions|best plays|nightly recap|mobile view)\b/i.test(haystack)) continue;
+    if (/^vod_|^VOD_/.test(title)) continue;
+    if (/ on \d{4}-\d{2}-\d{2}/.test(title)) continue;
+    if (/ on \d{1,2}\/\d{1,2}\/\d{4}/.test(title)) continue;
+    if (VIDEO_BLOCKLIST.some((re) => re.test(haystack))) continue;
+    if (!i.featuredImage) continue;
+    out.push({
+      id: String(i.id),
+      headline: title,
+      description: desc,
+      published: i.date || "",
+      imageUrl: i.featuredImage,
+      articleUrl: i.permalink || "",
+      byline: "",
+      section: "WNBA Top Videos",
+    });
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+async function fetchWNBA() {
+  const data = await getJson("https://content-api-prod.nba.com/public/1/leagues/wnba/content?count=25&type=post");
+  const raw = data?.results?.items || [];
+  return raw
+    .filter((i) => i.type === "post" && (i.permalink || "").includes("/news/"))
+    .filter((i) => passesArticleBlocklist(i.title || "", i.excerpt || ""))
+    .slice(0, 15)
+    .map((i) => ({
+      id: String(i.id),
+      headline: i.title || "",
+      description: i.excerpt || "",
+      published: i.date || "",
+      imageUrl: i.featuredImage || null,
+      articleUrl: i.permalink || "",
+      byline: i.author?.name || "",
+      section: "WNBA.com",
+    }));
+}
+
 async function fetchNHL() {
   const data = await getJson(
     "https://forge-dapi.d3.nhle.com/v2/content/en-us/stories?tags.slug=news&context.slug=nhl&%24limit=20"
@@ -1111,6 +1163,8 @@ const jobs = [
   ["mlb-videos", fetchMLBVideos],
   ["nba", fetchNBA],
   ["nba-videos", fetchNBAVideos],
+  ["wnba", fetchWNBA],
+  ["wnba-videos", fetchWNBAVideos],
   ["nhl", fetchNHL],
 
   // ESPN homepage top headlines + big-format videos (both scraped from espn.com)
@@ -1133,6 +1187,7 @@ const jobs = [
   ["reddit-general", () => fetchReddit("sports", "r/sports")],
   ["reddit-mlb", () => fetchReddit("baseball", "r/baseball")],
   ["reddit-nba", () => fetchReddit("nba", "r/nba")],
+  ["reddit-wnba", () => fetchReddit("wnba", "r/wnba")],
   ["reddit-nhl", () => fetchReddit("hockey", "r/hockey")],
   ["reddit-nfl", () => fetchReddit("nfl", "r/nfl")],
   ["reddit-ncaam", () => fetchReddit("CollegeBasketball", "r/CollegeBasketball")],
@@ -1160,6 +1215,7 @@ const ytCache = ONLY_REDDIT ? {} : await loadYTCache();
 const YT_CHANNEL_BY_FEED = {
   "mlb-videos": "MLB",
   "nba-videos": "NBA",
+  "wnba-videos": "WNBA",
   "espn-videos": "ESPN",
 };
 

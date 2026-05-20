@@ -87,7 +87,7 @@ function formatGameProgress(game: Game): { full: string; short: string } {
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: h, short: h };
   }
-  if (sport === "nba") {
+  if (sport === "nba" || sport === "wnba") {
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
     if (clock && clock !== "0.0") return { full: `${q} ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
@@ -191,6 +191,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // Based on actual YouTube upload timing research (April 2026)
   const highlightBufferHours: Record<string, number> = {
     nba: 3.5,  // ~2.5hr game + highlights up in 30-60min
+    wnba: 3.5, // mirrors NBA — same ~2hr game + same-channel upload cadence
     ncaam: 4,  // ~2hr game + highlights up in 1-3hrs (varies by matchup prominence)
     nhl: 4.5,  // ~2.5hr game + highlights up in 1-3hrs (Sportsnet/NHL)
     mlb: 5,    // ~3hr game + highlights up in ~2hrs (verified Dodgers-Jays 4/6/26)
@@ -201,7 +202,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     golf: 6,   // ~5hr round + recap upload delay
     tennis: 4, // ~2-3hr match + highlights up in 1-2hrs
   };
-  const regulationPeriods: Record<string, number> = { nba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, golf: 4, tennis: 3 };
+  const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, golf: 4, tennis: 3 };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();

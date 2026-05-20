@@ -1,6 +1,7 @@
 // Official YouTube channel names per league
 const OFFICIAL_CHANNELS: Record<string, string> = {
   nba: "NBA",
+  wnba: "WNBA",
   mlb: "MLB",
   nhl: "NHL",
   nfl: "NFL",

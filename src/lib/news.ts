@@ -9,6 +9,7 @@ const HOME_NEWS_URL = "https://now.core.api.espn.com/v1/sports/news";
 const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   mlb: "/baseball/mlb",
   nba: "/basketball/nba",
+  wnba: "/basketball/wnba",
   ncaam: "/basketball/mens-college-basketball",
   nfl: "/football/nfl",
   nhl: "/hockey/nhl",
@@ -136,6 +137,7 @@ export async function fetchPrebaked(name: string): Promise<NewsItem[]> {
 export const PREBAKED_FEEDS: Partial<Record<Sport, { name: string; label: string }>> = {
   mlb: { name: "mlb", label: "MLB.com" },
   nba: { name: "nba", label: "NBA.com" },
+  wnba: { name: "wnba", label: "WNBA.com" },
   nhl: { name: "nhl", label: "NHL.com" },
 };
 
@@ -148,6 +150,7 @@ export const PREBAKED_FEEDS: Partial<Record<Sport, { name: string; label: string
 const LEAGUE_LOGO: Record<Sport, string> = {
   mlb: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
   nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
+  wnba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
   nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
   nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
   mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
@@ -187,6 +190,7 @@ export interface ColumnSource {
 const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string; channel?: string }>> = {
   mlb: { key: "mlb-videos", label: "MLB Most Popular", channel: "MLB" },
   nba: { key: "nba-videos", label: "NBA Top Videos", channel: "NBA" },
+  wnba: { key: "wnba-videos", label: "WNBA Top Videos", channel: "WNBA" },
 };
 
 // Per-league subreddit card — pinned just below the official news link since
@@ -194,6 +198,7 @@ const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string; chann
 const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   mlb: { key: "reddit-mlb", label: "r/baseball" },
   nba: { key: "reddit-nba", label: "r/nba" },
+  wnba: { key: "reddit-wnba", label: "r/wnba" },
   nhl: { key: "reddit-nhl", label: "r/hockey" },
   nfl: { key: "reddit-nfl", label: "r/nfl" },
   ncaam: { key: "reddit-ncaam", label: "r/CollegeBasketball" },

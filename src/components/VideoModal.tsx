@@ -119,6 +119,8 @@ function sourceLabelFromUrl(url: string): string {
     if (host.endsWith("reddit.com") || host === "redd.it" || host.endsWith(".redd.it")) return "Open on Reddit";
     if (host.endsWith("mlb.com")) return "Open on MLB.com";
     if (host.endsWith("espn.com") || host.endsWith("espn.go.com")) return "Open on ESPN";
+    // wnba.com check must precede nba.com — "wnba.com".endsWith("nba.com") is true.
+    if (host.endsWith("wnba.com")) return "Open on WNBA.com";
     if (host.endsWith("nba.com")) return "Open on NBA.com";
     if (host.endsWith("nhl.com")) return "Open on NHL.com";
     if (host.endsWith("nfl.com")) return "Open on NFL.com";

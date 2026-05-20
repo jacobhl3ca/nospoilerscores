@@ -57,6 +57,7 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
 const SPORT_LABEL: Record<Sport, string> = {
   mlb: "MLB",
   nba: "NBA",
+  wnba: "WNBA",
   ncaam: "NCAAM",
   nfl: "NFL",
   nhl: "NHL",

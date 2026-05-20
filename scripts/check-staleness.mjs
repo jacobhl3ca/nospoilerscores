@@ -21,9 +21,9 @@ const NEWS_HOURLY = [
   "cbs-epl", "cbs-general", "cbs-golf", "cbs-mlb", "cbs-mls",
   "cbs-nba", "cbs-ncaam", "cbs-nfl", "cbs-nhl", "cbs-tennis",
   "espn-top", "espn-videos",
-  "mlb", "mlb-videos", "nba", "nba-videos", "nhl",
+  "mlb", "mlb-videos", "nba", "nba-videos", "wnba", "wnba-videos", "nhl",
   "reddit-epl", "reddit-general", "reddit-golf", "reddit-mlb", "reddit-mls",
-  "reddit-nba", "reddit-ncaam", "reddit-nfl", "reddit-nhl", "reddit-tennis",
+  "reddit-nba", "reddit-ncaam", "reddit-nfl", "reddit-nhl", "reddit-tennis", "reddit-wnba",
   "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",
 ];
