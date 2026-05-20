@@ -38,4 +38,15 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Android 11+ requires explicit <queries> for AppLauncher.canOpenUrl
+         to return true on the youtube:// scheme. iOS handles the same need
+         via LSApplicationQueriesSchemes in Info.plist. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="youtube" />
+        </intent>
+        <package android:name="com.google.android.youtube" />
+    </queries>
 </manifest>
