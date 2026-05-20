@@ -5,6 +5,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# A burst of pushes (3 commits in 30s) used to start parallel runs whose
+# wrangler uploads could finish out of order. cancel-in-progress means
+# the latest push always wins.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -12,9 +19,9 @@ jobs:
       contents: read
       deployments: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: 'npm'
@@ -24,8 +31,21 @@ jobs:
       - run: npm run build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy out --project-name=nospoilerscores --branch=main
+
+      # CF Pages's upload step has shipped "successful" deploys today that
+      # actually 500'd at prod (missing chunks/assets). Fail the workflow if
+      # hidescore.com isn't 200 within a few seconds of the deploy returning.
+      - name: Smoke-test prod
+        run: |
+          sleep 5
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://hidescore.com/)
+          if [ "$code" != "200" ]; then
+            echo "::error::hidescore.com returned HTTP $code after deploy"
+            exit 1
+          fi
+          echo "hidescore.com responded 200"
