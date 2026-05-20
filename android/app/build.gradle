@@ -1,5 +1,20 @@
 apply plugin: 'com.android.application'
 
+// Load release-signing credentials from ~/.config/hidescore/upload.env when
+// present. Keeps the upload keystore + password out of the repo and reuses
+// the same secrets directory as ~/.config/hidescore/r2.env. Falls back
+// silently for debug-only builds; release builds will fail loudly below.
+def hsReleaseSigning = [:]
+def hsEnv = file("${System.properties['user.home']}/.config/hidescore/upload.env")
+if (hsEnv.exists()) {
+    hsEnv.eachLine { line ->
+        if (line && !line.startsWith('#') && line.contains('=')) {
+            def kv = line.split('=', 2)
+            hsReleaseSigning[kv[0].trim()] = kv[1].trim()
+        }
+    }
+}
+
 android {
     namespace = "com.jacobhl.hidescore"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,11 +31,28 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hsReleaseSigning.HS_ANDROID_KEYSTORE) {
+                storeFile file(hsReleaseSigning.HS_ANDROID_KEYSTORE)
+                storePassword hsReleaseSigning.HS_ANDROID_KEYSTORE_PASSWORD
+                keyAlias hsReleaseSigning.HS_ANDROID_KEY_ALIAS
+                keyPassword hsReleaseSigning.HS_ANDROID_KEY_PASSWORD
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.name.toLowerCase().contains('release') } && !hsReleaseSigning.HS_ANDROID_KEYSTORE) {
+        throw new GradleException("Release build requested but ~/.config/hidescore/upload.env not found. See android/app/build.gradle for the expected keys.")
     }
 }
 
