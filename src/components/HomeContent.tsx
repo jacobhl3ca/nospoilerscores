@@ -872,7 +872,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 </svg>
               </a>
             )}
-            <ThemeToggle theme={prefs.theme} onToggle={toggleTheme} />
+            <div className="hidden sm:flex">
+              <ThemeToggle theme={prefs.theme} onToggle={toggleTheme} />
+            </div>
             <button
               onClick={() => setSettingsOpen(true)}
               className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
