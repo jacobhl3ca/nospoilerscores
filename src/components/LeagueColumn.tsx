@@ -420,8 +420,6 @@ export default function LeagueColumn({
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
-  const headerStripRef = useRef<HTMLDivElement>(null);
-  const [headerStripH, setHeaderStripH] = useState(0);
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   const [swapOpen, setSwapOpen] = useState(false);
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
@@ -506,23 +504,6 @@ export default function LeagueColumn({
     ro.observe(el);
     return () => ro.disconnect();
   }, [league.games]);
-
-  // Measure the sticky league-header strip's height. A column with ≤3 games
-  // pins its game cards just below this strip (see pinnedGamesStyle) so they
-  // stay on screen while taller columns scroll past — the offset has to track
-  // the strip's real height (which varies with/without the subtitle line).
-  useEffect(() => {
-    const el = headerStripRef.current;
-    if (!el) return;
-    // ResizeObserver fires once right after observe() and on every height
-    // change — its callback is async, so setState here stays out of the
-    // synchronous effect body (no cascading-render lint warning).
-    const ro = new ResizeObserver(() => {
-      setHeaderStripH(el.getBoundingClientRect().height);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [teamViewTeam, section]);
 
   const topMatchups = sortByMatchups ?? false;
 
@@ -616,24 +597,10 @@ export default function LeagueColumn({
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
 
-  // When a column shows only a handful of cards, pin them just below the
-  // sticky header strip so all of them stay on screen while taller columns
-  // scroll past. The column stretches to the tallest column's height (flex
-  // items-stretch), so a sticky child can travel the full page scroll.
-  // Applies to whatever the column is showing — today's games OR the
-  // "next game day" preview a gameless league falls back to.
-  const stickyGamesStyle = (count: number): React.CSSProperties | undefined =>
-    !section && !teamViewTeam && count > 0 && count <= 3
-      ? {
-          position: "sticky",
-          top: `calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + ${headerStripH}px)`,
-        }
-      : undefined;
-
   return (
     <div ref={columnRef} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]">
       {showHeader && (
-        <div ref={headerStripRef} className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
+        <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
           <div className="flex items-center justify-center">
             <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
             {isSwappable ? (
@@ -740,7 +707,7 @@ export default function LeagueColumn({
           isPastDate ? (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
           ) : league.nextGameDay ? (
-            <div className="flex flex-col gap-1.5 sm:gap-2" style={stickyGamesStyle(league.nextGameDay.games.length)}>
+            <div className="flex flex-col gap-1.5 sm:gap-2">
               {league.nextGameDay.games.map((game) => (
                 <GameCard
                   key={game.id}
@@ -762,7 +729,7 @@ export default function LeagueColumn({
           )
         ) : null
       ) : isPastDate ? (
-        <div className="flex flex-col gap-1.5 sm:gap-2" style={stickyGamesStyle(sorted.length)}>
+        <div className="flex flex-col gap-1.5 sm:gap-2">
           {sorted.map((game) => (
             <GameCard
               key={game.id}
@@ -780,7 +747,7 @@ export default function LeagueColumn({
           ))}
         </div>
       ) : (
-        <div className="flex flex-col gap-1.5 sm:gap-2" style={stickyGamesStyle(sorted.length)}>
+        <div className="flex flex-col gap-1.5 sm:gap-2">
           {renderUpcoming && liveGames.map((game) => (
             <GameCard
               key={game.id}
