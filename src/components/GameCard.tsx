@@ -358,7 +358,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 <RatingBadge rating={game.rating!} />
               ) : seriesInMiddle ? (
                 <span
-                  className="text-[10px] sm:text-[11px] italic whitespace-nowrap truncate block pr-0.5"
+                  className="hidden sm:block text-[11px] italic whitespace-nowrap truncate pr-0.5"
                   style={{ color: "var(--text-muted)" }}
                 >
                   {formatSeriesStatus(game.seriesStatus!)}
