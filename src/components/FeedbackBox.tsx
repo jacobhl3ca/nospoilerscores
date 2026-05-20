@@ -44,21 +44,23 @@ export default function FeedbackBox() {
             aria-label="Add more feedback"
             title="Add more feedback"
             className="w-4 h-4 flex items-center justify-center rounded-full text-xs leading-none cursor-pointer transition-opacity hover:opacity-70"
-            style={{ background: "#fff", color: "#111", border: "1px solid var(--border)" }}
+            style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
           >
             +
           </button>
         </div>
       ) : (
-        <form onSubmit={submit} className="inline-flex items-center gap-1.5">
-          <span className="shrink-0">feedback:</span>
+        <form onSubmit={submit} className="relative inline-flex items-center">
+          {/* Caption sits absolutely to the left of the input (right-full) so
+              it doesn't shift the bubble — the input stays dead-centered. */}
+          <span className="absolute right-full mr-1.5 whitespace-nowrap">Feedback:</span>
           <input
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
             aria-label="Feedback"
-            className="w-32 text-xs px-1.5 py-0 leading-none rounded outline-none"
-            style={{ background: "#fff", color: "#111", border: "1px solid var(--border)" }}
+            className="w-36 text-xs px-2 py-0 leading-none rounded outline-none"
+            style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
           />
         </form>
       )}
