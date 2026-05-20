@@ -41,10 +41,6 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // ── Major team sports ──
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", marchMadnessLabel: true },
   { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
-  // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Swap-only
-  // (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot rotation —
-  // selectable from the slot-3 dropdown when in season.
-  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", excludeFromAuto: true },
   { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", championshipDate: "11-01", mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
   { sport: "nhl",   label: "NHL",   startDate: "04-07", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
   { sport: "nfl",   label: "NFL",   startDate: "09-04", endDate: "02-09", championshipDate: "02-09", mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
@@ -70,6 +66,11 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
   { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
+  // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Swap-only
+  // (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot rotation —
+  // selectable from the slot-3 dropdown when in season. Listed last so it
+  // sorts to the bottom of the league-header swap dropdown.
+  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", excludeFromAuto: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
