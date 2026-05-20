@@ -53,7 +53,7 @@ export default function FeedbackBox() {
         <form onSubmit={submit} className="relative inline-flex items-center">
           {/* Caption sits absolutely to the left of the input (right-full) so
               it doesn't shift the bubble — the input stays dead-centered. */}
-          <span className="absolute right-full whitespace-nowrap">Feedback</span>
+          <span className="absolute right-full mr-1.5 whitespace-nowrap">Feedback</span>
           <input
             type="text"
             value={text}
