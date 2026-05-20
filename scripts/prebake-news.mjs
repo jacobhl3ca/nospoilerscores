@@ -1001,12 +1001,18 @@ async function fetchReddit(subreddit, sectionLabel) {
     if (!passesArticleBlocklist(title)) continue;
     // Pick the best inline preview — Reddit's preview image first (high-res),
     // then the thumbnail field. Skip "self"/"default" placeholders for text posts.
+    // Final fallback: if the post URL is itself an i.redd.it image, use it.
+    // Reddit's anon endpoint strips preview/post_hint for some subreddits
+    // (observed on r/wnba 5/20/26) even when the post is clearly an image —
+    // the URL pattern is the only reliable signal in that case.
     const preview = p.preview?.images?.[0]?.source?.url;
     let imageUrl = null;
     if (preview) {
       imageUrl = preview.replace(/&amp;/g, "&");
     } else if (p.thumbnail && /^https?:\/\//.test(p.thumbnail)) {
       imageUrl = p.thumbnail;
+    } else if (/^https:\/\/i\.redd\.it\/.+\.(jpe?g|png|gif|webp)$/i.test(p.url || "")) {
+      imageUrl = p.url;
     }
     // v.redd.it videos: prefer hls_url (HLS playlist with both audio + video
     // tracks) when the post has audio. fallback_url is CMAF_*.mp4 — video only,
@@ -1028,7 +1034,10 @@ async function fetchReddit(subreddit, sectionLabel) {
     // i.redd.it image posts: surface the original full-res URL so the client
     // can pop a lightbox instead of bouncing out to reddit.com to view a JPEG.
     let imageFullUrl = null;
-    if (p.post_hint === "image" && /^https:\/\/i\.redd\.it\//.test(p.url || "")) {
+    // Accept i.redd.it image URLs regardless of post_hint — anon Reddit strips
+    // post_hint for some subreddits (see imageUrl fallback above for the same
+    // workaround). URL extension is sufficient signal.
+    if (/^https:\/\/i\.redd\.it\/.+\.(jpe?g|png|gif|webp)$/i.test(p.url || "")) {
       imageFullUrl = p.url;
     }
     // Selftext body — only for true text posts. Skip when the post carries
