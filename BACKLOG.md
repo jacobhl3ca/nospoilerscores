@@ -32,6 +32,7 @@ Tier key:
 - [ ] **ESPN news integration — sort-by-views decision** — ESPN API doesn't expose. Decide: scrape engagement metrics OR editorial curation. _src: project_hidescore_backlog_2026_04_13.md_
 - [ ] **ESPN news integration — default click action decision** — pick: ESPN gamecast / highlights modal / expand card / nothing. _src: project_hidescore_backlog_2026_04_13.md_
 - [ ] **MLS-vs-EPL summer overlap decision** — both active May 21 → Aug 1. Which displays? _src: project_hidescore_gap_closing_2026_04_13.md_
+- [ ] **Playoff bracket on subtitle hover** — when a league is in playoffs, hovering the italic `PlayoffSubtitle` under the league header pops a bracket image. Hook point: `LeagueColumn.tsx:679` (`<PlayoffSubtitle …/>`). Live-relevant now (NBA/NHL conference rounds, Stanley Cup ~6/4, NBA Finals ~6/5). **Open Qs before building:** (1) bracket source — ESPN bracket page screenshot vs generated SVG from `games[].playoffLabel` data we already parse vs hand-curated PNG per league; ESPN screenshot likely spoils scores so avoid. (2) mobile fallback — no hover; tap-to-open modal? long-press? small chevron affordance? (3) "optimally" positioning — anchored tooltip beside the subtitle vs centered modal vs slide-down panel under the league column. (4) per-league applicability — NBA/NHL bracket-style yes; MLB has bracket too; WNBA/MLS playoffs; ignore for golf (no bracket). NCAA = giant 64-team grid, treat separately.
 
 ## T3 — Older backlog, still open
 
@@ -62,11 +63,17 @@ Tier key:
 - [ ] **Playoff placeholders TBD play-in** — `season.type: 5`, show greyed-out cards. _src: project_hidescore_backlog_2026_04_13.md_
 - [ ] **MLB live links QA** — shipped session 48, needs live-game QA pass. _src: project_hidescore_backlog_2026_04_13.md_
 - [ ] **`/faq` and `/privacy` orphaned — no in-app link** — Footer dropped FAQ/Privacy in commit `c853502d` for the cleaner feedback-box layout (deliberate — full FAQ on homepage was too exposed). Current state: `/faq` reachable only via `sitemap.xml` (Google can find it, humans can't); `/privacy` linked from nowhere. App Store listing carries the privacy URL separately so submission is fine, but the website has zero link to either page. Revisit when there's a discreet home for them — e.g. a small "···" / "About" overlay, a settings-panel row, or one subtle footer line that doesn't clutter. _src: session 2026-05-19_
+- [ ] **iOS PrivacyInfo.xcprivacy manifest** — Apple has required this file since May 2024 for new submissions. We use GoatCounter analytics (`layout.tsx:135`), so create `ios/App/App/PrivacyInfo.xcprivacy` declaring `NSPrivacyTracking` only if GoatCounter touches IDFA (it doesn't by default — confirm), `NSPrivacyTrackingDomains: ["hidescore.goatcounter.com"]`, and required-reason API entries for any Capacitor plugin that touches file timestamps / UserDefaults. Existing submissions grandfathered through, but new uploads may start hitting warnings. _src: ios audit 2026-05-20_
+- [ ] **iOS App Tracking Transparency check** — paired with privacy manifest above. Verify whether GoatCounter touches IDFA. If yes, add `NSUserTrackingUsageDescription` to Info.plist and request permission. If no (likely — GoatCounter is cookieless), do nothing; an ATT prompt for non-tracking analytics is itself a review risk. _src: ios audit 2026-05-20_
+- [ ] **iOS splash screen simplification** — current `LaunchScreen.storyboard` scales a 1366×1366 Splash image via `scaleAspectFill`. Apple HIG prefers near-empty launch screens (background color only, or tiny logo). Looks stretched on different devices and feels slow. Swap for plain dark background to match app theme. _src: ios audit 2026-05-20_
+- [ ] **Buttons too small to interact with on mobile** — star, broadcast chip, +N network expander, highlight play buttons are below Apple's recommended 44×44pt hit target. Audit interactive elements for tap-target size on mobile. _src: session 2026-05-20_
+  - **Reconsider clickable card elements** — whole-card click-to-stream (live cards w/ `cardClickable` at `GameCard.tsx:261`) competes with inner buttons that `stopPropagation`. If buttons get bigger, accidental whole-card hits rise. Decide: keep card clickable + bigger buttons, or move the stream affordance to a single dedicated chip and un-click the card body.
 
 ## T5 — Strategic reminders (not action items)
 
 - [ ] **MLB clip-embed legality** — in-app MLB modal streams MLB's HLS playlists directly. Fine for hobby site, **revisit before monetization** (App Store paid tier, ads, sponsorships, scale). Safer path: anchor-out to MLB.com. _src: project_hidescore_mlb_clip_legality.md_
 - [ ] **iOS bundle staleness regression watch** — resolved 4/27 commit 13da7e9 via `getApiBase()` routing. Don't re-introduce hardcoded `/path.json` fetches in client code or iOS will freeze data at cap-sync time. _src: project_hidescore_ios_bundle_staleness.md_
+- [ ] **Homepage SEO: no H1, no static crawlable text** — Removed "Spoiler-free sports scores" intro 2026-05-19 (`a4f4cebc`) alongside the FAQ block (`a2a5440c`) to clean the homepage. Result: `/` has zero visible `<h1>` and zero prerendered body copy — game data loads client-side, so crawlers see meta tags + JSON-LD only. `/faq` and `/privacy` still carry indexable copy, but homepage-query impressions/CTR may slide. Watch GSC homepage rows over the next 2–4 weeks; if they dip, mitigations (cheapest → richest): sr-only `<h1>HideScore</h1>`, minimal visible H1 ("HideScore"), or a one-line tagline above the game cards. Sibling concern to line 65 (`/faq` orphan). _src: session 2026-05-20_
 
 ---
 
@@ -99,8 +106,8 @@ For reference — these were on past lists but are done.
 | T1 time-sensitive | 5 |
 | T2 deferred-with-plan | 11 |
 | T3 backlog | 12 |
-| T4 polish | 8 |
+| T4 polish | 12 |
 | T5 strategic | 2 |
-| **Total open** | **38** |
+| **Total open** | **42** |
 
 Recently shipped (~5 weeks): 14 items.
