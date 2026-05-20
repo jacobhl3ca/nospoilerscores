@@ -62,6 +62,21 @@ export default function FeedbackBox() {
             className="w-36 text-xs px-2 py-0 leading-none rounded outline-none"
             style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
           />
+          {/* Symmetric to the caption on the left — absolutely positioned so
+              the input bubble stays dead-centered regardless of state. */}
+          <button
+            type="submit"
+            disabled={!text.trim()}
+            aria-label="Send feedback"
+            title="Send feedback"
+            className="absolute left-full ml-1.5 flex items-center justify-center rounded-full transition-opacity enabled:hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ width: 18, height: 18, background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 19V5" />
+              <path d="m5 12 7-7 7 7" />
+            </svg>
+          </button>
         </form>
       )}
       </div>
