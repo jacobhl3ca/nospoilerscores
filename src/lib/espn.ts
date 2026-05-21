@@ -628,7 +628,7 @@ function hasPrimeBroadcast(game: Game): boolean {
   return game.broadcasts.some((b) => /\b(amazon|prime)\b/i.test(b));
 }
 
-async function fetchWithRetry(url: string, retries = 1, timeoutMs = 10000): Promise<Response> {
+async function fetchWithRetry(url: string, retries = 2, timeoutMs = 10000): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -640,6 +640,9 @@ async function fetchWithRetry(url: string, retries = 1, timeoutMs = 10000): Prom
       clearTimeout(timer);
       if (attempt === retries) throw e;
     }
+    // Linear backoff before the next attempt — an immediate retry usually
+    // lands inside the same ESPN blip/rate-limit window, so wait it out.
+    await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
   }
   throw new Error("Fetch failed");
 }
@@ -1044,7 +1047,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
 export async function fetchGames(
   sport: Sport,
   date?: string
-): Promise<Game[]> {
+): Promise<{ games: Game[]; failed: boolean }> {
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   if (date) url.searchParams.set("dates", date);
 
@@ -1062,16 +1065,17 @@ export async function fetchGames(
   const espnAiringsPromise = loadEspnAirings();
 
   // A failed/non-OK fetch OR a non-JSON body (ESPN's CDN occasionally serves
-  // a 200 HTML interstitial during incidents) degrades this league to an
-  // empty column — it must never throw, or one bad league blanks the whole
-  // board via the Promise.all in fetchAllLeagues.
+  // a 200 HTML interstitial during incidents) returns failed:true rather
+  // than throwing — one bad league must not blank the whole board. The
+  // failed flag lets callers tell a real fetch error from a genuinely empty
+  // schedule, so they don't fall back to tomorrow's games on a flake.
   let data: { events?: unknown[] } | null;
   try {
     const res = await fetchWithRetry(url.toString());
-    if (!res.ok) return [];
+    if (!res.ok) return { games: [], failed: true };
     data = await res.json();
   } catch {
-    return [];
+    return { games: [], failed: true };
   }
 
   const events = data?.events ?? [];
@@ -1163,7 +1167,7 @@ export async function fetchGames(
     }
   }
 
-  return games;
+  return { games, failed: false };
 }
 
 // Full team list for a league — used by the Settings team picker so users can
@@ -1365,10 +1369,14 @@ export async function fetchAllLeagues(
       if (!golfTournament) return null;
       return { sport: cfg.sport, label, games: [], golfTournament };
     }
-    const games = await fetchGames(cfg.sport, date);
+    const { games, failed } = await fetchGames(cfg.sport, date);
     if (cfg.sport === "nhl" && date) await enrichNhlVideos(games, date);
     let nextGameDay: { date: string; games: Game[] } | null = null;
-    if (games.length === 0) {
+    // Only surface the "next game day" fallback when ESPN genuinely returned
+    // an empty schedule. On a fetch failure games is also [] — falling back
+    // there would render tomorrow's slate labeled "Tomorrow" on the Today
+    // tab, which reads as a bug. A failed league carries fetchFailed instead.
+    if (!failed && games.length === 0) {
       // NBA + NHL publish playoff games only as the prior round wraps. During
       // their playoff months (May/Jun) ESPN's "next 7 days" can be a flat zero
       // even though Conf Finals / Cup Final games will be added soon. Look 21
@@ -1377,7 +1385,7 @@ export async function fetchAllLeagues(
       const lookahead = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth ? 21 : 7;
       nextGameDay = await fetchNextGameDay(cfg.sport, lookahead, date);
     }
-    return { sport: cfg.sport, label, games, nextGameDay };
+    return { sport: cfg.sport, label, games, nextGameDay, fetchFailed: failed };
   };
 
   // allSettled, not all: a single league throwing must not blank the whole
@@ -1545,7 +1553,7 @@ export async function fetchNextGameDay(
 
   const results = await Promise.all(
     dates.map(async (dateStr) => {
-      const games = await fetchGames(sport, dateStr);
+      const { games } = await fetchGames(sport, dateStr);
       const futureGames = games.filter((g) => g.state === "pre" || g.state === "in");
       return { date: dateStr, games: futureGames };
     })

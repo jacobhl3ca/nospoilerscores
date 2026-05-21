@@ -96,4 +96,8 @@ export interface LeagueData {
   games: Game[];
   nextGameDay?: { date: string; games: Game[] } | null;
   golfTournament?: GolfTournament | null;
+  // True when the games fetch failed (network/non-OK/non-JSON) rather than
+  // ESPN returning a genuinely empty schedule. Lets the column show an
+  // "unavailable" message instead of falling back to the next game day.
+  fetchFailed?: boolean;
 }

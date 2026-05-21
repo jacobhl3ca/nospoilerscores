@@ -705,7 +705,12 @@ export default function LeagueColumn({
         />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
-          isPastDate ? (
+          league.fetchFailed ? (
+            // The games fetch errored (ESPN flake / rate-limit) — say so
+            // rather than falling through to the next-game-day slate, which
+            // would mislabel tomorrow's games as today's.
+            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Schedule unavailable — pull to refresh</p>
+          ) : isPastDate ? (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
