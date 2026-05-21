@@ -432,9 +432,16 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
   const setSlotLeague = (slotIdx: number, sport: Sport | undefined) => {
     const displayed = sortedLeagues.map((l) => l.sport);
-    const resolved: (Sport | undefined)[] = [0, 1, 2].map((i) =>
-      i === slotIdx ? sport : (selectedSlotLeagues[i] ?? displayed[i]),
+    const resolved: (Sport | undefined)[] = [0, 1, 2].map(
+      (i) => selectedSlotLeagues[i] ?? displayed[i],
     );
+    // Picking a league already shown in another column swaps the two slots so
+    // the same league never lands in two columns at once.
+    if (sport !== undefined) {
+      const dupIdx = resolved.findIndex((s, i) => i !== slotIdx && s === sport);
+      if (dupIdx !== -1) resolved[dupIdx] = resolved[slotIdx];
+    }
+    resolved[slotIdx] = sport;
     updatePrefs({
       firstLeague: resolved[0],
       secondLeague: resolved[1],
@@ -576,11 +583,15 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         // News view → remount sources to re-fetch their feeds.
         setNewsRefreshKey((k) => k + 1);
       } else if (selectedDate) {
+        // silent — the descending spinner pill is the refresh feedback, so
+        // keep the current board up and swap data in place when the pull
+        // resolves. Without this, refresh flashes the whole board to the gray
+        // skeleton and rebuilds it, which reads as a slow reload.
         await fetchData(selectedDate, prefs.thirdLeague, {
           first: prefs.firstLeague,
           second: prefs.secondLeague,
           third: prefs.thirdLeague,
-        });
+        }, true);
       }
     } finally {
       // Min spinner display so the refresh feels confirmed even on instant
@@ -1074,18 +1085,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               onPlayEmbed: openEmbedModal,
               selectedDate,
             };
-            // Per-slot swap dropdowns: each column's dropdown excludes leagues
-            // already shown in the OTHER slots so the user never picks a duplicate.
-            const displayedSports = sortedLeagues.map(l => l.sport);
-            const swapPropsForSlot = (idx: number) => {
-              const others = new Set(displayedSports.filter((_, i) => i !== idx));
-              const options = thirdLeagueOptions.filter(o => !others.has(o.sport));
-              return {
-                swappableOptions: options,
-                selectedThirdLeague: selectedSlotLeagues[idx],
-                onSwapLeague: (s: Sport | undefined) => setSlotLeague(idx, s),
-              };
-            };
+            // Per-slot swap dropdowns: each column's dropdown offers every
+            // in-season league. Picking one already shown in another column
+            // swaps the two (see setSlotLeague) instead of duplicating it.
+            const swapPropsForSlot = (idx: number) => ({
+              swappableOptions: thirdLeagueOptions,
+              selectedThirdLeague: selectedSlotLeagues[idx],
+              onSwapLeague: (s: Sport | undefined) => setSlotLeague(idx, s),
+            });
 
             if (showFinalSplit) {
               return (
@@ -1121,7 +1128,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         )}
       </main>
 
-      <footer className="px-4 py-3 text-center text-xs flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
+      <footer className="px-4 py-3 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />

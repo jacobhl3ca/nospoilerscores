@@ -152,21 +152,28 @@ export default function SettingsPanel({
     for (const sport of sportsToLoad) loadTeamSport(sport);
   }, [open, prefs.favoriteTeams, loadTeamSport]);
 
-  // Per-slot dropdown options exclude leagues currently in OTHER slots so the
-  // user can't pick a duplicate (matches the in-header dropdown behavior).
   const displayedSports = useMemo(
     () => displayedLeagues.map((l) => l.sport),
     [displayedLeagues],
   );
-  const slotOptionsFor = (slotIdx: number) => {
-    const others = new Set(displayedSports.filter((_, i) => i !== slotIdx));
-    return thirdLeagueOptions.filter((o) => !others.has(o.sport));
-  };
 
+  // Each slot dropdown offers every in-season league. Picking one already in
+  // another slot swaps the two; unset slots lock to their on-screen league so
+  // the auto-picker doesn't reshuffle columns the user didn't touch.
   const setSlot = (slotIdx: number, sport: Sport | undefined) => {
-    if (slotIdx === 0) updatePrefs({ firstLeague: sport });
-    else if (slotIdx === 1) updatePrefs({ secondLeague: sport });
-    else if (slotIdx === 2) updatePrefs({ thirdLeague: sport });
+    const resolved: (Sport | undefined)[] = [0, 1, 2].map(
+      (i) => slotValues[i] ?? displayedSports[i],
+    );
+    if (sport !== undefined) {
+      const dupIdx = resolved.findIndex((s, i) => i !== slotIdx && s === sport);
+      if (dupIdx !== -1) resolved[dupIdx] = resolved[slotIdx];
+    }
+    resolved[slotIdx] = sport;
+    updatePrefs({
+      firstLeague: resolved[0],
+      secondLeague: resolved[1],
+      thirdLeague: resolved[2],
+    });
   };
 
   const slotValues: (Sport | undefined)[] = [
@@ -356,7 +363,7 @@ export default function SettingsPanel({
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
                     <option value="">Auto</option>
-                    {slotOptionsFor(idx).map((o) => (
+                    {thirdLeagueOptions.map((o) => (
                       <option key={o.sport} value={o.sport}>{o.label}</option>
                     ))}
                   </select>
