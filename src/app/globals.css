@@ -102,8 +102,15 @@ body {
 .emoji {
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
-.monkey-toggle:hover {
-  outline: 2px solid var(--accent);
+/* Gate hover behind a real pointer. On touch (iOS) :hover sticks to the
+   last-tapped element until you tap elsewhere — and the settings panel's
+   close button sits over the same top-right spot as the gear, so tapping
+   to close fell through to the gear and left the accent ring on it.
+   hover: hover means touch never triggers this rule at all. */
+@media (hover: hover) {
+  .monkey-toggle:hover {
+    outline: 2px solid var(--accent);
+  }
 }
 
 
