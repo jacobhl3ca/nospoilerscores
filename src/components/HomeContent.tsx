@@ -726,7 +726,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         </div>
       )}
       <header ref={headerRef} className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
-        <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
+        <div className="max-w-6xl mx-auto relative flex flex-wrap items-center justify-between gap-2 sm:gap-4">
           <a
             href="/"
             onClick={(e) => {
@@ -750,7 +750,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
           </a>
-          <div className="flex-1 flex justify-center xl:absolute xl:left-1/2 xl:-translate-x-1/2">
+          <div className="order-last w-full flex justify-center sm:order-none sm:w-auto sm:flex-1 xl:absolute xl:left-1/2 xl:-translate-x-1/2">
             {!showNews && <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />}
           </div>
           <div className="justify-self-end flex items-center gap-1 sm:gap-2 flex-shrink-0">
