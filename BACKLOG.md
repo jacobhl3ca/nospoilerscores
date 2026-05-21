@@ -69,7 +69,7 @@ Tier key:
 - [ ] **iOS splash screen simplification** — current `LaunchScreen.storyboard` scales a 1366×1366 Splash image via `scaleAspectFill`. Apple HIG prefers near-empty launch screens (background color only, or tiny logo). Looks stretched on different devices and feels slow. Swap for plain dark background to match app theme. _src: ios audit 2026-05-20_
 - [ ] **Buttons too small to interact with on mobile** — star, broadcast chip, +N network expander, highlight play buttons are below Apple's recommended 44×44pt hit target. Audit interactive elements for tap-target size on mobile. _src: session 2026-05-20_
   - **Reconsider clickable card elements** — whole-card click-to-stream (live cards w/ `cardClickable` at `GameCard.tsx:261`) competes with inner buttons that `stopPropagation`. If buttons get bigger, accidental whole-card hits rise. Decide: keep card clickable + bigger buttons, or move the stream affordance to a single dedicated chip and un-click the card body.
-- [ ] **Scrub Co-Authored-By trailers from recent commits** — Project CLAUDE.md `## Git` rule says "No Co-Authored-By lines", but AI-assisted commits added trailers anyway. Affected commits already on `main`: `8cc564b4` (5/20 ThemeToggle mobile-hide), `cdbdc55f` / `0bfa8465` / `da2693f4` / `2d47e332` (5/20 WNBA add), `ed02abca` / `c853502d` (5/19). Decide: amend each via interactive rebase + force-push to main, OR leave history dirty and just enforce the rule going forward. Force-push to `main` is destructive — only run if Jacob explicitly approves. _src: session 2026-05-20 iphone toolbar overflow_
+- [x] **Scrub Co-Authored-By trailers from recent commits** — ✅ DONE 2026-05-21. Audit found **13** trailer'd commits (all 5/20, `0c25da04`…`85bee286`), not the 7 first estimated. Rewrote `928fd410..HEAD` with `git filter-branch --msg-filter` (perl strips the `Co-Authored-By:` line + preceding blank), verified tree diff empty (file contents byte-identical) and zero remaining trailers, then `git push --force-with-lease origin main`. New HEAD `0c1a017e`. Going forward: no Co-Authored-By trailers on this repo per CLAUDE.md `## Git`.
 
 ## T5 — Strategic reminders (not action items)
 
@@ -108,8 +108,8 @@ For reference — these were on past lists but are done.
 | T1 time-sensitive | 5 |
 | T2 deferred-with-plan | 11 |
 | T3 backlog | 12 |
-| T4 polish | 13 |
+| T4 polish | 12 |
 | T5 strategic | 2 |
-| **Total open** | **43** |
+| **Total open** | **42** |
 
 Recently shipped (~5 weeks): 14 items.
