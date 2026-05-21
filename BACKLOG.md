@@ -33,6 +33,7 @@ Tier key:
 - [ ] **ESPN news integration — default click action decision** — pick: ESPN gamecast / highlights modal / expand card / nothing. _src: project_hidescore_backlog_2026_04_13.md_
 - [ ] **MLS-vs-EPL summer overlap decision** — both active May 21 → Aug 1. Which displays? _src: project_hidescore_gap_closing_2026_04_13.md_
 - [ ] **Playoff bracket on subtitle hover** — when a league is in playoffs, hovering the italic `PlayoffSubtitle` under the league header pops a bracket image. Hook point: `LeagueColumn.tsx:679` (`<PlayoffSubtitle …/>`). Live-relevant now (NBA/NHL conference rounds, Stanley Cup ~6/4, NBA Finals ~6/5). **Open Qs before building:** (1) bracket source — ESPN bracket page screenshot vs generated SVG from `games[].playoffLabel` data we already parse vs hand-curated PNG per league; ESPN screenshot likely spoils scores so avoid. (2) mobile fallback — no hover; tap-to-open modal? long-press? small chevron affordance? (3) "optimally" positioning — anchored tooltip beside the subtitle vs centered modal vs slide-down panel under the league column. (4) per-league applicability — NBA/NHL bracket-style yes; MLB has bracket too; WNBA/MLS playoffs; ignore for golf (no bracket). NCAA = giant 64-team grid, treat separately.
+- [ ] **Header overflow — bottom-toolbar / tab-bar redesign** — header overflows horizontally on narrow screens: it needs ~422px but phones give 360–414px → 8–62px overflow → the _whole page_ becomes pannable left/right (scores + Settings panel look mis-scaled as a side effect). Confirmed on the live site via Playwright at 360/390/414px, so it's a website bug both native apps inherit through the WebView. Root cause: the right-side icon cluster (`justify-self-end … flex-shrink-0` in `HomeContent.tsx`) can't compress. **Options:** (1) **Bottom toolbar / iOS-style tab bar** (Jacob's pick to explore) — move every icon except the date nav (share, monkey-sort, news, calendar, theme, settings) into a fixed bottom toolbar; header keeps only the H logo + ‹ Yest/Today/Tomo ›, fully clearing the overflow. Works on web + both native apps (just `position:fixed` + `env(safe-area-inset-bottom)` padding, same pattern the footer already uses); actually cleaner _inside_ the native apps than mobile Safari, where a fixed bottom bar can fight Safari's own auto-hiding toolbar. Page needs bottom padding so content/footer isn't covered. Nuance: a true iOS tab bar is for top-level nav (Scores / News / Settings) — monkey-sort + theme are toggles, not nav, so either accept a mixed bar or split (nav in the bar, toggles stay in header). (2) header wraps to two rows on narrow screens — no features cut, taller mobile header. (3) shrink icons `w-7→w-6` + tighten gaps + drop the calendar icon on mobile — stays one row, fixes down to 360px. (4) collapse secondary icons behind a `⋯` overflow menu. Don't regress the `xl:` logo / DateNav-centering breakpoint — see `feedback_hidescore_header_compact.md`. _src: session_hidescore_iphone_toolbar_overflow_2026_05_20.md_
 
 ## T3 — Older backlog, still open
 
@@ -106,10 +107,10 @@ For reference — these were on past lists but are done.
 | Tier | Count |
 |---|---|
 | T1 time-sensitive | 5 |
-| T2 deferred-with-plan | 11 |
+| T2 deferred-with-plan | 12 |
 | T3 backlog | 12 |
 | T4 polish | 12 |
 | T5 strategic | 2 |
-| **Total open** | **42** |
+| **Total open** | **43** |
 
 Recently shipped (~5 weeks): 14 items.
