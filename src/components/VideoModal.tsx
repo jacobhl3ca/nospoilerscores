@@ -155,11 +155,45 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (e.g., v.redd.it MP4s).
   const [showCC, setShowCC] = useState(false);
   const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
+  // Brief "Copied ✓" confirmation after the copy-link button is tapped.
+  const [copied, setCopied] = useState(false);
   const hlsMode = !!playbackUrl;
   const embedMode = !!embedUrl && !playbackUrl;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
+  // The URL the footer points at — the YouTube watch page for YT clips,
+  // otherwise the original source page. Also what Copy-link writes out.
+  const shareUrl = (hlsMode || embedMode || imageMode || textMode)
+    ? (fallbackUrl || "")
+    : `https://www.youtube.com/watch?v=${currentId}`;
+
+  // Copy the highlight's link to the clipboard. navigator.clipboard works in
+  // both the browser and the iOS WKWebView — the app loads from the https
+  // hidescore.com origin, so it's a secure context — meaning no Capacitor
+  // plugin and no native rebuild; this ships as a plain web push. Falls back
+  // to a hidden-textarea execCommand for any context without the async API.
+  const copyLink = async () => {
+    if (!shareUrl) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = shareUrl;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* throwaway affordance — the link stays tappable if copy fails */
+    }
+  };
 
   // Reset caption state any time the modal swaps to a different stream
   useEffect(() => {
@@ -517,10 +551,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           </div>
         )}
 
-        {/* Direct link — branded per source so users know where they're going */}
-        <div className={`${textMode ? "mt-4" : "mt-3"} text-center`}>
+        {/* Direct link + copy — branded per source so users know where the
+            link goes; the copy button gives iOS the same grab-the-URL that
+            the browser's right-click menu does on the web. */}
+        <div className={`${textMode ? "mt-4" : "mt-3"} flex items-center justify-center gap-3`}>
           <a
-            href={(hlsMode || embedMode || imageMode || textMode) ? (fallbackUrl || "#") : `https://www.youtube.com/watch?v=${currentId}`}
+            href={shareUrl || "#"}
             target="_blank"
             rel="noopener noreferrer"
             className={textMode
@@ -530,6 +566,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           >
             {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
           </a>
+          {shareUrl && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); copyLink(); }}
+              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
+            >
+              {copied ? "Copied ✓" : "Copy link"}
+            </button>
+          )}
         </div>
       </div>
     </div>
