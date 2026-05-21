@@ -274,10 +274,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     >
       {/* Playoff series state — pre/live games only, today only, after the
           noon-ET morning reset. Hidden on finished games so the post-game
-          series score doesn't reveal tonight's outcome. When a rating is
-          also showing in the middle cell, fall back to a standalone top
-          line; otherwise the line slots into the status bar's middle cell
-          alongside the time and network. */}
+          series score doesn't reveal tonight's outcome, and only shown when
+          ratings are revealed (monkey on) since the series score is itself a
+          competitive signal. When a rating is also showing in the middle
+          cell, fall back to a standalone top line; otherwise the line slots
+          into the status bar's middle cell alongside the time and network. */}
       {game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && showRating && (
         <div
           className="mb-1 text-[10px] sm:text-[11px] text-center italic"
@@ -294,7 +295,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         const hasBroadcast = !isFinished && game.broadcasts.length > 0;
         const showFinal = isFinished && !isPastDate && !teamView;
         const seriesInMiddle =
-          !!game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && !hasRating;
+          !!game.seriesStatus && isToday && !isFinished && getETHour() >= 12 && showRatings && !hasRating;
         const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView || seriesInMiddle;
         if (!showBar) return null;
         // Small ESPN link wrapper for upcoming-time / date labels.
