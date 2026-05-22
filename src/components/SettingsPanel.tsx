@@ -31,7 +31,7 @@ interface SettingsPanelProps {
 }
 
 const DATE_MODE_OPTIONS: { value: DefaultDateMode; label: string; hint: string }[] = [
-  { value: "smart", label: "Smart", hint: "Yesterday before 10:30 AM ET, today after" },
+  { value: "smart", label: "Smart", hint: "Yesterday before 1 PM ET, today after" },
   { value: "yesterday", label: "Yesterday", hint: "Always start on yesterday" },
   { value: "today", label: "Today", hint: "Always start on today" },
 ];

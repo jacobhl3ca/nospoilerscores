@@ -74,15 +74,6 @@ export function getETHour(): number {
   return parseInt(get("hour"), 10);
 }
 
-export function getETMinute(): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(new Date());
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
-  return parseInt(get("minute"), 10);
-}
-
 // Custom calendar dropdown — starts Monday, blue weekends
 function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps & { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);

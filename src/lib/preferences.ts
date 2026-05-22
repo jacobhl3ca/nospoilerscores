@@ -131,9 +131,7 @@ export interface Preferences {
   firstLeague?: Sport; // user-chosen 1st league slot override
   secondLeague?: Sport; // user-chosen 2nd league slot override
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
-  // Number of visible score columns (1-3). Undefined → 3 (default full layout).
-  columnCount?: number;
-  // Default date on launch: smart (yesterday before 10:30 AM ET, today after),
+  // Default date on launch: smart (yesterday before 1 PM ET, today after),
   // always today, or always yesterday.
   defaultDateMode?: DefaultDateMode;
   // Landing view on launch: remember last (default), always scores, always news.

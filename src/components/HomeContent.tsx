@@ -11,7 +11,7 @@ import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
-import DateNav, { getDateString, CalendarDropdown, getETHour, getETMinute } from "@/components/DateNav";
+import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
@@ -26,9 +26,8 @@ function getResolvedTheme(theme: Theme): "dark" | "light" {
 
 function getSmartDefaultOffset(): number {
   const hour = getETHour();
-  const minutes = getETMinute();
-  // Before 10:30am ET → default to yesterday; after → today
-  return (hour < 10 || (hour === 10 && minutes < 30)) ? -1 : 0;
+  // Before 1pm ET → default to yesterday; after → today
+  return hour < 13 ? -1 : 0;
 }
 
 function resolveDefaultOffset(mode: "smart" | "today" | "yesterday" | undefined): number {
@@ -60,15 +59,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  // Undo state for a just-removed score column. Snapshots the slot/column-count
-  // prefs AND the loaded-league order so the toast (and Cmd/Ctrl+Z) can put the
-  // column back instantly. Cleared on undo, manual dismiss, or auto-timeout.
-  const [removedColumn, setRemovedColumn] = useState<{
-    snapshot: Pick<Preferences, "firstLeague" | "secondLeague" | "thirdLeague" | "columnCount">;
-    leagues: LeagueData[];
-    label: string;
-  } | null>(null);
-  const [isMacPlatform, setIsMacPlatform] = useState(false);
   // sortByMatchups removed — monkey toggle now controls both ratings visibility AND sort order
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
@@ -476,55 +466,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return 0;
   });
 
-  // Column-count layout: prefs.columnCount caps how many score columns show
-  // (1-3, default 3). visibleCount also clamps to however many leagues the
-  // fetch actually returned, so a date with only 2 active leagues never tries
-  // to render a 3rd empty column.
-  const desiredColumns = Math.min(3, Math.max(1, prefs.columnCount ?? 3));
-  const visibleCount = Math.min(desiredColumns, sortedLeagues.length);
-  const visibleLeagues = sortedLeagues.slice(0, visibleCount);
-
-  // Remove the score column at display index `idx`. Snapshots prefs + league
-  // order for undo, drops the column from the loaded list immediately, and
-  // rewrites the slot order so the removed league moves to the last (now
-  // hidden) slot — that keeps it one click away via "Add column" / undo and
-  // stops the auto-picker from reshuffling the survivors. The optimistic
-  // setLeagues lands the same order the slot-pref refetch settles to, so the
-  // surviving columns never flash the wrong league.
-  const removeColumn = (idx: number) => {
-    const removed = sortedLeagues[idx];
-    if (!removed || visibleCount <= 1) return;
-    const nextOrder = [...sortedLeagues.filter((_, i) => i !== idx), removed];
-    setRemovedColumn({
-      snapshot: {
-        firstLeague: prefs.firstLeague,
-        secondLeague: prefs.secondLeague,
-        thirdLeague: prefs.thirdLeague,
-        columnCount: prefs.columnCount,
-      },
-      leagues: sortedLeagues,
-      label: removed.label,
-    });
-    setLeagues(nextOrder);
-    updatePrefs({
-      firstLeague: nextOrder[0]?.sport,
-      secondLeague: nextOrder[1]?.sport,
-      thirdLeague: nextOrder[2]?.sport,
-      columnCount: visibleCount - 1,
-    });
-  };
-
-  const addColumn = () => {
-    updatePrefs({ columnCount: Math.min(3, desiredColumns + 1) });
-  };
-
-  const undoRemoveColumn = () => {
-    if (!removedColumn) return;
-    setLeagues(removedColumn.leagues);
-    updatePrefs(removedColumn.snapshot);
-    setRemovedColumn(null);
-  };
-
   const headerRef = useRef<HTMLElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -610,32 +551,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
-  useEffect(() => {
-    setIsMacPlatform(/Mac|iPhone|iPad/.test(navigator.userAgent));
-  }, []);
-
-  // A removed column stays undoable for a short window: the toast offers an
-  // Undo button and Cmd/Ctrl+Z does the same. Both the 6s timer and the key
-  // listener live only while a removal is pending.
-  useEffect(() => {
-    if (!removedColumn) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey) return;
-      if (e.key !== "z" && e.key !== "Z") return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      e.preventDefault();
-      undoRemoveColumn();
-    };
-    window.addEventListener("keydown", onKey);
-    const timer = window.setTimeout(() => setRemovedColumn(null), 6000);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [removedColumn]);
 
   // ── Pull-to-refresh ────────────────────────────────────────────────
   // Touch-only gesture. iOS WKWebView's native bounce sits on top of this so
@@ -767,29 +682,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const ptrProgress = Math.min(pullDelta / 70, 1);
   const ptrVisible = pullDelta > 0 || refreshing;
   const ptrTranslateY = refreshing ? 28 : Math.max(0, pullDelta - 12);
-
-  // Dashed placeholder column that brings a removed column back. Sized to
-  // match a real LeagueColumn so the row stays aligned. Rendered as the last
-  // item in the scoreboard row whenever a league is hidden.
-  const addColumnGhost = (
-    <button
-      key="add-column"
-      type="button"
-      onClick={addColumn}
-      className="flex flex-col items-center justify-center gap-2 flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh] rounded-xl cursor-pointer transition-colors"
-      style={{ border: "2px dashed var(--border)", color: "var(--text-muted)" }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-      title="Add a league column"
-      aria-label="Add a league column"
-    >
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-      <span className="text-xs font-medium">Add column</span>
-    </button>
-  );
 
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
@@ -1134,7 +1026,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           );
         })() : loading ? (
           <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-            {Array.from({ length: desiredColumns }, (_, i) => i + 1).map((i) => (
+            {[1, 2, 3].map((i) => (
               <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
                   <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
@@ -1161,7 +1053,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 ))}
               </div>
             ))}
-            {desiredColumns < 3 && addColumnGhost}
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -1194,10 +1085,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               selectedDate,
             };
             // Per-slot swap dropdowns: each column's dropdown lists its own
-            // league plus any league NOT already shown in another visible
-            // column. Excluding the on-screen leagues means picking one only
-            // ever changes this column — it can't reshuffle the others.
-            const displayedSports = visibleLeagues.map((l) => l.sport);
+            // league plus any league NOT already shown in another column.
+            // Excluding the on-screen leagues means picking one only ever
+            // changes this column — it can't reshuffle the others.
+            const displayedSports = sortedLeagues.map((l) => l.sport);
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: thirdLeagueOptions.filter(
                 (o) => o.sport === displayedSports[idx] || !displayedSports.includes(o.sport),
@@ -1205,12 +1096,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               selectedThirdLeague: selectedSlotLeagues[idx],
               onSwapLeague: (s: Sport | undefined) => setSlotLeague(idx, s),
             });
-            const showAddGhost = visibleCount < sortedLeagues.length;
 
             if (showFinalSplit) {
               return (
                 <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-                  {visibleLeagues.map((league, idx) => (
+                  {sortedLeagues.map((league, idx) => (
                     <LeagueColumn
                       key={league.sport}
                       league={league}
@@ -1218,29 +1108,23 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                       isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
                       showFinalSeparator
                       {...swapPropsForSlot(idx)}
-                      onRemoveColumn={() => removeColumn(idx)}
-                      canRemoveColumn={visibleCount > 1}
                     />
                   ))}
-                  {showAddGhost && addColumnGhost}
                 </div>
               );
             }
 
             return (
               <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-                {visibleLeagues.map((league, idx) => (
+                {sortedLeagues.map((league, idx) => (
                   <LeagueColumn
                     key={league.sport}
                     league={league}
                     {...commonProps}
                     isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
                     {...swapPropsForSlot(idx)}
-                    onRemoveColumn={() => removeColumn(idx)}
-                    canRemoveColumn={visibleCount > 1}
                   />
                 ))}
-                {showAddGhost && addColumnGhost}
               </div>
             );
           })()
@@ -1304,39 +1188,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               style={{ background: "var(--accent)", color: "white" }}
             >
               {favToastCopied ? "Copied!" : "Copy favorites link"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {removedColumn && (
-        <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl shadow-lg animate-fade-in max-w-xs w-[calc(100%-2rem)]"
-          style={{ background: "linear-gradient(var(--bg-card), var(--bg-card)), var(--bg)", border: "1px solid var(--border)" }}
-        >
-          <div className="px-4 py-3 flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                {removedColumn.label} column removed
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                Press {isMacPlatform ? "⌘Z" : "Ctrl+Z"} to undo
-              </p>
-            </div>
-            <button
-              onClick={undoRemoveColumn}
-              className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-              style={{ background: "var(--accent)", color: "white" }}
-            >
-              Undo
-            </button>
-            <button
-              onClick={() => setRemovedColumn(null)}
-              className="shrink-0 self-start text-xs cursor-pointer"
-              style={{ color: "var(--text-muted)" }}
-              aria-label="Dismiss"
-            >
-              {"✕"}
             </button>
           </div>
         </div>
