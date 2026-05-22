@@ -157,17 +157,14 @@ export default function SettingsPanel({
     [displayedLeagues],
   );
 
-  // Each slot dropdown offers every in-season league. Picking one already in
-  // another slot swaps the two; unset slots lock to their on-screen league so
-  // the auto-picker doesn't reshuffle columns the user didn't touch.
+  // Each slot dropdown offers every in-season league. Duplicates are allowed —
+  // picking a league already in another slot just sets this slot to it too;
+  // unset slots lock to their on-screen league so the auto-picker doesn't
+  // reshuffle columns the user didn't touch.
   const setSlot = (slotIdx: number, sport: Sport | undefined) => {
     const resolved: (Sport | undefined)[] = [0, 1, 2].map(
       (i) => slotValues[i] ?? displayedSports[i],
     );
-    if (sport !== undefined) {
-      const dupIdx = resolved.findIndex((s, i) => i !== slotIdx && s === sport);
-      if (dupIdx !== -1) resolved[dupIdx] = resolved[slotIdx];
-    }
     resolved[slotIdx] = sport;
     updatePrefs({
       firstLeague: resolved[0],

@@ -429,17 +429,13 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // displayed so the auto-picker doesn't shuffle them. Without this, picking
   // NCAAM for slot 2 (with slots 1+3 unset) re-runs auto-pick for the others
   // and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
+  // Duplicates are allowed: picking a league already shown in another column
+  // just sets this slot to it too, giving two columns of the same league.
   const setSlotLeague = (slotIdx: number, sport: Sport | undefined) => {
     const displayed = sortedLeagues.map((l) => l.sport);
     const resolved: (Sport | undefined)[] = [0, 1, 2].map(
       (i) => selectedSlotLeagues[i] ?? displayed[i],
     );
-    // Picking a league already shown in another column swaps the two slots so
-    // the same league never lands in two columns at once.
-    if (sport !== undefined) {
-      const dupIdx = resolved.findIndex((s, i) => i !== slotIdx && s === sport);
-      if (dupIdx !== -1) resolved[dupIdx] = resolved[slotIdx];
-    }
     resolved[slotIdx] = sport;
     updatePrefs({
       firstLeague: resolved[0],
@@ -1084,15 +1080,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               onPlayEmbed: openEmbedModal,
               selectedDate,
             };
-            // Per-slot swap dropdowns: each column's dropdown lists its own
-            // league plus any league NOT already shown in another column.
-            // Excluding the on-screen leagues means picking one only ever
-            // changes this column — it can't reshuffle the others.
+            // Per-slot swap dropdowns: every column lists every in-season
+            // league. Leagues already shown in another column come through
+            // greyed (via shownElsewhere) but stay selectable — picking one
+            // gives you a second column of that league.
             const displayedSports = sortedLeagues.map((l) => l.sport);
             const swapPropsForSlot = (idx: number) => ({
-              swappableOptions: thirdLeagueOptions.filter(
-                (o) => o.sport === displayedSports[idx] || !displayedSports.includes(o.sport),
-              ),
+              swappableOptions: thirdLeagueOptions,
+              shownElsewhere: displayedSports.filter((_, i) => i !== idx),
               selectedThirdLeague: selectedSlotLeagues[idx],
               onSwapLeague: (s: Sport | undefined) => setSlotLeague(idx, s),
             });
@@ -1102,7 +1097,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                   {sortedLeagues.map((league, idx) => (
                     <LeagueColumn
-                      key={league.sport}
+                      key={`${league.sport}-${idx}`}
                       league={league}
                       {...commonProps}
                       isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
@@ -1118,7 +1113,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                 {sortedLeagues.map((league, idx) => (
                   <LeagueColumn
-                    key={league.sport}
+                    key={`${league.sport}-${idx}`}
                     league={league}
                     {...commonProps}
                     isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}

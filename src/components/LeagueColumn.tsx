@@ -31,6 +31,8 @@ interface LeagueColumnProps {
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport;
   onSwapLeague?: (sport: Sport | undefined) => void;
+  // Sports shown in the other columns — dropdown greys these (still selectable).
+  shownElsewhere?: Sport[];
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -418,6 +420,7 @@ export default function LeagueColumn({
   swappableOptions,
   selectedThirdLeague,
   onSwapLeague,
+  shownElsewhere,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -641,21 +644,26 @@ export default function LeagueColumn({
                         Auto
                       </button>
                     )}
-                    {swappableOptions!.map((opt) => (
-                      <button
-                        key={opt.sport}
-                        onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
-                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                        style={{
-                          color: opt.sport === league.sport ? "var(--accent)" : "var(--text)",
-                          fontWeight: opt.sport === league.sport ? 600 : 400,
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                    {swappableOptions!.map((opt) => {
+                      const isCurrent = opt.sport === league.sport;
+                      const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
+                      return (
+                        <button
+                          key={opt.sport}
+                          onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
+                          className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                          style={{
+                            color: isCurrent ? "var(--accent)" : isElsewhere ? "var(--text-muted)" : "var(--text)",
+                            fontWeight: isCurrent ? 600 : 400,
+                          }}
+                          title={isElsewhere ? "Already shown in another column — pick to add a second" : undefined}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

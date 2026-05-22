@@ -1346,15 +1346,9 @@ export async function fetchAllLeagues(
       slot2Cfg ?? nextAuto(),
       slot3Cfg ?? nextAuto(),
     ];
-    const seen = new Set<string>();
-    final = [];
-    for (const cfg of slots) {
-      if (!cfg) continue;
-      const key = `${cfg.sport}::${cfg.label}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      final.push(cfg);
-    }
+    // Keep every set slot, including duplicates — a user can deliberately put
+    // the same league in two columns via the per-column swap dropdown.
+    final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
   } else if (slot3Cfg && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
     // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen league.
     final = [...auto.slice(0, MAX_LEAGUES - 1), slot3Cfg];
