@@ -31,6 +31,9 @@ interface LeagueColumnProps {
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport;
   onSwapLeague?: (sport: Sport | undefined) => void;
+  // Bottom-of-column control to drop this column from the layout.
+  onRemoveColumn?: () => void;
+  canRemoveColumn?: boolean;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -418,6 +421,8 @@ export default function LeagueColumn({
   swappableOptions,
   selectedThirdLeague,
   onSwapLeague,
+  onRemoveColumn,
+  canRemoveColumn,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -599,7 +604,7 @@ export default function LeagueColumn({
   const renderFinished = section !== "upcoming";
 
   return (
-    <div ref={columnRef} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]">
+    <div ref={columnRef} className="flex flex-col flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]">
       {showHeader && (
         <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
           <div className="flex items-center justify-center">
@@ -804,6 +809,27 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
             />
           ))}
+        </div>
+      )}
+      {canRemoveColumn && onRemoveColumn && (
+        // mt-auto pins this to the bottom of the column box so the three
+        // columns' remove controls line up regardless of how many games each
+        // holds.
+        <div className="flex justify-center mt-auto pt-4 pb-1">
+          <button
+            onClick={onRemoveColumn}
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md cursor-pointer transition-colors"
+            style={{ color: "var(--text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            title="Remove this column"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+            Remove column
+          </button>
         </div>
       )}
     </div>
