@@ -386,8 +386,13 @@ export default {
             if (!isExtended && !teamsMatchedId) teamsMatchedId = videoId;
             if (isExtended && !teamsExtendedId) teamsExtendedId = videoId;
           }
-          // Weak: highlight + year (teams might be abbreviated differently)
-          if (hasYear) {
+          // Weak: highlight + year (teams might be abbreviated
+          // differently). Only valid when the query doesn't itself
+          // specify two teams — for game queries this tier would let a
+          // trending unrelated highlight win just because the date
+          // matches (e.g. a HoH Nationals/Braves walk-off recap for a
+          // Cardinals/Reds query). queryHasSpecificTeams gates it off.
+          if (hasYear && !queryHasSpecificTeams) {
             if (!isExtended && !yearMatchedId) yearMatchedId = videoId;
             if (isExtended && !yearMatchedExtendedId) yearMatchedExtendedId = videoId;
           }
