@@ -240,8 +240,15 @@ export default {
             queryTeams.length === 2 &&
             queryTeams.every((team) => titleHasTeam(titleLower, team));
 
-          // Check if the year matches
-          const hasYear = queryYear && title.includes(queryYear);
+          // Check if the year matches. Accept both the 4-digit form
+          // ("2026") and MLB's short-date form ("(5/22/26)" → 26) so
+          // MLB's neutral "Team vs. Team Game Highlights (M/D/YY)"
+          // uploads register as date-matched and beat un-dated spoiler
+          // recaps ("FULL COMEBACK & WALK-OFF…") in the channelTeams*
+          // tie-break.
+          const queryYY = queryYear ? queryYear.slice(-2) : null;
+          const shortYearMatch = queryYY && new RegExp(`\\b\\d{1,2}/\\d{1,2}/${queryYY}\\b`).test(title);
+          const hasYear = queryYear && (title.includes(queryYear) || shortYearMatch);
 
           // Check if series game number matches (e.g. "Game 2" in title)
           const hasGameNum = queryGameNum && titleLower.includes(`game ${queryGameNum}`);
