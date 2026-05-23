@@ -553,19 +553,30 @@ export default function LeagueColumn({
     if (bHasFav && !aHasFav) return 1;
     if (aHasFav && bHasFav) return aPri - bPri;
 
+    // Delayed live games (rain/heat/etc.) sort to the bottom of the live
+    // cluster regardless of mode — still "live", just paused.
+    const isDelayed = (g: Game) => g.state === "in" && /delay/i.test(g.statusDetail);
+
     // Monkey OFF (topMatchups === false): fully chronological
     if (!topMatchups) {
       // Still group live games first (they're actively happening)
       if (a.state === "in" && b.state !== "in") return -1;
       if (b.state === "in" && a.state !== "in") return 1;
+      if (a.state === "in" && b.state === "in") {
+        const aDel = isDelayed(a), bDel = isDelayed(b);
+        if (aDel !== bDel) return aDel ? 1 : -1;
+      }
       return new Date(a.date).getTime() - new Date(b.date).getTime();
     }
 
     // Monkey ON: competitive sort
-    // Live games first, sorted by rating
+    // Live games first, sorted by rating (delayed → bottom of live cluster,
+    // below SKIP-tier).
     if (a.state === "in" && b.state !== "in") return -1;
     if (b.state === "in" && a.state !== "in") return 1;
     if (a.state === "in" && b.state === "in") {
+      const aDel = isDelayed(a), bDel = isDelayed(b);
+      if (aDel !== bDel) return aDel ? 1 : -1;
       return (b.rating ?? 0) - (a.rating ?? 0);
     }
 
