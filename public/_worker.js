@@ -98,7 +98,10 @@ export default {
           return base;
         })();
 
-        // Team name aliases — ESPN shortDisplayName → common YouTube title variants
+        // Team name aliases — ESPN shortDisplayName → common YouTube title variants.
+        // Reverse-indexed below so a lookup by ANY listed variant returns the
+        // full alias list (lets queries from ESPN's compact names match titles
+        // that use the full club name, e.g. "Nottm Forest" ↔ "Nottingham Forest").
         const TEAM_ALIASES = {
           "trail blazers": ["blazers", "trail blazers", "portland"],
           "timberwolves": ["timberwolves", "wolves", "minnesota"],
@@ -109,6 +112,30 @@ export default {
           "red sox": ["red sox", "boston"],
           "d-backs": ["d-backs", "diamondbacks", "dbacks", "arizona"],
           "st. john's": ["st. john's", "st johns", "saint john's", "saint johns", "st john's"],
+          // EPL — ESPN compact form ↔ club name(s) used in YouTube titles
+          "nottm forest": ["nottm forest", "nottingham forest", "nottingham"],
+          "man united": ["man united", "manchester united", "man utd"],
+          "man city": ["man city", "manchester city"],
+          "c palace": ["c palace", "crystal palace", "palace"],
+          "spurs": ["spurs", "tottenham", "tottenham hotspur"],
+          "west ham": ["west ham", "west ham united"],
+          "newcastle": ["newcastle", "newcastle united"],
+          "leeds": ["leeds", "leeds united"],
+          "wolves": ["wolves", "wolverhampton"],
+          "brighton": ["brighton", "brighton & hove", "brighton hove"],
+          "aston villa": ["aston villa", "villa"],
+          // MLS — abbreviations ↔ full names
+          "nycfc": ["nycfc", "new york city fc", "new york city"],
+          "red bull ny": ["red bull ny", "new york red bulls", "red bulls"],
+          "la galaxy": ["la galaxy", "los angeles galaxy", "galaxy"],
+          "lafc": ["lafc", "los angeles fc", "los angeles football club"],
+          "d.c. united": ["d.c. united", "dc united"],
+          "kansas city": ["kansas city", "sporting kansas city", "sporting kc"],
+          "st. louis": ["st. louis", "st louis", "saint louis", "st. louis city"],
+          "new england": ["new england", "new england revolution", "revolution"],
+          "cf montréal": ["cf montréal", "cf montreal", "montreal"],
+          "salt lake": ["salt lake", "real salt lake", "rsl"],
+          "san jose": ["san jose", "san jose earthquakes", "earthquakes"],
         };
 
         // Extract team names from query: "Away vs Home highlights ..."
@@ -307,6 +334,19 @@ export default {
           const hasYear = titleHasExplicitDate
             ? titleDateMatches
             : !!(queryYear && title.includes(queryYear));
+
+          // Spoiler hard-skip — defended at the worker since hidescore's
+          // entire purpose is hiding outcomes. Two patterns:
+          //   • soccer-style score in title ("Chelsea 2-1 Spurs"). Lookbehind/
+          //     lookahead exclude (M-D-Y) date hyphens and "2025-26" season
+          //     spans from false-positive matching.
+          //   • outcome keywords ("walk-off", "comeback", "stuns", "leads",
+          //     "winner", "wins", "loses", "hat-trick", "no-hitter", "grand
+          //     slam"). Tuned to skip "champion"/"champions" because
+          //     "Premier League" / "Champions League" appear in legit titles.
+          const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat|defeats|beats|leads?|leader|winning|winner|wins|loses|loss|hat[- ]trick|no[- ]hitter|grand slam)\b/i;
+          if (SCORE_RX.test(title) || SPOILER_RX.test(title)) continue;
 
           // Check if series game number matches (e.g. "Game 2" in title)
           const hasGameNum = queryGameNum && titleLower.includes(`game ${queryGameNum}`);
