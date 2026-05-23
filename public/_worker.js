@@ -332,6 +332,23 @@ export default {
               const tD = parseInt(longTok[2], 10);
               const tY = longTok[3];
               titleDateMatches = tM === queryMonth && tD === queryDay && tY === queryYear;
+            } else {
+              // Bare M/D tokens (no year) — official NHL channel uses
+              // "Team @ Team M/D | NHL Highlights" for regular-season
+              // games. Without this check, a 2/27 upload won a 5/23 query
+              // because shortTok/longTok both failed and hasYear stayed
+              // loose. Negative lookahead prevents matching the M/D part
+              // of an already-handled M/D/Y; range check (M≤12, D≤31)
+              // keeps stray digit pairs from being misread as dates.
+              const bareTok = title.match(/\b(\d{1,2})\/(\d{1,2})\b(?!\s*[\/.\-]\s*\d)/);
+              if (bareTok) {
+                const tM = parseInt(bareTok[1], 10);
+                const tD = parseInt(bareTok[2], 10);
+                if (tM >= 1 && tM <= 12 && tD >= 1 && tD <= 31) {
+                  titleHasExplicitDate = true;
+                  titleDateMatches = tM === queryMonth && tD === queryDay;
+                }
+              }
             }
           }
           if (titleHasExplicitDate && !titleDateMatches) continue;
