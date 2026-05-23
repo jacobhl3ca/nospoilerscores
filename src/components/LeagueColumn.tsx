@@ -636,17 +636,14 @@ export default function LeagueColumn({
                     <button
                       onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                      style={{
-                        color: !selectedThirdLeague ? "var(--accent)" : "var(--text)",
-                        fontWeight: !selectedThirdLeague ? 600 : 400,
-                      }}
+                      style={{ color: "var(--text-muted)" }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       Auto
                     </button>
                     {swappableOptions!.map((opt) => {
-                      const isCurrent = opt.sport === selectedThirdLeague;
+                      const isCurrent = opt.sport === league.sport;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
                       return (
                         <button
