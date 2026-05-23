@@ -124,10 +124,22 @@ export default {
         // query landing on a HoH walk-off recap of Nationals/Braves).
         const queryHasSpecificTeams = queryTeams.length === 2;
 
-        // Build alias lists for each team
+        // Reverse-index TEAM_ALIASES so a lookup by ANY variant finds
+        // the full alias list. ESPN's shortDisplayName is "Diamondbacks"
+        // while MLB's YouTube title uses "D-backs"; without this
+        // reverse-lookup, getTeamVariants("diamondbacks") fell back to
+        // ["diamondbacks"], hasTeams was always false, and the only
+        // tier that fired was yearMatchedId (team-agnostic, recently
+        // gated behind queryHasSpecificTeams). Build once per request.
+        const TEAM_VARIANT_INDEX = {};
+        for (const variants of Object.values(TEAM_ALIASES)) {
+          for (const v of variants) {
+            TEAM_VARIANT_INDEX[v.toLowerCase()] = variants;
+          }
+        }
         function getTeamVariants(teamName) {
           const lower = teamName.toLowerCase();
-          return TEAM_ALIASES[lower] || [lower];
+          return TEAM_VARIANT_INDEX[lower] || TEAM_ALIASES[lower] || [lower];
         }
 
         function titleHasTeam(titleLower, teamName) {
