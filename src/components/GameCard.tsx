@@ -212,7 +212,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     return Date.now() > gameStart + bufferMs;
   })();
 
-  const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  // Pin to ET — Firefox private browsing forces the browser TZ to UTC
+  // (anti-fingerprinting / privacy.resistFingerprinting), which shifts a
+  // late-evening ET game one day forward in the query date. Worker matches
+  // the YouTube title's date strictly, so the off-by-one made every labeled
+  // button return 404 → openExternal fallback. Pinning to ET makes the
+  // query stable across browsers and matches how leagues date their
+  // official recap uploads.
+  const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
   const highlightUrl = highlightsReady
     ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote)
     : null;
