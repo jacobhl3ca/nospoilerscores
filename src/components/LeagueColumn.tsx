@@ -632,18 +632,19 @@ export default function LeagueColumn({
                     className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[100px]"
                     style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                   >
-                    {/* Auto option — reset to default */}
-                    {selectedThirdLeague && (
-                      <button
-                        onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
-                        className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                        style={{ color: "var(--text-muted)" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        Auto
-                      </button>
-                    )}
+                    {/* Auto option — always present so the dropdown is consistent per column */}
+                    <button
+                      onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
+                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                      style={{
+                        color: !selectedThirdLeague ? "var(--accent)" : "var(--text)",
+                        fontWeight: !selectedThirdLeague ? 600 : 400,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      Auto
+                    </button>
                     {swappableOptions!.map((opt) => {
                       const isCurrent = opt.sport === league.sport;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
