@@ -254,15 +254,15 @@ export default {
             queryTeams.every((team) => titleHasTeam(titleLower, team));
 
           // Date match — strict when both the title carries an M/D/YY
-          // token and the query has a parseable date. Required to
-          // beat MLB's cross-day pollution: YouTube's channel-filtered
-          // search returns the most-recent matching upload first, so a
-          // 5/21 game would win the channelBestId tier for a 5/19
-          // query if hasYear were just queryYear-substring. The strict
-          // path rejects any title whose date token names a different
-          // day or year. When the title has NO M/D/YY token, fall back
-          // to the loose year-substring check so NBA/WNBA/NHL recap
-          // titles in long form ("May 22, 2026") still pass.
+          // token and the query has a parseable date. When the title's
+          // explicit date DISAGREES with the query, disqualify the
+          // video from every tier (not just hasYear), because the
+          // fallback channelTeamsId / teamsMatchedId tiers don't
+          // require year and would otherwise serve last week's game
+          // as today's highlight. Better to return 404 than a wrong-
+          // day spoiler. Titles with no M/D/YY token (NBA/WNBA/NHL
+          // long form "May 22, 2026") fall back to the loose year-
+          // substring check and are not disqualified.
           const titleDateTok = title.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
           let hasYear;
           if (titleDateTok && queryMonth && queryDay && queryYear) {
@@ -270,7 +270,9 @@ export default {
             const tD = parseInt(titleDateTok[2], 10);
             const tY = titleDateTok[3];
             const yearOk = tY === queryYear || tY === queryYear.slice(-2);
-            hasYear = tM === queryMonth && tD === queryDay && yearOk;
+            const dateMatches = tM === queryMonth && tD === queryDay && yearOk;
+            if (!dateMatches) continue; // hard-skip wrong-date uploads
+            hasYear = true;
           } else {
             hasYear = !!(queryYear && title.includes(queryYear));
           }
