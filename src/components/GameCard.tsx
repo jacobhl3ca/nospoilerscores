@@ -67,17 +67,23 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
 */
 
 
-function formatGameProgress(game: Game): { full: string; short: string } {
+function formatGameProgress(game: Game): { full: string; short: string; delayed?: boolean } {
   const { sport, statusDetail, clock, period } = game;
   if (sport === "mlb") {
-    const m = statusDetail.match(/^(Top|Bot|Mid|End)\s+(\d+)/i);
+    // Delayed games arrive as "Rain Delay, Top 1st" — render the inning the
+    // same compact way as live cards and append a "rain" tag the renderer
+    // recolors yellow.
+    const delayed = /delay/i.test(statusDetail);
+    const m = statusDetail.match(/(Top|Bot|Bottom|Mid|End)\s+(\d+)/i);
     if (m) {
       const half = m[1].toLowerCase();
       const inn = m[2];
       const arrow = (half === "top" || half === "mid") ? "▲" : "▼";
-      const full = `${arrow}${inn}`;
-      return { full, short: full }; // already compact
+      const base = `${arrow}${inn}`;
+      if (delayed) return { full: `${base} rain`, short: `${base} rain`, delayed: true };
+      return { full: base, short: base };
     }
+    if (delayed) return { full: "rain", short: "rain", delayed: true };
     return { full: statusDetail, short: statusDetail.slice(0, 3) };
   }
   if (sport === "ncaam") {
@@ -338,11 +344,17 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   })()}
                 </span>
               ) : isLive && gameProgress ? (
-                liveUrl ? (
-                  <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-green-500 font-medium hover:text-green-400 transition-colors" onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
-                ) : (
-                  <span className="text-green-500 font-medium"><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>
-                )
+                (() => {
+                  const colorCls = gameProgress.delayed
+                    ? "text-yellow-500 font-medium hover:text-yellow-400 transition-colors"
+                    : "text-green-500 font-medium hover:text-green-400 transition-colors";
+                  const staticCls = gameProgress.delayed ? "text-yellow-500 font-medium" : "text-green-500 font-medium";
+                  return liveUrl ? (
+                    <a href={liveUrl} target="_blank" rel="noopener noreferrer" className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
+                  ) : (
+                    <span className={staticCls}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>
+                  );
+                })()
               ) : showFinal && !hasRating ? (
                 "FINAL"
               ) : nextGameDate ? (
