@@ -70,20 +70,24 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
 function formatGameProgress(game: Game): { full: string; short: string; delayed?: boolean } {
   const { sport, statusDetail, clock, period } = game;
   if (sport === "mlb") {
-    // Delayed games arrive as "Rain Delay, Top 1st" — render the inning the
-    // same compact way as live cards and append a "rain" tag the renderer
-    // recolors yellow.
-    const delayed = /delay/i.test(statusDetail);
+    // Delayed games arrive as "Rain Delay, Top 1st" / "Heat Delay, ..." —
+    // render the inning the same compact way as live cards and append the
+    // reason word (Rain/Heat/...) in proper case; the renderer recolors yellow.
+    const delayMatch = statusDetail.match(/(\w+)\s+delay/i);
+    const delayed = !!delayMatch || /delay/i.test(statusDetail);
+    const reason = delayMatch
+      ? delayMatch[1][0].toUpperCase() + delayMatch[1].slice(1).toLowerCase()
+      : delayed ? "Delay" : "";
     const m = statusDetail.match(/(Top|Bot|Bottom|Mid|End)\s+(\d+)/i);
     if (m) {
       const half = m[1].toLowerCase();
       const inn = m[2];
       const arrow = (half === "top" || half === "mid") ? "▲" : "▼";
       const base = `${arrow}${inn}`;
-      if (delayed) return { full: `${base} rain`, short: `${base} rain`, delayed: true };
+      if (delayed) return { full: `${base} ${reason}`, short: `${base} ${reason}`, delayed: true };
       return { full: base, short: base };
     }
-    if (delayed) return { full: "rain", short: "rain", delayed: true };
+    if (delayed) return { full: reason, short: reason, delayed: true };
     return { full: statusDetail, short: statusDetail.slice(0, 3) };
   }
   if (sport === "ncaam") {
