@@ -356,6 +356,18 @@ export default {
             }
           }
           if (titleHasExplicitDate && !titleDateMatches) continue;
+          // Wrong-year hard-skip — when the title has no full M/D/YY date but
+          // DOES contain a 4-digit year that disagrees with the query year,
+          // drop the video. Otherwise an old upload (e.g. an MLS title like
+          // "Audi 2024 MLS Cup Playoffs | Full Match Highlights" with no
+          // game date) could win the channelTeamsId tier for a current-year
+          // query, since channelTeamsId doesn't require hasYear. Allow
+          // titles that contain queryYear alongside other years (season
+          // spans like "2025/26").
+          if (!titleHasExplicitDate && queryYear) {
+            const titleYears = title.match(/\b(20\d{2})\b/g) || [];
+            if (titleYears.length > 0 && !titleYears.includes(queryYear)) continue;
+          }
           const hasYear = titleHasExplicitDate
             ? titleDateMatches
             : !!(queryYear && title.includes(queryYear));
