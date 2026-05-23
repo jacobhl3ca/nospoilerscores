@@ -425,18 +425,24 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     updatePrefs({ thirdLeague: sport });
   };
 
-  // When the user swaps one column, lock the other two to whatever's currently
-  // displayed so the auto-picker doesn't shuffle them. Without this, picking
-  // NCAAM for slot 2 (with slots 1+3 unset) re-runs auto-pick for the others
-  // and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
+  // When the user picks a league for one column, lock the other two to whatever's
+  // currently displayed so the auto-picker doesn't shuffle them. Without this,
+  // picking NCAAM for slot 2 (with slots 1+3 unset) re-runs auto-pick for the
+  // others and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
   // Duplicates are allowed: picking a league already shown in another column
   // just sets this slot to it too, giving two columns of the same league.
+  // Clicking Auto (sport===undefined) only unsets that one slot, so consecutive
+  // Auto clicks across all three columns actually drop back to fully default.
   const setSlotLeague = (slotIdx: number, sport: Sport | undefined) => {
-    const displayed = sortedLeagues.map((l) => l.sport);
-    const resolved: (Sport | undefined)[] = [0, 1, 2].map(
-      (i) => selectedSlotLeagues[i] ?? displayed[i],
-    );
-    resolved[slotIdx] = sport;
+    let resolved: (Sport | undefined)[];
+    if (sport === undefined) {
+      resolved = [...selectedSlotLeagues];
+      resolved[slotIdx] = undefined;
+    } else {
+      const displayed = sortedLeagues.map((l) => l.sport);
+      resolved = [0, 1, 2].map((i) => selectedSlotLeagues[i] ?? displayed[i]);
+      resolved[slotIdx] = sport;
+    }
     updatePrefs({
       firstLeague: resolved[0],
       secondLeague: resolved[1],
