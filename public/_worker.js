@@ -313,7 +313,11 @@ export default {
           let titleDateMatches = false;
           if (queryMonth && queryDay && queryYear) {
             const queryYY = queryYear.slice(-2);
-            const shortTok = title.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+            // Accept M/D/YY, M-D-YY, and M.D.YY date forms. Soccer uploaders
+            // (esp. team-channel reuploads) use dot-separators ("7.24.16")
+            // which slipped past the slash-only regex and let a 2016 NYCFC
+            // upload win a 2026 NYCFC query.
+            const shortTok = title.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/);
             const longTok = title.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})\b/i);
             if (shortTok) {
               titleHasExplicitDate = true;
