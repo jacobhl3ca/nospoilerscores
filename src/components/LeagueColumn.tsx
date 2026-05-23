@@ -646,7 +646,7 @@ export default function LeagueColumn({
                       Auto
                     </button>
                     {swappableOptions!.map((opt) => {
-                      const isCurrent = opt.sport === league.sport;
+                      const isCurrent = opt.sport === selectedThirdLeague;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
                       return (
                         <button
