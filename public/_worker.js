@@ -116,6 +116,13 @@ export default {
         const queryTeams = teamsMatch
           ? [teamsMatch[1].toLowerCase(), teamsMatch[2].toLowerCase()]
           : [];
+        // When the query specifies a concrete game (both team names
+        // parsed), refuse to fall through to firstHighlightId or the
+        // raw-regex catch-all — those tiers don't enforce hasTeams and
+        // would otherwise serve a trending unrelated game when no
+        // upload exists for the requested matchup (e.g. Cardinals/Reds
+        // query landing on a HoH walk-off recap of Nationals/Braves).
+        const queryHasSpecificTeams = queryTeams.length === 2;
 
         // Build alias lists for each team
         function getTeamVariants(teamName) {
@@ -253,29 +260,41 @@ export default {
             queryTeams.length === 2 &&
             queryTeams.every((team) => titleHasTeam(titleLower, team));
 
-          // Date match — strict when both the title carries an M/D/YY
-          // token and the query has a parseable date. When the title's
-          // explicit date DISAGREES with the query, disqualify the
-          // video from every tier (not just hasYear), because the
-          // fallback channelTeamsId / teamsMatchedId tiers don't
-          // require year and would otherwise serve last week's game
-          // as today's highlight. Better to return 404 than a wrong-
-          // day spoiler. Titles with no M/D/YY token (NBA/WNBA/NHL
-          // long form "May 22, 2026") fall back to the loose year-
-          // substring check and are not disqualified.
-          const titleDateTok = title.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
-          let hasYear;
-          if (titleDateTok && queryMonth && queryDay && queryYear) {
-            const tM = parseInt(titleDateTok[1], 10);
-            const tD = parseInt(titleDateTok[2], 10);
-            const tY = titleDateTok[3];
-            const yearOk = tY === queryYear || tY === queryYear.slice(-2);
-            const dateMatches = tM === queryMonth && tD === queryDay && yearOk;
-            if (!dateMatches) continue; // hard-skip wrong-date uploads
-            hasYear = true;
-          } else {
-            hasYear = !!(queryYear && title.includes(queryYear));
+          // Date match — strict when both the title carries an
+          // explicit date (short form "(5/22/26)" or long form "May
+          // 22, 2026") and the query has a parseable date. When the
+          // title's date DISAGREES with the query, disqualify the
+          // video from every tier — otherwise channelTeamsId /
+          // teamsMatchedId (hasTeams only) would serve last week's
+          // game as today's highlight. Better to 404 than spoil.
+          // Titles with NO explicit date fall back to the loose
+          // year-substring check (preserves YouTube descriptions
+          // that only mention the year).
+          let titleHasExplicitDate = false;
+          let titleDateMatches = false;
+          if (queryMonth && queryDay && queryYear) {
+            const queryYY = queryYear.slice(-2);
+            const shortTok = title.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+            const longTok = title.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})\b/i);
+            if (shortTok) {
+              titleHasExplicitDate = true;
+              const tM = parseInt(shortTok[1], 10);
+              const tD = parseInt(shortTok[2], 10);
+              const tY = shortTok[3];
+              titleDateMatches =
+                tM === queryMonth && tD === queryDay && (tY === queryYear || tY === queryYY);
+            } else if (longTok) {
+              titleHasExplicitDate = true;
+              const tM = QUERY_MONTHS[longTok[1].slice(0,3).toLowerCase()];
+              const tD = parseInt(longTok[2], 10);
+              const tY = longTok[3];
+              titleDateMatches = tM === queryMonth && tD === queryDay && tY === queryYear;
+            }
           }
+          if (titleHasExplicitDate && !titleDateMatches) continue;
+          const hasYear = titleHasExplicitDate
+            ? titleDateMatches
+            : !!(queryYear && title.includes(queryYear));
 
           // Check if series game number matches (e.g. "Game 2" in title)
           const hasGameNum = queryGameNum && titleLower.includes(`game ${queryGameNum}`);
@@ -423,10 +442,10 @@ export default {
             // Weakest: player reels, any-from-channel, any highlight
             channelPlayerReelId ||
             playerReelId ||
-            (isGolfQuery ? (golfChannelAnyOk ? channelAnyId : null) : channelAnyId) ||
-            (isGolfQuery ? null : firstHighlightId) ||
-            (isGolfQuery ? (golfChannelAnyOk ? channelAnyExtendedId : null) : channelAnyExtendedId) ||
-            (isGolfQuery ? null : firstHighlightExtendedId) ||
+            (isGolfQuery ? (golfChannelAnyOk ? channelAnyId : null) : (queryHasSpecificTeams ? null : channelAnyId)) ||
+            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightId) ||
+            (isGolfQuery ? (golfChannelAnyOk ? channelAnyExtendedId : null) : (queryHasSpecificTeams ? null : channelAnyExtendedId)) ||
+            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId) ||
             null;
         } else {
           // General (non-channel) search: standard everywhere first,
@@ -449,10 +468,10 @@ export default {
             yearMatchedExtendedId ||
             // Weakest
             playerReelId ||
-            (isGolfQuery ? null : firstHighlightId) ||
-            (isGolfQuery ? null : firstHighlightExtendedId);
+            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightId) ||
+            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId);
         }
-        if (!videoId && !isGolfQuery) {
+        if (!videoId && !isGolfQuery && !queryHasSpecificTeams) {
           // Raw-regex fallback — only for non-golf. For golf we'd
           // rather return 404 than guess wrong and let a random
           // PGA TOUR highlight win the Masters slot.
