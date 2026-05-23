@@ -111,6 +111,10 @@ export default {
           "white sox": ["white sox", "chi sox", "chicago white"],
           "red sox": ["red sox", "boston"],
           "d-backs": ["d-backs", "diamondbacks", "dbacks", "arizona"],
+          // MLB has been inconsistent: some recaps title the team as
+          // "Athletics", others as "A's" (with apostrophe). ESPN uses
+          // "Athletics" as shortDisplayName, so we map both.
+          "athletics": ["athletics", "a's", "oakland"],
           "st. john's": ["st. john's", "st johns", "saint john's", "saint johns", "st john's"],
           // EPL — ESPN compact form ↔ club name(s) used in YouTube titles
           "nottm forest": ["nottm forest", "nottingham forest", "nottingham"],

@@ -7,8 +7,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   nfl: "NFL",
   ncaam: "March Madness",
   fifa: "FIFA",
-  epl: "Premier League",
-  mls: "MLS",
+  // EPL: Premier League's own YouTube channel posts only short clips
+  // (broadcast rights restrict full game recaps). NBC Sports (US broadcaster)
+  // uploads the actual game-by-game highlights with title format
+  // "TeamA v. TeamB | PREMIER LEAGUE HIGHLIGHTS | M/D/YYYY | NBC Sports".
+  epl: "NBC Sports",
+  // MLS: the official channel is "Major League Soccer", not "MLS" —
+  // the abbreviation never matched, so the labeled button always 404'd.
+  mls: "Major League Soccer",
   // Golf majors — each tournament has its own channel
   golf_masters: "The Masters",
   golf_pga: "PGA Championship",
