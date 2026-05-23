@@ -489,23 +489,19 @@ export default {
 
         let videoId;
         if (preferChannel) {
-          // Channel-filtered priority (highest → lowest). Length is
-          // the dominant preference: every standard-highlight tier
-          // (channel OR non-channel) is exhausted before any
-          // extended tier, so a random-channel standard recap beats
-          // the official channel's extended upload. For a golf
-          // query, channelAnyId is only safe when the channel itself
-          // is tournament-specific (The Masters → implicitly Masters
-          // content); otherwise we'd let a generic PGA TOUR upload
-          // for a different tour stop slip through as the last
-          // resort, which is what we're explicitly preventing.
-          // Non-channel fallback is restored on the SIM_RX skip:
-          // sim/gameplay videos are filtered out upstream, so
-          // falling through to a real third-party recap is safe.
-          const golfChannelAnyOk =
-            isGolfQuery && channelImpliesGolfTournament;
+          // Channel-filtered priority (highest → lowest). When the
+          // caller specifies a channel, we never fall through to
+          // non-channel matches — the client already has a separate
+          // "anywhere" button for that, and falling through here means
+          // the labeled "▶ NBA" button serves a Prime Video Philippines
+          // upload (or NHL on ESPN, etc.) when the real NBA channel
+          // hasn't posted yet. SIM_RX upstream catches 2K-style fakes
+          // but not streaming-service uploaders with legitimate-looking
+          // titles. Returning null instead lets the client drop to the
+          // external YouTube search URL, which is the right escape
+          // hatch for "official channel doesn't have it yet."
           videoId =
-            // Standard: channel first
+            // Standard
             channelBestId ||
             channelGolfRecapYearId ||
             channelGolfRecapId ||
@@ -513,31 +509,14 @@ export default {
             channelGolfRoundYearId ||
             channelGolfRoundId ||
             channelTeamsId ||
-            // Standard: non-channel (length beats channel preference)
-            bestMatchId ||
-            teamsGameMatchedId ||
-            golfRecapYearId ||
-            golfRecapId ||
-            golfRoundYearId ||
-            golfRoundId ||
-            teamsMatchedId ||
-            yearMatchedId ||
-            // Extended: channel first
+            // Extended
             channelBestExtendedId ||
             channelTeamsYearExtendedId ||
             channelTeamsExtendedId ||
-            // Extended: non-channel
-            bestMatchExtendedId ||
-            teamsGameExtendedId ||
-            teamsExtendedId ||
-            yearMatchedExtendedId ||
-            // Weakest: player reels, any-from-channel, any highlight
+            // Weakest: player reels and any-from-channel
             channelPlayerReelId ||
-            playerReelId ||
-            (isGolfQuery ? (golfChannelAnyOk ? channelAnyId : null) : (queryHasSpecificTeams ? null : channelAnyId)) ||
-            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightId) ||
-            (isGolfQuery ? (golfChannelAnyOk ? channelAnyExtendedId : null) : (queryHasSpecificTeams ? null : channelAnyExtendedId)) ||
-            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId) ||
+            (isGolfQuery && !channelImpliesGolfTournament ? null : (queryHasSpecificTeams ? null : channelAnyId)) ||
+            (isGolfQuery && !channelImpliesGolfTournament ? null : (queryHasSpecificTeams ? null : channelAnyExtendedId)) ||
             null;
         } else {
           // General (non-channel) search: standard everywhere first,
