@@ -385,9 +385,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     isEspn && game.streamUrl && /\/watch\/player\/_\/id\//.test(game.streamUrl)
                       ? game.streamUrl
                       : null;
+                  // MLB broadcasts (MLB.TV, MLB Network, RSNs) all stream on
+                  // mlb.com/tv — prefer the gamePk deep link when we have it.
+                  const mlbStream =
+                    game.sport === "mlb" && game.streamUrl && /mlb\.com\/tv\/g\d+/.test(game.streamUrl)
+                      ? game.streamUrl
+                      : null;
                   const href =
                     (isPrime && game.primeStreamUrl) ||
                     espnStream ||
+                    mlbStream ||
                     networkStreamUrl(name, game.id, game.sport) ||
                     sportStreamFallback(game.sport);
                   return (
@@ -452,9 +459,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   isEspn && game.streamUrl && /\/watch\/player\/_\/id\//.test(game.streamUrl)
                     ? game.streamUrl
                     : null;
+                const mlbStream =
+                  game.sport === "mlb" && game.streamUrl && /mlb\.com\/tv\/g\d+/.test(game.streamUrl)
+                    ? game.streamUrl
+                    : null;
                 const href =
                   (isPrime && game.primeStreamUrl) ||
                   espnStream ||
+                  mlbStream ||
                   networkStreamUrl(b, game.id, game.sport) ||
                   sportStreamFallback(game.sport);
                 return (

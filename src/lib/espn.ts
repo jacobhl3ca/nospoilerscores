@@ -675,9 +675,9 @@ export function sportStreamFallback(sport: Sport): string {
     case "wnba": return "https://www.wnba.com/watch";
     case "ncaam": return "https://www.espn.com/watch/";
     case "nfl": return "https://www.nfl.com/plus/";
-    case "nhl": return "https://www.nhl.com/tv";
+    case "nhl": return "https://www.espn.com/watch/";
     case "mlb": return "https://www.mlb.com/tv";
-    case "mls": return "https://tv.apple.com/us/sports/mls";
+    case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";
     case "fifa": return "https://www.foxsports.com/live";
     case "tennis": return "https://www.tennischannel.com/";
@@ -699,11 +699,13 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   // WBD → Max (incl. "HBO Max", "TNT", "TBS", "TruTV")
   if (b.includes("max") || b === "tnt" || b === "tbs" || b === "trutv") return "https://play.max.com/live";
   // NBC / NBC Sports → NBCSports live page (NBC-branded, sports-focused)
-  if (b.includes("nbc")) return "https://www.nbcsports.com/live";
+  if (b.includes("nbc")) return "https://www.nbcsports.com/watch";
   // Other NBCU streamers (USA Network, Peacock, Golf Channel, Telemundo Deportes) → Peacock
   if (b.includes("usa") || b === "peacock" || b === "golf channel" || b.startsWith("tele")) return "https://www.peacocktv.com/";
-  // CBS / Paramount+
-  if (b === "cbs" || b === "cbssn" || b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
+  // CBS-branded broadcasts → CBS Sports (a real CBS-branded live page)
+  if (b === "cbs" || b === "cbssn") return "https://www.cbssports.com/watch/live";
+  // Paramount+ broadcasts (rare; carries some CBS Sports content) → Paramount+
+  if (b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
   // Amazon Prime Video — fall back to the Prime sports hub. Sport-specific
   // paths (/sports/nfl etc.) return 404, so we use the generic hub. Per-game
   // deep links are handled upstream via the scraped ASIN map.
@@ -711,14 +713,14 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
     return "https://www.primevideo.com/sports";
   }
   // Apple TV+ (MLS Season Pass primarily)
-  if (b === "apple tv+" || b === "apple tv") return "https://tv.apple.com/us/sports/mls";
+  if (b === "apple tv+" || b === "apple tv") return "https://tv.apple.com/us/mls";
   // YouTube TV / NFL Sunday Ticket
   if (b === "youtube tv" || b === "nfl sunday ticket" || b === "youtube") return "https://tv.youtube.com/";
   // League-specific networks
   if (b === "nfl network" || b === "nfl+") return "https://www.nfl.com/plus/";
   if (b === "nba tv") return "https://www.nba.com/watch";
   if (b === "wnba league pass" || b === "wnba tv") return "https://www.wnba.com/watch";
-  if (b === "nhl network") return "https://www.nhl.com/tv";
+  if (b === "nhl network") return "https://www.espn.com/watch/";
   if (b === "mlb.tv" || b === "mlb network") return "https://www.mlb.com/tv";
   if (b === "tennis channel") return "https://www.tennischannel.com/";
   // Masters-only streamer — already added during golf broadcast enrichment
@@ -1119,14 +1121,14 @@ export async function fetchGames(
     }
   }
 
-  // Deepen the NHL landing URL (https://www.nhl.com/tv) to a per-game path
-  // when we can resolve NHL's own game ID. ESPN-broadcast NHL games keep
-  // their espn.com/watch deep link — only the generic NHL fallback is
+  // Deepen the NHL fallback to a per-game nhl.com/tv path when we can
+  // resolve NHL's own game ID. ESPN-broadcast NHL games keep their
+  // espn.com/watch deep link — only the generic ESPN-watch fallback is
   // replaced, so we never clobber a closer streamer URL.
   if (sport === "nhl" && nhlIdsPromise) {
     const nhlIds = await nhlIdsPromise;
     for (const game of games) {
-      if (game.streamUrl !== "https://www.nhl.com/tv") continue;
+      if (game.streamUrl !== "https://www.espn.com/watch/") continue;
       const nhlId = nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`);
       if (nhlId) game.streamUrl = `https://www.nhl.com/tv/${nhlId}`;
     }
