@@ -135,7 +135,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const prefetchStarted = useRef(false);
   const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | null>(null);
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
-  const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null;
+  // Hide the rating badge while a live game is in a delay — rating returns
+  // once play resumes.
+  const isDelayed = game.state === "in" && /delay/i.test(game.statusDetail);
+  const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null && !isDelayed;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
