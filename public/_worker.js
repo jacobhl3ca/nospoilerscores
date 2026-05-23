@@ -49,6 +49,19 @@ export default {
         const yearMatch = query.match(/\b(20\d{2})\b/);
         const queryYear = yearMatch ? yearMatch[1] : null;
 
+        // Extract month + day from the en-US-format date GameCard sends
+        // ("…highlights May 22, 2026"). When present, the per-video
+        // hasYear check below is upgraded to a strict M/D/YY match,
+        // which rejects MLB titles whose (M/D/YY) token names a
+        // different day (e.g. a 5/21 upload winning the 5/19 query).
+        // NBA/WNBA/NHL recap titles use the long form "May 22, 2026"
+        // with no M/D/YY token and so fall back to the loose year
+        // check — no regression.
+        const QUERY_MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+        const dateInQueryMatch = query.match(/\b([A-Za-z]{3,9})\s+(\d{1,2}),\s+(\d{4})\b/);
+        const queryMonth = dateInQueryMatch ? QUERY_MONTHS[dateInQueryMatch[1].slice(0,3).toLowerCase()] : null;
+        const queryDay = dateInQueryMatch ? parseInt(dateInQueryMatch[2], 10) : null;
+
         // Extract series game number from query (e.g. "Game 2")
         const gameNumMatch = query.match(/Game (\d+)/i);
         const queryGameNum = gameNumMatch ? gameNumMatch[1] : null;
@@ -240,15 +253,27 @@ export default {
             queryTeams.length === 2 &&
             queryTeams.every((team) => titleHasTeam(titleLower, team));
 
-          // Check if the year matches. Accept both the 4-digit form
-          // ("2026") and MLB's short-date form ("(5/22/26)" → 26) so
-          // MLB's neutral "Team vs. Team Game Highlights (M/D/YY)"
-          // uploads register as date-matched and beat un-dated spoiler
-          // recaps ("FULL COMEBACK & WALK-OFF…") in the channelTeams*
-          // tie-break.
-          const queryYY = queryYear ? queryYear.slice(-2) : null;
-          const shortYearMatch = queryYY && new RegExp(`\\b\\d{1,2}/\\d{1,2}/${queryYY}\\b`).test(title);
-          const hasYear = queryYear && (title.includes(queryYear) || shortYearMatch);
+          // Date match — strict when both the title carries an M/D/YY
+          // token and the query has a parseable date. Required to
+          // beat MLB's cross-day pollution: YouTube's channel-filtered
+          // search returns the most-recent matching upload first, so a
+          // 5/21 game would win the channelBestId tier for a 5/19
+          // query if hasYear were just queryYear-substring. The strict
+          // path rejects any title whose date token names a different
+          // day or year. When the title has NO M/D/YY token, fall back
+          // to the loose year-substring check so NBA/WNBA/NHL recap
+          // titles in long form ("May 22, 2026") still pass.
+          const titleDateTok = title.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+          let hasYear;
+          if (titleDateTok && queryMonth && queryDay && queryYear) {
+            const tM = parseInt(titleDateTok[1], 10);
+            const tD = parseInt(titleDateTok[2], 10);
+            const tY = titleDateTok[3];
+            const yearOk = tY === queryYear || tY === queryYear.slice(-2);
+            hasYear = tM === queryMonth && tD === queryDay && yearOk;
+          } else {
+            hasYear = !!(queryYear && title.includes(queryYear));
+          }
 
           // Check if series game number matches (e.g. "Game 2" in title)
           const hasGameNum = queryGameNum && titleLower.includes(`game ${queryGameNum}`);
