@@ -174,6 +174,9 @@ function getPlayoffSubtitle(
         href: entry.selectionUrl ?? "https://www.mlb.com/network/live",
       };
     }
+    // Past the 3h air window today: show ended, hide the subtitle entirely.
+    // (A stale "Big Inning · 2:00 PM ET" at 6pm reads like an upcoming show.)
+    if (isToday && minsSinceStart > 180) return null;
     // Show the scheduled time as plain italic (no link until we go live).
     return {
       tiers: [`Big Inning · ${entry.timeET} ET`, `Big Inning · ${entry.timeET}`, "Big Inning"],
