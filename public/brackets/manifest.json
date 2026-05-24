@@ -1,21 +1,13 @@
 {
-  "generatedAt": "2026-05-24T13:36:27.031Z",
+  "generatedAt": "2026-05-24T14:17:57.451Z",
   "sports": {
     "nba": {
       "year": 2026,
-      "generatedAt": "2026-05-24T13:36:27.031Z"
+      "generatedAt": "2026-05-24T14:17:57.451Z"
     },
     "nhl": {
       "year": 2026,
-      "generatedAt": "2026-05-24T13:36:27.031Z"
-    },
-    "mlb": {
-      "year": 2026,
-      "generatedAt": "2026-05-24T13:36:27.031Z"
-    },
-    "nfl": {
-      "year": 2026,
-      "generatedAt": "2026-05-24T13:36:27.031Z"
+      "generatedAt": "2026-05-24T14:17:57.451Z"
     }
   }
 }

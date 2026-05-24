@@ -38,27 +38,44 @@ const PY = "/opt/homebrew/opt/python@3.13/bin/python3.13";
 //   NFL: Wikipedia (same out-of-season story as MLB).
 const SOURCES = {
   nba: {
+    // NBA.com aggressively blocks headless: HTTP/2 fingerprint detection
+    // in chromium, "Application error" in firefox. Wikipedia is the best
+    // working source. clipFromHeading grabs the floating-div bracket region
+    // between the #Bracket heading and the next h2/h3.
     url: "https://en.wikipedia.org/wiki/2026_NBA_playoffs",
-    // NBA Wikipedia builds the main bracket from floating divs after the
-    // #Bracket heading, not a single <table>. clipFromHeading captures the
-    // bounding rect from that heading down to the next h2/h3.
     clipFromHeading: "Bracket",
   },
   nhl: {
+    // NHL.com works headless. The bracket itself lives inside #root — a
+    // clean 1248×858 region containing only the bracket (no nav, no ads,
+    // no cookie banner). Belt-and-suspenders hideSelectors still strips
+    // chrome in case #root ever expands to wrap the header.
     url: "https://www.nhl.com/playoffs/2026/bracket",
-    // NHL.com renders a clean dark-theme bracket React widget. The .brk
-    // table selector misses, so we fall back to a full-page screenshot —
-    // hideSelectors below strips the nav/ads/cookie chrome before clicking.
-    selector: "[data-testid='bracket'], .bracket, section[class*='bracket']",
-    hideSelectors: "header, [class*='Header_'], [class*='Promo'], [class*='Advertisement'], [class*='ad-'], [id*='ad-'], iframe, [class*='Subnav'], [class*='SubNav'], .cookie-banner, [class*='CookieBanner'], [class*='cookie-banner'], [class*='Cookie'], [id*='cookie'], [id*='consent'], [class*='consent'], [class*='Consent'], #onetrust-banner-sdk, #onetrust-consent-sdk, .osano-cm-window, [aria-label*='cookie' i], [aria-label*='consent' i]",
+    selector: "#root",
+    hideSelectors: "header, [class*='Header_'], [class*='Subnav'], [class*='SubNav'], iframe, [class*='Promo'], [class*='Advertisement'], [class*='ad-'], [id*='ad-'], .cookie-banner, [class*='CookieBanner'], [class*='cookie-banner'], [class*='Cookie'], [id*='cookie'], [id*='consent'], [class*='consent'], [class*='Consent'], #onetrust-banner-sdk, #onetrust-consent-sdk, .osano-cm-window, [aria-label*='cookie' i], [aria-label*='consent' i]",
   },
   mlb: {
-    url: "https://en.wikipedia.org/wiki/2025_Major_League_Baseball_postseason",
-    clipFromHeading: "Playoff_bracket",
+    // MLB.com's bracket page only exists Oct–Nov (postseason). Out of
+    // season the URL soft-404s; the rejectIfTextIncludes guard below
+    // drops those so the sport falls off the manifest, hiding the trigger
+    // until the scrape actually returns a real bracket.
+    url: "https://www.mlb.com/postseason/bracket",
+    selector: "main",
+    hideSelectors: "header, nav, [class*='Header_'], [class*='Subnav'], iframe, [class*='Ad'], [id*='ad-'], .cookie-banner, [id*='cookie'], [id*='consent'], #onetrust-banner-sdk",
+    rejectIfTextIncludes: ["OOF! We dropped the ball", "404 Not Found", "Page Not Found"],
   },
   nfl: {
-    url: "https://en.wikipedia.org/wiki/2025%E2%80%9326_NFL_playoffs",
-    clipFromHeading: "Bracket",
+    // NFL.com bracket page exists Jan–Feb (playoffs). Out of season the
+    // page loads but the React bracket widget doesn't render, leaving a
+    // mostly-blank body — requireAnyText catches that and skips.
+    url: "https://www.nfl.com/playoffs/bracket",
+    selector: "[class*='Bracket'], main",
+    hideSelectors: "header, nav, [class*='Header_'], [class*='Subnav'], iframe, [class*='Ad'], [id*='ad-'], .cookie-banner, [id*='cookie'], [id*='consent'], #onetrust-banner-sdk",
+    rejectIfTextIncludes: ["404", "Page not found", "Page Not Found"],
+    // At least one of these terms must appear in body text — they're all
+    // unavoidable on a real NFL bracket page, and absent when the React
+    // widget hasn't loaded its content yet (off-season blank page).
+    requireAnyText: ["Wild Card", "Divisional", "Super Bowl", "Conference Championship", "AFC", "NFC"],
   },
 };
 
@@ -99,6 +116,21 @@ with sync_playwright() as p:
                 except Exception:
                     pass
             page.wait_for_timeout(3000)
+            # Soft-404 detection: many sports sites serve their "page doesn't
+            # exist yet" page as HTTP 200, so .goto() succeeds. Look for known
+            # error-page text and skip the sport entirely — better to keep
+            # the previous bracket PNG than overwrite it with a junk page.
+            reject_markers = src.get("rejectIfTextIncludes") or []
+            require_markers = src.get("requireAnyText") or []
+            if reject_markers or require_markers:
+                body_text = page.evaluate("() => (document.body && document.body.innerText) || ''")
+                low = body_text.lower()
+                for marker in reject_markers:
+                    if marker.lower() in low:
+                        raise Exception(f"soft-404: page body contains '{marker}'")
+                if require_markers:
+                    if not any(m.lower() in low for m in require_markers):
+                        raise Exception(f"page body missing any of required markers: {require_markers}")
             # Strip page chrome (nav, ads, cookie banners) before screenshot.
             # Doing this via display:none in JS rather than --block-ads keeps
             # the bracket itself intact.
@@ -213,33 +245,32 @@ async function main() {
   }
 
   const generatedAt = new Date().toISOString();
-  const successes = {};
   for (const [sport, result] of Object.entries(parsed)) {
     if (result.ok) {
-      successes[sport] = { year: 2026, generatedAt };
       console.log(`  ${sport}: ok${result.fallback ? ` (fallback: ${result.fallback})` : ""}`);
     } else {
       console.warn(`  ${sport}: FAILED — ${result.error}`);
     }
   }
 
-  // Manifest is what the UI reads to decide which brackets exist. Per-sport
-  // entries persist across runs so a single failing scrape doesn't drop a
-  // sport from the UI; we just rewrite the ones that succeeded.
-  let prevManifest = {};
-  if (existsSync(META_PATH)) {
-    try {
-      prevManifest = JSON.parse(
-        require("node:fs").readFileSync(META_PATH, "utf8"),
-      ).sports ?? {};
-    } catch {}
+  // Manifest is derived from "which PNGs actually exist on disk." This means
+  // a soft-404 scrape that doesn't write a PNG drops the sport from the
+  // manifest (UI hides the trigger), while a transient scrape failure with
+  // a still-on-disk PNG from a prior good run keeps the sport visible.
+  // Out-of-season leagues (MLB in May, NFL in August) naturally fall out
+  // by not having a PNG.
+  const manifestSports = {};
+  for (const sport of Object.keys(SOURCES)) {
+    const pngPath = resolve(OUT_DIR, `${sport}-2026.png`);
+    if (existsSync(pngPath)) {
+      manifestSports[sport] = { year: 2026, generatedAt };
+    }
   }
-  const merged = { ...prevManifest, ...successes };
   writeFileSync(
     META_PATH,
-    JSON.stringify({ generatedAt, sports: merged }, null, 2) + "\n",
+    JSON.stringify({ generatedAt, sports: manifestSports }, null, 2) + "\n",
   );
-  console.log(`Wrote manifest with ${Object.keys(merged).length} sports`);
+  console.log(`Wrote manifest with ${Object.keys(manifestSports).length} sports`);
 }
 
 main().catch((e) => {
