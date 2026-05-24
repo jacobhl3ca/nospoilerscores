@@ -37,6 +37,12 @@ interface VideoModalProps {
   // Selftext body for Reddit text posts. Raw markdown — rendered with
   // paragraph breaks + autolinking. Only shown in textMode (no media).
   body?: string | null;
+  // Mirrors the monkey-see toggle. When false, the modal opens with the
+  // player covered by a "Tap to reveal" overlay and the rendered headline
+  // hidden — uploader-baked spoiler text (MLB official YouTube thumbnails,
+  // poster frames with the result overlaid) doesn't flash before the user
+  // commits to seeing it. Clicking the overlay reveals everything.
+  showRatings?: boolean;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -132,7 +138,11 @@ function sourceLabelFromUrl(url: string): string {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, showRatings = true }: VideoModalProps) {
+  // When monkey is off, hold the player covered behind a reveal overlay so
+  // uploader-baked spoiler thumbnails / poster frames don't flash. Default
+  // true (revealed) for safety on any call site that hasn't passed the prop.
+  const [revealed, setRevealed] = useState(showRatings);
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -522,7 +532,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
-                poster={proxyImage(poster) ?? undefined}
+                poster={revealed ? (proxyImage(poster) ?? undefined) : undefined}
               />
             ) : embedMode ? (
               <iframe
@@ -534,13 +544,39 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             ) : (
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
             )}
+            {/* Reveal overlay — sits ABOVE the iframe to cover MLB's
+                YouTube/poster thumbnails that bake the result into the image.
+                Tapping it removes the cover and the underlying player keeps
+                playing whatever it was loading. */}
+            {!revealed && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setRevealed(true); }}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white"
+                style={{ background: "rgba(0, 0, 0, 0.96)" }}
+                aria-label="Reveal video"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/monkey-see-no-evil.svg"
+                  alt=""
+                  width={48}
+                  height={48}
+                  draggable={false}
+                  className="opacity-80"
+                />
+                <span className="text-sm sm:text-base font-medium">Tap to reveal highlight</span>
+                <span className="text-xs text-white/50">Spoilers in the thumbnail</span>
+              </button>
+            )}
           </div>
         )}
 
         {/* Headline + byline below media — for image / video modes, gives
             context without filling the modal. textMode renders these inside
-            the card itself, so skip them here. */}
-        {!textMode && headline && (
+            the card itself, so skip them here. Hidden when not yet revealed
+            since the headline itself is the spoiler. */}
+        {!textMode && revealed && headline && (
           <div className="mt-3 text-center px-2">
             <p className="text-sm sm:text-base text-white/90 leading-snug">{headline}</p>
             {(byline || published) && (
