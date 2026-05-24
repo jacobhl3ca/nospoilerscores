@@ -1085,6 +1085,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               onPlayHighlight: openVideoModal,
               onPlayEmbed: openEmbedModal,
               selectedDate,
+              onRetry: () => doRefreshRef.current(),
             };
             // Per-slot swap dropdowns: every column lists every in-season
             // league. Leagues already shown in another column come through

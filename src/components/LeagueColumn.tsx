@@ -33,6 +33,9 @@ interface LeagueColumnProps {
   onSwapLeague?: (sport: Sport | undefined) => void;
   // Sports shown in the other columns — dropdown greys these (still selectable).
   shownElsewhere?: Sport[];
+  // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
+  // covers mobile; this is the desktop-equivalent path.
+  onRetry?: () => void;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -140,8 +143,11 @@ function getPlayoffSubtitle(
   // show in place of the (still-far-off) postseason countdown. Per-night
   // start times come from the schedule scraped daily by scripts/scrape-
   // big-inning.mjs. Only show the subtitle on dates the schedule lists
-  // (Big Inning skips some days). Only attach the /network/live link once
-  // we've crossed the scheduled ET start time on today's date.
+  // (Big Inning skips some days). LIVE treatment requires both: scheduled
+  // start has passed within the last 4h AND ≥2 MLB games are currently in
+  // progress — a proxy for "the whip-around actually has games to whip to".
+  // The real MLB Network HLS feed is auth-walled, so this game-count
+  // heuristic is the most accurate signal we can read anonymously.
   if (sport === "mlb" && bigInningSchedule) {
     // selectedDate is YYYYMMDD — schedule is keyed YYYY-MM-DD.
     const isoDate = `${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}`;
@@ -154,15 +160,19 @@ function getPlayoffSubtitle(
       now.y === +selectedDate.slice(0, 4) &&
       now.mo === +selectedDate.slice(4, 6) &&
       now.d === +selectedDate.slice(6, 8);
-    const past = FORCE_BIG_INNING_LIVE_PREVIEW || (!!parsed && isToday && (now.h > parsed.h || (now.h === parsed.h && now.m >= parsed.m)));
+    const minsSinceStart =
+      parsed && isToday ? (now.h - parsed.h) * 60 + (now.m - parsed.m) : -1;
+    const withinAirWindow = minsSinceStart >= 0 && minsSinceStart <= 240;
+    const liveGameCount = (games ?? []).filter((g) => g.state === "in").length;
+    const isLive = FORCE_BIG_INNING_LIVE_PREVIEW || (withinAirWindow && liveGameCount >= 2);
 
-    if (past) {
+    if (isLive) {
       return {
         tiers: ["● Big Inning · LIVE", "● Big Inning live", "● Big Inning"],
         href: entry.selectionUrl ?? "https://www.mlb.com/network/live",
       };
     }
-    // Show the scheduled time as plain italic (no link until we hit start).
+    // Show the scheduled time as plain italic (no link until we go live).
     return {
       tiers: [`Big Inning · ${entry.timeET} ET`, `Big Inning · ${entry.timeET}`, "Big Inning"],
     };
@@ -421,6 +431,7 @@ export default function LeagueColumn({
   selectedThirdLeague,
   onSwapLeague,
   shownElsewhere,
+  onRetry,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -723,10 +734,25 @@ export default function LeagueColumn({
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (
-            // The games fetch errored (ESPN flake / rate-limit) — say so
-            // rather than falling through to the next-game-day slate, which
-            // would mislabel tomorrow's games as today's.
-            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Schedule unavailable — pull to refresh</p>
+            // The games fetch errored AND we had no cached fallback (the
+            // stale-while-revalidate cache in fetchGames means most flakes
+            // never reach this branch). Offer a manual retry — pull-to-
+            // refresh covers mobile, this button covers desktop and is the
+            // safer choice over a full page reload, which can blow away
+            // the service worker cache and trigger hydration mismatches.
+            <div className="flex flex-col items-center gap-2 py-6 sm:py-8">
+              <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>Schedule unavailable</p>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="text-xs sm:text-sm px-3 py-1 rounded border hover:opacity-80 transition-opacity"
+                  style={{ color: "var(--text)", borderColor: "var(--border)" }}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
           ) : isPastDate ? (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
           ) : league.nextGameDay ? (

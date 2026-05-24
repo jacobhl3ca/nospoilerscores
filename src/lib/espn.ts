@@ -696,8 +696,10 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b.includes("espn") || b === "abc") return `https://www.espn.com/watch/player/_/id/${gameId}`;
   // FOX family
   if (b === "fox" || b === "fs1" || b === "fs2" || b === "fox deportes") return "https://www.foxsports.com/live";
-  // WBD → Max (incl. "HBO Max", "TNT", "TBS", "TruTV")
-  if (b.includes("max") || b === "tnt" || b === "tbs" || b === "trutv") return "https://play.max.com/live";
+  // WBD → Max (incl. "HBO Max", "TNT", "TBS", "TruTV"). play.max.com/live and
+  // play.hbomax.com/sports both 302 to the marketing home; hbomax.com/sports
+  // is the one URL that lands on the actual live-sports browse page.
+  if (b.includes("max") || b === "tnt" || b === "tbs" || b === "trutv") return "https://www.hbomax.com/sports";
   // NBC / NBC Sports → NBCSports live page (NBC-branded, sports-focused)
   if (b.includes("nbc")) return "https://www.nbcsports.com/watch";
   // Other NBCU streamers (USA Network, Peacock, Golf Channel, Telemundo Deportes) → Peacock
@@ -1046,6 +1048,36 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
   };
 }
 
+// localStorage-backed stale-while-revalidate cache for fetchGames. On a fetch
+// failure we transparently return the last successful payload — the user sees
+// slightly stale data rather than the "Schedule unavailable" empty state.
+// Per-sport+date key; entries replaced on every successful fetch, no TTL since
+// the next successful refresh overwrites them. Failures during private-mode
+// or quota-full just degrade to the no-cache path.
+const SCOREBOARD_CACHE_PREFIX = "hidescore.scoreboard.";
+function scoreboardCacheKey(sport: Sport, date?: string): string {
+  return `${SCOREBOARD_CACHE_PREFIX}${sport}.${date ?? "today"}`;
+}
+function readScoreboardCache(sport: Sport, date?: string): Game[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(scoreboardCacheKey(sport, date));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Game[];
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+function writeScoreboardCache(sport: Sport, date: string | undefined, games: Game[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(scoreboardCacheKey(sport, date), JSON.stringify(games));
+  } catch {
+    // Quota exceeded / private mode / disabled storage — silent.
+  }
+}
+
 export async function fetchGames(
   sport: Sport,
   date?: string
@@ -1067,17 +1099,22 @@ export async function fetchGames(
   const espnAiringsPromise = loadEspnAirings();
 
   // A failed/non-OK fetch OR a non-JSON body (ESPN's CDN occasionally serves
-  // a 200 HTML interstitial during incidents) returns failed:true rather
-  // than throwing — one bad league must not blank the whole board. The
-  // failed flag lets callers tell a real fetch error from a genuinely empty
-  // schedule, so they don't fall back to tomorrow's games on a flake.
+  // a 200 HTML interstitial during incidents) falls back to the localStorage
+  // cache from the last successful fetch — stale-while-revalidate so the
+  // user keeps seeing games through transient ESPN blips. Only when the
+  // cache is also empty does failed:true bubble up to the empty-state UI.
+  const failWithCacheFallback = (): { games: Game[]; failed: boolean } => {
+    const cached = readScoreboardCache(sport, date);
+    if (cached && cached.length) return { games: cached, failed: false };
+    return { games: [], failed: true };
+  };
   let data: { events?: unknown[] } | null;
   try {
     const res = await fetchWithRetry(url.toString());
-    if (!res.ok) return { games: [], failed: true };
+    if (!res.ok) return failWithCacheFallback();
     data = await res.json();
   } catch {
-    return { games: [], failed: true };
+    return failWithCacheFallback();
   }
 
   const events = data?.events ?? [];
@@ -1169,6 +1206,7 @@ export async function fetchGames(
     }
   }
 
+  writeScoreboardCache(sport, date, games);
   return { games, failed: false };
 }
 
