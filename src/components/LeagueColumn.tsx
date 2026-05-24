@@ -144,10 +144,12 @@ function getPlayoffSubtitle(
   // start times come from the schedule scraped daily by scripts/scrape-
   // big-inning.mjs. Only show the subtitle on dates the schedule lists
   // (Big Inning skips some days). LIVE treatment requires both: scheduled
-  // start has passed within the last 4h AND ≥2 MLB games are currently in
+  // start has passed within the last 3h AND ≥2 MLB games are currently in
   // progress — a proxy for "the whip-around actually has games to whip to".
-  // The real MLB Network HLS feed is auth-walled, so this game-count
-  // heuristic is the most accurate signal we can read anonymously.
+  // 3h matches typical Big Inning runtime; a 2pm Saturday show ends ~5pm.
+  // The real MLB Network HLS feed is auth-walled, so this combined
+  // window+game-count heuristic is the most accurate signal we can read
+  // anonymously.
   if (sport === "mlb" && bigInningSchedule) {
     // selectedDate is YYYYMMDD — schedule is keyed YYYY-MM-DD.
     const isoDate = `${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}`;
@@ -162,7 +164,7 @@ function getPlayoffSubtitle(
       now.d === +selectedDate.slice(6, 8);
     const minsSinceStart =
       parsed && isToday ? (now.h - parsed.h) * 60 + (now.m - parsed.m) : -1;
-    const withinAirWindow = minsSinceStart >= 0 && minsSinceStart <= 240;
+    const withinAirWindow = minsSinceStart >= 0 && minsSinceStart <= 180;
     const liveGameCount = (games ?? []).filter((g) => g.state === "in").length;
     const isLive = FORCE_BIG_INNING_LIVE_PREVIEW || (withinAirWindow && liveGameCount >= 2);
 
