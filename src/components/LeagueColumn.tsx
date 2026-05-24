@@ -11,6 +11,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import GameCard from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import TeamView from "./TeamView";
+import { BracketTrigger } from "./BracketModal";
 
 interface LeagueColumnProps {
   league: LeagueData;
@@ -77,6 +78,11 @@ function shortenPlayoffLabel(headline: string): string {
 interface SubtitleResult {
   tiers: string[];
   href?: string;
+  // True when the subtitle is the in-progress playoff round label (e.g.
+  // "East Finals · Game 3"), the only state where wrapping with a bracket
+  // hover-trigger makes sense. Countdowns, play-in, Big Inning, and the
+  // pre-postseason countdown all leave this false.
+  inPlayoffs?: boolean;
 }
 
 // Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
@@ -136,7 +142,7 @@ function getPlayoffSubtitle(
     // narrow columns when the full version overflows.
     const short = text.replace(/Game (\d+)/g, "G$1");
     const tiers = short !== text ? [text, short] : [text];
-    return { tiers };
+    return { tiers, inPlayoffs: true };
   }
 
   // MLB regular season: nod to MLB Network's nightly Big Inning whip-around
@@ -258,6 +264,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; se
   const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
   const tiers = result?.tiers ?? [];
   const href = result?.href;
+  const inPlayoffs = !!result?.inPlayoffs;
   const tiersKey = tiers.join("|");
   const [tierIdx, setTierIdx] = useState(tiers.length ? tiers.length - 1 : 0);
   const [ready, setReady] = useState(false);
@@ -346,9 +353,11 @@ function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; se
     );
   }
   return (
-    <span ref={ref as React.RefObject<HTMLSpanElement>} className={spanCls} style={baseStyle}>
-      {renderText(text)}
-    </span>
+    <BracketTrigger sport={sport} enabled={inPlayoffs}>
+      <span ref={ref as React.RefObject<HTMLSpanElement>} className={spanCls} style={baseStyle}>
+        {renderText(text)}
+      </span>
+    </BracketTrigger>
   );
 }
 
