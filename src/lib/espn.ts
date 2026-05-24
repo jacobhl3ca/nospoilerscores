@@ -471,7 +471,7 @@ function parseGame(event: any, sport: Sport): Game {
       seriesNote = match[0];
     }
     // Detect playoff/postseason/tournament games from notes
-    if (/playoff|postseason|wild.?card|divisional|conference|championship|finals|round|semi.?final|quarter.?final|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
+    if (/playoff|postseason|wild.?card|divisional|conference|championship|finals?|round|semi.?finals?|quarter.?finals?|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
       isPlayoff = true;
       if (!playoffLabel) playoffLabel = headline;
     }
