@@ -1341,7 +1341,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           byline={videoModal.byline}
           published={videoModal.published}
           body={videoModal.body}
-          showRatings={prefs.showRatings}
           onClose={closeVideoModal}
         />
       )}
