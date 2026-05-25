@@ -468,17 +468,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     prefs.thirdLeague,
   ];
 
-  const sortedLeagues = [...leagues].sort((a, b) => {
-    const aIdx = prefs.favoriteLeagues.indexOf(a.sport);
-    const bIdx = prefs.favoriteLeagues.indexOf(b.sport);
-    const aFav = aIdx !== -1;
-    const bFav = bIdx !== -1;
-
-    if (aFav && !bFav) return -1;
-    if (bFav && !aFav) return 1;
-    if (aFav && bFav) return aIdx - bIdx;
-    return 0;
-  });
+  // Render in slot order as returned by fetchAllLeagues. The old favoriteLeagues
+  // sort is dead — the star UI that set it has been removed; keeping the sort
+  // around could still reorder columns for users with stale localStorage prefs,
+  // breaking the "Auto on col N = the column's default" guarantee.
+  const sortedLeagues = leagues;
 
   const headerRef = useRef<HTMLElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);

@@ -1380,41 +1380,18 @@ export async function fetchAllLeagues(
   const slot1Cfg = resolveSlot(slotOverrides?.first);
   const slot2Cfg = resolveSlot(slotOverrides?.second);
   const slot3Cfg = resolveSlot(slotOverrides?.third) ?? resolveSlot(thirdLeagueSport);
-  // Sport union of slots that resolved to a real league (skips "empty" + null).
-  const slotSport = (cfg: LeagueConfig | "empty" | null): Sport | undefined =>
-    cfg && cfg !== "empty" ? cfg.sport : undefined;
 
   let final: LeagueConfig[];
   if (slot1Cfg || slot2Cfg || (slotOverrides?.third && slot3Cfg)) {
     // Any per-slot override → user is in full manual control. Build slot-by-slot:
-    // each set slot uses its override; each unset slot falls back to the auto pick
-    // EXCLUDING leagues already chosen for other slots — otherwise picking a sport
-    // that's also an auto pick would dedup down to fewer than 3 columns.
-    const chosen = new Set<Sport>(
-      [slotSport(slot1Cfg), slotSport(slot2Cfg), slotSport(slot3Cfg)].filter(
-        (s): s is Sport => !!s,
-      ),
-    );
-    // Position-aware auto fallback: when slot N is unset, prefer auto[N] (the
-    // auto-picker's own choice for that slot), falling back to any remaining
-    // unused auto pick. Otherwise a manual pick in slot 0 + Auto in slot 1 would
-    // hand slot 1 the leftmost auto entry (e.g. NBA), violating its left-slot
-    // pin. Tracks usage as we go so two Auto slots don't grab the same league.
-    const used = new Set<Sport>(chosen);
-    const nextAutoForSlot = (slotIdx: number): LeagueConfig | null => {
-      const preferred = auto[slotIdx];
-      if (preferred && !used.has(preferred.sport)) {
-        used.add(preferred.sport);
-        return preferred;
-      }
-      for (const cfg of auto) {
-        if (!used.has(cfg.sport)) {
-          used.add(cfg.sport);
-          return cfg;
-        }
-      }
-      return null;
-    };
+    // each set slot uses its override; each unset slot falls back to its position
+    // default in auto.
+    // Auto = the slot's position default, always. No fallback when auto[N]'s
+    // sport is already pinned in another slot — duplicates are allowed (Jacob's
+    // rule: Auto on column N must equal that column's normal league regardless
+    // of what's pinned elsewhere, even if it duplicates). Explicit duplicates
+    // are already a supported intentional layout via the swap dropdown.
+    const nextAutoForSlot = (slotIdx: number): LeagueConfig | null => auto[slotIdx] ?? null;
     // Each slot resolves to one of: explicit league (incl. "empty" → skip),
     // unset (null) → fall back to that slot's auto pick.
     const resolveFinal = (cfg: LeagueConfig | "empty" | null, slotIdx: number): LeagueConfig | null =>
