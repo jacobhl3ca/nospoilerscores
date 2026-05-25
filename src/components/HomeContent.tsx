@@ -438,6 +438,33 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     });
   };
 
+  // Reorder: pin the currently displayed leagues to explicit slot prefs first
+  // (so an all-Auto layout doesn't no-op the move), then splice fromIdx → toIdx.
+  // Empty slots travel with their slot value so the gap moves with the drag.
+  const reorderSlots = (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    // Build a length-3 slot array, filling unset/auto slots with their currently
+    // displayed league. Empty slots stay "empty"; auto slots that had no fetched
+    // league fall back to undefined (rare — auto failed for that slot).
+    const leagueQueue = sortedLeagues.map((l) => l.sport);
+    let queueIdx = 0;
+    const baseline: (Sport | "empty" | undefined)[] = [0, 1, 2].map((i) => {
+      const pref = selectedSlotLeagues[i];
+      if (pref === "empty") return "empty";
+      if (pref) return pref;
+      // Auto/unset → use whichever league is currently in this slot's position
+      // among the displayed ones. The leagueQueue is in slot order (empties dropped).
+      return leagueQueue[queueIdx++];
+    });
+    const [item] = baseline.splice(fromIdx, 1);
+    baseline.splice(toIdx, 0, item);
+    updatePrefs({
+      firstLeague: baseline[0],
+      secondLeague: baseline[1],
+      thirdLeague: baseline[2],
+    });
+  };
+
   const selectedSlotLeagues: (Sport | "empty" | undefined)[] = [
     prefs.firstLeague,
     prefs.secondLeague,
@@ -1106,6 +1133,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                       key={entry.isEmpty ? `empty-${entry.slotIdx}` : `${entry.league.sport}-${entry.slotIdx}`}
                       league={entry.league}
                       isEmpty={entry.isEmpty}
+                      slotIdx={entry.slotIdx}
+                      onReorderSlots={reorderSlots}
                       {...commonProps}
                       showFinalSeparator
                       {...swapPropsForSlot(entry.slotIdx)}
@@ -1122,6 +1151,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                     key={entry.isEmpty ? `empty-${entry.slotIdx}` : `${entry.league.sport}-${entry.slotIdx}`}
                     league={entry.league}
                     isEmpty={entry.isEmpty}
+                    slotIdx={entry.slotIdx}
+                    onReorderSlots={reorderSlots}
                     {...commonProps}
                     {...swapPropsForSlot(entry.slotIdx)}
                   />

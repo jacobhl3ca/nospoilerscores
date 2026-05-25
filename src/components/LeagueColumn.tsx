@@ -37,6 +37,10 @@ interface LeagueColumnProps {
   // Slot is explicitly empty — render just the header + dropdown so the user
   // can switch back; skip everything below.
   isEmpty?: boolean;
+  // 0/1/2. Used by the drag handle to identify the source slot on drag start;
+  // the parent owns reorder logic and writes the new slot order back to prefs.
+  slotIdx?: number;
+  onReorderSlots?: (fromIdx: number, toIdx: number) => void;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -437,13 +441,17 @@ export default function LeagueColumn({
   shownElsewhere,
   onRetry,
   isEmpty,
+  slotIdx,
+  onReorderSlots,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   const [swapOpen, setSwapOpen] = useState(false);
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
+  const canDrag = onReorderSlots !== undefined && slotIdx !== undefined;
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
   useEffect(() => { setTeamViewTeam(null); }, [league.sport, league.label]);
@@ -629,15 +637,52 @@ export default function LeagueColumn({
   const renderFinished = section !== "upcoming";
 
   return (
-    <div ref={columnRef} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]">
+    <div
+      ref={columnRef}
+      className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh] transition-colors"
+      style={isDragOver ? { background: "var(--bg-card-hover)" } : undefined}
+      onDragOver={canDrag ? (e) => {
+        // Allow drop ONLY when a column drag is in progress (vs file/text drag).
+        if (!e.dataTransfer.types.includes("application/x-hidescore-slot")) return;
+        e.preventDefault();
+        setIsDragOver(true);
+      } : undefined}
+      onDragLeave={canDrag ? () => setIsDragOver(false) : undefined}
+      onDrop={canDrag ? (e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const fromStr = e.dataTransfer.getData("application/x-hidescore-slot");
+        if (!fromStr) return;
+        const fromIdx = parseInt(fromStr, 10);
+        if (Number.isFinite(fromIdx) && fromIdx !== slotIdx && slotIdx !== undefined) {
+          onReorderSlots!(fromIdx, slotIdx);
+        }
+      } : undefined}
+    >
       {showHeader && (
         <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
           <div className="flex items-center justify-center">
             <span
-              className="inline-flex flex-col justify-between items-center mr-1.5 cursor-grab select-none"
-              style={{ color: "var(--text-muted)", opacity: 0.35, width: "5px", height: "12px" }}
+              className="inline-flex flex-col justify-between items-center mr-1.5 select-none"
+              style={{
+                color: "var(--text-muted)",
+                opacity: 0.35,
+                width: "5px",
+                height: "12px",
+                cursor: canDrag ? "grab" : "default",
+              }}
               aria-hidden="true"
-              title="Drag to reorder column"
+              title={canDrag ? "Drag to reorder column" : undefined}
+              draggable={canDrag}
+              onDragStart={canDrag ? (e) => {
+                e.dataTransfer.setData("application/x-hidescore-slot", String(slotIdx));
+                e.dataTransfer.effectAllowed = "move";
+                // Use the column wrapper as the drag image so the user sees the
+                // whole column move, not just the tiny dots.
+                if (columnRef.current) {
+                  e.dataTransfer.setDragImage(columnRef.current, 20, 20);
+                }
+              } : undefined}
             >
               <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
               <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />

@@ -1395,17 +1395,34 @@ export async function fetchAllLeagues(
         (s): s is Sport => !!s,
       ),
     );
-    const autoQueue = auto.filter((cfg) => !chosen.has(cfg.sport));
-    let autoIdx = 0;
-    const nextAuto = (): LeagueConfig | null => autoQueue[autoIdx++] ?? null;
+    // Position-aware auto fallback: when slot N is unset, prefer auto[N] (the
+    // auto-picker's own choice for that slot), falling back to any remaining
+    // unused auto pick. Otherwise a manual pick in slot 0 + Auto in slot 1 would
+    // hand slot 1 the leftmost auto entry (e.g. NBA), violating its left-slot
+    // pin. Tracks usage as we go so two Auto slots don't grab the same league.
+    const used = new Set<Sport>(chosen);
+    const nextAutoForSlot = (slotIdx: number): LeagueConfig | null => {
+      const preferred = auto[slotIdx];
+      if (preferred && !used.has(preferred.sport)) {
+        used.add(preferred.sport);
+        return preferred;
+      }
+      for (const cfg of auto) {
+        if (!used.has(cfg.sport)) {
+          used.add(cfg.sport);
+          return cfg;
+        }
+      }
+      return null;
+    };
     // Each slot resolves to one of: explicit league (incl. "empty" → skip),
-    // unset (null) → fall back to next auto pick.
-    const resolveFinal = (cfg: LeagueConfig | "empty" | null): LeagueConfig | null =>
-      cfg === "empty" ? null : (cfg ?? nextAuto());
+    // unset (null) → fall back to that slot's auto pick.
+    const resolveFinal = (cfg: LeagueConfig | "empty" | null, slotIdx: number): LeagueConfig | null =>
+      cfg === "empty" ? null : (cfg ?? nextAutoForSlot(slotIdx));
     const slots: (LeagueConfig | null)[] = [
-      resolveFinal(slot1Cfg),
-      resolveFinal(slot2Cfg),
-      resolveFinal(slot3Cfg),
+      resolveFinal(slot1Cfg, 0),
+      resolveFinal(slot2Cfg, 1),
+      resolveFinal(slot3Cfg, 2),
     ];
     // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
