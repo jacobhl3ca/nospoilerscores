@@ -1128,6 +1128,13 @@ export async function fetchGames(
       // Filter out preseason/spring training — bad highlights, ties in records, low-quality games
       const seasonType = e.season?.type ?? 0;
       if (seasonType === 1) return false;
+      // Tournament-wrapper events with no competitors aren't real matches. ESPN's
+      // tennis scoreboard returns Roland Garros etc. as a single 0-competitor event
+      // with a stale STATUS_FINAL flag before match-level data publishes — rendering
+      // that as a game produces TBD/"?" avatars. Drop it; the column falls back to
+      // the "Schedule TBD" empty state until real matches show up.
+      const competitors = e.competitions?.[0]?.competitors ?? [];
+      if (competitors.length < 2) return false;
       return true;
     })
     // A single malformed event must not take down the whole league.
