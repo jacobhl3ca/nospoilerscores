@@ -161,8 +161,8 @@ export default function SettingsPanel({
   // picking a league already in another slot just sets this slot to it too;
   // unset slots lock to their on-screen league so the auto-picker doesn't
   // reshuffle columns the user didn't touch.
-  const setSlot = (slotIdx: number, sport: Sport | undefined) => {
-    const resolved: (Sport | undefined)[] = [0, 1, 2].map(
+  const setSlot = (slotIdx: number, sport: Sport | "empty" | undefined) => {
+    const resolved: (Sport | "empty" | undefined)[] = [0, 1, 2].map(
       (i) => slotValues[i] ?? displayedSports[i],
     );
     resolved[slotIdx] = sport;
@@ -173,7 +173,7 @@ export default function SettingsPanel({
     });
   };
 
-  const slotValues: (Sport | undefined)[] = [
+  const slotValues: (Sport | "empty" | undefined)[] = [
     prefs.firstLeague,
     prefs.secondLeague,
     prefs.thirdLeague,
@@ -347,15 +347,19 @@ export default function SettingsPanel({
             {[0, 1, 2].map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
               const value = slotValues[idx];
+              const hint = value === "empty" ? "Hidden" : value ? undefined : `Auto · currently ${fallbackLabel}`;
               return (
                 <Field
                   key={idx}
                   label={`Slot ${idx + 1}`}
-                  hint={value ? undefined : `Auto · currently ${fallbackLabel}`}
+                  hint={hint}
                 >
                   <select
                     value={value ?? ""}
-                    onChange={(e) => setSlot(idx, e.target.value ? (e.target.value as Sport) : undefined)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSlot(idx, v === "" ? undefined : v === "empty" ? "empty" : (v as Sport));
+                    }}
                     className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
@@ -363,6 +367,7 @@ export default function SettingsPanel({
                     {thirdLeagueOptions.map((o) => (
                       <option key={o.sport} value={o.sport}>{o.label}</option>
                     ))}
+                    <option value="empty">Empty</option>
                   </select>
                 </Field>
               );

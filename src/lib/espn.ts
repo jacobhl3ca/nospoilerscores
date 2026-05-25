@@ -700,7 +700,9 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   // play.hbomax.com/sports both 302 to the marketing home; hbomax.com/sports
   // is the one URL that lands on the actual live-sports browse page.
   if (b.includes("max") || b === "tnt" || b === "tbs" || b === "trutv") return "https://www.hbomax.com/sports";
-  // NBC / NBC Sports → NBCSports live page (NBC-branded, sports-focused)
+  // Plain "NBC" = the broadcast network → nbc.com/live. "NBCS"/"NBC Sports" =
+  // the cable channel → NBCSports live page.
+  if (b === "nbc") return "https://www.nbc.com/live";
   if (b.includes("nbc")) return "https://www.nbcsports.com/watch";
   // Other NBCU streamers (USA Network, Peacock, Golf Channel, Telemundo Deportes) → Peacock
   if (b.includes("usa") || b === "peacock" || b === "golf channel" || b.startsWith("tele")) return "https://www.peacocktv.com/";
@@ -1346,8 +1348,8 @@ async function enrichNhlVideos(games: Game[], date: string): Promise<void> {
 
 export async function fetchAllLeagues(
   date?: string,
-  thirdLeagueSport?: Sport,
-  slotOverrides?: { first?: Sport; second?: Sport; third?: Sport },
+  thirdLeagueSport?: Sport | "empty",
+  slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty" },
 ): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
@@ -1359,15 +1361,21 @@ export async function fetchAllLeagues(
   const auto = pickAndAssignLeagues(viewDate);
 
   // Per-slot overrides: each slot independently swappable to any active league.
-  // Falls back to legacy thirdLeagueSport when slotOverrides.third is unset to
-  // preserve old shareable favorites links that only encode `t=`.
-  const resolveSlot = (sport: Sport | undefined): LeagueConfig | null => {
+  // "empty" hides the slot entirely (no auto fallback). Falls back to legacy
+  // thirdLeagueSport when slotOverrides.third is unset to preserve old share URLs.
+  // Returns LeagueConfig for a sport, "empty" to keep the slot explicitly hidden,
+  // or null when unset (which then triggers the auto fallback downstream).
+  const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | null => {
+    if (sport === "empty") return "empty";
     if (!sport) return null;
     return ALL_LEAGUES.find((l) => l.sport === sport && isLeagueActive(l, viewDate)) ?? null;
   };
   const slot1Cfg = resolveSlot(slotOverrides?.first);
   const slot2Cfg = resolveSlot(slotOverrides?.second);
   const slot3Cfg = resolveSlot(slotOverrides?.third) ?? resolveSlot(thirdLeagueSport);
+  // Sport union of slots that resolved to a real league (skips "empty" + null).
+  const slotSport = (cfg: LeagueConfig | "empty" | null): Sport | undefined =>
+    cfg && cfg !== "empty" ? cfg.sport : undefined;
 
   let final: LeagueConfig[];
   if (slot1Cfg || slot2Cfg || (slotOverrides?.third && slot3Cfg)) {
@@ -1376,20 +1384,25 @@ export async function fetchAllLeagues(
     // EXCLUDING leagues already chosen for other slots — otherwise picking a sport
     // that's also an auto pick would dedup down to fewer than 3 columns.
     const chosen = new Set<Sport>(
-      [slot1Cfg?.sport, slot2Cfg?.sport, slot3Cfg?.sport].filter((s): s is Sport => !!s),
+      [slotSport(slot1Cfg), slotSport(slot2Cfg), slotSport(slot3Cfg)].filter(
+        (s): s is Sport => !!s,
+      ),
     );
     const autoQueue = auto.filter((cfg) => !chosen.has(cfg.sport));
     let autoIdx = 0;
     const nextAuto = (): LeagueConfig | null => autoQueue[autoIdx++] ?? null;
+    // Each slot resolves to one of: explicit league (incl. "empty" → skip),
+    // unset (null) → fall back to next auto pick.
+    const resolveFinal = (cfg: LeagueConfig | "empty" | null): LeagueConfig | null =>
+      cfg === "empty" ? null : (cfg ?? nextAuto());
     const slots: (LeagueConfig | null)[] = [
-      slot1Cfg ?? nextAuto(),
-      slot2Cfg ?? nextAuto(),
-      slot3Cfg ?? nextAuto(),
+      resolveFinal(slot1Cfg),
+      resolveFinal(slot2Cfg),
+      resolveFinal(slot3Cfg),
     ];
-    // Keep every set slot, including duplicates — a user can deliberately put
-    // the same league in two columns via the per-column swap dropdown.
+    // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
-  } else if (slot3Cfg && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
+  } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
     // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen league.
     final = [...auto.slice(0, MAX_LEAGUES - 1), slot3Cfg];
   } else {

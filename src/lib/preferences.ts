@@ -50,8 +50,8 @@ const SHORT_TO_RATINGS: Record<string, DefaultRatings> = { a: "auto", f: "off", 
 export function encodeFavorites(
   teams: string[],
   leagues: Sport[],
-  thirdLeague?: Sport,
-  slotLeagues?: (Sport | undefined)[],
+  thirdLeague?: Sport | "empty",
+  slotLeagues?: (Sport | "empty" | undefined)[],
   extras?: {
     theme?: Theme;
     defaultDateMode?: DefaultDateMode;
@@ -63,9 +63,11 @@ export function encodeFavorites(
   const params = new URLSearchParams();
   if (teams.length > 0) params.set("f", teams.map(encodeTeamId).join("."));
   if (leagues.length > 0) params.set("l", leagues.map((s) => SPORT_TO_SHORT[s] ?? s).join("."));
-  if (thirdLeague) params.set("t", SPORT_TO_SHORT[thirdLeague] ?? thirdLeague);
+  if (thirdLeague) params.set("t", thirdLeague === "empty" ? "0" : (SPORT_TO_SHORT[thirdLeague] ?? thirdLeague));
+  // "empty" slot encoded as "0" so it round-trips through SHORT_TO_SPORT (which
+  // would otherwise drop it back to undefined and lose the explicit hide).
   if (slotLeagues && slotLeagues.some(Boolean)) {
-    params.set("s", slotLeagues.map((s) => (s ? (SPORT_TO_SHORT[s] ?? s) : "_")).join("."));
+    params.set("s", slotLeagues.map((s) => (!s ? "_" : s === "empty" ? "0" : (SPORT_TO_SHORT[s] ?? s))).join("."));
   }
   if (extras?.theme) params.set("th", THEME_TO_SHORT[extras.theme]);
   if (extras?.defaultDateMode) params.set("dd", DATE_MODE_TO_SHORT[extras.defaultDateMode]);
@@ -79,8 +81,8 @@ export function encodeFavorites(
 export function decodeFavorites(params: URLSearchParams): {
   teams?: string[];
   leagues?: Sport[];
-  thirdLeague?: Sport;
-  slotLeagues?: (Sport | undefined)[];
+  thirdLeague?: Sport | "empty";
+  slotLeagues?: (Sport | "empty" | undefined)[];
   theme?: Theme;
   defaultDateMode?: DefaultDateMode;
   defaultLandingView?: DefaultLandingView;
@@ -90,8 +92,8 @@ export function decodeFavorites(params: URLSearchParams): {
   const result: {
     teams?: string[];
     leagues?: Sport[];
-    thirdLeague?: Sport;
-    slotLeagues?: (Sport | undefined)[];
+    thirdLeague?: Sport | "empty";
+    slotLeagues?: (Sport | "empty" | undefined)[];
     theme?: Theme;
     defaultDateMode?: DefaultDateMode;
     defaultLandingView?: DefaultLandingView;
@@ -104,8 +106,8 @@ export function decodeFavorites(params: URLSearchParams): {
   const s = params.get("s");
   if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
-  if (t) result.thirdLeague = SHORT_TO_SPORT[t];
-  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : SHORT_TO_SPORT[tok]));
+  if (t) result.thirdLeague = t === "0" ? "empty" : SHORT_TO_SPORT[t];
+  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : tok === "0" ? "empty" : SHORT_TO_SPORT[tok]));
   const th = params.get("th");
   const dd = params.get("dd");
   const dv = params.get("dv");
@@ -127,9 +129,10 @@ export interface Preferences {
   skipExplainer: boolean;
   skipNewsExplainer: boolean;
   showNews: boolean; // persist last view across refreshes
-  thirdLeague?: Sport; // user-chosen 3rd league slot override
-  firstLeague?: Sport; // user-chosen 1st league slot override
-  secondLeague?: Sport; // user-chosen 2nd league slot override
+  // "empty" hides the slot (no league rendered for that column).
+  thirdLeague?: Sport | "empty"; // user-chosen 3rd league slot override
+  firstLeague?: Sport | "empty"; // user-chosen 1st league slot override
+  secondLeague?: Sport | "empty"; // user-chosen 2nd league slot override
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
   // Default date on launch: smart (yesterday before 1 PM ET, today after),
   // always today, or always yesterday.

@@ -14,8 +14,6 @@ import TeamView from "./TeamView";
 
 interface LeagueColumnProps {
   league: LeagueData;
-  isFavoriteLeague: boolean;
-  onToggleFavoriteLeague: (sport: Sport) => void;
   favoriteTeams: string[];
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
@@ -29,13 +27,16 @@ interface LeagueColumnProps {
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
   // 3rd league slot swapping
   swappableOptions?: { sport: Sport; label: string }[];
-  selectedThirdLeague?: Sport;
-  onSwapLeague?: (sport: Sport | undefined) => void;
+  selectedThirdLeague?: Sport | "empty";
+  onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // Sports shown in the other columns — dropdown greys these (still selectable).
   shownElsewhere?: Sport[];
   // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
   // covers mobile; this is the desktop-equivalent path.
   onRetry?: () => void;
+  // Slot is explicitly empty — render just the header + dropdown so the user
+  // can switch back; skip everything below.
+  isEmpty?: boolean;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -419,8 +420,6 @@ function formatDateCompact(yyyymmdd: string): string {
 
 export default function LeagueColumn({
   league,
-  isFavoriteLeague,
-  onToggleFavoriteLeague,
   favoriteTeams,
   onToggleFavoriteTeam,
   showRatings,
@@ -437,6 +436,7 @@ export default function LeagueColumn({
   onSwapLeague,
   shownElsewhere,
   onRetry,
+  isEmpty,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -633,7 +633,16 @@ export default function LeagueColumn({
       {showHeader && (
         <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
           <div className="flex items-center justify-center">
-            <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
+            <span
+              className="inline-flex flex-col justify-between items-center mr-1.5 cursor-grab select-none"
+              style={{ color: "var(--text-muted)", opacity: 0.35, width: "5px", height: "12px" }}
+              aria-hidden="true"
+              title="Drag to reorder column"
+            >
+              <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
+              <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
+              <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
+            </span>
             {isSwappable ? (
               <div ref={swapRef} className="relative">
                 <button
@@ -642,8 +651,8 @@ export default function LeagueColumn({
                   style={{ color: "var(--text)" }}
                   title="Switch league"
                 >
-                  <h2 className="text-base sm:text-lg font-bold tracking-wide">
-                    {league.label}
+                  <h2 className="text-base sm:text-lg font-bold tracking-wide" style={isEmpty ? { color: "var(--text-muted)" } : undefined}>
+                    {isEmpty ? "Empty" : league.label}
                   </h2>
                   <svg
                     width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -670,7 +679,7 @@ export default function LeagueColumn({
                       Auto
                     </button>
                     {swappableOptions!.map((opt) => {
-                      const isCurrent = opt.sport === league.sport;
+                      const isCurrent = !isEmpty && opt.sport === league.sport;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
                       return (
                         <button
@@ -689,30 +698,43 @@ export default function LeagueColumn({
                         </button>
                       );
                     })}
+                    {/* Empty — hides the column entirely until switched back. */}
+                    <button
+                      onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
+                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                      style={{
+                        color: isEmpty ? "var(--accent)" : "var(--text-muted)",
+                        fontWeight: isEmpty ? 600 : 400,
+                        borderTop: "1px solid var(--border)",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      Empty
+                    </button>
                   </div>
                 )}
               </div>
             ) : (
-              <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-                {league.label}
+              <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: isEmpty ? "var(--text-muted)" : "var(--text)" }}>
+                {isEmpty ? "Empty" : league.label}
               </h2>
             )}
-            <button
-              onClick={() => onToggleFavoriteLeague(league.sport)}
-              className={`text-sm transition-colors ml-1.5 ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
-              style={isFavoriteLeague ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-              title={isFavoriteLeague ? "Remove favorite league" : "Set as favorite league"}
-            >
-              ★
-            </button>
+            <span
+              className="invisible ml-1.5"
+              aria-hidden="true"
+              style={{ width: "5px", height: "12px", display: "inline-block" }}
+            />
           </div>
-          {league.golfTournament ? (
+          {isEmpty ? null : league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
           ) : (
             <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
           )}
         </div>
       )}
+      {isEmpty ? null : (<>
+      {/* non-empty body */}
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
           <TeamView
@@ -854,6 +876,7 @@ export default function LeagueColumn({
           ))}
         </div>
       )}
+      </>)}
     </div>
   );
 }

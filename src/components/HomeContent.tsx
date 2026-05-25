@@ -199,8 +199,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
   const fetchData = useCallback(async (
     date: string,
-    thirdLeague?: Sport,
-    slotOverrides?: { first?: Sport; second?: Sport; third?: Sport },
+    thirdLeague?: Sport | "empty",
+    slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty" },
     silent = false,
   ) => {
     // silent=true skips the global skeleton — used when only one slot changed
@@ -383,16 +383,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     });
   };
 
-  const toggleFavoriteLeague = (sport: Sport) => {
-    const current = prefs.favoriteLeagues;
-    if (current.includes(sport)) {
-      updatePrefs({ favoriteLeagues: current.filter((s) => s !== sport) });
-    } else {
-      updatePrefs({ favoriteLeagues: [...current, sport] });
-      showFavSavedToast();
-    }
-  };
-
   const toggleFavoriteTeam = (teamId: string) => {
     const current = prefs.favoriteTeams;
     if (current.includes(teamId)) {
@@ -421,20 +411,18 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return options;
   }, [selectedDate]);
 
-  const setThirdLeague = (sport: Sport | undefined) => {
+  const setThirdLeague = (sport: Sport | "empty" | undefined) => {
     updatePrefs({ thirdLeague: sport });
   };
 
-  // When the user picks a league for one column, lock the other two to whatever's
-  // currently displayed so the auto-picker doesn't shuffle them. Without this,
-  // picking NCAAM for slot 2 (with slots 1+3 unset) re-runs auto-pick for the
-  // others and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
-  // Duplicates are allowed: picking a league already shown in another column
-  // just sets this slot to it too, giving two columns of the same league.
-  // Clicking Auto (sport===undefined) only unsets that one slot, so consecutive
-  // Auto clicks across all three columns actually drop back to fully default.
-  const setSlotLeague = (slotIdx: number, sport: Sport | undefined) => {
-    let resolved: (Sport | undefined)[];
+  // When the user picks a league (or Empty) for one column, lock the other two
+  // to whatever's currently displayed so the auto-picker doesn't shuffle them.
+  // Without this, picking NCAAM for slot 2 (with slots 1+3 unset) re-runs auto-pick
+  // for the others and can bump NHL out of slot 3 — see lib/espn.ts fetchAllLeagues.
+  // Duplicates are allowed; "empty" hides the slot; Auto (undefined) only unsets
+  // that one slot, so consecutive Auto clicks across all three drop back to default.
+  const setSlotLeague = (slotIdx: number, sport: Sport | "empty" | undefined) => {
+    let resolved: (Sport | "empty" | undefined)[];
     if (sport === undefined) {
       resolved = [...selectedSlotLeagues];
       resolved[slotIdx] = undefined;
@@ -450,7 +438,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     });
   };
 
-  const selectedSlotLeagues: (Sport | undefined)[] = [
+  const selectedSlotLeagues: (Sport | "empty" | undefined)[] = [
     prefs.firstLeague,
     prefs.secondLeague,
     prefs.thirdLeague,
@@ -1074,8 +1062,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             const hasFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state === "post"));
             const showFinalSplit = hasNonFinished && hasFinished;
             const commonProps = {
-              isFavoriteLeague: false as boolean,
-              onToggleFavoriteLeague: toggleFavoriteLeague,
               favoriteTeams: prefs.favoriteTeams,
               onToggleFavoriteTeam: toggleFavoriteTeam,
               showRatings: prefs.showRatings,
@@ -1096,20 +1082,33 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               swappableOptions: thirdLeagueOptions,
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
               selectedThirdLeague: selectedSlotLeagues[idx],
-              onSwapLeague: (s: Sport | undefined) => setSlotLeague(idx, s),
+              onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
             });
+            // Slot 2 fetched-league queue: fetchAllLeagues skipped empty slots, so
+            // we walk slot prefs and pull from the fetched queue for non-empty slots,
+            // inserting an empty placeholder where the user picked Empty.
+            const leagueQueue = [...sortedLeagues];
+            const emptyStub: LeagueData = { sport: "mlb", label: "Empty", games: [] };
+            const slotEntries = [0, 1, 2].map((slotIdx) => {
+              if (selectedSlotLeagues[slotIdx] === "empty") {
+                return { slotIdx, league: emptyStub, isEmpty: true as const };
+              }
+              const league = leagueQueue.shift();
+              if (!league) return null;
+              return { slotIdx, league, isEmpty: false as const };
+            }).filter((e): e is NonNullable<typeof e> => e !== null);
 
             if (showFinalSplit) {
               return (
                 <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-                  {sortedLeagues.map((league, idx) => (
+                  {slotEntries.map((entry) => (
                     <LeagueColumn
-                      key={`${league.sport}-${idx}`}
-                      league={league}
+                      key={entry.isEmpty ? `empty-${entry.slotIdx}` : `${entry.league.sport}-${entry.slotIdx}`}
+                      league={entry.league}
+                      isEmpty={entry.isEmpty}
                       {...commonProps}
-                      isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
                       showFinalSeparator
-                      {...swapPropsForSlot(idx)}
+                      {...swapPropsForSlot(entry.slotIdx)}
                     />
                   ))}
                 </div>
@@ -1118,13 +1117,13 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
             return (
               <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-                {sortedLeagues.map((league, idx) => (
+                {slotEntries.map((entry) => (
                   <LeagueColumn
-                    key={`${league.sport}-${idx}`}
-                    league={league}
+                    key={entry.isEmpty ? `empty-${entry.slotIdx}` : `${entry.league.sport}-${entry.slotIdx}`}
+                    league={entry.league}
+                    isEmpty={entry.isEmpty}
                     {...commonProps}
-                    isFavoriteLeague={prefs.favoriteLeagues.includes(league.sport)}
-                    {...swapPropsForSlot(idx)}
+                    {...swapPropsForSlot(entry.slotIdx)}
                   />
                 ))}
               </div>
