@@ -34,13 +34,14 @@ interface LeagueColumnProps {
   // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
   // covers mobile; this is the desktop-equivalent path.
   onRetry?: () => void;
-  // Slot is explicitly empty — render just the header + dropdown so the user
-  // can switch back; skip everything below.
-  isEmpty?: boolean;
   // 0/1/2. Used by the drag handle to identify the source slot on drag start;
   // the parent owns reorder logic and writes the new slot order back to prefs.
   slotIdx?: number;
   onReorderSlots?: (fromIdx: number, toIdx: number) => void;
+  // Number of visible columns (1-3). The column's max-width adapts so the
+  // remaining columns breathe instead of leaving empty space on the sides
+  // when slots are hidden via the "Empty" option.
+  columnCount?: number;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -440,9 +441,9 @@ export default function LeagueColumn({
   onSwapLeague,
   shownElsewhere,
   onRetry,
-  isEmpty,
   slotIdx,
   onReorderSlots,
+  columnCount,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -636,11 +637,22 @@ export default function LeagueColumn({
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
 
+  // Adaptive max-width: 3 columns share screen at narrow per-col widths;
+  // with 1-2 visible columns we widen each so the slate fills the viewport
+  // instead of leaving dead air on the sides.
+  const maxWidth = columnCount === 1
+    ? { maxWidth: "min(640px, 100%)" }
+    : columnCount === 2
+    ? { maxWidth: "min(420px, 50%)" }
+    : { maxWidth: "min(280px, 33%)" };
   return (
     <div
       ref={columnRef}
-      className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh] transition-colors"
-      style={isDragOver ? { background: "var(--bg-card-hover)" } : undefined}
+      className="flex-1 min-w-0 min-h-[60vh] transition-colors"
+      style={{
+        ...maxWidth,
+        ...(isDragOver ? { background: "var(--bg-card-hover)" } : {}),
+      }}
       onDragEnter={canDrag ? (e) => {
         // dragenter + dragover BOTH need preventDefault for drop to fire (HTML5 spec).
         // Convert types via Array.from — Safari returns DOMStringList here, not Array,
@@ -708,8 +720,8 @@ export default function LeagueColumn({
                   style={{ color: "var(--text)" }}
                   title="Switch league"
                 >
-                  <h2 className="text-base sm:text-lg font-bold tracking-wide" style={isEmpty ? { color: "var(--text-muted)" } : undefined}>
-                    {isEmpty ? "Empty" : league.label}
+                  <h2 className="text-base sm:text-lg font-bold tracking-wide">
+                    {league.label}
                   </h2>
                   <svg
                     width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -736,7 +748,7 @@ export default function LeagueColumn({
                       Auto
                     </button>
                     {swappableOptions!.map((opt) => {
-                      const isCurrent = !isEmpty && opt.sport === league.sport;
+                      const isCurrent = opt.sport === league.sport;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
                       return (
                         <button
@@ -760,8 +772,7 @@ export default function LeagueColumn({
                       onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{
-                        color: isEmpty ? "var(--accent)" : "var(--text-muted)",
-                        fontWeight: isEmpty ? 600 : 400,
+                        color: "var(--text-muted)",
                         borderTop: "1px solid var(--border)",
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
@@ -773,8 +784,8 @@ export default function LeagueColumn({
                 )}
               </div>
             ) : (
-              <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: isEmpty ? "var(--text-muted)" : "var(--text)" }}>
-                {isEmpty ? "Empty" : league.label}
+              <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+                {league.label}
               </h2>
             )}
             <span
@@ -783,15 +794,13 @@ export default function LeagueColumn({
               style={{ width: "5px", height: "12px", display: "inline-block" }}
             />
           </div>
-          {isEmpty ? null : league.golfTournament ? (
+          {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
           ) : (
             <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
           )}
         </div>
       )}
-      {isEmpty ? null : (<>
-      {/* non-empty body */}
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
           <TeamView
@@ -933,7 +942,6 @@ export default function LeagueColumn({
           ))}
         </div>
       )}
-      </>)}
     </div>
   );
 }

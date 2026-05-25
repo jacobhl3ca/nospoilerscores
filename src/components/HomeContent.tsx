@@ -1102,35 +1102,57 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               selectedThirdLeague: selectedSlotLeagues[idx],
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
             });
-            // Slot 2 fetched-league queue: fetchAllLeagues skipped empty slots, so
-            // we walk slot prefs and pull from the fetched queue for non-empty slots,
-            // inserting an empty placeholder where the user picked Empty.
+            // Build slot entries: empty slots truly collapse (no placeholder
+            // column). Remaining columns get adaptive widths so 2-column or
+            // 1-column layouts breathe instead of leaving dead air on the sides.
             const leagueQueue = [...sortedLeagues];
-            const emptyStub: LeagueData = { sport: "mlb", label: "Empty", games: [] };
             const slotEntries = [0, 1, 2].map((slotIdx) => {
-              if (selectedSlotLeagues[slotIdx] === "empty") {
-                return { slotIdx, league: emptyStub, isEmpty: true as const };
-              }
+              if (selectedSlotLeagues[slotIdx] === "empty") return null;
               const league = leagueQueue.shift();
               if (!league) return null;
-              return { slotIdx, league, isEmpty: false as const };
-            }).filter((e): e is NonNullable<typeof e> => e !== null);
+              return { slotIdx, league };
+            }).filter((e): e is { slotIdx: number; league: LeagueData } => e !== null);
+            const columnCount = slotEntries.length;
+            // "+ Column" affordance: restores the leftmost-empty slot to Auto.
+            // Hidden when all 3 slots are showing.
+            const firstEmptySlot = [0, 1, 2].find((i) => selectedSlotLeagues[i] === "empty");
+            const restoreFirstEmpty = () => {
+              if (firstEmptySlot === undefined) return;
+              setSlotLeague(firstEmptySlot, undefined);
+            };
+            const addColumnChip = firstEmptySlot !== undefined ? (
+              <button
+                type="button"
+                onClick={restoreFirstEmpty}
+                className="flex flex-col items-center justify-start pt-7 min-w-[28px] cursor-pointer transition-opacity hover:opacity-80 select-none"
+                style={{ color: "var(--text-muted)", opacity: 0.5 }}
+                title="Add column back"
+                aria-label="Add column back"
+              >
+                <span className="text-2xl leading-none">+</span>
+              </button>
+            ) : null;
+
+            const commonColumnProps = (entry: { slotIdx: number; league: LeagueData }) => ({
+              league: entry.league,
+              slotIdx: entry.slotIdx,
+              columnCount,
+              onReorderSlots: reorderSlots,
+              ...commonProps,
+              ...swapPropsForSlot(entry.slotIdx),
+            });
 
             if (showFinalSplit) {
               return (
                 <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                   {slotEntries.map((entry) => (
                     <LeagueColumn
-                      key={entry.isEmpty ? `empty-${entry.slotIdx}` : `${entry.league.sport}-${entry.slotIdx}`}
-                      league={entry.league}
-                      isEmpty={entry.isEmpty}
-                      slotIdx={entry.slotIdx}
-                      onReorderSlots={reorderSlots}
-                      {...commonProps}
+                      key={`${entry.league.sport}-${entry.slotIdx}`}
                       showFinalSeparator
-                      {...swapPropsForSlot(entry.slotIdx)}
+                      {...commonColumnProps(entry)}
                     />
                   ))}
+                  {addColumnChip}
                 </div>
               );
             }
@@ -1139,15 +1161,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                 {slotEntries.map((entry) => (
                   <LeagueColumn
-                    key={entry.isEmpty ? `empty-${entry.slotIdx}` : `${entry.league.sport}-${entry.slotIdx}`}
-                    league={entry.league}
-                    isEmpty={entry.isEmpty}
-                    slotIdx={entry.slotIdx}
-                    onReorderSlots={reorderSlots}
-                    {...commonProps}
-                    {...swapPropsForSlot(entry.slotIdx)}
+                    key={`${entry.league.sport}-${entry.slotIdx}`}
+                    {...commonColumnProps(entry)}
                   />
                 ))}
+                {addColumnChip}
               </div>
             );
           })()
