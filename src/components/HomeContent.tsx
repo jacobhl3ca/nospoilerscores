@@ -1112,9 +1112,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               if (!league) return null;
               return { slotIdx, league };
             }).filter((e): e is { slotIdx: number; league: LeagueData } => e !== null);
-            const columnCount = slotEntries.length;
-            // "+ Column" affordance: restores the leftmost-empty slot to Auto.
-            // Hidden when all 3 slots are showing.
+            // "+" affordance: restores the leftmost-empty slot to Auto.
+            // Hidden when all 3 slots are showing. Column widths stay fixed at
+            // their 3-up size so a 2-column or 1-column layout doesn't reflow —
+            // the remaining columns sit in their original positions and the
+            // "+" chip occupies the freed space on the right.
             const firstEmptySlot = [0, 1, 2].find((i) => selectedSlotLeagues[i] === "empty");
             const restoreFirstEmpty = () => {
               if (firstEmptySlot === undefined) return;
@@ -1136,7 +1138,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             const commonColumnProps = (entry: { slotIdx: number; league: LeagueData }) => ({
               league: entry.league,
               slotIdx: entry.slotIdx,
-              columnCount,
               onReorderSlots: reorderSlots,
               ...commonProps,
               ...swapPropsForSlot(entry.slotIdx),

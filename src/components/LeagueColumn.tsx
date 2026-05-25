@@ -38,10 +38,6 @@ interface LeagueColumnProps {
   // the parent owns reorder logic and writes the new slot order back to prefs.
   slotIdx?: number;
   onReorderSlots?: (fromIdx: number, toIdx: number) => void;
-  // Number of visible columns (1-3). The column's max-width adapts so the
-  // remaining columns breathe instead of leaving empty space on the sides
-  // when slots are hidden via the "Empty" option.
-  columnCount?: number;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -443,7 +439,6 @@ export default function LeagueColumn({
   onRetry,
   slotIdx,
   onReorderSlots,
-  columnCount,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -637,22 +632,11 @@ export default function LeagueColumn({
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
 
-  // Adaptive max-width: 3 columns share screen at narrow per-col widths;
-  // with 1-2 visible columns we widen each so the slate fills the viewport
-  // instead of leaving dead air on the sides.
-  const maxWidth = columnCount === 1
-    ? { maxWidth: "min(640px, 100%)" }
-    : columnCount === 2
-    ? { maxWidth: "min(420px, 50%)" }
-    : { maxWidth: "min(280px, 33%)" };
   return (
     <div
       ref={columnRef}
-      className="flex-1 min-w-0 min-h-[60vh] transition-colors"
-      style={{
-        ...maxWidth,
-        ...(isDragOver ? { background: "var(--bg-card-hover)" } : {}),
-      }}
+      className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh] transition-colors"
+      style={isDragOver ? { background: "var(--bg-card-hover)" } : undefined}
       onDragEnter={canDrag ? (e) => {
         // Unconditional preventDefault — both dragenter + dragover need to call
         // it for the target to accept a drop (HTML5 spec). Previously we filtered
