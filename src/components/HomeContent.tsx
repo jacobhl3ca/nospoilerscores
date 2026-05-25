@@ -438,26 +438,23 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     });
   };
 
-  // Reorder: pin the currently displayed leagues to explicit slot prefs first
-  // (so an all-Auto layout doesn't no-op the move), then splice fromIdx → toIdx.
-  // Empty slots travel with their slot value so the gap moves with the drag.
+  // Drag-to-swap: dropping column A onto column B trades their positions
+  // (not splice/insertion — that shuffles the middle column too). All-Auto
+  // layouts get pinned to explicit prefs first so the swap actually sticks.
+  // Empty slots swap as "empty" so the gap moves with the drag.
   const reorderSlots = (fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
-    // Build a length-3 slot array, filling unset/auto slots with their currently
-    // displayed league. Empty slots stay "empty"; auto slots that had no fetched
-    // league fall back to undefined (rare — auto failed for that slot).
     const leagueQueue = sortedLeagues.map((l) => l.sport);
     let queueIdx = 0;
     const baseline: (Sport | "empty" | undefined)[] = [0, 1, 2].map((i) => {
       const pref = selectedSlotLeagues[i];
       if (pref === "empty") return "empty";
       if (pref) return pref;
-      // Auto/unset → use whichever league is currently in this slot's position
-      // among the displayed ones. The leagueQueue is in slot order (empties dropped).
+      // Auto/unset → use whichever league is currently in this slot's position.
+      // leagueQueue is in slot order (empties already dropped by fetchAllLeagues).
       return leagueQueue[queueIdx++];
     });
-    const [item] = baseline.splice(fromIdx, 1);
-    baseline.splice(toIdx, 0, item);
+    [baseline[fromIdx], baseline[toIdx]] = [baseline[toIdx], baseline[fromIdx]];
     updatePrefs({
       firstLeague: baseline[0],
       secondLeague: baseline[1],

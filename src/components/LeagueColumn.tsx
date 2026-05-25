@@ -641,11 +641,21 @@ export default function LeagueColumn({
       ref={columnRef}
       className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh] transition-colors"
       style={isDragOver ? { background: "var(--bg-card-hover)" } : undefined}
-      onDragOver={canDrag ? (e) => {
-        // Allow drop ONLY when a column drag is in progress (vs file/text drag).
-        if (!e.dataTransfer.types.includes("application/x-hidescore-slot")) return;
+      onDragEnter={canDrag ? (e) => {
+        // dragenter + dragover BOTH need preventDefault for drop to fire (HTML5 spec).
+        // Convert types via Array.from — Safari returns DOMStringList here, not Array,
+        // so `.includes()` would throw. Filtering by our custom MIME prevents wrong
+        // drops (file drags, text selections, etc.) from firing onReorderSlots.
+        const types = Array.from(e.dataTransfer.types);
+        if (!types.includes("application/x-hidescore-slot")) return;
         e.preventDefault();
-        setIsDragOver(true);
+      } : undefined}
+      onDragOver={canDrag ? (e) => {
+        const types = Array.from(e.dataTransfer.types);
+        if (!types.includes("application/x-hidescore-slot")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (!isDragOver) setIsDragOver(true);
       } : undefined}
       onDragLeave={canDrag ? () => setIsDragOver(false) : undefined}
       onDrop={canDrag ? (e) => {
@@ -661,7 +671,20 @@ export default function LeagueColumn({
     >
       {showHeader && (
         <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
-          <div className="flex items-center justify-center">
+          <div
+            className="flex items-center justify-center"
+            draggable={canDrag}
+            style={canDrag ? { cursor: "grab" } : undefined}
+            onDragStart={canDrag ? (e) => {
+              e.dataTransfer.setData("application/x-hidescore-slot", String(slotIdx));
+              e.dataTransfer.effectAllowed = "move";
+              // Use the column wrapper as the drag image so the user sees the
+              // whole column move, not just the header strip.
+              if (columnRef.current) {
+                e.dataTransfer.setDragImage(columnRef.current, 20, 20);
+              }
+            } : undefined}
+          >
             <span
               className="inline-flex flex-col justify-between items-center mr-1.5 select-none"
               style={{
@@ -669,20 +692,9 @@ export default function LeagueColumn({
                 opacity: 0.35,
                 width: "5px",
                 height: "12px",
-                cursor: canDrag ? "grab" : "default",
               }}
               aria-hidden="true"
-              title={canDrag ? "Drag to reorder column" : undefined}
-              draggable={canDrag}
-              onDragStart={canDrag ? (e) => {
-                e.dataTransfer.setData("application/x-hidescore-slot", String(slotIdx));
-                e.dataTransfer.effectAllowed = "move";
-                // Use the column wrapper as the drag image so the user sees the
-                // whole column move, not just the tiny dots.
-                if (columnRef.current) {
-                  e.dataTransfer.setDragImage(columnRef.current, 20, 20);
-                }
-              } : undefined}
+              title={canDrag ? "Drag the header to reorder" : undefined}
             >
               <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
               <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
