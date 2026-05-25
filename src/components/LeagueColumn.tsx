@@ -654,22 +654,30 @@ export default function LeagueColumn({
         ...(isDragOver ? { background: "var(--bg-card-hover)" } : {}),
       }}
       onDragEnter={canDrag ? (e) => {
-        // dragenter + dragover BOTH need preventDefault for drop to fire (HTML5 spec).
-        // Convert types via Array.from — Safari returns DOMStringList here, not Array,
-        // so `.includes()` would throw. Filtering by our custom MIME prevents wrong
-        // drops (file drags, text selections, etc.) from firing onReorderSlots.
-        const types = Array.from(e.dataTransfer.types);
-        if (!types.includes("application/x-hidescore-slot")) return;
+        // Unconditional preventDefault — both dragenter + dragover need to call
+        // it for the target to accept a drop (HTML5 spec). Previously we filtered
+        // by types here, but Safari sometimes returns an empty types[] during
+        // dragenter when crossing rapidly across child boundaries (game cards),
+        // causing the drop to silently fail. The drop handler validates the
+        // payload via getData(), so non-column drags (files, text) still no-op.
         e.preventDefault();
       } : undefined}
       onDragOver={canDrag ? (e) => {
-        const types = Array.from(e.dataTransfer.types);
-        if (!types.includes("application/x-hidescore-slot")) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         if (!isDragOver) setIsDragOver(true);
       } : undefined}
-      onDragLeave={canDrag ? () => setIsDragOver(false) : undefined}
+      onDragLeave={canDrag ? (e) => {
+        // dragLeave fires every time the cursor crosses a child boundary inside
+        // the column (game cards, swap button, etc.), even while still inside
+        // the wrapper. Only clear the highlight when relatedTarget is actually
+        // outside this column — otherwise the dropEffect/isDragOver state flickers
+        // and dragover doesn't get a chance to reapply preventDefault before
+        // the user releases.
+        const related = e.relatedTarget as Node | null;
+        if (related && e.currentTarget.contains(related)) return;
+        setIsDragOver(false);
+      } : undefined}
       onDrop={canDrag ? (e) => {
         e.preventDefault();
         setIsDragOver(false);
