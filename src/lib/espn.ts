@@ -697,10 +697,14 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b.includes("espn") || b === "abc") return `https://www.espn.com/watch/player/_/id/${gameId}`;
   // FOX family
   if (b === "fox" || b === "fs1" || b === "fs2" || b === "fox deportes") return "https://www.foxsports.com/live";
-  // WBD → Max (incl. "HBO Max", "TNT", "TBS", "TruTV"). play.max.com/live and
+  // TNT has its own TV Everywhere portal — keep it TNT-branded rather than
+  // dumping the user on HBO Max where the channel is no longer visibly
+  // labeled "TNT".
+  if (b === "tnt") return "https://www.tntdrama.com/watchtnt";
+  // WBD → Max (incl. "HBO Max", "TBS", "TruTV"). play.max.com/live and
   // play.hbomax.com/sports both 302 to the marketing home; hbomax.com/sports
   // is the one URL that lands on the actual live-sports browse page.
-  if (b.includes("max") || b === "tnt" || b === "tbs" || b === "trutv") return "https://www.hbomax.com/sports";
+  if (b.includes("max") || b === "tbs" || b === "trutv") return "https://www.hbomax.com/sports";
   // Plain "NBC" = the broadcast network → nbc.com/live. "NBCS"/"NBC Sports" =
   // the cable channel → NBCSports live page.
   if (b === "nbc") return "https://www.nbc.com/live";
