@@ -693,24 +693,32 @@ export function sportStreamFallback(sport: Sport): string {
 export function networkStreamUrl(broadcast: string, gameId: string, sport?: Sport): string | null {
   const b = broadcast.toLowerCase().trim();
   if (!b) return null;
-  // ESPN family (incl. ABC, ESPN Unlmtd, ESPN+, ESPNU, SEC/ACC Network, ESPN Deportes)
-  if (b.includes("espn") || b === "abc") return `https://www.espn.com/watch/player/_/id/${gameId}`;
+  // ESPN family deep-links via gameId. ABC is ESPN-owned but its own broadcast
+  // network has a dedicated live page, so route it there instead of the ESPN
+  // player — the user picked ABC, send them to ABC.
+  if (b.includes("espn")) return `https://www.espn.com/watch/player/_/id/${gameId}`;
+  if (b === "abc") return "https://abc.com/watch-live";
   // FOX family
   if (b === "fox" || b === "fs1" || b === "fs2" || b === "fox deportes") return "https://www.foxsports.com/live";
-  // TNT has its own TV Everywhere portal — keep it TNT-branded rather than
-  // dumping the user on HBO Max where the channel is no longer visibly
-  // labeled "TNT".
+  // WBD networks. TNT/TBS/TruTV each have their own TV Everywhere portal —
+  // routing them all to HBO Max strips the network branding the user just
+  // clicked. Generic "Max"/"HBO Max" broadcasts still go to hbomax.com/sports
+  // (play.max.com/live and play.hbomax.com/sports both 302 to marketing).
   if (b === "tnt") return "https://www.tntdrama.com/watchtnt";
-  // WBD → Max (incl. "HBO Max", "TBS", "TruTV"). play.max.com/live and
-  // play.hbomax.com/sports both 302 to the marketing home; hbomax.com/sports
-  // is the one URL that lands on the actual live-sports browse page.
-  if (b.includes("max") || b === "tbs" || b === "trutv") return "https://www.hbomax.com/sports";
+  if (b === "tbs") return "https://www.tbs.com/watchtbs";
+  if (b === "trutv") return "https://www.trutv.com/watchtrutv";
+  if (b.includes("max")) return "https://www.hbomax.com/sports";
   // Plain "NBC" = the broadcast network → nbc.com/live. "NBCS"/"NBC Sports" =
   // the cable channel → NBCSports live page.
   if (b === "nbc") return "https://www.nbc.com/live";
   if (b.includes("nbc")) return "https://www.nbcsports.com/watch";
-  // Other NBCU streamers (USA Network, Peacock, Golf Channel, Telemundo Deportes) → Peacock
-  if (b.includes("usa") || b === "peacock" || b === "golf channel" || b.startsWith("tele")) return "https://www.peacocktv.com/";
+  // Other NBCU networks each have their own live/TVE page distinct from the
+  // Peacock homepage — only fall back to peacocktv.com when the broadcast is
+  // literally Peacock.
+  if (b.includes("usa")) return "https://www.usanetwork.com/live";
+  if (b === "golf channel") return "https://www.golfchannel.com/watch";
+  if (b.startsWith("tele")) return "https://www.telemundo.com/deportes";
+  if (b === "peacock") return "https://www.peacocktv.com/";
   // CBS-branded broadcasts → CBS Sports (a real CBS-branded live page)
   if (b === "cbs" || b === "cbssn") return "https://www.cbssports.com/watch/live";
   // Paramount+ broadcasts (rare; carries some CBS Sports content) → Paramount+
@@ -721,27 +729,39 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b === "amazon prime" || b === "prime video" || b === "amazon") {
     return "https://www.primevideo.com/sports";
   }
-  // Apple TV+ (MLS Season Pass primarily)
-  if (b === "apple tv+" || b === "apple tv") return "https://tv.apple.com/us/mls";
+  // Apple TV+ — MLS Season Pass is the only Apple-branded sports landing with
+  // a stable public URL. For other sports (notably MLB Friday Night Baseball)
+  // every tv.apple.com sport/channel/show path 404s, so send to the Apple TV
+  // homepage where the user can navigate or sign in.
+  if (b === "apple tv+" || b === "apple tv") {
+    if (sport === "mls") return "https://tv.apple.com/us/mls";
+    return "https://tv.apple.com/us";
+  }
   // YouTube TV / NFL Sunday Ticket
   if (b === "youtube tv" || b === "nfl sunday ticket" || b === "youtube") return "https://tv.youtube.com/";
   // League-specific networks
   if (b === "nfl network" || b === "nfl+") return "https://www.nfl.com/plus/";
   if (b === "nba tv") return "https://www.nba.com/watch";
   if (b === "wnba league pass" || b === "wnba tv") return "https://www.wnba.com/watch";
-  if (b === "nhl network") return "https://www.espn.com/watch/";
+  // NHL Network has its own page (redirects to nhl.com/nhl-network). The old
+  // espn.com/watch fallback was a generic ESPN landing with no NHL context.
+  if (b === "nhl network") return "https://www.nhlnetwork.com/";
   if (b === "mlb.tv" || b === "mlb network") return "https://www.mlb.com/tv";
   if (b === "tennis channel") return "https://www.tennischannel.com/";
   // Masters-only streamer — already added during golf broadcast enrichment
   if (b === "masters.com") return "https://www.masters.com/en_US/watch/index.html";
-  // MLB direct-to-consumer team feeds ("Brewers.TV", "YES", "SNY", "NESN",
-  // "MASN", regional Sports Networks, etc.). MLB.tv is the single best
-  // streaming home — most RSNs have black-out caveats but in-market viewers
-  // already know to use the team app, and out-of-market viewers want MLB.tv.
+  // MLB RSN routing. When the broadcast names a specific RSN with its own
+  // portal, send the user there (matches what they clicked). Generic "*.tv"
+  // team feeds and RSNs without a known live page fall through to mlb.com/tv.
   if (sport === "mlb") {
+    if (b === "yes") return "https://www.yesnetwork.com/";
+    if (b === "sny") return "https://sny.tv/";
+    if (b === "nesn") return "https://nesn.com/";
+    if (b === "masn") return "https://www.masnsports.com/";
+    if (b.includes("marquee")) return "https://www.marqueesportsnetwork.com/";
     if (/\.tv$/i.test(b)) return "https://www.mlb.com/tv";
-    if (/^(yes|sny|nesn|masn|chsn|snw|snp|sn1)$/.test(b)) return "https://www.mlb.com/tv";
-    if (b.includes("sportsnet") || b.includes("marquee") || b.includes("fanduel") || b.includes("space city") || b.includes("nbc sports")) return "https://www.mlb.com/tv";
+    if (/^(chsn|snw|snp|sn1)$/.test(b)) return "https://www.mlb.com/tv";
+    if (b.includes("sportsnet") || b.includes("fanduel") || b.includes("space city") || b.includes("nbc sports")) return "https://www.mlb.com/tv";
   }
   return null;
 }
