@@ -527,6 +527,7 @@ function parseGame(event: any, sport: Sport): Game {
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports
     primeStreamUrl: null, // populated from /prime-asins.json when matchup matches
+    noHitterPitchingTeam: null, // MLB only — populated from MLB Stats API linescore
   };
 }
 
@@ -751,9 +752,18 @@ function buildStreamUrl(game: Game): string {
   return sportStreamFallback(game.sport);
 }
 
-// MLB Stats API: fetch gamePk values for a date, keyed by home team abbreviation
-async function fetchMLBGamePks(date?: string): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
+// MLB Stats API: fetch per-game metadata for a date, keyed by "away@home"
+// (abbreviations). Returns the gamePk for the MLB.tv deep link plus the live
+// linescore signals needed to compute the No-Hit Alert badge.
+interface MlbGameMeta {
+  gamePk: string;
+  isLive: boolean;       // status.abstractGameState === "Live"
+  awayHits?: number;
+  homeHits?: number;
+  currentInning?: number; // 1-9+
+}
+async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>> {
+  const map = new Map<string, MlbGameMeta>();
   try {
     // Convert YYYYMMDD to YYYY-MM-DD
     let apiDate: string;
@@ -763,7 +773,7 @@ async function fetchMLBGamePks(date?: string): Promise<Map<string, string>> {
       const now = new Date();
       apiDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     }
-    const res = await fetchWithRetry(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${apiDate}&hydrate=team`, 1, 5000);
+    const res = await fetchWithRetry(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${apiDate}&hydrate=team,linescore`, 1, 5000);
     if (!res.ok) return map;
     const data = await res.json();
     for (const dateEntry of data.dates ?? []) {
@@ -771,14 +781,21 @@ async function fetchMLBGamePks(date?: string): Promise<Map<string, string>> {
         const gamePk = String(game.gamePk);
         const homeAbbrev = game.teams?.home?.team?.abbreviation ?? "";
         const awayAbbrev = game.teams?.away?.team?.abbreviation ?? "";
+        if (!homeAbbrev || !awayAbbrev) continue;
+        const ls = game.linescore ?? {};
+        const meta: MlbGameMeta = {
+          gamePk,
+          isLive: game.status?.abstractGameState === "Live",
+          awayHits: ls.teams?.away?.hits,
+          homeHits: ls.teams?.home?.hits,
+          currentInning: ls.currentInning,
+        };
         // Key by "away@home" to handle doubleheaders
-        if (homeAbbrev && awayAbbrev) {
-          map.set(`${awayAbbrev}@${homeAbbrev}`, gamePk);
-        }
+        map.set(`${awayAbbrev}@${homeAbbrev}`, meta);
       }
     }
   } catch {
-    // Non-critical — games just won't have deep links
+    // Non-critical — games just won't have deep links / no-hit alerts
   }
   return map;
 }
@@ -1087,8 +1104,8 @@ export async function fetchGames(
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   if (date) url.searchParams.set("dates", date);
 
-  // For MLB, fetch game PKs in parallel with ESPN data
-  const mlbPksPromise = sport === "mlb" ? fetchMLBGamePks(date) : null;
+  // For MLB, fetch game metadata (gamePk + live linescore) in parallel with ESPN data
+  const mlbMetaPromise = sport === "mlb" ? fetchMLBGameMeta(date) : null;
   // Same pattern for NHL — fetch NHL's own game IDs so we can deep-link
   // non-ESPN broadcasts into nhl.com/tv/{id} instead of the generic landing.
   const nhlIdsPromise = sport === "nhl" ? fetchNHLGameIds(date) : null;
@@ -1147,15 +1164,25 @@ export async function fetchGames(
     })
     .filter((g: Game | null): g is Game => g !== null);
 
-  // Enrich MLB games with direct MLB.tv stream links
-  if (sport === "mlb" && mlbPksPromise) {
-    const mlbPks = await mlbPksPromise;
+  // Enrich MLB games with direct MLB.tv stream links + No-Hit Alert flag
+  if (sport === "mlb" && mlbMetaPromise) {
+    const mlbMeta = await mlbMetaPromise;
     for (const game of games) {
       const awayAbbrev = espnToMlbAbbrev(game.awayTeam.abbreviation);
       const homeAbbrev = espnToMlbAbbrev(game.homeTeam.abbreviation);
-      const gamePk = mlbPks.get(`${awayAbbrev}@${homeAbbrev}`);
-      if (gamePk) {
-        game.streamUrl = `https://www.mlb.com/tv/g${gamePk}`;
+      const meta = mlbMeta.get(`${awayAbbrev}@${homeAbbrev}`);
+      if (!meta) continue;
+      game.streamUrl = `https://www.mlb.com/tv/g${meta.gamePk}`;
+      // No-Hit Alert: live game, opposing batting team has 0 hits, pitcher has
+      // carried the bid into at least the 6th inning (i.e., 5 complete innings
+      // of no-hit ball). Matches the MLB.com Gameday alert threshold. Cleared
+      // automatically on the next refresh once a hit drops.
+      if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 6) {
+        if (meta.awayHits === 0) {
+          game.noHitterPitchingTeam = game.homeTeam.abbreviation;
+        } else if (meta.homeHits === 0) {
+          game.noHitterPitchingTeam = game.awayTeam.abbreviation;
+        }
       }
     }
   }
