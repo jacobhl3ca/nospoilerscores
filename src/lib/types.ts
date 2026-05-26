@@ -56,10 +56,6 @@ export interface Game {
   // fielder's choice without needing the heavier boxscore hydrate. Always
   // implies noHitterPitchingTeam is set.
   isPerfectGame?: boolean;
-  // DEMO ONLY (?nhalert=1): override the No-Hitter Alert pill text so the
-  // staging preview can show "No-Hitter" vs "No-Hitter Alert" side by side.
-  // Ignored in production — never set by espn.ts.
-  noHitterAlertLabelOverride?: string;
 }
 
 export interface Team {

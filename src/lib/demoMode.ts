@@ -29,22 +29,13 @@ export function applyNoHitAlertDemo(leagues: LeagueData[]): LeagueData[] {
       rating: number;
       awayScore: string;
       homeScore: string;
-      labelOverride?: string;
     };
     const overrides: Override[] = [
       // Mirrors espn.ts rating overrides: perfect=110 (above natural cap →
       // always sorts #1), no-hitter=95 (always GREAT).
-      // Cards 1-3: production styling ("…Alert" suffix).
       { pitching: "home", status: "Top 7th", rating: 95, awayScore: "0", homeScore: "1" },
       { pitching: "home", perfect: true, status: "Bot 8th", rating: 110, awayScore: "0", homeScore: "2" },
       { pitching: "away", status: "Mid 9th", rating: 95, awayScore: "3", homeScore: "0" },
-      // Cards 4-6: same alerts but with the "Alert" suffix dropped, so the
-      // two label styles can be compared at a glance.
-      { pitching: "home", status: "Top 7th", rating: 95, awayScore: "0", homeScore: "1", labelOverride: "No-Hitter" },
-      { pitching: "home", perfect: true, status: "Bot 8th", rating: 110, awayScore: "0", homeScore: "2", labelOverride: "Perfect Game" },
-      { pitching: "away", status: "Mid 9th", rating: 95, awayScore: "3", homeScore: "0", labelOverride: "No-Hitter" },
-      // Cards 7-10: regular live games at each rating tier (no badge) for
-      // baseline comparison against the alert pills.
       { status: "Bot 6th", rating: 92, awayScore: "3", homeScore: "2" },  // GREAT
       { status: "Top 5th", rating: 78, awayScore: "5", homeScore: "3" },  // GOOD
       { status: "Bot 7th", rating: 60, awayScore: "7", homeScore: "3" },  // MEH
@@ -65,7 +56,6 @@ export function applyNoHitAlertDemo(leagues: LeagueData[]): LeagueData[] {
         homeTeam: { ...g.homeTeam, score: o.homeScore },
         noHitterPitchingTeam: pitchingTeam,
         isPerfectGame: !!o.perfect,
-        noHitterAlertLabelOverride: o.labelOverride,
       };
     }
     return { ...league, games };
