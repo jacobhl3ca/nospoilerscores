@@ -86,7 +86,6 @@ export default function GolfLeaderboard({
     null,
     null,
   ]);
-  const [fetchingSlot, setFetchingSlot] = useState<number | null>(null);
   const prefetchStarted = useRef(false);
 
   const allPlayers = tournament.players;
@@ -335,12 +334,15 @@ export default function GolfLeaderboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightQuery, officialChannel, secondaryChannelsKey]);
 
-  // All 4 slots paint on first render — parity with other leagues
-  // whose highlight buttons appear synchronously. Each slot's click
-  // handler falls back to a YouTube search if its prefetched videoId
-  // hasn't arrived yet, so no button is ever dead.
+  // Only render slots whose videoId has resolved. Slots that never resolve
+  // (no curated channel + no backfill query found a recap) stay hidden
+  // instead of dropping the user onto a YouTube search page — same
+  // never-fall-back contract as the team-sport highlight buttons.
   const visibleHighlightSlots = useMemo(
-    () => highlightSlots.map((id, index) => ({ id, index })),
+    () =>
+      highlightSlots
+        .map((id, index) => ({ id, index }))
+        .filter((s): s is { id: string; index: number } => s.id !== null),
     [highlightSlots]
   );
 
@@ -576,62 +578,24 @@ export default function GolfLeaderboard({
         <div className="mt-1.5 grid grid-cols-2 gap-1">
           {visibleHighlightSlots.map(({ id, index }) => {
             const isMainSlot = index === 0;
-            const isFetching = fetchingSlot === index;
             return (
               <button
                 key={index}
-                onClick={async () => {
-                  if (!onPlayHighlight) {
-                    window.open(highlightFallbackUrl, "_blank");
-                    return;
-                  }
-                  if (id) {
-                    onPlayHighlight(id, highlightFallbackUrl);
-                    return;
-                  }
-                  // Slot 0 prefetch missed — refetch from the first
-                  // curated channel (ESPN for golf majors). Slots 1–3
-                  // can't be individually refetched since they're
-                  // position-based inside the walked chain, so if
-                  // their prefetch produced nothing we fall through
-                  // to opening a YouTube search.
-                  const mainChannel = secondaryChannels[0] ?? officialChannel;
-                  if (isMainSlot && mainChannel) {
-                    setFetchingSlot(0);
-                    const fetched = await fetchFirstVideoId(highlightQuery, mainChannel);
-                    setFetchingSlot(null);
-                    if (fetched) {
-                      setHighlightSlots((prev) => {
-                        const next = [...prev];
-                        next[0] = fetched;
-                        return next;
-                      });
-                      onPlayHighlight(fetched, highlightFallbackUrl);
-                      return;
-                    }
-                  }
-                  window.open(highlightFallbackUrl, "_blank");
+                onClick={() => {
+                  // visibleHighlightSlots filters to slots whose id has resolved,
+                  // so id is always set here. If onPlayHighlight isn't wired up
+                  // the click is a no-op rather than opening a YouTube search.
+                  if (onPlayHighlight) onPlayHighlight(id, highlightFallbackUrl);
                 }}
-                disabled={fetchingSlot !== null}
                 className="highlight-btn flex items-center justify-center py-1.5 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
-                style={{
-                  background: "var(--bg-card-hover)",
-                  color: "var(--accent)",
-                  opacity: isFetching ? 0.5 : undefined,
-                }}
+                style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
                 title={
                   isMainSlot
                     ? `ESPN — Round ${completedRounds} highlights`
                     : `Round ${completedRounds} highlights — more on YouTube`
                 }
               >
-                {isFetching ? (
-                  <span className="text-[10px]">Loading...</span>
-                ) : (
-                  <>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  </>
-                )}
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               </button>
             );
           })}

@@ -1,0 +1,29 @@
+name: Check highlight-button fallbacks
+
+on:
+  schedule:
+    # Hourly — catches a game whose official-channel YouTube lookup misses
+    # (team-name alias gap, etc.) within an hour of the game ending, while
+    # the card is still on the site. The script exits 1 only on a fully
+    # exhausted lookup chain (button gets hidden), so emails only fire when
+    # users would actually see the inconsistency.
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # Same defensive pattern as staleness-check.yml — treat infra failures
+      # (checkout 403s, setup-node hiccups) as skips so they don't email.
+      - uses: actions/checkout@v4
+        id: checkout
+        continue-on-error: true
+      - uses: actions/setup-node@v4
+        id: setup
+        if: steps.checkout.outcome == 'success'
+        with:
+          node-version: 22
+        continue-on-error: true
+      - if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
+        run: node scripts/check-highlight-fallbacks.mjs

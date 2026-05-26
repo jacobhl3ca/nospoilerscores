@@ -5,7 +5,7 @@ import { Game, Team } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
-import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, resolveHighlightVideo } from "@/lib/youtube";
 import { getETHour } from "@/components/DateNav";
 
 interface GameCardProps {
@@ -134,6 +134,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
   const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | null>(null);
+  // "loading" while prefetch (or click-time chain) is running. "found" once
+  // resolveHighlightVideo returns an id. "missing" once the full retry chain
+  // has been exhausted — the button is hidden in that state so the user
+  // never gets dropped onto a YouTube search page.
+  type HighlightStatus = "loading" | "found" | "missing";
+  const [officialStatus, setOfficialStatus] = useState<HighlightStatus>("loading");
+  const [searchStatus, setSearchStatus] = useState<HighlightStatus>("loading");
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
@@ -245,18 +252,27 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
+    const away = game.awayTeam.shortDisplayName;
+    const home = game.homeTeam.shortDisplayName;
+    const series = game.seriesNote;
     if (officialChannel) {
       (async () => {
-        const officialId = await fetchFirstVideoId(query, officialChannel);
+        const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel);
         prefetchedOfficialId.current = officialId;
-        const id = await fetchFirstVideoId(query, undefined, [officialId]);
+        setOfficialStatus(officialId ? "found" : "missing");
+        const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId]);
         prefetchedVideoId.current = id;
+        setSearchStatus(id ? "found" : "missing");
       })();
     } else {
-      fetchFirstVideoId(query).then((id) => { prefetchedVideoId.current = id; });
+      // No official channel for this league — only the search button is rendered.
+      setOfficialStatus("missing");
+      resolveHighlightVideo(away, home, dateStr, series).then((id) => {
+        prefetchedVideoId.current = id;
+        setSearchStatus(id ? "found" : "missing");
+      });
     }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, officialChannel]);
+  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel]);
 
   const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
@@ -576,10 +592,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ))}
       </div>
 
-      {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}
-      {isFinished && highlightUrl && (
+      {/* Highlights — render only buttons whose video resolved (or is still
+          resolving). A button whose full retry chain returns null is hidden
+          rather than falling back to a YouTube search page. */}
+      {isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing") && (
         <div className="mt-1 sm:mt-2 flex gap-1">
-          {officialChannel && (
+          {officialChannel && officialStatus !== "missing" && (
             <button
               onClick={async () => {
                 if (!onPlayHighlight) return;
@@ -588,14 +606,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   return;
                 }
                 setFetchingOnClick("official");
-                const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-                const id = await fetchFirstVideoId(query, officialChannel);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
+                  setOfficialStatus("found");
                   onPlayHighlight(id, highlightUrl);
                 } else {
-                  openExternal(highlightUrl);
+                  setOfficialStatus("missing");
                 }
               }}
               disabled={fetchingOnClick !== null}
@@ -613,36 +631,38 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               )}
             </button>
           )}
-          <button
-            onClick={async () => {
-              if (!onPlayHighlight) return;
-              if (prefetchedVideoId.current) {
-                onPlayHighlight(prefetchedVideoId.current, highlightUrl);
-                return;
-              }
-              setFetchingOnClick("search");
-              const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-              // Dedup against primary so the two buttons never play the same video.
-              const id = await fetchFirstVideoId(query, undefined, [prefetchedOfficialId.current]);
-              setFetchingOnClick(null);
-              if (id) {
-                prefetchedVideoId.current = id;
-                onPlayHighlight(id, highlightUrl);
-              } else {
-                openExternal(highlightUrl);
-              }
-            }}
-            disabled={fetchingOnClick !== null}
-            className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-            style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-            title="Top search result highlights"
-          >
-            {fetchingOnClick === "search" ? (
-              <span className="text-[10px]">Loading...</span>
-            ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-            )}
-          </button>
+          {searchStatus !== "missing" && (
+            <button
+              onClick={async () => {
+                if (!onPlayHighlight) return;
+                if (prefetchedVideoId.current) {
+                  onPlayHighlight(prefetchedVideoId.current, highlightUrl);
+                  return;
+                }
+                setFetchingOnClick("search");
+                // Dedup against primary so the two buttons never play the same video.
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current]);
+                setFetchingOnClick(null);
+                if (id) {
+                  prefetchedVideoId.current = id;
+                  setSearchStatus("found");
+                  onPlayHighlight(id, highlightUrl);
+                } else {
+                  setSearchStatus("missing");
+                }
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
+              title="Top search result highlights"
+            >
+              {fetchingOnClick === "search" ? (
+                <span className="text-[10px]">Loading...</span>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              )}
+            </button>
+          )}
         </div>
       )}
 

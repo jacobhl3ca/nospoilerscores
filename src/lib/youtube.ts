@@ -85,8 +85,31 @@ export function getSecondaryChannels(sport: string, label?: string): string[] {
   return [];
 }
 
+// ESPN's `shortDisplayName` occasionally diverges from how official league
+// channels title their highlight uploads (e.g. ESPN: "Red Bull NY", MLS
+// channel videos: "New York Red Bulls"). Without a rewrite the
+// channel-scoped /api/youtube lookup returns no results and the highlight
+// button falls back to a YouTube search page.
+const TEAM_NAME_ALIASES: Record<string, string> = {
+  "Red Bull NY": "New York Red Bulls",
+};
+
+function aliasTeam(name: string): string {
+  return TEAM_NAME_ALIASES[name] ?? name;
+}
+
 function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
-  const parts = [`${awayTeam} vs ${homeTeam} highlights ${dateStr}`];
+  const parts = [`${aliasTeam(awayTeam)} vs ${aliasTeam(homeTeam)} highlights ${dateStr}`];
+  if (seriesNote) parts.push(seriesNote);
+  return parts.join(" ");
+}
+
+// Same query without the date suffix — used as a last-resort retry when the
+// dated form returns nothing. Some official channels title their recaps
+// without a date or use a format the matcher doesn't see ("Game Recap |
+// AwayTeam @ HomeTeam") so dropping the date lets the lookup land.
+function buildUndatedQuery(awayTeam: string, homeTeam: string, seriesNote?: string | null): string {
+  const parts = [`${aliasTeam(awayTeam)} vs ${aliasTeam(homeTeam)} highlights`];
   if (seriesNote) parts.push(seriesNote);
   return parts.join(" ");
 }
@@ -121,6 +144,34 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
   } catch {
     return null;
   }
+}
+
+// Walks the lookup chain so a highlight button never has to fall back to
+// opening a YouTube search page externally. Tries in order:
+//   1. channel-filtered query (the strict "official" lookup)
+//   2. unfiltered query (any video matching the dated title)
+//   3. unfiltered query without the date suffix (catches channels whose
+//      recap titles omit the date entirely)
+// Returns the first hit (deduped against `exclude`), or null if nothing
+// matched anywhere — callers should hide the button in that case rather
+// than dropping users into a YouTube search.
+export async function resolveHighlightVideo(
+  awayTeam: string,
+  homeTeam: string,
+  dateStr: string,
+  seriesNote: string | null | undefined,
+  channel?: string,
+  exclude?: (string | null | undefined)[]
+): Promise<string | null> {
+  const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
+  if (channel) {
+    const hit = await fetchFirstVideoId(datedQuery, channel, exclude);
+    if (hit) return hit;
+  }
+  const unscoped = await fetchFirstVideoId(datedQuery, undefined, exclude);
+  if (unscoped) return unscoped;
+  const undated = buildUndatedQuery(awayTeam, homeTeam, seriesNote);
+  return fetchFirstVideoId(undated, undefined, exclude);
 }
 
 export function getYouTubeEmbedUrl(videoId: string): string {
