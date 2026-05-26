@@ -1224,6 +1224,11 @@ export async function fetchGames(
       // perfect game (catches walks/HBP/errors via aggregate runners-on
       // without needing the boxscore hydrate). Cleared on next refresh as
       // soon as a hit drops or a runner reaches.
+      //
+      // Rating override: a no-hit bid is always interesting regardless of
+      // score margin, so floor the rating at 95 (always GREAT). A perfect
+      // game gets 110 — above the natural 0–100 cap so the live-cluster
+      // sort always puts it at the top.
       if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 6) {
         if (meta.awayHits === 0) {
           game.noHitterPitchingTeam = game.homeTeam.abbreviation;
@@ -1235,6 +1240,11 @@ export async function fetchGames(
           if ((meta.homeRuns ?? 0) === 0 && (meta.homeLeftOnBase ?? 0) === 0) {
             game.isPerfectGame = true;
           }
+        }
+        if (game.isPerfectGame) {
+          game.rating = 110;
+        } else if (game.noHitterPitchingTeam) {
+          game.rating = Math.max(95, game.rating ?? 0);
         }
       }
     }

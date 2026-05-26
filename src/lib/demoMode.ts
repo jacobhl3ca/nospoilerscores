@@ -31,8 +31,10 @@ export function applyNoHitAlertDemo(leagues: LeagueData[]): LeagueData[] {
       homeScore: string;
     };
     const overrides: Override[] = [
+      // Mirrors espn.ts rating overrides: perfect=110 (above natural cap →
+      // always sorts #1), no-hitter=95 (always GREAT).
       { pitching: "home", status: "Top 7th", rating: 95, awayScore: "0", homeScore: "1" },
-      { pitching: "home", perfect: true, status: "Bot 8th", rating: 95, awayScore: "0", homeScore: "2" },
+      { pitching: "home", perfect: true, status: "Bot 8th", rating: 110, awayScore: "0", homeScore: "2" },
       { pitching: "away", status: "Mid 9th", rating: 95, awayScore: "3", homeScore: "0" },
       { status: "Bot 6th", rating: 92, awayScore: "3", homeScore: "2" },  // GREAT
       { status: "Top 5th", rating: 78, awayScore: "5", homeScore: "3" },  // GOOD
