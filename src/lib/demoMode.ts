@@ -19,43 +19,52 @@ export function applyNoHitAlertDemo(leagues: LeagueData[]): LeagueData[] {
   return leagues.map((league) => {
     if (league.sport !== "mlb" || league.games.length === 0) return league;
     const games = [...league.games];
-    // First 3 cards: no-hit / perfect / combined no-hit (badge shown).
-    // Next 4 cards: regular live games at each rating tier (no badge) so
-    // the alert can be compared against normal in-progress ratings.
-    type Override = {
-      pitching?: "home" | "away";
-      perfect?: boolean;
-      status: string;
-      rating: number;
-      awayScore: string;
-      homeScore: string;
+    // Color/emoji preview: each card showcases a different Tailwind color +
+    // with-or-without baseball emoji combo so the user can pick the final
+    // styling on staging. Label on the pill names the color. The first card
+    // is the perfect-game pill in rose so it can be eyeballed alongside.
+    type Variant = {
+      label: string;
+      textClass: string;
+      bgRgba: string;
+      showEmoji: boolean;
     };
-    const overrides: Override[] = [
-      // Mirrors espn.ts rating overrides: perfect=110 (above natural cap →
-      // always sorts #1), no-hitter=95 (always GREAT).
-      { pitching: "home", status: "Top 7th", rating: 95, awayScore: "0", homeScore: "1" },
-      { pitching: "home", perfect: true, status: "Bot 8th", rating: 110, awayScore: "0", homeScore: "2" },
-      { pitching: "away", status: "Mid 9th", rating: 95, awayScore: "3", homeScore: "0" },
-      { status: "Bot 6th", rating: 92, awayScore: "3", homeScore: "2" },  // GREAT
-      { status: "Top 5th", rating: 78, awayScore: "5", homeScore: "3" },  // GOOD
-      { status: "Bot 7th", rating: 60, awayScore: "7", homeScore: "3" },  // MEH
-      { status: "Top 8th", rating: 30, awayScore: "11", homeScore: "2" }, // SKIP
+    const variants: Variant[] = [
+      // amber (current)
+      { label: "Amber + ⚾",      textClass: "text-amber-500",   bgRgba: "rgba(245, 158, 11, 0.12)", showEmoji: true },
+      { label: "Amber",          textClass: "text-amber-500",   bgRgba: "rgba(245, 158, 11, 0.12)", showEmoji: false },
+      // orange
+      { label: "Orange + ⚾",     textClass: "text-orange-500",  bgRgba: "rgba(249, 115, 22, 0.13)", showEmoji: true },
+      { label: "Orange",         textClass: "text-orange-500",  bgRgba: "rgba(249, 115, 22, 0.13)", showEmoji: false },
+      // red
+      { label: "Red + ⚾",        textClass: "text-red-500",     bgRgba: "rgba(239, 68, 68, 0.12)",  showEmoji: true },
+      { label: "Red",            textClass: "text-red-500",     bgRgba: "rgba(239, 68, 68, 0.12)",  showEmoji: false },
+      // violet
+      { label: "Violet + ⚾",     textClass: "text-violet-500",  bgRgba: "rgba(139, 92, 246, 0.13)", showEmoji: true },
+      { label: "Violet",         textClass: "text-violet-500",  bgRgba: "rgba(139, 92, 246, 0.13)", showEmoji: false },
+      // indigo
+      { label: "Indigo + ⚾",     textClass: "text-indigo-500",  bgRgba: "rgba(99, 102, 241, 0.13)", showEmoji: true },
+      { label: "Indigo",         textClass: "text-indigo-500",  bgRgba: "rgba(99, 102, 241, 0.13)", showEmoji: false },
+      // fuchsia
+      { label: "Fuchsia + ⚾",    textClass: "text-fuchsia-500", bgRgba: "rgba(217, 70, 239, 0.12)", showEmoji: true },
+      { label: "Fuchsia",        textClass: "text-fuchsia-500", bgRgba: "rgba(217, 70, 239, 0.12)", showEmoji: false },
+      // emerald
+      { label: "Emerald + ⚾",    textClass: "text-emerald-500", bgRgba: "rgba(16, 185, 129, 0.13)", showEmoji: true },
+      { label: "Emerald",        textClass: "text-emerald-500", bgRgba: "rgba(16, 185, 129, 0.13)", showEmoji: false },
     ];
-    for (let i = 0; i < Math.min(games.length, overrides.length); i++) {
+    for (let i = 0; i < Math.min(games.length, variants.length); i++) {
       const g = games[i];
-      const o = overrides[i];
-      const pitchingTeam = o.pitching === "home" ? g.homeTeam.abbreviation
-                         : o.pitching === "away" ? g.awayTeam.abbreviation
-                         : null;
+      const v = variants[i];
       games[i] = {
         ...g,
         state: "in",
-        statusDetail: o.status,
-        rating: o.rating,
-        awayTeam: { ...g.awayTeam, score: o.awayScore },
-        homeTeam: { ...g.homeTeam, score: o.homeScore },
-        noHitterPitchingTeam: pitchingTeam,
-        isPerfectGame: !!o.perfect,
+        statusDetail: "Top 7th",
+        rating: 95,
+        awayTeam: { ...g.awayTeam, score: "0" },
+        homeTeam: { ...g.homeTeam, score: "1" },
+        noHitterPitchingTeam: g.homeTeam.abbreviation,
+        isPerfectGame: false,
+        noHitterBadgeOverride: { textClass: v.textClass, bgRgba: v.bgRgba, showEmoji: v.showEmoji, label: v.label },
       };
     }
     return { ...league, games };

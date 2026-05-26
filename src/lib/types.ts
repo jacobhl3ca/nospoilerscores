@@ -56,6 +56,10 @@ export interface Game {
   // fielder's choice without needing the heavier boxscore hydrate. Always
   // implies noHitterPitchingTeam is set.
   isPerfectGame?: boolean;
+  // DEMO ONLY (?nhalert=1): per-card override for the No-Hitter Alert pill
+  // styling so each card in the demo column can showcase a different color
+  // / emoji combo for side-by-side comparison. Ignored in production.
+  noHitterBadgeOverride?: { textClass: string; bgRgba: string; showEmoji: boolean; label?: string };
 }
 
 export interface Team {
