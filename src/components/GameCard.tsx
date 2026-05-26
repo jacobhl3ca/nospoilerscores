@@ -309,19 +309,21 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         </div>
       )}
 
-      {/* MLB No-Hit Alert — live MLB game, opposing batters have no hits past
-          the 5th inning. Mirrors the MLB.com Gameday alert. Gated on the
-          ratings/spoiler toggle (the alert reveals an in-progress score
-          dynamic) and never shown on finished games. */}
+      {/* MLB No-Hit / Perfect Game Alert — live MLB game, opposing batters
+          have no hits past the 5th inning. Mirrors the MLB.com Gameday alert.
+          Gated on the ratings/spoiler toggle (the alert reveals an in-progress
+          score dynamic) and never shown on finished games. */}
       {isLive && showRatings && game.sport === "mlb" && game.noHitterPitchingTeam && (
         <div className="mb-1 flex justify-center">
           <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-500"
-            style={{ background: "rgba(245, 158, 11, 0.12)" }}
-            title={`${game.noHitterPitchingTeam} has not allowed a hit`}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${game.isPerfectGame ? "text-rose-500" : "text-amber-500"}`}
+            style={{ background: game.isPerfectGame ? "rgba(244, 63, 94, 0.12)" : "rgba(245, 158, 11, 0.12)" }}
+            title={game.isPerfectGame
+              ? `${game.noHitterPitchingTeam}: no batter has reached base`
+              : `${game.noHitterPitchingTeam} has not allowed a hit`}
           >
             <span aria-hidden>⚾</span>
-            No-Hit Alert · {game.noHitterPitchingTeam}
+            {game.isPerfectGame ? "Perfect Game" : "No-Hit Alert"} · {game.noHitterPitchingTeam}
           </span>
         </div>
       )}

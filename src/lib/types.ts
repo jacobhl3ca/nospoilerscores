@@ -51,6 +51,11 @@ export interface Game {
   // the game finishes. The card itself decides whether to surface it (only
   // shown when the ratings/spoiler toggle is on, never on highlights).
   noHitterPitchingTeam?: string | null;
+  // Strict subset of the no-hit case: opposing team has also had zero runners
+  // reach base (runs + leftOnBase = 0). Catches walks / HBP / errors /
+  // fielder's choice without needing the heavier boxscore hydrate. Always
+  // implies noHitterPitchingTeam is set.
+  isPerfectGame?: boolean;
 }
 
 export interface Team {

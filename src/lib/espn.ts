@@ -764,6 +764,10 @@ interface MlbGameMeta {
   isLive: boolean;       // status.abstractGameState === "Live"
   awayHits?: number;
   homeHits?: number;
+  awayRuns?: number;
+  homeRuns?: number;
+  awayLeftOnBase?: number;
+  homeLeftOnBase?: number;
   currentInning?: number; // 1-9+
 }
 async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>> {
@@ -792,6 +796,10 @@ async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>
           isLive: game.status?.abstractGameState === "Live",
           awayHits: ls.teams?.away?.hits,
           homeHits: ls.teams?.home?.hits,
+          awayRuns: ls.teams?.away?.runs,
+          homeRuns: ls.teams?.home?.runs,
+          awayLeftOnBase: ls.teams?.away?.leftOnBase,
+          homeLeftOnBase: ls.teams?.home?.leftOnBase,
           currentInning: ls.currentInning,
         };
         // Key by "away@home" to handle doubleheaders
@@ -1177,15 +1185,24 @@ export async function fetchGames(
       const meta = mlbMeta.get(`${awayAbbrev}@${homeAbbrev}`);
       if (!meta) continue;
       game.streamUrl = `https://www.mlb.com/tv/g${meta.gamePk}`;
-      // No-Hit Alert: live game, opposing batting team has 0 hits, pitcher has
-      // carried the bid into at least the 6th inning (i.e., 5 complete innings
-      // of no-hit ball). Matches the MLB.com Gameday alert threshold. Cleared
-      // automatically on the next refresh once a hit drops.
+      // No-Hit / Perfect Game Alert: live game, opposing batting team has 0
+      // hits, pitcher has carried the bid into at least the 6th inning (5
+      // complete innings of no-hit ball). Matches the MLB.com Gameday alert
+      // threshold. The opposing team's runs+leftOnBase=0 upgrades it to a
+      // perfect game (catches walks/HBP/errors via aggregate runners-on
+      // without needing the boxscore hydrate). Cleared on next refresh as
+      // soon as a hit drops or a runner reaches.
       if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 6) {
         if (meta.awayHits === 0) {
           game.noHitterPitchingTeam = game.homeTeam.abbreviation;
+          if ((meta.awayRuns ?? 0) === 0 && (meta.awayLeftOnBase ?? 0) === 0) {
+            game.isPerfectGame = true;
+          }
         } else if (meta.homeHits === 0) {
           game.noHitterPitchingTeam = game.awayTeam.abbreviation;
+          if ((meta.homeRuns ?? 0) === 0 && (meta.homeLeftOnBase ?? 0) === 0) {
+            game.isPerfectGame = true;
+          }
         }
       }
     }
