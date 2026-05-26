@@ -758,10 +758,22 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
     if (b === "sny") return "https://sny.tv/";
     if (b === "nesn") return "https://nesn.com/";
     if (b === "masn") return "https://www.masnsports.com/";
+    if (b === "chsn") return "https://chsn.tv/";
     if (b.includes("marquee")) return "https://www.marqueesportsnetwork.com/";
+    if (b.includes("fanduel")) return "https://fanduelsportsnetwork.com/";
+    if (b.includes("space city")) return "https://www.spacecityhomenetwork.com/";
+    // Canadian Sportsnet feeds (Blue Jays — SNE/SNW/SN1/SN360/SNO/SNP, plus
+    // any "Sportsnet"-branded variant). The live product sportsnetplus.ca is
+    // geo-locked to Canada; sportsnet.ca is the public, US-accessible brand
+    // landing.
+    if (/^(sne|snw|sn1|sn360|sno|snp)$/.test(b)) return "https://www.sportsnet.ca/";
+    if (b.includes("sportsnet")) return "https://www.sportsnet.ca/";
+    // Generic team feed ("Brewers.TV" etc.) — no per-team portal worth
+    // deep-linking; mlb.com/tv is the safe streaming home.
     if (/\.tv$/i.test(b)) return "https://www.mlb.com/tv";
-    if (/^(chsn|snw|snp|sn1)$/.test(b)) return "https://www.mlb.com/tv";
-    if (b.includes("sportsnet") || b.includes("fanduel") || b.includes("space city") || b.includes("nbc sports")) return "https://www.mlb.com/tv";
+    // ("NBC Sports Bay Area/Philly/Boston/California") is caught upstream by
+    // the b.includes("nbc") rule and routed to nbcsports.com/watch — no MLB
+    // override needed here.
   }
   return null;
 }
