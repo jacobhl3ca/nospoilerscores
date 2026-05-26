@@ -11,8 +11,17 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      # Treat pre-script GitHub infra failures (checkout 403s, setup-node hiccups)
+      # as skips, not job failures — only the staleness script's exit code should
+      # email. A sustained Actions outage will surface via the publishing workflows.
       - uses: actions/checkout@v4
+        id: checkout
+        continue-on-error: true
       - uses: actions/setup-node@v4
+        id: setup
+        if: steps.checkout.outcome == 'success'
         with:
           node-version: 22
-      - run: node scripts/check-staleness.mjs
+        continue-on-error: true
+      - if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
+        run: node scripts/check-staleness.mjs
