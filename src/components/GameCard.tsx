@@ -339,7 +339,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               : `${game.noHitterPitchingTeam} has not allowed a hit`}
           >
             <span aria-hidden>⚾</span>
-            {game.isPerfectGame ? "Perfect Game Alert" : "No-Hitter Alert"}
+            {game.noHitterAlertLabelOverride ?? (game.isPerfectGame ? "Perfect Game Alert" : "No-Hitter Alert")}
           </span>
         </div>
       )}
