@@ -648,7 +648,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               title="NHL.com recap (~5 min)"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">5m</span>
+              <span className="text-[10px] font-medium">5<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
           {game.nhlCondensedEmbed && (
@@ -665,7 +665,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               title="NHL.com condensed game (~10 min)"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">10m</span>
+              <span className="text-[10px] font-medium">10<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
         </div>
