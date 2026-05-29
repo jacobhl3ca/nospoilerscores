@@ -74,7 +74,7 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
       style={{
         background: "transparent",
         ...(inline
-          ? { borderTop: "1px solid var(--border)", marginTop: "0.5rem" }
+          ? {}
           : { background: "var(--bg)", borderTop: "1px solid var(--border)", paddingBottom: "env(safe-area-inset-bottom)" }),
       }}
     >
@@ -1192,7 +1192,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         </div>
       )}
       <header ref={headerRef} className="px-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)", paddingBottom: "0.5rem" }}>
-        <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
+        <div className="max-w-6xl mx-auto relative grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
           <a
             href="/"
             onClick={(e) => {
@@ -1207,7 +1207,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 window.scrollTo({ top: 0, behavior: "auto" });
               }
             }}
-            className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0"
+            className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0 justify-self-start"
             style={{ color: "var(--text)" }}
           >
             <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
@@ -1217,21 +1217,15 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </svg>
           </a>
 
-          {/* Middle slot: takes the open space between logo and right
-              cluster. Holds the date nav (scores) or news pill rows (news
-              view). Centered via flex-1 + justify-center so the right
-              cluster stays anchored to the edge. Mobile drops contents to
-              a second row below. */}
-          <div className="hidden sm:flex flex-1 justify-center items-center min-w-0">
-            {/* News view keeps a clean header to match hidescore.com — the
-                type/focus filter pills were removed; source control lives in the
-                per-column "News ▾" dropdowns + the ☰ per-column source menu. */}
-            {!showNews && (
-              <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
-            )}
+          {/* Desktop top-row middle = the view tabs (Scores/Rated/News). It's
+              the auto column between two equal 1fr columns, so it's page-centered
+              and lines up with the middle content column (MLB). Date nav drops to
+              the 2nd row below; mobile hides this and uses the fixed bottom bar. */}
+          <div className="hidden sm:block justify-self-center w-80">
+            <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 justify-self-end">
             {/* Share — web only (xl+). On mobile the same action lives at the
                 bottom of the settings panel. */}
             {hasFavorites && (
@@ -1369,18 +1363,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           </div>
         </div>
 
-        {/* Mobile-only second row: date nav (scores) or news pill rows
-            (news view). On sm+ both live in the middle slot of the top row. */}
+        {/* Date nav = 2nd row under the view tabs (scores/rated only), centered
+            in max-w-6xl so it lines up with the middle content column. Shows on
+            all sizes (desktop tabs now live in the top-row middle). */}
         {!showNews && (
-          <div className="sm:hidden max-w-6xl mx-auto mt-1 flex justify-center">
+          <div className="max-w-6xl mx-auto mt-1 flex justify-center">
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
         )}
-        {/* Desktop: view-mode tabs as a row inside the sticky header. Mobile
-            keeps the fixed bottom bar (this inline one is hidden < sm). */}
-        <div className="hidden sm:block">
-          <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
-        </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
