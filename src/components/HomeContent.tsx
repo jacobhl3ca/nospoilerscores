@@ -43,7 +43,8 @@ type ViewMode = "scores-plain" | "scores-rated" | "news";
 // 🙈 No ratings  |  🙉 With ratings  |  📰 News. Selected state uses accent
 // color on icon + label (no solid background fill) so it reads "elegant"
 // rather than "chunky pill". Home-indicator clearance via safe-area inset.
-function BottomTabBar({ viewMode, onChange }: { viewMode: ViewMode; onChange: (m: ViewMode) => void }) {
+function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: ViewMode; onChange: (m: ViewMode) => void; placement?: "bottom" | "inline" }) {
+  const inline = placement === "inline";
   const tab = (mode: ViewMode, icon: ReactNode, label: string, title: string) => {
     const active = viewMode === mode;
     return (
@@ -53,7 +54,7 @@ function BottomTabBar({ viewMode, onChange }: { viewMode: ViewMode; onChange: (m
         title={title}
         aria-label={title}
         aria-pressed={active}
-        className="flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors h-14 select-none"
+        className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none ${inline ? "h-12" : "h-14"}`}
         style={{
           color: active ? "var(--accent)" : "var(--text-muted)",
           background: "transparent",
@@ -69,11 +70,12 @@ function BottomTabBar({ viewMode, onChange }: { viewMode: ViewMode; onChange: (m
   return (
     <nav
       aria-label="View mode"
-      className="fixed left-0 right-0 bottom-0 z-40"
+      className={inline ? "w-full" : "fixed left-0 right-0 bottom-0 z-40"}
       style={{
-        background: "var(--bg)",
-        borderTop: "1px solid var(--border)",
-        paddingBottom: "env(safe-area-inset-bottom)",
+        background: "transparent",
+        ...(inline
+          ? { borderTop: "1px solid var(--border)", marginTop: "0.5rem" }
+          : { background: "var(--bg)", borderTop: "1px solid var(--border)", paddingBottom: "env(safe-area-inset-bottom)" }),
       }}
     >
       <div className="max-w-md mx-auto flex items-stretch">
@@ -1308,7 +1310,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
                     </svg>
-                    {(newsTypeFilter !== "all" || !!newsFocusLeague) && !newsFilterOpen && (
+                    {newsTypeFilter !== "all" && !newsFilterOpen && (
                       <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: "var(--accent)" }} />
                     )}
                   </button>
@@ -1328,23 +1330,15 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                         value={newsTypeFilter}
                         onChange={(v) => setNewsTypeFilter(v as "all" | "espn" | "reddit" | "homepage")}
                       />
-                      {newsHeaderFocusOptions.length > 1 && (
-                        <>
-                          <div className="text-[11px] font-bold uppercase tracking-wide mt-3 mb-1.5" style={{ color: "var(--text-muted)" }}>League</div>
-                          <NewsPillRow
-                            options={newsHeaderFocusOptions}
-                            value={newsFocusLeague ?? "all"}
-                            onChange={(v) => setNewsFocusLeague(v === "all" ? undefined : (v as Sport | "espn"))}
-                          />
-                        </>
-                      )}
-                      {(newsTypeFilter !== "all" || !!newsFocusLeague) && (
+                      {/* League filtering removed (Jacob 5/29) — clicking a
+                          column's league name does the same thing. Source only. */}
+                      {newsTypeFilter !== "all" && (
                         <button
-                          onClick={() => { setNewsTypeFilter("all"); setNewsFocusLeague(undefined); }}
+                          onClick={() => setNewsTypeFilter("all")}
                           className="mt-3 text-xs underline cursor-pointer"
                           style={{ color: "var(--text-muted)" }}
                         >
-                          Clear filters
+                          Clear filter
                         </button>
                       )}
                     </div>
@@ -1408,6 +1402,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
         )}
+        {/* Desktop: view-mode tabs as a row inside the sticky header. Mobile
+            keeps the fixed bottom bar (this inline one is hidden < sm). */}
+        <div className="hidden sm:block">
+          <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
@@ -1470,7 +1469,16 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             : visibleNewsEntries;
           const renderSourcesFor = (entry: typeof visibleNewsEntries[number]): NewsSource[] => {
             const filtered = entry.orderedCascade
-              .filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter)
+              .filter((s) => {
+                if (newsTypeFilter === "all") return true;
+                const t = classifySource(s);
+                // "Homepage" = the aggregated homepage feed, which includes ESPN
+                // (videos + headlines) AND league-official feeds — so col 3 (the
+                // ESPN "News" col) shows under Homepage and All ≈ Homepage at the
+                // top (they differ only by Reddit, which sits deeper). (Jacob 5/29)
+                if (newsTypeFilter === "homepage") return t === "homepage" || t === "espn";
+                return t === newsTypeFilter;
+              })
               .filter((s) => !newsHiddenSources.includes(s.label));
             return cascadeToSources(filtered);
           };
@@ -2027,7 +2035,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         </svg>
       </button>
 
-      <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
+      <div className="sm:hidden">
+        <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
+      </div>
     </div>
   );
 }
