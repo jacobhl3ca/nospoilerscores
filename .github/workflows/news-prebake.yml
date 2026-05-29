@@ -2,8 +2,9 @@ name: Prebake news feeds
 
 on:
   schedule:
-    # Every hour — keeps deploy cap headroom; news doesn't need 30-min freshness.
-    - cron: "0 * * * *"
+    # Every 2h — news doesn't need hourly freshness; trimmed to stay under the
+    # Actions free cap.
+    - cron: "0 */2 * * *"
   workflow_dispatch:
 
 jobs:
