@@ -158,6 +158,8 @@
 - [ ] **Re-add news source-order / hide menu (☰) — single-column view.** Removed the header ☰ menu 5/29 (Jacob: only useful in 1-col view). Bring it back, scoped to where it helps.
   > The drag-reorder + per-source hide (`NewsOrderMenu`, still defined in HomeContent.tsx) was pulled from the header cluster; state/component remain. Re-surface it in 1-col mode (or per-column) when revisiting the news layout. _src: 2026-05-29 Jacob #3_
 
+- [ ] **Decide what the news columns show when the "Homepage" source filter is selected.** (Don't build yet — just figure out the right behavior.) With the 4-category filter, picking "Homepage" restricts to the league-official site feeds (NBA.com / MLB.com); columns whose visible cascade has no homepage-type source go sparse/empty. Decide the intended UX: collapse to fewer columns? show a single aggregated homepage column? fall back to something? Same question applies to ESPN/Reddit/Top videos when a column has none of that type. _src: 2026-05-29 Jacob_
+
 - [ ] **News toggle icon looks broken.** Swap the News toggle icon — it reads as a smudge at small sizes.
   > Lucide's `newspaper` glyph: at 14–16px the folded-corner detail collapses into a stray smudge/doubled line. Swap for a simpler document/feed icon (`HomeContent.tsx:815-820`). _src: session 2026-05-19_
 
