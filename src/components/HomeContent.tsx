@@ -1208,27 +1208,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               cluster stays anchored to the edge. Mobile drops contents to
               a second row below. */}
           <div className="hidden sm:flex flex-1 justify-center items-center min-w-0">
-            {showNews ? (
-              <div className="flex flex-col items-center gap-1">
-                <NewsPillRow
-                  options={[
-                    { value: "all", label: "All" },
-                    { value: "espn", label: "ESPN" },
-                    { value: "reddit", label: "Reddit" },
-                    { value: "homepage", label: "Homepage" },
-                  ]}
-                  value={newsTypeFilter}
-                  onChange={(v) => setNewsTypeFilter(v as "all" | "espn" | "reddit" | "homepage")}
-                />
-                {newsHeaderFocusOptions.length > 1 && (
-                  <NewsPillRow
-                    options={newsHeaderFocusOptions}
-                    value={newsFocusLeague ?? "all"}
-                    onChange={(v) => setNewsFocusLeague(v === "all" ? undefined : (v as Sport | "espn"))}
-                  />
-                )}
-              </div>
-            ) : (
+            {/* News view keeps a clean header to match hidescore.com — the
+                type/focus filter pills were removed; source control lives in the
+                per-column "News ▾" dropdowns + the ☰ per-column source menu. */}
+            {!showNews && (
               <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
             )}
           </div>
@@ -1352,27 +1335,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
           </div>
         )}
-        {showNews && (
-          <div className="sm:hidden max-w-6xl mx-auto mt-1 flex flex-col items-center gap-1">
-            <NewsPillRow
-              options={[
-                { value: "all", label: "All" },
-                { value: "espn", label: "ESPN" },
-                { value: "reddit", label: "Reddit" },
-                { value: "homepage", label: "Homepage" },
-              ]}
-              value={newsTypeFilter}
-              onChange={(v) => setNewsTypeFilter(v as "all" | "espn" | "reddit" | "homepage")}
-            />
-            {newsHeaderFocusOptions.length > 1 && (
-              <NewsPillRow
-                options={newsHeaderFocusOptions}
-                value={newsFocusLeague ?? "all"}
-                onChange={(v) => setNewsFocusLeague(v === "all" ? undefined : (v as Sport | "espn"))}
-              />
-            )}
-          </div>
-        )}
       </header>
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
@@ -1392,21 +1354,17 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           // Type/hidden filters are applied at render-time so the dropdown
           // can still display + re-enable hidden sources.
           const orderFor = (sport?: Sport) => sport ? prefs.newsSourceOrder?.[sport] : undefined;
-          // ESPN entry: always-present "virtual" league at the head of the
-          // entry list. Default order = ESPN headlines first, then ESPN
-          // Videos, then r/sports. User can drag-reorder via the ☰ menu
-          // (keyed under the "espn" sentinel in newsSourceOrder).
-          const ESPN_CASCADE: ColumnSource[] = [
-            { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: GENERIC_CASCADE[1]?.logoUrl },
-            { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: GENERIC_CASCADE[0]?.logoUrl },
-            { label: "r/sports", key: "reddit-general", kind: "prebaked" },
-          ];
+          // Col-3 fallback = hidescore.com's "News" feed. Use GENERIC_CASCADE,
+          // which leads with ESPN Videos (a video) — so all 3 columns lead with
+          // video and the AlignedVideoStrip activates → clean aligned grid like
+          // live. ESPN top headlines fill the tail below (useEspnTopTail).
+          // Labeled "News" (swappable to a 3rd league) to match hidescore.com.
           const espnEntry = {
             slotIdx: -1,
             sport: undefined as Sport | undefined,
             id: "espn" as const,
-            label: "ESPN",
-            orderedCascade: applyOrder(ESPN_CASCADE, prefs.newsSourceOrder?.["espn"]),
+            label: "News",
+            orderedCascade: applyOrder(GENERIC_CASCADE, prefs.newsSourceOrder?.["espn"]),
           };
           const leagueEntries = [0, 1, 2].map((slotIdx) => {
             if (selectedSlotLeagues[slotIdx] === "empty") return null;
@@ -1533,16 +1491,17 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                         .filter((_, i) => i !== idx)
                         .map((e) => e.sport)
                         .filter((s): s is Sport => !!s);
-                      // ESPN entry is virtual (no scores slot) — no swap UI.
+                      // "News" (ESPN) col is swappable to a 3rd league via
+                      // setNewsThirdLeague — matches hidescore.com's "News ▾".
                       const isEspn = entry.id === "espn";
                       return (
                         <div key={`title-${entry.id}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                           <NewsColumnTitle
                             title={entry.label}
-                            swappableOptions={isEspn ? undefined : thirdLeagueOptions}
+                            swappableOptions={thirdLeagueOptions}
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
-                            onSwapLeague={isEspn ? undefined : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                            onSwapLeague={isEspn ? ((s) => { if (s && s !== "empty") setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
                           />
                         </div>
                       );
@@ -1572,10 +1531,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                       key={`nc-${entry.id}-${newsRefreshKey}`}
                       title={entry.label}
                       sources={sourcesForEntry(entry, idx)}
-                      swappableOptions={isEspn ? undefined : thirdLeagueOptions}
+                      swappableOptions={thirdLeagueOptions}
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
-                      onSwapLeague={isEspn ? undefined : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                      onSwapLeague={isEspn ? ((s) => { if (s && s !== "empty") setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}
