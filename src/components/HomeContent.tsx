@@ -1207,7 +1207,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 window.scrollTo({ top: 0, behavior: "auto" });
               }
             }}
-            className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0 justify-self-start"
+            className="hover:opacity-80 transition-opacity flex items-center flex-shrink-0 justify-self-start col-start-1"
             style={{ color: "var(--text)" }}
           >
             <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
@@ -1221,11 +1221,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               the auto column between two equal 1fr columns, so it's page-centered
               and lines up with the middle content column (MLB). Date nav drops to
               the 2nd row below; mobile hides this and uses the fixed bottom bar. */}
-          <div className="hidden sm:block justify-self-center w-80">
+          <div className="hidden sm:block justify-self-center col-start-2 w-80">
             <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 justify-self-end">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 justify-self-end col-start-3">
             {/* Share — web only (xl+). On mobile the same action lives at the
                 bottom of the settings panel. */}
             {hasFavorites && (
@@ -1737,12 +1737,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         )}
       </main>
 
-      <footer className="px-4 py-3 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}>
+      <footer className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-5 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />
         {!isNativeApp && (
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-1">
             <a
               href="https://apps.apple.com/app/hidescore/id6766885311"
               target="_blank"
