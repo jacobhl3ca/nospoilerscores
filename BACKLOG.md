@@ -7,6 +7,9 @@
 
 ## T1 — Time-sensitive
 
+- [ ] **ESPN Videos feed is stale (~23h) — Mac mini scraper.** The `espn-videos` R2 feed (the col-3 "News" videos on BOTH staging + hidescore.com) last fetched 2026-05-28 17:09; old clips show and dead ones 404 (e.g. the Elly De La Cruz link). Affects prod, not a layout bug.
+  > ESPN's WAF blocks GHA datacenter IPs, so `espn-videos` is owned by the Mac mini cron (192.168.99.63) + a retry mirror. ~23h staleness ⇒ the Mac mini scraper is failing/stopped (or ESPN changed markup). Staleness checker should email at crit=24h. Investigate: is the Mac mini reachable + the espn-videos cron running? Re-run `scripts/prebake-news.mjs` for espn-videos there; check for an ESPN scrape regression. _src: 2026-05-29 Jacob (stale ESPN videos / Elly 404)_
+
 - [ ] **GitHub Actions minutes — follow-up trims if the cap looms again.** The two core cron cuts shipped 5/29; this tracks the remaining conditional levers.
   > **DONE 5/29** (direct commits to `main`, `476b85b` / `7ccb9da`): `staleness-check.yml` `*/30`→`0 * * * *` (hourly, −720/mo) and `news-prebake.yml` hourly→`0 */2 * * *` (every 2h, −720/mo). Projected ~3,420 → ~1,980 min/mo, just under the 2,000 free tier (cycle reset ~6/1). A one-time confirm-check is scheduled 6/2 9am ET (routine `trig_01NnceGiHkisQki3uBpWVeBb`) to verify the new rate holds after reset.
   > **DONE 5/29 on `staging`** (so the staging→main merge no longer re-blows the cap): matched main's trims (`staleness-check.yml` `*/30`→hourly, `news-prebake.yml` hourly→every-2h) AND folded `node scripts/check-highlight-fallbacks.mjs` into `staleness-check.yml`'s hourly job, then deleted the standalone `highlight-fallback-check.yml` — so the highlight watchdog now costs 0 extra Actions minutes. The folded step runs even if the staleness step fails (guarded by `!cancelled()` + infra-success), so both alerts stay independent.
@@ -136,6 +139,12 @@
 
 - [ ] **Relabel the "smart order" news column header (esp. 1-col mode).** The ESPN/smart-default news column header reads ambiguously; rename to something clear like "Smart order" / "Top headlines".
   > In 1-col mode the view lists all leagues (good), but the lead/ESPN column header needs a clearer label than the current league-switcher affordance — "Smart order", "Top headlines", etc. — so it's obvious what the default ordering is. _src: 2026-05-29 Jacob_
+
+- [ ] **ESPN "News" column: headlines-on-top option (height-matched) + setting to flip.** Jacob wants the col-3 ESPN section to lead with TEXT HEADLINES on top — but at the SAME height as the other two columns' first video cards, so the 3-up top row stays aligned/clean. Add a Settings toggle to flip headlines to the bottom (= current view: ESPN Videos on top, headlines tail below).
+  > Requires `AlignedVideoStrip` surgery: today col-3's row-1 cell is a video card (subgrid-aligned with NBA/MLB videos) and ESPN top headlines fill the pad rows below (`useEspnTopTail`). The ask = make col-3's row-1 cell a compact ESPN-headlines block sized to the same subgrid row height as the video cards (align-self handles short content), with the ESPN video(s) moving below. New pref e.g. `espnNewsLead: "headlines" | "video"` (default "headlines" per Jacob), surfaced in SettingsPanel. Needs visual iteration on the preview. _src: 2026-05-29 Jacob_
+
+- [ ] **Mobile / narrow-screen header polish (scores view).** On smaller screens the top toolbar (H logo left, calendar+settings right, then ‹ Yest/Today/Tomo › on a 2nd row) looks unbalanced — too much empty space, date nav floating alone. Tighten it.
+  > Jacob flagged 2026-05-29 (screenshot). The bottom-tab-bar overhaul reworked the header; the scores-view narrow layout wraps the date nav to a 2nd row and feels sparse. Options: pull the date nav into the top row when it fits, reduce the vertical gap, or rebalance logo/icon spacing. Don't regress the `xl:` logo / DateNav-centering breakpoint ([[feedback_hidescore_header_compact]]). _src: 2026-05-29 Jacob_
 
 - [ ] **News toggle icon looks broken.** Swap the News toggle icon — it reads as a smudge at small sizes.
   > Lucide's `newspaper` glyph: at 14–16px the folded-corner detail collapses into a stray smudge/doubled line. Swap for a simpler document/feed icon (`HomeContent.tsx:815-820`). _src: session 2026-05-19_
