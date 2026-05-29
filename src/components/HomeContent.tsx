@@ -1419,9 +1419,16 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             const orderedCascade = applyOrder(cascade, orderFor(sport));
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
           }).filter((e): e is NonNullable<typeof e> => e !== null);
-          // ESPN goes FIRST in Smart mode (matches Jacob's spec: "i actually
-          // want to put it as first column instead in smart mode").
-          const visibleNewsEntries = [espnEntry, ...leagueEntries];
+          // Match hidescore.com's default column order: the two scores leagues
+          // fill cols 1-2, and col 3 is the chosen 3rd news league if set, else
+          // the ESPN/general feed — NOT a forced ESPN first column. (Reverted the
+          // 5/28 ESPN-first default per Jacob 5/29; ESPN stays reachable as the
+          // col-3 fallback and the focus/order controls are unchanged.)
+          const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
+          const thirdColEntry = prefs.newsThirdLeague
+            ? leagueEntries.find((e) => e.slotIdx === 2)
+            : espnEntry;
+          const visibleNewsEntries = [...firstTwoEntries, ...(thirdColEntry ? [thirdColEntry] : [])];
 
           // Apply Focus league (drops other entries) then per-entry filter
           // by type + hidden labels. Type "all" is a no-op; hidden labels
