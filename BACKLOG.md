@@ -47,8 +47,8 @@
 - [ ] **Post-R2 #1: NBC.com scraper.** Deep-link NBC broadcast chips to `nbc.com/watch/...` URLs.
   > New `scripts/scrape-nbc-sports.mjs` mirroring the prime-asins pattern. Edit `espn.ts:671`. _src: project_hidescore_post_r2_followups.md_
 
-- [ ] **Reddit OAuth completion.** Finish Reddit OAuth once the Data API app is approved.
-  > Code shipped 4/28 (commit `37f3816`), waiting on Reddit Data API approval for the `Reasonable_Stick_329` app. If approved, retire the Mac mini reddit cron. _src: project_hidescore_reddit_403.md_
+- [ ] **Reddit news feeds DOWN — anonymous endpoint now 403s the Mac-mini IP too; OAuth blocked by the banned account.** All r/* feeds stale since ~2026-05-28 17:09 (last good scrape). Up to then the Mac-mini residential IP could still hit unauthenticated `reddit.com/.../hot.json`; Reddit then started 403'ing it (the GHA IPs were already blocked since 4/27).
+  > The scraper (`fetchReddit` in `prebake-news.mjs`) already supports app-only OAuth via `oauth.reddit.com` when `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` are set — but they're NOT on the Mac mini (only `r2.env` there) and NOT in local `.env.local` (they live in GitHub secrets). **Bigger blocker:** the OAuth app `Reasonable_Stick_329` is registered under Jacob's **now-banned Reddit account**, so OAuth likely won't work until the account/app is restored (ties into his ongoing Reddit negotiation). Fix path once unblocked: put the two creds in `~/.config/hidescore/` on the Mac mini + export them in `hidescore-reddit-cron.sh` so `fetchReddit` uses OAuth. Until then, Reddit feeds stay empty (ESPN feeds are unaffected — decoupled 5/29). _src: project_hidescore_reddit_403.md; 2026-05-29 Jacob_
 
 - [ ] **Length toggle (Extended / Condensed).** Add a highlight-length toggle, starting with MLB.
   > MLB has the most distinct cadences: ~5 min condensed vs ~15–20 min full recap vs 1-min cuts. _src: project_hidescore_gap_closing_2026_04_13.md_
