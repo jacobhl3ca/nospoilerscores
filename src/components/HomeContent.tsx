@@ -1106,6 +1106,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     document.addEventListener("mousedown", onClickAway);
     return () => document.removeEventListener("mousedown", onClickAway);
   }, [newsOrderOpen]);
+  // News filter popover (source type + focus league) — same click-away pattern.
+  const [newsFilterOpen, setNewsFilterOpen] = useState(false);
+  const newsFilterRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!newsFilterOpen) return;
+    const onClickAway = (e: MouseEvent) => {
+      if (newsFilterRef.current && !newsFilterRef.current.contains(e.target as Node)) {
+        setNewsFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickAway);
+    return () => document.removeEventListener("mousedown", onClickAway);
+  }, [newsFilterOpen]);
   const newsColCount = (prefs.newsColCount ?? 3) as 1 | 2 | 3;
   const setNewsColCount = (n: 1 | 2 | 3) => updatePrefs({ newsColCount: n });
   // Aggregate teams seen across loaded leagues so the settings panel can map
@@ -1277,6 +1290,66 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             {showNews && (
               <>
                 <ColumnCountButtons value={newsColCount} onChange={setNewsColCount} />
+                {/* Source-type + focus-league filters live in a funnel popover
+                    instead of always-on header pill rows — keeps the news header
+                    clean like hidescore.com while keeping the filters reachable. */}
+                <div ref={newsFilterRef} className="relative">
+                  <button
+                    onClick={() => setNewsFilterOpen(!newsFilterOpen)}
+                    className="monkey-toggle relative w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                    style={{
+                      background: newsFilterOpen ? "var(--accent)" : "var(--bg-card)",
+                      border: `1px solid ${newsFilterOpen ? "var(--accent)" : "var(--border)"}`,
+                      color: newsFilterOpen ? "white" : "var(--text-muted)",
+                    }}
+                    title="Filter news"
+                    aria-label="Filter news"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                    </svg>
+                    {(newsTypeFilter !== "all" || !!newsFocusLeague) && !newsFilterOpen && (
+                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: "var(--accent)" }} />
+                    )}
+                  </button>
+                  {newsFilterOpen && (
+                    <div
+                      className="absolute top-full mt-1 right-0 rounded-lg shadow-lg z-50 p-3 min-w-[210px]"
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                    >
+                      <div className="text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Source</div>
+                      <NewsPillRow
+                        options={[
+                          { value: "all", label: "All" },
+                          { value: "espn", label: "ESPN" },
+                          { value: "reddit", label: "Reddit" },
+                          { value: "homepage", label: "Homepage" },
+                        ]}
+                        value={newsTypeFilter}
+                        onChange={(v) => setNewsTypeFilter(v as "all" | "espn" | "reddit" | "homepage")}
+                      />
+                      {newsHeaderFocusOptions.length > 1 && (
+                        <>
+                          <div className="text-[11px] font-bold uppercase tracking-wide mt-3 mb-1.5" style={{ color: "var(--text-muted)" }}>League</div>
+                          <NewsPillRow
+                            options={newsHeaderFocusOptions}
+                            value={newsFocusLeague ?? "all"}
+                            onChange={(v) => setNewsFocusLeague(v === "all" ? undefined : (v as Sport | "espn"))}
+                          />
+                        </>
+                      )}
+                      {(newsTypeFilter !== "all" || !!newsFocusLeague) && (
+                        <button
+                          onClick={() => { setNewsTypeFilter("all"); setNewsFocusLeague(undefined); }}
+                          className="mt-3 text-xs underline cursor-pointer"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          Clear filters
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div ref={newsOrderRef} className="relative">
                   <button
                     onClick={() => setNewsOrderOpen(!newsOrderOpen)}
