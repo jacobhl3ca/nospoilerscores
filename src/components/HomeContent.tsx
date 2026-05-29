@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
 import { LeagueData, Sport } from "@/lib/types";
-import type { LeagueConfig } from "@/lib/espn";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
@@ -10,9 +9,8 @@ import LeagueColumn from "@/components/LeagueColumn";
 import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource, classifySource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
-import ThemeToggle from "@/components/ThemeToggle";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 
@@ -24,16 +22,377 @@ function getResolvedTheme(theme: Theme): "dark" | "light" {
   return theme;
 }
 
-function getSmartDefaultOffset(): number {
-  const hour = getETHour();
-  // Before 1pm ET → default to yesterday; after → today
-  return hour < 13 ? -1 : 0;
+function getSmartDefaultOffset(cutoffHour = 13): number {
+  // User-local hour. The cutoff represents "when today's slate has likely
+  // started" from the user's wall-clock POV — Pacific user wants their own
+  // 1 PM, not 1 PM ET (which is 10 AM for them).
+  const hour = new Date().getHours();
+  return hour < cutoffHour ? -1 : 0;
 }
 
-function resolveDefaultOffset(mode: "smart" | "today" | "yesterday" | undefined): number {
+function resolveDefaultOffset(mode: "smart" | "today" | "yesterday" | undefined, cutoffHour?: number): number {
   if (mode === "today") return 0;
   if (mode === "yesterday") return -1;
-  return getSmartDefaultOffset();
+  return getSmartDefaultOffset(cutoffHour);
+}
+
+type ViewMode = "scores-plain" | "scores-rated" | "news";
+
+// iOS-style fixed bottom tab bar. Always pinned to the viewport bottom, sits
+// over scrolled content with a translucent blurred background, three tabs:
+// 🙈 No ratings  |  🙉 With ratings  |  📰 News. Selected state uses accent
+// color on icon + label (no solid background fill) so it reads "elegant"
+// rather than "chunky pill". Home-indicator clearance via safe-area inset.
+function BottomTabBar({ viewMode, onChange }: { viewMode: ViewMode; onChange: (m: ViewMode) => void }) {
+  const tab = (mode: ViewMode, icon: ReactNode, label: string, title: string) => {
+    const active = viewMode === mode;
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(mode)}
+        title={title}
+        aria-label={title}
+        aria-pressed={active}
+        className="flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors h-14 select-none"
+        style={{
+          color: active ? "var(--accent)" : "var(--text-muted)",
+          background: "transparent",
+        }}
+      >
+        <span className={`flex items-center justify-center transition-opacity ${active ? "opacity-100" : "opacity-70"}`}>
+          {icon}
+        </span>
+        <span className="text-[10px] sm:text-[11px] font-medium leading-none">{label}</span>
+      </button>
+    );
+  };
+  return (
+    <nav
+      aria-label="View mode"
+      className="fixed left-0 right-0 bottom-0 z-40"
+      style={{
+        background: "var(--bg)",
+        borderTop: "1px solid var(--border)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
+      <div className="max-w-md mx-auto flex items-stretch">
+        {tab(
+          "scores-plain",
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/monkey-see-no-evil.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          "Scores",
+          "Scores (no ratings, no spoilers)",
+        )}
+        {tab(
+          "scores-rated",
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/monkey-hear-no-evil.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          "Rated",
+          "Scores with ratings (sort by best games)",
+        )}
+        {tab(
+          "news",
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+            <path d="M18 14h-8" />
+            <path d="M15 18h-5" />
+            <path d="M10 6h8v4h-8V6Z" />
+          </svg>,
+          "News",
+          "News (full spoilers)",
+        )}
+      </div>
+    </nav>
+  );
+}
+
+function ColumnCountButtons({ value, onChange }: { value: 1 | 2 | 3; onChange: (n: 1 | 2 | 3) => void }) {
+  const seg = (n: 1 | 2 | 3, title: string) => {
+    const active = value === n;
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(n)}
+        title={title}
+        aria-label={title}
+        aria-pressed={active}
+        className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center cursor-pointer transition-colors"
+        style={{
+          background: "transparent",
+          color: active ? "var(--accent)" : "var(--text-muted)",
+        }}
+      >
+        <ColIcon n={n} />
+      </button>
+    );
+  };
+  return (
+    <div
+      className="inline-flex rounded-full overflow-hidden"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    >
+      {seg(1, "Single column")}
+      {seg(2, "Two columns")}
+      {seg(3, "Three columns")}
+    </div>
+  );
+}
+
+// Yesterday/Today/Tomorrow-style pill row used for news global filters
+// (source type, focus league). Selected pill gets a faint card background
+// + bold text; unselected stay muted. Same visual language as DateNav.
+function NewsPillRow({ options, value, onChange }: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-center gap-0.5 flex-wrap">
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className="px-3 py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-colors text-center cursor-pointer"
+            style={
+              active
+                ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
+                : { color: "var(--text-muted)", background: "transparent" }
+            }
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Resolve sources into the user's preferred order. Unknown labels (e.g. a
+// new source added after the user customized their order) fall through to
+// the tail in cascade-default order, so new content still surfaces.
+function applyOrder<T extends { label: string }>(sources: T[], order: string[] | undefined): T[] {
+  if (!order || order.length === 0) return sources;
+  const lookup = new Map(sources.map((s) => [s.label, s] as const));
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const label of order) {
+    const s = lookup.get(label);
+    if (s) { out.push(s); seen.add(label); }
+  }
+  for (const s of sources) {
+    if (!seen.has(s.label)) out.push(s);
+  }
+  return out;
+}
+
+// Drag-reorderable list of news source labels inside the ☰ menu. Pointer
+// events (not HTML5 drag) so it works on iOS — captured on the handle, then
+// window-level move/up listeners track the drag across re-renders even if
+// the pointer leaves the row. `dropIdx` is the insertion slot (0..n), drawn
+// as a thin accent bar between rows so the user can see where the item
+// will land before releasing.
+function NewsOrderMenu({
+  cascadeOrder,
+  currentOrder,
+  hiddenLabels,
+  onChange,
+  onToggleHide,
+  onReset,
+}: {
+  cascadeOrder: string[];        // default order from leagueSourceCascade
+  currentOrder: string[] | undefined; // user's custom order, or undefined for Smart
+  hiddenLabels: string[];        // sources the user has hidden via checkbox
+  onChange: (order: string[]) => void;
+  onToggleHide: (label: string) => void;
+  onReset: () => void;
+}) {
+  const smartActive = !currentOrder || currentOrder.length === 0;
+  // Visible order = custom (if any), with unknown labels filtered out.
+  // When smart, show cascade.
+  const visible = smartActive
+    ? cascadeOrder
+    : applyOrder(cascadeOrder.map((l) => ({ label: l })), currentOrder).map((s) => s.label);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [dragLabel, setDragLabel] = useState<string | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
+
+  const startDrag = (e: React.PointerEvent, label: string) => {
+    e.preventDefault();
+    setDragLabel(label);
+    const startIdx = visible.indexOf(label);
+    setDropIdx(startIdx);
+    const onMove = (ev: PointerEvent) => {
+      const list = listRef.current;
+      if (!list) return;
+      const rows = Array.from(list.querySelectorAll<HTMLElement>("[data-row]"));
+      let next = rows.length;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i].getBoundingClientRect();
+        if (ev.clientY < r.top + r.height / 2) { next = i; break; }
+      }
+      setDropIdx(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      setDragLabel((curLabel) => {
+        setDropIdx((curDrop) => {
+          if (curLabel != null && curDrop != null) {
+            const without = visible.filter((l) => l !== curLabel);
+            const from = visible.indexOf(curLabel);
+            // When dragging downward, the removal shifts every index after
+            // `from` up by 1 — so we have to compensate the insertion slot.
+            const insertAt = curDrop > from ? curDrop - 1 : curDrop;
+            without.splice(insertAt, 0, curLabel);
+            // No-op if order didn't actually change.
+            const changed = without.some((l, i) => l !== visible[i]);
+            if (changed) onChange(without);
+          }
+          return null;
+        });
+        return null;
+      });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
+  return (
+    <div
+      className="absolute right-0 mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden"
+      style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+    >
+      <button
+        type="button"
+        className="w-full text-left px-3 py-2 text-sm flex items-center justify-between cursor-pointer transition-colors"
+        style={{ color: smartActive ? "var(--accent)" : "var(--text)", borderBottom: "1px solid var(--border)" }}
+        onClick={onReset}
+        title="Reset to default order"
+      >
+        <span className="font-medium">Smart {smartActive ? "(default)" : ""}</span>
+        {smartActive && <span aria-hidden="true">✓</span>}
+      </button>
+      <div ref={listRef} className="py-1 select-none">
+        {visible.map((label, i) => {
+          const isDragging = dragLabel === label;
+          return (
+            <div key={label} className="relative">
+              {/* drop indicator above this row */}
+              {dropIdx === i && !isDragging && (
+                <div className="absolute left-2 right-2 -top-px h-0.5 rounded" style={{ background: "var(--accent)" }} />
+              )}
+              <div
+                data-row
+                className="px-3 py-2 text-sm flex items-center gap-2"
+                style={{
+                  background: isDragging ? "var(--bg-card-hover)" : "transparent",
+                  opacity: isDragging ? 0.6 : 1,
+                  touchAction: "none",
+                }}
+              >
+                {/* Drag handle — only this part captures the drag pointer so
+                    the checkbox + label remain tappable for their own actions. */}
+                <span
+                  onPointerDown={(e) => startDrag(e, label)}
+                  className="shrink-0 cursor-grab active:cursor-grabbing"
+                  style={{ color: "var(--text-muted)" }}
+                  aria-label="Drag to reorder"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="9" x2="20" y2="9" />
+                    <line x1="4" y1="15" x2="20" y2="15" />
+                  </svg>
+                </span>
+                {/* Visibility checkbox — toggles the source on/off without
+                    removing it from the order, so user can re-show later. */}
+                <button
+                  type="button"
+                  onClick={() => onToggleHide(label)}
+                  className="shrink-0 flex items-center justify-center rounded cursor-pointer"
+                  style={{
+                    width: "16px",
+                    height: "16px",
+                    background: hiddenLabels.includes(label) ? "transparent" : "var(--accent)",
+                    border: "1px solid " + (hiddenLabels.includes(label) ? "var(--border)" : "var(--accent)"),
+                  }}
+                  aria-pressed={!hiddenLabels.includes(label)}
+                  aria-label={hiddenLabels.includes(label) ? `Show ${label}` : `Hide ${label}`}
+                  title={hiddenLabels.includes(label) ? "Hidden — tap to show" : "Visible — tap to hide"}
+                >
+                  {!hiddenLabels.includes(label) && (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </button>
+                <span
+                  className="flex-1 min-w-0 truncate"
+                  style={{ color: hiddenLabels.includes(label) ? "var(--text-muted)" : "var(--text)" }}
+                >{label}</span>
+              </div>
+            </div>
+          );
+        })}
+        {/* drop indicator at the very end */}
+        {dropIdx === visible.length && (
+          <div className="relative h-0.5 -mt-px mx-2 rounded" style={{ background: "var(--accent)" }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Subtle + button rendered after the visible league columns when at least
+// one slot has been emptied. Click repopulates that slot with the first
+// eligible league. Narrow column-shaped target so it visually slots into
+// the grid without dominating it.
+function AddColumnButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Add a league column"
+      aria-label="Add a league column"
+      className="flex items-center justify-center rounded-lg cursor-pointer transition-colors"
+      style={{
+        width: "44px",
+        height: "44px",
+        background: "transparent",
+        border: "1px dashed var(--border)",
+        color: "var(--text-muted)",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "var(--accent)";
+        e.currentTarget.style.color = "var(--accent)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "var(--border)";
+        e.currentTarget.style.color = "var(--text-muted)";
+      }}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    </button>
+  );
+}
+
+function ColIcon({ n }: { n: 1 | 2 | 3 }) {
+  // Simple grid icon: 1/2/3 vertical bars inside a rounded rectangle.
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      {n >= 2 && <line x1={n === 2 ? "12" : "9"} y1="4" x2={n === 2 ? "12" : "9"} y2="20" />}
+      {n === 3 && <line x1="15" y1="4" x2="15" y2="20" />}
+    </svg>
+  );
 }
 
 export default function HomeContent({ initialOffset }: { initialOffset?: number }) {
@@ -48,7 +407,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   useEffect(() => {
     if (selectedDate === "") {
       const stored = loadPreferences();
-      setSelectedDate(getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode)));
+      setSelectedDate(getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour)));
     }
   }, [initialOffset, selectedDate]);
   const [showRatingsExplainer, setShowRatingsExplainer] = useState(false);
@@ -246,48 +605,67 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
 
+  // Live-clock polling: while any game on the board is in-progress, silently
+  // refetch every 10s so the Q4/period and clock keep advancing (matches
+  // Google's sports-card behavior — clock jumps every poll, not every second).
+  // Pauses when the tab is hidden so background tabs don't burn ESPN calls.
+  const hasLiveGames = leagues.some(l => l.games.some(g => g.state === "in"));
+  useEffect(() => {
+    if (!hasLiveGames || !selectedDate) return;
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      fetchData(selectedDate, prefs.thirdLeague, {
+        first: prefs.firstLeague,
+        second: prefs.secondLeague,
+        third: prefs.thirdLeague,
+      }, true);
+    }, 10_000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
+
   const updatePrefs = (update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
     setPrefs(next);
     savePreferences(next);
   };
 
-  const toggleTheme = () => {
-    const resolved = getResolvedTheme(prefs.theme);
-    const next: Theme = resolved === "dark" ? "light" : "dark";
-    updatePrefs({ theme: next });
-    document.documentElement.setAttribute("data-theme", next);
-  };
+  // Three-state view toggle: scores-plain (🙈) | scores-rated (🙉) | news.
+  // Single segmented control in the header replaces the old separate
+  // monkey + news buttons. Switching INTO news/ratings runs the same
+  // explainer modals as before; switching out is silent.
+  const viewMode: ViewMode = showNews ? "news" : prefs.showRatings ? "scores-rated" : "scores-plain";
 
-  const handleMonkeyClick = () => {
-    if (!prefs.showRatings) {
-      if (prefs.skipExplainer) {
-        updatePrefs({ showRatings: true });
-      } else {
-        setShowRatingsExplainer(true);
-      }
-    } else {
-      updatePrefs({ showRatings: false });
-    }
-  };
-
-  const confirmRatings = (dontShowAgain: boolean) => {
-    setShowRatingsExplainer(false);
-    updatePrefs({ showRatings: true, skipExplainer: dontShowAgain });
-  };
-
-  const handleNewsClick = () => {
-    if (showNews) {
-      setShowNews(false);
-      updatePrefs({ showNews: false });
+  const handleViewModeClick = (mode: ViewMode) => {
+    if (mode === viewMode) return;
+    if (mode === "scores-plain") {
+      if (showNews) setShowNews(false);
+      updatePrefs({ showNews: false, showRatings: false });
       return;
     }
+    if (mode === "scores-rated") {
+      if (showNews) setShowNews(false);
+      if (!prefs.showRatings && !prefs.skipExplainer) {
+        // Exit news now; ratings flip on after the explainer confirms.
+        updatePrefs({ showNews: false });
+        setShowRatingsExplainer(true);
+      } else {
+        updatePrefs({ showNews: false, showRatings: true });
+      }
+      return;
+    }
+    // mode === "news"
     if (prefs.skipNewsExplainer) {
       setShowNews(true);
       updatePrefs({ showNews: true });
     } else {
       setShowNewsExplainer(true);
     }
+  };
+
+  const confirmRatings = (dontShowAgain: boolean) => {
+    setShowRatingsExplainer(false);
+    updatePrefs({ showRatings: true, skipExplainer: dontShowAgain });
   };
 
   const confirmNews = (dontShowAgain: boolean) => {
@@ -412,10 +790,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return options;
   }, [selectedDate]);
 
-  const setThirdLeague = (sport: Sport | "empty" | undefined) => {
-    updatePrefs({ thirdLeague: sport });
-  };
-
   // When the user picks a league (or Empty) for one column, lock the other two
   // to whatever's currently displayed so the auto-picker doesn't shuffle them.
   // Without this, picking NCAAM for slot 2 (with slots 1+3 unset) re-runs auto-pick
@@ -474,6 +848,61 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // around could still reorder columns for users with stale localStorage prefs,
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
+
+  // News-order persistence. Custom per-sport ordering of the source labels
+  // inside a single news column. Drag-reorder in the ☰ menu writes here;
+  // applyOrder reads from it to reshuffle the cascade-default source list
+  // (unknown labels fall through to the tail so new sources still surface).
+  // The ☰ dropdown manages whichever league is currently "primary": the
+  // focused league if Focus is set, otherwise the first visible scores slot.
+  // ESPN focus is handled separately (sport=undefined → dropdown isn't
+  // sport-keyed; we'll wire ESPN order using a sentinel key in prefs).
+  const newsCol1Sport: Sport | undefined = (prefs.newsFocusLeague && prefs.newsFocusLeague !== "espn")
+    ? prefs.newsFocusLeague
+    : sortedLeagues[0]?.sport;
+  const newsOrderForCol1: string[] | undefined = newsCol1Sport
+    ? prefs.newsSourceOrder?.[newsCol1Sport]
+    : undefined;
+  const setNewsSourceOrder = (sport: Sport, order: string[]) => {
+    const existing = prefs.newsSourceOrder ?? {};
+    updatePrefs({ newsSourceOrder: { ...existing, [sport]: order } });
+  };
+  const clearNewsSourceOrder = (sport: Sport) => {
+    const existing = prefs.newsSourceOrder ?? {};
+    if (!existing[sport]) return;
+    const next = { ...existing };
+    delete next[sport];
+    updatePrefs({ newsSourceOrder: next });
+  };
+  const newsTypeFilter = prefs.newsTypeFilter ?? "all";
+  const setNewsTypeFilter = (t: "all" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
+  const newsFocusLeague = prefs.newsFocusLeague;
+  const setNewsFocusLeague = (s: Sport | "espn" | undefined) => updatePrefs({ newsFocusLeague: s });
+  const newsHiddenSources = prefs.newsHiddenSources ?? [];
+  const toggleNewsSourceHidden = (label: string) => {
+    const next = newsHiddenSources.includes(label)
+      ? newsHiddenSources.filter((l) => l !== label)
+      : [...newsHiddenSources, label];
+    updatePrefs({ newsHiddenSources: next });
+  };
+  // Focus-pill options for the news view header. Built at component level
+  // so the header can render the pills regardless of where in the render
+  // tree visibleNewsEntries is computed. ESPN is always present + each
+  // non-empty league slot appears.
+  const newsHeaderFocusOptions: { value: string; label: string }[] = (() => {
+    const opts: { value: string; label: string }[] = [
+      { value: "all", label: "All" },
+      { value: "espn", label: "ESPN" },
+    ];
+    [0, 1, 2].forEach((slotIdx) => {
+      if (selectedSlotLeagues[slotIdx] === "empty") return;
+      const sport = slotIdx === 2 && prefs.newsThirdLeague ? prefs.newsThirdLeague : sortedLeagues[slotIdx]?.sport;
+      if (!sport) return;
+      const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
+      opts.push({ value: sport, label });
+    });
+    return opts;
+  })();
 
   const headerRef = useRef<HTMLElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -665,6 +1094,20 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   }, []);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newsOrderOpen, setNewsOrderOpen] = useState(false);
+  const newsOrderRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!newsOrderOpen) return;
+    const onClickAway = (e: MouseEvent) => {
+      if (newsOrderRef.current && !newsOrderRef.current.contains(e.target as Node)) {
+        setNewsOrderOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickAway);
+    return () => document.removeEventListener("mousedown", onClickAway);
+  }, [newsOrderOpen]);
+  const newsColCount = (prefs.newsColCount ?? 3) as 1 | 2 | 3;
+  const setNewsColCount = (n: 1 | 2 | 3) => updatePrefs({ newsColCount: n });
   // Aggregate teams seen across loaded leagues so the settings panel can map
   // favorite-team IDs to display names + logos. Teams favorited but not
   // currently in any loaded game fall through to "id-only" rendering.
@@ -733,7 +1176,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           </div>
         </div>
       )}
-      <header ref={headerRef} className="px-4 py-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}>
+      <header ref={headerRef} className="px-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)", paddingBottom: "0.5rem" }}>
         <div className="max-w-6xl mx-auto relative flex items-center justify-between gap-2 sm:gap-4">
           <a
             href="/"
@@ -753,167 +1196,183 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             style={{ color: "var(--text)" }}
           >
             <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
-            <svg className="xl:hidden w-6 h-6 header-logo" viewBox="0 0 32 32" fill="none">
+            <svg className="xl:hidden w-7 h-7 header-logo" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="6" className="header-logo-bg" />
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
           </a>
-          <div className="flex-1 flex justify-center xl:absolute xl:left-1/2 xl:-translate-x-1/2">
-            {!showNews && <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />}
+
+          {/* Middle slot: takes the open space between logo and right
+              cluster. Holds the date nav (scores) or news pill rows (news
+              view). Centered via flex-1 + justify-center so the right
+              cluster stays anchored to the edge. Mobile drops contents to
+              a second row below. */}
+          <div className="hidden sm:flex flex-1 justify-center items-center min-w-0">
+            {showNews ? (
+              <div className="flex flex-col items-center gap-1">
+                <NewsPillRow
+                  options={[
+                    { value: "all", label: "All" },
+                    { value: "espn", label: "ESPN" },
+                    { value: "reddit", label: "Reddit" },
+                    { value: "homepage", label: "Homepage" },
+                  ]}
+                  value={newsTypeFilter}
+                  onChange={(v) => setNewsTypeFilter(v as "all" | "espn" | "reddit" | "homepage")}
+                />
+                {newsHeaderFocusOptions.length > 1 && (
+                  <NewsPillRow
+                    options={newsHeaderFocusOptions}
+                    value={newsFocusLeague ?? "all"}
+                    onChange={(v) => setNewsFocusLeague(v === "all" ? undefined : (v as Sport | "espn"))}
+                  />
+                )}
+              </div>
+            ) : (
+              <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+            )}
           </div>
-          <div className="justify-self-end flex items-center gap-1 sm:gap-2 flex-shrink-0">
+
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {/* Share — web only (xl+). On mobile the same action lives at the
+                bottom of the settings panel. */}
             {hasFavorites && (
               <button
                 onClick={shareFavorites}
-                className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer text-sm sm:text-lg"
+                className="monkey-toggle hidden xl:flex w-10 h-10 items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
                 style={{
                   background: "var(--bg-card)",
                   border: "1px solid var(--border)",
                   color: showShareCopied ? "var(--accent)" : "var(--text-muted)",
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--accent)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--border)";
-                }}
-                title={showShareCopied ? "Link copied!" : "Copy favorites link"}
+                title={showShareCopied ? "Link copied!" : "Copy settings link"}
               >
                 {showShareCopied ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                   </svg>
                 )}
               </button>
             )}
+
+            {/* Scores cluster: calendar picker. */}
             {!showNews && (
-              <button
-                onClick={handleMonkeyClick}
-                className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-muted)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--accent)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--border)";
-                }}
-                title={prefs.showRatings ? "Hide ratings & sort chronologically" : "Show ratings & sort by best games"}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={prefs.showRatings ? "/monkey-hear-no-evil.svg" : "/monkey-see-no-evil.svg"}
-                  alt={prefs.showRatings ? "Hide ratings" : "Show ratings"}
-                  width={20}
-                  height={20}
-                  className="w-4 h-4 sm:w-5 sm:h-5"
-                  draggable={false}
-                />
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setCalendarOpen(!calendarOpen)}
+                  className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                  style={{
+                    background: calendarOpen ? "var(--accent)" : "var(--bg-card)",
+                    border: `1px solid ${calendarOpen ? "var(--accent)" : "var(--border)"}`,
+                    color: calendarOpen ? "white" : "var(--text-muted)",
+                  }}
+                  title="Pick a date"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </button>
+                {calendarOpen && (
+                  <CalendarDropdown
+                    selectedDate={selectedDate}
+                    onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }}
+                    onClose={() => setCalendarOpen(false)}
+                  />
+                )}
+              </div>
             )}
-            <button
-              onClick={handleNewsClick}
-              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-              style={{
-                background: showNews ? "var(--accent)" : "var(--bg-card)",
-                border: `1px solid ${showNews ? "var(--accent)" : "var(--border)"}`,
-                color: showNews ? "white" : "var(--text-muted)",
-              }}
-              onMouseEnter={(e) => { if (!showNews) e.currentTarget.style.borderColor = "var(--accent)"; }}
-              onMouseLeave={(e) => { if (!showNews) e.currentTarget.style.borderColor = "var(--border)"; }}
-              title={showNews ? "Back to scores" : "View news (contains spoilers)"}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
-                <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
-                <path d="M18 14h-8" />
-                <path d="M15 18h-5" />
-                <path d="M10 6h8v4h-8V6Z" />
-              </svg>
-            </button>
-            <div className={`relative ${showNews ? "hidden" : ""}`}>
-              <button
-                onClick={() => setCalendarOpen(!calendarOpen)}
-                className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-                style={{
-                  background: calendarOpen ? "var(--accent)" : "var(--bg-card)",
-                  border: `1px solid ${calendarOpen ? "var(--accent)" : "var(--border)"}`,
-                  color: calendarOpen ? "white" : "var(--text-muted)",
-                }}
-                onMouseEnter={(e) => {
-                  if (!calendarOpen) e.currentTarget.style.borderColor = "var(--accent)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!calendarOpen) e.currentTarget.style.borderColor = "var(--border)";
-                }}
-                title="Pick a date"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              </button>
-              {calendarOpen && (
-                <CalendarDropdown
-                  selectedDate={selectedDate}
-                  onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }}
-                  onClose={() => setCalendarOpen(false)}
-                />
-              )}
-            </div>
-            {!isNativeApp && (
-              <a
-                href="https://apps.apple.com/app/hidescore/id6766885311"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-muted)",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-                title="Get the iOS app"
-                aria-label="Get the iOS app on the App Store"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="sm:w-4 sm:h-4">
-                  <path d="M17.05 12.04c-.03-3.02 2.47-4.47 2.58-4.54-1.41-2.06-3.6-2.34-4.38-2.37-1.86-.19-3.64 1.1-4.59 1.1-.96 0-2.41-1.07-3.97-1.04-2.04.03-3.93 1.19-4.98 3.02-2.13 3.69-.54 9.13 1.52 12.12 1.01 1.46 2.21 3.1 3.78 3.04 1.52-.06 2.09-.98 3.93-.98 1.83 0 2.36.98 3.97.95 1.64-.03 2.68-1.49 3.69-2.96 1.16-1.69 1.64-3.34 1.66-3.42-.04-.02-3.19-1.22-3.21-4.84zM14.05 3.27c.83-1.01 1.39-2.41 1.24-3.81-1.2.05-2.65.8-3.51 1.81-.77.89-1.45 2.32-1.27 3.69 1.34.1 2.71-.68 3.54-1.69z" />
-                </svg>
-              </a>
+
+            {/* News cluster: column-count (1/2/3) + ☰ order menu. */}
+            {showNews && (
+              <>
+                <ColumnCountButtons value={newsColCount} onChange={setNewsColCount} />
+                <div ref={newsOrderRef} className="relative">
+                  <button
+                    onClick={() => setNewsOrderOpen(!newsOrderOpen)}
+                    className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                    style={{
+                      background: newsOrderOpen ? "var(--accent)" : "var(--bg-card)",
+                      border: `1px solid ${newsOrderOpen ? "var(--accent)" : "var(--border)"}`,
+                      color: newsOrderOpen ? "white" : "var(--text-muted)",
+                    }}
+                    title="Reorder news"
+                    aria-label="Reorder news columns"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="4" y1="7" x2="20" y2="7" />
+                      <line x1="4" y1="12" x2="20" y2="12" />
+                      <line x1="4" y1="17" x2="20" y2="17" />
+                    </svg>
+                  </button>
+                  {newsOrderOpen && newsCol1Sport && (
+                    <NewsOrderMenu
+                      cascadeOrder={leagueSourceCascade(newsCol1Sport).map((c) => c.label)}
+                      currentOrder={newsOrderForCol1}
+                      hiddenLabels={newsHiddenSources}
+                      onChange={(order) => setNewsSourceOrder(newsCol1Sport, order)}
+                      onToggleHide={toggleNewsSourceHidden}
+                      onReset={() => clearNewsSourceOrder(newsCol1Sport)}
+                    />
+                  )}
+                </div>
+              </>
             )}
-            <div className="hidden sm:flex">
-              <ThemeToggle theme={prefs.theme} onToggle={toggleTheme} />
-            </div>
+
             <button
               onClick={() => setSettingsOpen(true)}
-              className="monkey-toggle w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+              className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
               style={{
                 background: settingsOpen ? "var(--accent)" : "var(--bg-card)",
                 border: `1px solid ${settingsOpen ? "var(--accent)" : "var(--border)"}`,
                 color: settingsOpen ? "white" : "var(--text-muted)",
               }}
-              onMouseEnter={(e) => { if (!settingsOpen) e.currentTarget.style.borderColor = "var(--accent)"; }}
-              onMouseLeave={(e) => { if (!settingsOpen) e.currentTarget.style.borderColor = "var(--border)"; }}
               title="Settings"
               aria-label="Open settings"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:w-4 sm:h-4">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
             </button>
           </div>
         </div>
+
+        {/* Mobile-only second row: date nav (scores) or news pill rows
+            (news view). On sm+ both live in the middle slot of the top row. */}
+        {!showNews && (
+          <div className="sm:hidden max-w-6xl mx-auto mt-1 flex justify-center">
+            <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+          </div>
+        )}
+        {showNews && (
+          <div className="sm:hidden max-w-6xl mx-auto mt-1 flex flex-col items-center gap-1">
+            <NewsPillRow
+              options={[
+                { value: "all", label: "All" },
+                { value: "espn", label: "ESPN" },
+                { value: "reddit", label: "Reddit" },
+                { value: "homepage", label: "Homepage" },
+              ]}
+              value={newsTypeFilter}
+              onChange={(v) => setNewsTypeFilter(v as "all" | "espn" | "reddit" | "homepage")}
+            />
+            {newsHeaderFocusOptions.length > 1 && (
+              <NewsPillRow
+                options={newsHeaderFocusOptions}
+                value={newsFocusLeague ?? "all"}
+                onChange={(v) => setNewsFocusLeague(v === "all" ? undefined : (v as Sport | "espn"))}
+              />
+            )}
+          </div>
+        )}
       </header>
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
@@ -927,13 +1386,78 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 ? () => fetchLeagueNews(c.sport!, 10)
                 : () => fetchPrebaked(c.key),
             }));
-          const buildSources = (sport?: Sport): NewsSource[] =>
-            sport ? cascadeToSources(leagueSourceCascade(sport)) : [];
-          const col1All = buildSources(sortedLeagues[0]?.sport);
-          const col2All = buildSources(sortedLeagues[1]?.sport);
-          const col3All: NewsSource[] = prefs.newsThirdLeague
-            ? buildSources(prefs.newsThirdLeague)
-            : cascadeToSources(GENERIC_CASCADE);
+          // Build visible news entries, mirroring how scores collapses Empty
+          // slots. Each entry carries its sport, label, full cascade (for
+          // dropdown management), and the user-ordered cascade (post-applyOrder).
+          // Type/hidden filters are applied at render-time so the dropdown
+          // can still display + re-enable hidden sources.
+          const orderFor = (sport?: Sport) => sport ? prefs.newsSourceOrder?.[sport] : undefined;
+          // ESPN entry: always-present "virtual" league at the head of the
+          // entry list. Default order = ESPN headlines first, then ESPN
+          // Videos, then r/sports. User can drag-reorder via the ☰ menu
+          // (keyed under the "espn" sentinel in newsSourceOrder).
+          const ESPN_CASCADE: ColumnSource[] = [
+            { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: GENERIC_CASCADE[1]?.logoUrl },
+            { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: GENERIC_CASCADE[0]?.logoUrl },
+            { label: "r/sports", key: "reddit-general", kind: "prebaked" },
+          ];
+          const espnEntry = {
+            slotIdx: -1,
+            sport: undefined as Sport | undefined,
+            id: "espn" as const,
+            label: "ESPN",
+            orderedCascade: applyOrder(ESPN_CASCADE, prefs.newsSourceOrder?.["espn"]),
+          };
+          const leagueEntries = [0, 1, 2].map((slotIdx) => {
+            if (selectedSlotLeagues[slotIdx] === "empty") return null;
+            const sport: Sport | undefined = slotIdx === 2 && prefs.newsThirdLeague
+              ? prefs.newsThirdLeague
+              : sortedLeagues[slotIdx]?.sport;
+            if (!sport) return null;
+            const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
+            const cascade = leagueSourceCascade(sport);
+            const orderedCascade = applyOrder(cascade, orderFor(sport));
+            return { slotIdx, sport, id: sport as string, label, orderedCascade };
+          }).filter((e): e is NonNullable<typeof e> => e !== null);
+          // ESPN goes FIRST in Smart mode (matches Jacob's spec: "i actually
+          // want to put it as first column instead in smart mode").
+          const visibleNewsEntries = [espnEntry, ...leagueEntries];
+
+          // Apply Focus league (drops other entries) then per-entry filter
+          // by type + hidden labels. Type "all" is a no-op; hidden labels
+          // are removed via Array.filter so they vanish from view but stay
+          // togglable in the dropdown.
+          const focusedEntries = newsFocusLeague
+            ? visibleNewsEntries.filter((e) => e.id === newsFocusLeague)
+            : visibleNewsEntries;
+          const renderSourcesFor = (entry: typeof visibleNewsEntries[number]): NewsSource[] => {
+            const filtered = entry.orderedCascade
+              .filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter)
+              .filter((s) => !newsHiddenSources.includes(s.label));
+            return cascadeToSources(filtered);
+          };
+
+          // Swap on a news column: slot 2 with a newsThirdLeague override
+          // touches that pref alone (keeps scores untouched); other columns
+          // share scores' slot prefs so news + scores stay in sync.
+          const newsSwapFor = (slotIdx: number) =>
+            (s: Sport | "empty" | undefined) => {
+              // Auto (undefined): clear newsThirdLeague override for slot 2,
+              // otherwise clear the scores slot pref too.
+              if (slotIdx === 2 && prefs.newsThirdLeague && s !== "empty") {
+                setNewsThirdLeague(s as Sport | undefined);
+                return;
+              }
+              setSlotLeague(slotIdx, s);
+            };
+
+          // Convenience aliases — the aligned-video-strip logic below still
+          // references col1All/col2All/col3All directly to detect the all-
+          // video case (3-col only). Use the rendered (post-filter) sources
+          // since the strip activation should track what's visible.
+          const col1All = focusedEntries[0] ? renderSourcesFor(focusedEntries[0]) : [];
+          const col2All = focusedEntries[1] ? renderSourcesFor(focusedEntries[1]) : [];
+          const col3All = focusedEntries[2] ? renderSourcesFor(focusedEntries[2]) : [];
           // When all 3 columns lead with a video source, lift those into the
           // aligned strip so video N in every column is the same vertical
           // size. Otherwise let each column render its own first card.
@@ -941,60 +1465,81 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             col1All[0]?.variant === "video" &&
             col2All[0]?.variant === "video" &&
             col3All[0]?.variant === "video";
-          const col1Rest = allFirstAreVideo ? col1All.slice(1) : col1All;
-          const col2Rest = allFirstAreVideo ? col2All.slice(1) : col2All;
-          // ESPN top headlines slot into col 3's empty pad cells inside the
-          // video strip (via `tailFetch`) when col 3 is generic — fills the
-          // open space below espn-videos without changing the videos' heights.
-          // Pull it out of col3Rest so we don't render the same card twice.
-          const useEspnTopTail = allFirstAreVideo && !prefs.newsThirdLeague;
-          const col3Rest = allFirstAreVideo
-            ? (useEspnTopTail
-                ? col3All.slice(1).filter((s) => s.label !== "ESPN")
-                : col3All.slice(1))
-            : col3All;
-          const col3Title = prefs.newsThirdLeague
-            ? (thirdLeagueOptions.find((o) => o.sport === prefs.newsThirdLeague)?.label ?? "News")
-            : "News";
-          // Cols 1 and 2 are already showing sortedLeagues[0] and [1]'s news,
-          // so hide them from the col-3 swap dropdown — listing them is
-          // redundant since they're permanently exposed.
-          const newsExposedSports = new Set([
-            sortedLeagues[0]?.sport,
-            sortedLeagues[1]?.sport,
-          ].filter((s): s is Sport => !!s));
-          const newsThirdLeagueOptions = thirdLeagueOptions.filter(
-            (o) => !newsExposedSports.has(o.sport),
-          );
+          // Which entries actually render: 1-col stacks ALL focused leagues
+          // (Jacob's "single column view should have all leagues"); 2/3-col
+          // takes the first N entries side-by-side. AlignedVideoStrip only
+          // makes sense at exactly 3 side-by-side cols with all video-first.
+          // When a Focus league is set, there's only one entry — force 1-col.
+          const effectiveColCount = newsFocusLeague ? 1 : newsColCount;
+          const renderedEntries = effectiveColCount === 1
+            ? focusedEntries
+            : focusedEntries.slice(0, effectiveColCount);
+          const stripActive = effectiveColCount === 3
+            && focusedEntries.length === 3
+            && allFirstAreVideo;
+          const useEspnTopTail = stripActive && !prefs.newsThirdLeague;
+          // Sources stripped of the video lead when the strip is active.
+          const sourcesForEntry = (entry: typeof renderedEntries[number], idx: number) => {
+            const all = renderSourcesFor(entry);
+            if (!stripActive) return all;
+            if (idx === 2 && useEspnTopTail) {
+              return all.slice(1).filter((s) => s.label !== "ESPN");
+            }
+            return all.slice(1);
+          };
+
+          const wideCol = "flex-1 min-w-0 max-w-[420px] xl:max-w-[520px]";
+          const narrowCol = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
+          // News + button: same pattern as scores. When user picks Empty on a
+          // news league column, the underlying scores slot becomes empty too,
+          // so this finds the first empty slot and refills it on click.
+          const newsFirstEmptySlot = [0, 1, 2].find((i) => selectedSlotLeagues[i] === "empty");
+          const newsOnAddColumn = newsFirstEmptySlot !== undefined && leagueEntries.length < 3
+            ? () => {
+                const shown = leagueEntries.map((e) => e.sport);
+                const eligible = thirdLeagueOptions.filter((o) => !shown.includes(o.sport));
+                const pick = eligible[0]?.sport ?? thirdLeagueOptions[0]?.sport;
+                if (pick) setSlotLeague(newsFirstEmptySlot, pick);
+              }
+            : undefined;
+          const containerCls = effectiveColCount === 1
+            ? "flex flex-col items-center gap-8"
+            : "flex flex-row justify-center items-stretch gap-2 sm:gap-4";
+          const widthClassFor = () =>
+            effectiveColCount === 1 ? wideCol : narrowCol;
+
           return (
             <>
-              {allFirstAreVideo && (
+              {stripActive && (
                 <>
-                  {/* League titles render above AlignedVideoStrip so MLB / NBA /
-                      News sit at the top — otherwise the video strip pushes the
-                      titles below it. The row itself is sticky (matching the
-                      home page's per-column title pinning) so titles stay under
-                      the main header as you scroll. Ref drives --news-titlebar-h
-                      which positions per-source sticky headers below it. */}
+                  {/* League titles render above AlignedVideoStrip so the league
+                      labels sit at the top — otherwise the video strip pushes
+                      them below it. Sticky so they stay under the app header
+                      while scrolling. Ref drives --news-titlebar-h. */}
                   <div
                     ref={newsTitleRowRef}
                     className="flex flex-row justify-center items-stretch gap-2 sm:gap-4 league-sticky-top sticky z-30"
                     style={{ background: "var(--bg)" }}
                   >
-                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
-                      <NewsColumnTitle title={sortedLeagues[0]?.label ?? "News"} />
-                    </div>
-                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
-                      <NewsColumnTitle title={sortedLeagues[1]?.label ?? "News"} />
-                    </div>
-                    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
-                      <NewsColumnTitle
-                        title={col3Title}
-                        swappableOptions={newsThirdLeagueOptions}
-                        selectedThirdLeague={prefs.newsThirdLeague}
-                        onSwapLeague={setNewsThirdLeague}
-                      />
-                    </div>
+                    {renderedEntries.map((entry, idx) => {
+                      const otherSports = renderedEntries
+                        .filter((_, i) => i !== idx)
+                        .map((e) => e.sport)
+                        .filter((s): s is Sport => !!s);
+                      // ESPN entry is virtual (no scores slot) — no swap UI.
+                      const isEspn = entry.id === "espn";
+                      return (
+                        <div key={`title-${entry.id}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                          <NewsColumnTitle
+                            title={entry.label}
+                            swappableOptions={isEspn ? undefined : thirdLeagueOptions}
+                            shownElsewhere={otherSports}
+                            selectedSport={entry.sport}
+                            onSwapLeague={isEspn ? undefined : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                   <AlignedVideoStrip
                     key={`avs-${newsRefreshKey}`}
@@ -1005,31 +1550,38 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                   />
                 </>
               )}
-              <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-                <NewsColumn
-                  key={`nc1-${newsRefreshKey}`}
-                  title={sortedLeagues[0]?.label ?? "News"}
-                  sources={col1Rest}
-                  hideTitle={allFirstAreVideo}
-                  onPlayVideo={playNewsVideo}
-                />
-                <NewsColumn
-                  key={`nc2-${newsRefreshKey}`}
-                  title={sortedLeagues[1]?.label ?? "News"}
-                  sources={col2Rest}
-                  hideTitle={allFirstAreVideo}
-                  onPlayVideo={playNewsVideo}
-                />
-                <NewsColumn
-                  key={`nc3-${newsRefreshKey}`}
-                  title={col3Title}
-                  sources={col3Rest}
-                  swappableOptions={newsThirdLeagueOptions}
-                  selectedThirdLeague={prefs.newsThirdLeague}
-                  onSwapLeague={setNewsThirdLeague}
-                  hideTitle={allFirstAreVideo}
-                  onPlayVideo={playNewsVideo}
-                />
+              {/* Use regular flex (not inline-flex) so multi-col layouts
+                  distribute flex-1 children across the viewport instead of
+                  sizing to content + overflowing on narrow mobile widths. */}
+              <div className={containerCls}>
+                {renderedEntries.map((entry, idx) => {
+                  const otherSports = renderedEntries
+                    .filter((_, i) => i !== idx)
+                    .map((e) => e.sport)
+                    .filter((s): s is Sport => !!s);
+                  const isEspn = entry.id === "espn";
+                  return (
+                    <NewsColumn
+                      key={`nc-${entry.id}-${newsRefreshKey}`}
+                      title={entry.label}
+                      sources={sourcesForEntry(entry, idx)}
+                      swappableOptions={isEspn ? undefined : thirdLeagueOptions}
+                      shownElsewhere={otherSports}
+                      selectedSport={entry.sport}
+                      onSwapLeague={isEspn ? undefined : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                      hideTitle={stripActive}
+                      onPlayVideo={playNewsVideo}
+                      widthClassName={widthClassFor()}
+                    />
+                  );
+                })}
+                {newsOnAddColumn && (
+                  effectiveColCount === 1 ? (
+                    <div className="mt-2"><AddColumnButton onClick={newsOnAddColumn} /></div>
+                  ) : (
+                    <div className="flex items-start pt-7 shrink-0"><AddColumnButton onClick={newsOnAddColumn} /></div>
+                  )
+                )}
               </div>
             </>
           );
@@ -1103,59 +1655,87 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               selectedThirdLeague: selectedSlotLeagues[idx],
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
             });
-            // Slot 2 fetched-league queue: fetchAllLeagues skipped empty slots, so
-            // we walk slot prefs and pull from the fetched queue for non-empty slots,
-            // inserting an empty placeholder where the user picked Empty.
+            // Slot fetched-league queue: fetchAllLeagues skipped empty slots,
+            // so we walk slot prefs and pull from the fetched queue for non-
+            // empty slots. Empty slots collapse the column entirely (no stub
+            // rendered); the + button at the end of the row brings them back.
             const leagueQueue = [...sortedLeagues];
-            const emptyStub: LeagueData = { sport: "mlb", label: "Empty", games: [] };
             const slotEntries = [0, 1, 2].map((slotIdx) => {
-              if (selectedSlotLeagues[slotIdx] === "empty") {
-                return { slotIdx, league: emptyStub, isEmpty: true as const };
-              }
+              if (selectedSlotLeagues[slotIdx] === "empty") return null;
               const league = leagueQueue.shift();
               if (!league) return null;
               return { slotIdx, league, isEmpty: false as const };
             }).filter((e): e is NonNullable<typeof e> => e !== null);
 
+            // + button: first slot the user explicitly emptied gets repopulated
+            // with the first eligible league (not currently shown in another
+            // visible column). Only shown when there's room (<3 visible cols).
+            const firstEmptySlot = [0, 1, 2].find((i) => selectedSlotLeagues[i] === "empty");
+            const onAddColumn = firstEmptySlot !== undefined && slotEntries.length < 3
+              ? () => {
+                  const shown = slotEntries.map((e) => e.league.sport);
+                  const eligible = thirdLeagueOptions.filter((o) => !shown.includes(o.sport));
+                  const pick = eligible[0]?.sport ?? thirdLeagueOptions[0]?.sport;
+                  if (pick) setSlotLeague(firstEmptySlot, pick);
+                }
+              : undefined;
+
+            // Wrap the columns in an inline-flex group that's centered in the
+            // outer container, and float the + button absolutely to the right
+            // of that group. This way the columns center as a unit (one-col
+            // sits perfectly under "Today" in the date nav) and + tags along
+            // without skewing the centering.
             if (showFinalSplit) {
               return (
-                <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-                  {slotEntries.map((entry) => (
-                    <LeagueColumn
-                      key={entry.isEmpty ? `empty-${entry.slotIdx}` : `${entry.league.sport}-${entry.slotIdx}`}
-                      league={entry.league}
-                      isEmpty={entry.isEmpty}
-                      slotIdx={entry.slotIdx}
-                      onReorderSlots={reorderSlots}
-                      {...commonProps}
-                      showFinalSeparator
-                      {...swapPropsForSlot(entry.slotIdx)}
-                    />
-                  ))}
+                <div className="flex justify-center">
+                  <div className="relative inline-flex items-stretch gap-2 sm:gap-4">
+                    {slotEntries.map((entry) => (
+                      <LeagueColumn
+                        key={`${entry.league.sport}-${entry.slotIdx}`}
+                        league={entry.league}
+                        slotIdx={entry.slotIdx}
+                        onReorderSlots={reorderSlots}
+                        {...commonProps}
+                        showFinalSeparator
+                        {...swapPropsForSlot(entry.slotIdx)}
+                      />
+                    ))}
+                    {onAddColumn && (
+                      <div className="absolute left-full ml-2 sm:ml-4 top-7">
+                        <AddColumnButton onClick={onAddColumn} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             }
 
             return (
-              <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-                {slotEntries.map((entry) => (
-                  <LeagueColumn
-                    key={entry.isEmpty ? `empty-${entry.slotIdx}` : `${entry.league.sport}-${entry.slotIdx}`}
-                    league={entry.league}
-                    isEmpty={entry.isEmpty}
-                    slotIdx={entry.slotIdx}
-                    onReorderSlots={reorderSlots}
-                    {...commonProps}
-                    {...swapPropsForSlot(entry.slotIdx)}
-                  />
-                ))}
+              <div className="flex justify-center">
+                <div className="relative inline-flex items-stretch gap-2 sm:gap-4">
+                  {slotEntries.map((entry) => (
+                    <LeagueColumn
+                      key={`${entry.league.sport}-${entry.slotIdx}`}
+                      league={entry.league}
+                      slotIdx={entry.slotIdx}
+                      onReorderSlots={reorderSlots}
+                      {...commonProps}
+                      {...swapPropsForSlot(entry.slotIdx)}
+                    />
+                  ))}
+                  {onAddColumn && (
+                    <div className="absolute left-full ml-2 sm:ml-4 top-7">
+                      <AddColumnButton onClick={onAddColumn} />
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()
         )}
       </main>
 
-      <footer className="px-4 py-3 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}>
+      <footer className="px-4 py-3 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)", paddingBottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}>
         <span>Catch up on games without spoilers.</span>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />
@@ -1165,22 +1745,42 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               href="https://apps.apple.com/app/hidescore/id6766885311"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block leading-none transition-opacity hover:opacity-80"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors"
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border)",
+                color: "var(--text-muted)",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
               aria-label="Download HideScore on the App Store"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M17.05 12.04c-.03-3.02 2.47-4.47 2.58-4.54-1.41-2.06-3.6-2.34-4.38-2.37-1.86-.19-3.64 1.1-4.59 1.1-.96 0-2.41-1.07-3.97-1.04-2.04.03-3.93 1.19-4.98 3.02-2.13 3.69-.54 9.13 1.52 12.12 1.01 1.46 2.21 3.1 3.78 3.04 1.52-.06 2.09-.98 3.93-.98 1.83 0 2.36.98 3.97.95 1.64-.03 2.68-1.49 3.69-2.96 1.16-1.69 1.64-3.34 1.66-3.42-.04-.02-3.19-1.22-3.21-4.84zM14.05 3.27c.83-1.01 1.39-2.41 1.24-3.81-1.2.05-2.65.8-3.51 1.81-.77.89-1.45 2.32-1.27 3.69 1.34.1 2.71-.68 3.54-1.69z" />
+              </svg>
+              <span>App Store</span>
             </a>
-            {/* Android pill tabled until ready
             <a
               href="/HideScore.apk"
               download="HideScore.apk"
-              className="inline-block leading-none transition-opacity hover:opacity-80"
-              aria-label="Download HideScore Android APK"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors"
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border)",
+                color: "var(--text-muted)",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              aria-label="Download HideScore for Android"
             >
-              <img src="/android-download-badge.svg" alt="Download Android APK" height={40} className="block h-10 w-auto" />
+              {/* Official Google Play geometry: 4 triangular sections that
+                  together form the play icon. Rendered in single color
+                  (currentColor) so it matches the label tone. */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M3 20.5V3.5C3 2.91 3.34 2.39 3.85 2.15L13.69 12L3.85 21.85C3.34 21.61 3 21.09 3 20.5M16.81 15.12L6.05 21.34L14.54 12.85L16.81 15.12M20.16 10.81C20.5 11.08 20.75 11.5 20.75 12C20.75 12.5 20.53 12.92 20.18 13.18L17.89 14.5L15.39 12L17.89 9.5L20.16 10.81M6.05 2.66L16.81 8.88L14.54 11.15L6.05 2.66Z" />
+              </svg>
+              <span>Google Play</span>
             </a>
-            */}
           </div>
         )}
       </footer>
@@ -1388,7 +1988,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         className={`monkey-toggle fixed z-40 w-11 h-11 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 shadow-lg ${showScrollTop ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         style={{
           right: "2rem",
-          bottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
+          // Lifted clear of the fixed bottom tab bar (h-14 + safe-area) so
+          // the two don't overlap in the corner.
+          bottom: "calc(env(safe-area-inset-bottom) + 4.75rem)",
           // var(--bg) instead of --bg-card so the button stays opaque over
           // arbitrary scrolled content — bg-card is rgba(.., .05) in dark mode
           // and would make the button nearly invisible over a Reddit thumbnail.
@@ -1403,6 +2005,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           <polyline points="18 15 12 9 6 15" />
         </svg>
       </button>
+
+      <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} />
     </div>
   );
 }

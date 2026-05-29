@@ -22,6 +22,21 @@
 // resolves, and those were still landing in the in-app browser.
 // Falls back to Browser.open if YouTube isn't installed.
 //
+// Streaming "watch" links (MLB, ESPN, NBA, Prime Video, …): the destination
+// networks ship mobile apps that register their content URLs as iOS
+// Universal Links / Android App Links — e.g. the MLB app claims
+// mlb.com/tv/g* (its per-game page). SFSafariViewController does NOT fire
+// universal links, so in the wrapper those taps were stuck in the in-app
+// browser even when the app was installed. We instead hand the *unchanged
+// https URL* to AppLauncher.openUrl(): on both platforms the OS opens the
+// registered app deep-linked to that exact game when installed, and falls
+// back to the system browser otherwise. We deliberately do NOT gate on
+// canOpenUrl — an https URL always "can open" (Safari), which would mask an
+// installed app — and we avoid custom app schemes so this needs no
+// LSApplicationQueriesSchemes / Android <queries> entries and ships live via
+// the WebView without a native rebuild. On the mobile web the same handoff
+// already happens automatically when window.open hits a universal link.
+//
 // Note: this is only a fallback. The primary path plays highlights in
 // HideScore's own embedded player (VideoModal) — see fetchFirstVideoId in
 // lib/youtube.ts. openExternal only runs when no specific video resolves.
@@ -83,6 +98,56 @@ function openInBrowser(url: string): void {
     });
 }
 
+// Streaming destinations whose mobile apps register their content URLs as
+// iOS Universal Links / Android App Links. Opening these https URLs via
+// AppLauncher.openUrl() deep-links straight into the installed app (the MLB
+// app's /tv/g{gamePk} game page, ESPN's /watch player, etc.), falling back
+// to the system browser when the app isn't installed. Matched on hostname
+// suffix so "www." and regional subdomains (e.g. nbcsports.com) are covered.
+const APP_LINK_HOSTS = [
+  "mlb.com",           // MLB app — /tv/g* (per-game), /news/*
+  "espn.com",          // ESPN app — /watch/*, gamecast
+  "nba.com",           // NBA app — /watch, league-pass-stream
+  "wnba.com",          // WNBA app — /watch
+  "nhl.com",           // NHL app — /tv
+  "nfl.com",           // NFL app — /plus
+  "foxsports.com",     // FOX Sports app — /live
+  "nbcsports.com",     // NBC Sports app
+  "nbc.com",           // NBC app
+  "peacocktv.com",     // Peacock
+  "hbomax.com",        // Max — /sports
+  "paramountplus.com", // Paramount+
+  "primevideo.com",    // Prime Video
+  "tv.apple.com",      // Apple TV
+  "tv.youtube.com",    // YouTube TV
+  "cbssports.com",     // CBS Sports
+  "tennischannel.com", // Tennis Channel
+  "pgatour.com",       // PGA Tour
+  "usanetwork.com",    // USA Network
+  "golfchannel.com",   // Golf Channel
+];
+
+function isAppLinkHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return APP_LINK_HOSTS.some((h) => host === h || host.endsWith("." + h));
+  } catch {
+    return false;
+  }
+}
+
+// Hand an https Universal Link / App Link to the OS so it deep-links into the
+// registered app when installed (else the system browser). Falls back to the
+// in-app browser if the AppLauncher plugin is unavailable.
+async function openViaAppLink(url: string): Promise<void> {
+  try {
+    const { AppLauncher } = await import("@capacitor/app-launcher");
+    await AppLauncher.openUrl({ url });
+  } catch {
+    openInBrowser(url);
+  }
+}
+
 export function openExternal(url: string): void {
   if (!url) return;
   if (isCapacitorNative()) {
@@ -91,6 +156,10 @@ export function openExternal(url: string): void {
       tryOpenInYouTubeApp(ytApp).then((opened) => {
         if (!opened) openInBrowser(url);
       });
+      return;
+    }
+    if (isAppLinkHost(url)) {
+      openViaAppLink(url);
       return;
     }
     openInBrowser(url);

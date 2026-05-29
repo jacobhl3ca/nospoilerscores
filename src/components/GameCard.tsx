@@ -93,24 +93,24 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
   if (sport === "ncaam") {
     // NCAAM uses halves, not quarters
     const h = period <= 2 ? `H${period}` : period === 3 ? "OT" : `${period - 2}OT`;
-    if (clock && clock !== "0.0") return { full: `${h} ${clock}`, short: h };
+    if (clock && clock !== "0.0") return { full: `${h} - ${clock}`, short: h };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: h, short: h };
   }
   if (sport === "nba" || sport === "wnba") {
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
-    if (clock && clock !== "0.0") return { full: `${q} ${clock}`, short: q };
+    if (clock && clock !== "0.0") return { full: `${q} - ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: q, short: q };
   }
   if (sport === "nhl") {
     const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : `${period - 3}OT`;
-    if (clock && clock !== "0.0") return { full: `${p} ${clock}`, short: p };
+    if (clock && clock !== "0.0") return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
   if (sport === "nfl") {
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
-    if (clock && clock !== "0.0") return { full: `${q} ${clock}`, short: q };
+    if (clock && clock !== "0.0") return { full: `${q} - ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: q, short: q };
   }
@@ -213,16 +213,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     nba: 3.5,  // ~2.5hr game + highlights up in 30-60min
     wnba: 3.5, // mirrors NBA — same ~2hr game + same-channel upload cadence
     ncaam: 4,  // ~2hr game + highlights up in 1-3hrs (varies by matchup prominence)
+    ncaaw: 4,  // mirrors NCAAM
+    ncaaf: 5,  // ~3.5hr game + 1-2hr upload (mirrors NFL)
     nhl: 4.5,  // ~2.5hr game + highlights up in 1-3hrs (Sportsnet/NHL)
     mlb: 5,    // ~3hr game + highlights up in ~2hrs (verified Dodgers-Jays 4/6/26)
     nfl: 5,    // ~3.5hr game + highlights up in 1-2hrs
     fifa: 3,   // ~2hr match + highlights up quickly
     epl: 3,    // ~2hr match + highlights up quickly
     mls: 3,    // ~2hr match + highlights up quickly
+    ucl: 3,    // mirrors EPL — CBS Sports Golazo posts within ~2hrs of final whistle
+    uel: 3,    // mirrors EPL
     golf: 6,   // ~5hr round + recap upload delay
     tennis: 4, // ~2-3hr match + highlights up in 1-2hrs
   };
-  const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, golf: 4, tennis: 3 };
+  const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 2, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
@@ -388,10 +392,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 </span>
               ) : isLive && gameProgress ? (
                 (() => {
+                  // Animated underline only when an actual game clock is shown
+                  // (Q4 - 02:05) and the game isn't delayed. Quarter-only labels
+                  // ("Q4", "Half", "▲5") get no underline because there's no
+                  // time to tick down.
+                  const hasClock = !gameProgress.delayed && /\d:\d/.test(gameProgress.full);
+                  const tickCls = hasClock ? " live-clock" : "";
                   const colorCls = gameProgress.delayed
                     ? "text-yellow-500 font-medium hover:text-yellow-400 transition-colors"
-                    : "text-green-500 font-medium hover:text-green-400 transition-colors";
-                  const staticCls = gameProgress.delayed ? "text-yellow-500 font-medium" : "text-green-500 font-medium";
+                    : `text-green-500 font-medium hover:text-green-400 transition-colors${tickCls}`;
+                  const staticCls = gameProgress.delayed ? "text-yellow-500 font-medium" : `text-green-500 font-medium${tickCls}`;
                   return liveUrl ? (
                     <a href={liveUrl} target="_blank" rel="noopener noreferrer" className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
                   ) : (

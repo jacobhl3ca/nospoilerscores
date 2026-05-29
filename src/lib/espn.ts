@@ -8,6 +8,8 @@ const SPORT_PATHS: Record<Sport, string> = {
   nba: "/basketball/nba/scoreboard",
   wnba: "/basketball/wnba/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
+  ncaaw: "/basketball/womens-college-basketball/scoreboard",
+  ncaaf: "/football/college-football/scoreboard",
   nfl: "/football/nfl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
   golf: "/golf/pga/scoreboard",
@@ -15,6 +17,8 @@ const SPORT_PATHS: Record<Sport, string> = {
   fifa: "/soccer/fifa.world/scoreboard",
   epl: "/soccer/eng.1/scoreboard",
   mls: "/soccer/usa.1/scoreboard",
+  ucl: "/soccer/uefa.champions/scoreboard",
+  uel: "/soccer/uefa.europa/scoreboard",
 };
 
 // Seasonal league config: show/hide based on date
@@ -64,8 +68,21 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19", firstPref: true, displaySlot: "center", slotPrecedence: 2, yearCycle: { mod: 4, anchor: 2026 } },
   // ── Premier League (Aug–May) ──
   { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
+  // ── UEFA Champions League (Sep League phase → Jun Final) ──
+  // Active across Sep 14 → Jun 5 but only ~17 matchdays in window; on
+  // non-matchday days the column shows news only.
+  { sport: "ucl", label: "UCL", startDate: "09-14", endDate: "06-05", championshipDate: "06-05" },
+  // ── UEFA Europa League (Sep group → late May Final) ──
+  { sport: "uel", label: "UEL", startDate: "09-24", endDate: "05-22", championshipDate: "05-22" },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
   { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
+  // ── NCAAF (College Football, Aug–early Jan, CFB Championship ~Jan 11) ──
+  // Starts 08-22 to catch Week 0 (late-August opener weekend).
+  { sport: "ncaaf", label: "NCAAF", startDate: "08-22", endDate: "01-12", championshipDate: "01-12" },
+  // ── NCAAW (Women's College Basketball, Nov–early Apr) ──
+  // Swap-only (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot
+  // rotation — selectable from the slot-3 dropdown when in season. Mirrors WNBA.
+  { sport: "ncaaw", label: "NCAAW", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", excludeFromAuto: true },
   // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Swap-only
   // (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot rotation —
   // selectable from the slot-3 dropdown when in season. Listed last so it
@@ -116,6 +133,16 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 // Oct 20 – Nov 1:   + NBA                           → [NBA, NFL, MLB]
 // Nov 2 – Dec 31:   MLB ends; + NCAAM              → [NBA, NFL, NCAAM]
 // ═══════════════════════════════════════════════════════════════
+// Added 2026-05-27 — not unrolled into the day-by-day grid above:
+//   • NCAAF (Aug 29 – Jan 12, priority 4) joins between NFL and tennis;
+//     overlaps NFL Sundays and NCAAM/NBA in fall.
+//   • UCL (Sep 14 – Jun 5, priority 10) and UEL (Sep 24 – May 22, priority 11)
+//     compete for the soccer slot — UCL > UEL > MLS, EPL still beats both.
+//     Matchdays are sparse (~17 active days/season) — column shows news only
+//     on non-matchday days within the window.
+//   • NCAAW (Nov 1 – Apr 6, excludeFromAuto) — swap-only via dropdown,
+//     mirrors WNBA.
+// ═══════════════════════════════════════════════════════════════
 
 function toMMDD(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -152,14 +179,21 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   nba: 1,
   mlb: 2,
   nfl: 3,
-  tennis: 4,
-  golf: 5,
-  ncaam: 6,
-  nhl: 7,
-  epl: 8,
-  mls: 9,
-  fifa: 10,
-  wnba: 11,
+  ncaaf: 4,
+  tennis: 5,
+  golf: 6,
+  ncaam: 7,
+  nhl: 8,
+  epl: 9,
+  // UCL sits between EPL (9) and MLS (12) so on UCL matchdays it auto-picks
+  // for the soccer slot over MLS, while still yielding to EPL when both have
+  // games. UEL one notch below — Europa nights pair with UCL but UCL wins.
+  ucl: 10,
+  uel: 11,
+  mls: 12,
+  fifa: 13,
+  ncaaw: 14,
+  wnba: 15,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -310,11 +344,18 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // scaled down so scoring bonus normalizes the same way.
   wnba:   { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 28,  regulationPeriods: 4 },
   ncaam:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 2 },
+  // NCAAW: similar quarter/half structure as NCAAM, lower scoring (~70 vs ~75).
+  ncaaw:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 25,  regulationPeriods: 2 },
+  // NCAAF: scoring similar to NFL, mirrors its calibration.
+  ncaaf:  { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
   nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
   fifa:   { multiplier: 22,  overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   mls:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // UCL / UEL: 90-min soccer, mirrors EPL.
+  ucl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  uel:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
 };
@@ -657,11 +698,15 @@ export function espnGameUrl(game: Game): string {
     case "nba": return `https://www.espn.com/nba/game/_/gameId/${game.id}`;
     case "wnba": return `https://www.espn.com/wnba/game/_/gameId/${game.id}`;
     case "ncaam": return `https://www.espn.com/mens-college-basketball/game/_/gameId/${game.id}`;
+    case "ncaaw": return `https://www.espn.com/womens-college-basketball/game/_/gameId/${game.id}`;
+    case "ncaaf": return `https://www.espn.com/college-football/game/_/gameId/${game.id}`;
     case "nfl": return `https://www.espn.com/nfl/game/_/gameId/${game.id}`;
     case "nhl": return `https://www.espn.com/nhl/game/_/gameId/${game.id}`;
     case "epl":
     case "mls":
     case "fifa":
+    case "ucl":
+    case "uel":
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
     case "golf": return `https://www.espn.com/golf/leaderboard`;
     case "tennis": return `https://www.espn.com/tennis/scoreboard`;
@@ -675,12 +720,17 @@ export function sportStreamFallback(sport: Sport): string {
     case "nba": return "https://www.nba.com/watch";
     case "wnba": return "https://www.wnba.com/watch";
     case "ncaam": return "https://www.espn.com/watch/";
+    case "ncaaw": return "https://www.espn.com/watch/";
+    case "ncaaf": return "https://www.espn.com/watch/";
     case "nfl": return "https://www.nfl.com/plus/";
     case "nhl": return "https://www.espn.com/watch/";
     case "mlb": return "https://www.mlb.com/tv";
     case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";
     case "fifa": return "https://www.foxsports.com/live";
+    // UCL / UEL: Paramount+ holds US rights through 2030.
+    case "ucl": return "https://www.paramountplus.com/sports/uefa-champions-league/";
+    case "uel": return "https://www.paramountplus.com/sports/uefa-europa-league/";
     case "tennis": return "https://www.tennischannel.com/";
     case "golf": return "https://www.pgatour.com/live";
   }

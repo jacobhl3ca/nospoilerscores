@@ -34,9 +34,6 @@ interface LeagueColumnProps {
   // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
   // covers mobile; this is the desktop-equivalent path.
   onRetry?: () => void;
-  // Slot is explicitly empty — render just the header + dropdown so the user
-  // can switch back; skip everything below.
-  isEmpty?: boolean;
   // 0/1/2. Used by the drag handle to identify the source slot on drag start;
   // the parent owns reorder logic and writes the new slot order back to prefs.
   slotIdx?: number;
@@ -441,7 +438,6 @@ export default function LeagueColumn({
   onSwapLeague,
   shownElsewhere,
   onRetry,
-  isEmpty,
   slotIdx,
   onReorderSlots,
 }: LeagueColumnProps) {
@@ -694,40 +690,19 @@ export default function LeagueColumn({
               }
             } : undefined}
           >
-            <span
-              className="inline-flex flex-col justify-between items-center mr-1.5 select-none"
-              style={{
-                color: "var(--text-muted)",
-                opacity: 0.35,
-                width: "5px",
-                height: "12px",
-              }}
-              aria-hidden="true"
-              title={canDrag ? "Drag the header to reorder" : undefined}
-            >
-              <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
-              <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
-              <span style={{ width: "3px", height: "3px", borderRadius: "9999px", background: "currentColor" }} />
-            </span>
+            {/* Drag-to-reorder still works on the whole title row (cursor:
+                grab) — the visual dot indicator was dropped. */}
             {isSwappable ? (
               <div ref={swapRef} className="relative">
                 <button
                   onClick={() => setSwapOpen(!swapOpen)}
-                  className="flex items-center gap-0.5 cursor-pointer transition-colors hover:opacity-80"
+                  className="cursor-pointer transition-colors hover:opacity-80"
                   style={{ color: "var(--text)" }}
                   title="Switch league"
                 >
-                  <h2 className="text-base sm:text-lg font-bold tracking-wide" style={isEmpty ? { color: "var(--text-muted)" } : undefined}>
-                    {isEmpty ? "Empty" : league.label}
+                  <h2 className="text-base sm:text-lg font-bold tracking-wide">
+                    {league.label}
                   </h2>
-                  <svg
-                    width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                    className={`transition-transform duration-150 ${swapOpen ? "rotate-180" : ""}`}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
                 </button>
                 {swapOpen && (
                   <div
@@ -745,7 +720,7 @@ export default function LeagueColumn({
                       Auto
                     </button>
                     {swappableOptions!.map((opt) => {
-                      const isCurrent = !isEmpty && opt.sport === league.sport;
+                      const isCurrent = opt.sport === league.sport;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
                       return (
                         <button
@@ -769,8 +744,8 @@ export default function LeagueColumn({
                       onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{
-                        color: isEmpty ? "var(--accent)" : "var(--text-muted)",
-                        fontWeight: isEmpty ? 600 : 400,
+                        color: "var(--text-muted)",
+                        fontWeight: 400,
                         borderTop: "1px solid var(--border)",
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
@@ -782,25 +757,18 @@ export default function LeagueColumn({
                 )}
               </div>
             ) : (
-              <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: isEmpty ? "var(--text-muted)" : "var(--text)" }}>
-                {isEmpty ? "Empty" : league.label}
+              <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+                {league.label}
               </h2>
             )}
-            <span
-              className="invisible ml-1.5"
-              aria-hidden="true"
-              style={{ width: "5px", height: "12px", display: "inline-block" }}
-            />
           </div>
-          {isEmpty ? null : league.golfTournament ? (
+          {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
           ) : (
             <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
           )}
         </div>
       )}
-      {isEmpty ? null : (<>
-      {/* non-empty body */}
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
           <TeamView
@@ -942,7 +910,6 @@ export default function LeagueColumn({
           ))}
         </div>
       )}
-      </>)}
     </div>
   );
 }

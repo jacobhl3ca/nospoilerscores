@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sport } from "@/lib/types";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -35,15 +35,21 @@ export type PlayHandler = (opts: PlayOpts) => void;
 interface NewsColumnProps {
   title: string;
   sources: NewsSource[];
-  // 3rd-column selector — same dropdown UX as the scores view.
+  // League swap selector — click the title to pick a different league.
+  // Callback receives undefined for Auto (revert to default) and "empty" to
+  // hide the column entirely.
   swappableOptions?: { sport: Sport; label: string }[];
-  selectedThirdLeague?: Sport;
-  onSwapLeague?: (sport: Sport | undefined) => void;
+  shownElsewhere?: Sport[];
+  selectedSport?: Sport;
+  onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // When true, the column renders only its source cards — the title row is
   // rendered separately above (e.g. as part of the page-level TitleStrip
   // that sits above AlignedVideoStrip). Keeps the league title above the
   // big-format video strip instead of buried below it.
   hideTitle?: boolean;
+  // Override the default narrow column width (e.g. for single-column mode).
+  // When omitted, falls back to the standard 225/280px max.
+  widthClassName?: string;
   // Video card click → open inline player modal. Called only when the item
   // has either a direct HLS stream (MLB) or a prebake-validated YouTube ID.
   // Receives the full playback payload so the modal can pick the right player.
@@ -56,73 +62,95 @@ interface NewsColumnProps {
 export function NewsColumnTitle({
   title,
   swappableOptions,
-  selectedThirdLeague,
+  shownElsewhere,
+  selectedSport,
   onSwapLeague,
 }: {
   title: string;
   swappableOptions?: { sport: Sport; label: string }[];
-  selectedThirdLeague?: Sport;
-  onSwapLeague?: (sport: Sport | undefined) => void;
+  shownElsewhere?: Sport[];
+  selectedSport?: Sport;
+  onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
 }) {
   const [swapOpen, setSwapOpen] = useState(false);
+  const swapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!swapOpen) return;
+    const onAway = (e: MouseEvent) => {
+      if (swapRef.current && !swapRef.current.contains(e.target as Node)) {
+        setSwapOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onAway);
+    return () => document.removeEventListener("mousedown", onAway);
+  }, [swapOpen]);
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
   return (
     <div
       className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30"
       style={{ background: "var(--bg)", paddingTop: "1.75rem" }}
     >
-      <div className="flex items-center justify-center">
-        <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
+      <div className="relative flex items-center justify-center px-6 w-full">
         {isSwappable ? (
-          <div className="relative">
+          <div ref={swapRef} className="relative">
             <button
               onClick={() => setSwapOpen(!swapOpen)}
-              className="flex items-center gap-0.5 cursor-pointer transition-colors hover:opacity-80"
+              className="cursor-pointer transition-colors hover:opacity-80"
               style={{ color: "var(--text)" }}
-              title="Switch news feed"
+              title="Switch news league"
             >
               <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
-              <svg
-                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                className={`transition-transform duration-150 ${swapOpen ? "rotate-180" : ""}`}
-                style={{ color: "var(--text-muted)" }}
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
             </button>
             {swapOpen && (
               <div
                 className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[120px]"
                 style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
               >
+                {/* Auto reverts to the in-season default for this slot. */}
                 <button
                   onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
                   className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                  style={{ color: "var(--text-muted)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  Auto
+                </button>
+                {swappableOptions!.map((opt) => {
+                  const isCurrent = opt.sport === selectedSport;
+                  const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
+                  return (
+                    <button
+                      key={opt.sport}
+                      onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
+                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                      style={{
+                        color: isCurrent ? "var(--accent)" : isElsewhere ? "var(--text-muted)" : "var(--text)",
+                        fontWeight: isCurrent ? 600 : 400,
+                      }}
+                      title={isElsewhere ? "Already shown in another column" : undefined}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+                {/* Empty hides the column entirely (matches the scores-view
+                    behavior). User re-adds via the + button on scores or via
+                    the focus pill. */}
+                <button
+                  onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
+                  className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                   style={{
-                    color: !selectedThirdLeague ? "var(--accent)" : "var(--text)",
-                    fontWeight: !selectedThirdLeague ? 600 : 400,
+                    color: "var(--text-muted)",
+                    borderTop: "1px solid var(--border)",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
-                  Top Headlines
+                  Empty
                 </button>
-                {swappableOptions!.map((opt) => (
-                  <button
-                    key={opt.sport}
-                    onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
-                    className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
-                    style={{
-                      color: opt.sport === selectedThirdLeague ? "var(--accent)" : "var(--text)",
-                      fontWeight: opt.sport === selectedThirdLeague ? 600 : 400,
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
               </div>
             )}
           </div>
@@ -131,7 +159,6 @@ export function NewsColumnTitle({
             {title}
           </h2>
         )}
-        <span className="text-sm invisible ml-1.5" aria-hidden="true">★</span>
       </div>
       <span
         className="text-[9px] sm:text-[10px] italic mt-0.5 block"
@@ -523,18 +550,22 @@ export default function NewsColumn({
   title,
   sources,
   swappableOptions,
-  selectedThirdLeague,
+  shownElsewhere,
+  selectedSport,
   onSwapLeague,
   hideTitle,
+  widthClassName,
   onPlayVideo,
 }: NewsColumnProps) {
+  const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
   return (
-    <div className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]">
+    <div className={`${widthCls} min-h-[60vh]`}>
       {!hideTitle && (
         <NewsColumnTitle
           title={title}
           swappableOptions={swappableOptions}
-          selectedThirdLeague={selectedThirdLeague}
+          shownElsewhere={shownElsewhere}
+          selectedSport={selectedSport}
           onSwapLeague={onSwapLeague}
         />
       )}

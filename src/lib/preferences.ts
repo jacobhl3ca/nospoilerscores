@@ -5,7 +5,9 @@ const STORAGE_KEY = "nss-preferences";
 // Compact encoding for share URLs: mlb→m, nba→n, wnba→wn, ncaam→c, nhl→h, nfl→f, golf→g, tennis→t, fifa→w
 // The decoder regex (`[a-z]+`) and SHORT_TO_SPORT lookup handle multi-char codes,
 // so wnba doesn't need a single char — keeps fifa→w stable for existing share URLs.
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s" };
+// Added 2026-05-27: ncaaw→cw (women's college bb), ncaaf→cf (college football),
+// ucl→uc (Champions League), uel→ue (Europa League).
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;
@@ -141,6 +143,26 @@ export interface Preferences {
   defaultLandingView?: DefaultLandingView;
   // Ratings on launch: auto (smart morning reset), always off, always on.
   defaultRatings?: DefaultRatings;
+  // News-view column count (1, 2, or 3). Default 1.
+  newsColCount?: 1 | 2 | 3;
+  // Hour-of-day (user-local) at which "smart" landing flips from yesterday
+  // to today. 0-23. Default 13 (1 PM local) — covers when most morning
+  // slate is final for Eastern fans; users in other zones can pick their own.
+  smartCutoffHour?: number;
+  // Per-sport custom news-source ordering. Keyed by sport, value is an
+  // ordered list of source labels (e.g. ["NBA Top Videos", "ESPN", ...]).
+  // Sources missing from the list fall back to the cascade default order
+  // appended to the end. Absence of an entry = use Smart (default) order.
+  newsSourceOrder?: Record<string, string[]>;
+  // Source-type pill filter for the news view. "all" shows every source;
+  // others restrict to one type globally across all visible leagues.
+  newsTypeFilter?: "all" | "espn" | "reddit" | "homepage";
+  // When set, the news view shows ONLY this entry. "espn" focuses the
+  // always-present ESPN entry; otherwise a league sport. Undefined = all.
+  newsFocusLeague?: Sport | "espn";
+  // Source labels the user has hidden via the per-source visibility checkbox.
+  // Applied alongside the type pill (independent filters).
+  newsHiddenSources?: string[];
 }
 
 const defaults: Preferences = {
@@ -154,6 +176,9 @@ const defaults: Preferences = {
   defaultDateMode: "smart",
   defaultLandingView: "remember",
   defaultRatings: "auto",
+  newsColCount: 3,
+  smartCutoffHour: 13,
+  newsTypeFilter: "all",
 };
 
 export function loadPreferences(): Preferences {

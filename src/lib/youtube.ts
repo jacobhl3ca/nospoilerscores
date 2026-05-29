@@ -6,6 +6,13 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   nhl: "NHL",
   nfl: "NFL",
   ncaam: "March Madness",
+  // NCAAW: same NCAA tournament uploader as NCAAM ("March Madness" channel
+  // posts both men's and women's brackets). Regular-season games fall through
+  // to the no-channel secondary search — same limitation NCAAM has.
+  ncaaw: "March Madness",
+  // NCAAF: ESPN College Football posts per-game recaps with title format
+  // "Team A vs. Team B | Full Game Highlights | ESPN College Football".
+  ncaaf: "ESPN College Football",
   fifa: "FIFA",
   // EPL: Premier League's own YouTube channel posts only short clips
   // (broadcast rights restrict full game recaps). NBC Sports (US broadcaster)
@@ -15,6 +22,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // MLS: the official channel is "Major League Soccer", not "MLS" —
   // the abbreviation never matched, so the labeled button always 404'd.
   mls: "Major League Soccer",
+  // UCL / UEL: UEFA's own channel posts compilations not per-game recaps;
+  // CBS Sports Golazo (US rights holder) posts per-match Extended Highlights
+  // with title format "TeamA vs. TeamB: Extended Highlights | UCL [Round] |
+  // CBS Sports Golazo". They only post the extended version (no standard
+  // companion) — the worker's extended-vs-standard demote still picks them
+  // because nothing else competes at the same tier.
+  ucl: "CBS Sports Golazo",
+  uel: "CBS Sports Golazo",
   // Golf majors — each tournament has its own channel
   golf_masters: "The Masters",
   golf_pga: "PGA Championship",

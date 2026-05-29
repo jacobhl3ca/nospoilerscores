@@ -186,7 +186,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
 function stripLeaguePrefixForMobile(label: string): string {
   let s = label;
   for (let i = 0; i < 3; i++) {
-    const m = s.match(/^(?:NBA|MLB|NHL|NFL|EPL|MLS|NCAAM|NCAAF|ESPN|GOLF|TENNIS|F1|WNBA)\s+/i);
+    const m = s.match(/^(?:NBA|MLB|NHL|NFL|EPL|MLS|UCL|UEL|NCAAM|NCAAW|NCAAF|ESPN|GOLF|TENNIS|F1|WNBA)\s+/i);
     if (!m) break;
     s = s.slice(m[0].length);
   }

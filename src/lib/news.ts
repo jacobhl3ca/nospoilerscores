@@ -11,6 +11,8 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   nba: "/basketball/nba",
   wnba: "/basketball/wnba",
   ncaam: "/basketball/mens-college-basketball",
+  ncaaw: "/basketball/womens-college-basketball",
+  ncaaf: "/football/college-football",
   nfl: "/football/nfl",
   nhl: "/hockey/nhl",
   golf: "/golf/pga",
@@ -18,6 +20,8 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   fifa: "/soccer",
   epl: "/soccer/eng.1",
   mls: "/soccer/usa.1",
+  ucl: "/soccer/uefa.champions",
+  uel: "/soccer/uefa.europa",
 };
 
 export interface NewsItem {
@@ -162,9 +166,16 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   // ATP/WTA) marks via upload.wikimedia.org, which allows hotlinking with a
   // browser UA and is fronted by Wikimedia's CDN.
   ncaam: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+  // NCAAW/NCAAF reuse the NCAA mark — same governing body, no league-specific
+  // logo on ESPN's CDN. Distinction is in the column header label + game data.
+  ncaaw: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+  ncaaf: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
   golf: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
   tennis: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/International_Tennis_Federation_Logo.svg/250px-International_Tennis_Federation_Logo.svg.png",
   epl: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
+  // UCL = ESPN soccer league id 2; UEL = id 2310.
+  ucl: "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png",
+  uel: "https://a.espncdn.com/i/leaguelogos/soccer/500/2310.png",
 };
 
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds
@@ -236,6 +247,20 @@ export const GENERIC_CASCADE: ColumnSource[] = [
   { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: ESPN_BRAND_LOGO },
   { label: "r/sports", key: "reddit-general", kind: "prebaked" },
 ];
+
+// Classify a news source by its origin so the pill row above the news view
+// can globally filter to one type. Reddit = `reddit-*` keys; Homepage =
+// league.com feeds + league-official video feeds (NBA Top Videos etc.); ESPN
+// = everything else (ESPN headlines, ESPN videos, ESPN per-league cards).
+export type NewsSourceType = "espn" | "reddit" | "homepage";
+export function classifySource(src: { key?: string; label?: string }): NewsSourceType {
+  const key = src.key ?? "";
+  if (key.startsWith("reddit-")) return "reddit";
+  // PREBAKED_FEEDS keys are bare sport codes ("mlb"/"nba"/"wnba"/"nhl");
+  // PREBAKED_VIDEOS keys are "<sport>-videos". Both are league-official.
+  if (/^(mlb|nba|wnba|nhl|nfl|ncaam|ncaaw|ncaaf|golf|tennis|fifa|epl|mls|ucl|uel)(-videos)?$/.test(key)) return "homepage";
+  return "espn";
+}
 
 // Reddit's preview.redd.it / external-preview.redd.it images get blocked by
 // Safari's anti-tracking and Firefox's strict mode when loaded as third-party
