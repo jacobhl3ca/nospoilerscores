@@ -248,18 +248,18 @@ export const GENERIC_CASCADE: ColumnSource[] = [
   { label: "r/sports", key: "reddit-general", kind: "prebaked" },
 ];
 
-// Classify a news source by its origin so the pill row above the news view
-// can globally filter to one type. Reddit = `reddit-*` keys; Homepage =
-// league.com feeds + league-official video feeds (NBA Top Videos etc.); ESPN
-// = everything else (ESPN headlines, ESPN videos, ESPN per-league cards).
-export type NewsSourceType = "espn" | "reddit" | "homepage";
+// Classify a news source by its origin for the funnel source filter.
+//  - reddit:    `reddit-*` keys (r/sports, r/nba, …)
+//  - topvideos: any `*-videos` feed (NBA Top Videos, MLB Most Popular, ESPN Videos)
+//  - espn:      ESPN headlines + ESPN per-league cards (`espn-top`, `espn-<sport>`)
+//  - homepage:  the league-official site feeds (NBA.com / MLB.com — bare sport keys)
+export type NewsSourceType = "topvideos" | "espn" | "reddit" | "homepage";
 export function classifySource(src: { key?: string; label?: string }): NewsSourceType {
   const key = src.key ?? "";
   if (key.startsWith("reddit-")) return "reddit";
-  // PREBAKED_FEEDS keys are bare sport codes ("mlb"/"nba"/"wnba"/"nhl");
-  // PREBAKED_VIDEOS keys are "<sport>-videos". Both are league-official.
-  if (/^(mlb|nba|wnba|nhl|nfl|ncaam|ncaaw|ncaaf|golf|tennis|fifa|epl|mls|ucl|uel)(-videos)?$/.test(key)) return "homepage";
-  return "espn";
+  if (key.endsWith("-videos")) return "topvideos";
+  if (key.startsWith("espn")) return "espn";
+  return "homepage";
 }
 
 // Reddit's preview.redd.it / external-preview.redd.it images get blocked by

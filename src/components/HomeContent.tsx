@@ -877,7 +877,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     updatePrefs({ newsSourceOrder: next });
   };
   const newsTypeFilter = prefs.newsTypeFilter ?? "all";
-  const setNewsTypeFilter = (t: "all" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
+  const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
   const newsFocusLeague = prefs.newsFocusLeague;
   const setNewsFocusLeague = (s: Sport | "espn" | undefined) => updatePrefs({ newsFocusLeague: s });
   const newsHiddenSources = prefs.newsHiddenSources ?? [];
@@ -1323,12 +1323,13 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                       <NewsPillRow
                         options={[
                           { value: "all", label: "All" },
-                          { value: "espn", label: "ESPN" },
+                          { value: "topvideos", label: "Top videos" },
                           { value: "reddit", label: "Reddit" },
+                          { value: "espn", label: "ESPN" },
                           { value: "homepage", label: "Homepage" },
                         ]}
                         value={newsTypeFilter}
-                        onChange={(v) => setNewsTypeFilter(v as "all" | "espn" | "reddit" | "homepage")}
+                        onChange={(v) => setNewsTypeFilter(v as "all" | "topvideos" | "espn" | "reddit" | "homepage")}
                       />
                       {/* League filtering removed (Jacob 5/29) — clicking a
                           column's league name does the same thing. Source only. */}
@@ -1344,35 +1345,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                     </div>
                   )}
                 </div>
-                <div ref={newsOrderRef} className="relative">
-                  <button
-                    onClick={() => setNewsOrderOpen(!newsOrderOpen)}
-                    className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-                    style={{
-                      background: newsOrderOpen ? "var(--accent)" : "var(--bg-card)",
-                      border: `1px solid ${newsOrderOpen ? "var(--accent)" : "var(--border)"}`,
-                      color: newsOrderOpen ? "white" : "var(--text-muted)",
-                    }}
-                    title="Reorder news"
-                    aria-label="Reorder news columns"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="4" y1="7" x2="20" y2="7" />
-                      <line x1="4" y1="12" x2="20" y2="12" />
-                      <line x1="4" y1="17" x2="20" y2="17" />
-                    </svg>
-                  </button>
-                  {newsOrderOpen && newsCol1Sport && (
-                    <NewsOrderMenu
-                      cascadeOrder={leagueSourceCascade(newsCol1Sport).map((c) => c.label)}
-                      currentOrder={newsOrderForCol1}
-                      hiddenLabels={newsHiddenSources}
-                      onChange={(order) => setNewsSourceOrder(newsCol1Sport, order)}
-                      onToggleHide={toggleNewsSourceHidden}
-                      onReset={() => clearNewsSourceOrder(newsCol1Sport)}
-                    />
-                  )}
-                </div>
+                {/* ☰ source-order / hide menu removed for now (Jacob 5/29) —
+                    mainly useful in single-column view; backlogged for later. */}
               </>
             )}
 
@@ -1469,16 +1443,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             : visibleNewsEntries;
           const renderSourcesFor = (entry: typeof visibleNewsEntries[number]): NewsSource[] => {
             const filtered = entry.orderedCascade
-              .filter((s) => {
-                if (newsTypeFilter === "all") return true;
-                const t = classifySource(s);
-                // "Homepage" = the aggregated homepage feed, which includes ESPN
-                // (videos + headlines) AND league-official feeds — so col 3 (the
-                // ESPN "News" col) shows under Homepage and All ≈ Homepage at the
-                // top (they differ only by Reddit, which sits deeper). (Jacob 5/29)
-                if (newsTypeFilter === "homepage") return t === "homepage" || t === "espn";
-                return t === newsTypeFilter;
-              })
+              .filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter)
               .filter((s) => !newsHiddenSources.includes(s.label));
             return cascadeToSources(filtered);
           };

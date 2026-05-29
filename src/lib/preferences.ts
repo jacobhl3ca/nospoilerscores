@@ -156,7 +156,7 @@ export interface Preferences {
   newsSourceOrder?: Record<string, string[]>;
   // Source-type pill filter for the news view. "all" shows every source;
   // others restrict to one type globally across all visible leagues.
-  newsTypeFilter?: "all" | "espn" | "reddit" | "homepage";
+  newsTypeFilter?: "all" | "topvideos" | "espn" | "reddit" | "homepage";
   // When set, the news view shows ONLY this entry. "espn" focuses the
   // always-present ESPN entry; otherwise a league sport. Undefined = all.
   newsFocusLeague?: Sport | "espn";
