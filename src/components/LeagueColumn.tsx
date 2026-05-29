@@ -163,10 +163,11 @@ function getPlayoffSubtitle(
 
     const parsed = parseEtTime(entry.timeET);
     const now = nowInEt();
-    const isToday =
-      now.y === +selectedDate.slice(0, 4) &&
-      now.mo === +selectedDate.slice(4, 6) &&
-      now.d === +selectedDate.slice(6, 8);
+    const todayYmd = now.y * 10000 + now.mo * 100 + now.d;
+    const selectedYmd = +selectedDate;
+    // Past day: the show is over, the scheduled time is meaningless. Hide.
+    if (selectedYmd < todayYmd) return null;
+    const isToday = selectedYmd === todayYmd;
     const minsSinceStart =
       parsed && isToday ? (now.h - parsed.h) * 60 + (now.m - parsed.m) : -1;
     const withinAirWindow = minsSinceStart >= 0 && minsSinceStart <= 180;
