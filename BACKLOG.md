@@ -1,91 +1,219 @@
 # HideScore — Master Backlog
 
-Compiled 2026-05-13 from a full scrub of project memory + session notes + git history. Check items off as you ship them. Source memory file is cited so the implementation plan can be re-loaded.
-
-Tier key:
-- **T1** = time-sensitive (this week)
-- **T2** = deferred with plan ready
-- **T3** = older backlog, still open
-- **T4** = polish / low priority
-- **T5** = strategic reminder (not action, just don't forget)
-
----
-
 ## T1 — Time-sensitive
 
-- [ ] **Reddit post on /r/hockey or /r/nba** — promo during playoff window (NBA Finals ~6/5, Stanley Cup ~6/4). Direct link to hidescore.com, not App Store. **Drafted 2026-05-13 — see REDDIT_DRAFT.md, awaiting title/body pick.** _src: session_hidescore_resubmit_2026_05_13.md_
-- [ ] **Apple verdict watch** — resubmitted 5/13, typical 24-48h. Passive. _src: session_hidescore_resubmit_2026_05_13.md_
-- [ ] **iOS app rebuild + TestFlight upload** — web has ~3 commits ahead of iOS bundle (Starts 5/3 fix, layout overhaul, playoff lookahead). `npx cap sync ios` → Xcode archive → TestFlight. _src: project_hidescore_ios_rebuild_2026_05_04.md_
-- [x] **www.hidescore.com → 525 fix** — ✅ FIXED 2026-05-13. Root cause: stale CNAME → `parkingpage.namecheap.com` (Namecheap default). Updated CNAME → `hidescore.com` (proxied) + added www to nospoilerscores Pages custom domains via CF API. Cert provisioned in ~30s. Now serves apex content (no canonical redirect — `<link rel="canonical">` handles SEO). Upgrade to 301 later via CF dashboard if needed.
-- [ ] **GSC validation clicks** — 3 rows safe to click Validate (5xx, 404, redirect). Skip "Crawled-not-indexed". No code, ~2 min. _src: session_hidescore_gsc_2026_04_27.md_
+- [ ] **GitHub Actions minutes — follow-up trims if the cap looms again.** The two core cron cuts shipped 5/29; this tracks the remaining conditional levers.
+  > **DONE 5/29** (direct commits to `main`, `476b85b` / `7ccb9da`): `staleness-check.yml` `*/30`→`0 * * * *` (hourly, −720/mo) and `news-prebake.yml` hourly→`0 */2 * * *` (every 2h, −720/mo). Projected ~3,420 → ~1,980 min/mo, just under the 2,000 free tier (cycle reset ~6/1). A one-time confirm-check is scheduled 6/2 9am ET (routine `trig_01NnceGiHkisQki3uBpWVeBb`) to verify the new rate holds after reset.
+  > **Still open / conditional:** (1) **consider `staleness-check` → every 2h (`0 */2 * * *`, another ~−360/mo) — especially if Actions approaches the cap again.** It's a pure watchdog (produces no content), so a 2h check still catches outages; this is the next lever to pull and the cheapest headroom. (2) Before merging the `staging` `highlight-fallback-check.yml` (currently a standalone HOURLY cron, +720/mo, NOT yet on main), fold its `node scripts/check-highlight-fallbacks.mjs` step into `staleness-check.yml`'s hourly job so it costs 0 extra minutes instead of re-blowing the budget. _src: session_loose_ends_audit_2026_05_28.md (chat 2d0aabd5); 2026-05-29 cron trim_
+
+- [ ] **Commit + merge the `staging` layout overhaul.** The new homepage / bottom-tab-bar overhaul is built but sitting uncommitted on `staging` — commit it (as Jacob, no Co-Authored-By), then decide staging→main.
+  > ~14 modified files (new-site mockup + bottom tab-bar header + highlights logic). Gates two T1 items: it supersedes the standalone "Header overflow" trim (T2) and must land BEFORE the iOS rebuild, or the rebuilt bundle ships the old layout. Decide: ship staging→main now, or keep iterating. _src: session_loose_ends_audit_2026_05_28.md (chats 73df0d24, 829e00b8)_
+
+- [ ] **iOS app rebuild + TestFlight upload.** Rebuild the iOS bundle (it's behind web) and push to TestFlight.
+  > **Update 5/26: a 1.0.3 build 6 was already uploaded → TestFlight** (see the done "Next iOS build (1.0.3)" item below). Since the app loads live via `server.url`, the overhaul appears in-app automatically once it deploys — the upload wasn't blocked by the ordering. Only thing still pending: re-run `npx cap sync ios` AFTER the staging overhaul lands to refresh the offline-only `out/` first-launch fallback (low priority), then upload a fresh build if you want the fallback current. Web is ~3 commits ahead of the iOS bundle (Starts 5/3 fix, layout overhaul, playoff lookahead). `npx cap sync ios` → Xcode archive → TestFlight. _src: project_hidescore_ios_rebuild_2026_05_04.md_
+
+- [ ] **Reddit post on /r/hockey or /r/nba.** Promo post during the playoff window, linking straight to the site.
+  > Timed to NBA Finals ~6/5 and Stanley Cup ~6/4. Link to hidescore.com, not the App Store. Drafted 2026-05-13 — see `REDDIT_DRAFT.md`, awaiting title/body pick. _src: session_hidescore_resubmit_2026_05_13.md_
+
+- [ ] **Apple verdict watch.** Wait on Apple's review decision for the 5/13 resubmission.
+  > Resubmitted 5/13, typical 24–48h turnaround. Passive — nothing to do but watch. _src: session_hidescore_resubmit_2026_05_13.md_
+
+- [ ] **GSC validation clicks.** Click Validate on the three safe Search Console rows.
+  > Safe rows: 5xx, 404, redirect. Skip "Crawled-not-indexed". No code, ~2 min. _src: session_hidescore_gsc_2026_04_27.md_
 
 ## T2 — Deferred with plan ready
 
-- [ ] **Bracket modal: figure out spoiler-safe view** — bracket-modal feature is built on `bracket-modal` branch (preview at `https://bracket-modal.nospoilerscores.pages.dev`) but the bracket itself reveals series scores (`COL 4 LAK 0` etc.), which is exactly what HideScore exists to hide. Decide where/how to surface it — gate behind monkey-see toggle? Move to News view only? Strip scores and show empty bracket + matchups only? NHL image looks good visually (`#root` crop) and NBA Wikipedia clip works too; gating is the question, not rendering. Branch has working scrapers + `BracketTrigger`/`BracketFullModal` components in `src/components/BracketModal.tsx`. **Do not merge to main until decided.**
-- [ ] **VideoModal spoiler reveal overlay (autoplay-aware)** — MLB's official YouTube channel bakes the result into highlight thumbnails ("Complete Game Shutout!"). When a user clicks "Watch highlight" from a GameCard, the YouTube poster flashes the result before playback starts. Initial fix (commit `5131079f`, reverted in `f498eaf5`) shipped a Tap-to-reveal overlay unconditionally when monkey was off — but that adds friction for users whose browsers DO autoplay (the video starts immediately, no spoiler visible). **Refined plan:** detect autoplay availability and only show the reveal overlay when autoplay was BLOCKED. For HLS `<video>`: `videoRef.play()` returns a Promise — `.catch()` ⇒ autoplay denied ⇒ show overlay. For YouTube iframe: load with `autoplay=1`, listen for onStateChange — if state stays at -1/5 after ~500ms, autoplay denied. Hide rendered headline whenever overlay is active. Default monkey-on path stays unchanged. Reverted code lives in commit `5131079f` as starting reference.
-- [ ] **MLB player option 1** — force hls.js on Safari + disable subtitle tracks → Reddit-style clean controls. Touch `VideoModal.tsx:133` (skip native HLS branch), remove CC button at `:332-342`. _src: project_hidescore_mlb_player_consistency.md_
-- [ ] **FastCast pin** — pin Real Fast + FastCast to slots 1+2 of mlb-videos strip. New `fetchMLBPinnedRoundups()` in `scripts/prebake-news.mjs`, prepend before `items.length >= 10` cap. _src: project_hidescore_mlb_fastcast_pin.md_
-- [ ] **Post-R2 #1: NBC.com scraper** — deep-link NBC broadcast chips to `nbc.com/watch/...` URLs. New `scripts/scrape-nbc-sports.mjs` mirroring prime-asins pattern. Edit `espn.ts:671`. _src: project_hidescore_post_r2_followups.md_
-- [x] **Post-R2 #2: espn-top cron diagnostic** — ✅ DONE 2026-05-13 commit `fb2d9968`. Root cause: ESPN intermittently serves homepage HTML *without* the `headlineStack top-headlines` block. Same Mac mini residential IP, 5 min apart, opposite results. Mac mini cron's been losing the lottery most of the day. Fix: 3x retry with 1.5s gap on empty result in `fetchESPNTopHeadlines`. Successful HTML re-seeds module cache for the videos scraper too. Worst case: 4 fetches/~5s instead of 1.
-- [x] **Post-R2 #3: espn-top fallback tightening** — ✅ DONE 2026-05-13 commit `0e1f4618`. Cap-at-9 was already obsolete (broken `now.core.api.espn.com` fallback was removed earlier). Added narrow blocklist patterns (`transfer rumors`, `daily.*playoffs|schedule|bracket`) to global ARTICLE_BLOCKLIST. Skipped bare `odds` + `preview` — too broad, false-positives on legit game previews.
-- [x] **R2 staleness checker** — ✅ DONE 2026-05-13. New `scripts/check-staleness.mjs` + `.github/workflows/staleness-check.yml` runs every 30min, hits all 38 prebaked feeds at `hidescore.com` (worker → R2 path), parses `fetchedAt`/`generatedAt`. **Tiered alerts:** warnings (past per-feed `warnH`) logged only — workflow stays green, no email; critical (past 4× `warnH`) or fetch error fails workflow → GH emails repo owner. Thresholds: news/espn-airings warn=6h crit=24h; prime-asins warn=18h crit=72h; big-inning warn=36h crit=144h. **Day-1 caught two real silent-failure modes:** Mac mini stuck uploading 25.8h-stale files (self-recovered); espn-videos 28h stale due to ESPN WAF challenging GHA IPs → moved to Mac mini cron + retry mirror (commit `38068ca0`).
-- [ ] **Reddit OAuth completion** — code shipped 4/28 commit 37f3816, waiting on Reddit Data API approval for `Reasonable_Stick_329` app. If approved: retire Mac mini reddit cron. _src: project_hidescore_reddit_403.md_
-- [ ] **Length toggle (Extended/Condensed)** — start with MLB (most distinct cadences: ~5min condensed vs ~15-20min full recap vs 1-min cuts). _src: project_hidescore_gap_closing_2026_04_13.md_
-- [ ] **ESPN news integration — sort-by-views decision** — ESPN API doesn't expose. Decide: scrape engagement metrics OR editorial curation. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **ESPN news integration — default click action decision** — pick: ESPN gamecast / highlights modal / expand card / nothing. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **MLS-vs-EPL summer overlap decision** — both active May 21 → Aug 1. Which displays? _src: project_hidescore_gap_closing_2026_04_13.md_
-- [ ] **Playoff bracket on subtitle hover** — when a league is in playoffs, hovering the italic `PlayoffSubtitle` under the league header pops a bracket image. Hook point: `LeagueColumn.tsx:679` (`<PlayoffSubtitle …/>`). Live-relevant now (NBA/NHL conference rounds, Stanley Cup ~6/4, NBA Finals ~6/5). **Open Qs before building:** (1) bracket source — ESPN bracket page screenshot vs generated SVG from `games[].playoffLabel` data we already parse vs hand-curated PNG per league; ESPN screenshot likely spoils scores so avoid. (2) mobile fallback — no hover; tap-to-open modal? long-press? small chevron affordance? (3) "optimally" positioning — anchored tooltip beside the subtitle vs centered modal vs slide-down panel under the league column. (4) per-league applicability — NBA/NHL bracket-style yes; MLB has bracket too; WNBA/MLS playoffs; ignore for golf (no bracket). NCAA = giant 64-team grid, treat separately.
-- [ ] **Adaptive layouts for 1-5 visible league columns** — today the layout is hardcoded for 3 columns (flex row, equal widths, `max-w-[225px] xl:max-w-[280px]` per column in `LeagueColumn.tsx`). With the new in-column "Empty" option (5/24), users can already drop down to 2 or 1. Add a real layout response keyed on the number of NON-empty slots: **1 league** = single centered column, wider (e.g. `max-w-[480px]`) so cards aren't lost in whitespace, optionally with a richer hero treatment; **2 leagues** = two equal columns at a wider per-column max so the slate fills the viewport; **3 leagues** = current behavior; **4-5 leagues** = drop per-column max-width and shrink gaps + abbreviations more aggressively, or fall back to horizontal scroll on narrow viewports. Slot system would need to support more than 3 slots (currently capped at first/second/third in `preferences.ts` + `setSlotLeague`). Mobile/desktop responsive rules differ — 4-5 columns are desktop-only, mobile should auto-collapse to horizontal scroll or stack. Pairs naturally with the column drag-handle (the subtle 3-dot indicator added 5/24 is the affordance — wire it to actual reorder + slot resize). _src: session 2026-05-24_
-- [ ] **Header overflow — bottom-toolbar / tab-bar redesign** — header overflows horizontally on narrow screens: it needs ~422px but phones give 360–414px → 8–62px overflow → the _whole page_ becomes pannable left/right (scores + Settings panel look mis-scaled as a side effect). Confirmed on the live site via Playwright at 360/390/414px, so it's a website bug both native apps inherit through the WebView. Root cause: the right-side icon cluster (`justify-self-end … flex-shrink-0` in `HomeContent.tsx`) can't compress. **Options:** (1) **Bottom toolbar / iOS-style tab bar** (Jacob's pick to explore) — move every icon except the date nav (share, monkey-sort, news, calendar, theme, settings) into a fixed bottom toolbar; header keeps only the H logo + ‹ Yest/Today/Tomo ›, fully clearing the overflow. Works on web + both native apps (just `position:fixed` + `env(safe-area-inset-bottom)` padding, same pattern the footer already uses); actually cleaner _inside_ the native apps than mobile Safari, where a fixed bottom bar can fight Safari's own auto-hiding toolbar. Page needs bottom padding so content/footer isn't covered. Nuance: a true iOS tab bar is for top-level nav (Scores / News / Settings) — monkey-sort + theme are toggles, not nav, so either accept a mixed bar or split (nav in the bar, toggles stay in header). (2) header wraps to two rows on narrow screens — no features cut, taller mobile header. (3) shrink icons `w-7→w-6` + tighten gaps + drop the calendar icon on mobile — stays one row, fixes down to 360px. (4) collapse secondary icons behind a `⋯` overflow menu. Don't regress the `xl:` logo / DateNav-centering breakpoint — see `feedback_hidescore_header_compact.md`. _src: session_hidescore_iphone_toolbar_overflow_2026_05_20.md_
+- [ ] **Bracket modal: figure out the spoiler-safe view.** Decide how to surface the playoff bracket without revealing series scores.
+  > Built on the `bracket-modal` branch (preview `https://bracket-modal.nospoilerscores.pages.dev`), but the bracket shows series scores (`COL 4 LAK 0`) — exactly what HideScore hides. Options: gate behind the monkey-see toggle, move to News view only, or strip scores and show an empty bracket + matchups. Rendering already works (NHL `#root` crop looks good, NBA Wikipedia clip works) — gating is the open question. Scrapers + `BracketTrigger`/`BracketFullModal` live in `src/components/BracketModal.tsx`. **Do not merge to main until decided.**
+
+- [ ] **VideoModal spoiler-reveal overlay (autoplay-aware).** Show a tap-to-reveal overlay only when the browser blocks autoplay, so YouTube thumbnails can't flash the result.
+  > MLB's official channel bakes results into thumbnails ("Complete Game Shutout!"), so the poster spoils before playback. First fix (commit `5131079f`, reverted in `f498eaf5`) showed the overlay unconditionally when monkey was off — but that adds friction where autoplay works. Refined plan: detect autoplay and only overlay when it's BLOCKED. HLS `<video>`: `videoRef.play()` returns a Promise — `.catch()` ⇒ denied ⇒ overlay. YouTube iframe: load `autoplay=1`, watch onStateChange — state stuck at -1/5 after ~500ms ⇒ denied. Hide the rendered headline while the overlay is active. Default monkey-on path unchanged. Reverted code in `5131079f` is the starting reference.
+
+- [ ] **MLB player option 1.** Force hls.js on Safari and drop subtitles for clean, Reddit-style controls.
+  > Touch `VideoModal.tsx:133` (skip the native HLS branch), remove the CC button at `:332-342`. _src: project_hidescore_mlb_player_consistency.md_
+
+- [ ] **FastCast pin.** Pin Real Fast + FastCast to the first two slots of the MLB videos strip.
+  > New `fetchMLBPinnedRoundups()` in `scripts/prebake-news.mjs`, prepend before the `items.length >= 10` cap. _src: project_hidescore_mlb_fastcast_pin.md_
+
+- [ ] **Post-R2 #1: NBC.com scraper.** Deep-link NBC broadcast chips to `nbc.com/watch/...` URLs.
+  > New `scripts/scrape-nbc-sports.mjs` mirroring the prime-asins pattern. Edit `espn.ts:671`. _src: project_hidescore_post_r2_followups.md_
+
+- [ ] **Reddit OAuth completion.** Finish Reddit OAuth once the Data API app is approved.
+  > Code shipped 4/28 (commit `37f3816`), waiting on Reddit Data API approval for the `Reasonable_Stick_329` app. If approved, retire the Mac mini reddit cron. _src: project_hidescore_reddit_403.md_
+
+- [ ] **Length toggle (Extended / Condensed).** Add a highlight-length toggle, starting with MLB.
+  > MLB has the most distinct cadences: ~5 min condensed vs ~15–20 min full recap vs 1-min cuts. _src: project_hidescore_gap_closing_2026_04_13.md_
+
+- [ ] **ESPN news: sort-by-views decision.** Decide how to rank ESPN news without a views signal.
+  > ESPN's API doesn't expose view counts. Choose: scrape engagement metrics, or curate editorially. _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **ESPN news: default click-action decision.** Pick what tapping an ESPN news item does.
+  > Options: ESPN gamecast, highlights modal, expand the card, or nothing. _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **MLS-vs-EPL summer overlap decision.** Decide which league shows when both run over the summer.
+  > Both active May 21 → Aug 1. Which displays? _src: project_hidescore_gap_closing_2026_04_13.md_
+
+- [ ] **Playoff bracket on subtitle hover.** During playoffs, hovering a league's playoff subtitle pops a bracket image.
+  > Hook point: `LeagueColumn.tsx:679` (`<PlayoffSubtitle …/>`). Live-relevant now (NBA/NHL conference rounds, Stanley Cup ~6/4, NBA Finals ~6/5). Open Qs: (1) bracket source — ESPN screenshot (likely spoils scores, avoid) vs generated SVG from the `games[].playoffLabel` data we already parse vs hand-curated PNG per league. (2) mobile has no hover — tap-to-open modal? long-press? chevron? (3) positioning — anchored tooltip vs centered modal vs slide-down panel. (4) per-league — NBA/NHL/MLB have brackets; WNBA/MLS playoffs; golf has none; NCAA's 64-team grid is separate.
+
+- [ ] **Adaptive layouts for 1–5 visible league columns.** Make the column layout respond to how many leagues are shown instead of assuming 3.
+  > Today it's hardcoded for 3 columns (`max-w-[225px] xl:max-w-[280px]` per column in `LeagueColumn.tsx`). The "Empty" slot option (5/24) lets users drop to 2 or 1. Plan, keyed on non-empty slot count: **1** = single centered wider column (~`max-w-[480px]`), maybe a hero treatment; **2** = two wider equal columns; **3** = current; **4–5** = drop per-column max-width, shrink gaps/abbreviations, or horizontal-scroll on narrow viewports. Slot system needs >3 slots (currently first/second/third in `preferences.ts` + `setSlotLeague`). 4–5 columns are desktop-only; mobile collapses to scroll/stack. Pairs with the column drag-handle (the 3-dot indicator added 5/24). _src: session 2026-05-24_
+
+- [ ] **F1 (Formula 1).** Add Formula 1 — a bigger lift than other league adds because races have 22 drivers, not 2 teams.
+  > ESPN endpoint exists (`racing/f1/scoreboard`); channel = `FORMULA 1`, title format `Race Highlights | 2026 <Race> Grand Prix`. The `Away vs Home` GameCard render and the `${away} vs ${home} highlights ${date}` query both break for a 22-competitor event. Needs: (a) a new GameCard branch like the golf/tennis tournament tiles (race + circuit + podium row), (b) `getF1HighlightQuery(raceName, year)` mirroring `getGolfHighlightQuery`, (c) ~3h buffer (race + upload), (d) season window 03-01 → 12-15, (e) a Sunday priority slot. `OFFICIAL_CHANNELS.f1 = "FORMULA 1"` already handled in the AlignedVideoStrip mobile-strip regex. _src: session 2026-05-27 sports-audit_
+
+- [ ] **Additional sports — decide which to add (Olympics first).** Evaluate and pick which other sports to bring in, Olympics first.
+  > Evaluated 2026-05-27 but deferred. In rough priority order:
+  > - **Olympics** (Winter + Summer) — biennial 2-week windows (next: Summer 2028 LA Jul 14–30; Winter 2030 French Alps Feb). Huge audience but no aggregated ESPN feed — each event posts under its sport. Needs a custom source (NBC Olympics or IOC YouTube?), not the simple ESPN-add pattern.
+  > - **La Liga / Bundesliga / Serie A / Ligue 1** — ESPN `soccer/esp.1`, `ger.1`, `ita.1`, `fra.1`. Most US viewers follow one; do prefs gate which shows?
+  > - **Liga MX** — `soccer/mex.1`, year-round (2 splits). Large NYC fanbase, ESPN coverage.
+  > - **NWSL** — `soccer/usa.nwsl`, Mar–Nov. Growing audience.
+  > - **UFC** — `mma/ufc`, most Saturdays. Spoiler-heavy → fits the app. Add if Jacob watches.
+  > - **Ryder Cup** — biennial Sep golf event (next: 2027, Adare Manor, Ireland).
+  > - **NASCAR / IndyCar** — `racing/nascar-cup`, `racing/irl`. Niche overlap with F1; skip unless interested.
+  > - **Cricket (IPL, T20 World Cup)** — `cricket/<league>`. Global big, small US daily audience.
+  > - **Rugby (Six Nations, RWC)** — `rugby/<league>`. Niche in the US.
+  > - **UEFA Conference League** — `soccer/uefa.europa.conf`. Pairs with UCL + UEL.
+  > _src: session 2026-05-27 sports-audit_
+
+- [ ] **Header overflow — bottom-toolbar / tab-bar redesign.** Fix the header overflowing on narrow screens, likely by moving icons to a bottom toolbar.
+  > It needs ~422px but phones give 360–414px → 8–62px overflow → the whole page becomes pannable (scores + Settings look mis-scaled). Confirmed live via Playwright at 360/390/414px — a website bug both native apps inherit through the WebView. Root cause: the right-side icon cluster (`justify-self-end … flex-shrink-0` in `HomeContent.tsx`) can't compress. Options: (1) **bottom toolbar / iOS tab bar** (Jacob's pick) — move all icons except date nav (share, monkey-sort, news, calendar, theme, settings) into a fixed bottom bar; header keeps the H logo + ‹ Yest/Today/Tomo ›. Uses `position:fixed` + `env(safe-area-inset-bottom)` like the footer; cleaner inside the native apps than mobile Safari. Note a true tab bar is for nav (Scores/News/Settings) — toggles like monkey-sort/theme aren't nav, so accept a mixed bar or split them. (2) wrap header to two rows on narrow screens. (3) shrink icons `w-7→w-6` + tighten gaps + drop calendar on mobile. (4) collapse secondary icons behind a `⋯` menu. Don't regress the `xl:` logo / DateNav-centering breakpoint — see `feedback_hidescore_header_compact.md`. **Update (5/21):** option (2) the 2-row wrap was shipped (`833e45a3`) then **REVERTED** (`2165e68b`) — Jacob disliked the unbalanced look. Agreed next = **remove redundant icons**: delete the header App Store icon (it duplicates the footer App Store badge) + fold the calendar into tapping the date label → 3 icons (monkey · news · settings), one row. **The 5/28 layout overhaul on `staging` reworks the header into a bottom tab bar (option 1, Jacob's pick) and likely supersedes this — verify that's merged before doing the standalone trim.** _src: session_hidescore_iphone_toolbar_overflow_2026_05_20.md, session_hidescore_android_app_build_2026_05_20_to_21.md_
+
+- [ ] **Android app — un-table download pill + Play Store decision.** The app is built and sideloadable; the footer download pill is commented out and the Play Store track is parked.
+  > Capacitor Android app built + emulator-verified 5/20-21 (appId `com.jacobhl.hidescore`, WebView → hidescore.com via `server.url`, same as iOS). Signed release APK lives at `public/HideScore.apk` and serves at `hidescore.com/HideScore.apk`. **Open decisions:** (1) **un-table the footer Android download pill** — currently `{/* Android pill tabled until ready */}` in `HomeContent.tsx`; surface it when ready (re-add the `eslint-disable` line that JSX-comment-nesting forced out; the badge SVG must NOT contain the literal "APK" — CF WAF 500s it, use the Android-logo version). (2) **Play Store vs stay-sideload** — Play Console account exists (`7809060308326519816`, $25 paid) but publishing needs a real Android device + a 20-tester / 14-day closed test (~6 weeks); sideload is the working channel meanwhile. Upload keystore + creds at `~/.config/hidescore/upload.env` — **back this up** (resettable via Play App Signing if lost, but painful). Toolchain how-to in memory `reference_android_build_toolchain_macos.md`. _src: session_hidescore_android_app_build_2026_05_20_to_21.md_
 
 ## T3 — Older backlog, still open
 
-- [ ] **Dodgers walk-off recap threshold** — yesterday's game ranked "good", should be higher. Investigate threshold. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **MLB time wrap on mobile** — Pit vs Chi game time wraps, others don't. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **NBA "Tomorrow" tag bubble** — favorited team not bubbling to top when tagged tomorrow. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **Multi-network click expand** — click card with multiple networks → wrap text under network row to cover team records; second click collapses. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **Calendar button won't close on 2nd click** — opens correctly but won't dismiss. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **Favorites-saved popup transparent bg** — mobile dark mode (desktop fine). _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **SportsCenter YouTube fix** — currently links Jacob's saved channel, not official ESPN. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **Team subreddit links at bottom of cards** — feature not implemented. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **Live-game dates in team view use withEspn** — ESPN gamecast on a LIVE game would spoil. Guard with `isFinished`-style check. _src: session_hidescore_team_view.md_
-- [ ] **NewsColumn/news.ts ownership confirm** — committed alongside team view session, was it intended? _src: session_hidescore_team_view.md_
-- [ ] **Big yesterday highlights from other teams** — surface beyond top-billed. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **Season-wide highlight scrub** — top dunks, biggest highlights from official channels. _src: project_hidescore_backlog_2026_04_13.md_
+- [ ] **Dodgers walk-off recap threshold.** Yesterday's walk-off ranked only "good" — it should rank higher; investigate the threshold.
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **MLB time wrap on mobile.** The Pit vs Chi game time wraps on mobile while others don't.
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **NBA "Tomorrow" tag bubble.** A favorited team isn't bubbling to the top when tagged for tomorrow.
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Multi-network click expand.** Click a multi-network card to wrap text under the network row over team records; click again to collapse.
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Calendar button won't close on 2nd click.** It opens correctly but won't dismiss.
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Favorites-saved popup transparent bg.** The popup background is transparent in mobile dark mode (desktop is fine).
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **SportsCenter YouTube fix.** The link points at Jacob's saved channel, not the official ESPN one.
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Team subreddit links at bottom of cards.** Not yet implemented.
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Live-game dates in team view use withEspn.** Guard team-view live games so ESPN gamecast links don't spoil scores.
+  > A gamecast on a LIVE game would spoil — guard with an `isFinished`-style check. _src: session_hidescore_team_view.md_
+
+- [ ] **NewsColumn / news.ts ownership confirm.** Confirm these were intentionally committed with the team-view session.
+  > _src: session_hidescore_team_view.md_
+
+- [ ] **Big yesterday highlights from other teams.** Surface big highlights beyond the top-billed team.
+  > _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Season-wide highlight scrub.** Pull top dunks and the season's biggest highlights from official channels.
+  > _src: project_hidescore_backlog_2026_04_13.md_
 
 ## T4 — Polish / low priority
 
-- [ ] **News toggle icon looks broken** — the header News toggle uses Lucide's `newspaper` glyph; at 14–16px the folded-corner detail collapses into what reads as a stray smudge/doubled line on the lower-left. Swap for a simpler document/feed icon (`HomeContent.tsx:815-820`). _src: session 2026-05-19_
-- [ ] **Big Inning auto-tick timer** — subtitle doesn't flip "9:00 PM ET" → "LIVE" mid-session without page render. Add 60s timer in PlayoffSubtitle. _src: session104_hidescore_2026_05_08_to_13.md_
-- [ ] **Clean dead code** — `next.config.ts` rewrites, commented ESPN button at `GameCard.tsx:44-55`, backup footer at `HomeContent.tsx:419-422`. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **Revisit short-column pinning** — added 5/19 (commit `ed02abca`) to pin a column's cards when it had ≤3 games; removed 5/20 (felt off in practice). Decide if/when to bring back, possibly with different criteria — e.g. pin only when _every_ column has ≤3, or trigger on viewport-height vs total-card-height instead of count. Reference impl lives in the `LeagueColumn.tsx` diff of `ed02abca` (headerStripRef + ResizeObserver + `stickyGamesStyle`). _src: session 2026-05-20_
-- [ ] **Footer pinning consideration** — explore sticky-to-viewport-bottom footer (FeedbackBox + captions + App Store badge stay visible while scrolling games). Open Qs: mobile real-estate cost, iOS safe-area handling, whether to pin only on tall-content days or always. Sibling decision to short-column pinning above. _src: session 2026-05-20_
-- [ ] **Live-card green accent bar** — shipped 5/20 (commit `96126cab`) as a 3px inset box-shadow `#22c55e` on the left edge of live GameCards; reverted 5/20 ("like it but don't love it anymore"). Revisit if live games need a stronger scan signal beyond the existing red LIVE pill — possibly a thinner bar, a different color tied to `--text-live`, or a subtle border-color shift instead of an inset shadow. _src: session 2026-05-20_
-- [ ] **Ratings popup copy precision** — `HomeContent.tsx:529` says "reordered by top records and best matchups" but actually live/finished sort by rating, only upcoming sort by records. Suggested rewrite: "Games are also reordered by best matchups — live and finished by rating, upcoming by team records." _src: project_hidescore_backlog_2026_04_13.md_
-- [x] **Wrangler version pinning** — ✅ DONE 2026-05-13 commit `0e1f4618`. Pinned `wrangler@^4` in all 4 GHA workflows. Mac mini install still TODO — needs ssh command Jacob can paste.
-- [ ] **Delete stale `public/` JSON copies** — after R2 stable ~30 days (~6/13), 39 fallback files in `public/` deletable. Cosmetic. _src: project_hidescore_deploy_cap.md_
-- [ ] **Playoff countdown copy** — show "Playoffs in X days"; if room remains in card width, append "(Mar 20)". _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **Playoff placeholders TBD play-in** — `season.type: 5`, show greyed-out cards. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **MLB live links QA** — shipped session 48, needs live-game QA pass. _src: project_hidescore_backlog_2026_04_13.md_
-- [ ] **`/faq` and `/privacy` orphaned — no in-app link** — Footer dropped FAQ/Privacy in commit `c853502d` for the cleaner feedback-box layout (deliberate — full FAQ on homepage was too exposed). Current state: `/faq` reachable only via `sitemap.xml` (Google can find it, humans can't); `/privacy` linked from nowhere. App Store listing carries the privacy URL separately so submission is fine, but the website has zero link to either page. Revisit when there's a discreet home for them — e.g. a small "···" / "About" overlay, a settings-panel row, or one subtle footer line that doesn't clutter. _src: session 2026-05-19_
-- [ ] **iOS PrivacyInfo.xcprivacy manifest** — Apple has required this file since May 2024 for new submissions. We use GoatCounter analytics (`layout.tsx:135`), so create `ios/App/App/PrivacyInfo.xcprivacy` declaring `NSPrivacyTracking` only if GoatCounter touches IDFA (it doesn't by default — confirm), `NSPrivacyTrackingDomains: ["hidescore.goatcounter.com"]`, and required-reason API entries for any Capacitor plugin that touches file timestamps / UserDefaults. Existing submissions grandfathered through, but new uploads may start hitting warnings. _src: ios audit 2026-05-20_
-- [ ] **iOS App Tracking Transparency check** — paired with privacy manifest above. Verify whether GoatCounter touches IDFA. If yes, add `NSUserTrackingUsageDescription` to Info.plist and request permission. If no (likely — GoatCounter is cookieless), do nothing; an ATT prompt for non-tracking analytics is itself a review risk. _src: ios audit 2026-05-20_
-- [ ] **iOS splash screen simplification** — current `LaunchScreen.storyboard` scales a 1366×1366 Splash image via `scaleAspectFill`. Apple HIG prefers near-empty launch screens (background color only, or tiny logo). Looks stretched on different devices and feels slow. Swap for plain dark background to match app theme. _src: ios audit 2026-05-20_
-- [ ] **Buttons too small to interact with on mobile** — star, broadcast chip, +N network expander, highlight play buttons are below Apple's recommended 44×44pt hit target. Audit interactive elements for tap-target size on mobile. _src: session 2026-05-20_
-  - **Reconsider clickable card elements** — whole-card click-to-stream (live cards w/ `cardClickable` at `GameCard.tsx:261`) competes with inner buttons that `stopPropagation`. If buttons get bigger, accidental whole-card hits rise. Decide: keep card clickable + bigger buttons, or move the stream affordance to a single dedicated chip and un-click the card body.
-- [x] **Scrub Co-Authored-By trailers from recent commits** — ✅ DONE 2026-05-21. Audit found **13** trailer'd commits (all 5/20, `0c25da04`…`85bee286`), not the 7 first estimated. Rewrote `928fd410..HEAD` with `git filter-branch --msg-filter` (perl strips the `Co-Authored-By:` line + preceding blank), verified tree diff empty (file contents byte-identical) and zero remaining trailers, then `git push --force-with-lease origin main`. New HEAD `0c1a017e`. Going forward: no Co-Authored-By trailers on this repo per CLAUDE.md `## Git`.
+- [ ] **Delete the redundant nospoilerscores Vercel project.** hidescore.com runs on Cloudflare Pages now; the old Vercel Git link just burns ~1 build/day and leaves a stale `.vercel.app` URL.
+  > Delete the Vercel project entirely — NOT just disconnect Git (that leaves a frozen `nospoilerscores.vercel.app` still resolving, the worst of the three options). First verify nothing points at the `.vercel.app` URL (DNS, App Store / Capacitor `server.url`, links). Confirmed 5/28: live site is `server: cloudflare`. _src: session_loose_ends_audit_2026_05_28.md (chat f31109fe)_
+
+- [ ] **News section jump-nav.** Add a sticky pill row to jump between news sections, like the Yesterday/Today/Tomorrow date nav.
+  > Pills list the visible league/section headers; tapping scrolls smoothly to that section. Especially useful in 1-col stacked mode. _src: 2026-05-27 layout-iteration_
+
+- [ ] **News toggle icon looks broken.** Swap the News toggle icon — it reads as a smudge at small sizes.
+  > Lucide's `newspaper` glyph: at 14–16px the folded-corner detail collapses into a stray smudge/doubled line. Swap for a simpler document/feed icon (`HomeContent.tsx:815-820`). _src: session 2026-05-19_
+
+- [ ] **Big Inning auto-tick timer.** Make the Big Inning subtitle flip to "LIVE" on time without a page re-render.
+  > It doesn't flip "9:00 PM ET" → "LIVE" mid-session without a render. Add a 60s timer in PlayoffSubtitle. _src: session104_hidescore_2026_05_08_to_13.md_
+
+- [ ] **Clean dead code.** Remove a few stale code paths.
+  > `next.config.ts` rewrites, the commented ESPN button at `GameCard.tsx:44-55`, the backup footer at `HomeContent.tsx:419-422`. _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Live-clock bar: smooth the loop seam.** The Google-style Material progress bar under the live clock (`Q4 - 02:05`) is a touch glitchy at the end of its cycle — the green segment doesn't minimize smoothly before the loop restarts.
+  > Part of the WIP Google live-clock feature (poll-and-jump countdown + Material indeterminate linear progress bar; not yet ported into the repo — lives in the `/tmp/live-clock-comparison` demo). The seam is the primary/secondary `scaleX`→0.08 reset at 100%. Likely fix when porting: the two-segment Material spec is designed to hide the seam (the secondary bar covers the primary's reset) — make sure BOTH segments are wired, or stagger/cross-fade so no frame shows an empty/abrupt collapse. Exact keyframes + DOM in `reference_google_material_indeterminate_progress.md`. _src: session_hidescore_live_clock_google_bar_2026_05_27.md_
+
+- [ ] **Revisit short-column pinning.** Decide whether to bring back pinning a column's cards when it has few games, maybe with new criteria.
+  > Added 5/19 (commit `ed02abca`), removed 5/20 (felt off). Possible new triggers: pin only when *every* column has ≤3, or trigger on viewport-height vs total-card-height instead of count. Reference impl in the `LeagueColumn.tsx` diff of `ed02abca` (headerStripRef + ResizeObserver + `stickyGamesStyle`). _src: session 2026-05-20_
+
+- [ ] **Footer pinning consideration.** Explore a footer that sticks to the viewport bottom (FeedbackBox + captions + App Store badge stay visible).
+  > Open Qs: mobile real-estate cost, iOS safe-area handling, pin only on tall-content days or always. Sibling to short-column pinning. _src: session 2026-05-20_
+
+- [ ] **Live-card green accent bar.** Revisit a green accent bar on live cards (shipped then reverted).
+  > Shipped 5/20 (commit `96126cab`) as a 3px inset box-shadow `#22c55e` on the left edge; reverted 5/20 ("like it but don't love it"). Revisit if live games need a stronger scan signal beyond the red LIVE pill — maybe a thinner bar, a color tied to `--text-live`, or a border-color shift instead of an inset shadow. _src: session 2026-05-20_
+
+- [ ] **Ratings popup copy precision.** Fix the ratings popup copy — it misstates how games are sorted.
+  > `HomeContent.tsx:529` says "reordered by top records and best matchups", but live/finished sort by rating and only upcoming sort by records. Suggested: "Games are also reordered by best matchups — live and finished by rating, upcoming by team records." _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Delete stale `public/` JSON copies.** Delete the 39 fallback JSON files in `public/` once R2 has been stable ~30 days.
+  > Target ~6/13. Cosmetic. _src: project_hidescore_deploy_cap.md_
+
+- [ ] **Playoff countdown copy.** Show "Playoffs in X days", appending the date if the card has room.
+  > Append "(Mar 20)" if width allows. _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **Playoff placeholders for TBD play-in.** Show greyed-out placeholder cards for TBD play-in games.
+  > `season.type: 5`. _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **MLB live links QA.** Do a live-game QA pass on MLB live links.
+  > Shipped session 48, needs the QA pass. _src: project_hidescore_backlog_2026_04_13.md_
+
+- [ ] **`/faq` and `/privacy` orphaned — no in-app link.** Give both pages a discreet in-app link; they're currently reachable from nowhere.
+  > Footer dropped FAQ/Privacy in commit `c853502d` for a cleaner feedback-box layout (deliberate — the full FAQ on the homepage was too exposed). Now `/faq` is reachable only via `sitemap.xml` (Google finds it, humans can't) and `/privacy` from nowhere. App Store listing carries the privacy URL separately, so submission is fine. Revisit with a discreet home — a "···"/"About" overlay, a settings-panel row, or one subtle footer line. _src: session 2026-05-19_
+
+- [x] **Next iOS build (1.0.3) — bundled + uploaded 2026-05-26.** Built + uploaded **1.0.3 (build 6)** to App Store Connect via CLI archive→export; processing → TestFlight (NOT auto-released — submit for review when ready). Version bump committed + pushed to `staging` 5/29 (`8b43bfed`).
+  > Build 6 now CARRIES (no longer "will ride a future build"): dark/tinted app icons, Info.plist white status bar (`UIViewControllerBasedStatusBarAppearance=false` + `UIStatusBarStyle=LightContent`), explicit ATS `NSAllowsArbitraryLoads=false`. **Correction to old note:** Cloud Signing DOES work from the CLI — it needs an **Admin** ASC API key (App Manager fails with "Cloud signing permission error"); ASC keys are immutable so you revoke+regenerate to change role; a released version train is closed even to TestFlight, so MARKETING_VERSION had to go 1.0.2→1.0.3. Full recipe + 3 gotchas in `reference_xcode_cli_ios_buildout.md`. Still open as separate items below: PrivacyInfo.xcprivacy, splash simplification (ATT = no action — GoatCounter is cookieless). _src: session_hidescore_ios_audit_upload_2026_05_22_to_26.md_
+
+- [ ] **Revoke the temporary Admin ASC API key `4H5A2N5GKT`.** Made it Admin on 5/26 only to unblock Cloud Signing for the 1.0.3 upload; no need to keep a standing Admin key.
+  > App Store Connect → Users and Access → Integrations → revoke `4H5A2N5GKT`. The `.p8` lives at `~/.appstoreconnect/private_keys/`; creds shim at `~/.appstoreconnect/credentials`. _src: session_hidescore_ios_audit_upload_2026_05_22_to_26.md_
+
+- [ ] **iOS PrivacyInfo.xcprivacy manifest.** Add the privacy manifest Apple requires for new submissions.
+  > Required since May 2024. We use GoatCounter (`layout.tsx:135`), so create `ios/App/App/PrivacyInfo.xcprivacy` declaring `NSPrivacyTracking` only if GoatCounter touches IDFA (it doesn't by default — confirm), `NSPrivacyTrackingDomains: ["hidescore.goatcounter.com"]`, and required-reason API entries for any Capacitor plugin touching file timestamps / UserDefaults. Existing submissions are grandfathered; new uploads may start warning. _src: ios audit 2026-05-20_
+
+- [ ] **iOS App Tracking Transparency check.** Check whether GoatCounter touches IDFA; add an ATT prompt only if it does.
+  > Paired with the privacy manifest. If GoatCounter touches IDFA, add `NSUserTrackingUsageDescription` to Info.plist and request permission. If not (likely — it's cookieless), do nothing; an ATT prompt for non-tracking analytics is itself a review risk. _src: ios audit 2026-05-20_
+
+- [ ] **iOS splash screen simplification.** Replace the stretched splash image with a plain dark background.
+  > `LaunchScreen.storyboard` scales a 1366×1366 image via `scaleAspectFill`; Apple HIG prefers near-empty launch screens. Looks stretched and slow. _src: ios audit 2026-05-20_
+
+- [ ] **Buttons too small to interact with on mobile.** Audit tap targets — several are below Apple's 44×44pt minimum.
+  > Star, broadcast chip, +N network expander, and highlight play buttons are under 44×44pt. Related: whole-card click-to-stream (live cards with `cardClickable` at `GameCard.tsx:261`) competes with inner buttons that `stopPropagation` — if buttons grow, accidental whole-card hits rise. Decide: keep the card clickable with bigger buttons, or move the stream affordance to one dedicated chip and un-click the card body. _src: session 2026-05-20_
+
+- [ ] **In-app browser fallback for non-login network links.** If we ever add network/watch links that AREN'T login-gated (free schedules, previews, recaps), upgrade the native app-link handoff to keep the in-app browser as the fallback when the app isn't installed.
+  > Current `openExternal.ts` hands known app-domain https URLs to `AppLauncher.openUrl()`: opens the installed app deep-linked to the game, else **full Safari**. Intentional for the current links — they're all login-gated streaming (mlb.com/tv, espn.com/watch, Peacock, Max…) and `SFSafariViewController`'s isolated cookie store (iOS 11+) would force a re-login, so full Safari (carries the user's session) is the better fallback. The "both worlds" design = open with iOS `UIApplication.open(url, options: [.universalLinksOnly: true])` → deep-links to the app if installed, returns failure if not, then fall back to `Browser.open` (in-app). Stock `@capacitor/app-launcher` doesn't expose `universalLinksOnly`, so this needs a small custom native plugin. Only worth it once a non-login link exists. _src: session 2026-05-29 (deep-link to network apps)_
 
 ## T5 — Strategic reminders (not action items)
 
-- [ ] **MLB clip-embed legality** — in-app MLB modal streams MLB's HLS playlists directly. Fine for hobby site, **revisit before monetization** (App Store paid tier, ads, sponsorships, scale). Safer path: anchor-out to MLB.com. _src: project_hidescore_mlb_clip_legality.md_
-- [ ] **iOS bundle staleness regression watch** — resolved 4/27 commit 13da7e9 via `getApiBase()` routing. Don't re-introduce hardcoded `/path.json` fetches in client code or iOS will freeze data at cap-sync time. _src: project_hidescore_ios_bundle_staleness.md_
-- [ ] **Homepage SEO: no H1, no static crawlable text** — Removed "Spoiler-free sports scores" intro 2026-05-19 (`a4f4cebc`) alongside the FAQ block (`a2a5440c`) to clean the homepage. Result: `/` has zero visible `<h1>` and zero prerendered body copy — game data loads client-side, so crawlers see meta tags + JSON-LD only. `/faq` and `/privacy` still carry indexable copy, but homepage-query impressions/CTR may slide. Watch GSC homepage rows over the next 2–4 weeks; if they dip, mitigations (cheapest → richest): sr-only `<h1>HideScore</h1>`, minimal visible H1 ("HideScore"), or a one-line tagline above the game cards. Sibling concern to line 65 (`/faq` orphan). _src: session 2026-05-20_
+- [ ] **MLB clip-embed legality.** Revisit embedding MLB's HLS clips before any monetization.
+  > The in-app MLB modal streams MLB's HLS playlists directly. Fine for a hobby site; revisit before an App Store paid tier, ads, sponsorships, or scale. Safer path: anchor out to MLB.com. _src: project_hidescore_mlb_clip_legality.md_
+
+- [ ] **iOS bundle staleness regression watch.** Don't re-introduce hardcoded JSON fetches that froze iOS data at sync time.
+  > Resolved 4/27 (commit `13da7e9`) via `getApiBase()` routing. Don't add hardcoded `/path.json` fetches in client code or iOS freezes data at cap-sync time. _src: project_hidescore_ios_bundle_staleness.md_
+
+- [ ] **Homepage SEO: no H1, no static crawlable text.** Watch homepage search performance after the H1/intro removal; add a minimal H1 if it dips.
+  > Removed the "Spoiler-free sports scores" intro 2026-05-19 (`a4f4cebc`) with the FAQ block (`a2a5440c`). Now `/` has no visible `<h1>` and no prerendered body copy — crawlers see only meta tags + JSON-LD. `/faq` and `/privacy` still carry indexable copy. Watch GSC homepage rows for 2–4 weeks; if they dip, mitigate (cheap → rich): sr-only `<h1>HideScore</h1>`, a minimal visible H1, or a one-line tagline above the cards. Sibling to the `/faq` orphan above. _src: session 2026-05-20_
 
 ---
 
-## Recently shipped (since the original 4/13 backlog)
+<details>
+<summary><strong>✅ Done</strong></summary>
 
-For reference — these were on past lists but are done.
+### Shipped from this backlog
+
+- [x] **www.hidescore.com → 525 fix** — FIXED 2026-05-13. Stale CNAME → `parkingpage.namecheap.com`; updated CNAME → `hidescore.com` (proxied) + added www to Pages custom domains via CF API. Cert in ~30s. Serves apex content; `<link rel="canonical">` handles SEO.
+- [x] **Post-R2 #2: espn-top cron diagnostic** — DONE 2026-05-13 (commit `fb2d9968`). ESPN intermittently serves homepage HTML without the `headlineStack top-headlines` block. Fix: 3× retry with 1.5s gap on empty result in `fetchESPNTopHeadlines`; re-seeds module cache for the videos scraper.
+- [x] **Post-R2 #3: espn-top fallback tightening** — DONE 2026-05-13 (commit `0e1f4618`). Added narrow blocklist patterns (`transfer rumors`, `daily.*playoffs|schedule|bracket`) to ARTICLE_BLOCKLIST. Skipped bare `odds`/`preview` (too broad).
+- [x] **R2 staleness checker** — DONE 2026-05-13. `scripts/check-staleness.mjs` + `.github/workflows/staleness-check.yml` every 30 min, hits all 38 prebaked feeds, parses `fetchedAt`/`generatedAt`. Tiered alerts (warn = log only; critical/error = fail → GH email). Day-1 caught two real silent failures.
+- [x] **Wrangler version pinning** — DONE 2026-05-13 (commit `0e1f4618`). Pinned `wrangler@^4` in all 4 GHA workflows. Mac mini install still TODO.
+- [x] **Scrub Co-Authored-By trailers** — DONE 2026-05-21. Found 13 trailer'd commits (all 5/20); rewrote `928fd410..HEAD` with `git filter-branch --msg-filter`, verified empty tree diff, `push --force-with-lease`. New HEAD `0c1a017e`.
+
+### Recently shipped (since the original 4/13 backlog)
 
 - ✅ iOS Capacitor wrapper (sessions 71-74)
 - ✅ Alt-video fallback (session 69)
@@ -103,17 +231,4 @@ For reference — these were on past lists but are done.
 - ✅ R2 migration Step 2: cron decoupled from deploys — commit `2d61b000` (5/13)
 - ✅ App Store resubmit: demo mode + sanitized metadata + screenshots — commits `94dc7a48`, `f44d335c`, `aa561dc2` (5/13)
 
----
-
-## Stats
-
-| Tier | Count |
-|---|---|
-| T1 time-sensitive | 5 |
-| T2 deferred-with-plan | 12 |
-| T3 backlog | 12 |
-| T4 polish | 12 |
-| T5 strategic | 2 |
-| **Total open** | **43** |
-
-Recently shipped (~5 weeks): 14 items.
+</details>
