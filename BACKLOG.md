@@ -6,6 +6,10 @@
 
 - [ ] **QA + prep for the 2026 World Cup (soon).** World Cup 2026 is this summer — make sure FIFA/soccer surfacing is solid before it starts: verify the `fifa` league config + season window, the new soccer range-lookahead (`fetchNextGameDayRange`) resolves real fixtures, soccer-slot priority (UCL>UEL>MLS, EPL beats both), broadcast/watch links for WC matches, news feeds, and that the column auto-appears on match days. Do a full QA pass on the soccer path generally.
 
+## 🅿️ Parked — maybe re-add
+
+- [ ] **News column-count selector (1/2/3).** Removed 5/30 — it didn't do much and news is now fixed at desktop=3 / mobile=1. If wanted back, restore `ColumnCountButtons`/`ColIcon` + the `newsColCount` pref wiring in `HomeContent.tsx` (it's in git history) and gate the mobile-forced single column behind it.
+
 ## 📌 Pinned — when the Android app is ready
 
 - [ ] **Un-table the Android download pill + fix its label + Play Store decision.** Re-tabled 5/29 (commit `a35dc529`) while the Android app is handled separately; surface it when ready.

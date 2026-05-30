@@ -509,6 +509,18 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return () => mq.removeEventListener("change", handler);
   }, [prefs.theme]);
 
+  // Track narrow viewports so the news view can force a single stacked column
+  // on phones (Jacob 5/30 — mobile news = 1 col, order News → the two score
+  // leagues). Desktop stays at the fixed 3-column layout.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const handler = () => setIsMobile(mq.matches);
+    handler();
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
   const openVideoModal = useCallback((videoId: string, fallbackUrl: string) => {
     setVideoModal({ videoId, fallbackUrl });
     const params = new URLSearchParams(window.location.search);
@@ -1324,10 +1336,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               )}
             </button>
 
-            {/* News cluster: column-count (1/2/3) + ☰ order menu. */}
+            {/* News cluster: source filter popover. (The 1/2/3 column-count
+                selector was removed 5/30 — desktop is a fixed 3 columns, mobile
+                is a single stacked column. Backlogged to re-add if wanted.) */}
             {showNews && (
               <>
-                <ColumnCountButtons value={newsColCount} onChange={setNewsColCount} />
                 {/* Source-type + focus-league filters live in a funnel popover
                     instead of always-on header pill rows — keeps the news header
                     clean like hidescore.com while keeping the filters reachable. */}
@@ -1481,7 +1494,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           const thirdColEntry = prefs.newsThirdLeague
             ? leagueEntries.find((e) => e.slotIdx === 2)
             : espnEntry;
-          const visibleNewsEntries = [...firstTwoEntries, ...(thirdColEntry ? [thirdColEntry] : [])];
+          // Mobile (single stacked column): lead with News, then the two score
+          // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
+          // 3-across order: the two leagues, then the News/3rd-league column.
+          const visibleNewsEntries = isMobile
+            ? [espnEntry, ...firstTwoEntries]
+            : [...firstTwoEntries, ...(thirdColEntry ? [thirdColEntry] : [])];
 
           // Apply Focus league (drops other entries) then per-entry filter
           // by type + hidden labels. Type "all" is a no-op; hidden labels
@@ -1530,7 +1548,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           // takes the first N entries side-by-side. AlignedVideoStrip only
           // makes sense at exactly 3 side-by-side cols with all video-first.
           // When a Focus league is set, there's only one entry — force 1-col.
-          const effectiveColCount = newsFocusLeague ? 1 : newsColCount;
+          // Phones → 1 stacked column; desktop → fixed 3 across. (A Focus
+          // league also collapses to 1.) The user-facing 1/2/3 selector is gone.
+          const effectiveColCount = (newsFocusLeague || isMobile) ? 1 : 3;
           const renderedEntries = effectiveColCount === 1
             ? focusedEntries
             : focusedEntries.slice(0, effectiveColCount);
