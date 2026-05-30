@@ -666,7 +666,13 @@ export default function LeagueColumn({
       onDrop={canDrag ? (e) => {
         e.preventDefault();
         setIsDragOver(false);
-        const fromStr = e.dataTransfer.getData("application/x-hidescore-slot");
+        // Read the custom type first, then text/plain (Safari/Firefox often
+        // drop custom MIME types across the drag → getData returns ""), then
+        // the module-level fallback (set on dragstart) as a last resort.
+        const fromStr = e.dataTransfer.getData("application/x-hidescore-slot")
+          || e.dataTransfer.getData("text/plain")
+          || (dragSourceSlot != null ? String(dragSourceSlot) : "");
+        dragSourceSlot = null;
         if (!fromStr) return;
         const fromIdx = parseInt(fromStr, 10);
         if (Number.isFinite(fromIdx) && fromIdx !== slotIdx && slotIdx !== undefined) {
@@ -682,6 +688,10 @@ export default function LeagueColumn({
             style={canDrag ? { cursor: "grab" } : undefined}
             onDragStart={canDrag ? (e) => {
               e.dataTransfer.setData("application/x-hidescore-slot", String(slotIdx));
+              // text/plain is preserved by every browser (custom MIME types are
+              // not, esp. Safari/Firefox); module-level var is the JS fallback.
+              e.dataTransfer.setData("text/plain", String(slotIdx));
+              dragSourceSlot = slotIdx ?? null;
               e.dataTransfer.effectAllowed = "move";
               // Use the column wrapper as the drag image so the user sees the
               // whole column move, not just the header strip.
