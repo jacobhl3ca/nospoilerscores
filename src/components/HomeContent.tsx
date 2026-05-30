@@ -1214,28 +1214,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             <div className="hidden sm:block w-80">
               <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
             </div>
-            {!showNews && (
-              <div className="sm:hidden">
-                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
-                  <span className="relative inline-flex">
-                    <button
-                      onClick={() => setCalendarOpen(!calendarOpen)}
-                      className="ml-1 w-7 h-7 flex items-center justify-center rounded-full transition-colors cursor-pointer"
-                      style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
-                      title="Pick a date"
-                      aria-label="Pick a date"
-                    >
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                      </svg>
-                    </button>
-                    {calendarOpen && (
-                      <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
-                    )}
-                  </span>
-                } />
-              </div>
-            )}
+            {/* Date nav lives in its own row below the header on ALL sizes now
+                (moved out of this cramped top-middle on mobile so the right-side
+                theme + settings icons don't overflow off-screen on phones). */}
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 justify-self-end col-start-3">
@@ -1376,12 +1357,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         </div>
 
       </header>
-      {/* sm+: date nav sits BELOW the header divider line (Jacob's pick). On
-          small screens it's in the header top-row middle instead (above), since
-          the tabs drop to the fixed bottom bar there. Scores/rated only;
-          centered in max-w-6xl to line up with the middle (MLB) column. */}
+      {/* Date nav sits BELOW the header divider line on ALL sizes. (Was
+          top-row-middle on mobile, but that overflowed the right-side icons —
+          its own centered row is cleaner.) Scores/rated only; centered in
+          max-w-6xl to line up with the middle (MLB) column. */}
       {!showNews && (
-        <div className="hidden sm:flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
+        <div className="flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
           <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
             <span className="relative inline-flex">
               <button
