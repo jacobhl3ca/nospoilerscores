@@ -1217,12 +1217,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </svg>
           </a>
 
-          {/* Desktop top-row middle = the view tabs (Scores/Rated/News). It's
-              the auto column between two equal 1fr columns, so it's page-centered
-              and lines up with the middle content column (MLB). Date nav drops to
-              the 2nd row below; mobile hides this and uses the fixed bottom bar. */}
-          <div className="hidden sm:block justify-self-center col-start-2 w-80">
-            <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
+          {/* Top-row middle (col 2): the view tabs on sm+ (page-centered between
+              two 1fr cols → lines up with the middle MLB column). On small screens
+              the tabs drop to the fixed bottom bar, so the date nav takes this slot
+              instead (scores/rated only) — sitting cleanly in the top row. */}
+          <div className="justify-self-center col-start-2">
+            <div className="hidden sm:block w-80">
+              <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
+            </div>
+            {!showNews && (
+              <div className="sm:hidden">
+                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 justify-self-end col-start-3">
@@ -1363,15 +1370,16 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           </div>
         </div>
 
-        {/* Date nav = 2nd row under the view tabs (scores/rated only), centered
-            in max-w-6xl so it lines up with the middle content column. Shows on
-            all sizes (desktop tabs now live in the top-row middle). */}
-        {!showNews && (
-          <div className="max-w-6xl mx-auto mt-1 flex justify-center">
-            <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
-          </div>
-        )}
       </header>
+      {/* sm+: date nav sits BELOW the header divider line (Jacob's pick). On
+          small screens it's in the header top-row middle instead (above), since
+          the tabs drop to the fixed bottom bar there. Scores/rated only;
+          centered in max-w-6xl to line up with the middle (MLB) column. */}
+      {!showNews && (
+        <div className="hidden sm:flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
+          <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+        </div>
+      )}
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
         {showNews ? (() => {
