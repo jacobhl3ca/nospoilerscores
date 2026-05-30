@@ -453,7 +453,12 @@ export default function LeagueColumn({
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
-  const canDrag = onReorderSlots !== undefined && slotIdx !== undefined;
+  // Column drag-to-reorder disabled 2026-05-30 — native HTML5 DnD didn't swap
+  // reliably (the draggable handle is also the swap-dropdown button; Safari/
+  // Firefox quirks). Tabled in BACKLOG for a pointer-event rebuild. Keep the
+  // props so re-enabling is a one-line flip.
+  void onReorderSlots; void slotIdx;
+  const canDrag = false;
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
   useEffect(() => { setTeamViewTeam(null); }, [league.sport, league.label]);

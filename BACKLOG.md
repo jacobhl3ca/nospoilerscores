@@ -8,6 +8,8 @@
 
 ## 🅿️ Parked — maybe re-add
 
+- [ ] **Column drag-to-reorder (scores view).** Disabled 5/30 — native HTML5 drag-and-drop didn't swap reliably (the draggable header is also the league swap-dropdown button; Safari/Firefox drop custom dataTransfer MIME types mid-drag). Code is intact behind `canDrag = false` in `LeagueColumn.tsx` (+ a `text/plain`/JS-var fallback already added). To re-enable properly, rebuild with **pointer events** (window-level pointermove/up + in-page dispatch) like the RIOC restaurant reorder — see `feedback_playwright_drag_drop_testing` + `session_rioc_restaurant_sort`. Flip `canDrag` back on once rebuilt.
+
 - [ ] **News column-count selector (1/2/3).** Removed 5/30 — it didn't do much and news is now fixed at desktop=3 / mobile=1. If wanted back, restore `ColumnCountButtons`/`ColIcon` + the `newsColCount` pref wiring in `HomeContent.tsx` (it's in git history) and gate the mobile-forced single column behind it.
 
 ## 📌 Pinned — when the Android app is ready
