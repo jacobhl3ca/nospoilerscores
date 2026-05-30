@@ -6,6 +6,10 @@
 
 - [ ] **QA + prep for the 2026 World Cup (soon).** World Cup 2026 is this summer — make sure FIFA/soccer surfacing is solid before it starts: verify the `fifa` league config + season window, the new soccer range-lookahead (`fetchNextGameDayRange`) resolves real fixtures, soccer-slot priority (UCL>UEL>MLS, EPL beats both), broadcast/watch links for WC matches, news feeds, and that the column auto-appears on match days. Do a full QA pass on the soccer path generally.
 
+## 🔧 Minor — restore when convenient
+
+- [ ] **Restore the R2-upload retry loop in `news-prebake.yml`.** The 3-attempt retry-with-backoff (orig commit `93833db9`) was lost 5/30 when a linter reverted an in-progress edit during a conflict fix and the simple one-line `wrangler r2 object put` got committed to main. The cron works fine without it; this is just resilience against transient R2 5xx. Re-add the `for attempt in 1 2 3` loop to the "Upload news feeds to R2" step (it's in git history at `93833db9`), to BOTH staging + main so they don't diverge.
+
 ## 🅿️ Parked — maybe re-add
 
 - [ ] **Column drag-to-reorder (scores view).** Disabled 5/30 — native HTML5 drag-and-drop didn't swap reliably (the draggable header is also the league swap-dropdown button; Safari/Firefox drop custom dataTransfer MIME types mid-drag). Code is intact behind `canDrag = false` in `LeagueColumn.tsx` (+ a `text/plain`/JS-var fallback already added). To re-enable properly, rebuild with **pointer events** (window-level pointermove/up + in-page dispatch) like the RIOC restaurant reorder — see `feedback_playwright_drag_drop_testing` + `session_rioc_restaurant_sort`. Flip `canDrag` back on once rebuilt.
