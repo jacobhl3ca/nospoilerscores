@@ -15,7 +15,11 @@
    next source comes into view. --news-titlebar-h is the measured height
    of the league-title row. */
 .news-source-sticky-top {
-  top: calc(var(--header-h, 0px) + var(--news-titlebar-h, 4.5rem));
+  /* Default --news-titlebar-h to 0: in 1-col / 2-col modes the per-league
+     title row isn't rendered, so the source header should pin flush against
+     the app header instead of leaving a 4.5rem gap where scrolled content
+     bleeds through and visually clips the rounded top corners. */
+  top: calc(var(--header-h, 0px) + var(--news-titlebar-h, 0px));
 }
 
 :root {
@@ -142,5 +146,40 @@ body {
 .live-pulse-dot {
   display: inline-block;
   animation: live-pulse 1.6s ease-in-out 2;
+}
+
+/* Google-style sliding underline for live game clocks (Q4 02:05). A short
+   green bar sweeps left→right under the text on a slow loop, signaling
+   "this is ticking even though the digits only refresh every ~10s." */
+.live-clock {
+  position: relative;
+  display: inline-block;
+}
+.live-clock::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 35%,
+    currentColor 50%,
+    transparent 65%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: live-clock-sweep 2.2s linear infinite;
+  pointer-events: none;
+  border-radius: 1px;
+}
+@keyframes live-clock-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-clock::after { animation: none; opacity: 0.6; }
 }
 

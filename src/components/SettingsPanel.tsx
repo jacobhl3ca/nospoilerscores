@@ -59,6 +59,8 @@ const SPORT_LABEL: Record<Sport, string> = {
   nba: "NBA",
   wnba: "WNBA",
   ncaam: "NCAAM",
+  ncaaw: "NCAAW",
+  ncaaf: "NCAAF",
   nfl: "NFL",
   nhl: "NHL",
   golf: "Golf",
@@ -66,6 +68,8 @@ const SPORT_LABEL: Record<Sport, string> = {
   fifa: "FIFA",
   epl: "EPL",
   mls: "MLS",
+  ucl: "UCL",
+  uel: "UEL",
 };
 
 function teamSportFromId(id: string): Sport | null {
@@ -161,8 +165,8 @@ export default function SettingsPanel({
   // picking a league already in another slot just sets this slot to it too;
   // unset slots lock to their on-screen league so the auto-picker doesn't
   // reshuffle columns the user didn't touch.
-  const setSlot = (slotIdx: number, sport: Sport | undefined) => {
-    const resolved: (Sport | undefined)[] = [0, 1, 2].map(
+  const setSlot = (slotIdx: number, sport: Sport | "empty" | undefined) => {
+    const resolved: (Sport | "empty" | undefined)[] = [0, 1, 2].map(
       (i) => slotValues[i] ?? displayedSports[i],
     );
     resolved[slotIdx] = sport;
@@ -173,7 +177,7 @@ export default function SettingsPanel({
     });
   };
 
-  const slotValues: (Sport | undefined)[] = [
+  const slotValues: (Sport | "empty" | undefined)[] = [
     prefs.firstLeague,
     prefs.secondLeague,
     prefs.thirdLeague,
@@ -314,6 +318,27 @@ export default function SettingsPanel({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+          {/* Theme — first because the old standalone header toggle moved
+              in here, and dark/light is the most-frequently-flipped setting. */}
+          <Section title="Theme">
+            <RadioGroup
+              value={prefs.theme}
+              options={THEME_OPTIONS}
+              onChange={(v) => {
+                updatePrefs({ theme: v });
+                if (v === "system") {
+                  const sys = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+                  document.documentElement.setAttribute("data-theme", sys);
+                } else {
+                  document.documentElement.setAttribute("data-theme", v);
+                }
+              }}
+            />
+            <p className="text-[11px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+              Currently rendering: {resolvedTheme}
+            </p>
+          </Section>
+
           {/* Default View */}
           <Section title="Default view">
             <Field label="Landing date" hint="What day to show when you open the app">
@@ -323,6 +348,25 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ defaultDateMode: v })}
               />
             </Field>
+            {(prefs.defaultDateMode ?? "smart") === "smart" && (
+              <Field label="Smart switch time" hint="Hour (your local time) when Smart flips from yesterday to today">
+                <select
+                  value={prefs.smartCutoffHour ?? 13}
+                  onChange={(e) => updatePrefs({ smartCutoffHour: Number(e.target.value) })}
+                  className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                >
+                  {Array.from({ length: 24 }, (_, h) => {
+                    const base = h === 0 ? "12 AM (midnight)"
+                      : h === 12 ? "12 PM (noon)"
+                      : h < 12 ? `${h} AM`
+                      : `${h - 12} PM`;
+                    const label = h === 13 ? `${base} (default)` : base;
+                    return <option key={h} value={h}>{label}</option>;
+                  })}
+                </select>
+              </Field>
+            )}
             <Field label="Landing view" hint="Scores or news on launch">
               <RadioGroup
                 value={prefs.defaultLandingView ?? "remember"}
@@ -347,15 +391,19 @@ export default function SettingsPanel({
             {[0, 1, 2].map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
               const value = slotValues[idx];
+              const hint = value === "empty" ? "Hidden" : value ? undefined : `Auto · currently ${fallbackLabel}`;
               return (
                 <Field
                   key={idx}
                   label={`Slot ${idx + 1}`}
-                  hint={value ? undefined : `Auto · currently ${fallbackLabel}`}
+                  hint={hint}
                 >
                   <select
                     value={value ?? ""}
-                    onChange={(e) => setSlot(idx, e.target.value ? (e.target.value as Sport) : undefined)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSlot(idx, v === "" ? undefined : v === "empty" ? "empty" : (v as Sport));
+                    }}
                     className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
@@ -363,6 +411,7 @@ export default function SettingsPanel({
                     {thirdLeagueOptions.map((o) => (
                       <option key={o.sport} value={o.sport}>{o.label}</option>
                     ))}
+                    <option value="empty">Empty</option>
                   </select>
                 </Field>
               );
@@ -454,26 +503,6 @@ export default function SettingsPanel({
                 ))}
               </select>
             </Field>
-          </Section>
-
-          {/* Theme */}
-          <Section title="Theme">
-            <RadioGroup
-              value={prefs.theme}
-              options={THEME_OPTIONS}
-              onChange={(v) => {
-                updatePrefs({ theme: v });
-                if (v === "system") {
-                  const sys = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-                  document.documentElement.setAttribute("data-theme", sys);
-                } else {
-                  document.documentElement.setAttribute("data-theme", v);
-                }
-              }}
-            />
-            <p className="text-[11px] mt-1.5" style={{ color: "var(--text-muted)" }}>
-              Currently rendering: {resolvedTheme}
-            </p>
           </Section>
 
           {/* Onboarding hints */}

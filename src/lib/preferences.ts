@@ -5,7 +5,9 @@ const STORAGE_KEY = "nss-preferences";
 // Compact encoding for share URLs: mlb→m, nba→n, wnba→wn, ncaam→c, nhl→h, nfl→f, golf→g, tennis→t, fifa→w
 // The decoder regex (`[a-z]+`) and SHORT_TO_SPORT lookup handle multi-char codes,
 // so wnba doesn't need a single char — keeps fifa→w stable for existing share URLs.
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s" };
+// Added 2026-05-27: ncaaw→cw (women's college bb), ncaaf→cf (college football),
+// ucl→uc (Champions League), uel→ue (Europa League).
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;
@@ -50,8 +52,8 @@ const SHORT_TO_RATINGS: Record<string, DefaultRatings> = { a: "auto", f: "off", 
 export function encodeFavorites(
   teams: string[],
   leagues: Sport[],
-  thirdLeague?: Sport,
-  slotLeagues?: (Sport | undefined)[],
+  thirdLeague?: Sport | "empty",
+  slotLeagues?: (Sport | "empty" | undefined)[],
   extras?: {
     theme?: Theme;
     defaultDateMode?: DefaultDateMode;
@@ -63,9 +65,11 @@ export function encodeFavorites(
   const params = new URLSearchParams();
   if (teams.length > 0) params.set("f", teams.map(encodeTeamId).join("."));
   if (leagues.length > 0) params.set("l", leagues.map((s) => SPORT_TO_SHORT[s] ?? s).join("."));
-  if (thirdLeague) params.set("t", SPORT_TO_SHORT[thirdLeague] ?? thirdLeague);
+  if (thirdLeague) params.set("t", thirdLeague === "empty" ? "0" : (SPORT_TO_SHORT[thirdLeague] ?? thirdLeague));
+  // "empty" slot encoded as "0" so it round-trips through SHORT_TO_SPORT (which
+  // would otherwise drop it back to undefined and lose the explicit hide).
   if (slotLeagues && slotLeagues.some(Boolean)) {
-    params.set("s", slotLeagues.map((s) => (s ? (SPORT_TO_SHORT[s] ?? s) : "_")).join("."));
+    params.set("s", slotLeagues.map((s) => (!s ? "_" : s === "empty" ? "0" : (SPORT_TO_SHORT[s] ?? s))).join("."));
   }
   if (extras?.theme) params.set("th", THEME_TO_SHORT[extras.theme]);
   if (extras?.defaultDateMode) params.set("dd", DATE_MODE_TO_SHORT[extras.defaultDateMode]);
@@ -79,8 +83,8 @@ export function encodeFavorites(
 export function decodeFavorites(params: URLSearchParams): {
   teams?: string[];
   leagues?: Sport[];
-  thirdLeague?: Sport;
-  slotLeagues?: (Sport | undefined)[];
+  thirdLeague?: Sport | "empty";
+  slotLeagues?: (Sport | "empty" | undefined)[];
   theme?: Theme;
   defaultDateMode?: DefaultDateMode;
   defaultLandingView?: DefaultLandingView;
@@ -90,8 +94,8 @@ export function decodeFavorites(params: URLSearchParams): {
   const result: {
     teams?: string[];
     leagues?: Sport[];
-    thirdLeague?: Sport;
-    slotLeagues?: (Sport | undefined)[];
+    thirdLeague?: Sport | "empty";
+    slotLeagues?: (Sport | "empty" | undefined)[];
     theme?: Theme;
     defaultDateMode?: DefaultDateMode;
     defaultLandingView?: DefaultLandingView;
@@ -104,8 +108,8 @@ export function decodeFavorites(params: URLSearchParams): {
   const s = params.get("s");
   if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
-  if (t) result.thirdLeague = SHORT_TO_SPORT[t];
-  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : SHORT_TO_SPORT[tok]));
+  if (t) result.thirdLeague = t === "0" ? "empty" : SHORT_TO_SPORT[t];
+  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : tok === "0" ? "empty" : SHORT_TO_SPORT[tok]));
   const th = params.get("th");
   const dd = params.get("dd");
   const dv = params.get("dv");
@@ -127,9 +131,10 @@ export interface Preferences {
   skipExplainer: boolean;
   skipNewsExplainer: boolean;
   showNews: boolean; // persist last view across refreshes
-  thirdLeague?: Sport; // user-chosen 3rd league slot override
-  firstLeague?: Sport; // user-chosen 1st league slot override
-  secondLeague?: Sport; // user-chosen 2nd league slot override
+  // "empty" hides the slot (no league rendered for that column).
+  thirdLeague?: Sport | "empty"; // user-chosen 3rd league slot override
+  firstLeague?: Sport | "empty"; // user-chosen 1st league slot override
+  secondLeague?: Sport | "empty"; // user-chosen 2nd league slot override
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
   // Default date on launch: smart (yesterday before 1 PM ET, today after),
   // always today, or always yesterday.
@@ -138,6 +143,26 @@ export interface Preferences {
   defaultLandingView?: DefaultLandingView;
   // Ratings on launch: auto (smart morning reset), always off, always on.
   defaultRatings?: DefaultRatings;
+  // News-view column count (1, 2, or 3). Default 1.
+  newsColCount?: 1 | 2 | 3;
+  // Hour-of-day (user-local) at which "smart" landing flips from yesterday
+  // to today. 0-23. Default 13 (1 PM local) — covers when most morning
+  // slate is final for Eastern fans; users in other zones can pick their own.
+  smartCutoffHour?: number;
+  // Per-sport custom news-source ordering. Keyed by sport, value is an
+  // ordered list of source labels (e.g. ["NBA Top Videos", "ESPN", ...]).
+  // Sources missing from the list fall back to the cascade default order
+  // appended to the end. Absence of an entry = use Smart (default) order.
+  newsSourceOrder?: Record<string, string[]>;
+  // Source-type pill filter for the news view. "all" shows every source;
+  // others restrict to one type globally across all visible leagues.
+  newsTypeFilter?: "all" | "topvideos" | "espn" | "reddit" | "homepage";
+  // When set, the news view shows ONLY this entry. "espn" focuses the
+  // always-present ESPN entry; otherwise a league sport. Undefined = all.
+  newsFocusLeague?: Sport | "espn";
+  // Source labels the user has hidden via the per-source visibility checkbox.
+  // Applied alongside the type pill (independent filters).
+  newsHiddenSources?: string[];
 }
 
 const defaults: Preferences = {
@@ -151,6 +176,9 @@ const defaults: Preferences = {
   defaultDateMode: "smart",
   defaultLandingView: "remember",
   defaultRatings: "auto",
+  newsColCount: 3,
+  smartCutoffHour: 13,
+  newsTypeFilter: "all",
 };
 
 export function loadPreferences(): Preferences {

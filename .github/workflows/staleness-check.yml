@@ -1,9 +1,9 @@
-name: Check feed staleness
+name: Check feed staleness + highlight fallbacks
 
 on:
   schedule:
-    # Hourly — catches Mac mini death, token revocation, R2 outage,
-    # silent scrape regressions. Cheap (~30s × 24/day = 12 min/day).
+    # Hourly — catches Mac mini death, token revocation, R2 outage, silent
+    # scrape regressions. Trimmed from */30 to stay under the Actions free cap.
     - cron: "0 * * * *"
   workflow_dispatch:
 
@@ -25,3 +25,8 @@ jobs:
         continue-on-error: true
       - if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
         run: node scripts/check-staleness.mjs
+      # Folded in from the former standalone highlight-fallback-check.yml so it
+      # costs 0 extra Actions minutes. Runs even if the staleness step failed
+      # (as long as the infra steps succeeded) so both alerts stay independent.
+      - if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.setup.outcome == 'success' }}
+        run: node scripts/check-highlight-fallbacks.mjs

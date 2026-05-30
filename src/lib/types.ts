@@ -1,4 +1,4 @@
-export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls";
+export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel";
 
 export interface Game {
   id: string;
@@ -44,6 +44,18 @@ export interface Game {
   // no Prime ASIN for the matchup — the Prime chip then falls back to the
   // sport-specific Prime landing page.
   primeStreamUrl: string | null;
+  // MLB no-hit alert: abbreviation of the team currently throwing a no-hitter
+  // (i.e., the opposing batting team has 0 hits) once the pitcher has carried
+  // it through 5 full innings — the threshold MLB.com uses for its in-app
+  // No-Hit Alert. Only set for live MLB games and cleared once a hit drops or
+  // the game finishes. The card itself decides whether to surface it (only
+  // shown when the ratings/spoiler toggle is on, never on highlights).
+  noHitterPitchingTeam?: string | null;
+  // Strict subset of the no-hit case: opposing team has also had zero runners
+  // reach base (runs + leftOnBase = 0). Catches walks / HBP / errors /
+  // fielder's choice without needing the heavier boxscore hydrate. Always
+  // implies noHitterPitchingTeam is set.
+  isPerfectGame?: boolean;
 }
 
 export interface Team {

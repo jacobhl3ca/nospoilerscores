@@ -140,6 +140,23 @@ export default {
           "cf montréal": ["cf montréal", "cf montreal", "montreal"],
           "salt lake": ["salt lake", "real salt lake", "rsl"],
           "san jose": ["san jose", "san jose earthquakes", "earthquakes"],
+          // UCL / UEL — ESPN shortDisplayName ↔ CBS Sports Golazo title forms
+          "psg": ["psg", "paris saint-germain", "paris sg", "paris"],
+          "inter milan": ["inter milan", "inter", "internazionale"],
+          "bayern": ["bayern", "bayern munich", "fc bayern", "fc bayern münchen", "fc bayern muenchen"],
+          "atlético": ["atlético", "atletico", "atletico madrid", "atlético madrid", "atletico de madrid", "atleti"],
+          "leverkusen": ["leverkusen", "bayer leverkusen", "bayer"],
+          "dortmund": ["dortmund", "borussia dortmund", "bvb"],
+          "frankfurt": ["frankfurt", "eintracht frankfurt", "eintracht"],
+          "napoli": ["napoli", "ssc napoli"],
+          "juventus": ["juventus", "juve"],
+          "ajax": ["ajax", "ajax amsterdam"],
+          "psv": ["psv", "psv eindhoven"],
+          "monaco": ["monaco", "as monaco"],
+          "club brugge": ["club brugge", "brugge"],
+          "københavn": ["københavn", "kobenhavn", "copenhagen", "fc copenhagen"],
+          "real madrid": ["real madrid", "madrid"],
+          "barcelona": ["barcelona", "barça", "barca", "fc barcelona"],
         };
 
         // Extract team names from query: "Away vs Home highlights ..."
@@ -381,8 +398,12 @@ export default {
           //     "winner", "wins", "loses", "hat-trick", "no-hitter", "grand
           //     slam"). Tuned to skip "champion"/"champions" because
           //     "Premier League" / "Champions League" appear in legit titles.
+          //   • Soccer-specific additions (2026-05-27): "red card" (key
+          //     match event), "(grab|gets|gains) all three points" / "all
+          //     three points" — soccer-cliché for a 3-point win that
+          //     bypassed every prior keyword.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat|defeats|beats|leads?|leader|winning|winner|wins|loses|loss|hat[- ]trick|no[- ]hitter|grand slam)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat|defeats|beats|leads?|leader|winning|winner|wins|loses|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
           if (SCORE_RX.test(title) || SPOILER_RX.test(title)) continue;
 
           // Simulation/videogame hard-skip — NBA 2K, MLB The Show, FIFA,

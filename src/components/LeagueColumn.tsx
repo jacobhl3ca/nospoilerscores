@@ -12,10 +12,13 @@ import GameCard from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import TeamView from "./TeamView";
 
+// JS fallback for the drag source slot — some browsers (Safari/Firefox) drop
+// custom dataTransfer MIME types across a drag, so the onDrop handler can't
+// always read back the source index via getData. Set on dragstart, read on drop.
+let dragSourceSlot: number | null = null;
+
 interface LeagueColumnProps {
   league: LeagueData;
-  isFavoriteLeague: boolean;
-  onToggleFavoriteLeague: (sport: Sport) => void;
   favoriteTeams: string[];
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
@@ -29,13 +32,17 @@ interface LeagueColumnProps {
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
   // 3rd league slot swapping
   swappableOptions?: { sport: Sport; label: string }[];
-  selectedThirdLeague?: Sport;
-  onSwapLeague?: (sport: Sport | undefined) => void;
+  selectedThirdLeague?: Sport | "empty";
+  onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // Sports shown in the other columns — dropdown greys these (still selectable).
   shownElsewhere?: Sport[];
   // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
   // covers mobile; this is the desktop-equivalent path.
   onRetry?: () => void;
+  // 0/1/2. Used by the drag handle to identify the source slot on drag start;
+  // the parent owns reorder logic and writes the new slot order back to prefs.
+  slotIdx?: number;
+  onReorderSlots?: (fromIdx: number, toIdx: number) => void;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -158,10 +165,11 @@ function getPlayoffSubtitle(
 
     const parsed = parseEtTime(entry.timeET);
     const now = nowInEt();
-    const isToday =
-      now.y === +selectedDate.slice(0, 4) &&
-      now.mo === +selectedDate.slice(4, 6) &&
-      now.d === +selectedDate.slice(6, 8);
+    const todayYmd = now.y * 10000 + now.mo * 100 + now.d;
+    const selectedYmd = +selectedDate;
+    // Past day: the show is over, the scheduled time is meaningless. Hide.
+    if (selectedYmd < todayYmd) return null;
+    const isToday = selectedYmd === todayYmd;
     const minsSinceStart =
       parsed && isToday ? (now.h - parsed.h) * 60 + (now.m - parsed.m) : -1;
     const withinAirWindow = minsSinceStart >= 0 && minsSinceStart <= 180;
@@ -419,8 +427,6 @@ function formatDateCompact(yyyymmdd: string): string {
 
 export default function LeagueColumn({
   league,
-  isFavoriteLeague,
-  onToggleFavoriteLeague,
   favoriteTeams,
   onToggleFavoriteTeam,
   showRatings,
@@ -437,13 +443,22 @@ export default function LeagueColumn({
   onSwapLeague,
   shownElsewhere,
   onRetry,
+  slotIdx,
+  onReorderSlots,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   const [swapOpen, setSwapOpen] = useState(false);
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
+  // Column drag-to-reorder disabled 2026-05-30 — native HTML5 DnD didn't swap
+  // reliably (the draggable handle is also the swap-dropdown button; Safari/
+  // Firefox quirks). Tabled in BACKLOG for a pointer-event rebuild. Keep the
+  // props so re-enabling is a one-line flip.
+  void onReorderSlots; void slotIdx;
+  const canDrag = false;
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
   useEffect(() => { setTeamViewTeam(null); }, [league.sport, league.label]);
@@ -629,30 +644,85 @@ export default function LeagueColumn({
   const renderFinished = section !== "upcoming";
 
   return (
-    <div ref={columnRef} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]">
+    <div
+      ref={columnRef}
+      className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh] transition-colors"
+      style={isDragOver ? { background: "var(--bg-card-hover)" } : undefined}
+      onDragEnter={canDrag ? (e) => {
+        // Unconditional preventDefault — both dragenter + dragover need to call
+        // it for the target to accept a drop (HTML5 spec). Previously we filtered
+        // by types here, but Safari sometimes returns an empty types[] during
+        // dragenter when crossing rapidly across child boundaries (game cards),
+        // causing the drop to silently fail. The drop handler validates the
+        // payload via getData(), so non-column drags (files, text) still no-op.
+        e.preventDefault();
+      } : undefined}
+      onDragOver={canDrag ? (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (!isDragOver) setIsDragOver(true);
+      } : undefined}
+      onDragLeave={canDrag ? (e) => {
+        // dragLeave fires every time the cursor crosses a child boundary inside
+        // the column (game cards, swap button, etc.), even while still inside
+        // the wrapper. Only clear the highlight when relatedTarget is actually
+        // outside this column — otherwise the dropEffect/isDragOver state flickers
+        // and dragover doesn't get a chance to reapply preventDefault before
+        // the user releases.
+        const related = e.relatedTarget as Node | null;
+        if (related && e.currentTarget.contains(related)) return;
+        setIsDragOver(false);
+      } : undefined}
+      onDrop={canDrag ? (e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        // Read the custom type first, then text/plain (Safari/Firefox often
+        // drop custom MIME types across the drag → getData returns ""), then
+        // the module-level fallback (set on dragstart) as a last resort.
+        const fromStr = e.dataTransfer.getData("application/x-hidescore-slot")
+          || e.dataTransfer.getData("text/plain")
+          || (dragSourceSlot != null ? String(dragSourceSlot) : "");
+        dragSourceSlot = null;
+        if (!fromStr) return;
+        const fromIdx = parseInt(fromStr, 10);
+        if (Number.isFinite(fromIdx) && fromIdx !== slotIdx && slotIdx !== undefined) {
+          onReorderSlots!(fromIdx, slotIdx);
+        }
+      } : undefined}
+    >
       {showHeader && (
         <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
-          <div className="flex items-center justify-center">
-            <span className="text-sm invisible mr-1.5" aria-hidden="true">★</span>
+          <div
+            className="flex items-center justify-center"
+            draggable={canDrag}
+            style={canDrag ? { cursor: "grab" } : undefined}
+            onDragStart={canDrag ? (e) => {
+              e.dataTransfer.setData("application/x-hidescore-slot", String(slotIdx));
+              // text/plain is preserved by every browser (custom MIME types are
+              // not, esp. Safari/Firefox); module-level var is the JS fallback.
+              e.dataTransfer.setData("text/plain", String(slotIdx));
+              dragSourceSlot = slotIdx ?? null;
+              e.dataTransfer.effectAllowed = "move";
+              // Use the column wrapper as the drag image so the user sees the
+              // whole column move, not just the header strip.
+              if (columnRef.current) {
+                e.dataTransfer.setDragImage(columnRef.current, 20, 20);
+              }
+            } : undefined}
+          >
+            {/* Drag-to-reorder still works on the whole title row (cursor:
+                grab) — the visual dot indicator was dropped. */}
             {isSwappable ? (
               <div ref={swapRef} className="relative">
                 <button
                   onClick={() => setSwapOpen(!swapOpen)}
-                  className="flex items-center gap-0.5 cursor-pointer transition-colors hover:opacity-80"
+                  className="cursor-pointer transition-colors hover:opacity-80"
                   style={{ color: "var(--text)" }}
                   title="Switch league"
                 >
                   <h2 className="text-base sm:text-lg font-bold tracking-wide">
                     {league.label}
                   </h2>
-                  <svg
-                    width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                    className={`transition-transform duration-150 ${swapOpen ? "rotate-180" : ""}`}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
                 </button>
                 {swapOpen && (
                   <div
@@ -689,6 +759,20 @@ export default function LeagueColumn({
                         </button>
                       );
                     })}
+                    {/* Empty — hides the column entirely until switched back. */}
+                    <button
+                      onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
+                      className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                      style={{
+                        color: "var(--text-muted)",
+                        fontWeight: 400,
+                        borderTop: "1px solid var(--border)",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      Empty
+                    </button>
                   </div>
                 )}
               </div>
@@ -697,14 +781,6 @@ export default function LeagueColumn({
                 {league.label}
               </h2>
             )}
-            <button
-              onClick={() => onToggleFavoriteLeague(league.sport)}
-              className={`text-sm transition-colors ml-1.5 ${isFavoriteLeague ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
-              style={isFavoriteLeague ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-              title={isFavoriteLeague ? "Remove favorite league" : "Set as favorite league"}
-            >
-              ★
-            </button>
           </div>
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />

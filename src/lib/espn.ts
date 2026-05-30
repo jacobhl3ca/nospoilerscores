@@ -8,6 +8,8 @@ const SPORT_PATHS: Record<Sport, string> = {
   nba: "/basketball/nba/scoreboard",
   wnba: "/basketball/wnba/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
+  ncaaw: "/basketball/womens-college-basketball/scoreboard",
+  ncaaf: "/football/college-football/scoreboard",
   nfl: "/football/nfl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
   golf: "/golf/pga/scoreboard",
@@ -15,6 +17,8 @@ const SPORT_PATHS: Record<Sport, string> = {
   fifa: "/soccer/fifa.world/scoreboard",
   epl: "/soccer/eng.1/scoreboard",
   mls: "/soccer/usa.1/scoreboard",
+  ucl: "/soccer/uefa.champions/scoreboard",
+  uel: "/soccer/uefa.europa/scoreboard",
 };
 
 // Seasonal league config: show/hide based on date
@@ -64,8 +68,21 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19", firstPref: true, displaySlot: "center", slotPrecedence: 2, yearCycle: { mod: 4, anchor: 2026 } },
   // ── Premier League (Aug–May) ──
   { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
+  // ── UEFA Champions League (Sep League phase → Jun Final) ──
+  // Active across Sep 14 → Jun 5 but only ~17 matchdays in window; on
+  // non-matchday days the column shows news only.
+  { sport: "ucl", label: "UCL", startDate: "09-14", endDate: "06-05", championshipDate: "06-05" },
+  // ── UEFA Europa League (Sep group → late May Final) ──
+  { sport: "uel", label: "UEL", startDate: "09-24", endDate: "05-22", championshipDate: "05-22" },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
   { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
+  // ── NCAAF (College Football, Aug–early Jan, CFB Championship ~Jan 11) ──
+  // Starts 08-22 to catch Week 0 (late-August opener weekend).
+  { sport: "ncaaf", label: "NCAAF", startDate: "08-22", endDate: "01-12", championshipDate: "01-12" },
+  // ── NCAAW (Women's College Basketball, Nov–early Apr) ──
+  // Swap-only (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot
+  // rotation — selectable from the slot-3 dropdown when in season. Mirrors WNBA.
+  { sport: "ncaaw", label: "NCAAW", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", excludeFromAuto: true },
   // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Swap-only
   // (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot rotation —
   // selectable from the slot-3 dropdown when in season. Listed last so it
@@ -116,6 +133,16 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 // Oct 20 – Nov 1:   + NBA                           → [NBA, NFL, MLB]
 // Nov 2 – Dec 31:   MLB ends; + NCAAM              → [NBA, NFL, NCAAM]
 // ═══════════════════════════════════════════════════════════════
+// Added 2026-05-27 — not unrolled into the day-by-day grid above:
+//   • NCAAF (Aug 29 – Jan 12, priority 4) joins between NFL and tennis;
+//     overlaps NFL Sundays and NCAAM/NBA in fall.
+//   • UCL (Sep 14 – Jun 5, priority 10) and UEL (Sep 24 – May 22, priority 11)
+//     compete for the soccer slot — UCL > UEL > MLS, EPL still beats both.
+//     Matchdays are sparse (~17 active days/season) — column shows news only
+//     on non-matchday days within the window.
+//   • NCAAW (Nov 1 – Apr 6, excludeFromAuto) — swap-only via dropdown,
+//     mirrors WNBA.
+// ═══════════════════════════════════════════════════════════════
 
 function toMMDD(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -152,14 +179,21 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   nba: 1,
   mlb: 2,
   nfl: 3,
-  tennis: 4,
-  golf: 5,
-  ncaam: 6,
-  nhl: 7,
-  epl: 8,
-  mls: 9,
-  fifa: 10,
-  wnba: 11,
+  ncaaf: 4,
+  tennis: 5,
+  golf: 6,
+  ncaam: 7,
+  nhl: 8,
+  epl: 9,
+  // UCL sits between EPL (9) and MLS (12) so on UCL matchdays it auto-picks
+  // for the soccer slot over MLS, while still yielding to EPL when both have
+  // games. UEL one notch below — Europa nights pair with UCL but UCL wins.
+  ucl: 10,
+  uel: 11,
+  mls: 12,
+  fifa: 13,
+  ncaaw: 14,
+  wnba: 15,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -310,11 +344,18 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // scaled down so scoring bonus normalizes the same way.
   wnba:   { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 28,  regulationPeriods: 4 },
   ncaam:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 2 },
+  // NCAAW: similar quarter/half structure as NCAAM, lower scoring (~70 vs ~75).
+  ncaaw:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 25,  regulationPeriods: 2 },
+  // NCAAF: scoring similar to NFL, mirrors its calibration.
+  ncaaf:  { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
   nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
   fifa:   { multiplier: 22,  overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   mls:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // UCL / UEL: 90-min soccer, mirrors EPL.
+  ucl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  uel:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
 };
@@ -428,6 +469,118 @@ function calculateRating(game: any): number | null {
   return Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus - lowScoringPenalty)));
 }
 
+// Tennis returns ONE event per tournament (e.g. "Roland Garros") with 0
+// top-level competitors; the real matches live in event.groupings[] (one per
+// draw: Men's/Women's Singles, Doubles, etc.), each with athlete-based
+// competitors instead of teams. Flatten the singles matches for the viewed
+// day into individual Game cards. Doubles are skipped (4 athletes / different
+// layout). parseTennisMatch maps an athlete pair into the team-shaped Game the
+// cards already render — country flag as the "logo", set count as the score.
+function tennisEtYmd(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+  } catch {
+    return "";
+  }
+}
+
+function parseTennisMatch(match: any, event: any): Game {
+  const comps = match.competitors ?? [];
+  const home = comps.find((c: any) => c.homeAway === "home") ?? comps[0];
+  const away = comps.find((c: any) => c.homeAway === "away") ?? comps[1];
+  const mkTeam = (c: any): Team => {
+    const a = c?.athlete ?? {};
+    const setsWon = (c?.linescores ?? []).filter((l: any) => l.winner).length;
+    return {
+      // Empty id → GameCard renders the name as plain text (no team-schedule
+      // view, which doesn't exist for individual players).
+      id: "",
+      abbreviation: a.shortName ?? a.displayName ?? "",
+      displayName: a.displayName ?? "",
+      shortDisplayName: a.displayName ?? "",
+      logo: a.flag?.href ?? "",
+      color: "666666",
+      score: String(setsWon),
+      winner: c?.winner ?? false,
+      record: "",
+    };
+  };
+  const state = (match.status?.type?.state ?? "pre") as "pre" | "in" | "post";
+  const homeTeam = mkTeam(home);
+  const awayTeam = mkTeam(away);
+  // Tournament + year context for the highlight search. Without it the
+  // unscoped fallback query ("A vs B highlights") can land on the same
+  // players' match from a DIFFERENT event/year (e.g. a French Open match
+  // resolving to "Rome Open 2025"). Threaded through the Game's seriesNote,
+  // which is only ever used to build the YouTube query (never rendered).
+  const matchYear = (match.date ?? event.date ?? "").slice(0, 4);
+  const tourneyTag = [event.name, matchYear].filter(Boolean).join(" ");
+  // Closeness rating (drives the Rated-view sort): a deciding final set is the
+  // most compelling, straight sets the least. Pre/in matches get a neutral mid.
+  const hs = Number(homeTeam.score) || 0;
+  const as = Number(awayTeam.score) || 0;
+  const diff = Math.abs(hs - as);
+  let rating = 55;
+  if (state === "post") {
+    if (diff <= 1) rating = 90;             // went the distance (2-1 / 3-2)
+    else if (hs + as >= 4 && diff === 2) rating = 78; // long match (3-1)
+    else rating = 65;                       // straight sets
+  }
+  const name = `${awayTeam.displayName} vs ${homeTeam.displayName}`;
+  return {
+    id: match.id ?? `${event.id}-${awayTeam.abbreviation}-${homeTeam.abbreviation}`,
+    sport: "tennis",
+    date: match.date ?? event.date,
+    name,
+    shortName: name,
+    state,
+    statusDetail: match.status?.type?.shortDetail ?? match.status?.type?.detail ?? "",
+    clock: match.status?.displayClock ?? "",
+    period: match.status?.period ?? 0,
+    completed: match.status?.type?.completed ?? false,
+    homeTeam,
+    awayTeam,
+    broadcasts: [],
+    venue: "",
+    highlightUrl: null,
+    // Not a playoff "Game N" — repurposed to carry tournament+year into the
+    // highlight search so it can't drift to the wrong event (see above).
+    seriesNote: tourneyTag || null,
+    seriesStatus: null,
+    playoffLabel: null,
+    isPlayoff: false,
+    recapUrl: null,
+    rating,
+    streamUrl: null,
+    primeStreamUrl: null,
+  };
+}
+
+function buildTennisGames(events: any[], date?: string): Game[] {
+  const todayYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replace(/-/g, "");
+  const target = date ?? todayYmd;
+  const games: Game[] = [];
+  for (const event of events) {
+    for (const grouping of event.groupings ?? []) {
+      const slug = (grouping.grouping?.slug ?? "").toLowerCase();
+      // Singles draws only.
+      if (!slug.includes("singles") || slug.includes("doubles")) continue;
+      for (const match of grouping.competitions ?? []) {
+        if ((match.competitors?.length ?? 0) < 2) continue;
+        if (tennisEtYmd(match.date) !== target) continue;
+        const sn = match.status?.type?.name ?? "";
+        if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
+        try {
+          games.push(parseTennisMatch(match, event));
+        } catch {
+          // A single malformed match must not blank the whole draw.
+        }
+      }
+    }
+  }
+  return games;
+}
+
 function parseGame(event: any, sport: Sport): Game {
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors ?? [];
@@ -527,6 +680,7 @@ function parseGame(event: any, sport: Sport): Game {
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports
     primeStreamUrl: null, // populated from /prime-asins.json when matchup matches
+    noHitterPitchingTeam: null, // MLB only — populated from MLB Stats API linescore
   };
 }
 
@@ -656,11 +810,15 @@ export function espnGameUrl(game: Game): string {
     case "nba": return `https://www.espn.com/nba/game/_/gameId/${game.id}`;
     case "wnba": return `https://www.espn.com/wnba/game/_/gameId/${game.id}`;
     case "ncaam": return `https://www.espn.com/mens-college-basketball/game/_/gameId/${game.id}`;
+    case "ncaaw": return `https://www.espn.com/womens-college-basketball/game/_/gameId/${game.id}`;
+    case "ncaaf": return `https://www.espn.com/college-football/game/_/gameId/${game.id}`;
     case "nfl": return `https://www.espn.com/nfl/game/_/gameId/${game.id}`;
     case "nhl": return `https://www.espn.com/nhl/game/_/gameId/${game.id}`;
     case "epl":
     case "mls":
     case "fifa":
+    case "ucl":
+    case "uel":
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
     case "golf": return `https://www.espn.com/golf/leaderboard`;
     case "tennis": return `https://www.espn.com/tennis/scoreboard`;
@@ -674,12 +832,17 @@ export function sportStreamFallback(sport: Sport): string {
     case "nba": return "https://www.nba.com/watch";
     case "wnba": return "https://www.wnba.com/watch";
     case "ncaam": return "https://www.espn.com/watch/";
+    case "ncaaw": return "https://www.espn.com/watch/";
+    case "ncaaf": return "https://www.espn.com/watch/";
     case "nfl": return "https://www.nfl.com/plus/";
     case "nhl": return "https://www.espn.com/watch/";
     case "mlb": return "https://www.mlb.com/tv";
     case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";
     case "fifa": return "https://www.foxsports.com/live";
+    // UCL / UEL: Paramount+ holds US rights through 2030.
+    case "ucl": return "https://www.paramountplus.com/sports/uefa-champions-league/";
+    case "uel": return "https://www.paramountplus.com/sports/uefa-europa-league/";
     case "tennis": return "https://www.tennischannel.com/";
     case "golf": return "https://www.pgatour.com/live";
   }
@@ -692,20 +855,36 @@ export function sportStreamFallback(sport: Sport): string {
 export function networkStreamUrl(broadcast: string, gameId: string, sport?: Sport): string | null {
   const b = broadcast.toLowerCase().trim();
   if (!b) return null;
-  // ESPN family (incl. ABC, ESPN Unlmtd, ESPN+, ESPNU, SEC/ACC Network, ESPN Deportes)
-  if (b.includes("espn") || b === "abc") return `https://www.espn.com/watch/player/_/id/${gameId}`;
+  // ESPN family deep-links via gameId. ABC is ESPN-owned but its own broadcast
+  // network has a dedicated live page, so route it there instead of the ESPN
+  // player — the user picked ABC, send them to ABC.
+  if (b.includes("espn")) return `https://www.espn.com/watch/player/_/id/${gameId}`;
+  if (b === "abc") return "https://abc.com/watch-live";
   // FOX family
   if (b === "fox" || b === "fs1" || b === "fs2" || b === "fox deportes") return "https://www.foxsports.com/live";
-  // WBD → Max (incl. "HBO Max", "TNT", "TBS", "TruTV"). play.max.com/live and
-  // play.hbomax.com/sports both 302 to the marketing home; hbomax.com/sports
-  // is the one URL that lands on the actual live-sports browse page.
-  if (b.includes("max") || b === "tnt" || b === "tbs" || b === "trutv") return "https://www.hbomax.com/sports";
-  // NBC / NBC Sports → NBCSports live page (NBC-branded, sports-focused)
+  // WBD networks. TNT/TBS/TruTV each have their own TV Everywhere portal —
+  // routing them all to HBO Max strips the network branding the user just
+  // clicked. Generic "Max"/"HBO Max" broadcasts still go to hbomax.com/sports
+  // (play.max.com/live and play.hbomax.com/sports both 302 to marketing).
+  if (b === "tnt") return "https://www.tntdrama.com/watchtnt";
+  if (b === "tbs") return "https://www.tbs.com/watchtbs";
+  if (b === "trutv") return "https://www.trutv.com/watchtrutv";
+  if (b.includes("max")) return "https://www.hbomax.com/sports";
+  // Plain "NBC" = the broadcast network → nbc.com/live. "NBCS"/"NBC Sports" =
+  // the cable channel → NBCSports live page.
+  if (b === "nbc") return "https://www.nbc.com/live";
   if (b.includes("nbc")) return "https://www.nbcsports.com/watch";
-  // Other NBCU streamers (USA Network, Peacock, Golf Channel, Telemundo Deportes) → Peacock
-  if (b.includes("usa") || b === "peacock" || b === "golf channel" || b.startsWith("tele")) return "https://www.peacocktv.com/";
-  // CBS-branded broadcasts → CBS Sports (a real CBS-branded live page)
-  if (b === "cbs" || b === "cbssn") return "https://www.cbssports.com/watch/live";
+  // Other NBCU networks each have their own live/TVE page distinct from the
+  // Peacock homepage — only fall back to peacocktv.com when the broadcast is
+  // literally Peacock.
+  if (b.includes("usa")) return "https://www.usanetwork.com/live";
+  if (b === "golf channel") return "https://www.golfchannel.com/watch";
+  if (b.startsWith("tele")) return "https://www.telemundo.com/deportes";
+  if (b === "peacock") return "https://www.peacocktv.com/";
+  // Plain "CBS" = the broadcast network → CBS's own live-TV stream. "CBSSN" =
+  // CBS Sports Network (the cable channel) → the CBS Sports live page.
+  if (b === "cbs") return "https://www.cbs.com/live-tv/";
+  if (b === "cbssn") return "https://www.cbssports.com/watch/live";
   // Paramount+ broadcasts (rare; carries some CBS Sports content) → Paramount+
   if (b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
   // Amazon Prime Video — fall back to the Prime sports hub. Sport-specific
@@ -714,27 +893,51 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b === "amazon prime" || b === "prime video" || b === "amazon") {
     return "https://www.primevideo.com/sports";
   }
-  // Apple TV+ (MLS Season Pass primarily)
-  if (b === "apple tv+" || b === "apple tv") return "https://tv.apple.com/us/mls";
+  // Apple TV+ — MLS Season Pass is the only Apple-branded sports landing with
+  // a stable public URL. For other sports (notably MLB Friday Night Baseball)
+  // every tv.apple.com sport/channel/show path 404s, so send to the Apple TV
+  // homepage where the user can navigate or sign in.
+  if (b === "apple tv+" || b === "apple tv") {
+    if (sport === "mls") return "https://tv.apple.com/us/mls";
+    return "https://tv.apple.com/us";
+  }
   // YouTube TV / NFL Sunday Ticket
   if (b === "youtube tv" || b === "nfl sunday ticket" || b === "youtube") return "https://tv.youtube.com/";
   // League-specific networks
   if (b === "nfl network" || b === "nfl+") return "https://www.nfl.com/plus/";
   if (b === "nba tv") return "https://www.nba.com/watch";
   if (b === "wnba league pass" || b === "wnba tv") return "https://www.wnba.com/watch";
-  if (b === "nhl network") return "https://www.espn.com/watch/";
+  // NHL Network has its own page (redirects to nhl.com/nhl-network). The old
+  // espn.com/watch fallback was a generic ESPN landing with no NHL context.
+  if (b === "nhl network") return "https://www.nhlnetwork.com/";
   if (b === "mlb.tv" || b === "mlb network") return "https://www.mlb.com/tv";
   if (b === "tennis channel") return "https://www.tennischannel.com/";
   // Masters-only streamer — already added during golf broadcast enrichment
   if (b === "masters.com") return "https://www.masters.com/en_US/watch/index.html";
-  // MLB direct-to-consumer team feeds ("Brewers.TV", "YES", "SNY", "NESN",
-  // "MASN", regional Sports Networks, etc.). MLB.tv is the single best
-  // streaming home — most RSNs have black-out caveats but in-market viewers
-  // already know to use the team app, and out-of-market viewers want MLB.tv.
+  // MLB RSN routing. When the broadcast names a specific RSN with its own
+  // portal, send the user there (matches what they clicked). Generic "*.tv"
+  // team feeds and RSNs without a known live page fall through to mlb.com/tv.
   if (sport === "mlb") {
+    if (b === "yes") return "https://www.yesnetwork.com/";
+    if (b === "sny") return "https://sny.tv/";
+    if (b === "nesn") return "https://nesn.com/";
+    if (b === "masn") return "https://www.masnsports.com/";
+    if (b === "chsn") return "https://chsn.tv/";
+    if (b.includes("marquee")) return "https://www.marqueesportsnetwork.com/";
+    if (b.includes("fanduel")) return "https://fanduelsportsnetwork.com/";
+    if (b.includes("space city")) return "https://www.spacecityhomenetwork.com/";
+    // Canadian Sportsnet feeds (Blue Jays — SNE/SNW/SN1/SN360/SNO/SNP, plus
+    // any "Sportsnet"-branded variant). The live product sportsnetplus.ca is
+    // geo-locked to Canada; sportsnet.ca is the public, US-accessible brand
+    // landing.
+    if (/^(sne|snw|sn1|sn360|sno|snp)$/.test(b)) return "https://www.sportsnet.ca/";
+    if (b.includes("sportsnet")) return "https://www.sportsnet.ca/";
+    // Generic team feed ("Brewers.TV" etc.) — no per-team portal worth
+    // deep-linking; mlb.com/tv is the safe streaming home.
     if (/\.tv$/i.test(b)) return "https://www.mlb.com/tv";
-    if (/^(yes|sny|nesn|masn|chsn|snw|snp|sn1)$/.test(b)) return "https://www.mlb.com/tv";
-    if (b.includes("sportsnet") || b.includes("marquee") || b.includes("fanduel") || b.includes("space city") || b.includes("nbc sports")) return "https://www.mlb.com/tv";
+    // ("NBC Sports Bay Area/Philly/Boston/California") is caught upstream by
+    // the b.includes("nbc") rule and routed to nbcsports.com/watch — no MLB
+    // override needed here.
   }
   return null;
 }
@@ -749,9 +952,22 @@ function buildStreamUrl(game: Game): string {
   return sportStreamFallback(game.sport);
 }
 
-// MLB Stats API: fetch gamePk values for a date, keyed by home team abbreviation
-async function fetchMLBGamePks(date?: string): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
+// MLB Stats API: fetch per-game metadata for a date, keyed by "away@home"
+// (abbreviations). Returns the gamePk for the MLB.tv deep link plus the live
+// linescore signals needed to compute the No-Hit Alert badge.
+interface MlbGameMeta {
+  gamePk: string;
+  isLive: boolean;       // status.abstractGameState === "Live"
+  awayHits?: number;
+  homeHits?: number;
+  awayRuns?: number;
+  homeRuns?: number;
+  awayLeftOnBase?: number;
+  homeLeftOnBase?: number;
+  currentInning?: number; // 1-9+
+}
+async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>> {
+  const map = new Map<string, MlbGameMeta>();
   try {
     // Convert YYYYMMDD to YYYY-MM-DD
     let apiDate: string;
@@ -761,7 +977,7 @@ async function fetchMLBGamePks(date?: string): Promise<Map<string, string>> {
       const now = new Date();
       apiDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     }
-    const res = await fetchWithRetry(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${apiDate}&hydrate=team`, 1, 5000);
+    const res = await fetchWithRetry(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${apiDate}&hydrate=team,linescore`, 1, 5000);
     if (!res.ok) return map;
     const data = await res.json();
     for (const dateEntry of data.dates ?? []) {
@@ -769,14 +985,25 @@ async function fetchMLBGamePks(date?: string): Promise<Map<string, string>> {
         const gamePk = String(game.gamePk);
         const homeAbbrev = game.teams?.home?.team?.abbreviation ?? "";
         const awayAbbrev = game.teams?.away?.team?.abbreviation ?? "";
+        if (!homeAbbrev || !awayAbbrev) continue;
+        const ls = game.linescore ?? {};
+        const meta: MlbGameMeta = {
+          gamePk,
+          isLive: game.status?.abstractGameState === "Live",
+          awayHits: ls.teams?.away?.hits,
+          homeHits: ls.teams?.home?.hits,
+          awayRuns: ls.teams?.away?.runs,
+          homeRuns: ls.teams?.home?.runs,
+          awayLeftOnBase: ls.teams?.away?.leftOnBase,
+          homeLeftOnBase: ls.teams?.home?.leftOnBase,
+          currentInning: ls.currentInning,
+        };
         // Key by "away@home" to handle doubleheaders
-        if (homeAbbrev && awayAbbrev) {
-          map.set(`${awayAbbrev}@${homeAbbrev}`, gamePk);
-        }
+        map.set(`${awayAbbrev}@${homeAbbrev}`, meta);
       }
     }
   } catch {
-    // Non-critical — games just won't have deep links
+    // Non-critical — games just won't have deep links / no-hit alerts
   }
   return map;
 }
@@ -1078,6 +1305,81 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
   }
 }
 
+// Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
+// the single-day fetch and the soccer range-lookahead so both apply the same
+// postponed/preseason/0-competitor filtering + per-event failure isolation.
+function eventsToGames(events: any[], sport: Sport): Game[] {
+  return events
+    .filter((e: any) => {
+      // Filter out postponed/canceled/suspended games
+      const statusName = e.status?.type?.name ?? "";
+      if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
+      // Filter out preseason/spring training — bad highlights, ties in records, low-quality games
+      const seasonType = e.season?.type ?? 0;
+      if (seasonType === 1) return false;
+      // Tournament-wrapper events with no competitors aren't real matches.
+      const competitors = e.competitions?.[0]?.competitors ?? [];
+      if (competitors.length < 2) return false;
+      return true;
+    })
+    // A single malformed event must not take down the whole league.
+    .map((e: any) => {
+      try {
+        return parseGame(e, sport);
+      } catch {
+        return null;
+      }
+    })
+    .filter((g: Game | null): g is Game => g !== null);
+}
+
+// Soccer leagues have multi-week gaps (international windows, the 2026 World
+// Cup summer break, etc.) that blow past the 7-day next-game lookahead → the
+// column shows "Schedule TBD" even though games resume weeks out. ESPN's
+// scoreboard accepts a DATE RANGE (`?dates=YYYYMMDD-YYYYMMDD`) returning every
+// fixture in the window in ONE request, so we can find the true next match day
+// without dozens of separate fetches. Returns the earliest future day's slate.
+async function fetchNextGameDayRange(
+  sport: Sport,
+  fromDate?: string,
+  windowDays = 80,
+): Promise<{ date: string; games: Game[] } | null> {
+  const base = fromDate
+    ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
+    : new Date();
+  const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const start = new Date(base); start.setDate(start.getDate() + 1);
+  const end = new Date(base); end.setDate(end.getDate() + windowDays);
+  const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+  url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
+  let events: any[];
+  try {
+    const res = await fetchWithRetry(url.toString());
+    if (!res.ok) return null;
+    const data = await res.json();
+    events = data?.events ?? [];
+  } catch {
+    return null;
+  }
+  const games = eventsToGames(events, sport).filter((g) => g.state === "pre" || g.state === "in");
+  if (!games.length) return null;
+  // Group by the fixture's ET calendar day, return the earliest day's slate.
+  const dayOf = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+    } catch {
+      return "";
+    }
+  };
+  let earliest = "";
+  for (const g of games) {
+    const d = dayOf(g.date);
+    if (d && (!earliest || d < earliest)) earliest = d;
+  }
+  if (!earliest) return null;
+  return { date: earliest, games: games.filter((g) => dayOf(g.date) === earliest) };
+}
+
 export async function fetchGames(
   sport: Sport,
   date?: string
@@ -1085,8 +1387,8 @@ export async function fetchGames(
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   if (date) url.searchParams.set("dates", date);
 
-  // For MLB, fetch game PKs in parallel with ESPN data
-  const mlbPksPromise = sport === "mlb" ? fetchMLBGamePks(date) : null;
+  // For MLB, fetch game metadata (gamePk + live linescore) in parallel with ESPN data
+  const mlbMetaPromise = sport === "mlb" ? fetchMLBGameMeta(date) : null;
   // Same pattern for NHL — fetch NHL's own game IDs so we can deep-link
   // non-ESPN broadcasts into nhl.com/tv/{id} instead of the generic landing.
   const nhlIdsPromise = sport === "nhl" ? fetchNHLGameIds(date) : null;
@@ -1118,35 +1420,54 @@ export async function fetchGames(
   }
 
   const events = data?.events ?? [];
-  const games: Game[] = events
-    .filter((e: any) => {
-      // Filter out postponed/canceled/suspended games
-      const statusName = e.status?.type?.name ?? "";
-      if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
-      // Filter out preseason/spring training — bad highlights, ties in records, low-quality games
-      const seasonType = e.season?.type ?? 0;
-      if (seasonType === 1) return false;
-      return true;
-    })
-    // A single malformed event must not take down the whole league.
-    .map((e: any) => {
-      try {
-        return parseGame(e, sport);
-      } catch {
-        return null;
-      }
-    })
-    .filter((g: Game | null): g is Game => g !== null);
 
-  // Enrich MLB games with direct MLB.tv stream links
-  if (sport === "mlb" && mlbPksPromise) {
-    const mlbPks = await mlbPksPromise;
+  // Tennis nests its real matches in event.groupings[].competitions[] with
+  // athlete-based competitors — flattened by a dedicated parser, not the
+  // team-based path below (which would drop the 0-competitor tournament wrapper).
+  if (sport === "tennis") {
+    return { games: buildTennisGames(events, date), failed: false };
+  }
+
+  const games: Game[] = eventsToGames(events, sport);
+
+  // Enrich MLB games with direct MLB.tv stream links + No-Hit Alert flag
+  if (sport === "mlb" && mlbMetaPromise) {
+    const mlbMeta = await mlbMetaPromise;
     for (const game of games) {
       const awayAbbrev = espnToMlbAbbrev(game.awayTeam.abbreviation);
       const homeAbbrev = espnToMlbAbbrev(game.homeTeam.abbreviation);
-      const gamePk = mlbPks.get(`${awayAbbrev}@${homeAbbrev}`);
-      if (gamePk) {
-        game.streamUrl = `https://www.mlb.com/tv/g${gamePk}`;
+      const meta = mlbMeta.get(`${awayAbbrev}@${homeAbbrev}`);
+      if (!meta) continue;
+      game.streamUrl = `https://www.mlb.com/tv/g${meta.gamePk}`;
+      // No-Hit / Perfect Game Alert: live game, opposing batting team has 0
+      // hits, pitcher has carried the bid into at least the 6th inning (5
+      // complete innings of no-hit ball). Matches the MLB.com Gameday alert
+      // threshold. The opposing team's runs+leftOnBase=0 upgrades it to a
+      // perfect game (catches walks/HBP/errors via aggregate runners-on
+      // without needing the boxscore hydrate). Cleared on next refresh as
+      // soon as a hit drops or a runner reaches.
+      //
+      // Rating override: a no-hit bid is always interesting regardless of
+      // score margin, so floor the rating at 95 (always GREAT). A perfect
+      // game gets 110 — above the natural 0–100 cap so the live-cluster
+      // sort always puts it at the top.
+      if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 6) {
+        if (meta.awayHits === 0) {
+          game.noHitterPitchingTeam = game.homeTeam.abbreviation;
+          if ((meta.awayRuns ?? 0) === 0 && (meta.awayLeftOnBase ?? 0) === 0) {
+            game.isPerfectGame = true;
+          }
+        } else if (meta.homeHits === 0) {
+          game.noHitterPitchingTeam = game.awayTeam.abbreviation;
+          if ((meta.homeRuns ?? 0) === 0 && (meta.homeLeftOnBase ?? 0) === 0) {
+            game.isPerfectGame = true;
+          }
+        }
+        if (game.isPerfectGame) {
+          game.rating = 110;
+        } else if (game.noHitterPitchingTeam) {
+          game.rating = Math.max(95, game.rating ?? 0);
+        }
       }
     }
   }
@@ -1346,22 +1667,30 @@ async function enrichNhlVideos(games: Game[], date: string): Promise<void> {
 
 export async function fetchAllLeagues(
   date?: string,
-  thirdLeagueSport?: Sport,
-  slotOverrides?: { first?: Sport; second?: Sport; third?: Sport },
+  thirdLeagueSport?: Sport | "empty",
+  slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty" },
 ): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
     ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`)
     : new Date();
+  // Today in ET as YYYYMMDD, so the "next game day" lookahead only fires on
+  // today/future tabs — on a PAST tab (e.g. Yesterday) a league with no game
+  // should read "No games", not surface a future game (Jacob 5/29).
+  const todayYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replace(/-/g, "");
+  const isPastView = !!date && date < todayYmd;
 
   // Resolved slot order from the layout rules. Returns 1-3 LeagueConfigs in
   // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top.
   const auto = pickAndAssignLeagues(viewDate);
 
   // Per-slot overrides: each slot independently swappable to any active league.
-  // Falls back to legacy thirdLeagueSport when slotOverrides.third is unset to
-  // preserve old shareable favorites links that only encode `t=`.
-  const resolveSlot = (sport: Sport | undefined): LeagueConfig | null => {
+  // "empty" hides the slot entirely (no auto fallback). Falls back to legacy
+  // thirdLeagueSport when slotOverrides.third is unset to preserve old share URLs.
+  // Returns LeagueConfig for a sport, "empty" to keep the slot explicitly hidden,
+  // or null when unset (which then triggers the auto fallback downstream).
+  const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | null => {
+    if (sport === "empty") return "empty";
     if (!sport) return null;
     return ALL_LEAGUES.find((l) => l.sport === sport && isLeagueActive(l, viewDate)) ?? null;
   };
@@ -1372,24 +1701,26 @@ export async function fetchAllLeagues(
   let final: LeagueConfig[];
   if (slot1Cfg || slot2Cfg || (slotOverrides?.third && slot3Cfg)) {
     // Any per-slot override → user is in full manual control. Build slot-by-slot:
-    // each set slot uses its override; each unset slot falls back to the auto pick
-    // EXCLUDING leagues already chosen for other slots — otherwise picking a sport
-    // that's also an auto pick would dedup down to fewer than 3 columns.
-    const chosen = new Set<Sport>(
-      [slot1Cfg?.sport, slot2Cfg?.sport, slot3Cfg?.sport].filter((s): s is Sport => !!s),
-    );
-    const autoQueue = auto.filter((cfg) => !chosen.has(cfg.sport));
-    let autoIdx = 0;
-    const nextAuto = (): LeagueConfig | null => autoQueue[autoIdx++] ?? null;
+    // each set slot uses its override; each unset slot falls back to its position
+    // default in auto.
+    // Auto = the slot's position default, always. No fallback when auto[N]'s
+    // sport is already pinned in another slot — duplicates are allowed (Jacob's
+    // rule: Auto on column N must equal that column's normal league regardless
+    // of what's pinned elsewhere, even if it duplicates). Explicit duplicates
+    // are already a supported intentional layout via the swap dropdown.
+    const nextAutoForSlot = (slotIdx: number): LeagueConfig | null => auto[slotIdx] ?? null;
+    // Each slot resolves to one of: explicit league (incl. "empty" → skip),
+    // unset (null) → fall back to that slot's auto pick.
+    const resolveFinal = (cfg: LeagueConfig | "empty" | null, slotIdx: number): LeagueConfig | null =>
+      cfg === "empty" ? null : (cfg ?? nextAutoForSlot(slotIdx));
     const slots: (LeagueConfig | null)[] = [
-      slot1Cfg ?? nextAuto(),
-      slot2Cfg ?? nextAuto(),
-      slot3Cfg ?? nextAuto(),
+      resolveFinal(slot1Cfg, 0),
+      resolveFinal(slot2Cfg, 1),
+      resolveFinal(slot3Cfg, 2),
     ];
-    // Keep every set slot, including duplicates — a user can deliberately put
-    // the same league in two columns via the per-column swap dropdown.
+    // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
-  } else if (slot3Cfg && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
+  } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
     // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen league.
     final = [...auto.slice(0, MAX_LEAGUES - 1), slot3Cfg];
   } else {
@@ -1410,7 +1741,7 @@ export async function fetchAllLeagues(
     // an empty schedule. On a fetch failure games is also [] — falling back
     // there would render tomorrow's slate labeled "Tomorrow" on the Today
     // tab, which reads as a bug. A failed league carries fetchFailed instead.
-    if (!failed && games.length === 0) {
+    if (!failed && games.length === 0 && !isPastView) {
       // NBA + NHL publish playoff games only as the prior round wraps. During
       // their playoff months (May/Jun) ESPN's "next 7 days" can be a flat zero
       // even though Conf Finals / Cup Final games will be added soon. Look 21
@@ -1418,6 +1749,14 @@ export async function fetchAllLeagues(
       const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
       const lookahead = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth ? 21 : 7;
       nextGameDay = await fetchNextGameDay(cfg.sport, lookahead, date);
+      // Soccer leagues take multi-week breaks (intl windows / 2026 World Cup
+      // summer gap) longer than the day-by-day lookahead. When that finds
+      // nothing, widen with a single range query so the column shows the real
+      // next match day instead of "Schedule TBD".
+      const SOCCER: Sport[] = ["mls", "epl", "ucl", "uel", "fifa"];
+      if (!nextGameDay && SOCCER.includes(cfg.sport)) {
+        nextGameDay = await fetchNextGameDayRange(cfg.sport, date);
+      }
     }
     return { sport: cfg.sport, label, games, nextGameDay, fetchFailed: failed };
   };

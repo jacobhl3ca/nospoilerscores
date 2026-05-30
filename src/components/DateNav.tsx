@@ -1,10 +1,13 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, type ReactNode } from "react";
 
 interface DateNavProps {
   selectedDate: string; // YYYYMMDD
   onDateChange: (date: string) => void;
+  // Optional node rendered to the RIGHT of the › arrow (e.g. a bare calendar
+  // icon) without shifting the Yesterday/Today/Tomorrow buttons.
+  trailing?: ReactNode;
 }
 
 function toYYYYMMDD(d: Date): string {
@@ -176,7 +179,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 // Exported for use in toolbar
 export { CalendarDropdown };
 
-export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
+export default function DateNav({ selectedDate, onDateChange, trailing }: DateNavProps) {
   const yesterday = getDateString(-1);
   const today = getDateString(0);
   const tomorrow = getDateString(1);
@@ -209,6 +212,10 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
 
   return (
     <div className="flex gap-0 sm:gap-0.5 items-center justify-center">
+      {/* Invisible leading spacer mirrors the trailing calendar icon's width so
+          the ‹ Yesterday/Today/Tomorrow › group stays centered (lines up with
+          the middle MLB column) instead of being shoved left by the icon. */}
+      {trailing && <span aria-hidden className="w-7 h-7 sm:w-8 sm:h-8 mr-1 shrink-0" />}
       <button
         onClick={goEarlier}
         className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full text-sm sm:text-base transition-colors cursor-pointer"
@@ -243,6 +250,7 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
       >
         ›
       </button>
+      {trailing}
     </div>
   );
 }

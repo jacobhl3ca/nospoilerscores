@@ -5,7 +5,7 @@ import { Game, Team } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
-import { getYouTubeSearchUrl, getHighlightSearchQuery, fetchFirstVideoId, getOfficialChannelName } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, resolveHighlightVideo } from "@/lib/youtube";
 import { getETHour } from "@/components/DateNav";
 
 interface GameCardProps {
@@ -93,24 +93,24 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
   if (sport === "ncaam") {
     // NCAAM uses halves, not quarters
     const h = period <= 2 ? `H${period}` : period === 3 ? "OT" : `${period - 2}OT`;
-    if (clock && clock !== "0.0") return { full: `${h} ${clock}`, short: h };
+    if (clock && clock !== "0.0") return { full: `${h} - ${clock}`, short: h };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: h, short: h };
   }
   if (sport === "nba" || sport === "wnba") {
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
-    if (clock && clock !== "0.0") return { full: `${q} ${clock}`, short: q };
+    if (clock && clock !== "0.0") return { full: `${q} - ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: q, short: q };
   }
   if (sport === "nhl") {
     const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : `${period - 3}OT`;
-    if (clock && clock !== "0.0") return { full: `${p} ${clock}`, short: p };
+    if (clock && clock !== "0.0") return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
   if (sport === "nfl") {
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
-    if (clock && clock !== "0.0") return { full: `${q} ${clock}`, short: q };
+    if (clock && clock !== "0.0") return { full: `${q} - ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: q, short: q };
   }
@@ -134,6 +134,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
   const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | null>(null);
+  // "loading" while prefetch (or click-time chain) is running. "found" once
+  // resolveHighlightVideo returns an id. "missing" once the full retry chain
+  // has been exhausted — the button is hidden in that state so the user
+  // never gets dropped onto a YouTube search page.
+  type HighlightStatus = "loading" | "found" | "missing";
+  const [officialStatus, setOfficialStatus] = useState<HighlightStatus>("loading");
+  const [searchStatus, setSearchStatus] = useState<HighlightStatus>("loading");
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
@@ -206,16 +213,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     nba: 3.5,  // ~2.5hr game + highlights up in 30-60min
     wnba: 3.5, // mirrors NBA — same ~2hr game + same-channel upload cadence
     ncaam: 4,  // ~2hr game + highlights up in 1-3hrs (varies by matchup prominence)
+    ncaaw: 4,  // mirrors NCAAM
+    ncaaf: 5,  // ~3.5hr game + 1-2hr upload (mirrors NFL)
     nhl: 4.5,  // ~2.5hr game + highlights up in 1-3hrs (Sportsnet/NHL)
     mlb: 5,    // ~3hr game + highlights up in ~2hrs (verified Dodgers-Jays 4/6/26)
     nfl: 5,    // ~3.5hr game + highlights up in 1-2hrs
     fifa: 3,   // ~2hr match + highlights up quickly
     epl: 3,    // ~2hr match + highlights up quickly
     mls: 3,    // ~2hr match + highlights up quickly
+    ucl: 3,    // mirrors EPL — CBS Sports Golazo posts within ~2hrs of final whistle
+    uel: 3,    // mirrors EPL
     golf: 6,   // ~5hr round + recap upload delay
     tennis: 4, // ~2-3hr match + highlights up in 1-2hrs
   };
-  const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, golf: 4, tennis: 3 };
+  const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 2, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
@@ -245,18 +256,27 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
+    const away = game.awayTeam.shortDisplayName;
+    const home = game.homeTeam.shortDisplayName;
+    const series = game.seriesNote;
     if (officialChannel) {
       (async () => {
-        const officialId = await fetchFirstVideoId(query, officialChannel);
+        const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel);
         prefetchedOfficialId.current = officialId;
-        const id = await fetchFirstVideoId(query, undefined, [officialId]);
+        setOfficialStatus(officialId ? "found" : "missing");
+        const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId]);
         prefetchedVideoId.current = id;
+        setSearchStatus(id ? "found" : "missing");
       })();
     } else {
-      fetchFirstVideoId(query).then((id) => { prefetchedVideoId.current = id; });
+      // No official channel for this league — only the search button is rendered.
+      setOfficialStatus("missing");
+      resolveHighlightVideo(away, home, dateStr, series).then((id) => {
+        prefetchedVideoId.current = id;
+        setSearchStatus(id ? "found" : "missing");
+      });
     }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, officialChannel]);
+  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel]);
 
   const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
@@ -309,6 +329,25 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         </div>
       )}
 
+      {/* MLB No-Hit / Perfect Game Alert — live MLB game, opposing batters
+          have no hits past the 5th inning. Mirrors the MLB.com Gameday alert.
+          Gated on the ratings/spoiler toggle (the alert reveals an in-progress
+          score dynamic) and never shown on finished games. */}
+      {isLive && showRatings && game.sport === "mlb" && game.noHitterPitchingTeam && (
+        <div className="mb-1 flex justify-center">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${game.isPerfectGame ? "text-rose-500" : "text-amber-500"}`}
+            style={{ background: game.isPerfectGame ? "rgba(244, 63, 94, 0.12)" : "rgba(245, 158, 11, 0.12)" }}
+            title={game.isPerfectGame
+              ? `${game.noHitterPitchingTeam}: no batter has reached base`
+              : `${game.noHitterPitchingTeam} has not allowed a hit`}
+          >
+            <span aria-hidden>⚾</span>
+            {game.isPerfectGame ? "Perfect Game" : "No-Hitter"}
+          </span>
+        </div>
+      )}
+
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
         const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);
@@ -353,10 +392,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 </span>
               ) : isLive && gameProgress ? (
                 (() => {
+                  // Animated underline only when an actual game clock is shown
+                  // (Q4 - 02:05) and the game isn't delayed. Quarter-only labels
+                  // ("Q4", "Half", "▲5") get no underline because there's no
+                  // time to tick down.
+                  const hasClock = !gameProgress.delayed && /\d:\d/.test(gameProgress.full);
+                  const tickCls = hasClock ? " live-clock" : "";
                   const colorCls = gameProgress.delayed
                     ? "text-yellow-500 font-medium hover:text-yellow-400 transition-colors"
-                    : "text-green-500 font-medium hover:text-green-400 transition-colors";
-                  const staticCls = gameProgress.delayed ? "text-yellow-500 font-medium" : "text-green-500 font-medium";
+                    : `text-green-500 font-medium hover:text-green-400 transition-colors${tickCls}`;
+                  const staticCls = gameProgress.delayed ? "text-yellow-500 font-medium" : `text-green-500 font-medium${tickCls}`;
                   return liveUrl ? (
                     <a href={liveUrl} target="_blank" rel="noopener noreferrer" className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
                   ) : (
@@ -557,10 +602,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ))}
       </div>
 
-      {/* Highlights — 2 buttons if official channel exists, 1 button otherwise */}
-      {isFinished && highlightUrl && (
+      {/* Highlights — render only buttons whose video resolved (or is still
+          resolving). A button whose full retry chain returns null is hidden
+          rather than falling back to a YouTube search page. */}
+      {isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing") && (
         <div className="mt-1 sm:mt-2 flex gap-1">
-          {officialChannel && (
+          {officialChannel && officialStatus !== "missing" && (
             <button
               onClick={async () => {
                 if (!onPlayHighlight) return;
@@ -569,14 +616,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   return;
                 }
                 setFetchingOnClick("official");
-                const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-                const id = await fetchFirstVideoId(query, officialChannel);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
+                  setOfficialStatus("found");
                   onPlayHighlight(id, highlightUrl);
                 } else {
-                  openExternal(highlightUrl);
+                  setOfficialStatus("missing");
                 }
               }}
               disabled={fetchingOnClick !== null}
@@ -594,36 +641,38 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               )}
             </button>
           )}
-          <button
-            onClick={async () => {
-              if (!onPlayHighlight) return;
-              if (prefetchedVideoId.current) {
-                onPlayHighlight(prefetchedVideoId.current, highlightUrl);
-                return;
-              }
-              setFetchingOnClick("search");
-              const query = getHighlightSearchQuery(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
-              // Dedup against primary so the two buttons never play the same video.
-              const id = await fetchFirstVideoId(query, undefined, [prefetchedOfficialId.current]);
-              setFetchingOnClick(null);
-              if (id) {
-                prefetchedVideoId.current = id;
-                onPlayHighlight(id, highlightUrl);
-              } else {
-                openExternal(highlightUrl);
-              }
-            }}
-            disabled={fetchingOnClick !== null}
-            className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-            style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-            title="Top search result highlights"
-          >
-            {fetchingOnClick === "search" ? (
-              <span className="text-[10px]">Loading...</span>
-            ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-            )}
-          </button>
+          {searchStatus !== "missing" && (
+            <button
+              onClick={async () => {
+                if (!onPlayHighlight) return;
+                if (prefetchedVideoId.current) {
+                  onPlayHighlight(prefetchedVideoId.current, highlightUrl);
+                  return;
+                }
+                setFetchingOnClick("search");
+                // Dedup against primary so the two buttons never play the same video.
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current]);
+                setFetchingOnClick(null);
+                if (id) {
+                  prefetchedVideoId.current = id;
+                  setSearchStatus("found");
+                  onPlayHighlight(id, highlightUrl);
+                } else {
+                  setSearchStatus("missing");
+                }
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
+              title="Top search result highlights"
+            >
+              {fetchingOnClick === "search" ? (
+                <span className="text-[10px]">Loading...</span>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -648,7 +697,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               title="NHL.com recap (~5 min)"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">5 min</span>
+              <span className="text-[10px] font-medium">5<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
           {game.nhlCondensedEmbed && (
@@ -665,7 +714,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               title="NHL.com condensed game (~10 min)"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">10 min</span>
+              <span className="text-[10px] font-medium">10<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
         </div>

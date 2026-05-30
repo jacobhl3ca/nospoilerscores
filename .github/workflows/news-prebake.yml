@@ -2,7 +2,12 @@ name: Prebake news feeds
 
 on:
   schedule:
+<<<<<<< HEAD
     # Every 2h — news doesn't need hourly freshness; halves Actions spend.
+=======
+    # Every 2h — news doesn't need hourly freshness; trimmed to stay under the
+    # Actions free cap.
+>>>>>>> staging
     - cron: "0 */2 * * *"
   workflow_dispatch:
 

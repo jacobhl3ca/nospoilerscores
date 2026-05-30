@@ -11,13 +11,19 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   nba: "/basketball/nba",
   wnba: "/basketball/wnba",
   ncaam: "/basketball/mens-college-basketball",
+  ncaaw: "/basketball/womens-college-basketball",
+  ncaaf: "/football/college-football",
   nfl: "/football/nfl",
   nhl: "/hockey/nhl",
   golf: "/golf/pga",
-  tennis: "/tennis",
+  // ESPN has no bare /tennis/news feed (404) — the ATP league feed carries the
+  // marquee tennis news (Slams, both tours' headlines), so route tennis there.
+  tennis: "/tennis/atp",
   fifa: "/soccer",
   epl: "/soccer/eng.1",
   mls: "/soccer/usa.1",
+  ucl: "/soccer/uefa.champions",
+  uel: "/soccer/uefa.europa",
 };
 
 export interface NewsItem {
@@ -162,9 +168,16 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   // ATP/WTA) marks via upload.wikimedia.org, which allows hotlinking with a
   // browser UA and is fronted by Wikimedia's CDN.
   ncaam: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+  // NCAAW/NCAAF reuse the NCAA mark — same governing body, no league-specific
+  // logo on ESPN's CDN. Distinction is in the column header label + game data.
+  ncaaw: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+  ncaaf: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
   golf: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
   tennis: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/International_Tennis_Federation_Logo.svg/250px-International_Tennis_Federation_Logo.svg.png",
   epl: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
+  // UCL = ESPN soccer league id 2; UEL = id 2310.
+  ucl: "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png",
+  uel: "https://a.espncdn.com/i/leaguelogos/soccer/500/2310.png",
 };
 
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds
@@ -217,12 +230,9 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const out: ColumnSource[] = [];
   const officialVideos = PREBAKED_VIDEOS[sport];
   if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
-  // Reddit before official-site feed for cols 1/2 — Jacob's preferred order
-  // post-2026-04-30. r/baseball / r/nba / etc. surface story-of-the-hour
-  // discussion that the official feeds (MLB.com Most Popular / NBA.com) are
-  // slower to pick up.
-  const reddit = REDDIT_SUB[sport];
-  if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
+  // Reddit feeds removed from the news view for now (2026-05-30, Jacob) —
+  // the Reddit scrape is unreliable (IP-blocked) and the cards were stale.
+  // REDDIT_SUB is kept defined for when feeds are wired back up.
   const official = PREBAKED_FEEDS[sport];
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
   out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
@@ -230,12 +240,26 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 }
 
 // Col 3's default (no league picked) — ESPN videos lead, then ESPN top
-// headlines and r/sports. CBS / theScore removed at Jacob's request.
+// headlines. CBS / theScore removed at Jacob's request; r/sports removed
+// 2026-05-30 (Reddit feeds pulled from the news view for now).
 export const GENERIC_CASCADE: ColumnSource[] = [
   { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: ESPN_BRAND_LOGO },
   { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: ESPN_BRAND_LOGO },
-  { label: "r/sports", key: "reddit-general", kind: "prebaked" },
 ];
+
+// Classify a news source by its origin for the funnel source filter.
+//  - reddit:    `reddit-*` keys (r/sports, r/nba, …)
+//  - topvideos: any `*-videos` feed (NBA Top Videos, MLB Most Popular, ESPN Videos)
+//  - espn:      ESPN headlines + ESPN per-league cards (`espn-top`, `espn-<sport>`)
+//  - homepage:  the league-official site feeds (NBA.com / MLB.com — bare sport keys)
+export type NewsSourceType = "topvideos" | "espn" | "reddit" | "homepage";
+export function classifySource(src: { key?: string; label?: string }): NewsSourceType {
+  const key = src.key ?? "";
+  if (key.startsWith("reddit-")) return "reddit";
+  if (key.endsWith("-videos")) return "topvideos";
+  if (key.startsWith("espn")) return "espn";
+  return "homepage";
+}
 
 // Reddit's preview.redd.it / external-preview.redd.it images get blocked by
 // Safari's anti-tracking and Firefox's strict mode when loaded as third-party
