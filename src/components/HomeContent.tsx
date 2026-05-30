@@ -54,7 +54,7 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         title={title}
         aria-label={title}
         aria-pressed={active}
-        className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none ${inline ? "h-10" : "h-14"}`}
+        className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none ${inline ? "h-12" : "h-14"}`}
         style={{
           color: active ? "var(--accent)" : "var(--text-muted)",
           // Filled background on the selected tab so it reads as a toggle/
