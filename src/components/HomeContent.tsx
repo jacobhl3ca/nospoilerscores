@@ -117,38 +117,6 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
   );
 }
 
-function ColumnCountButtons({ value, onChange }: { value: 1 | 2 | 3; onChange: (n: 1 | 2 | 3) => void }) {
-  const seg = (n: 1 | 2 | 3, title: string) => {
-    const active = value === n;
-    return (
-      <button
-        type="button"
-        onClick={() => onChange(n)}
-        title={title}
-        aria-label={title}
-        aria-pressed={active}
-        className="w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center cursor-pointer transition-colors"
-        style={{
-          background: "transparent",
-          color: active ? "var(--accent)" : "var(--text-muted)",
-        }}
-      >
-        <ColIcon n={n} />
-      </button>
-    );
-  };
-  return (
-    <div
-      className="inline-flex rounded-full overflow-hidden"
-      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-    >
-      {seg(1, "Single column")}
-      {seg(2, "Two columns")}
-      {seg(3, "Three columns")}
-    </div>
-  );
-}
-
 // Yesterday/Today/Tomorrow-style pill row used for news global filters
 // (source type, focus league). Selected pill gets a faint card background
 // + bold text; unselected stay muted. Same visual language as DateNav.
@@ -394,16 +362,6 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function ColIcon({ n }: { n: 1 | 2 | 3 }) {
-  // Simple grid icon: 1/2/3 vertical bars inside a rounded rectangle.
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      {n >= 2 && <line x1={n === 2 ? "12" : "9"} y1="4" x2={n === 2 ? "12" : "9"} y2="20" />}
-      {n === 3 && <line x1="15" y1="4" x2="15" y2="20" />}
-    </svg>
-  );
-}
 
 export default function HomeContent({ initialOffset }: { initialOffset?: number }) {
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
