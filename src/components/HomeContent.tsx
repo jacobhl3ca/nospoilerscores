@@ -1491,9 +1491,15 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           // 5/28 ESPN-first default per Jacob 5/29; ESPN stays reachable as the
           // col-3 fallback and the focus/order controls are unchanged.)
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
-          const thirdColEntry = prefs.newsThirdLeague
-            ? leagueEntries.find((e) => e.slotIdx === 2)
-            : espnEntry;
+          // Col 3 = the chosen 3rd league, else the News (ESPN) feed — UNLESS
+          // the user emptied slot 3 (then the column is hidden and the + button
+          // refills it). "Empty" on the News column routes through setSlotLeague(2)
+          // so it reuses the scores-view empty/refill mechanism.
+          const thirdColEntry = selectedSlotLeagues[2] === "empty"
+            ? null
+            : prefs.newsThirdLeague
+              ? leagueEntries.find((e) => e.slotIdx === 2)
+              : espnEntry;
           // Mobile (single stacked column): lead with News, then the two score
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
@@ -1616,7 +1622,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                             swappableOptions={thirdLeagueOptions}
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
-                            onSwapLeague={isEspn ? ((s) => { if (s && s !== "empty") setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                            onSwapLeague={isEspn ? ((s) => { if (s === "empty") setSlotLeague(2, "empty"); else if (s) setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
                           />
                         </div>
                       );
@@ -1653,7 +1659,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                       swappableOptions={thirdLeagueOptions}
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
-                      onSwapLeague={isEspn ? ((s) => { if (s && s !== "empty") setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                      onSwapLeague={isEspn ? ((s) => { if (s === "empty") setSlotLeague(2, "empty"); else if (s) setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}
