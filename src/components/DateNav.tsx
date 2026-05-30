@@ -1,10 +1,13 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, type ReactNode } from "react";
 
 interface DateNavProps {
   selectedDate: string; // YYYYMMDD
   onDateChange: (date: string) => void;
+  // Optional node rendered to the RIGHT of the › arrow (e.g. a bare calendar
+  // icon) without shifting the Yesterday/Today/Tomorrow buttons.
+  trailing?: ReactNode;
 }
 
 function toYYYYMMDD(d: Date): string {
@@ -176,7 +179,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 // Exported for use in toolbar
 export { CalendarDropdown };
 
-export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
+export default function DateNav({ selectedDate, onDateChange, trailing }: DateNavProps) {
   const yesterday = getDateString(-1);
   const today = getDateString(0);
   const tomorrow = getDateString(1);
@@ -243,6 +246,7 @@ export default function DateNav({ selectedDate, onDateChange }: DateNavProps) {
       >
         ›
       </button>
+      {trailing}
     </div>
   );
 }
