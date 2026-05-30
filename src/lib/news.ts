@@ -228,12 +228,9 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const out: ColumnSource[] = [];
   const officialVideos = PREBAKED_VIDEOS[sport];
   if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
-  // Reddit before official-site feed for cols 1/2 — Jacob's preferred order
-  // post-2026-04-30. r/baseball / r/nba / etc. surface story-of-the-hour
-  // discussion that the official feeds (MLB.com Most Popular / NBA.com) are
-  // slower to pick up.
-  const reddit = REDDIT_SUB[sport];
-  if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
+  // Reddit feeds removed from the news view for now (2026-05-30, Jacob) —
+  // the Reddit scrape is unreliable (IP-blocked) and the cards were stale.
+  // REDDIT_SUB is kept defined for when feeds are wired back up.
   const official = PREBAKED_FEEDS[sport];
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
   out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
@@ -241,11 +238,11 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 }
 
 // Col 3's default (no league picked) — ESPN videos lead, then ESPN top
-// headlines and r/sports. CBS / theScore removed at Jacob's request.
+// headlines. CBS / theScore removed at Jacob's request; r/sports removed
+// 2026-05-30 (Reddit feeds pulled from the news view for now).
 export const GENERIC_CASCADE: ColumnSource[] = [
   { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: ESPN_BRAND_LOGO },
   { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: ESPN_BRAND_LOGO },
-  { label: "r/sports", key: "reddit-general", kind: "prebaked" },
 ];
 
 // Classify a news source by its origin for the funnel source filter.

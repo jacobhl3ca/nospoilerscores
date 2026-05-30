@@ -508,6 +508,13 @@ function parseTennisMatch(match: any, event: any): Game {
   const state = (match.status?.type?.state ?? "pre") as "pre" | "in" | "post";
   const homeTeam = mkTeam(home);
   const awayTeam = mkTeam(away);
+  // Tournament + year context for the highlight search. Without it the
+  // unscoped fallback query ("A vs B highlights") can land on the same
+  // players' match from a DIFFERENT event/year (e.g. a French Open match
+  // resolving to "Rome Open 2025"). Threaded through the Game's seriesNote,
+  // which is only ever used to build the YouTube query (never rendered).
+  const matchYear = (match.date ?? event.date ?? "").slice(0, 4);
+  const tourneyTag = [event.name, matchYear].filter(Boolean).join(" ");
   // Closeness rating (drives the Rated-view sort): a deciding final set is the
   // most compelling, straight sets the least. Pre/in matches get a neutral mid.
   const hs = Number(homeTeam.score) || 0;
@@ -536,7 +543,9 @@ function parseTennisMatch(match: any, event: any): Game {
     broadcasts: [],
     venue: "",
     highlightUrl: null,
-    seriesNote: null,
+    // Not a playoff "Game N" — repurposed to carry tournament+year into the
+    // highlight search so it can't drift to the wrong event (see above).
+    seriesNote: tourneyTag || null,
     seriesStatus: null,
     playoffLabel: null,
     isPlayoff: false,
@@ -1342,32 +1351,7 @@ export async function fetchGames(
     return { games: buildTennisGames(events, date), failed: false };
   }
 
-  const games: Game[] = events
-    .filter((e: any) => {
-      // Filter out postponed/canceled/suspended games
-      const statusName = e.status?.type?.name ?? "";
-      if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
-      // Filter out preseason/spring training — bad highlights, ties in records, low-quality games
-      const seasonType = e.season?.type ?? 0;
-      if (seasonType === 1) return false;
-      // Tournament-wrapper events with no competitors aren't real matches. ESPN's
-      // tennis scoreboard returns Roland Garros etc. as a single 0-competitor event
-      // with a stale STATUS_FINAL flag before match-level data publishes — rendering
-      // that as a game produces TBD/"?" avatars. Drop it; the column falls back to
-      // the "Schedule TBD" empty state until real matches show up.
-      const competitors = e.competitions?.[0]?.competitors ?? [];
-      if (competitors.length < 2) return false;
-      return true;
-    })
-    // A single malformed event must not take down the whole league.
-    .map((e: any) => {
-      try {
-        return parseGame(e, sport);
-      } catch {
-        return null;
-      }
-    })
-    .filter((g: Game | null): g is Game => g !== null);
+  const games: Game[] = eventsToGames(events, sport);
 
   // Enrich MLB games with direct MLB.tv stream links + No-Hit Alert flag
   if (sport === "mlb" && mlbMetaPromise) {
@@ -1688,6 +1672,14 @@ export async function fetchAllLeagues(
       const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
       const lookahead = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth ? 21 : 7;
       nextGameDay = await fetchNextGameDay(cfg.sport, lookahead, date);
+      // Soccer leagues take multi-week breaks (intl windows / 2026 World Cup
+      // summer gap) longer than the day-by-day lookahead. When that finds
+      // nothing, widen with a single range query so the column shows the real
+      // next match day instead of "Schedule TBD".
+      const SOCCER: Sport[] = ["mls", "epl", "ucl", "uel", "fifa"];
+      if (!nextGameDay && SOCCER.includes(cfg.sport)) {
+        nextGameDay = await fetchNextGameDayRange(cfg.sport, date);
+      }
     }
     return { sport: cfg.sport, label, games, nextGameDay, fetchFailed: failed };
   };

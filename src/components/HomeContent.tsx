@@ -1336,7 +1336,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                         options={[
                           { value: "all", label: "All" },
                           { value: "topvideos", label: "Top videos" },
-                          { value: "reddit", label: "Reddit" },
                           { value: "espn", label: "ESPN" },
                           { value: "homepage", label: "Homepage" },
                         ]}
