@@ -656,8 +656,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     if (mode === "scores-rated") {
       if (showNews) setShowNews(false);
       if (!prefs.showRatings && !prefs.skipExplainer) {
-        // Exit news now; ratings flip on after the explainer confirms.
-        updatePrefs({ showNews: false });
+        // First time only: show the explainer AND mark it seen now, so it
+        // never reappears regardless of the "don't show again" checkbox
+        // (Jacob 5/30 — popup should fire exactly once). Ratings flip on
+        // when the explainer confirms.
+        updatePrefs({ showNews: false, skipExplainer: true });
         setShowRatingsExplainer(true);
       } else {
         updatePrefs({ showNews: false, showRatings: true });
@@ -669,19 +672,24 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       setShowNews(true);
       updatePrefs({ showNews: true });
     } else {
+      // First time only — mark seen immediately so it never reappears.
+      updatePrefs({ skipNewsExplainer: true });
       setShowNewsExplainer(true);
     }
   };
 
-  const confirmRatings = (dontShowAgain: boolean) => {
+  // Param kept optional + ignored: callers may still pass the old
+  // "don't show again" checkbox value, but the popup is now first-time-only
+  // (always marked seen), so the value no longer matters.
+  const confirmRatings = (_dontShowAgain?: boolean) => {
     setShowRatingsExplainer(false);
-    updatePrefs({ showRatings: true, skipExplainer: dontShowAgain });
+    updatePrefs({ showRatings: true, skipExplainer: true });
   };
 
-  const confirmNews = (dontShowAgain: boolean) => {
+  const confirmNews = (_dontShowAgain?: boolean) => {
     setShowNewsExplainer(false);
     setShowNews(true);
-    updatePrefs({ showNews: true, skipNewsExplainer: dontShowAgain || prefs.skipNewsExplainer });
+    updatePrefs({ showNews: true, skipNewsExplainer: true });
   };
 
   const setNewsThirdLeague = (sport: Sport | undefined) => {

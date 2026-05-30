@@ -16,7 +16,9 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   nfl: "/football/nfl",
   nhl: "/hockey/nhl",
   golf: "/golf/pga",
-  tennis: "/tennis",
+  // ESPN has no bare /tennis/news feed (404) — the ATP league feed carries the
+  // marquee tennis news (Slams, both tours' headlines), so route tennis there.
+  tennis: "/tennis/atp",
   fifa: "/soccer",
   epl: "/soccer/eng.1",
   mls: "/soccer/usa.1",
