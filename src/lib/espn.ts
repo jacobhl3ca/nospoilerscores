@@ -1303,6 +1303,81 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
   }
 }
 
+// Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
+// the single-day fetch and the soccer range-lookahead so both apply the same
+// postponed/preseason/0-competitor filtering + per-event failure isolation.
+function eventsToGames(events: any[], sport: Sport): Game[] {
+  return events
+    .filter((e: any) => {
+      // Filter out postponed/canceled/suspended games
+      const statusName = e.status?.type?.name ?? "";
+      if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
+      // Filter out preseason/spring training — bad highlights, ties in records, low-quality games
+      const seasonType = e.season?.type ?? 0;
+      if (seasonType === 1) return false;
+      // Tournament-wrapper events with no competitors aren't real matches.
+      const competitors = e.competitions?.[0]?.competitors ?? [];
+      if (competitors.length < 2) return false;
+      return true;
+    })
+    // A single malformed event must not take down the whole league.
+    .map((e: any) => {
+      try {
+        return parseGame(e, sport);
+      } catch {
+        return null;
+      }
+    })
+    .filter((g: Game | null): g is Game => g !== null);
+}
+
+// Soccer leagues have multi-week gaps (international windows, the 2026 World
+// Cup summer break, etc.) that blow past the 7-day next-game lookahead → the
+// column shows "Schedule TBD" even though games resume weeks out. ESPN's
+// scoreboard accepts a DATE RANGE (`?dates=YYYYMMDD-YYYYMMDD`) returning every
+// fixture in the window in ONE request, so we can find the true next match day
+// without dozens of separate fetches. Returns the earliest future day's slate.
+async function fetchNextGameDayRange(
+  sport: Sport,
+  fromDate?: string,
+  windowDays = 80,
+): Promise<{ date: string; games: Game[] } | null> {
+  const base = fromDate
+    ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
+    : new Date();
+  const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const start = new Date(base); start.setDate(start.getDate() + 1);
+  const end = new Date(base); end.setDate(end.getDate() + windowDays);
+  const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+  url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
+  let events: any[];
+  try {
+    const res = await fetchWithRetry(url.toString());
+    if (!res.ok) return null;
+    const data = await res.json();
+    events = data?.events ?? [];
+  } catch {
+    return null;
+  }
+  const games = eventsToGames(events, sport).filter((g) => g.state === "pre" || g.state === "in");
+  if (!games.length) return null;
+  // Group by the fixture's ET calendar day, return the earliest day's slate.
+  const dayOf = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+    } catch {
+      return "";
+    }
+  };
+  let earliest = "";
+  for (const g of games) {
+    const d = dayOf(g.date);
+    if (d && (!earliest || d < earliest)) earliest = d;
+  }
+  if (!earliest) return null;
+  return { date: earliest, games: games.filter((g) => dayOf(g.date) === earliest) };
+}
+
 export async function fetchGames(
   sport: Sport,
   date?: string
