@@ -12,6 +12,11 @@ import GameCard from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import TeamView from "./TeamView";
 
+// JS fallback for the drag source slot — some browsers (Safari/Firefox) drop
+// custom dataTransfer MIME types across a drag, so the onDrop handler can't
+// always read back the source index via getData. Set on dragstart, read on drop.
+let dragSourceSlot: number | null = null;
+
 interface LeagueColumnProps {
   league: LeagueData;
   favoriteTeams: string[];
