@@ -54,7 +54,7 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         title={title}
         aria-label={title}
         aria-pressed={active}
-        className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none ${inline ? "h-12" : "h-14"}`}
+        className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none ${inline ? "h-10" : "h-14"}`}
         style={{
           color: active ? "var(--accent)" : "var(--text-muted)",
           background: "transparent",
@@ -70,7 +70,7 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
   return (
     <nav
       aria-label="View mode"
-      className={inline ? "w-full" : "fixed left-0 right-0 bottom-0 z-40"}
+      className={inline ? "w-full flex justify-center" : "fixed left-0 right-0 bottom-0 z-40"}
       style={{
         background: "transparent",
         ...(inline
@@ -78,7 +78,12 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
           : { background: "var(--bg)", borderTop: "1px solid var(--border)", paddingBottom: "env(safe-area-inset-bottom)" }),
       }}
     >
-      <div className="max-w-md mx-auto flex items-stretch">
+      {/* Inline (desktop): a subtle segmented-control box so the tabs read as a
+          deliberate nav, not floating icons. Bottom (mobile): full-width bar. */}
+      <div
+        className={inline ? "flex items-stretch w-72 rounded-xl overflow-hidden" : "max-w-md mx-auto flex items-stretch"}
+        style={inline ? { background: "var(--bg-card)", border: "1px solid var(--border)" } : undefined}
+      >
         {tab(
           "scores-plain",
           // eslint-disable-next-line @next/next/no-img-element
@@ -1690,39 +1695,14 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 }
               : undefined;
 
-            // Wrap the columns in an inline-flex group that's centered in the
-            // outer container, and float the + button absolutely to the right
-            // of that group. This way the columns center as a unit (one-col
-            // sits perfectly under "Today" in the date nav) and + tags along
-            // without skewing the centering.
+            // Full-width flex row so the flex-1 columns distribute across the
+            // viewport (up to their max-w) and the group centers — matches
+            // hidescore.com. The + button is a trailing flex child (like the
+            // news view) so it tags along without forcing a content-width group
+            // (the old inline-flex wrapper shrank the columns — Jacob 5/29).
             if (showFinalSplit) {
               return (
-                <div className="flex justify-center">
-                  <div className="relative inline-flex items-stretch gap-2 sm:gap-4">
-                    {slotEntries.map((entry) => (
-                      <LeagueColumn
-                        key={`${entry.league.sport}-${entry.slotIdx}`}
-                        league={entry.league}
-                        slotIdx={entry.slotIdx}
-                        onReorderSlots={reorderSlots}
-                        {...commonProps}
-                        showFinalSeparator
-                        {...swapPropsForSlot(entry.slotIdx)}
-                      />
-                    ))}
-                    {onAddColumn && (
-                      <div className="absolute left-full ml-2 sm:ml-4 top-7">
-                        <AddColumnButton onClick={onAddColumn} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <div className="flex justify-center">
-                <div className="relative inline-flex items-stretch gap-2 sm:gap-4">
+                <div className="relative flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                   {slotEntries.map((entry) => (
                     <LeagueColumn
                       key={`${entry.league.sport}-${entry.slotIdx}`}
@@ -1730,15 +1710,36 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                       slotIdx={entry.slotIdx}
                       onReorderSlots={reorderSlots}
                       {...commonProps}
+                      showFinalSeparator
                       {...swapPropsForSlot(entry.slotIdx)}
                     />
                   ))}
                   {onAddColumn && (
-                    <div className="absolute left-full ml-2 sm:ml-4 top-7">
+                    <div className="flex items-start pt-7 shrink-0">
                       <AddColumnButton onClick={onAddColumn} />
                     </div>
                   )}
                 </div>
+              );
+            }
+
+            return (
+              <div className="relative flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                {slotEntries.map((entry) => (
+                  <LeagueColumn
+                    key={`${entry.league.sport}-${entry.slotIdx}`}
+                    league={entry.league}
+                    slotIdx={entry.slotIdx}
+                    onReorderSlots={reorderSlots}
+                    {...commonProps}
+                    {...swapPropsForSlot(entry.slotIdx)}
+                  />
+                ))}
+                {onAddColumn && (
+                  <div className="flex items-start pt-7 shrink-0">
+                    <AddColumnButton onClick={onAddColumn} />
+                  </div>
+                )}
               </div>
             );
           })()

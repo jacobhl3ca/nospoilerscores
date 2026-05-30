@@ -1502,6 +1502,11 @@ export async function fetchAllLeagues(
   const viewDate = date
     ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`)
     : new Date();
+  // Today in ET as YYYYMMDD, so the "next game day" lookahead only fires on
+  // today/future tabs — on a PAST tab (e.g. Yesterday) a league with no game
+  // should read "No games", not surface a future game (Jacob 5/29).
+  const todayYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replace(/-/g, "");
+  const isPastView = !!date && date < todayYmd;
 
   // Resolved slot order from the layout rules. Returns 1-3 LeagueConfigs in
   // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top.
@@ -1564,7 +1569,7 @@ export async function fetchAllLeagues(
     // an empty schedule. On a fetch failure games is also [] — falling back
     // there would render tomorrow's slate labeled "Tomorrow" on the Today
     // tab, which reads as a bug. A failed league carries fetchFailed instead.
-    if (!failed && games.length === 0) {
+    if (!failed && games.length === 0 && !isPastView) {
       // NBA + NHL publish playoff games only as the prior round wraps. During
       // their playoff months (May/Jun) ESPN's "next 7 days" can be a flat zero
       // even though Conf Finals / Cup Final games will be added soon. Look 21
