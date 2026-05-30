@@ -881,8 +881,10 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b === "golf channel") return "https://www.golfchannel.com/watch";
   if (b.startsWith("tele")) return "https://www.telemundo.com/deportes";
   if (b === "peacock") return "https://www.peacocktv.com/";
-  // CBS-branded broadcasts → CBS Sports (a real CBS-branded live page)
-  if (b === "cbs" || b === "cbssn") return "https://www.cbssports.com/watch/live";
+  // Plain "CBS" = the broadcast network → CBS's own live-TV stream. "CBSSN" =
+  // CBS Sports Network (the cable channel) → the CBS Sports live page.
+  if (b === "cbs") return "https://www.cbs.com/live-tv/";
+  if (b === "cbssn") return "https://www.cbssports.com/watch/live";
   // Paramount+ broadcasts (rare; carries some CBS Sports content) → Paramount+
   if (b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
   // Amazon Prime Video — fall back to the Prime sports hub. Sport-specific
