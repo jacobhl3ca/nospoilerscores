@@ -57,7 +57,10 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none ${inline ? "h-10" : "h-14"}`}
         style={{
           color: active ? "var(--accent)" : "var(--text-muted)",
-          background: "transparent",
+          // Filled background on the selected tab so it reads as a toggle/
+          // segmented-control selection rather than just recolored text.
+          background: active ? "var(--bg-card-hover)" : "transparent",
+          fontWeight: active ? 600 : 400,
         }}
       >
         <span className={`flex items-center justify-center transition-opacity ${active ? "opacity-100" : "opacity-70"}`}>
@@ -95,7 +98,7 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
           "scores-rated",
           // eslint-disable-next-line @next/next/no-img-element
           <img src="/monkey-hear-no-evil.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
-          "Rated",
+          "Ratings",
           "Scores with ratings (sort by best games)",
         )}
         {tab(
@@ -883,8 +886,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   };
   const newsTypeFilter = prefs.newsTypeFilter ?? "all";
   const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
-  const newsFocusLeague = prefs.newsFocusLeague;
-  const setNewsFocusLeague = (s: Sport | "espn" | undefined) => updatePrefs({ newsFocusLeague: s });
+  // The news "focus league" pill UI was removed (5/29), but its pref can still
+  // be set in stale localStorage from an earlier staging build — which silently
+  // forced the news view to a single wide column with no way to clear it. Ignore
+  // it so the 1/2/3 column selector (default 3) is authoritative.
+  const newsFocusLeague: Sport | "espn" | undefined = undefined;
   const newsHiddenSources = prefs.newsHiddenSources ?? [];
   const toggleNewsSourceHidden = (label: string) => {
     const next = newsHiddenSources.includes(label)
@@ -1569,6 +1575,10 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                   distribute flex-1 children across the viewport instead of
                   sizing to content + overflowing on narrow mobile widths. */}
               <div className={containerCls}>
+                {/* Leading spacer balances the trailing + button so the news
+                    columns stay centered (multi-column only; 1-col centers the
+                    + below the single column). */}
+                {newsOnAddColumn && effectiveColCount !== 1 && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
                 {renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
                     .filter((_, i) => i !== idx)
@@ -1703,6 +1713,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             if (showFinalSplit) {
               return (
                 <div className="relative flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                  {/* Invisible leading spacer balances the trailing + button so
+                      the columns stay centered when a slot has been emptied. */}
+                  {onAddColumn && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
                   {slotEntries.map((entry) => (
                     <LeagueColumn
                       key={`${entry.league.sport}-${entry.slotIdx}`}
@@ -1725,6 +1738,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
 
             return (
               <div className="relative flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                {/* Invisible leading spacer balances the trailing + button so
+                    the columns stay centered when a slot has been emptied. */}
+                {onAddColumn && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
                 {slotEntries.map((entry) => (
                   <LeagueColumn
                     key={`${entry.league.sport}-${entry.slotIdx}`}

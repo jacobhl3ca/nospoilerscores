@@ -469,6 +469,109 @@ function calculateRating(game: any): number | null {
   return Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus - lowScoringPenalty)));
 }
 
+// Tennis returns ONE event per tournament (e.g. "Roland Garros") with 0
+// top-level competitors; the real matches live in event.groupings[] (one per
+// draw: Men's/Women's Singles, Doubles, etc.), each with athlete-based
+// competitors instead of teams. Flatten the singles matches for the viewed
+// day into individual Game cards. Doubles are skipped (4 athletes / different
+// layout). parseTennisMatch maps an athlete pair into the team-shaped Game the
+// cards already render — country flag as the "logo", set count as the score.
+function tennisEtYmd(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+  } catch {
+    return "";
+  }
+}
+
+function parseTennisMatch(match: any, event: any): Game {
+  const comps = match.competitors ?? [];
+  const home = comps.find((c: any) => c.homeAway === "home") ?? comps[0];
+  const away = comps.find((c: any) => c.homeAway === "away") ?? comps[1];
+  const mkTeam = (c: any): Team => {
+    const a = c?.athlete ?? {};
+    const setsWon = (c?.linescores ?? []).filter((l: any) => l.winner).length;
+    return {
+      // Empty id → GameCard renders the name as plain text (no team-schedule
+      // view, which doesn't exist for individual players).
+      id: "",
+      abbreviation: a.shortName ?? a.displayName ?? "",
+      displayName: a.displayName ?? "",
+      shortDisplayName: a.displayName ?? "",
+      logo: a.flag?.href ?? "",
+      color: "666666",
+      score: String(setsWon),
+      winner: c?.winner ?? false,
+      record: "",
+    };
+  };
+  const state = (match.status?.type?.state ?? "pre") as "pre" | "in" | "post";
+  const homeTeam = mkTeam(home);
+  const awayTeam = mkTeam(away);
+  // Closeness rating (drives the Rated-view sort): a deciding final set is the
+  // most compelling, straight sets the least. Pre/in matches get a neutral mid.
+  const hs = Number(homeTeam.score) || 0;
+  const as = Number(awayTeam.score) || 0;
+  const diff = Math.abs(hs - as);
+  let rating = 55;
+  if (state === "post") {
+    if (diff <= 1) rating = 90;             // went the distance (2-1 / 3-2)
+    else if (hs + as >= 4 && diff === 2) rating = 78; // long match (3-1)
+    else rating = 65;                       // straight sets
+  }
+  const name = `${awayTeam.displayName} vs ${homeTeam.displayName}`;
+  return {
+    id: match.id ?? `${event.id}-${awayTeam.abbreviation}-${homeTeam.abbreviation}`,
+    sport: "tennis",
+    date: match.date ?? event.date,
+    name,
+    shortName: name,
+    state,
+    statusDetail: match.status?.type?.shortDetail ?? match.status?.type?.detail ?? "",
+    clock: match.status?.displayClock ?? "",
+    period: match.status?.period ?? 0,
+    completed: match.status?.type?.completed ?? false,
+    homeTeam,
+    awayTeam,
+    broadcasts: [],
+    venue: "",
+    highlightUrl: null,
+    seriesNote: null,
+    seriesStatus: null,
+    playoffLabel: null,
+    isPlayoff: false,
+    recapUrl: null,
+    rating,
+    streamUrl: null,
+    primeStreamUrl: null,
+  };
+}
+
+function buildTennisGames(events: any[], date?: string): Game[] {
+  const todayYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replace(/-/g, "");
+  const target = date ?? todayYmd;
+  const games: Game[] = [];
+  for (const event of events) {
+    for (const grouping of event.groupings ?? []) {
+      const slug = (grouping.grouping?.slug ?? "").toLowerCase();
+      // Singles draws only.
+      if (!slug.includes("singles") || slug.includes("doubles")) continue;
+      for (const match of grouping.competitions ?? []) {
+        if ((match.competitors?.length ?? 0) < 2) continue;
+        if (tennisEtYmd(match.date) !== target) continue;
+        const sn = match.status?.type?.name ?? "";
+        if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
+        try {
+          games.push(parseTennisMatch(match, event));
+        } catch {
+          // A single malformed match must not blank the whole draw.
+        }
+      }
+    }
+  }
+  return games;
+}
+
 function parseGame(event: any, sport: Sport): Game {
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors ?? [];
@@ -1231,6 +1334,14 @@ export async function fetchGames(
   }
 
   const events = data?.events ?? [];
+
+  // Tennis nests its real matches in event.groupings[].competitions[] with
+  // athlete-based competitors — flattened by a dedicated parser, not the
+  // team-based path below (which would drop the 0-competitor tournament wrapper).
+  if (sport === "tennis") {
+    return { games: buildTennisGames(events, date), failed: false };
+  }
+
   const games: Game[] = events
     .filter((e: any) => {
       // Filter out postponed/canceled/suspended games
