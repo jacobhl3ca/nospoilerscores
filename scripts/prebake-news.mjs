@@ -959,13 +959,20 @@ async function persistVideos(name, fresh, pinnedId) {
 }
 
 // ── Reddit top posts (per-league + general /r/sports) ────────────
-// Reddit started 403'ing GitHub Actions datacenter IPs on the public
-// www.reddit.com JSON endpoints in late April 2026. OAuth (oauth.reddit.com)
-// is unaffected because the bearer token is the auth signal, not the IP. When
-// REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET are set we run app-only OAuth ("web
-// app" type with client_credentials grant); without them we fall back to the
-// public path so local runs keep working without any setup.
-const REDDIT_UA = "web:com.hidescore.prebake:v1.0 (by /u/Reasonable_Stick_329)";
+// Reddit started 403'ing the public www.reddit.com JSON endpoints from GitHub
+// Actions datacenter IPs in late April 2026, then extended the block to ALL
+// unauthenticated .json (incl. residential IPs + old/np/oauth hosts) by late
+// May 2026 — every /hot.json now returns 403 everywhere. Two working paths:
+//   1. OAuth (oauth.reddit.com) — full media (video, full-res, scores), needs
+//      REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET (app-only client_credentials).
+//      Reddit gated NEW app creation behind manual approval in Nov 2026, so
+//      until that request clears we don't have creds.
+//   2. RSS (/hot/.rss) — still returns 200 with a custom User-Agent. No video
+//      stream / full-res image / score data, but carries title/link/author/
+//      date + a thumbnail for image+highlight posts. This is the active path.
+// fetchReddit() auto-selects: creds present → OAuth JSON; absent → RSS. Drop
+// the creds in and it upgrades back to full media with no code change.
+const REDDIT_UA = "web:com.hidescore.prebake:v1.0 (by /u/Signal_Interview_704)";
 let _redditTokenPromise = null;
 async function getRedditToken() {
   const id = process.env.REDDIT_CLIENT_ID;
@@ -996,13 +1003,85 @@ async function getRedditToken() {
   return _redditTokenPromise;
 }
 
+// Subreddit-meta / recurring AutoModerator threads. The OAuth path skips these
+// via p.stickied + flair, but RSS carries no stickied/flair field, so match on
+// the (stable) title patterns instead. Belt-and-suspenders with the author skip.
+const REDDIT_META_TITLE =
+  /daily (discussion|game) thread|game thread index|post[- ]?game thread|free talk|sunday brunch|shitpost saturday|moronic monday|megathread|simple questions|weekly|^\s*\[?\s*off[- ]?topic/i;
+
+// RSS fallback — used when no OAuth creds are configured (see header note).
+// Atom feed returns 200 with a custom UA; carries title/link/author/published
+// and, for image/highlight posts, a media:thumbnail (external-preview.redd.it
+// ~640w). No video stream, full-res image, scores, or selftext — those fields
+// are null vs the OAuth path. Reddit rate-limits RSS (~429 after a burst), so
+// the hourly cron's sequential per-sub fetch stays well within limits.
+async function fetchRedditRSS(subreddit, sectionLabel) {
+  const url = `https://www.reddit.com/r/${subreddit}/hot/.rss?limit=25`;
+  // The job runner fires all 11 reddit feeds in parallel and Reddit rate-limits
+  // RSS (~429 after a short burst), so desync with a little jitter up front and
+  // retry 429s with backoff. Worst case a few seconds — far under the hourly cron.
+  await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 1200)));
+  let xml = null;
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers: { "User-Agent": REDDIT_UA } });
+    if (res.ok) {
+      xml = await res.text();
+      break;
+    }
+    if (res.status === 429 && attempt < 4) {
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1) + Math.floor(Math.random() * 1000)));
+      continue;
+    }
+    throw new Error(`${url} → ${res.status}`);
+  }
+  const out = [];
+  const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+  let m;
+  while ((m = entryRe.exec(xml)) !== null) {
+    const e = m[1];
+    const title = decodeEntities(((e.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "").trim());
+    if (!title) continue;
+    if (!passesArticleBlocklist(title)) continue;
+    if (REDDIT_META_TITLE.test(title)) continue;
+    let author = ((e.match(/<name>([\s\S]*?)<\/name>/) || [])[1] || "").trim().replace(/^\/?u\//i, "");
+    if (/^AutoModerator$/i.test(author)) continue;
+    const link = ((e.match(/<link[^>]*href="([^"]+)"/) || [])[1] || "").trim();
+    if (!link) continue;
+    const id = ((e.match(/<id>([\s\S]*?)<\/id>/) || [])[1] || link).trim();
+    const published = ((e.match(/<published>([\s\S]*?)<\/published>/) || [])[1] || "").trim();
+    // RSS carries no stickied flag, so drop ancient pinned/welcome/rules posts
+    // by age — genuine "hot" posts are at most a few days old, while pins linger
+    // for months (e.g. r/sports' "Welcome to /r/sports!").
+    const ts = published ? Date.parse(published) : NaN;
+    if (ts && Date.now() - ts > 21 * 864e5) continue;
+    // media:thumbnail is present for image/highlight posts only (text/video posts omit it).
+    let imageUrl = ((e.match(/<media:thumbnail[^>]*\burl="([^"]+)"/) || [])[1] || "").trim();
+    imageUrl = imageUrl ? decodeEntities(imageUrl) : null;
+    out.push({
+      id,
+      headline: title,
+      description: "",
+      published: published ? new Date(published).toISOString() : "",
+      imageUrl,
+      articleUrl: link,
+      byline: author ? `u/${author}` : "",
+      section: sectionLabel,
+      videoUrl: null,
+      imageFullUrl: null,
+      body: null,
+    });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 async function fetchReddit(subreddit, sectionLabel) {
   const token = await getRedditToken().catch(() => null);
-  const url = token
-    ? `https://oauth.reddit.com/r/${subreddit}/hot?limit=25&raw_json=1`
-    : `https://www.reddit.com/r/${subreddit}/hot.json?limit=25`;
-  const headers = { "User-Agent": REDDIT_UA };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  // No creds → anon JSON is 403 everywhere now, so use the RSS feed (still 200).
+  // With creds, the richer oauth.reddit.com JSON path below runs instead.
+  if (!token) return fetchRedditRSS(subreddit, sectionLabel);
+  const url = `https://oauth.reddit.com/r/${subreddit}/hot?limit=25&raw_json=1`;
+  const headers = { "User-Agent": REDDIT_UA, Authorization: `Bearer ${token}` };
   const res = await fetch(url, { headers });
   if (!res.ok) throw new Error(`${url} → ${res.status}`);
   const data = await res.json();
