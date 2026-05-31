@@ -10,6 +10,12 @@
 
 - [ ] **Restore the R2-upload retry loop in `news-prebake.yml`.** The 3-attempt retry-with-backoff (orig commit `93833db9`) was lost 5/30 when a linter reverted an in-progress edit during a conflict fix and the simple one-line `wrangler r2 object put` got committed to main. The cron works fine without it; this is just resilience against transient R2 5xx. Re-add the `for attempt in 1 2 3` loop to the "Upload news feeds to R2" step (it's in git history at `93833db9`), to BOTH staging + main so they don't diverge.
 
+## 💡 Consider
+
+- [ ] **Highlight team names in a chosen accent color on cards.** Jacob 5/31 — consider coloring the team name text (team color? site accent?) on game cards for visual pop. Decide a scheme that stays readable in light + dark and doesn't imply a winner. Not started.
+- [ ] **Zoom gets stuck on mobile.** Jacob 5/31 — pinch-zoom on hidescore.com can get "stuck". Viewport has NO zoom lock (`{themeColor, viewportFit:"cover"}`), so the cause is likely the sticky header + fixed bottom tab bar + an overflow trap when zoomed. Needs a clearer repro (can't zoom back out? can't pan while zoomed?) before fixing — don't guess.
+- [ ] **Calendar picker on mobile.** The date-picker calendar icon is desktop-only now (the mobile header date-nav line has no room for it). If wanted on mobile, find a spot (e.g. tap the date label, or a slot in Settings).
+
 ## 🅿️ Parked — maybe re-add
 
 - [ ] **Column drag-to-reorder (scores view).** Disabled 5/30 — native HTML5 drag-and-drop didn't swap reliably (the draggable header is also the league swap-dropdown button; Safari/Firefox drop custom dataTransfer MIME types mid-drag). Code is intact behind `canDrag = false` in `LeagueColumn.tsx` (+ a `text/plain`/JS-var fallback already added). To re-enable properly, rebuild with **pointer events** (window-level pointermove/up + in-page dispatch) like the RIOC restaurant reorder — see `feedback_playwright_drag_drop_testing` + `session_rioc_restaurant_sort`. Flip `canDrag` back on once rebuilt.
