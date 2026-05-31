@@ -27,6 +27,8 @@ interface LeagueColumnProps {
   sortByMatchups?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string) => void;
+  // Clicking a game card body opens a spoiler-safe details popup (owned by HomeContent).
+  onShowDetails?: (game: Game) => void;
   selectedDate: string; // YYYYMMDD
   section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
@@ -435,6 +437,7 @@ export default function LeagueColumn({
   sortByMatchups,
   onPlayHighlight,
   onPlayEmbed,
+  onShowDetails,
   selectedDate,
   section,
   showFinalSeparator,
@@ -851,6 +854,7 @@ export default function LeagueColumn({
                   nextGameDate={formatDateCompact(league.nextGameDay!.date)}
                   useAbbreviations={useAbbreviations}
                   onSelectTeam={setTeamViewTeam}
+                  onShowDetails={onShowDetails}
                 />
               ))}
             </div>
@@ -873,6 +877,7 @@ export default function LeagueColumn({
               isToday={isToday}
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
+              onShowDetails={onShowDetails}
             />
           ))}
         </div>
@@ -890,6 +895,7 @@ export default function LeagueColumn({
               isToday={isToday}
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
+              onShowDetails={onShowDetails}
             />
           ))}
           {renderUpcoming && preGames.map((game) => (
@@ -904,6 +910,7 @@ export default function LeagueColumn({
               isToday={isToday}
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
+              onShowDetails={onShowDetails}
             />
           ))}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
@@ -926,6 +933,7 @@ export default function LeagueColumn({
               isToday={isToday}
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
+              onShowDetails={onShowDetails}
             />
           ))}
         </div>

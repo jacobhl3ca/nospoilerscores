@@ -27,6 +27,9 @@ interface GameCardProps {
   teamView?: boolean;
   // When set, clicking a team name opens that team's schedule view in the column.
   onSelectTeam?: (team: Team) => void;
+  // Clicking the card body opens a spoiler-safe details popup. (Live games still
+  // jump straight to the stream from the green status / network chip.)
+  onShowDetails?: (game: Game) => void;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -129,7 +132,7 @@ function formatSeriesStatus(s: string): string {
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, onSelectTeam }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, onSelectTeam, onShowDetails }: GameCardProps) {
   const prefetchedVideoId = useRef<string | null>(null);
   const prefetchedOfficialId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
@@ -295,10 +298,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       <img src={team.logo} alt={team.abbreviation} title={team.displayName} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
     );
 
-  // Live games: clicking the card body (anywhere except inner buttons/links
-  // that stopPropagation — team names, star, broadcast chip, Q1 link) opens
-  // the stream. Same UUID-aware URL as the Q1 / ABC chip use.
-  const cardClickable = isLive && !!liveUrl;
+  // Clicking the card body opens a spoiler-safe details popup. Inner
+  // buttons/links that stopPropagation keep their own actions — team names
+  // (schedule view), the live green status + network chip (jump to the
+  // stream), highlight buttons, etc. Disabled in the per-team schedule view.
+  const cardClickable = !!onShowDetails && !teamView;
   return (
     <div
       className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${cardClickable ? " cursor-pointer" : ""}`}
@@ -308,9 +312,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-      onClick={cardClickable ? () => openExternal(liveUrl!) : undefined}
-      role={cardClickable ? "link" : undefined}
-      title={cardClickable ? "Watch live" : undefined}
+      onClick={cardClickable ? () => onShowDetails!(game) : undefined}
+      role={cardClickable ? "button" : undefined}
+      title={cardClickable ? "Game details" : undefined}
     >
       {/* Playoff series state — pre-game only, today only, after the noon-ET
           morning reset. Hidden once the game is live or finished so the series
@@ -591,9 +595,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 );
               })()}
             </span>
-            <span className="shrink-0 flex items-center">
-              {star(team.id, favoriteTeams.includes(team.id), isTBD)}
-            </span>
+            {/* Favorite-star removed 2026-05-31 (Jacob) — favoriting still
+                available via the team-schedule view. */}
             <span className="flex-1 min-w-0" />
             {!isTBD && team.record && !effectivePastDate && !isFinished ? (
               <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>
