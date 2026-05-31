@@ -105,7 +105,9 @@ function openInBrowser(url: string): void {
 // to the system browser when the app isn't installed. Matched on hostname
 // suffix so "www." and regional subdomains (e.g. nbcsports.com) are covered.
 const APP_LINK_HOSTS = [
-  "mlb.com",           // MLB app — /tv/g* (per-game), /news/*
+  "mlb.com",           // MLB app — /tv/g* (per-game), /tv hub, /news/*
+  "abc.com",           // ABC app — /watch-live
+  "cbs.com",           // CBS app — /live-tv (plain CBS broadcast)
   "espn.com",          // ESPN app — /watch/*, gamecast
   "nba.com",           // NBA app — /watch, league-pass-stream
   "wnba.com",          // WNBA app — /watch
