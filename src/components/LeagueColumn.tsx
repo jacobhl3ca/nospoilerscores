@@ -181,7 +181,12 @@ function getPlayoffSubtitle(
     if (isLive) {
       return {
         tiers: ["● Big Inning · LIVE", "● Big Inning live", "● Big Inning"],
-        href: entry.selectionUrl ?? "https://www.mlb.com/network/live",
+        // Fallback to the MLB.TV hub: the MLB app claims mlb.com/tv as a
+        // universal link, so on mobile the subtitle (routed via openExternal)
+        // opens the app — where Big Inning lives — instead of the browser. The
+        // old /network/live URL wasn't app-claimed → browser. Precise per-night
+        // deep link still used when the scraper has entry.selectionUrl.
+        href: entry.selectionUrl ?? "https://www.mlb.com/tv",
       };
     }
     // Past the 3h air window today: show ended, hide the subtitle entirely.
