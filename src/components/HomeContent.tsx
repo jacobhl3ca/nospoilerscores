@@ -56,11 +56,13 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         title={title}
         aria-label={title}
         aria-pressed={active}
-        className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none ${inline ? "h-12" : "h-14"}`}
+        className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none rounded-lg m-1 ${inline ? "h-10" : "h-12"}`}
         style={{
-          color: active ? "var(--accent)" : "var(--text-muted)",
-          // Filled background on the selected tab so it reads as a toggle/
-          // segmented-control selection rather than just recolored text.
+          // Match the Yesterday/Today/Tomorrow date-nav pill: a subtle
+          // bg-card-hover fill with neutral text (not accent) on the selected
+          // tab (Jacob 6/1). rounded-lg + m-1 makes it an inset pill rather
+          // than a full-height block.
+          color: active ? "var(--text)" : "var(--text-muted)",
           background: active ? "var(--bg-card-hover)" : "transparent",
           fontWeight: active ? 600 : 400,
         }}

@@ -6,7 +6,7 @@ import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { handleExternalClick } from "@/lib/openExternal";
 import GameHighlights from "@/components/GameHighlights";
-import { getETHour } from "@/components/DateNav";
+import { getETHour, getDateString } from "@/components/DateNav";
 
 interface GameCardProps {
   game: Game;
@@ -153,13 +153,22 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const teamViewDateLabel = teamView ? (() => {
     const d = new Date(game.date);
     if (isNaN(d.getTime())) return "";
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const dDay = new Date(d); dDay.setHours(0, 0, 0, 0);
-    const diffDays = Math.round((dDay.getTime() - today.getTime()) / (24 * 3600 * 1000));
+    // Bucket the game by its Eastern calendar day — the same basis the
+    // scoreboard + date nav use (getDateString). Device-local bucketing broke
+    // under UTC render contexts: a 9pm-ET game is past midnight UTC, so it
+    // rolled into the next day and mislabeled (two "Yesterday" cards for games
+    // played on different ET days).
+    const etYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(d);
+    // getDateString returns "YYYYMMDD" (no separators); etYmd is "YYYY-MM-DD".
+    // Strip non-digits so both parse regardless of format.
+    const toNum = (ymd: string) => { const s = ymd.replace(/\D/g, ""); return Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)) / 86400000; };
+    const diffDays = toNum(etYmd) - toNum(getDateString(0));
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Tomorrow";
     if (diffDays === -1) return "Yesterday";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
   })() : null;
   const teamViewTime = teamView && isFuture ? (() => {
     const cleaned = cleanStatusDetail(game.statusDetail, true);

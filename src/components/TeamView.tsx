@@ -6,6 +6,7 @@ const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : use
 import { Game, Sport, Team } from "@/lib/types";
 import { fetchTeamSchedule } from "@/lib/espn";
 import GameCard from "./GameCard";
+import { getDateString } from "@/components/DateNav";
 
 interface TeamViewProps {
   sport: Sport;
@@ -148,11 +149,16 @@ export default function TeamView({
     return () => ro.disconnect();
   }, [team.shortDisplayName, team.displayName, team.abbreviation, leagueLabel]);
 
-  const todayYMD = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
-  const gameIsToday = (g: Game) => g.date.slice(0, 10) === todayYMD;
+  // Bucket by Eastern day (getDateString) — matches the scoreboard and the
+  // card's own date label. `g.date.slice(0,10)` is the UTC day, which
+  // mislabels late-evening ET games (past midnight UTC) as the next day.
+  const gameIsToday = (g: Game) => {
+    const etYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date(g.date));
+    // getDateString returns "YYYYMMDD"; etYmd is "YYYY-MM-DD" — drop dashes.
+    return etYmd.replace(/-/g, "") === getDateString(0);
+  };
 
   const renderCard = (game: Game) => (
     <GameCard

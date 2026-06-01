@@ -76,7 +76,7 @@ body {
 /* News tab emoji (📰): the Twemoji newspaper is a bright near-white block that
    glares on the dark bottom bar. Knock it down in dark mode so it reads as
    muted like the other unselected tabs (Jacob 6/1). */
-[data-theme="dark"] .news-tab-emoji { filter: brightness(0.62) contrast(1.05); }
+[data-theme="dark"] .news-tab-emoji { filter: brightness(0.74) contrast(1.03); }
 
 .date-nav-btn:not([style*="font-weight"]):hover {
   background: var(--bg-card) !important;
