@@ -36,7 +36,7 @@ export default function GameDetailModal({
       if (!isNaN(d.getTime())) {
         return d.toLocaleString("en-US", {
           weekday: "short", month: "short", day: "numeric",
-          hour: "numeric", minute: "2-digit", timeZoneName: "short",
+          hour: "numeric", minute: "2-digit",
         });
       }
     } catch { /* fall through */ }

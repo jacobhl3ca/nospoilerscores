@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
+import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
@@ -16,9 +17,9 @@ interface GameCardProps {
   nextGameDate?: string;
   isPastDate?: boolean;
   isToday?: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   // Plays a non-YouTube embed (NHL recaps via Brightcove) in the same modal.
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
   leagueLabel?: string;
   useAbbreviations?: boolean;
   // When true, render the game's own date on the top-left regardless of state,
@@ -251,6 +252,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote)
     : null;
 
+  // Matchup card for shared highlight links — built from the game so the
+  // VideoModal's copy-link can render+upload the preview and hand back a
+  // hidescore.com link that unfurls cleanly in iMessage. See lib/shareCard.
+  const shareCard = useMemo(() => buildShareCard(game, leagueLabel), [game, leagueLabel]);
+
   // Pre-fetch YouTube video IDs in background (official channel + top search).
   // When both buttons exist, the secondary prefetch waits for the primary so
   // it can exclude the primary's videoId — guaranteeing the secondary never
@@ -454,17 +460,21 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     isEspn && game.streamUrl && /\/watch\/player\/_\/id\//.test(game.streamUrl)
                       ? game.streamUrl
                       : null;
-                  // MLB broadcasts (MLB.TV, MLB Network, RSNs) all stream on
-                  // mlb.com/tv — prefer the gamePk deep link when we have it.
+                  const netUrl = networkStreamUrl(name, game.id, game.sport);
+                  // MLB.tv gamePk deep link — reuse ONLY when this chip's own
+                  // network is itself on mlb.com (MLB.TV / MLB Network / RSNs)
+                  // or has no dedicated page. A national net (NBC, FOX, …) on an
+                  // MLB game resolves to ITS own site, so route there, not MLB.tv.
                   const mlbStream =
                     game.sport === "mlb" && game.streamUrl && /mlb\.com\/tv\/g\d+/.test(game.streamUrl)
+                    && (!netUrl || netUrl.includes("mlb.com"))
                       ? game.streamUrl
                       : null;
                   const href =
                     (isPrime && game.primeStreamUrl) ||
                     espnStream ||
                     mlbStream ||
-                    networkStreamUrl(name, game.id, game.sport) ||
+                    netUrl ||
                     sportStreamFallback(game.sport);
                   return (
                     <a
@@ -528,15 +538,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   isEspn && game.streamUrl && /\/watch\/player\/_\/id\//.test(game.streamUrl)
                     ? game.streamUrl
                     : null;
+                const netUrl = networkStreamUrl(b, game.id, game.sport);
+                // Reuse the MLB.tv gamePk deep link only when this chip's own
+                // network is on mlb.com (MLB.TV / MLB Network / RSNs) or has no
+                // page; a national net (NBC/FOX/…) routes to its own site.
                 const mlbStream =
                   game.sport === "mlb" && game.streamUrl && /mlb\.com\/tv\/g\d+/.test(game.streamUrl)
+                  && (!netUrl || netUrl.includes("mlb.com"))
                     ? game.streamUrl
                     : null;
                 const href =
                   (isPrime && game.primeStreamUrl) ||
                   espnStream ||
                   mlbStream ||
-                  networkStreamUrl(b, game.id, game.sport) ||
+                  netUrl ||
                   sportStreamFallback(game.sport);
                 return (
                   <a
@@ -615,7 +630,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               onClick={async () => {
                 if (!onPlayHighlight) return;
                 if (prefetchedOfficialId.current) {
-                  onPlayHighlight(prefetchedOfficialId.current, highlightUrl);
+                  onPlayHighlight(prefetchedOfficialId.current, highlightUrl, shareCard);
                   return;
                 }
                 setFetchingOnClick("official");
@@ -624,7 +639,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 if (id) {
                   prefetchedOfficialId.current = id;
                   setOfficialStatus("found");
-                  onPlayHighlight(id, highlightUrl);
+                  onPlayHighlight(id, highlightUrl, shareCard);
                 } else {
                   setOfficialStatus("missing");
                 }
@@ -649,7 +664,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               onClick={async () => {
                 if (!onPlayHighlight) return;
                 if (prefetchedVideoId.current) {
-                  onPlayHighlight(prefetchedVideoId.current, highlightUrl);
+                  onPlayHighlight(prefetchedVideoId.current, highlightUrl, shareCard);
                   return;
                 }
                 setFetchingOnClick("search");
@@ -659,7 +674,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 if (id) {
                   prefetchedVideoId.current = id;
                   setSearchStatus("found");
-                  onPlayHighlight(id, highlightUrl);
+                  onPlayHighlight(id, highlightUrl, shareCard);
                 } else {
                   setSearchStatus("missing");
                 }
@@ -692,7 +707,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 e.stopPropagation();
                 const embed = game.nhlRecapEmbed!;
                 const page = game.nhlRecapUrl || embed;
-                if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com");
+                if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com", shareCard);
                 else openExternal(page);
               }}
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
@@ -709,7 +724,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 e.stopPropagation();
                 const embed = game.nhlCondensedEmbed!;
                 const page = game.nhlCondensedUrl || embed;
-                if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com");
+                if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com", shareCard);
                 else openExternal(page);
               }}
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"

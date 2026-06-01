@@ -2,6 +2,8 @@
 
 ## 🔝 Top priority
 
+- [ ] **Tweak/polish the share-card feature (shipped 5/31 as-is).** The OG share-card preview (browser draws a teams+date PNG to canvas → POSTs to the worker → R2 `cards/<key>.png` → `?c=<key>` swaps OG meta; see `src/lib/shareCard.ts` + `public/_worker.js`) was pushed in its current WIP state per Jacob. Revisit tomorrow: review the rendered card design, confirm the worker OG swap + R2 upload path work end-to-end, and decide what to refine.
+
 - [ ] **Reddit news feeds — fix + re-enable (FIRST to solve).** Reddit cards were removed from the news view 2026-05-30; the underlying feed is the priority fix. Register a fresh Reddit API app under any working account (reddit.com/prefs/apps → script/web, ~2 min) → client ID + secret → drop in `~/.config/hidescore/reddit.env` on the Mac mini + `source` in `hidescore-reddit-cron.sh` so `fetchReddit` takes the `oauth.reddit.com` path. App-only OAuth reads public subreddits (no posting / good standing needed). Then re-add the Reddit sources to `leagueSourceCascade`/`GENERIC_CASCADE` + the funnel filter option in HomeContent. _src: project_hidescore_reddit_403.md_
 
 - [ ] **QA + prep for the 2026 World Cup (soon).** World Cup 2026 is this summer — make sure FIFA/soccer surfacing is solid before it starts: verify the `fifa` league config + season window, the new soccer range-lookahead (`fetchNextGameDayRange`) resolves real fixtures, soccer-slot priority (UCL>UEL>MLS, EPL beats both), broadcast/watch links for WC matches, news feeds, and that the column auto-appears on match days. Do a full QA pass on the soccer path generally.

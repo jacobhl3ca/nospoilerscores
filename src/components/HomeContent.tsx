@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
 import { LeagueData, Sport, Game } from "@/lib/types";
+import type { ShareCardMeta } from "@/lib/shareCard";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
@@ -383,7 +384,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; shareCard?: ShareCardMeta | null } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
   const [showNews, setShowNews] = useState(false);
@@ -482,8 +483,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const openVideoModal = useCallback((videoId: string, fallbackUrl: string) => {
-    setVideoModal({ videoId, fallbackUrl });
+  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => {
+    setVideoModal({ videoId, fallbackUrl, shareCard });
     const params = new URLSearchParams(window.location.search);
     params.set("v", videoId);
     window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
@@ -492,8 +493,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // Game-card click → play a non-YouTube embed (NHL recaps via Brightcove)
   // inside the same modal. No ?v= param: the embed URL isn't a shareable
   // YouTube id, so we just push a history entry so Back / Esc dismiss it.
-  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string) => {
-    setVideoModal({ videoId: "", fallbackUrl, embedUrl, sourceLabel });
+  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => {
+    setVideoModal({ videoId: "", fallbackUrl, embedUrl, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", window.location.href);
   }, []);
 
@@ -1223,10 +1224,27 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             </div>
             {/* Mobile: date nav sits inline in the header middle (the view tabs
                 live in the fixed bottom bar on phones, so this slot is free).
-                Scores/Rated only. Calendar picker is desktop-only (no room). */}
+                Scores/Rated only. Calendar = bare icon after the › arrow. */}
             {!showNews && (
               <div className="sm:hidden flex justify-center">
-                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
+                  <span className="relative inline-flex">
+                    <button
+                      onClick={() => setCalendarOpen(!calendarOpen)}
+                      className="ml-1 w-7 h-7 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+                      style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
+                      title="Pick a date"
+                      aria-label="Pick a date"
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                      </svg>
+                    </button>
+                    {calendarOpen && (
+                      <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
+                    )}
+                  </span>
+                } />
               </div>
             )}
           </div>
@@ -1990,6 +2008,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           byline={videoModal.byline}
           published={videoModal.published}
           body={videoModal.body}
+          shareCard={videoModal.shareCard}
           onClose={closeVideoModal}
         />
       )}

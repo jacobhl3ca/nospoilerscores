@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, LeagueData, Sport, Team } from "@/lib/types";
+import type { ShareCardMeta } from "@/lib/shareCard";
 import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/lib/espn";
 import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -25,8 +26,8 @@ interface LeagueColumnProps {
   isPastDate: boolean;
   isToday?: boolean;
   sortByMatchups?: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
   // Clicking a game card body opens a spoiler-safe details popup (owned by HomeContent).
   onShowDetails?: (game: Game) => void;
   selectedDate: string; // YYYYMMDD

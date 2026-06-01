@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
 import { formatPublished, proxyImage } from "@/lib/news";
+import { ensureShareCardUploaded, shareCardUrl, type ShareCardMeta } from "@/lib/shareCard";
 
 interface VideoModalProps {
   videoId: string;
@@ -37,6 +38,10 @@ interface VideoModalProps {
   // Selftext body for Reddit text posts. Raw markdown — rendered with
   // paragraph breaks + autolinking. Only shown in textMode (no media).
   body?: string | null;
+  // Matchup metadata for game highlights — when present, Copy-link renders +
+  // uploads a preview card and shares a hidescore.com link that unfurls with
+  // the two teams + date instead of the raw YouTube/source URL. Null for news.
+  shareCard?: ShareCardMeta | null;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -132,7 +137,7 @@ function sourceLabelFromUrl(url: string): string {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -162,11 +167,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
+  // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
+  // text card) — used both for the footer link and the hidescore deep-link.
+  const ytId = (hlsMode || embedMode || imageMode || textMode) ? null : currentId;
   // The URL the footer points at — the YouTube watch page for YT clips,
-  // otherwise the original source page. Also what Copy-link writes out.
-  const shareUrl = (hlsMode || embedMode || imageMode || textMode)
-    ? (fallbackUrl || "")
-    : `https://www.youtube.com/watch?v=${currentId}`;
+  // otherwise the original source page.
+  const sourceShareUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : (fallbackUrl || "");
+  // For game highlights we hand out a hidescore.com link instead: it opens the
+  // clip in-app (?v=) AND unfurls in iMessage as a matchup card (?c=, served by
+  // the worker from the PNG we upload in copyLink). News/non-game clips have no
+  // shareCard, so they keep the plain source URL.
+  const shareUrl = shareCard ? shareCardUrl(shareCard, ytId) : sourceShareUrl;
 
   // Copy the highlight's link to the clipboard. navigator.clipboard works in
   // both the browser and the iOS WKWebView — the app loads from the https
@@ -175,6 +186,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // to a hidden-textarea execCommand for any context without the async API.
   const copyLink = async () => {
     if (!shareUrl) return;
+    // Kick the card render+upload (idempotent) so the matchup preview is in R2
+    // by the time the pasted link is unfurled. Non-blocking: never hold up the
+    // clipboard write, which must stay inside the user gesture for Safari/WKWebView.
+    if (shareCard) void ensureShareCardUploaded(shareCard).catch(() => {});
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
@@ -194,6 +209,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       /* throwaway affordance — the link stays tappable if copy fails */
     }
   };
+
+  // Pre-warm the share card the moment a game highlight opens, so the preview
+  // image is already in R2 by the time the user copies the link and pastes it.
+  useEffect(() => {
+    if (shareCard) void ensureShareCardUploaded(shareCard).catch(() => {});
+  }, [shareCard]);
 
   // Reset caption state any time the modal swaps to a different stream
   useEffect(() => {
