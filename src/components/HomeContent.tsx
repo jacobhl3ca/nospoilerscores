@@ -1555,7 +1555,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           const focusedEntries = newsFocusLeague
             ? visibleNewsEntries.filter((e) => e.id === newsFocusLeague)
             : visibleNewsEntries;
-          const renderSourcesFor = (entry: typeof visibleNewsEntries[number]): NewsSource[] => {
+          const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
             const filtered = entry.orderedCascade
               .filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter)
               .filter((s) => !newsHiddenSources.includes(s.label));
@@ -1564,7 +1564,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             // items lead in every column. Stable within a type so the per-sport
             // cascade order is preserved among same-type sources.
             const typeOrder = prefs.newsTypeFilterOrder;
-            const ordered = (newsTypeFilter === "all" && typeOrder && typeOrder.length)
+            return (newsTypeFilter === "all" && typeOrder && typeOrder.length)
               ? filtered
                   .map((s, i) => [s, i] as const)
                   .sort(([a, ai], [bz, bi]) => {
@@ -1574,8 +1574,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                   })
                   .map(([s]) => s)
               : filtered;
-            return cascadeToSources(ordered);
           };
+          const renderSourcesFor = (entry: typeof visibleNewsEntries[number]): NewsSource[] =>
+            cascadeToSources(orderedColumnSourcesFor(entry));
 
           // Swap on a news column: slot 2 with a newsThirdLeague override
           // touches that pref alone (keeps scores untouched); other columns
@@ -1628,6 +1629,42 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               return all.slice(1).filter((s) => s.label !== "ESPN");
             }
             return all.slice(1);
+          };
+
+          // Mobile single feed: instead of three stacked league sections, merge
+          // every card into ONE hand-ordered list (Jacob 6/1). Rank by (column
+          // role, source type) rather than by league key so the order survives a
+          // season change — "news" = the ESPN/general column, "A"/"B" = the 1st
+          // and 2nd in-season score leagues (today MLB/NBA; NFL season just
+          // reuses the A/B ranks). Unknown combos fall to the tail in cascade
+          // order. Resulting feed:
+          //   1 ESPN headlines  2 ESPN Videos  3 A Top Videos  4 r/<A>
+          //   5 r/<B>  6 r/sports  7 B Top Videos  8 A.com  9 B.com
+          //   10 ESPN A  11 ESPN B
+          const MOBILE_SOURCE_RANK: Record<string, number> = {
+            "news:espn": 1,
+            "news:topvideos": 2,
+            "A:topvideos": 3,
+            "A:reddit": 4,
+            "B:reddit": 5,
+            "news:reddit": 6,
+            "B:topvideos": 7,
+            "A:homepage": 8,
+            "B:homepage": 9,
+            "A:espn": 10,
+            "B:espn": 11,
+          };
+          const mobileMergedSources = (): NewsSource[] => {
+            const ranked = renderedEntries.flatMap((entry, idx) => {
+              const role = entry.id === "espn" ? "news" : idx === 1 ? "A" : "B";
+              return orderedColumnSourcesFor(entry).map((cs, subIdx) => ({
+                cs,
+                rank: MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`] ?? 900 + subIdx,
+                subIdx,
+              }));
+            });
+            ranked.sort((a, b) => a.rank - b.rank || a.subIdx - b.subIdx);
+            return cascadeToSources(ranked.map((r) => r.cs));
           };
 
           const wideCol = "flex-1 min-w-0 max-w-[420px] xl:max-w-[520px]";
@@ -1701,7 +1738,19 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                     columns stay centered (multi-column only; 1-col centers the
                     + below the single column). */}
                 {newsOnAddColumn && effectiveColCount !== 1 && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
-                {renderedEntries.map((entry, idx) => {
+                {isMobile && renderedEntries.length > 1 ? (
+                  // Phones: one merged, hand-ordered feed (no per-league titles —
+                  // the cards span every league, so a single league header would
+                  // be misleading). See mobileMergedSources for the order.
+                  <NewsColumn
+                    key={`nc-mobile-${newsRefreshKey}`}
+                    title=""
+                    sources={mobileMergedSources()}
+                    hideTitle
+                    onPlayVideo={playNewsVideo}
+                    widthClassName={widthClassFor()}
+                  />
+                ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
                     .filter((_, i) => i !== idx)
                     .map((e) => e.sport)
