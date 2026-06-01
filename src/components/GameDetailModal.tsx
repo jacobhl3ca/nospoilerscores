@@ -109,8 +109,8 @@ export default function GameDetailModal({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="hover:underline transition-colors"
-        style={{ color: "var(--text-muted)" }}
+        className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+        style={{ color: "var(--accent)" }}
         title={`Watch on ${name}`}
         onClick={handleExternalClick(href)}
       >
