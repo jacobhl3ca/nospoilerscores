@@ -30,5 +30,15 @@ jobs:
         run: |
           npm install -g wrangler@^4
           for f in public/news/*.json; do
-            wrangler r2 object put "hidescore-data/news/$(basename "$f")" --file "$f" --remote --content-type application/json
+            for attempt in 1 2 3; do
+              if wrangler r2 object put "hidescore-data/news/$(basename "$f")" --file "$f" --remote --content-type application/json; then
+                break
+              fi
+              if [ "$attempt" = "3" ]; then
+                echo "::error::wrangler upload failed 3x for $f"
+                exit 1
+              fi
+              echo "wrangler attempt $attempt failed, retrying in $((attempt * 10))s..."
+              sleep $((attempt * 10))
+            done
           done
