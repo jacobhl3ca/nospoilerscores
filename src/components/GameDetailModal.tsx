@@ -34,9 +34,13 @@ export default function GameDetailModal({
     try {
       const d = new Date(game.date);
       if (!isNaN(d.getTime())) {
+        // Pin to ET — without an explicit timeZone this inherits the browser
+        // TZ, which some webviews/private-browsing contexts force to UTC, so
+        // the line rendered "GMT" instead of the local Eastern time.
         return d.toLocaleString("en-US", {
           weekday: "short", month: "short", day: "numeric",
           hour: "numeric", minute: "2-digit", timeZoneName: "short",
+          timeZone: "America/New_York",
         });
       }
     } catch { /* fall through */ }
@@ -109,8 +113,9 @@ export default function GameDetailModal({
           <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.venue}</div>
         ) : null}
 
-        {/* Broadcasts */}
-        {game.broadcasts.length > 0 ? (
+        {/* Broadcasts — only useful before/while the game is on. Once it's
+            final the "where to watch" channels are noise, so hide them. */}
+        {game.broadcasts.length > 0 && !isFinal ? (
           <div className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
             <span className="uppercase tracking-wide">Watch: </span>{game.broadcasts.join(" · ")}
           </div>
@@ -122,7 +127,6 @@ export default function GameDetailModal({
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${ratingTier(game.rating).bg}`}>
               {ratingTier(game.rating).label}
             </span>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>game rating</span>
           </div>
         ) : null}
 
@@ -134,6 +138,20 @@ export default function GameDetailModal({
             style={{ background: "var(--accent)", color: "white" }}
           >
             Watch live
+          </button>
+        ) : null}
+
+        {/* Highlight link — finished games whose recap clip is available.
+            Tapping a highlight is an explicit user choice (it can spoil), so
+            it lives at the very bottom, below the rating. */}
+        {isFinal && game.highlightUrl ? (
+          <button
+            onClick={() => { openExternal(game.highlightUrl!); onClose(); }}
+            className="mt-4 w-full py-2 rounded-lg text-sm font-medium cursor-pointer flex items-center justify-center gap-2"
+            style={{ background: "var(--accent)", color: "white" }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            Watch highlights
           </button>
         ) : null}
       </div>

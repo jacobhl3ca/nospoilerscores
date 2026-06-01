@@ -214,8 +214,11 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
     <div className="flex gap-0 sm:gap-0.5 items-center justify-center">
       {/* Invisible leading spacer mirrors the trailing calendar icon's width so
           the ‹ Yesterday/Today/Tomorrow › group stays centered (lines up with
-          the middle MLB column) instead of being shoved left by the icon. */}
-      {trailing && <span aria-hidden className="w-7 h-7 sm:w-8 sm:h-8 mr-1 shrink-0" />}
+          the middle MLB column) instead of being shoved left by the icon.
+          Hidden on phones (Jacob 5/31) — the spacer was costing ~32px the
+          cramped mobile header couldn't spare, so the row reads cleaner
+          without it. Desktop keeps it for the MLB-column alignment. */}
+      {trailing && <span aria-hidden className="hidden sm:block sm:w-8 sm:h-8 sm:mr-1 shrink-0" />}
       <button
         onClick={goEarlier}
         className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full text-sm sm:text-base transition-colors cursor-pointer"
@@ -230,7 +233,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
           <button
             key={btn.date}
             onClick={() => onDateChange(btn.date)}
-            className="date-nav-btn w-[3rem] sm:w-[5.5rem] py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden"
+            className="date-nav-btn w-[2.75rem] sm:w-[5.5rem] py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden"
             style={
               isSelected
                 ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }

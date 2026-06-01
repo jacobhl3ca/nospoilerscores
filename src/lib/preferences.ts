@@ -157,6 +157,10 @@ export interface Preferences {
   // Source-type pill filter for the news view. "all" shows every source;
   // others restrict to one type globally across all visible leagues.
   newsTypeFilter?: "all" | "topvideos" | "espn" | "reddit" | "homepage";
+  // User-chosen ordering of the source-type filter options (the values above).
+  // Drag-to-reorder in the funnel popover persists here. Unknown/new values
+  // fall through to the tail in default order, so added sources still show.
+  newsTypeFilterOrder?: string[];
   // When set, the news view shows ONLY this entry. "espn" focuses the
   // always-present ESPN entry; otherwise a league sport. Undefined = all.
   newsFocusLeague?: Sport | "espn";

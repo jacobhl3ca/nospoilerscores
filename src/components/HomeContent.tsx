@@ -105,12 +105,8 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         )}
         {tab(
           "news",
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
-            <path d="M18 14h-8" />
-            <path d="M15 18h-5" />
-            <path d="M10 6h8v4h-8V6Z" />
-          </svg>,
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/news-emoji.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
           "News",
           "News (full spoilers)",
         )}
@@ -119,34 +115,103 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
   );
 }
 
-// Yesterday/Today/Tomorrow-style pill row used for news global filters
-// (source type, focus league). Selected pill gets a faint card background
-// + bold text; unselected stay muted. Same visual language as DateNav.
-function NewsPillRow({ options, value, onChange }: {
+// Vertical, one-per-row source-type filter used inside the funnel popover.
+// Each row is tappable to select that filter; a drag handle reorders the
+// rows (order persisted in prefs). Pointer-based drag (not HTML5) so it
+// works on iOS — same approach as NewsOrderMenu. `dropIdx` is the insertion
+// slot drawn as a thin accent bar between rows.
+function NewsFilterList({ options, value, onSelect, onReorder }: {
   options: { value: string; label: string }[];
   value: string;
-  onChange: (v: string) => void;
+  onSelect: (v: string) => void;
+  onReorder: (order: string[]) => void;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [dragVal, setDragVal] = useState<string | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
+  const order = options.map((o) => o.value);
+
+  const startDrag = (e: React.PointerEvent, val: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragVal(val);
+    setDropIdx(order.indexOf(val));
+    const onMove = (ev: PointerEvent) => {
+      const list = listRef.current;
+      if (!list) return;
+      const rows = Array.from(list.querySelectorAll<HTMLElement>("[data-row]"));
+      let next = rows.length;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i].getBoundingClientRect();
+        if (ev.clientY < r.top + r.height / 2) { next = i; break; }
+      }
+      setDropIdx(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      setDragVal((curVal) => {
+        setDropIdx((curDrop) => {
+          if (curVal != null && curDrop != null) {
+            const without = order.filter((v) => v !== curVal);
+            const from = order.indexOf(curVal);
+            const insertAt = curDrop > from ? curDrop - 1 : curDrop;
+            without.splice(insertAt, 0, curVal);
+            if (without.some((v, i) => v !== order[i])) onReorder(without);
+          }
+          return null;
+        });
+        return null;
+      });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
   return (
-    <div className="flex items-center justify-center gap-0.5 flex-wrap">
-      {options.map((opt) => {
+    <div ref={listRef} className="select-none">
+      {options.map((opt, i) => {
         const active = opt.value === value;
+        const isDragging = dragVal === opt.value;
         return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            className="px-3 py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-colors text-center cursor-pointer"
-            style={
-              active
-                ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
-                : { color: "var(--text-muted)", background: "transparent" }
-            }
-          >
-            {opt.label}
-          </button>
+          <div key={opt.value} className="relative">
+            {dropIdx === i && !isDragging && (
+              <div className="absolute left-1 right-1 -top-px h-0.5 rounded z-10" style={{ background: "var(--accent)" }} />
+            )}
+            <div
+              data-row
+              className="flex items-center gap-1 rounded"
+              style={{ background: isDragging ? "var(--bg-card-hover)" : "transparent", opacity: isDragging ? 0.6 : 1, touchAction: "none" }}
+            >
+              <span
+                onPointerDown={(e) => startDrag(e, opt.value)}
+                className="shrink-0 px-1 py-2 cursor-grab active:cursor-grabbing"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Drag to reorder"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" />
+                </svg>
+              </span>
+              <button
+                type="button"
+                onClick={() => onSelect(opt.value)}
+                className="flex-1 min-w-0 text-left px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors cursor-pointer"
+                style={active
+                  ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
+                  : { color: "var(--text-muted)", background: "transparent" }}
+              >
+                {opt.label}
+              </button>
+            </div>
+          </div>
         );
       })}
+      {dropIdx === options.length && (
+        <div className="relative h-0.5 -mt-px mx-1 rounded" style={{ background: "var(--accent)" }} />
+      )}
     </div>
   );
 }
@@ -868,6 +933,21 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   };
   const newsTypeFilter = prefs.newsTypeFilter ?? "all";
   const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
+  // Source-filter options + the user's drag-reordered order. Unknown labels in
+  // the saved order are ignored; new options not yet in the saved order fall
+  // through to the tail in default order.
+  const NEWS_FILTER_OPTIONS: { value: string; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "topvideos", label: "Top videos" },
+    { value: "reddit", label: "Reddit" },
+    { value: "espn", label: "ESPN" },
+    { value: "homepage", label: "Homepage" },
+  ];
+  const orderedNewsFilterOptions = applyOrder(
+    NEWS_FILTER_OPTIONS.map((o) => ({ ...o, label: o.value })),
+    prefs.newsTypeFilterOrder,
+  ).map((o) => NEWS_FILTER_OPTIONS.find((n) => n.value === o.value)!);
+  const setNewsTypeFilterOrder = (order: string[]) => updatePrefs({ newsTypeFilterOrder: order });
   // The news "focus league" pill UI was removed (5/29), but its pref can still
   // be set in stale localStorage from an earlier staging build — which silently
   // forced the news view to a single wide column with no way to clear it. Ignore
@@ -1218,7 +1298,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               two 1fr cols → lines up with the middle MLB column). On small screens
               the tabs drop to the fixed bottom bar, so the date nav takes this slot
               instead (scores/rated only) — sitting cleanly in the top row. */}
-          <div className="justify-self-center col-start-2 min-w-0">
+          {/* Mobile: left-align so the date nav slides over toward the H logo
+              (Jacob 6/1) — fills the dead space left of the ‹ arrow and opens
+              a gap between the calendar icon and the theme toggle so the right
+              cluster stops looking cramped. Desktop stays centered (the view
+              tabs need to line up under the middle MLB column). */}
+          <div className="justify-self-start sm:justify-self-center col-start-2 min-w-0">
             <div className="hidden sm:block w-80">
               <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
             </div>
@@ -1226,12 +1311,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 live in the fixed bottom bar on phones, so this slot is free).
                 Scores/Rated only. Calendar = bare icon after the › arrow. */}
             {!showNews && (
-              <div className="sm:hidden flex justify-center">
+              <div className="sm:hidden flex justify-start">
                 <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
                   <span className="relative inline-flex">
                     <button
                       onClick={() => setCalendarOpen(!calendarOpen)}
-                      className="ml-2 w-7 h-7 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+                      className="ml-1 w-7 h-7 flex items-center justify-center rounded-full transition-colors cursor-pointer"
                       style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                       title="Pick a date"
                       aria-label="Pick a date"
@@ -1276,6 +1361,54 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               </button>
             )}
 
+            {/* News source filter popover. Sits to the LEFT of the theme
+                toggle (Jacob 5/31). Source-type filters live in a funnel
+                popover instead of always-on header pill rows — keeps the news
+                header clean like hidescore.com while keeping them reachable. */}
+            {showNews && (
+              <div ref={newsFilterRef} className="relative">
+                <button
+                  onClick={() => setNewsFilterOpen(!newsFilterOpen)}
+                  className="monkey-toggle relative w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                  style={{
+                    background: newsFilterOpen ? "var(--accent)" : "var(--bg-card)",
+                    border: `1px solid ${newsFilterOpen ? "var(--accent)" : "var(--border)"}`,
+                    color: newsFilterOpen ? "white" : "var(--text-muted)",
+                  }}
+                  title="Filter news"
+                  aria-label="Filter news"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                  </svg>
+                </button>
+                {newsFilterOpen && (
+                  <div
+                    className="absolute top-full mt-1 right-0 rounded-lg shadow-lg z-50 p-3 min-w-[210px]"
+                    style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                  >
+                    <div className="text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Source</div>
+                    {/* One per row + drag-to-reorder (order saved to prefs). */}
+                    <NewsFilterList
+                      options={orderedNewsFilterOptions}
+                      value={newsTypeFilter}
+                      onSelect={(v) => setNewsTypeFilter(v as "all" | "topvideos" | "espn" | "reddit" | "homepage")}
+                      onReorder={setNewsTypeFilterOrder}
+                    />
+                    {newsTypeFilter !== "all" && (
+                      <button
+                        onClick={() => setNewsTypeFilter("all")}
+                        className="mt-3 text-xs underline cursor-pointer"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Clear filter
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Standalone theme toggle (sits where the calendar button used to;
                 the calendar moved to a bare icon at the end of the DateNav row).
                 Shown in every view. */}
@@ -1304,69 +1437,6 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 </svg>
               )}
             </button>
-
-            {/* News cluster: source filter popover. (The 1/2/3 column-count
-                selector was removed 5/30 — desktop is a fixed 3 columns, mobile
-                is a single stacked column. Backlogged to re-add if wanted.) */}
-            {showNews && (
-              <>
-                {/* Source-type + focus-league filters live in a funnel popover
-                    instead of always-on header pill rows — keeps the news header
-                    clean like hidescore.com while keeping the filters reachable. */}
-                <div ref={newsFilterRef} className="relative">
-                  <button
-                    onClick={() => setNewsFilterOpen(!newsFilterOpen)}
-                    className="monkey-toggle relative w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
-                    style={{
-                      background: newsFilterOpen ? "var(--accent)" : "var(--bg-card)",
-                      border: `1px solid ${newsFilterOpen ? "var(--accent)" : "var(--border)"}`,
-                      color: newsFilterOpen ? "white" : "var(--text-muted)",
-                    }}
-                    title="Filter news"
-                    aria-label="Filter news"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-                    </svg>
-                    {newsTypeFilter !== "all" && !newsFilterOpen && (
-                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ background: "var(--accent)" }} />
-                    )}
-                  </button>
-                  {newsFilterOpen && (
-                    <div
-                      className="absolute top-full mt-1 right-0 rounded-lg shadow-lg z-50 p-3 min-w-[210px]"
-                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-                    >
-                      <div className="text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Source</div>
-                      <NewsPillRow
-                        options={[
-                          { value: "all", label: "All" },
-                          { value: "topvideos", label: "Top videos" },
-                          { value: "reddit", label: "Reddit" },
-                          { value: "espn", label: "ESPN" },
-                          { value: "homepage", label: "Homepage" },
-                        ]}
-                        value={newsTypeFilter}
-                        onChange={(v) => setNewsTypeFilter(v as "all" | "topvideos" | "espn" | "reddit" | "homepage")}
-                      />
-                      {/* League filtering removed (Jacob 5/29) — clicking a
-                          column's league name does the same thing. Source only. */}
-                      {newsTypeFilter !== "all" && (
-                        <button
-                          onClick={() => setNewsTypeFilter("all")}
-                          className="mt-3 text-xs underline cursor-pointer"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Clear filter
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-                {/* ☰ source-order / hide menu removed for now (Jacob 5/29) —
-                    mainly useful in single-column view; backlogged for later. */}
-              </>
-            )}
 
             <button
               onClick={() => setSettingsOpen(true)}
