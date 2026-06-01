@@ -1,0 +1,29 @@
+name: Check watch-link rot
+
+on:
+  schedule:
+    # Daily. The hardcoded broadcaster "watch" URLs in src/lib/espn.ts change
+    # rarely, so an hourly sweep would just hammer ~39 third-party sites (and
+    # risk bot-flagging). Once a day catches a network reorganizing its site
+    # within 24h, which is plenty for a non-live-data link.
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # Treat pre-script GitHub infra failures (checkout 403s, setup-node
+      # hiccups) as skips, not job failures — only the checker's exit code
+      # should email the owner. Mirrors staleness-check.yml.
+      - uses: actions/checkout@v4
+        id: checkout
+        continue-on-error: true
+      - uses: actions/setup-node@v4
+        id: setup
+        if: steps.checkout.outcome == 'success'
+        with:
+          node-version: 22
+        continue-on-error: true
+      - if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
+        run: node scripts/check-watch-links.mjs

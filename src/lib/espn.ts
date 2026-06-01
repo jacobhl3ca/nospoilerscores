@@ -841,8 +841,8 @@ export function sportStreamFallback(sport: Sport): string {
     case "epl": return "https://www.peacocktv.com/";
     case "fifa": return "https://www.foxsports.com/live";
     // UCL / UEL: Paramount+ holds US rights through 2030.
-    case "ucl": return "https://www.paramountplus.com/sports/uefa-champions-league/";
-    case "uel": return "https://www.paramountplus.com/sports/uefa-europa-league/";
+    case "ucl": return "https://www.paramountplus.com/shows/uefa-champions-league/";
+    case "uel": return "https://www.paramountplus.com/shows/uefa-europa-league/";
     case "tennis": return "https://www.tennischannel.com/";
     case "golf": return "https://www.pgatour.com/live";
   }
