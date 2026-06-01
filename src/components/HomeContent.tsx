@@ -11,7 +11,7 @@ import GameDetailModal from "@/components/GameDetailModal";
 import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, ColumnSource, classifySource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
@@ -1632,12 +1632,15 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           };
 
           // Mobile single feed: instead of three stacked league sections, merge
-          // every card into ONE hand-ordered list (Jacob 6/1). Rank by (column
-          // role, source type) rather than by league key so the order survives a
-          // season change — "news" = the ESPN/general column, "A"/"B" = the 1st
-          // and 2nd in-season score leagues (today MLB/NBA; NFL season just
-          // reuses the A/B ranks). Unknown combos fall to the tail in cascade
-          // order. Resulting feed:
+          // every card into ONE fixed, hand-ordered list (Jacob 6/1). Rank by
+          // (column role, source type) — "news" = the ESPN/general column,
+          // "A"/"B" = the higher/lower-priority in-season score league. The A/B
+          // split is NOT the user's column order (which is NBA-first by the app's
+          // canonical precedence) — it's MOBILE_NEWS_LEAGUE_ORDER, a fixed global
+          // order so the feed always reads MLB-before-NBA regardless of how the
+          // scores columns are arranged. Per-source granular reordering (via the
+          // filter button) is backlogged. Unknown combos fall to the tail in
+          // cascade order. Resulting feed:
           //   1 ESPN headlines  2 ESPN Videos  3 A Top Videos  4 r/<A>
           //   5 r/<B>  6 r/sports  7 B Top Videos  8 A.com  9 B.com
           //   10 ESPN A  11 ESPN B
@@ -1655,8 +1658,22 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             "B:espn": 11,
           };
           const mobileMergedSources = (): NewsSource[] => {
-            const ranked = renderedEntries.flatMap((entry, idx) => {
-              const role = entry.id === "espn" ? "news" : idx === 1 ? "A" : "B";
+            // Sort the score-league entries by the fixed global priority so role
+            // A is always the higher-priority league (MLB ahead of NBA), not
+            // whatever sits in scores column 1.
+            const newsEntry = renderedEntries.filter((e) => e.id === "espn");
+            const leagueEntries = renderedEntries
+              .filter((e) => e.id !== "espn")
+              .sort((a, b) => {
+                const ra = a.sport ? MOBILE_NEWS_LEAGUE_ORDER.indexOf(a.sport) : -1;
+                const rb = b.sport ? MOBILE_NEWS_LEAGUE_ORDER.indexOf(b.sport) : -1;
+                return (ra === -1 ? 99 : ra) - (rb === -1 ? 99 : rb);
+              });
+            const ordered = [...newsEntry, ...leagueEntries];
+            const ranked = ordered.flatMap((entry) => {
+              const role = entry.id === "espn"
+                ? "news"
+                : leagueEntries.indexOf(entry) === 0 ? "A" : "B";
               return orderedColumnSourcesFor(entry).map((cs, subIdx) => ({
                 cs,
                 rank: MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`] ?? 900 + subIdx,

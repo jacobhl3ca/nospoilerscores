@@ -252,6 +252,18 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   return out;
 }
 
+// Fixed global league priority for the MOBILE merged news feed (Jacob 6/1).
+// The desktop columns use the app's canonical precedence (NBA before MLB), but
+// the single mobile feed is hand-ordered MLB-first and stays that way no matter
+// how the scores columns are arranged. Whichever two leagues are in season sort
+// by this list to decide which leads the merged feed. Tune here (or, later, via
+// the filter button — backlogged) to re-rank. Leagues not listed fall to the
+// tail in their column order.
+export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
+  "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf",
+  "fifa", "epl", "ucl", "uel", "mls", "golf", "tennis", "wnba", "ncaaw",
+];
+
 // Col 3's default (no league picked) — ESPN videos lead, then ESPN top
 // headlines, then r/sports. CBS / theScore removed at Jacob's request.
 // (r/sports re-added 2026-05-31 after the temporary 5/30 removal.)
