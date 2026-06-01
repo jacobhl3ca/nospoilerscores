@@ -627,7 +627,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         <div className="mt-1 sm:mt-2 flex gap-1">
           {officialChannel && officialStatus !== "missing" && (
             <button
-              onClick={async () => {
+              onClick={async (e) => {
+                e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedOfficialId.current) {
                   onPlayHighlight(prefetchedOfficialId.current, highlightUrl, shareCard);
@@ -661,7 +662,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           )}
           {searchStatus !== "missing" && (
             <button
-              onClick={async () => {
+              onClick={async (e) => {
+                e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedVideoId.current) {
                   onPlayHighlight(prefetchedVideoId.current, highlightUrl, shareCard);
