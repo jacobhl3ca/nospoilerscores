@@ -3,10 +3,11 @@
 //
 // A shared link `hidescore.com/?v=<id>&c=<key>` opens the clip in-app (?v=) and,
 // for link-preview crawlers (iMessage/Slack/Twitter/…), unfurls as a matchup
-// card (teams + date). The card PNG is rendered in the user's browser at share
-// time and POSTed to /api/card-upload → R2 at `cards/<key>.png`. We can't render
-// images in this worker (Satori/resvg WASM would blow the free-plan bundle cap),
-// so the browser does it; the worker only stores, serves, and injects OG meta.
+// card (teams + date). The card PNG is rendered SERVER-SIDE by the prebake cron
+// (scripts/prebake-share-cards.mjs, Node + node-canvas) and stored in R2 at
+// `cards/<key>.png`. Browser rendering was abandoned: Firefox resistFinger-
+// printing randomizes canvas readback and corrupts the export. So the worker
+// only serves the stored card and injects the per-game OG meta.
 const CARD_KEY_RE = /^[a-z]+-[a-z0-9]+-[a-z0-9]+-\d{8}$/;
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -36,72 +37,15 @@ class AttrSetter {
   element(el) { el.setAttribute(this.attr, this.value); }
 }
 
-const CORS_JSON = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" };
+// Bump when the card design changes — appended to og:image as ?r=N so crawlers
+// and the CDN fetch a fresh URL instead of a stale cached image.
+const CARD_REV = 2;
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // --- Share-card image proxy: clean-CORS team logos for the browser canvas.
-    // ESPN's CDN taints a <canvas>; routing logos through here (with ACAO:*)
-    // keeps the card canvas exportable. Host-locked to espncdn to avoid an SSRF.
-    if (url.pathname === "/api/logo") {
-      const target = url.searchParams.get("u");
-      let host = "";
-      try { host = new URL(target).host; } catch { return new Response("bad u", { status: 400 }); }
-      if (!/(^|\.)espncdn\.com$/.test(host)) return new Response("forbidden host", { status: 403 });
-      const upstream = await fetch(target, {
-        headers: { "User-Agent": "Mozilla/5.0" },
-        cf: { cacheTtl: 86400, cacheEverything: true },
-      });
-      if (!upstream.ok) return new Response("upstream " + upstream.status, { status: 502 });
-      return new Response(upstream.body, {
-        headers: {
-          "Content-Type": upstream.headers.get("Content-Type") || "image/png",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "public, max-age=86400",
-        },
-      });
-    }
-
-    // --- Share-card upload: browser POSTs the rendered PNG; we store it in R2.
-    if (url.pathname === "/api/card-upload") {
-      if (request.method === "OPTIONS") {
-        return new Response(null, {
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Max-Age": "86400",
-          },
-        });
-      }
-      if (request.method !== "POST") {
-        return new Response(JSON.stringify({ error: "method not allowed" }), { status: 405, headers: CORS_JSON });
-      }
-      const key = url.searchParams.get("key") || "";
-      if (!CARD_KEY_RE.test(key)) {
-        return new Response(JSON.stringify({ error: "bad key" }), { status: 400, headers: CORS_JSON });
-      }
-      if (!env.DATA) {
-        return new Response(JSON.stringify({ error: "no bucket" }), { status: 503, headers: CORS_JSON });
-      }
-      const ct = request.headers.get("Content-Type") || "";
-      if (!ct.startsWith("image/png")) {
-        return new Response(JSON.stringify({ error: "bad content-type" }), { status: 400, headers: CORS_JSON });
-      }
-      const buf = await request.arrayBuffer();
-      // 1200×630 PNGs land ~60–180KB; cap well above that, reject empties.
-      if (buf.byteLength < 1000 || buf.byteLength > 500000) {
-        return new Response(JSON.stringify({ error: "bad size" }), { status: 400, headers: CORS_JSON });
-      }
-      await env.DATA.put(`cards/${key}.png`, buf, {
-        httpMetadata: { contentType: "image/png", cacheControl: "public, max-age=31536000" },
-      });
-      return new Response(JSON.stringify({ ok: true }), { headers: CORS_JSON });
-    }
-
-    // --- Serve a stored share card.
+    // --- Serve a stored share card (rendered server-side by the prebake cron).
     if (url.pathname.startsWith("/cards/") && url.pathname.endsWith(".png")) {
       if (env.DATA) {
         const obj = await env.DATA.get(url.pathname.replace(/^\//, ""));
@@ -109,7 +53,11 @@ export default {
           return new Response(obj.body, {
             headers: {
               "Content-Type": "image/png",
-              "Cache-Control": "public, max-age=31536000",
+              // Moderate TTL (1 day), not immutable: the prebake may re-render a
+              // card (corrected logos, design tweak). Hard busts ride the ?r=
+              // rev appended to og:image (CARD_REV) so a stuck edge/crawler cache
+              // entry can't pin a bad image for a year.
+              "Cache-Control": "public, max-age=86400",
               "Access-Control-Allow-Origin": "*",
             },
           });
@@ -130,7 +78,7 @@ export default {
       if (env.DATA) {
         try { hasCard = !!(await env.DATA.head(`cards/${cardKey}.png`)); } catch { /* head best-effort */ }
       }
-      if (hasCard) meta.image = `https://hidescore.com/cards/${cardKey}.png`;
+      if (hasCard) meta.image = `https://hidescore.com/cards/${cardKey}.png?r=${CARD_REV}`;
       const assetRes = await env.ASSETS.fetch(new Request(new URL("/", url), { method: "GET" }));
       return new HTMLRewriter()
         .on('meta[property="og:image"]', new AttrSetter("content", meta.image))

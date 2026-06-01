@@ -1,0 +1,40 @@
+name: Prebake highlight share cards
+
+on:
+  schedule:
+    # Hourly — finished games get a matchup preview card within an hour, well
+    # before a highlight is even shareable (per-league buffer is 3–5h after
+    # start). Covers yesterday + today (ET) each run.
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+# A new run supersedes an in-flight one; we only care about the latest cards.
+concurrency:
+  group: share-cards
+  cancel-in-progress: true
+
+jobs:
+  prebake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # node-canvas ships prebuilt linux-x64 binaries; no apt deps needed.
+      - run: npm install canvas@^3
+      - run: node scripts/prebake-share-cards.mjs
+      - name: Upload share cards to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npm install -g wrangler@^4
+          shopt -s nullglob
+          cards=(share-cards-out/*.png)
+          echo "Uploading ${#cards[@]} cards to R2…"
+          for f in "${cards[@]}"; do
+            key="cards/$(basename "$f")"
+            wrangler r2 object put "hidescore-data/$key" --file "$f" --remote --content-type image/png
+          done
+          echo "Done."

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
 import { formatPublished, proxyImage } from "@/lib/news";
-import { ensureShareCardUploaded, shareCardUrl, type ShareCardMeta } from "@/lib/shareCard";
+import { shareCardUrl, type ShareCardMeta } from "@/lib/shareCard";
 
 interface VideoModalProps {
   videoId: string;
@@ -186,10 +186,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // to a hidden-textarea execCommand for any context without the async API.
   const copyLink = async () => {
     if (!shareUrl) return;
-    // Kick the card render+upload (idempotent) so the matchup preview is in R2
-    // by the time the pasted link is unfurled. Non-blocking: never hold up the
-    // clipboard write, which must stay inside the user gesture for Safari/WKWebView.
-    if (shareCard) void ensureShareCardUploaded(shareCard).catch(() => {});
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
@@ -209,12 +205,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       /* throwaway affordance — the link stays tappable if copy fails */
     }
   };
-
-  // Pre-warm the share card the moment a game highlight opens, so the preview
-  // image is already in R2 by the time the user copies the link and pastes it.
-  useEffect(() => {
-    if (shareCard) void ensureShareCardUploaded(shareCard).catch(() => {});
-  }, [shareCard]);
 
   // Reset caption state any time the modal swaps to a different stream
   useEffect(() => {
