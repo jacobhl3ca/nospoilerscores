@@ -15,6 +15,7 @@ interface TeamViewProps {
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  onShowDetails?: (game: Game) => void;
   onBack: () => void;
   onSelectTeam: (team: Team) => void;
   useAbbreviations: boolean;
@@ -45,6 +46,7 @@ export default function TeamView({
   onToggleFavoriteTeam,
   showRatings,
   onPlayHighlight,
+  onShowDetails,
   onBack,
   onSelectTeam,
   useAbbreviations,
@@ -160,6 +162,7 @@ export default function TeamView({
       onToggleFavoriteTeam={onToggleFavoriteTeam}
       showRatings={showRatings}
       onPlayHighlight={onPlayHighlight}
+      onShowDetails={onShowDetails}
       leagueLabel={leagueLabel}
       useAbbreviations={useAbbreviations}
       teamView

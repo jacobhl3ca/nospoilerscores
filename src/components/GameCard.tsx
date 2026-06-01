@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
-import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
+import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
-import { isDemoModeActive } from "@/lib/demoMode";
-import { openExternal, handleExternalClick } from "@/lib/openExternal";
-import { getYouTubeSearchUrl, getOfficialChannelName, resolveHighlightVideo } from "@/lib/youtube";
+import { handleExternalClick } from "@/lib/openExternal";
+import GameHighlights from "@/components/GameHighlights";
 import { getETHour } from "@/components/DateNav";
 
 interface GameCardProps {
@@ -134,22 +133,16 @@ function formatSeriesStatus(s: string): string {
 }
 
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, onSelectTeam, onShowDetails }: GameCardProps) {
-  const prefetchedVideoId = useRef<string | null>(null);
-  const prefetchedOfficialId = useRef<string | null>(null);
-  const prefetchStarted = useRef(false);
-  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | null>(null);
-  // "loading" while prefetch (or click-time chain) is running. "found" once
-  // resolveHighlightVideo returns an id. "missing" once the full retry chain
-  // has been exhausted — the button is hidden in that state so the user
-  // never gets dropped onto a YouTube search page.
-  type HighlightStatus = "loading" | "found" | "missing";
-  const [officialStatus, setOfficialStatus] = useState<HighlightStatus>("loading");
-  const [searchStatus, setSearchStatus] = useState<HighlightStatus>("loading");
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
   const isDelayed = game.state === "in" && /delay/i.test(game.statusDetail);
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null && !isDelayed;
+  // A live game whose rating is withheld because it's still in its 1st period
+  // (see calculateRating's insufficient-signal gate). Surface a muted "Too
+  // Early" pill where the rating badge would go so the empty slot reads as
+  // intentional, not a missing/broken rating.
+  const tooEarly = showRatings && game.state === "in" && game.rating === null && !isDelayed;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
@@ -211,82 +204,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     isPlaceholderName(game.homeTeam.abbreviation);
   const gameProgress = isLive ? formatGameProgress(game) : null;
 
-  // Per-league buffer (hrs from game start) before showing highlight button
-  // Based on actual YouTube upload timing research (April 2026)
-  const highlightBufferHours: Record<string, number> = {
-    nba: 3.5,  // ~2.5hr game + highlights up in 30-60min
-    wnba: 3.5, // mirrors NBA — same ~2hr game + same-channel upload cadence
-    ncaam: 4,  // ~2hr game + highlights up in 1-3hrs (varies by matchup prominence)
-    ncaaw: 4,  // mirrors NCAAM
-    ncaaf: 5,  // ~3.5hr game + 1-2hr upload (mirrors NFL)
-    nhl: 4.5,  // ~2.5hr game + highlights up in 1-3hrs (Sportsnet/NHL)
-    mlb: 5,    // ~3hr game + highlights up in ~2hrs (verified Dodgers-Jays 4/6/26)
-    nfl: 5,    // ~3.5hr game + highlights up in 1-2hrs
-    fifa: 3,   // ~2hr match + highlights up quickly
-    epl: 3,    // ~2hr match + highlights up quickly
-    mls: 3,    // ~2hr match + highlights up quickly
-    ucl: 3,    // mirrors EPL — CBS Sports Golazo posts within ~2hrs of final whistle
-    uel: 3,    // mirrors EPL
-    golf: 6,   // ~5hr round + recap upload delay
-    tennis: 4, // ~2-3hr match + highlights up in 1-2hrs
-  };
-  const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 2, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
-  const highlightsReady = isFinished && (() => {
-    if (!isToday) return true;
-    const gameStart = new Date(game.date).getTime();
-    const otPeriods = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
-    const otExtra = otPeriods * (game.sport === "mlb" ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
-    const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
-    return Date.now() > gameStart + bufferMs;
-  })();
-
-  // Pin to ET — Firefox private browsing forces the browser TZ to UTC
-  // (anti-fingerprinting / privacy.resistFingerprinting), which shifts a
-  // late-evening ET game one day forward in the query date. Worker matches
-  // the YouTube title's date strictly, so the off-by-one made every labeled
-  // button return 404 → openExternal fallback. Pinning to ET makes the
-  // query stable across browsers and matches how leagues date their
-  // official recap uploads.
-  const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
-  const highlightUrl = highlightsReady
-    ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote)
-    : null;
-
-  // Matchup card for shared highlight links — built from the game so the
-  // VideoModal's copy-link can render+upload the preview and hand back a
-  // hidescore.com link that unfurls cleanly in iMessage. See lib/shareCard.
-  const shareCard = useMemo(() => buildShareCard(game, leagueLabel), [game, leagueLabel]);
-
-  // Pre-fetch YouTube video IDs in background (official channel + top search).
-  // When both buttons exist, the secondary prefetch waits for the primary so
-  // it can exclude the primary's videoId — guaranteeing the secondary never
-  // duplicates the primary result.
-  const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
-  useEffect(() => {
-    if (!highlightUrl || prefetchStarted.current) return;
-    prefetchStarted.current = true;
-    const away = game.awayTeam.shortDisplayName;
-    const home = game.homeTeam.shortDisplayName;
-    const series = game.seriesNote;
-    if (officialChannel) {
-      (async () => {
-        const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel);
-        prefetchedOfficialId.current = officialId;
-        setOfficialStatus(officialId ? "found" : "missing");
-        const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId]);
-        prefetchedVideoId.current = id;
-        setSearchStatus(id ? "found" : "missing");
-      })();
-    } else {
-      // No official channel for this league — only the search button is rendered.
-      setOfficialStatus("missing");
-      resolveHighlightVideo(away, home, dateStr, series).then((id) => {
-        prefetchedVideoId.current = id;
-        setSearchStatus(id ? "found" : "missing");
-      });
-    }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel]);
-
   const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
       <button
@@ -307,8 +224,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // Clicking the card body opens a spoiler-safe details popup. Inner
   // buttons/links that stopPropagation keep their own actions — team names
   // (schedule view), the live green status + network chip (jump to the
-  // stream), highlight buttons, etc. Disabled in the per-team schedule view.
-  const cardClickable = !!onShowDetails && !teamView;
+  // stream), highlight buttons, etc. Enabled in the per-team schedule view
+  // too (Jacob 6/1) — tapping a schedule card opens its details popup; the
+  // team-name button still navigates via its own stopPropagation handler.
+  const cardClickable = !!onShowDetails;
   return (
     <div
       className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${cardClickable ? " cursor-pointer" : ""}`}
@@ -439,6 +358,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             <span className="min-w-0">
               {hasRating ? (
                 <RatingBadge rating={game.rating!} />
+              ) : tooEarly ? (
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-500/70 text-white uppercase whitespace-nowrap"
+                  title="Too early to rate — check back after the 1st"
+                >
+                  Too Early
+                </span>
               ) : seriesInMiddle ? (
                 <span
                   className="hidden sm:block text-[11px] italic whitespace-nowrap truncate pr-0.5"
@@ -620,125 +546,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ))}
       </div>
 
-      {/* Highlights — render only buttons whose video resolved (or is still
-          resolving). A button whose full retry chain returns null is hidden
-          rather than falling back to a YouTube search page. */}
-      {isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing") && (
-        <div className="mt-1 sm:mt-2 flex gap-1">
-          {officialChannel && officialStatus !== "missing" && (
-            <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                if (!onPlayHighlight) return;
-                if (prefetchedOfficialId.current) {
-                  onPlayHighlight(prefetchedOfficialId.current, highlightUrl, shareCard);
-                  return;
-                }
-                setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel);
-                setFetchingOnClick(null);
-                if (id) {
-                  prefetchedOfficialId.current = id;
-                  setOfficialStatus("found");
-                  onPlayHighlight(id, highlightUrl, shareCard);
-                } else {
-                  setOfficialStatus("missing");
-                }
-              }}
-              disabled={fetchingOnClick !== null}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
-              title={`${officialChannel} highlights`}
-            >
-              {fetchingOnClick === "official" ? (
-                <span className="text-[10px]">Loading...</span>
-              ) : (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : game.sport.toUpperCase()}</span>
-                </>
-              )}
-            </button>
-          )}
-          {searchStatus !== "missing" && (
-            <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                if (!onPlayHighlight) return;
-                if (prefetchedVideoId.current) {
-                  onPlayHighlight(prefetchedVideoId.current, highlightUrl, shareCard);
-                  return;
-                }
-                setFetchingOnClick("search");
-                // Dedup against primary so the two buttons never play the same video.
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current]);
-                setFetchingOnClick(null);
-                if (id) {
-                  prefetchedVideoId.current = id;
-                  setSearchStatus("found");
-                  onPlayHighlight(id, highlightUrl, shareCard);
-                } else {
-                  setSearchStatus("missing");
-                }
-              }}
-              disabled={fetchingOnClick !== null}
-              className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-              title="Top search result highlights"
-            >
-              {fetchingOnClick === "search" ? (
-                <span className="text-[10px]">Loading...</span>
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              )}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* NHL-only: full-game videos straight from NHL.com — the short recap
-          (~5 min) and the longer condensed game (~10 min). Sits below the
-          YouTube highlight buttons. Plays in the same in-app modal as every
-          other clip (Brightcove embed); the modal's footer link still opens
-          the NHL.com page. */}
-      {isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed) && (
-        <div className="mt-1 flex gap-1">
-          {game.nhlRecapEmbed && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const embed = game.nhlRecapEmbed!;
-                const page = game.nhlRecapUrl || embed;
-                if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com", shareCard);
-                else openExternal(page);
-              }}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-              title="NHL.com recap (~5 min)"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">5<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
-            </button>
-          )}
-          {game.nhlCondensedEmbed && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const embed = game.nhlCondensedEmbed!;
-                const page = game.nhlCondensedUrl || embed;
-                if (onPlayEmbed) onPlayEmbed(embed, page, "NHL.com", shareCard);
-                else openExternal(page);
-              }}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-              title="NHL.com condensed game (~10 min)"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">10<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
-            </button>
-          )}
-        </div>
-      )}
+      {/* Highlight buttons (official + top-search YouTube, plus NHL.com recap)
+          live in the shared GameHighlights component so the score card and the
+          details popup render identical buttons playing identical videos. */}
+      <GameHighlights
+        game={game}
+        leagueLabel={leagueLabel}
+        isToday={isToday}
+        onPlayHighlight={onPlayHighlight}
+        onPlayEmbed={onPlayEmbed}
+      />
     </div>
   );
 }

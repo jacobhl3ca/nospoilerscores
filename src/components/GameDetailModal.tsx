@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 import { Game } from "@/lib/types";
 import { openExternal } from "@/lib/openExternal";
+import { type ShareCardMeta } from "@/lib/shareCard";
+import { getDateString } from "@/components/DateNav";
+import GameHighlights from "@/components/GameHighlights";
 
 // Lightweight, SPOILER-SAFE game details popup. Shown when a score/ratings card
 // is tapped. Never renders score, winner, or rating unless `showRatings` is on
@@ -12,10 +15,16 @@ export default function GameDetailModal({
   game,
   showRatings,
   onClose,
+  leagueLabel,
+  onPlayHighlight,
+  onPlayEmbed,
 }: {
   game: Game;
   showRatings: boolean;
   onClose: () => void;
+  leagueLabel?: string;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -26,6 +35,15 @@ export default function GameDetailModal({
   const isLive = game.state === "in";
   const isFinal = game.state === "post";
   const liveUrl = game.streamUrl;
+  // Whether this game is on today's (ET) slate — drives the highlight-ready
+  // buffer in GameHighlights (today's finals wait for the recap upload window;
+  // past games show immediately).
+  const isToday = (() => {
+    try {
+      const ymd = new Date(game.date).toLocaleDateString("en-CA", { timeZone: "America/New_York" }).replace(/-/g, "");
+      return ymd === getDateString(0);
+    } catch { return false; }
+  })();
 
   // Start time / status WITHOUT score. For live we say "In progress" rather
   // than the period/clock (the clock alone is fine, but keep it minimal +
@@ -34,13 +52,12 @@ export default function GameDetailModal({
     try {
       const d = new Date(game.date);
       if (!isNaN(d.getTime())) {
-        // Pin to ET — without an explicit timeZone this inherits the browser
-        // TZ, which some webviews/private-browsing contexts force to UTC, so
-        // the line rendered "GMT" instead of the local Eastern time.
+        // Use the device's local timezone (Jacob 6/1) — no explicit timeZone,
+        // so the time + abbreviation render in whatever zone the device is set
+        // to, matching what the user expects on their own clock.
         return d.toLocaleString("en-US", {
           weekday: "short", month: "short", day: "numeric",
           hour: "numeric", minute: "2-digit", timeZoneName: "short",
-          timeZone: "America/New_York",
         });
       }
     } catch { /* fall through */ }
@@ -141,19 +158,18 @@ export default function GameDetailModal({
           </button>
         ) : null}
 
-        {/* Highlight link — finished games whose recap clip is available.
-            Tapping a highlight is an explicit user choice (it can spoil), so
-            it lives at the very bottom, below the rating. */}
-        {isFinal && game.highlightUrl ? (
-          <button
-            onClick={() => { openExternal(game.highlightUrl!); onClose(); }}
-            className="mt-4 w-full py-2 rounded-lg text-sm font-medium cursor-pointer flex items-center justify-center gap-2"
-            style={{ background: "var(--accent)", color: "white" }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-            Watch highlights
-          </button>
-        ) : null}
+        {/* Highlights — the SAME official + top-search buttons the score card
+            renders (Jacob 6/1, "should just match"), playing the same resolved
+            videos in the in-app player. Tapping one is an explicit choice (it
+            can spoil), so it sits at the very bottom, below the rating. */}
+        <GameHighlights
+          game={game}
+          leagueLabel={leagueLabel ?? ""}
+          isToday={isToday}
+          onPlayHighlight={onPlayHighlight}
+          onPlayEmbed={onPlayEmbed}
+          wrapMargin="mt-4"
+        />
       </div>
     </div>
   );

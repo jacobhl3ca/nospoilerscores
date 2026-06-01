@@ -221,7 +221,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
       {trailing && <span aria-hidden className="hidden sm:block sm:w-8 sm:h-8 sm:mr-1 shrink-0" />}
       <button
         onClick={goEarlier}
-        className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full text-sm sm:text-base transition-colors cursor-pointer"
+        className="date-nav-arrow w-8 h-8 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
         title="Go back one day"
       >
@@ -233,7 +233,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
           <button
             key={btn.date}
             onClick={() => onDateChange(btn.date)}
-            className="date-nav-btn w-[2.75rem] sm:w-[5.5rem] py-1 sm:py-1.5 rounded text-[11px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden"
+            className="date-nav-btn w-[2.75rem] sm:w-[5.5rem] py-2 sm:py-1.5 rounded text-[12px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden"
             style={
               isSelected
                 ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
@@ -247,7 +247,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
       })}
       <button
         onClick={goLater}
-        className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full text-sm sm:text-base transition-colors cursor-pointer"
+        className="date-nav-arrow w-8 h-8 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
         title="Go forward one day"
       >

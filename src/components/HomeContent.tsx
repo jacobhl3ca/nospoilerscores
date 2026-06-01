@@ -105,8 +105,12 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
         )}
         {tab(
           "news",
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src="/news-emoji.svg" alt="" width={24} height={24} className="w-6 h-6" draggable={false} />,
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+            <path d="M18 14h-8" />
+            <path d="M15 18h-5" />
+            <path d="M10 6h8v4h-8V6Z" />
+          </svg>,
           "News",
           "News (full spoilers)",
         )}
@@ -1299,12 +1303,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               two 1fr cols → lines up with the middle MLB column). On small screens
               the tabs drop to the fixed bottom bar, so the date nav takes this slot
               instead (scores/rated only) — sitting cleanly in the top row. */}
-          {/* Mobile: left-align so the date nav slides over toward the H logo
-              (Jacob 6/1) — fills the dead space left of the ‹ arrow and opens
-              a gap between the calendar icon and the theme toggle so the right
-              cluster stops looking cramped. Desktop stays centered (the view
-              tabs need to line up under the middle MLB column). */}
-          <div className="justify-self-start sm:justify-self-center col-start-2 min-w-0">
+          {/* Mobile: center the date nav within col 2 so it sits evenly
+              between the H logo and the theme toggle (Jacob 6/1). Desktop is
+              already centered (the view tabs line up under the middle MLB
+              column). The leading spacer is dropped on phones so the centering
+              is true (not biased by the trailing calendar icon). */}
+          <div className="justify-self-center col-start-2 min-w-0">
             <div className="hidden sm:block w-80">
               <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
             </div>
@@ -1312,12 +1316,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 live in the fixed bottom bar on phones, so this slot is free).
                 Scores/Rated only. Calendar = bare icon after the › arrow. */}
             {!showNews && (
-              <div className="sm:hidden flex justify-start">
+              <div className="sm:hidden flex justify-center">
                 <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
                   <span className="relative inline-flex">
                     <button
                       onClick={() => setCalendarOpen(!calendarOpen)}
-                      className="ml-1 w-7 h-7 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+                      className="ml-1 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
                       style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                       title="Pick a date"
                       aria-label="Pick a date"
@@ -1559,7 +1563,22 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             const filtered = entry.orderedCascade
               .filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter)
               .filter((s) => !newsHiddenSources.includes(s.label));
-            return cascadeToSources(filtered);
+            // When viewing "All", honor the user's source-type order from the
+            // funnel popover (Jacob 6/1) — dragging a source higher makes its
+            // items lead in every column. Stable within a type so the per-sport
+            // cascade order is preserved among same-type sources.
+            const typeOrder = prefs.newsTypeFilterOrder;
+            const ordered = (newsTypeFilter === "all" && typeOrder && typeOrder.length)
+              ? filtered
+                  .map((s, i) => [s, i] as const)
+                  .sort(([a, ai], [bz, bi]) => {
+                    const ra = typeOrder.indexOf(classifySource(a));
+                    const rb = typeOrder.indexOf(classifySource(bz));
+                    return (ra === -1 ? typeOrder.length : ra) - (rb === -1 ? typeOrder.length : rb) || ai - bi;
+                  })
+                  .map(([s]) => s)
+              : filtered;
+            return cascadeToSources(ordered);
           };
 
           // Swap on a news column: slot 2 with a newsThirdLeague override
@@ -2090,6 +2109,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           game={detailGame}
           showRatings={prefs.showRatings}
           onClose={() => setDetailGame(null)}
+          leagueLabel={thirdLeagueOptions.find((o) => o.sport === detailGame.sport)?.label ?? detailGame.sport.toUpperCase()}
+          onPlayHighlight={openVideoModal}
+          onPlayEmbed={openEmbedModal}
         />
       )}
 

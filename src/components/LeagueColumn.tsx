@@ -617,6 +617,12 @@ export default function LeagueColumn({
     if (a.state === "in" && b.state === "in") {
       const aDel = isDelayed(a), bDel = isDelayed(b);
       if (aDel !== bDel) return aDel ? 1 : -1;
+      // "Too early to rate" live games (rating still null in their 1st period)
+      // sit below rated live games — a just-started 0-0 game shouldn't outrank
+      // games that have built up real closeness signal. Order within the live
+      // cluster: rated (by rating desc) → too-early → delayed.
+      const aEarly = a.rating == null, bEarly = b.rating == null;
+      if (aEarly !== bEarly) return aEarly ? 1 : -1;
       return (b.rating ?? 0) - (a.rating ?? 0);
     }
 
@@ -808,6 +814,7 @@ export default function LeagueColumn({
             onToggleFavoriteTeam={onToggleFavoriteTeam}
             showRatings={showRatings}
             onPlayHighlight={onPlayHighlight}
+            onShowDetails={onShowDetails}
             onBack={() => setTeamViewTeam(null)}
             onSelectTeam={setTeamViewTeam}
             useAbbreviations={useAbbreviations}
