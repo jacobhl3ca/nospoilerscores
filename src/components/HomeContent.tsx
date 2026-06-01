@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
-import { LeagueData, Sport } from "@/lib/types";
+import { LeagueData, Sport, Game } from "@/lib/types";
+import type { ShareCardMeta } from "@/lib/shareCard";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import LeagueColumn from "@/components/LeagueColumn";
+import GameDetailModal from "@/components/GameDetailModal";
 import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
@@ -382,7 +384,9 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; shareCard?: ShareCardMeta | null } | null>(null);
+  // Spoiler-safe game-details popup, opened by tapping a score card body.
+  const [detailGame, setDetailGame] = useState<Game | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -479,8 +483,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const openVideoModal = useCallback((videoId: string, fallbackUrl: string) => {
-    setVideoModal({ videoId, fallbackUrl });
+  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => {
+    setVideoModal({ videoId, fallbackUrl, shareCard });
     const params = new URLSearchParams(window.location.search);
     params.set("v", videoId);
     window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
@@ -489,8 +493,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
   // Game-card click → play a non-YouTube embed (NHL recaps via Brightcove)
   // inside the same modal. No ?v= param: the embed URL isn't a shareable
   // YouTube id, so we just push a history entry so Back / Esc dismiss it.
-  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string) => {
-    setVideoModal({ videoId: "", fallbackUrl, embedUrl, sourceLabel });
+  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => {
+    setVideoModal({ videoId: "", fallbackUrl, embedUrl, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", window.location.href);
   }, []);
 
@@ -1181,7 +1185,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         </div>
       )}
       <header ref={headerRef} className="px-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)", paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)", paddingBottom: "0.5rem" }}>
-        <div className="max-w-6xl mx-auto relative grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
+        {/* Mobile uses auto_1fr_auto so the middle column gets all the leftover
+            width (logo + icons size to content) → the date nav fits on one line
+            without pushing the settings gear off-screen. Desktop keeps the
+            symmetric 1fr_auto_1fr so the view tabs sit dead-center under MLB. */}
+        <div className="max-w-6xl mx-auto relative grid grid-cols-[auto_1fr_auto] sm:grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
           <a
             href="/"
             onClick={(e) => {
@@ -1210,13 +1218,35 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               two 1fr cols → lines up with the middle MLB column). On small screens
               the tabs drop to the fixed bottom bar, so the date nav takes this slot
               instead (scores/rated only) — sitting cleanly in the top row. */}
-          <div className="justify-self-center col-start-2">
+          <div className="justify-self-center col-start-2 min-w-0">
             <div className="hidden sm:block w-80">
               <BottomTabBar viewMode={viewMode} onChange={handleViewModeClick} placement="inline" />
             </div>
-            {/* Date nav lives in its own row below the header on ALL sizes now
-                (moved out of this cramped top-middle on mobile so the right-side
-                theme + settings icons don't overflow off-screen on phones). */}
+            {/* Mobile: date nav sits inline in the header middle (the view tabs
+                live in the fixed bottom bar on phones, so this slot is free).
+                Scores/Rated only. Calendar = bare icon after the › arrow. */}
+            {!showNews && (
+              <div className="sm:hidden flex justify-center">
+                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
+                  <span className="relative inline-flex">
+                    <button
+                      onClick={() => setCalendarOpen(!calendarOpen)}
+                      className="ml-2 w-7 h-7 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+                      style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
+                      title="Pick a date"
+                      aria-label="Pick a date"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                      </svg>
+                    </button>
+                    {calendarOpen && (
+                      <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
+                    )}
+                  </span>
+                } />
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 justify-self-end col-start-3">
@@ -1312,6 +1342,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                         options={[
                           { value: "all", label: "All" },
                           { value: "topvideos", label: "Top videos" },
+                          { value: "reddit", label: "Reddit" },
                           { value: "espn", label: "ESPN" },
                           { value: "homepage", label: "Homepage" },
                         ]}
@@ -1357,12 +1388,12 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         </div>
 
       </header>
-      {/* Date nav sits BELOW the header divider line on ALL sizes. (Was
-          top-row-middle on mobile, but that overflowed the right-side icons —
-          its own centered row is cleaner.) Scores/rated only; centered in
-          max-w-6xl to line up with the middle (MLB) column. */}
+      {/* sm+ only: date nav sits BELOW the header divider line (desktop has the
+          view tabs in the top-row middle, so the date nav drops here). On mobile
+          it's inline in the header middle instead (above). Scores/rated only;
+          centered in max-w-6xl to line up with the middle (MLB) column. */}
       {!showNews && (
-        <div className="flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
+        <div className="hidden sm:flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
           <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
             <span className="relative inline-flex">
               <button
@@ -1671,6 +1702,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               sortByMatchups: prefs.showRatings,
               onPlayHighlight: openVideoModal,
               onPlayEmbed: openEmbedModal,
+              onShowDetails: (g: Game) => setDetailGame(g),
               selectedDate,
               onRetry: () => doRefreshRef.current(),
             };
@@ -1977,7 +2009,16 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           byline={videoModal.byline}
           published={videoModal.published}
           body={videoModal.body}
+          shareCard={videoModal.shareCard}
           onClose={closeVideoModal}
+        />
+      )}
+
+      {detailGame && (
+        <GameDetailModal
+          game={detailGame}
+          showRatings={prefs.showRatings}
+          onClose={() => setDetailGame(null)}
         />
       )}
 

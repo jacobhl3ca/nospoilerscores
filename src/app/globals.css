@@ -46,6 +46,18 @@
   --accent: #60a5fa;
 }
 
+/* iOS Safari auto-zooms when you focus an input/textarea whose font-size is
+   < 16px, and often leaves the user stuck zoomed in (e.g. tapping the feedback
+   box). Force 16px on form fields at mobile widths so focus never triggers the
+   zoom. Desktop keeps the smaller text-sm styling. */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--text);

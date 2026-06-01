@@ -2,6 +2,8 @@
 
 ## 🔝 Top priority
 
+- [ ] **Tweak/polish the share-card feature (shipped 5/31 as-is).** The OG share-card preview (browser draws a teams+date PNG to canvas → POSTs to the worker → R2 `cards/<key>.png` → `?c=<key>` swaps OG meta; see `src/lib/shareCard.ts` + `public/_worker.js`) was pushed in its current WIP state per Jacob. Revisit tomorrow: review the rendered card design, confirm the worker OG swap + R2 upload path work end-to-end, and decide what to refine.
+
 - [ ] **Reddit news feeds — fix + re-enable (FIRST to solve).** Reddit cards were removed from the news view 2026-05-30; the underlying feed is the priority fix. Register a fresh Reddit API app under any working account (reddit.com/prefs/apps → script/web, ~2 min) → client ID + secret → drop in `~/.config/hidescore/reddit.env` on the Mac mini + `source` in `hidescore-reddit-cron.sh` so `fetchReddit` takes the `oauth.reddit.com` path. App-only OAuth reads public subreddits (no posting / good standing needed). Then re-add the Reddit sources to `leagueSourceCascade`/`GENERIC_CASCADE` + the funnel filter option in HomeContent. _src: project_hidescore_reddit_403.md_
 
 - [ ] **QA + prep for the 2026 World Cup (soon).** World Cup 2026 is this summer — make sure FIFA/soccer surfacing is solid before it starts: verify the `fifa` league config + season window, the new soccer range-lookahead (`fetchNextGameDayRange`) resolves real fixtures, soccer-slot priority (UCL>UEL>MLS, EPL beats both), broadcast/watch links for WC matches, news feeds, and that the column auto-appears on match days. Do a full QA pass on the soccer path generally.
@@ -9,6 +11,12 @@
 ## 🔧 Minor — restore when convenient
 
 - [ ] **Restore the R2-upload retry loop in `news-prebake.yml`.** The 3-attempt retry-with-backoff (orig commit `93833db9`) was lost 5/30 when a linter reverted an in-progress edit during a conflict fix and the simple one-line `wrangler r2 object put` got committed to main. The cron works fine without it; this is just resilience against transient R2 5xx. Re-add the `for attempt in 1 2 3` loop to the "Upload news feeds to R2" step (it's in git history at `93833db9`), to BOTH staging + main so they don't diverge.
+
+## 💡 Consider
+
+- [ ] **Highlight team names in a chosen accent color on cards.** Jacob 5/31 — consider coloring the team name text (team color? site accent?) on game cards for visual pop. Decide a scheme that stays readable in light + dark and doesn't imply a winner. Not started.
+- [ ] **Zoom gets stuck on mobile.** Jacob 5/31 — pinch-zoom on hidescore.com can get "stuck". Viewport has NO zoom lock (`{themeColor, viewportFit:"cover"}`), so the cause is likely the sticky header + fixed bottom tab bar + an overflow trap when zoomed. Needs a clearer repro (can't zoom back out? can't pan while zoomed?) before fixing — don't guess.
+- [ ] **Calendar picker on mobile.** The date-picker calendar icon is desktop-only now (the mobile header date-nav line has no room for it). If wanted on mobile, find a spot (e.g. tap the date label, or a slot in Settings).
 
 ## 🅿️ Parked — maybe re-add
 

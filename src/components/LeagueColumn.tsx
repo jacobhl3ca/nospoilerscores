@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, LeagueData, Sport, Team } from "@/lib/types";
+import type { ShareCardMeta } from "@/lib/shareCard";
 import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/lib/espn";
 import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -25,8 +26,10 @@ interface LeagueColumnProps {
   isPastDate: boolean;
   isToday?: boolean;
   sortByMatchups?: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
+  // Clicking a game card body opens a spoiler-safe details popup (owned by HomeContent).
+  onShowDetails?: (game: Game) => void;
   selectedDate: string; // YYYYMMDD
   section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
@@ -179,7 +182,12 @@ function getPlayoffSubtitle(
     if (isLive) {
       return {
         tiers: ["● Big Inning · LIVE", "● Big Inning live", "● Big Inning"],
-        href: entry.selectionUrl ?? "https://www.mlb.com/network/live",
+        // Fallback to the MLB.TV hub: the MLB app claims mlb.com/tv as a
+        // universal link, so on mobile the subtitle (routed via openExternal)
+        // opens the app — where Big Inning lives — instead of the browser. The
+        // old /network/live URL wasn't app-claimed → browser. Precise per-night
+        // deep link still used when the scraper has entry.selectionUrl.
+        href: entry.selectionUrl ?? "https://www.mlb.com/tv",
       };
     }
     // Past the 3h air window today: show ended, hide the subtitle entirely.
@@ -435,6 +443,7 @@ export default function LeagueColumn({
   sortByMatchups,
   onPlayHighlight,
   onPlayEmbed,
+  onShowDetails,
   selectedDate,
   section,
   showFinalSeparator,
@@ -851,6 +860,7 @@ export default function LeagueColumn({
                   nextGameDate={formatDateCompact(league.nextGameDay!.date)}
                   useAbbreviations={useAbbreviations}
                   onSelectTeam={setTeamViewTeam}
+                  onShowDetails={onShowDetails}
                 />
               ))}
             </div>
@@ -873,6 +883,7 @@ export default function LeagueColumn({
               isToday={isToday}
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
+              onShowDetails={onShowDetails}
             />
           ))}
         </div>
@@ -890,6 +901,7 @@ export default function LeagueColumn({
               isToday={isToday}
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
+              onShowDetails={onShowDetails}
             />
           ))}
           {renderUpcoming && preGames.map((game) => (
@@ -904,6 +916,7 @@ export default function LeagueColumn({
               isToday={isToday}
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
+              onShowDetails={onShowDetails}
             />
           ))}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
@@ -926,6 +939,7 @@ export default function LeagueColumn({
               isToday={isToday}
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
+              onShowDetails={onShowDetails}
             />
           ))}
         </div>
