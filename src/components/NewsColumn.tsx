@@ -19,6 +19,8 @@ export interface NewsSource {
 export interface PlayOpts {
   videoId?: string;
   playbackUrl?: string | null;
+  // Brightcove iframe URL (NHL videos) — modal renders it in embedMode.
+  embedUrl?: string | null;
   imageUrl?: string | null;
   fallbackUrl: string;
   poster?: string | null;
@@ -451,11 +453,12 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
               </div>
               </>
             );
-            // Fire the in-app modal when we have either a direct HLS stream
-            // (MLB) OR a prebake-validated YouTube ID on the league's official
-            // channel. HLS is preferred since it plays the exact source clip.
-            // Otherwise fall through to a plain anchor to the source URL.
-            const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.youtubeVideoId);
+            // Fire the in-app modal when we have a direct HLS stream (MLB), a
+            // Brightcove embed (NHL), OR a prebake-validated YouTube ID on the
+            // league's official channel. HLS/embed are preferred since they
+            // play the exact source clip. Otherwise fall through to a plain
+            // anchor to the source URL.
+            const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.embedUrl || !!item.youtubeVideoId);
             if (canPlayInline) {
               return (
                 <button
@@ -470,6 +473,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     onPlay!({
                       videoId: item.youtubeVideoId || undefined,
                       playbackUrl: item.playbackUrl || null,
+                      embedUrl: item.embedUrl || null,
                       fallbackUrl: item.articleUrl,
                       poster: item.imageUrl || null,
                       // No sourceLabel — URL-derived label gives "Open on MLB.com",

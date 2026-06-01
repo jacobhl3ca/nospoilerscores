@@ -546,6 +546,71 @@ async function fetchNHL() {
     }));
 }
 
+// NHL.com videos are Brightcove-hosted (not YouTube, not a raw HLS manifest we
+// can reach un-signed), so each item carries a brightcoveId + brightcoveAccountId
+// and the modal plays it via the Brightcove default-player iframe (embedUrl) —
+// which handles the policy key / geo / DRM handshake for us. See VideoModal's
+// embedMode branch.
+const BRIGHTCOVE_EMBED = (account, vid) =>
+  `https://players.brightcove.net/${account}/default_default/index.html?videoId=${vid}`;
+
+// Studio/analysis shows — talking heads, not game action. The NHL videos feed
+// is dominated by these during the off-/post-season (NHL Tonight, NHL Network),
+// so drop them the way the NBA/ESPN feeds drop their personality content. A
+// FanDuel parlay ad seen 2026-06-01 was also tagged nhl-tonight, so this doubles
+// as a betting-content guard alongside passesArticleBlocklist.
+const NHL_STUDIO_TAGS = new Set(["nhl-tonight", "nhl-network"]);
+// Positive whitelist — keep only clips tagged as real highlights/recaps/goals.
+// Verified against the live feed 2026-06-01: cleanly separates "MTL at CAR |
+// Recap", "Top Goals", individual goal clips, condensed games from the studio
+// segments above.
+const NHL_HIGHLIGHT_TAGS = new Set([
+  "highlight", "goal", "top-plays", "real-time-highlight", "game-recap",
+  "condensed-game", "all-goals", "series-recap", "power-play-goal",
+  "shorthanded-goal", "top-saves", "save",
+]);
+
+async function fetchNHLVideos() {
+  const data = await getJson(
+    "https://forge-dapi.d3.nhle.com/v2/content/en-us/videos?context.slug=nhl&%24limit=40"
+  );
+  const raw = data?.items || [];
+  const out = [];
+  for (const i of raw) {
+    const f = i.fields || {};
+    const title = i.title || f.headline || "";
+    if (!title) continue;
+    if (!passesArticleBlocklist(title, f.description || "")) continue;
+    const tags = (i.tags || []).map((t) => t.slug);
+    // Drop studio/analysis; require at least one genuine-highlight tag.
+    if (tags.some((t) => NHL_STUDIO_TAGS.has(t))) continue;
+    if (!tags.some((t) => NHL_HIGHLIGHT_TAGS.has(t))) continue;
+    const bcId = f.brightcoveId;
+    const bcAccount = f.brightcoveAccountId;
+    if (!bcId || !bcAccount) continue;
+    // 16:9 thumbnail from the templateUrl ({formatInstructions} placeholder).
+    // The default thumbnailUrl is a 1:1 crop, which letterboxes in the card's
+    // aspect-video frame. Fall back to thumbnailUrl if the template is missing.
+    const tmpl = i.thumbnail?.templateUrl;
+    const imageUrl = tmpl
+      ? tmpl.replace("{formatInstructions}", "t_ratio16_9-size40")
+      : (i.thumbnail?.thumbnailUrl || null);
+    out.push({
+      id: String(bcId),
+      headline: title,
+      description: "",
+      published: i.contentDate || "",
+      imageUrl,
+      articleUrl: `https://www.nhl.com/video/${i.slug}`,
+      byline: "",
+      section: "NHL Top Videos",
+      embedUrl: BRIGHTCOVE_EMBED(bcAccount, bcId),
+    });
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
 // ── ESPN homepage TOP HEADLINES (scraped for exact order) ─────────
 
 // Cached homepage HTML so the headlines + videos scrapers share one fetch.
@@ -1273,6 +1338,7 @@ const jobs = [
   ["wnba", fetchWNBA],
   ["wnba-videos", fetchWNBAVideos],
   ["nhl", fetchNHL],
+  ["nhl-videos", fetchNHLVideos],
 
   // ESPN homepage top headlines + big-format videos (both scraped from espn.com)
   ["espn-top", fetchESPNTopHeadlines],
@@ -1329,6 +1395,7 @@ const YT_CHANNEL_BY_FEED = {
   "mlb-videos": "MLB",
   "nba-videos": "NBA",
   "wnba-videos": "WNBA",
+  "nhl-videos": "NHL",
   "espn-videos": "ESPN",
 };
 

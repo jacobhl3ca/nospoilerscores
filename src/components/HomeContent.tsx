@@ -572,6 +572,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     setVideoModal({
       videoId: opts.videoId || "",
       playbackUrl: opts.playbackUrl || null,
+      embedUrl: opts.embedUrl || null,
       imageUrl: opts.imageUrl || null,
       poster: opts.poster || null,
       fallbackUrl: opts.fallbackUrl,

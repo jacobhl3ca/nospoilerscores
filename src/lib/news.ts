@@ -50,6 +50,10 @@ export interface NewsItem {
   // v.redd.it CMAF fallback URL — single muxed MP4 that plays in <video>
   // without hls.js. Set on Reddit posts where Reddit hosts the clip directly.
   videoUrl?: string | null;
+  // Brightcove default-player iframe URL — set on NHL.com videos, which are
+  // Brightcove-hosted rather than YouTube/raw-HLS. The modal renders it in a
+  // plain <iframe> (embedMode), letting Brightcove handle policy key/geo/DRM.
+  embedUrl?: string | null;
   // i.redd.it full-res image URL — set when the post is an image post hosted
   // on Reddit. Lets the client pop a lightbox instead of bouncing out.
   imageFullUrl?: string | null;
@@ -204,6 +208,7 @@ const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string; chann
   mlb: { key: "mlb-videos", label: "MLB Most Popular", channel: "MLB" },
   nba: { key: "nba-videos", label: "NBA Top Videos", channel: "NBA" },
   wnba: { key: "wnba-videos", label: "WNBA Top Videos", channel: "WNBA" },
+  nhl: { key: "nhl-videos", label: "NHL Top Videos", channel: "NHL" },
 };
 
 // Per-league subreddit card — pinned just below the official news link since
