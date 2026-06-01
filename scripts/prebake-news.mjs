@@ -844,7 +844,7 @@ const VIDEO_BLOCKLIST = [
   /\brex ryan\b/i,
   /\brob parker\b/i,
   /\bryan clark\b/i,
-  /\bdan orlovsky\b/i,
+  /\borlovsky\b/i,         // Dan Orlovsky — ESPN often uses last name only
   /\bmina kimes\b/i,
   /\bdomonique foxworth\b/i,
   /\bwindhorst\b/i,         // Brian Windhorst
@@ -878,6 +878,31 @@ const VIDEO_BLOCKLIST = [
   /\bprops?\s+bet\b/i,
   /\bpicks?\s+(?:and|&)\s+props?\b/i,
 ];
+
+// ESPN-only structural analyst-take guard. ESPN headlines opinion/segment clips
+// as "Lastname: <claim>" or "First Last: <claim>" — a person's name (1–3
+// capitalized tokens) at the very start, then a colon. Real ESPN highlight
+// titles lead with the action ("Brady Neal cranks a three-run HR"), never a
+// bare name. This catches new pundits the name denylist misses, since ESPN uses
+// last-name-only ("Orlovsky: Pats making a 'dice roll'"). NOT added to
+// VIDEO_BLOCKLIST because the league feeds (MLB/NBA/WNBA) legitimately use a
+// "Label:" format for real highlights ("Game Highlights:", "Game Recap:",
+// "Real Fast:"); the label-word guard below keeps those. "St. Mary's…" / "Texas'
+// Stewart…" are safe (no leading "Word:").
+const ESPN_TAKE_PREFIX_RE = /^([A-Z][a-z'.]+(?:\s+[A-Z][a-z'.]+){0,2}):\s/;
+const ESPN_VIDEO_LABEL_WORDS = new Set([
+  "highlights", "highlight", "recap", "recaps", "plays", "play", "top", "best",
+  "game", "games", "full", "featured", "sc", "fastcast", "cast", "week", "day",
+  "season", "preview", "rankings", "chasing", "history", "real", "fast",
+  "behind", "watch", "extended", "condensed",
+]);
+function isEspnAnalystTake(title) {
+  const m = title.match(ESPN_TAKE_PREFIX_RE);
+  if (!m) return false;
+  // Keep label-led titles ("Top Plays:", "Real Fast:", "Power Rankings:") — a
+  // person's name contains no content-label word.
+  return !m[1].toLowerCase().split(/\s+/).some((w) => ESPN_VIDEO_LABEL_WORDS.has(w));
+}
 
 async function fetchESPNTopVideos() {
   // ICYMI is ESPN's hand-picked headline video — pinned to slot 2 so the day's
@@ -955,6 +980,7 @@ function scrapeESPNTopVideosFromHtml(html, icymi) {
     const imageUrl = imgM ? imgM[1] : null;
     const haystack = `${title} ${description}`;
     if (VIDEO_BLOCKLIST.some((re) => re.test(haystack))) continue;
+    if (isEspnAnalystTake(title)) continue;
     seen.add(vid);
     items.push({
       id: vid,
@@ -989,7 +1015,15 @@ async function persistVideos(name, fresh, pinnedId) {
     ? new Date(existing.fetchedAt).toLocaleDateString("en-US", { timeZone: "America/New_York" })
     : null;
   // Fresh day → drop yesterday's list. Same day → carry forward.
-  const carry = existingETDay === currentETDay ? (existing?.items || []) : [];
+  const carryRaw = existingETDay === currentETDay ? (existing?.items || []) : [];
+  // Purge carried-forward ESPN analyst takes so a pundit clip that slipped in
+  // earlier today (e.g. before this filter shipped) doesn't linger in the
+  // carry until the ET-midnight rollover. ICYMI is safe — its all-caps
+  // "ICYMI:" prefix doesn't match the name-pattern regex.
+  const carry =
+    name === "espn-videos"
+      ? carryRaw.filter((i) => !isEspnAnalystTake(i.headline || ""))
+      : carryRaw;
   const byId = new Map();
   // Seed with carry so unseen items survive the merge; fresh items overwrite
   // (so headline/description/imageUrl edits propagate) while preserving the
