@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>HideScore · Icon tester</title>
+<style>
+  :root { --bg:#0a0a0a; --card:rgba(255,255,255,.05); --border:rgba(255,255,255,.14);
+          --text:#ededed; --muted:#8a8f98; --accent:#3b82f6; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding:20px 16px 80px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 10px; font-size:13px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+       margin:30px 0 4px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+  p.hint { color:var(--muted); font-size:12px; margin:0 0 12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(116px,1fr)); gap:14px; }
+  .opt { background:var(--card); border:1px solid var(--border); border-radius:14px;
+         padding:12px 8px 10px; display:flex; flex-direction:column; align-items:center; }
+  .opt .num { font-size:11px; font-weight:700; color:var(--accent); margin-bottom:8px; }
+  .opt .cap { font-size:11px; color:var(--muted); margin-top:8px; text-align:center; }
+  /* tab cell — mimics the bottom-bar tab */
+  .tab { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; height:50px; }
+  .tab .ico { width:26px; height:26px; display:flex; align-items:center; justify-content:center; }
+  .tab .ico img { width:26px; height:26px; }
+  .tab .lbl { font-size:11px; font-weight:600; color:var(--muted); }
+  /* circle button — mimics the top toolbar buttons */
+  .circle { width:42px; height:42px; border-radius:50%; background:var(--card);
+            border:1px solid var(--border); display:flex; align-items:center; justify-content:center; }
+  .circle img { width:22px; height:22px; }
+  /* logo square */
+  .logo { width:30px; height:30px; border-radius:7px; background:#15171a; display:flex;
+          align-items:center; justify-content:center; font-weight:700; font-size:15px; color:var(--accent); }
+  svg.line { fill:none; stroke:#9aa0a6; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .dot { fill:#9aa0a6; stroke:none; }
+  .ref { display:flex; gap:0; background:var(--card); border:1px solid var(--border);
+         border-radius:14px; overflow:hidden; width:max-content; margin-bottom:6px; }
+  .ref .tab { width:88px; }
+</style>
+</head>
+<body>
+  <h1>Icon tester — every piece</h1>
+  <p class="sub">Pick an icon for any slot and tell me the codes (e.g. "S3, R2, news #6, theme T2").
+     Tab icons sit in a tab cell; toolbar icons sit in a circle button — exactly like the app.</p>
+
+  <h2>Reference — current bottom tabs</h2>
+  <div class="ref">
+    <div class="tab"><div class="ico"><img alt="" src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f648.svg"></div><div class="lbl">Scores</div></div>
+    <div class="tab"><div class="ico"><img alt="" src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f649.svg"></div><div class="lbl">Ratings</div></div>
+    <div class="tab"><div class="ico"><svg class="line" width="23" height="23" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg></div><div class="lbl">News</div></div>
+  </div>
+
+  <h2>Scores tab <span style="color:#3b82f6">(S#)</span></h2>
+  <p class="hint">"Hide the score / no spoilers" — current is the see-no-evil monkey (S1).</p>
+  <div class="grid" id="scores"></div>
+
+  <h2>Ratings tab <span style="color:#3b82f6">(R#)</span></h2>
+  <p class="hint">"Game quality / how good was it" — current is the hear-no-evil monkey (R1).</p>
+  <div class="grid" id="ratings"></div>
+
+  <h2>News tab <span style="color:#3b82f6">(N#)</span></h2>
+  <p class="hint">Current is the line-art newspaper (N1).</p>
+  <div class="grid" id="news"></div>
+
+  <h2>Logo <span style="color:#3b82f6">(L#)</span></h2>
+  <p class="hint">Top-left brand mark — current is the rounded "H" square (L1).</p>
+  <div class="grid" id="logo"></div>
+
+  <h2>Calendar <span style="color:#3b82f6">(C#)</span></h2>
+  <div class="grid" id="cal"></div>
+
+  <h2>Theme toggle <span style="color:#3b82f6">(T#)</span></h2>
+  <p class="hint">Shown in dark mode (taps to light) — current is the sun (T1).</p>
+  <div class="grid" id="theme"></div>
+
+  <h2>Settings <span style="color:#3b82f6">(G#)</span></h2>
+  <div class="grid" id="settings"></div>
+
+  <h2>News filter <span style="color:#3b82f6">(F#)</span></h2>
+  <p class="hint">The funnel that opens the source picker — current is the funnel (F1).</p>
+  <div class="grid" id="filter"></div>
+
+  <p class="hint" style="margin-top:24px">Made for you to pick from — I'll delete this page once you choose.</p>
+
+<script>
+  var T = "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/";
+  var L = '<svg class="line" width="23" height="23" viewBox="0 0 24 24">'; // line-svg opener
+
+  // chip(kind): "tab" | "circle" | "logo"
+  function chip(kind, label, inner){
+    if (kind==="tab")   return '<div class="tab"><div class="ico">'+inner+'</div><div class="lbl">'+label+'</div></div>';
+    if (kind==="logo")  return '<div class="logo">'+inner+'</div>';
+    return '<div class="circle">'+inner+'</div>';
+  }
+  function emoji(code){ return '<img alt="" src="'+T+code+'.svg">'; }
+  function render(hostId, kind, label, items){
+    var host=document.getElementById(hostId);
+    items.forEach(function(it){
+      var inner = it.emoji ? emoji(it.emoji) : (it.raw || (L+it.svg+'</svg>'));
+      var d=document.createElement("div"); d.className="opt";
+      d.innerHTML='<div class="num">'+it.id+'</div>'+chip(kind, it.lbl||label, inner)+'<div class="cap">'+it.cap+'</div>';
+      host.appendChild(d);
+    });
+  }
+
+  render("scores","tab","Scores",[
+    {id:"S1",emoji:"1f648",cap:"🙈 See-no-evil (current)"},
+    {id:"S2",svg:'<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/>',cap:"Eye-off / hidden"},
+    {id:"S3",emoji:"1f576",cap:"😎 Sunglasses"},
+    {id:"S4",emoji:"1f648",cap:"🙈 (same as S1)"},
+    {id:"S5",svg:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',cap:"Eye / watch"},
+    {id:"S6",emoji:"1f6ab",cap:"🚫 No spoilers"},
+    {id:"S7",svg:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',cap:"Locked / sealed"},
+    {id:"S8",emoji:"1f910",cap:"🤐 Zipper mouth"},
+  ]);
+
+  render("ratings","tab","Ratings",[
+    {id:"R1",emoji:"1f649",cap:"🙉 Hear-no-evil (current)"},
+    {id:"R2",emoji:"2b50",cap:"⭐ Star"},
+    {id:"R3",svg:'<polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3 12 2"/>',cap:"Star (line)"},
+    {id:"R4",emoji:"1f525",cap:"🔥 Fire"},
+    {id:"R5",emoji:"1f4c8",cap:"📈 Chart up"},
+    {id:"R6",svg:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.7V17c0 .6-.5 1-1 1.2C7.9 18.8 7 20.2 7 22"/><path d="M14 14.7V17c0 .6.5 1 1 1.2 1.2.5 2 2 2 3.8"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',cap:"Trophy"},
+    {id:"R7",emoji:"1f3c6",cap:"🏆 Trophy"},
+    {id:"R8",emoji:"1f4af",cap:"💯 100"},
+    {id:"R9",svg:'<path d="M7 10v12"/><path d="M15 5.9 14 10h5.8a2 2 0 0 1 2 2.6l-2.3 8a2 2 0 0 1-2 1.4H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.8a2 2 0 0 0 1.8-1.1L12 2a3.1 3.1 0 0 1 3 3.9Z"/>',cap:"Thumbs up"},
+  ]);
+
+  render("news","tab","News",[
+    {id:"N1",svg:'<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/>',cap:"Newspaper (current)"},
+    {id:"N2",svg:'<path d="M18 4H6a2 2 0 0 0-2 2v13a1 1 0 0 0 1 1h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/>',cap:"Article"},
+    {id:"N3",svg:'<path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',cap:"Megaphone"},
+    {id:"N4",svg:'<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle class="dot" cx="5" cy="19" r="1.5"/>',cap:"RSS / feed"},
+    {id:"N5",svg:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18Z"/>',cap:"Globe"},
+    {id:"N6",svg:'<rect x="2" y="7" width="20" height="13" rx="2"/><path d="m8 4 4 3 4-3"/>',cap:"TV"},
+    {id:"N9",emoji:"1f4f0",cap:"📰 Newspaper emoji"},
+    {id:"N10",emoji:"1f5de",cap:"🗞️ Rolled paper"},
+    {id:"N12",emoji:"1f4e3",cap:"📣 Megaphone"},
+    {id:"N14",emoji:"1f310",cap:"🌐 Globe"},
+    {id:"N15",emoji:"1f4fa",cap:"📺 TV"},
+  ]);
+
+  render("logo","logo","",[
+    {id:"L1",raw:"H",cap:'"H" square (current)'},
+    {id:"L2",raw:"HS",cap:'"HS" monogram'},
+    {id:"L3",raw:'<svg class="line" width="20" height="20" viewBox="0 0 24 24" style="stroke:#3b82f6"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>',cap:"Eye-off mark"},
+    {id:"L4",raw:'<span style="font-size:13px">🙈</span>',cap:"Monkey mark"},
+  ]);
+
+  render("cal","circle","",[
+    {id:"C1",svg:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',cap:"Calendar (current)"},
+    {id:"C2",svg:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle class="dot" cx="8" cy="15" r="1"/><circle class="dot" cx="12" cy="15" r="1"/><circle class="dot" cx="16" cy="15" r="1"/>',cap:"Calendar w/ days"},
+    {id:"C3",svg:'<path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="17.5" cy="17.5" r="4.5"/><path d="M17.5 16v1.5l1 1"/>',cap:"Calendar + clock"},
+    {id:"C4",svg:'<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',cap:"Clock"},
+  ]);
+
+  render("theme","circle","",[
+    {id:"T1",svg:'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.2" y1="4.2" x2="5.6" y2="5.6"/><line x1="18.4" y1="18.4" x2="19.8" y2="19.8"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.2" y1="19.8" x2="5.6" y2="18.4"/><line x1="18.4" y1="5.6" x2="19.8" y2="4.2"/>',cap:"Sun (current)"},
+    {id:"T2",svg:'<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>',cap:"Moon"},
+    {id:"T3",svg:'<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="#9aa0a6" stroke="none"/>',cap:"Contrast / half"},
+    {id:"T4",svg:'<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',cap:"Lightbulb"},
+  ]);
+
+  render("settings","circle","",[
+    {id:"G1",svg:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',cap:"Gear (current)"},
+    {id:"G2",svg:'<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',cap:"Sliders"},
+    {id:"G3",svg:'<circle class="dot" cx="12" cy="5" r="1.6"/><circle class="dot" cx="12" cy="12" r="1.6"/><circle class="dot" cx="12" cy="19" r="1.6"/>',cap:"Three dots"},
+    {id:"G4",svg:'<line x1="3" y1="6" x2="21" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="3" y1="12" x2="21" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="3" y1="18" x2="21" y2="18"/><circle cx="7" cy="18" r="2"/>',cap:"Adjustments"},
+  ]);
+
+  render("filter","circle","",[
+    {id:"F1",svg:'<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',cap:"Funnel (current)"},
+    {id:"F2",svg:'<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',cap:"Sliders"},
+    {id:"F3",svg:'<line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="9" y1="18" x2="15" y2="18"/>',cap:"Filter lines"},
+  ]);
+</script>
+</body>
+</html>

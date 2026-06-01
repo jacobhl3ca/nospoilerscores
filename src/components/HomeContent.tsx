@@ -1339,7 +1339,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
             )}
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 justify-self-end col-start-3">
+          <div className="flex items-center gap-2 flex-shrink-0 justify-self-end col-start-3">
             {/* Share — web only (xl+). On mobile the same action lives at the
                 bottom of the settings panel. */}
             {hasFavorites && (

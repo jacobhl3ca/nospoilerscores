@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { Game } from "@/lib/types";
-import { openExternal } from "@/lib/openExternal";
+import { openExternal, handleExternalClick } from "@/lib/openExternal";
+import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { getDateString } from "@/components/DateNav";
 import GameHighlights from "@/components/GameHighlights";
@@ -88,6 +89,36 @@ export default function GameDetailModal({
     : r >= 30 ? { label: "MEH", bg: "bg-orange-600" }
     : { label: "SKIP", bg: "bg-red-700" };
 
+  // A clickable broadcaster name — same resolution as the score card's network
+  // chips (Jacob 6/1): Prime/ESPN/MLB deep-links when available, else the
+  // network's own page, else a sport-level fallback. Opens via openExternal so
+  // it deep-links into the network app on mobile.
+  const networkLink = (name: string, key: string | number) => {
+    const isPrime = /\b(amazon|prime)\b/i.test(name);
+    const isEspn = /\b(espn|abc)\b/i.test(name);
+    const espnStream =
+      isEspn && game.streamUrl && /\/watch\/player\/_\/id\//.test(game.streamUrl) ? game.streamUrl : null;
+    const netUrl = networkStreamUrl(name, game.id, game.sport);
+    const mlbStream =
+      game.sport === "mlb" && game.streamUrl && /mlb\.com\/tv\/g\d+/.test(game.streamUrl)
+      && (!netUrl || netUrl.includes("mlb.com")) ? game.streamUrl : null;
+    const href = (isPrime && game.primeStreamUrl) || espnStream || mlbStream || netUrl || sportStreamFallback(game.sport);
+    return (
+      <a
+        key={key}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hover:underline transition-colors"
+        style={{ color: "var(--text-muted)" }}
+        title={`Watch on ${name}`}
+        onClick={handleExternalClick(href)}
+      >
+        {name}
+      </a>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -134,7 +165,8 @@ export default function GameDetailModal({
             final the "where to watch" channels are noise, so hide them. */}
         {game.broadcasts.length > 0 && !isFinal ? (
           <div className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-            <span className="uppercase tracking-wide">Watch: </span>{game.broadcasts.join(" · ")}
+            <span className="uppercase tracking-wide">Watch: </span>
+            {game.broadcasts.flatMap((b, i) => (i === 0 ? [networkLink(b, i)] : [" · ", networkLink(b, i)]))}
           </div>
         ) : null}
 
