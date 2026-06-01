@@ -219,6 +219,11 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   tennis: { key: "reddit-tennis", label: "r/tennis" },
   epl: { key: "reddit-epl", label: "r/PremierLeague" },
   mls: { key: "reddit-mls", label: "r/MLS" },
+  ucl: { key: "reddit-ucl", label: "r/championsleague" },
+  uel: { key: "reddit-uel", label: "r/EuropaLeague" },
+  fifa: { key: "reddit-fifa", label: "r/worldcup" },
+  ncaaf: { key: "reddit-ncaaf", label: "r/CFB" },
+  ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
 };
 
 // Cascade of news cards for a league column: official videos pinned first,

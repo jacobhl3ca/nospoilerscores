@@ -1302,6 +1302,12 @@ const jobs = [
   ["reddit-tennis", () => fetchReddit("tennis", "r/tennis")],
   ["reddit-epl", () => fetchReddit("PremierLeague", "r/PremierLeague")],
   ["reddit-mls", () => fetchReddit("MLS", "r/MLS")],
+  // 2026-05-31: complete league coverage — every sport the site tracks now has a sub.
+  ["reddit-ucl", () => fetchReddit("championsleague", "r/championsleague")],
+  ["reddit-uel", () => fetchReddit("EuropaLeague", "r/EuropaLeague")],
+  ["reddit-fifa", () => fetchReddit("worldcup", "r/worldcup")],
+  ["reddit-ncaaf", () => fetchReddit("CFB", "r/CFB")],
+  ["reddit-ncaaw", () => fetchReddit("ncaaw", "r/ncaaw")],
 
   // theScore — golf and tennis have no dedicated per-league path (API 404s).
   ["thescore-general", () => fetchTheScore("", "theScore")],
