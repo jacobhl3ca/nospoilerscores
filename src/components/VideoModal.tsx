@@ -115,6 +115,24 @@ function renderRedditBody(raw: string): React.ReactNode {
   });
 }
 
+// Embed-mode players (Brightcove, used by the NHL Top Videos news card) need
+// autoplay requested in the player URL — the iframe's allow="autoplay" only
+// grants the permission, it doesn't start playback. Append muted autoplay so
+// embed clips open playing like the YouTube (autoplay:1, mute:1) and HLS
+// (autoPlay muted) paths already do. muted=true is mandatory: browsers block
+// UNmuted autoplay, so without it the player stays paused. searchParams.set
+// overwrites, so this stays correct even if the baked URL later carries its own.
+function withAutoplay(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("autoplay", "true");
+    u.searchParams.set("muted", "true");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 // Per-source label for the modal's "Open on …" link. The footer used to read
 // "Open on source" generically — this maps the URL host to the actual brand so
 // users know whether they're heading to Reddit, MLB, ESPN, etc. before tapping.
@@ -537,7 +555,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               />
             ) : embedMode ? (
               <iframe
-                src={embedUrl!}
+                src={withAutoplay(embedUrl!)}
                 className="absolute inset-0 w-full h-full"
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowFullScreen
