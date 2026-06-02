@@ -689,10 +689,16 @@ function parseGame(event: any, sport: Sport): Game {
 let primeAsinsPromise: Promise<Record<string, string>> | null = null;
 export function loadPrimeAsins(): Promise<Record<string, string>> {
   if (!primeAsinsPromise) {
-    primeAsinsPromise = fetch(`${getApiBase()}/prime-asins.json`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => (d?.matchups ?? {}) as Record<string, string>)
-      .catch(() => ({} as Record<string, string>));
+    primeAsinsPromise = (async () => {
+      const res = await fetchTimed(`${getApiBase()}/prime-asins.json`);
+      const data = res?.ok ? await res.json().catch(() => null) : null;
+      // On a miss (timeout/network/parse), clear the cache so the next
+      // fetchGames retries rather than caching the empty result for the whole
+      // page lifetime — a single transient stall shouldn't permanently drop
+      // Prime deep-links for the session.
+      if (!data) primeAsinsPromise = null;
+      return (data?.matchups ?? {}) as Record<string, string>;
+    })();
   }
   return primeAsinsPromise;
 }
@@ -706,13 +712,16 @@ type EspnAiringsData = {
 let espnAiringsPromise: Promise<EspnAiringsData> | null = null;
 export function loadEspnAirings(): Promise<EspnAiringsData> {
   if (!espnAiringsPromise) {
-    espnAiringsPromise = fetch(`${getApiBase()}/espn-airings.json`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => ({
-        airings: d?.airings ?? {},
-        nbaGameIds: d?.nbaGameIds ?? {},
-      }))
-      .catch(() => ({ airings: {}, nbaGameIds: {} }));
+    espnAiringsPromise = (async () => {
+      const res = await fetchTimed(`${getApiBase()}/espn-airings.json`);
+      const data = res?.ok ? await res.json().catch(() => null) : null;
+      // Clear the cache on a miss so a later load retries (see loadPrimeAsins).
+      if (!data) espnAiringsPromise = null;
+      return {
+        airings: data?.airings ?? {},
+        nbaGameIds: data?.nbaGameIds ?? {},
+      };
+    })();
   }
   return espnAiringsPromise;
 }
@@ -733,12 +742,10 @@ export function loadBigInningSchedule(): Promise<BigInningSchedule> {
       // rail (per-night selection slug) are independent — fetch in parallel and
       // merge. Rail failures fall through to the /network/live href.
       const [scheduleRes, railRes] = await Promise.allSettled([
-        fetch(`${getApiBase()}/big-inning-schedule.json`, { cache: "no-store" })
-          .then((r) => (r.ok ? r.json() : null)),
-        fetch(
-          "https://dapi.cms.mlbinfra.com/v2/content/en-us/sel-mlbtv-featured-svod-video-list",
-          { cache: "no-store" }
-        ).then((r) => (r.ok ? r.json() : null)),
+        fetchTimed(`${getApiBase()}/big-inning-schedule.json`).then((r) => (r?.ok ? r.json() : null)),
+        fetchTimed(
+          "https://dapi.cms.mlbinfra.com/v2/content/en-us/sel-mlbtv-featured-svod-video-list"
+        ).then((r) => (r?.ok ? r.json() : null)),
       ]);
       const scheduleDoc = scheduleRes.status === "fulfilled" ? scheduleRes.value : null;
       const railDoc = railRes.status === "fulfilled" ? railRes.value : null;
@@ -780,6 +787,23 @@ function buildPrimeDeepLink(
 
 function hasPrimeBroadcast(game: Game): boolean {
   return game.broadcasts.some((b) => /\b(amazon|prime)\b/i.test(b));
+}
+
+// Single-shot fetch with a hard timeout. A plain fetch() has no timeout — a
+// stalled connection (one that opens but whose body never arrives, common on
+// flaky cell networks or a transient CDN hiccup) never rejects, so a .catch()
+// can't rescue it and any `await` on it hangs forever. Returns null on
+// timeout/error rather than throwing, so callers fall back to empty data.
+async function fetchTimed(url: string, timeoutMs = 8000): Promise<Response | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { cache: "no-store", signal: controller.signal });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchWithRetry(url: string, retries = 2, timeoutMs = 10000): Promise<Response> {

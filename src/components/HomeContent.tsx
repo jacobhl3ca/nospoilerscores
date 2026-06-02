@@ -606,6 +606,11 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return () => window.removeEventListener("popstate", handler);
   }, []);
 
+  // Safety net so the skeleton can never be permanent. The scoreboard +
+  // enrichment fetches in lib/espn.ts are each individually bounded now, but
+  // if a future fetch is ever added without a timeout, force the error/retry
+  // state after 40s (above the ~31s worst-case real load) rather than hang.
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchData = useCallback(async (
     date: string,
     thirdLeague?: Sport | "empty",
@@ -617,16 +622,29 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     // new pull resolves, which prevents the "all 3 columns flash gray" effect.
     if (!silent) setLoading(true);
     setError(false);
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    if (!silent) {
+      watchdogRef.current = setTimeout(() => {
+        watchdogRef.current = null;
+        setLoading(false);
+        setError(true);
+      }, 40_000);
+    }
     try {
       let data = await fetchAllLeagues(date, thirdLeague, slotOverrides);
       if (isDemoModeActive()) data = applyDemoMode(data);
       if (isNoHitAlertDemoActive()) data = applyNoHitAlertDemo(data);
       setLeagues(data);
+      // Real data won — clear any error the watchdog may have raised so a
+      // slow-but-successful load still shows the board instead of the retry UI.
+      setError(false);
     } catch {
       setLeagues([]);
       setError(true);
+    } finally {
+      if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+      if (!silent) setLoading(false);
     }
-    if (!silent) setLoading(false);
   }, []);
 
   // Two-effect split so slot/league pref changes don't flash the global
