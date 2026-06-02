@@ -114,6 +114,24 @@ export default function TeamView({
   const upcomingShown = upcoming.slice(0, upcomingLimit);
   const moreAvailable = upcoming.length > upcomingLimit;
 
+  // Doubleheaders: ids of finished games that share an Eastern calendar day with
+  // another finished game. Their cards show the start time so the two otherwise-
+  // identical FINAL rows (hidescore hides the score) are distinguishable.
+  const doubleheaderIds = useMemo(() => {
+    const byDay = new Map<string, string[]>();
+    for (const g of past) {
+      const ymd = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(new Date(g.date));
+      const arr = byDay.get(ymd) ?? [];
+      arr.push(g.id);
+      byDay.set(ymd, arr);
+    }
+    const ids = new Set<string>();
+    for (const arr of byDay.values()) if (arr.length > 1) arr.forEach((id) => ids.add(id));
+    return ids;
+  }, [past]);
+
   // If the full team name would collide with the left-edge back button (the
   // centered group visually crosses under it), swap to the 3-char abbrev.
   useEffect(() => {
@@ -173,6 +191,7 @@ export default function TeamView({
       useAbbreviations={useAbbreviations}
       teamView
       isToday={gameIsToday(game)}
+      isDoubleheader={doubleheaderIds.has(game.id)}
       onSelectTeam={onSelectTeam}
     />
   );

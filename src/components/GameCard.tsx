@@ -25,6 +25,10 @@ interface GameCardProps {
   // and treat finished games like past-date cards (hide records, show highlights).
   // Used by the per-team schedule view.
   teamView?: boolean;
+  // True when this finished game shares its (Eastern) calendar day with another
+  // of the team's games — a doubleheader. The schedule card then shows the
+  // start time so the two otherwise-identical FINAL cards are distinguishable.
+  isDoubleheader?: boolean;
   // When set, clicking a team name opens that team's schedule view in the column.
   onSelectTeam?: (team: Team) => void;
   // Clicking the card body opens a spoiler-safe details popup. (Live games still
@@ -132,7 +136,7 @@ function formatSeriesStatus(s: string): string {
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, onSelectTeam, onShowDetails }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
@@ -173,6 +177,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const teamViewTime = teamView && isFuture ? (() => {
     const cleaned = cleanStatusDetail(game.statusDetail, true);
     if (cleaned && /\bTBD\b/i.test(cleaned)) return "TBD";
+    try {
+      const d = new Date(game.date);
+      if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    } catch { /* fall through */ }
+    return null;
+  })() : null;
+  // Doubleheader disambiguation: a finished game that shares its day with another
+  // of the team's games shows its (device-local) start time, so the two FINAL
+  // cards aren't visually identical. Time is not a spoiler.
+  const teamViewDhTime = teamView && isFinished && isDoubleheader ? (() => {
     try {
       const d = new Date(game.date);
       if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -320,6 +334,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       <>
                         <span className="font-bold" style={{ color: "var(--text)" }}>{teamViewDateLabel}</span>
                         {isFuture && teamViewTime ? <span style={{ color: "var(--text-muted)" }}> · {teamViewTime}</span> : null}
+                        {teamViewDhTime ? <span style={{ color: "var(--text-muted)" }}> · {teamViewDhTime}</span> : null}
                         {isFinished && !hasRating ? <span style={{ color: "var(--text-muted)" }}> · FINAL</span> : null}
                       </>
                     );
