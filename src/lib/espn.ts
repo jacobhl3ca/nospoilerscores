@@ -448,6 +448,10 @@ function calculateRating(game: any): number | null {
 
   const score1 = parseInt(competitors[0].score ?? "0", 10);
   const score2 = parseInt(competitors[1].score ?? "0", 10);
+  // The team-schedule API returns score as an object ({value, displayValue})
+  // rather than a string, so parseInt yields NaN. Bail to null (unrated)
+  // instead of computing a garbage rating that mislabels every game "SKIP".
+  if (Number.isNaN(score1) || Number.isNaN(score2)) return null;
   const diff = Math.abs(score1 - score2);
   const total = score1 + score2;
 

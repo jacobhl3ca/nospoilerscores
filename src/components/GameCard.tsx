@@ -303,7 +303,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
         const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);
-        const hasRating = showRating;
+        // No rating badges in the team schedule view: it's a spoiler-free
+        // schedule, and the team-schedule API returns scores as objects (not
+        // strings), so calculateRating parses NaN and every finished game would
+        // mislabel as "SKIP". Finished schedule cards show "FINAL" instead.
+        const hasRating = showRating && !teamView;
         const hasBroadcast = !isFinished && game.broadcasts.length > 0;
         const showFinal = isFinished && !isPastDate && !teamView;
         const seriesInMiddle =
