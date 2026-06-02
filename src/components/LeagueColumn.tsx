@@ -7,6 +7,7 @@ const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : use
 import { Game, LeagueData, Sport, Team } from "@/lib/types";
 import type { ShareCardMeta } from "@/lib/shareCard";
 import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/lib/espn";
+import { handleExternalClick } from "@/lib/openExternal";
 import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
 import GameCard from "./GameCard";
@@ -359,6 +360,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; se
         href={href}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={handleExternalClick(href)}
         className={isLive ? liveCls : linkCls}
         style={baseStyle}
       >
