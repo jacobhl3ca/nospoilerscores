@@ -141,6 +141,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [currentId, setCurrentId] = useState(videoId);
   const failedIdsRef = useRef<string[]>([]);
   const retryingRef = useRef(false);
@@ -219,8 +220,47 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   }, [videoId]);
 
   useEffect(() => {
+    // Toggle fullscreen on the active media element. Picks the <video> for
+    // HLS/MP4 clips, otherwise the iframe (Brightcove embed via iframeRef, or
+    // the YouTube player which the YT API injects as an <iframe> inside the
+    // container). requestFullscreen covers desktop + Android; webkitEnterFullscreen
+    // is the iOS path — on iPhone ONLY a <video> can go fullscreen (the Fullscreen
+    // API doesn't exist for iframes/divs there), so embeds fall through to their
+    // own native control. Promise-based requestFullscreen is .catch()'d so a
+    // rejection (e.g. an iframe without allowfullscreen) degrades to a no-op
+    // instead of an unhandled rejection.
+    const toggleFullscreen = () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+        return;
+      }
+      const el: any = hlsMode
+        ? videoRef.current
+        : embedMode
+          ? iframeRef.current
+          : containerRef.current?.querySelector("iframe");
+      if (!el) return; // text / image modes have no media to expand
+      if (typeof el.requestFullscreen === "function") {
+        el.requestFullscreen().catch(() => {});
+      } else if (typeof el.webkitEnterFullscreen === "function") {
+        el.webkitEnterFullscreen(); // iOS <video>
+      } else if (typeof el.webkitRequestFullscreen === "function") {
+        el.webkitRequestFullscreen(); // older WebKit
+      }
+    };
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      // "f" toggles fullscreen — but don't steal it from text entry or from
+      // Cmd/Ctrl-F (browser find) and other modified chords.
+      if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        e.preventDefault();
+        toggleFullscreen();
+      }
     };
     document.addEventListener("keydown", handler);
     document.body.style.overflow = "hidden";
@@ -228,7 +268,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       document.removeEventListener("keydown", handler);
       document.body.style.overflow = "";
     };
-  }, [onClose]);
+  }, [onClose, hlsMode, embedMode]);
 
   // Direct-stream playback branch — handles two URL shapes:
   //   • .m3u8 manifests (MLB highlights) — Safari natively, hls.js elsewhere
@@ -537,6 +577,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               />
             ) : embedMode ? (
               <iframe
+                ref={iframeRef}
                 src={embedUrl!}
                 className="absolute inset-0 w-full h-full"
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
