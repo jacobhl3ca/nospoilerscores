@@ -360,6 +360,46 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
 };
 
+// Regulation period length in seconds, for count-down sports where ESPN's
+// status.clock is "seconds remaining in the current period". Lets us measure
+// progress *within* a period (smooth) instead of assuming a flat midpoint.
+const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
+  nba: 720, wnba: 600,        // 12-min / 10-min quarters
+  nfl: 900, ncaaf: 900,       // 15-min quarters
+  nhl: 1200,                  // 20-min periods
+  ncaam: 1200, ncaaw: 1200,   // 20-min halves
+};
+// Soccer is different: status.clock counts UP and equals total elapsed match
+// seconds (5400 = 90'), so progress is just clock / full match.
+const SOCCER_SPORTS = new Set<Sport>(["epl", "mls", "ucl", "uel", "fifa"]);
+const FULL_MATCH_SECONDS = 5400;
+
+// Fraction of regulation elapsed, [0,1]. Uses the live game clock for smooth
+// within-period progress (so the "too early" gate trips *during* period 1, and
+// every sport behaves like MLB/tennis — an honest "Too Early" at the start
+// rather than a misleading low badge). Falls back to a coarse period-midpoint
+// estimate when there's no usable clock (MLB innings, or missing data).
+function gameProgress(game: any, sport: Sport, regulationPeriods: number, state: string): number {
+  if (state === "post") return 1;
+  const clamp = (x: number) => Math.max(0, Math.min(1, x));
+  const period = game.status?.period ?? 0;
+  const clock = typeof game.status?.clock === "number" ? game.status.clock : null;
+  const coarse = clamp((period - 1 + 0.5) / regulationPeriods);
+
+  // Soccer: clock counts up as total elapsed match seconds.
+  if (SOCCER_SPORTS.has(sport)) {
+    return clock && clock > 0 ? clamp(clock / FULL_MATCH_SECONDS) : coarse;
+  }
+  // Count-down timed sports: clock = seconds left in the current period.
+  const periodLen = PERIOD_SECONDS[sport];
+  if (periodLen && period >= 1 && clock !== null) {
+    const periodFraction = clamp(1 - clock / periodLen);
+    return clamp((period - 1 + periodFraction) / regulationPeriods);
+  }
+  // MLB (no clock) and any gap: coarse midpoint of the current period.
+  return coarse;
+}
+
 // Calculate running margin from linescores: average absolute margin across all periods
 // Returns null if linescore data is insufficient
 function calcRunningMargin(competitors: any[]): number | null {
@@ -414,6 +454,21 @@ function calculateRating(game: any): number | null {
   const sport = game._sport as Sport;
   const config = SPORT_RATING_CONFIG[sport] ?? SPORT_RATING_CONFIG.nba;
 
+  // Game progress as a fraction of regulation [0,1] — clock-aware (see
+  // gameProgress). OT pushes progress to 1 (uncapped); finished games are 1.
+  const progress = gameProgress(game, sport, config.regulationPeriods, state);
+
+  // Insufficient-signal gate (time-based, ~first 12% of the game): a barely-
+  // started game has no closeness signal — a 0-0 start scores a perfect 100
+  // (zero margin = maximally "close") because the running-margin and final-
+  // period factors both fall back to that same 100 with no linescore data.
+  // That rockets just-started games to the top of the live cluster and
+  // monopolizes the Rated view. Withholding until ~12% elapsed means every
+  // sport shows an honest "Too Early" for its opening minutes (1st inning,
+  // first ~7 min of an NBA Q1 / NHL P1, first ~10 min of a soccer half)
+  // instead of a misleading early badge. Finished games always rate.
+  if (state === "in" && progress < 0.12) return null;
+
   // --- Factor 1: Final margin closeness (45%) ---
   const finalCloseness = Math.max(0, 100 - diff * config.multiplier);
 
@@ -466,7 +521,17 @@ function calculateRating(game: any): number | null {
     lowScoringPenalty = (2 - total) * 25; // 0 goals: -50, 1 goal: -25
   }
 
-  return Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus - lowScoringPenalty)));
+  const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus - lowScoringPenalty)));
+
+  // Confidence cap: a tied/scoreless game legitimately reads as "close," but
+  // early on that closeness carries little signal — it hasn't *held up* yet.
+  // Cap the max reachable rating by game progress so an early tie can't hit
+  // the top tiers no matter how close: GREAT (~85) only unlocks past ~62%
+  // elapsed, GOOD opens up around the midpoint. A blowout already rates low
+  // via the closeness factors, so the cap only bites genuinely-close games.
+  // Finished games (progress=1) are uncapped → cap = 100.
+  const cap = Math.round(60 + 40 * progress);
+  return Math.min(raw, cap);
 }
 
 // Tennis returns ONE event per tournament (e.g. "Roland Garros") with 0
@@ -516,16 +581,24 @@ function parseTennisMatch(match: any, event: any): Game {
   const matchYear = (match.date ?? event.date ?? "").slice(0, 4);
   const tourneyTag = [event.name, matchYear].filter(Boolean).join(" ");
   // Closeness rating (drives the Rated-view sort): a deciding final set is the
-  // most compelling, straight sets the least. Pre/in matches get a neutral mid.
+  // most compelling, straight sets the least. Same insufficient-signal handling
+  // as the team sports — a live match in its 1st set has no signal yet, so it's
+  // withheld ("Too Early") and rated by set-level once the 2nd set is underway.
   const hs = Number(homeTeam.score) || 0;
   const as = Number(awayTeam.score) || 0;
   const diff = Math.abs(hs - as);
-  let rating = 55;
+  const setNow = match.status?.period ?? 0; // current set number
+  let rating: number | null = null;
   if (state === "post") {
     if (diff <= 1) rating = 90;             // went the distance (2-1 / 3-2)
     else if (hs + as >= 4 && diff === 2) rating = 78; // long match (3-1)
     else rating = 65;                       // straight sets
+  } else if (state === "in" && setNow >= 2) {
+    // Rate a live match by how level it is, capped below GREAT — GREAT is
+    // reserved for finished deciders. Level (e.g. 1-1) reads best.
+    rating = diff === 0 ? 78 : diff === 1 ? 68 : 55;
   }
+  // 1st set (or pre) → rating stays null (Too Early / unrated)
   const name = `${awayTeam.displayName} vs ${homeTeam.displayName}`;
   return {
     id: match.id ?? `${event.id}-${awayTeam.abbreviation}-${homeTeam.abbreviation}`,
@@ -1229,24 +1302,38 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
       if (s === "E") return 0;
       return parseInt(s, 10) || 0;
     };
-    const topScores = players.slice(0, 10).map(p => parseScore(p.score));
-    const leader = topScores[0];
-    // Spread between 1st and 5th
-    const top5spread = Math.abs((topScores[4] ?? leader) - leader);
-    // Spread between 1st and 10th
-    const top10spread = Math.abs((topScores[9] ?? leader) - leader);
-    // Number of players within 2 strokes of lead
-    const within2 = topScores.filter(s => Math.abs(s - leader) <= 2).length;
+    // "Rate from Round 1", minus the opening-holes artifact: at the very start
+    // of R1 the whole field is bunched at even par, which reads as a maximally-
+    // tight leaderboard (→ GREAT) on zero real signal — golf's version of the
+    // 0-0 bug. Withhold the rating until the field is past the opening holes
+    // (any round completed, or a top player ≥6 holes into R1). After that, a
+    // genuinely tight leaderboard rates normally.
+    const parseThru = (t: string): number => (t === "F" ? 18 : parseInt(t, 10) || 0);
+    const topPlayers = players.slice(0, 10);
+    const anyRoundDone = topPlayers.some(p => p.rounds.length > 0);
+    const deepestThru = Math.max(0, ...topPlayers.filter(p => p.rounds.length === 0).map(p => parseThru(p.thru)));
+    // Past the opening holes — compute the real leaderboard-tightness rating.
+    // While still in the opening holes, rating stays null (no badge shown).
+    if (anyRoundDone || deepestThru >= 6) {
+      const topScores = players.slice(0, 10).map(p => parseScore(p.score));
+      const leader = topScores[0];
+      // Spread between 1st and 5th
+      const top5spread = Math.abs((topScores[4] ?? leader) - leader);
+      // Spread between 1st and 10th
+      const top10spread = Math.abs((topScores[9] ?? leader) - leader);
+      // Number of players within 2 strokes of lead
+      const within2 = topScores.filter(s => Math.abs(s - leader) <= 2).length;
 
-    // Tight leaderboard = high rating
-    // 0 spread = 100, each stroke of spread reduces by ~12
-    const spreadScore = Math.max(0, 100 - top5spread * 12);
-    // Depth bonus: more players bunched = more exciting
-    const depthBonus = Math.min(15, within2 * 2);
-    // Top 10 tightness (secondary factor)
-    const top10Score = Math.max(0, 50 - top10spread * 5);
+      // Tight leaderboard = high rating
+      // 0 spread = 100, each stroke of spread reduces by ~12
+      const spreadScore = Math.max(0, 100 - top5spread * 12);
+      // Depth bonus: more players bunched = more exciting
+      const depthBonus = Math.min(15, within2 * 2);
+      // Top 10 tightness (secondary factor)
+      const top10Score = Math.max(0, 50 - top10spread * 5);
 
-    rating = Math.min(100, Math.round(spreadScore * 0.6 + top10Score * 0.2 + depthBonus));
+      rating = Math.min(100, Math.round(spreadScore * 0.6 + top10Score * 0.2 + depthBonus));
+    }
   }
 
   // Look up the tournament's start date (MM-DD) from the league config so the
