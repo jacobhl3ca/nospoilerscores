@@ -1977,6 +1977,13 @@ export async function fetchTeamSchedule(
             const primary = t.logos.find((l: { rel?: string[] }) => l.rel?.includes("default")) ?? t.logos[0];
             if (primary?.href) t.logo = primary.href;
           }
+          // Score: scoreboard uses a string ("4"); schedule returns an object
+          // ({ value, displayValue }). Flatten to the string form so parseGame
+          // and calculateRating read the final score — otherwise parseInt gives
+          // NaN and every finished game rates as "SKIP".
+          if (c.score && typeof c.score === "object") {
+            c.score = String(c.score.displayValue ?? c.score.value ?? "");
+          }
           // Records: scoreboard uses records:[{summary}]; schedule uses record:[{type,displayValue}]
           // Prefer type==='total' — that's the season overall record.
           if (!c.records && Array.isArray(c.record)) {
