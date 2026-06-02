@@ -316,13 +316,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         video.removeEventListener("loadedmetadata", refreshHasCaptionTrack);
       };
     }
-    // hls.js fallback for Chrome/Firefox/etc. on .m3u8 only.
+    // hls.js fallback for Chrome/Firefox/etc. on .m3u8 only. (Safari/iOS never
+    // reach here — they take the native-HLS branch above, where the rendition
+    // is governed by the <video> element's rendered size, i.e. the modal width.)
+    // Configured to favor the top rendition from the first frame: these are
+    // short highlight clips (MLB ~30-90s, v.redd.it), so the default ABR — which
+    // starts on a low/mid level and ramps up over several segments — would often
+    // let the clip end before it ever reached max quality.
     let hls: any = null;
     let cancelled = false;
     import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
       if (!Hls.isSupported()) return;
-      hls = new Hls();
+      hls = new Hls({
+        // Don't let the (deliberately small) modal cap the level, and assume
+        // broadband so the very first segment isn't fetched at a low rendition.
+        capLevelToPlayerSize: false,
+        abrEwmaDefaultEstimate: 5_000_000,
+      });
       // Stop the SubtitleTrackController from auto-promoting a DEFAULT=YES
       // track. Setter, not config — this version's HlsConfig doesn't expose
       // subtitleDisplay. The enforce loop below is the real source of truth;
@@ -331,6 +342,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       hls.loadSource(playbackUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Pin to the highest rendition. For these short clips we want max
+        // quality immediately rather than waiting for ABR to climb to it
+        // mid-clip; setting currentLevel disables auto-switching, which is
+        // safe here — the clips are seconds-to-minutes long, not live streams.
+        // (The longer ~10-min NHL condensed games go through Brightcove embeds,
+        // not this path, so nothing here is long enough to risk a stall.)
+        if (hls.levels && hls.levels.length > 0) {
+          hls.currentLevel = hls.levels.length - 1;
+        }
         video.play().catch(() => {});
       });
     });
@@ -508,7 +528,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           or any whitespace around them dismisses. The video player and CC
           button stop propagation themselves so playback controls keep working. */}
       <div
-        className="relative w-full max-w-5xl"
+        className="relative w-full max-w-6xl"
         style={{ zIndex: 1 }}
       >
         {/* Close button */}
