@@ -603,6 +603,14 @@ function parseTennisMatch(match: any, event: any): Game {
     rating = diff === 0 ? 78 : diff === 1 ? 68 : 55;
   }
   // 1st set (or pre) → rating stays null (Too Early / unrated)
+  // Gather broadcasts — tennis nests these on the match (competition) object
+  // with the same broadcasts[].names[] shape as team sports (see parseGame).
+  const broadcasts: string[] = [];
+  for (const b of match.broadcasts ?? []) {
+    for (const bn of b.names ?? []) {
+      if (!broadcasts.includes(bn)) broadcasts.push(bn);
+    }
+  }
   const name = `${awayTeam.displayName} vs ${homeTeam.displayName}`;
   return {
     id: match.id ?? `${event.id}-${awayTeam.abbreviation}-${homeTeam.abbreviation}`,
@@ -617,7 +625,7 @@ function parseTennisMatch(match: any, event: any): Game {
     completed: match.status?.type?.completed ?? false,
     homeTeam,
     awayTeam,
-    broadcasts: [],
+    broadcasts,
     venue: "",
     highlightUrl: null,
     // Not a playoff "Game N" — repurposed to carry tournament+year into the
@@ -1683,6 +1691,8 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
     case "epl":
     case "mls":
     case "fifa":
+    case "ucl":
+    case "uel":
       return `https://a.espncdn.com/i/teamlogos/soccer/500/${rawId}.png`;
     default:
       return undefined;
