@@ -272,14 +272,20 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
 // clean text instead of showing an empty grey placeholder box.
 function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
   const [imgFailed, setImgFailed] = useState(false);
-  // min-h-[6rem] sm:min-h-[7rem] forces a uniform row height across every text
-  // source card — Reddit, MLB.com, NBA.com, ESPN-league. With identical row
-  // heights AND identical item counts (each prebake caps at 12), card N ends
-  // at the same vertical position in every column, giving the row-by-row
-  // alignment Jacob asked for. 7rem ≈ 5 text-sm lines (line-clamp-5 cap) +
-  // py-2 padding, so a max-length headline fits without truncation while
-  // shorter ones sit at the top with a small blank below.
-  const rowCls = "flex items-start gap-2 px-3 py-2 text-xs sm:text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] min-h-[6rem] sm:min-h-[7rem]";
+  // sm:min-h-[7rem] forces a uniform row height across every text source card
+  // — Reddit, MLB.com, NBA.com, ESPN-league. With identical row heights AND
+  // identical item counts (each prebake caps at 12), card N ends at the same
+  // vertical position in every column, giving the row-by-row alignment Jacob
+  // asked for. 7rem ≈ 5 text-sm lines (line-clamp-5 cap) + py-2 padding, so a
+  // max-length headline fits without truncation while shorter ones sit at the
+  // top with a small blank below.
+  // No min-height on phones: mobile is a single merged feed, so the
+  // cross-column row alignment the floor buys is moot — it just leaves a tall
+  // empty box under short headlines. Let rows hug their text on mobile; keep
+  // the floor at sm+ where the 3 columns align. text-sm (not text-xs) on
+  // mobile too — the phone is the primary surface, so size headlines for
+  // readability rather than to pack the narrow desktop column.
+  const rowCls = "flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Reddit posts always pop the modal so the user can read the post (and any
   // attached photo / video) without leaving hidescore. Other sources (ESPN
@@ -448,7 +454,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
               {/* minHeight 2.5rem floors each row at ~2 lines so first cards
                   line up across columns; line-clamp-3 lets long headlines
                   use a third line instead of truncating. */}
-              <div className="px-3 py-2 text-xs sm:text-sm leading-snug line-clamp-3" style={{ color: "var(--text)", minHeight: "2.5rem" }}>
+              <div className="px-3 py-2 text-sm leading-snug line-clamp-3" style={{ color: "var(--text)", minHeight: "2.5rem" }}>
                 {item.headline}
               </div>
               </>
