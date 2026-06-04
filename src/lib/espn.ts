@@ -1654,6 +1654,107 @@ export async function fetchGames(
   return { games, failed: false };
 }
 
+// Reconcile team-schedule ratings with the dated/live-final view.
+//
+// The team-schedule endpoint (fetchTeamSchedule) returns only the final score —
+// no per-period linescores. calculateRating therefore sees nothing but the final
+// margin: the running-margin (35%), close-entering-final-period (20%), and
+// comeback factors all silently collapse onto that one number, so the SAME
+// finished game can land a full tier off (e.g. GREAT vs MEH) from the rating it
+// shows on its actual date or at final. This backfills the correct, linescore-
+// aware rating by re-reading each game's day from the scoreboard endpoint (which
+// DOES carry linescores) and running the identical parseGame -> calculateRating
+// path the dated view uses — so the Schedule view and the dated/live-final view
+// agree by construction.
+//
+// Cheap and best-effort: games are grouped by ET calendar day so one request
+// covers a doubleheader, the warm per-date localStorage cache short-circuits the
+// network, requests are concurrency-capped, and any day that fails to fetch
+// simply leaves those games' ratings untouched. Returns id -> rating for every
+// requested game we could resolve (callers diff against the game's own rating).
+export async function fetchScheduleRatings(
+  sport: Sport,
+  games: Array<{ id: string; date: string }>,
+): Promise<Map<string, number | null>> {
+  const result = new Map<string, number | null>();
+  // Tennis/golf rate off bespoke (non-linescore) signals and have no per-team
+  // schedule view — there's nothing to reconcile.
+  if (sport === "tennis" || sport === "golf") return result;
+
+  // ESPN buckets a game under its START day in ET; the cache + dated view key on
+  // the same YYYYMMDD, so this both matches ESPN and reuses any warm cache.
+  const etDay = (iso: string): string | null => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/New_York",
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(new Date(iso)).replace(/-/g, "");
+    } catch {
+      return null;
+    }
+  };
+
+  const idsByDay = new Map<string, string[]>();
+  for (const g of games) {
+    const day = etDay(g.date);
+    if (!day) continue;
+    const arr = idsByDay.get(day) ?? [];
+    arr.push(g.id);
+    idsByDay.set(day, arr);
+  }
+  if (!idsByDay.size) return result;
+
+  // One scoreboard request per distinct day. eventsToGames runs the same
+  // parseGame -> calculateRating path as the dated view, so the linescore-aware
+  // rating is identical by construction.
+  //
+  // The warm per-date cache is only trusted when every game we need from it is
+  // FINAL: fetchGames writes that cache with whatever it last fetched, so a date
+  // viewed while a game was in progress holds that game's provisional, progress-
+  // capped rating (or an MLB no-hit/perfect-game override) — freezing that onto
+  // the now-finished schedule card would display the exact mis-tiering this
+  // backfill exists to remove. Any non-final or missing id falls through to a
+  // fresh scoreboard fetch, which returns the completed box.
+  const gamesForDay = async (day: string, wantIds: string[]): Promise<Game[]> => {
+    const cached = readScoreboardCache(sport, day);
+    if (cached && cached.length) {
+      const byId = new Map(cached.map((g) => [g.id, g] as const));
+      if (wantIds.every((id) => byId.get(id)?.state === "post")) return cached;
+    }
+    const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+    url.searchParams.set("dates", day);
+    try {
+      const res = await fetchWithRetry(url.toString());
+      if (!res.ok) return [];
+      const data: { events?: unknown[] } | null = await res.json();
+      return eventsToGames(data?.events ?? [], sport);
+    } catch {
+      return [];
+    }
+  };
+
+  const days = [...idsByDay.keys()];
+  const CONCURRENCY = 6;
+  for (let i = 0; i < days.length; i += CONCURRENCY) {
+    await Promise.all(
+      days.slice(i, i + CONCURRENCY).map(async (day) => {
+        const wantIds = idsByDay.get(day) ?? [];
+        const dayGames = await gamesForDay(day, wantIds);
+        const byId = new Map(dayGames.map((g) => [g.id, g] as const));
+        for (const id of wantIds) {
+          const match = byId.get(id);
+          // Only adopt a FINAL game's rating. If the fresh fetch still shows the
+          // game live (e.g. a late game ESPN hasn't closed yet, or a suspended
+          // game), leave the schedule card's own rating rather than swapping in
+          // a provisional one — keeps live and final ratings from disagreeing.
+          if (match && match.state === "post") result.set(id, match.rating);
+        }
+      })
+    );
+  }
+  return result;
+}
+
 // Full team list for a league — used by the Settings team picker so users can
 // browse all teams without having to find their team in a game card first.
 // Caches per-sport since the team list is effectively static within a season.
