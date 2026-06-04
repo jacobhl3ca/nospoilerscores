@@ -510,14 +510,13 @@ export default function LeagueColumn({
       const nameContainers = el.querySelectorAll(".team-name-container");
       if (!nameContainers.length) return;
 
-      // Get the longest team name from the games actually rendered. When today's
-      // slate is empty we render the next-game-day lookahead instead (league.games
-      // is []), so measure THOSE names — otherwise this bails early and
-      // useAbbreviations stays stuck at its initial `true`, abbreviating names
-      // ("NY"/"SA") even when the full names ("Knicks"/"Spurs") would easily fit.
-      const measuredGames = league.games.length
-        ? league.games
-        : (league.nextGameDay?.games ?? []);
+      // Get the longest team name from the games actually rendered. Both today's
+      // slate AND the upcoming lookahead can render together (NBA/NHL playoffs,
+      // World Cup), and on an empty slate only the lookahead shows — so measure
+      // the union. Otherwise this bails early and useAbbreviations stays stuck at
+      // its initial `true`, abbreviating names ("NY"/"SA") even when the full
+      // names ("Knicks"/"Spurs") would easily fit.
+      const measuredGames = [...league.games, ...(league.nextGameDay?.games ?? [])];
       const allNames = measuredGames.flatMap(g => [
         displayShortName(g.awayTeam),
         displayShortName(g.homeTeam),
@@ -949,6 +948,34 @@ export default function LeagueColumn({
               onShowDetails={onShowDetails}
             />
           ))}
+          {/* Upcoming future-day games shown alongside today's slate (NBA/NHL
+              playoffs, World Cup). Above the Final separator so upcoming sits
+              above finished; each card carries its own date label. */}
+          {renderUpcoming && league.nextGameDay && league.nextGameDay.games.length > 0 && (
+            <>
+              <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                <span className="text-[9px] uppercase tracking-wide">Upcoming</span>
+                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              </div>
+              {league.nextGameDay.games.map((game) => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  favoriteTeams={favoriteTeams}
+                  onToggleFavoriteTeam={onToggleFavoriteTeam}
+                  showRatings={showRatings}
+                  leagueLabel={league.label}
+                  onPlayHighlight={onPlayHighlight}
+                  onPlayEmbed={onPlayEmbed}
+                  nextGameDate={formatDateCompact(etDayString(game.date) || league.nextGameDay!.date)}
+                  useAbbreviations={useAbbreviations}
+                  onSelectTeam={setTeamViewTeam}
+                  onShowDetails={onShowDetails}
+                />
+              ))}
+            </>
+          )}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
             <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
               <div className="flex-1 h-px" style={{ background: "var(--border)" }} />

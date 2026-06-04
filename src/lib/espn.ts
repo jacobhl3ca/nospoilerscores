@@ -1477,7 +1477,9 @@ async function fetchNextGameDayRange(
   sport: Sport,
   fromDate?: string,
   windowDays = 80,
-  opts?: { maxGames?: number }, // maxGames: return the next N fixtures across all days
+  // allDays: every upcoming fixture in the window. maxDays: every fixture from
+  // the first N distinct ET match-days. Default (neither): the earliest day only.
+  opts?: { allDays?: boolean; maxDays?: number },
 ): Promise<{ date: string; games: Game[] } | null> {
   const base = fromDate
     ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
@@ -1506,20 +1508,31 @@ async function fetchNextGameDayRange(
       return "";
     }
   };
-  // maxGames: return the next N fixtures across the whole window, not just the
-  // earliest match day. The World Cup runs only a few matches per day, so "next
-  // 10" spans several days — each card shows its own date label (see LeagueColumn).
-  if (opts?.maxGames) {
-    const sorted = [...games]
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .slice(0, opts.maxGames);
-    let first = "";
-    for (const g of sorted) {
-      const d = dayOf(g.date);
-      if (d && (!first || d < first)) first = d;
-    }
+  const chrono = (gs: Game[]) => [...gs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
+  // allDays: every upcoming fixture in the window, chronological. Used for
+  // NBA/NHL in the playoffs — only a handful remain, so show them all in one
+  // ranged request. Each card derives its own date label (see LeagueColumn).
+  if (opts?.allDays) {
+    const sorted = chrono(games);
+    const first = leadDay(sorted);
     if (!first) return null;
     return { date: first, games: sorted };
+  }
+  // maxDays: every fixture from the first N distinct ET match-days. The World
+  // Cup runs a few matches per day with multi-day gaps (and a pre-tournament
+  // gap now), so "next 3 days" = the next 3 days that actually HAVE matches.
+  if (opts?.maxDays) {
+    const byDay = new Map<string, Game[]>();
+    for (const g of games) {
+      const d = dayOf(g.date);
+      if (!d) continue;
+      (byDay.get(d) ?? byDay.set(d, []).get(d)!).push(g);
+    }
+    const days = [...byDay.keys()].sort().slice(0, opts.maxDays);
+    if (!days.length) return null;
+    const picked = chrono(days.flatMap((d) => byDay.get(d)!));
+    return { date: days[0], games: picked };
   }
   let earliest = "";
   for (const g of games) {
@@ -1994,21 +2007,26 @@ export async function fetchAllLeagues(
     // an empty schedule. On a fetch failure games is also [] — falling back
     // there would render tomorrow's slate labeled "Tomorrow" on the Today
     // tab, which reads as a bug. A failed league carries fetchFailed instead.
-    if (!failed && games.length === 0 && !isPastView) {
-      const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
+    // NBA/NHL in the playoffs and the World Cup surface their upcoming slate
+    // even when there ARE games today, so the column shows TODAY'S games AND
+    // what's coming (Jacob 6/4). Every other league only falls back to the
+    // lookahead when today's slate is empty.
+    const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
+    const nbaNhlPlayoff = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth;
+    const alwaysShowUpcoming = nbaNhlPlayoff || cfg.sport === "fifa";
+    if (!failed && !isPastView && (games.length === 0 || alwaysShowUpcoming)) {
       if (cfg.sport === "fifa") {
-        // World Cup: surface the NEXT 10 matches, not just the opener day. Its
-        // fixtures run a few per day, so a single-day lookahead under-shows the
-        // tournament. One ranged request returns the whole window; we keep 10.
-        nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 80, { maxGames: 10 });
-      } else if ((cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth) {
-        // NBA + NHL publish playoff games only as the prior round wraps, and by
-        // June only a handful remain (Conf Finals → Cup/Finals). Scan 21 days
-        // and surface EVERY upcoming game, not just the next game day, so the
-        // whole remaining slate shows once each series posts.
-        nextGameDay = await fetchNextGameDay(cfg.sport, 21, date, { allDays: true });
+        // World Cup: the next 3 match-days (a few matches each). One ranged
+        // request; "3 days" counts days that actually have matches, so it works
+        // before kickoff (pre-tournament gap) and rolls forward during it.
+        nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 3 });
+      } else if (nbaNhlPlayoff) {
+        // NBA/NHL playoffs: only a handful of games remain (Conf Finals →
+        // Cup/Finals) — surface EVERY one in a single ranged request, not just
+        // the next game day. 30-day window covers a full series from Game 1.
+        nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 30, { allDays: true });
       } else {
-        // Default: the next game day only.
+        // Default (other leagues, empty slate only): the next game day.
         nextGameDay = await fetchNextGameDay(cfg.sport, 7, date);
         // Other soccer leagues take multi-week breaks (intl windows, summer
         // gaps) longer than the day-by-day lookahead. When that finds nothing,
@@ -2019,6 +2037,14 @@ export async function fetchAllLeagues(
           nextGameDay = await fetchNextGameDayRange(cfg.sport, date);
         }
       }
+    }
+    // The ranged lookahead starts at date+1, but ESPN's date filter is UTC-ish,
+    // so a late-ET game already in today's slate can slip into the window. Drop
+    // any upcoming game that's already shown in `games` so it can't render twice.
+    if (nextGameDay && games.length) {
+      const todayIds = new Set(games.map((g) => g.id));
+      const deduped = nextGameDay.games.filter((g) => !todayIds.has(g.id));
+      nextGameDay = deduped.length ? { ...nextGameDay, games: deduped } : null;
     }
     return { sport: cfg.sport, label, games, nextGameDay, fetchFailed: failed };
   };
@@ -2177,8 +2203,7 @@ export async function fetchTeamSchedule(
 export async function fetchNextGameDay(
   sport: Sport,
   daysToCheck = 7,
-  fromDate?: string, // YYYYMMDD — search from this date instead of today
-  opts?: { allDays?: boolean } // allDays: flatten EVERY future day in the window
+  fromDate?: string // YYYYMMDD — search from this date instead of today
 ): Promise<{ date: string; games: Game[] } | null> {
   const base = fromDate
     ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
@@ -2201,28 +2226,6 @@ export async function fetchNextGameDay(
       return { date: dateStr, games: futureGames };
     })
   );
-
-  // allDays: collapse the whole window into one chronological slate instead of
-  // just the next game day. Used by NBA/NHL in the playoffs, where only a
-  // handful of games remain — surface ALL of them (Conf Finals → Cup/Finals),
-  // not only the next series's first night.
-  if (opts?.allDays) {
-    const seen = new Set<string>();
-    const all: Game[] = [];
-    for (const r of results) {
-      for (const g of r.games) {
-        if (seen.has(g.id)) continue; // a game lives on exactly one day, but guard anyway
-        seen.add(g.id);
-        all.push(g);
-      }
-    }
-    if (!all.length) return null;
-    all.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    // `date` = earliest day, kept for the abbreviation-fit measure + back-compat.
-    // Each card derives its own date label from game.date (see LeagueColumn).
-    const earliest = results.find((r) => r.games.length > 0)?.date ?? "";
-    return { date: earliest, games: all };
-  }
 
   return results.find((r) => r.games.length > 0) ?? null;
 }
