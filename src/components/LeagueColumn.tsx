@@ -420,6 +420,20 @@ function GolfSubtitle({ league, selectedDate }: { league: LeagueData; selectedDa
   );
 }
 
+// An upcoming-game slate can now span multiple days (NBA/NHL "all upcoming",
+// World Cup "next 10"), so each card derives its own date from game.date rather
+// than sharing the slate's lead date. Bucket by ET calendar day to match the
+// YYYYMMDD basis fetchNextGameDay* uses; fall back to the slate's lead date.
+function etDayString(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date(iso)).replace(/-/g, "");
+  } catch {
+    return "";
+  }
+}
+
 function formatDateCompact(yyyymmdd: string): string {
   const y = yyyymmdd.slice(0, 4);
   const m = yyyymmdd.slice(4, 6);
@@ -873,7 +887,7 @@ export default function LeagueColumn({
                   leagueLabel={league.label}
                   onPlayHighlight={onPlayHighlight}
                   onPlayEmbed={onPlayEmbed}
-                  nextGameDate={formatDateCompact(league.nextGameDay!.date)}
+                  nextGameDate={formatDateCompact(etDayString(game.date) || league.nextGameDay!.date)}
                   useAbbreviations={useAbbreviations}
                   onSelectTeam={setTeamViewTeam}
                   onShowDetails={onShowDetails}
