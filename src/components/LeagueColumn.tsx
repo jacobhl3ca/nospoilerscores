@@ -974,19 +974,12 @@ export default function LeagueColumn({
             />
           ))}
           {/* Upcoming future-day games shown alongside today's slate (NBA/NHL
-              playoffs, World Cup). Above the Final separator so upcoming sits
-              above finished. Today's full card is the lead, so the whole
-              upcoming list is compact for NBA/NHL (firstFull=false). */}
-          {renderUpcoming && league.nextGameDay && league.nextGameDay.games.length > 0 && (
-            <>
-              <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-                <span className="text-[9px] uppercase tracking-wide">Upcoming</span>
-                <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
-              </div>
-              {renderUpcomingSlate(league.nextGameDay.games, false)}
-            </>
-          )}
+              playoffs, World Cup), above the Final separator so upcoming sits
+              above finished. Today's full card is the lead, so the list is
+              compact for NBA/NHL (firstFull=false). No "Upcoming" divider —
+              the per-row dates already mark them (Jacob 6/4). */}
+          {renderUpcoming && league.nextGameDay && league.nextGameDay.games.length > 0 &&
+            renderUpcomingSlate(league.nextGameDay.games, false)}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
             <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
               <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
