@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, Sport, Team } from "@/lib/types";
-import { fetchTeamSchedule } from "@/lib/espn";
+import { fetchTeamSchedule, fetchScheduleRatings } from "@/lib/espn";
 import GameCard from "./GameCard";
 import { getDateString } from "@/components/DateNav";
 
@@ -57,6 +57,9 @@ export default function TeamView({
   const [error, setError] = useState(false);
   const [upcomingLimit, setUpcomingLimit] = useState(PAGE_SIZE);
   const [pastLimit, setPastLimit] = useState(PAST_INITIAL);
+  // Linescore-aware rating backfill for finished games (see effect below). Keyed
+  // by game id; a value of null means "legitimately unrated on its date too".
+  const [ratingOverrides, setRatingOverrides] = useState<Record<string, number | null>>({});
   const [headerAbbrev, setHeaderAbbrev] = useState(false);
   const [headerH, setHeaderH] = useState(80);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -77,6 +80,7 @@ export default function TeamView({
   useEffect(() => {
     setUpcomingLimit(PAGE_SIZE);
     setPastLimit(PAST_INITIAL);
+    setRatingOverrides({});
     setAllGames(null);
     setLoading(true);
     setError(false);
@@ -113,6 +117,37 @@ export default function TeamView({
   const morePastAvailable = past.length > pastLimit;
   const upcomingShown = upcoming.slice(0, upcomingLimit);
   const moreAvailable = upcoming.length > upcomingLimit;
+
+  // The team-schedule endpoint omits per-period linescores, so finished-game
+  // ratings arrive as final-margin-only approximations that can disagree by a
+  // full tier with the rating the same game shows on its date / at final.
+  // Backfill the correct linescore-aware rating for just the visible finished
+  // games (grouped by date + cache-warm, so a handful of light requests). Keyed
+  // off the rendered ids so a "Show more" click only fetches the newcomers.
+  const pastShownIds = pastShown.map((g) => g.id).join(",");
+  useEffect(() => {
+    if (!pastShown.length) return;
+    const need = pastShown.filter((g) => !(g.id in ratingOverrides));
+    if (!need.length) return;
+    let cancelled = false;
+    (async () => {
+      const map = await fetchScheduleRatings(
+        sport,
+        need.map((g) => ({ id: g.id, date: g.date }))
+      );
+      if (cancelled || !map.size) return;
+      setRatingOverrides((prev) => {
+        const next = { ...prev };
+        for (const [id, r] of map) next[id] = r;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+    // ratingOverrides is read to skip already-resolved ids but intentionally not
+    // a dep — the id-keyed setter merge avoids a refetch loop; pastShownIds (and
+    // sport) are the real triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pastShownIds, sport]);
 
   // Doubleheaders: ids of finished games that share an Eastern calendar day with
   // another finished game. Their cards show the start time so the two otherwise-
@@ -178,10 +213,17 @@ export default function TeamView({
     return etYmd.replace(/-/g, "") === getDateString(0);
   };
 
-  const renderCard = (game: Game) => (
+  const renderCard = (game: Game) => {
+    // Swap in the linescore-aware rating when the backfill resolved one (and it
+    // actually differs) so the card matches the dated/live-final view.
+    const override = ratingOverrides[game.id];
+    const g = override !== undefined && override !== game.rating
+      ? { ...game, rating: override }
+      : game;
+    return (
     <GameCard
-      key={game.id}
-      game={game}
+      key={g.id}
+      game={g}
       favoriteTeams={favoriteTeams}
       onToggleFavoriteTeam={onToggleFavoriteTeam}
       showRatings={showRatings}
@@ -190,11 +232,12 @@ export default function TeamView({
       leagueLabel={leagueLabel}
       useAbbreviations={useAbbreviations}
       teamView
-      isToday={gameIsToday(game)}
-      isDoubleheader={doubleheaderIds.has(game.id)}
+      isToday={gameIsToday(g)}
+      isDoubleheader={doubleheaderIds.has(g.id)}
       onSelectTeam={onSelectTeam}
     />
-  );
+    );
+  };
 
   return (
     <>
