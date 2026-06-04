@@ -136,6 +136,126 @@ function formatSeriesStatus(s: string): string {
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
+// Compact upcoming-game row — used for the lookahead / "Upcoming" slate
+// (NBA/NHL playoffs, World Cup) instead of the full GameCard, so a multi-day
+// schedule stays short (Jacob 6/4). Layout: date/time + playoff series state on
+// top; below it the matchup ("away @ home", logos) with the broadcast network
+// pinned hard-right on the same row — the full card's stacked network got cut
+// off on mobile. Series state respects the ratings/reveal toggle (it discloses
+// who won the earlier games in the series).
+export function CompactUpcomingCard({
+  game,
+  nextGameDate,
+  useAbbreviations,
+  showRatings,
+  onSelectTeam,
+  onShowDetails,
+}: {
+  game: Game;
+  nextGameDate?: string;
+  useAbbreviations?: boolean;
+  showRatings?: boolean;
+  onSelectTeam?: (team: Team) => void;
+  onShowDetails?: (game: Game) => void;
+}) {
+  const espnUrl = espnGameUrl(game);
+  // Local tip-off time — mirrors GameCard's pre-game localTime derivation:
+  // prefer ESPN's status text, else fall back to the game's own date.
+  const localTime = (() => {
+    const cleaned = cleanStatusDetail(game.statusDetail, true);
+    if (cleaned && /\bTBD\b/i.test(cleaned)) return "TBD";
+    if (!cleaned || cleaned.toLowerCase() === "scheduled" || !/\d{1,2}:\d{2}/.test(cleaned) || /^starts\s/i.test(cleaned)) {
+      try {
+        const d = new Date(game.date);
+        if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      } catch { /* fall through */ }
+    }
+    return cleaned;
+  })();
+  const series = showRatings && game.seriesStatus ? formatSeriesStatus(game.seriesStatus) : null;
+  const network = game.broadcasts[0] ?? null;
+  const networkHref = network
+    ? ((/\b(amazon|prime)\b/i.test(network) && game.primeStreamUrl) || networkStreamUrl(network, game.id, game.sport) || sportStreamFallback(game.sport))
+    : null;
+
+  const isTBD = (team: Team) =>
+    team.shortDisplayName === "TBD" || team.abbreviation === "TBD" || !!team.shortDisplayName?.includes("/");
+  const teamLabel = (team: Team) => (useAbbreviations ? team.abbreviation : displayShortName(team));
+  const teamNode = (team: Team) => {
+    const label = <span className="whitespace-nowrap leading-none" title={team.displayName}>{teamLabel(team)}</span>;
+    if (isTBD(team) || !onSelectTeam || !team.id) return label;
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onSelectTeam(team); }}
+        className="cursor-pointer hover:underline decoration-dotted underline-offset-2"
+        title={`View ${team.displayName} schedule`}
+      >
+        {label}
+      </button>
+    );
+  };
+  const logo = (team: Team) =>
+    team.logo ? <img src={team.logo} alt={team.abbreviation} title={team.displayName} width={16} height={16} className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain shrink-0" /> : null;
+
+  const cardClickable = !!onShowDetails;
+  return (
+    <div
+      className={`rounded-lg px-2 py-1.5 transition-colors${cardClickable ? " cursor-pointer" : ""}`}
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      onClick={cardClickable ? () => onShowDetails!(game) : undefined}
+      role={cardClickable ? "button" : undefined}
+      title={cardClickable ? "Game details" : undefined}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+    >
+      {/* Top row: date · time (→ ESPN), and series state pinned right */}
+      <div className="flex items-center justify-between gap-2 mb-0.5 text-[10px] sm:text-[11px]" style={{ color: "var(--text-muted)" }}>
+        <a
+          href={espnUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline whitespace-nowrap"
+          style={{ color: "inherit" }}
+          title="View on ESPN"
+          onClick={handleExternalClick(espnUrl)}
+        >
+          {nextGameDate ? <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span> : null}
+          {nextGameDate && localTime ? " · " : ""}
+          {localTime || ""}
+        </a>
+        {series ? <span className="italic whitespace-nowrap shrink-0">{series}</span> : null}
+      </div>
+      {/* Matchup with the broadcast network pinned hard-right */}
+      <div className="flex items-center gap-1 min-w-0 text-xs sm:text-sm" style={{ color: "var(--text)" }}>
+        {logo(game.awayTeam)}
+        {teamNode(game.awayTeam)}
+        <span className="mx-0.5 shrink-0" style={{ color: "var(--text-muted)" }}>@</span>
+        {logo(game.homeTeam)}
+        {teamNode(game.homeTeam)}
+        <span className="flex-1 min-w-0" />
+        {network ? (
+          networkHref ? (
+            <a
+              href={networkHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 text-[10px] sm:text-xs hover:underline whitespace-nowrap"
+              style={{ color: "var(--text-muted)" }}
+              title={`Watch on ${network}`}
+              onClick={handleExternalClick(networkHref)}
+            >
+              {network}
+            </a>
+          ) : (
+            <span className="shrink-0 text-[10px] sm:text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{network}</span>
+          )
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Hide the rating badge while a live game is in a delay — rating returns
@@ -309,8 +429,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         const hasRating = showRating;
         const hasBroadcast = !isFinished && game.broadcasts.length > 0;
         const showFinal = isFinished && !isPastDate && !teamView;
+        // Playoff series state on pre-game cards, in ratings mode. On the Today
+        // tab, hold it until after the noon-ET morning reset; on future tabs
+        // (Tomorrow/+N) the current hour is irrelevant, so show it regardless
+        // so "NY leads 1-0" appears on tomorrow's game too (Jacob 6/4).
         const seriesInMiddle =
-          !!game.seriesStatus && isToday && isFuture && getETHour() >= 12 && showRatings && !hasRating;
+          !!game.seriesStatus && isFuture && showRatings && !hasRating && (!isToday || getETHour() >= 12);
         const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView || seriesInMiddle;
         if (!showBar) return null;
         // Small ESPN link wrapper for upcoming-time / date labels.

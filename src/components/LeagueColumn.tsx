@@ -10,7 +10,7 @@ import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/li
 import { handleExternalClick } from "@/lib/openExternal";
 import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
-import GameCard from "./GameCard";
+import GameCard, { CompactUpcomingCard } from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import TeamView from "./TeamView";
 
@@ -877,15 +877,10 @@ export default function LeagueColumn({
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
               {league.nextGameDay.games.map((game) => (
-                <GameCard
+                <CompactUpcomingCard
                   key={game.id}
                   game={game}
-                  favoriteTeams={favoriteTeams}
-                  onToggleFavoriteTeam={onToggleFavoriteTeam}
                   showRatings={showRatings}
-                  leagueLabel={league.label}
-                  onPlayHighlight={onPlayHighlight}
-                  onPlayEmbed={onPlayEmbed}
                   nextGameDate={formatDateCompact(etDayString(game.date) || league.nextGameDay!.date)}
                   useAbbreviations={useAbbreviations}
                   onSelectTeam={setTeamViewTeam}
@@ -959,15 +954,10 @@ export default function LeagueColumn({
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
               </div>
               {league.nextGameDay.games.map((game) => (
-                <GameCard
+                <CompactUpcomingCard
                   key={game.id}
                   game={game}
-                  favoriteTeams={favoriteTeams}
-                  onToggleFavoriteTeam={onToggleFavoriteTeam}
                   showRatings={showRatings}
-                  leagueLabel={league.label}
-                  onPlayHighlight={onPlayHighlight}
-                  onPlayEmbed={onPlayEmbed}
                   nextGameDate={formatDateCompact(etDayString(game.date) || league.nextGameDay!.date)}
                   useAbbreviations={useAbbreviations}
                   onSelectTeam={setTeamViewTeam}
