@@ -19,7 +19,10 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   // ESPN has no bare /tennis/news feed (404) — the ATP league feed carries the
   // marquee tennis news (Slams, both tours' headlines), so route tennis there.
   tennis: "/tennis/atp",
-  fifa: "/soccer",
+  // ESPN's bare /soccer/news now 404s; the World Cup league feed carries the
+  // actual WC coverage (squads, match previews, group analysis). Route fifa
+  // there so the "ESPN World Cup" news card stops coming back empty.
+  fifa: "/soccer/fifa.world",
   epl: "/soccer/eng.1",
   mls: "/soccer/usa.1",
   ucl: "/soccer/uefa.champions",
@@ -246,9 +249,17 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   // slower to pick up. (Re-added 2026-05-31 after the temporary 5/30 removal.)
   const reddit = REDDIT_SUB[sport];
   if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
+  // The World Cup is a marquee tournament with no official-site feed and no
+  // video feed, so the column was thin (just r/worldcup). Build it out (Jacob
+  // 6/4) with the high-volume r/soccer firehose alongside the WC-specific
+  // r/worldcup. reddit-soccer is baked by prebake-news.mjs.
+  if (sport === "fifa") out.push({ label: "r/soccer", key: "reddit-soccer", kind: "prebaked", logoUrl });
   const official = PREBAKED_FEEDS[sport];
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
-  out.push({ label: `ESPN ${sport.toUpperCase()}`, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
+  // fifa's ESPN feed is the World Cup league feed (see SPORT_NEWS_PATHS) — label
+  // it "ESPN World Cup" rather than the generic "ESPN FIFA".
+  const espnLabel = sport === "fifa" ? "ESPN World Cup" : `ESPN ${sport.toUpperCase()}`;
+  out.push({ label: espnLabel, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
   return out;
 }
 

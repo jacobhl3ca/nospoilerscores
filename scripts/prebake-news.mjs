@@ -1406,6 +1406,9 @@ const jobs = [
   ["reddit-ucl", () => fetchReddit("championsleague", "r/championsleague")],
   ["reddit-uel", () => fetchReddit("EuropaLeague", "r/EuropaLeague")],
   ["reddit-fifa", () => fetchReddit("worldcup", "r/worldcup")],
+  // r/soccer (the high-volume general sub) builds out the thin World Cup column
+  // alongside r/worldcup — see leagueSourceCascade("fifa") in src/lib/news.ts.
+  ["reddit-soccer", () => fetchReddit("soccer", "r/soccer")],
   ["reddit-ncaaf", () => fetchReddit("CFB", "r/CFB")],
   ["reddit-ncaaw", () => fetchReddit("ncaaw", "r/ncaaw")],
 
