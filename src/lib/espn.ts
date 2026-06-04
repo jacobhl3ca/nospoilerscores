@@ -65,7 +65,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "tennis", label: "Wimbledon",    startDate: "06-29", endDate: "07-13", championshipDate: "07-13", firstPref: true, displaySlot: "center", slotPrecedence: 4 },
   { sport: "tennis", label: "US Open",      startDate: "08-25", endDate: "09-14", championshipDate: "09-14", firstPref: true, displaySlot: "center", slotPrecedence: 3 },
   // ── FIFA World Cup (every 4 years; 2026 was the most recent anchor) ──
-  { sport: "fifa", label: "World Cup", startDate: "06-11", endDate: "07-19", championshipDate: "07-19", firstPref: true, displaySlot: "center", slotPrecedence: 2, yearCycle: { mod: 4, anchor: 2026 } },
+  // startDate opened to 06-04 (tournament opens 06-11) so the column previews
+  // live NOW with the opener via the next-game-day lookahead. Revert to 06-11
+  // after launch if you don't want it pinned before kickoff. NOTE: pinning the
+  // World Cup to center bumps MLB out of the default 3-column layout until
+  // NBA/NHL end (06-19).
+  { sport: "fifa", label: "World Cup", startDate: "06-04", endDate: "07-19", championshipDate: "07-19", firstPref: true, displaySlot: "center", slotPrecedence: 2, yearCycle: { mod: 4, anchor: 2026 } },
   // ── Premier League (Aug–May) ──
   { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
   // ── UEFA Champions League (Sep League phase → Jun Final) ──
@@ -948,7 +953,7 @@ export function sportStreamFallback(sport: Sport): string {
     case "mlb": return "https://www.mlb.com/tv";
     case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";
-    case "fifa": return "https://www.foxsports.com/live";
+    case "fifa": return "https://www.foxsports.com/soccer/fifa-world-cup";
     // UCL / UEL: Paramount+ holds US rights through 2030.
     case "ucl": return "https://www.paramountplus.com/shows/uefa-champions-league/";
     case "uel": return "https://www.paramountplus.com/shows/uefa-europa-league/";
@@ -969,6 +974,12 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   // player — the user picked ABC, send them to ABC.
   if (b.includes("espn")) return `https://www.espn.com/watch/player/_/id/${gameId}`;
   if (b === "abc") return "https://abc.com/watch-live";
+  // FIFA World Cup (2026): FOX/FS1 hold US English rights to all 104 matches —
+  // route the FOX family to the World Cup hub rather than the generic live page.
+  // Telemundo/Peacock (Spanish) keep their own destinations via the rules below.
+  if (sport === "fifa" && (b === "fox" || b === "fs1" || b === "fs2")) {
+    return "https://www.foxsports.com/soccer/fifa-world-cup";
+  }
   // FOX family
   if (b === "fox" || b === "fs1" || b === "fs2" || b === "fox deportes") return "https://www.foxsports.com/live";
   // WBD networks. TNT/TBS/TruTV each have their own TV Everywhere portal —
