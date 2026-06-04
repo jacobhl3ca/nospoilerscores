@@ -496,8 +496,15 @@ export default function LeagueColumn({
       const nameContainers = el.querySelectorAll(".team-name-container");
       if (!nameContainers.length) return;
 
-      // Get the longest team name from the rendered games
-      const allNames = league.games.flatMap(g => [
+      // Get the longest team name from the games actually rendered. When today's
+      // slate is empty we render the next-game-day lookahead instead (league.games
+      // is []), so measure THOSE names — otherwise this bails early and
+      // useAbbreviations stays stuck at its initial `true`, abbreviating names
+      // ("NY"/"SA") even when the full names ("Knicks"/"Spurs") would easily fit.
+      const measuredGames = league.games.length
+        ? league.games
+        : (league.nextGameDay?.games ?? []);
+      const allNames = measuredGames.flatMap(g => [
         displayShortName(g.awayTeam),
         displayShortName(g.homeTeam),
       ]);
