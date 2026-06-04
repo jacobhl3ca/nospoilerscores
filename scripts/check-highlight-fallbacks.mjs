@@ -177,6 +177,11 @@ for (const sport of Object.keys(ESPN_PATHS)) {
         channel: channel ?? "(none)",
         officialResult: official.videoId ? `${official.videoId} (${official.via})` : "EXHAUSTED",
         searchResult: search.videoId ? `${search.videoId} (${search.via})` : "EXHAUSTED",
+        // Raw inputs kept so the confirmation pass below can re-resolve.
+        away: teams.away,
+        home: teams.home,
+        dateStr,
+        channelKey: channel,
       };
       const officialExhausted = channel && !official.videoId;
       const searchExhausted = !search.videoId;
@@ -189,6 +194,37 @@ for (const sport of Object.keys(ESPN_PATHS)) {
         // channel video — likely a TEAM_NAME_ALIASES gap.
         aliasNeeded.push(row);
       }
+    }
+  }
+}
+
+// Confirmation pass. The /api/youtube endpoint throttles under load, so a
+// single scheduled run can null out lookups that resolve fine moments later
+// (the classic tell: several standard-named teams all "missing" the channel
+// filter in the same run). Re-resolve each exhausted game once after a short
+// cool-off and only keep the ones that are STILL empty — those are the real
+// hidden-button cases worth emailing about. Games that come back are logged
+// as recovered (no email).
+const confirmedExhausted = [];
+const recovered = [];
+if (exhausted.length) {
+  await sleep(3000); // let any transient throttle clear
+  for (const row of exhausted) {
+    const official = row.channelKey
+      ? await resolve(row.away, row.home, row.dateStr, row.channelKey)
+      : { videoId: "n/a", via: "no-official-channel" };
+    await sleep(40);
+    const search = await resolve(row.away, row.home, row.dateStr, undefined);
+    await sleep(40);
+    // Refresh the printed results with the retry's outcome either way.
+    row.officialResult = official.videoId ? `${official.videoId} (${official.via})` : "EXHAUSTED";
+    row.searchResult = search.videoId ? `${search.videoId} (${search.via})` : "EXHAUSTED";
+    const officialStillEmpty = row.channelKey && !official.videoId;
+    const searchStillEmpty = !search.videoId;
+    if (officialStillEmpty || searchStillEmpty) {
+      confirmedExhausted.push(row);
+    } else {
+      recovered.push(row);
     }
   }
 }
@@ -207,7 +243,8 @@ console.log(`base:        ${BASE}`);
 console.log(`window:      past ${LOOKBACK_HOURS}h (≈${dates.length} ET days)`);
 console.log(`leagues:     ${Object.keys(ESPN_PATHS).join(", ")}`);
 console.log(`scanned:     ${scanned} finished game(s)`);
-console.log(`exhausted:   ${exhausted.length}   (chain returns null — button is hidden)`);
+console.log(`exhausted:   ${confirmedExhausted.length}   (still empty after a confirmation retry — button is hidden)`);
+console.log(`recovered:   ${recovered.length}  (first pass missed, retry caught it — transient throttle, no email)`);
 console.log(`alias-needed: ${aliasNeeded.length}  (official-channel filter missed — broader retry caught it)\n`);
 
 if (aliasNeeded.length) {
@@ -215,9 +252,14 @@ if (aliasNeeded.length) {
   aliasNeeded.forEach(printRow);
 }
 
-if (exhausted.length) {
+if (recovered.length) {
+  console.log("--- RECOVERED ON RETRY (transient throttle, no email) ---");
+  recovered.forEach(printRow);
+}
+
+if (confirmedExhausted.length) {
   console.log("--- EXHAUSTED (UI hides the button) ---");
-  exhausted.forEach(printRow);
+  confirmedExhausted.forEach(printRow);
   console.log("Fix path: add a TEAM_NAME_ALIASES entry in src/lib/youtube.ts and mirror it in this script,");
   console.log("or extend the chain in resolveHighlightVideo() with an additional retry.");
   process.exit(1);
