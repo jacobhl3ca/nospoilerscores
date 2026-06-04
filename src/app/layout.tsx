@@ -136,6 +136,12 @@ export default function RootLayout({
           async
           src="//gc.zgo.at/count.js"
         />
+        {/* Umami analytics — self-hosted on the Mac mini, privacy-first */}
+        <script
+          defer
+          src="https://stats.hidescore.com/script.js"
+          data-website-id="bd9fa6f3-8754-4ca6-b439-f9e2bdeec66d"
+        />
         {/* PWA service worker — prod only; in dev it caches stale chunks and breaks hydration */}
         {process.env.NODE_ENV === "production" && (
           <script
