@@ -16,10 +16,10 @@ jobs:
       # Treat pre-script GitHub infra failures (checkout 403s, setup-node
       # hiccups) as skips, not job failures — only the checker's exit code
       # should email the owner. Mirrors staleness-check.yml.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         id: checkout
         continue-on-error: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         id: setup
         if: steps.checkout.outcome == 'success'
         with:
