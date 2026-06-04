@@ -680,6 +680,44 @@ export default function LeagueColumn({
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
 
+  // Render the upcoming/lookahead slate. NBA/NHL are down to a single playoff
+  // series with a few games left, so the lead game is a full card and the rest
+  // collapse to compact "@ home" rows (series state shows once, on a full card).
+  // `firstFull` makes the first game a full card — used when there's no game
+  // today (the empty-day lookahead); when today already has a full card above,
+  // the whole upcoming list is compact. Every other league stays all-full.
+  const isCompactLeague = league.sport === "nba" || league.sport === "nhl";
+  const renderUpcomingSlate = (games: Game[], firstFull: boolean) =>
+    games.map((game, i) => {
+      const nextGameDate = formatDateCompact(etDayString(game.date) || league.nextGameDay!.date);
+      if (isCompactLeague && !(firstFull && i === 0)) {
+        return (
+          <CompactUpcomingCard
+            key={game.id}
+            game={game}
+            nextGameDate={nextGameDate}
+            onShowDetails={onShowDetails}
+          />
+        );
+      }
+      return (
+        <GameCard
+          key={game.id}
+          game={game}
+          favoriteTeams={favoriteTeams}
+          onToggleFavoriteTeam={onToggleFavoriteTeam}
+          showRatings={showRatings}
+          leagueLabel={league.label}
+          onPlayHighlight={onPlayHighlight}
+          onPlayEmbed={onPlayEmbed}
+          nextGameDate={nextGameDate}
+          useAbbreviations={useAbbreviations}
+          onSelectTeam={setTeamViewTeam}
+          onShowDetails={onShowDetails}
+        />
+      );
+    });
+
   return (
     <div
       ref={columnRef}
@@ -876,17 +914,9 @@ export default function LeagueColumn({
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
-              {league.nextGameDay.games.map((game) => (
-                <CompactUpcomingCard
-                  key={game.id}
-                  game={game}
-                  showRatings={showRatings}
-                  nextGameDate={formatDateCompact(etDayString(game.date) || league.nextGameDay!.date)}
-                  useAbbreviations={useAbbreviations}
-                  onSelectTeam={setTeamViewTeam}
-                  onShowDetails={onShowDetails}
-                />
-              ))}
+              {/* No game today → the lead upcoming game is a full card, the
+                  rest compact (NBA/NHL); other leagues stay all-full. */}
+              {renderUpcomingSlate(league.nextGameDay.games, true)}
             </div>
           ) : (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Upcoming Schedule TBD</p>
@@ -945,7 +975,8 @@ export default function LeagueColumn({
           ))}
           {/* Upcoming future-day games shown alongside today's slate (NBA/NHL
               playoffs, World Cup). Above the Final separator so upcoming sits
-              above finished; each card carries its own date label. */}
+              above finished. Today's full card is the lead, so the whole
+              upcoming list is compact for NBA/NHL (firstFull=false). */}
           {renderUpcoming && league.nextGameDay && league.nextGameDay.games.length > 0 && (
             <>
               <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
@@ -953,17 +984,7 @@ export default function LeagueColumn({
                 <span className="text-[9px] uppercase tracking-wide">Upcoming</span>
                 <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
               </div>
-              {league.nextGameDay.games.map((game) => (
-                <CompactUpcomingCard
-                  key={game.id}
-                  game={game}
-                  showRatings={showRatings}
-                  nextGameDate={formatDateCompact(etDayString(game.date) || league.nextGameDay!.date)}
-                  useAbbreviations={useAbbreviations}
-                  onSelectTeam={setTeamViewTeam}
-                  onShowDetails={onShowDetails}
-                />
-              ))}
+              {renderUpcomingSlate(league.nextGameDay.games, false)}
             </>
           )}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
