@@ -637,7 +637,11 @@ function parseTennisMatch(match: any, event: any): Game {
     // highlight search so it can't drift to the wrong event (see above).
     seriesNote: tourneyTag || null,
     seriesStatus: null,
-    playoffLabel: null,
+    // Tournament round ("Quarterfinal", "Round 4", "Final", …). Surfaced in the
+    // italic league-header subtitle (see getPlayoffSubtitle's tennis branch),
+    // the same slot golf uses for "Round N of 4" and team sports use for the
+    // playoff round. isPlayoff stays false — tennis isn't a playoff "series".
+    playoffLabel: match.round?.displayName ?? null,
     isPlayoff: false,
     recapUrl: null,
     rating,
@@ -651,6 +655,12 @@ function buildTennisGames(events: any[], date?: string): Game[] {
   const target = date ?? todayYmd;
   const games: Game[] = [];
   for (const event of events) {
+    // Grand Slam only. The ATP scoreboard also returns the week's tune-up
+    // tournaments — e.g. during Roland Garros the grass-court Boss Open and
+    // Libéma Open appear too, with their qualifying matches. Without this gate
+    // those non-Slam matches leak into the "French Open" column (Jacob 6/7).
+    // All four Slams carry major:true; the tune-ups are major:false.
+    if (!event.major) continue;
     for (const grouping of event.groupings ?? []) {
       const slug = (grouping.grouping?.slug ?? "").toLowerCase();
       // Singles draws only.

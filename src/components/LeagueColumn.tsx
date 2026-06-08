@@ -90,6 +90,48 @@ interface SubtitleResult {
   href?: string;
 }
 
+// Tennis round wording for the italic header subtitle (parallels golf's
+// "Round N of 4"). The round is a per-MATCH property, and one column can carry
+// both the men's and women's draw, which occasionally sit a round apart on the
+// same day — so headline the DEEPEST round present (Final > Semifinal > … >
+// Round 1 > qualifying). Returns [full, short] tiers so a long label like
+// "Qualifying 1st Round" can collapse on a narrow column.
+const TENNIS_ROUND_ORDER = [
+  "Qualifying 1st Round",
+  "Qualifying 2nd Round",
+  "Qualifying Final",
+  "Round 1",
+  "Round 2",
+  "Round 3",
+  "Round 4",
+  "Quarterfinal",
+  "Semifinal",
+  "Final",
+];
+function deepestTennisRound(labels: string[]): string | null {
+  let best: string | null = null;
+  let bestRank = -Infinity;
+  for (const l of labels) {
+    const rank = TENNIS_ROUND_ORDER.indexOf(l);
+    // Unknown labels (rank -1) still beat "nothing chosen yet" so we never drop
+    // a real round just because ESPN introduced wording we don't enumerate.
+    if (best === null || rank > bestRank) {
+      best = l;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+function tennisRoundTiers(label: string): string[] {
+  const short = label
+    .replace(/Quarterfinal/i, "QF")
+    .replace(/Semifinal/i, "SF")
+    .replace(/Qualifying/i, "Qual")
+    .replace(/(\d+)(?:st|nd|rd|th)?\s+Round/i, "R$1")
+    .replace(/Round (\d+)/i, "R$1");
+  return short !== label ? [label, short] : [label];
+}
+
 // Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
 function parseEtTime(s: string): { h: number; m: number } | null {
   const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -128,6 +170,15 @@ function getPlayoffSubtitle(
   games: Game[] | undefined,
   bigInningSchedule: BigInningSchedule | null,
 ): SubtitleResult | null {
+  // Tennis: no playoff countdown — the subtitle is the tournament round, read
+  // off the day's matches (golf-style). Handled before the PLAYOFF_START_DATES
+  // gate since tennis has no entry there.
+  if (sport === "tennis") {
+    const labels = (games ?? []).map((g) => g.playoffLabel).filter(Boolean) as string[];
+    const round = deepestTennisRound(labels);
+    return round ? { tiers: tennisRoundTiers(round) } : null;
+  }
+
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
   const y = +selectedDate.slice(0, 4);
