@@ -865,7 +865,14 @@ export default function LeagueColumn({
                     >
                       Auto
                     </button>
-                    {swappableOptions!.map((opt) => {
+                    {/* Sort leagues already shown in another column (greyed) to
+                        the bottom, just above Empty — they're the least useful to
+                        pick again (Jacob 6/9). Stable sort keeps the rest in order. */}
+                    {[...swappableOptions!].sort((a, b) => {
+                      const ae = a.sport !== league.sport && !!shownElsewhere?.includes(a.sport);
+                      const be = b.sport !== league.sport && !!shownElsewhere?.includes(b.sport);
+                      return (ae ? 1 : 0) - (be ? 1 : 0);
+                    }).map((opt) => {
                       const isCurrent = opt.sport === league.sport;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
                       return (
