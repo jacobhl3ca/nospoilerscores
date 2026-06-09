@@ -31,6 +31,7 @@
   --text-muted: #999999;
   --border: rgba(0, 0, 0, 0.1);
   --border-hover: rgba(0, 0, 0, 0.2);
+  --menu-hover: rgba(0, 0, 0, 0.12);
   --accent: #2563eb;
 }
 
@@ -43,6 +44,7 @@
   --text-muted: #6b7280;
   --border: rgba(255, 255, 255, 0.1);
   --border-hover: rgba(255, 255, 255, 0.2);
+  --menu-hover: rgba(255, 255, 255, 0.12);
   --accent: #60a5fa;
 }
 

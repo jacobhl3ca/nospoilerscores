@@ -852,7 +852,7 @@ export default function LeagueColumn({
                 </button>
                 {swapOpen && (
                   <div
-                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[100px]"
+                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-hidden min-w-[100px]"
                     style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                   >
                     {/* Auto option — always present so the dropdown is consistent per column */}
@@ -860,7 +860,7 @@ export default function LeagueColumn({
                       onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{ color: "var(--text-muted)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border-hover)"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       Auto
@@ -878,7 +878,7 @@ export default function LeagueColumn({
                             fontWeight: isCurrent ? 600 : 400,
                           }}
                           title={isElsewhere ? "Already shown in another column — pick to add a second" : undefined}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border-hover)"; }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           {opt.label}
@@ -894,7 +894,7 @@ export default function LeagueColumn({
                         fontWeight: 400,
                         borderTop: "1px solid var(--border)",
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border-hover)"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       Empty
