@@ -211,7 +211,7 @@ export function CompactUpcomingCard({
           is perfectly centered in the card and lines up across every row, no
           matter the DOW width (Jacob 6/9). Date bold (DOW only on mobile), time
           shortened, network right. */}
-      <div className="grid sm:hidden grid-cols-[1fr_auto_1fr] items-baseline gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+      <div className="grid sm:hidden grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
         <span className="min-w-0 truncate font-bold justify-self-start" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
         <span className="justify-self-center whitespace-nowrap">{localTime ? shortenTime(localTime) : ""}</span>
         <span className="justify-self-end min-w-0 truncate">{networkNode}</span>
@@ -219,7 +219,7 @@ export function CompactUpcomingCard({
       {/* Desktop: bold DOW only; the M/D + time flow right after as one muted run
           (same size & color as the time) — "Sat 6/13 - 8:30 PM", no big gap
           before the dash. Network pinned right (Jacob 6/9). */}
-      <div className="hidden sm:flex items-baseline gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+      <div className="hidden sm:flex items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
         <span className="whitespace-nowrap">
           <span className="font-bold" style={{ color: "var(--text)" }}>{(nextGameDate || "").split(" ")[0]}</span>
           {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${localTime}` : ""}
@@ -474,31 +474,27 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 "FINAL"
               ) : nextGameDate ? (
                 withEspn(
+                  // ONE link (date + time underline together on hover, like
+                  // before). DOW bold + dark; M/D + time muted (same size/color).
+                  // Desktop: "Thu 6/11 - 7:00 PM"; mobile drops the M/D and
+                  // shortens the time ("Thu 7 PM") (Jacob 6/9).
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    {/* Bold DOW only, dark; the M/D is muted (same as the time).
-                        Mobile drops the M/D ("Thu 6/11" → "Thu") so date + time +
-                        the wide "FOX +2" all fit the World Cup cards (Jacob 6/9). */}
-                    <span className="hidden sm:inline">
-                      <span className="font-bold" style={{ color: "var(--text)" }}>{(nextGameDate || "").split(" ")[0]}</span>
-                      {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}
-                    </span>
-                    <span className="sm:hidden font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
+                    <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? <><span className="sm:hidden">Tomo</span><span className="hidden sm:inline">Tomorrow</span></> : (nextGameDate || "").split(" ")[0]}</span>
+                    <span className="hidden sm:inline">{(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${localTime}` : ""}</span>
+                    <span className="sm:hidden">{localTime ? ` ${shortenTime(localTime)}` : ""}</span>
+                  </span>
+                )
+              ) : isFuture ? (
+                // Normal today/future card with no date label — just the time
+                // (left), full ":00" on desktop, shortened on mobile.
+                withEspn(
+                  <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
+                    <span className="sm:hidden">{shortenTime(localTime || cleanStatusDetail(game.statusDetail, false))}</span>
+                    <span className="hidden sm:inline">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
                   </span>
                 )
               ) : null}
             </span>
-            {/* Time as its own shrink-0 cell so it never truncates on a narrow
-                card — only the date label above yields. No dash; the flex gap
-                separates them, matching the compact rows (Jacob 6/9). */}
-            {!teamView && (nextGameDate || isFuture) ? (() => {
-              const t = localTime || (isFuture ? cleanStatusDetail(game.statusDetail, false) : "");
-              if (!t) return null;
-              // Desktop: dash before the time ("Thu 6/11 - 7:00 PM") when there's a
-              // date label; full ":00". Mobile: shortened, no dash (tight column).
-              // Normal today cards have no date label → just the time, no dash.
-              const hasDate = !!nextGameDate;
-              return <span className="shrink-0 text-[11px] whitespace-nowrap">{withEspn(<><span className="sm:hidden">{shortenTime(t)}</span><span className="hidden sm:inline">{hasDate ? `- ${t}` : t}</span></>)}</span>;
-            })() : null}
             {/* Middle cell is rendered ONLY when it has breakpoint-visible content,
                 so an empty middle never eats a flex gap (which was clipping the
                 lead card's date to "T.." on mobile). The series variant is
