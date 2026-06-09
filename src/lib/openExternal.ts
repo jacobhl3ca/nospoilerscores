@@ -108,7 +108,11 @@ const APP_LINK_HOSTS = [
   "mlb.com",           // MLB app — /tv/g* (per-game), /tv hub, /news/*
   "abc.com",           // ABC app — /watch-live
   "cbs.com",           // CBS app — /live-tv (plain CBS broadcast)
-  "espn.com",          // ESPN app — /watch/*, gamecast
+  // "espn.com" intentionally NOT app-linked (Jacob 6/9): the ESPN app always
+  // serves an ad, is slow, and can't be dismissed. Routing ESPN through
+  // openInBrowser keeps it in SFSafariViewController, which does NOT fire
+  // Universal Links (so it never hands off to the ESPN app) and DOES honor
+  // Safari content blockers (AdGuard etc.), so news/videos load ad-free.
   "nba.com",           // NBA app — /watch, league-pass-stream
   "wnba.com",          // WNBA app — /watch
   "nhl.com",           // NHL app — /tv
