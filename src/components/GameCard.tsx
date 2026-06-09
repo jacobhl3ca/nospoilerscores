@@ -177,20 +177,15 @@ export function CompactUpcomingCard({
     ? ((/\b(amazon|prime)\b/i.test(network) && game.primeStreamUrl) || networkStreamUrl(network, game.id, game.sport) || sportStreamFallback(game.sport))
     : null;
   const cardClickable = !!onShowDetails;
-  // Date + time render crunched together after the team ("· Wed 6/10 8:00 PM"),
-  // the live hidescore format (Jacob 6/7) — not the spaced/aligned-column layout
-  // the A/B worktrees were trialing. Compact sizing/@team/network kept from that
-  // "compact" variant; the date/time just runs together and truncates if tight.
-  // Pinned right (ml-auto). shrink-0 so the text never clips on the narrow
-  // mobile column — the date yields instead. Extra py gives a taller tap target
-  // for easy thumbing (the column's too narrow for a full-width one) (Jacob 6/9).
+  // Position-agnostic network link (the row wrappers below place it); kept the
+  // same muted styling for both card layouts.
   const networkNode = network ? (
     networkHref ? (
       <a
         href={networkHref}
         target="_blank"
         rel="noopener noreferrer"
-        className="shrink-0 ml-auto text-right text-[10px] sm:text-xs hover:underline whitespace-nowrap py-1.5 -my-1.5"
+        className="text-[10px] sm:text-xs hover:underline whitespace-nowrap"
         style={{ color: "var(--text-muted)" }}
         title={`Watch on ${network}`}
         onClick={handleExternalClick(networkHref)}
@@ -198,7 +193,7 @@ export function CompactUpcomingCard({
         {network}
       </a>
     ) : (
-      <span className="shrink-0 ml-auto text-right text-[10px] sm:text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{network}</span>
+      <span className="text-[10px] sm:text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{network}</span>
     )
   ) : null;
   return (
@@ -211,25 +206,21 @@ export function CompactUpcomingCard({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
     >
-      {/* Row 1: date · time · network, no dash. The date sits in a fixed-width
-          cell so the times line up vertically across rows (Jacob 6/9 — "Fri"
-          and "Tue" are different widths, which slid the time around). DOW is
-          bolded again now that it's simple; mobile shows just the DOW. */}
-      <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-        {/* Mobile: date is content-sized + truncatable (the column is too narrow
-            to waste a fixed width). Desktop: fixed width so the times line up
-            across rows. DOW bolded; mobile shows just the DOW. */}
-        <span className="min-w-0 sm:w-16 sm:shrink-0 truncate whitespace-nowrap" style={{ color: "var(--text)" }}>
-          {/* Bold the DOW only — the M/D after it stays normal weight (Jacob 6/9). */}
-          <span className="sm:hidden font-bold">{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
-          <span className="hidden sm:inline">
-            <span className="font-bold">{(nextGameDate || "").split(" ")[0]}</span>
-            {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}
-          </span>
-        </span>
-        {/* Full ":00" time on desktop (there's room); shortened on mobile. */}
-        {localTime ? <span className="shrink-0 whitespace-nowrap"><span className="sm:hidden">{shortenTime(localTime)}</span><span className="hidden sm:inline">{localTime}</span></span> : null}
-        {networkNode}
+      {/* Mobile: date · time · network as a 3-col grid (1fr auto 1fr) so the TIME
+          is perfectly centered in the card and lines up across every row, no
+          matter the DOW width (Jacob 6/9). Date bold (DOW only on mobile), time
+          shortened, network right. */}
+      <div className="grid sm:hidden grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+        <span className="min-w-0 truncate font-bold justify-self-start" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
+        <span className="justify-self-center whitespace-nowrap">{localTime ? shortenTime(localTime) : ""}</span>
+        <span className="justify-self-end min-w-0 truncate">{networkNode}</span>
+      </div>
+      {/* Desktop: the previous, cleaner look — bold date + full ":00" time, network
+          pinned right (the bold-DOW / normal-M-D split read as weird) (Jacob 6/9). */}
+      <div className="hidden sm:flex items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+        <span className="font-bold whitespace-nowrap" style={{ color: "var(--text)" }}>{nextGameDate}</span>
+        {localTime ? <span className="whitespace-nowrap">{localTime}</span> : null}
+        {networkNode ? <span className="ml-auto whitespace-nowrap">{networkNode}</span> : null}
       </div>
       {/* Row 2: venue — "@ HOME". Series teams are fixed, so just the home side. */}
       <div className="flex items-center gap-1.5">
@@ -479,15 +470,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 "FINAL"
               ) : nextGameDate ? (
                 withEspn(
-                  <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text)" }}>
-                    {/* Bold the DOW only; the M/D stays normal weight. Mobile
-                        drops the M/D ("Thu 6/11" → "Thu") so date + time + the
-                        wide "FOX +2" all fit the World Cup cards (Jacob 6/9). */}
-                    <span className="hidden sm:inline">
-                      <span className="font-bold">{(nextGameDate || "").split(" ")[0]}</span>
-                      {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}
-                    </span>
-                    <span className="sm:hidden font-bold">{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
+                  <span className="text-[11px] whitespace-nowrap font-bold" style={{ color: "var(--text)" }}>
+                    {/* Desktop: full date, bolded (the cleaner previous look).
+                        Mobile drops the M/D ("Thu 6/11" → "Thu") so date + time +
+                        the wide "FOX +2" all fit the World Cup cards (Jacob 6/9). */}
+                    <span className="hidden sm:inline">{nextGameDate}</span>
+                    <span className="sm:hidden">{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
                   </span>
                 )
               ) : isFuture && isToday ? (
