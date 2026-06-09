@@ -221,10 +221,14 @@ export function CompactUpcomingCard({
           is perfectly centered in the card and lines up across every row, no
           matter the DOW width (Jacob 6/9). Date bold (DOW only on mobile), time
           shortened, network right. */}
-      <div className="grid sm:hidden grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-        <span className="min-w-0 truncate font-bold justify-self-start" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
-        <span className="justify-self-center whitespace-nowrap">{localTime ? shortenTime(localTime) : ""}</span>
-        <span className="justify-self-end min-w-0 truncate">{networkNode}</span>
+      <div className="flex sm:hidden items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+        {/* Time sits a space to the right of the DOW (not centered). The 3-letter
+            DOWs are ~the same width, so the times roughly line up across rows
+            without a fixed width (which would waste space + clip the network on a
+            narrow column). Network pinned right (Jacob 6/9). */}
+        <span className="shrink-0 font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
+        {localTime ? <span className="shrink-0 whitespace-nowrap">{shortenTime(localTime)}</span> : null}
+        <span className="ml-auto shrink-0 text-right">{networkNode}</span>
       </div>
       {/* Desktop: bold DOW only; the M/D + time flow right after as one muted run
           (same size & color as the time) — "Sat 6/13 - 8:30 PM", no big gap
@@ -430,7 +434,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             href={espnUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="underline decoration-dotted underline-offset-2 hover:decoration-solid transition-colors"
+            className="hover:underline transition-colors"
             style={{ color: "inherit" }}
             title="View on ESPN"
             onClick={handleExternalClick(espnUrl)}
@@ -439,7 +443,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           </a>
         );
         return (
-          <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1.5" style={{ color: "var(--text-muted)" }}>
+          <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
             {/* Flex (not a symmetric grid): the date/time takes all the space it
                 needs and only truncates (min-w-0) when the row is genuinely too
                 tight — so a wide card shows the full "Tomorrow - 8:30 PM" instead
