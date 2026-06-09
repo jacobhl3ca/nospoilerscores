@@ -10,6 +10,9 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # the failure-alert step below opens/updates an issue
     steps:
       # Treat pre-script GitHub infra failures (checkout 403s, setup-node hiccups)
       # as skips, not job failures — only the staleness script's exit code should
@@ -30,3 +33,24 @@ jobs:
       # (as long as the infra steps succeeded) so both alerts stay independent.
       - if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.setup.outcome == 'success' }}
         run: node scripts/check-highlight-fallbacks.mjs
+      # Real-failure alert. This step only runs when an actual check step above
+      # FAILED — a job that never got a runner ("not acquired by Runner of type
+      # hosted") runs zero steps, so GitHub-infra blips stay silent here. Lets us
+      # mute GitHub's native per-run failure emails and only hear about genuine
+      # staleness. De-dupes onto one open issue (hourly re-runs just comment), so
+      # a sustained outage = one @-mention email, not one per hour.
+      - name: Alert on real check failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Feed staleness check is failing"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          stamp="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          existing="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Still failing as of $stamp — $run_url"
+          else
+            gh issue create --title "🔴 $title" \
+              --body "$(printf 'A staleness/highlight check ran and **failed** — a real problem, not a GitHub runner blip.\n\nFirst seen: %s\nRun log: %s\n\ncc @jacobhl3ca' "$stamp" "$run_url")"
+          fi

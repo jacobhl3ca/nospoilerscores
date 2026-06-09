@@ -12,6 +12,9 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # the failure-alert step below opens/updates an issue
     steps:
       # Treat pre-script GitHub infra failures (checkout 403s, setup-node
       # hiccups) as skips, not job failures — only the checker's exit code
@@ -27,3 +30,22 @@ jobs:
         continue-on-error: true
       - if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
         run: node scripts/check-watch-links.mjs
+      # Real-failure alert — only runs when the checker above actually FAILED.
+      # A job that never got a runner runs zero steps, so GitHub-infra blips stay
+      # silent here (lets us mute GitHub's native failure emails). De-dupes onto
+      # one open issue so a sustained problem = one @-mention email.
+      - name: Alert on real check failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Watch-link check is failing"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          stamp="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          existing="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Still failing as of $stamp — $run_url"
+          else
+            gh issue create --title "🔴 $title" \
+              --body "$(printf 'The watch-link checker ran and **failed** — a real problem, not a GitHub runner blip.\n\nFirst seen: %s\nRun log: %s\n\ncc @jacobhl3ca' "$stamp" "$run_url")"
+          fi
