@@ -200,18 +200,16 @@ export function CompactUpcomingCard({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
     >
-      {/* Row 1: date · time left, broadcast network pinned top-right — mirrors the
-          full GameCard's status bar so the network sits top-right everywhere
-          (Jacob 6/8), instead of a cramped inline slot after the team. */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-          {/* Same-series rows, so the date is unbolded. Mobile drops the M/D
-              ("Sat 6/13" → "Sat") so the time never truncates; desktop keeps the
-              full date (Jacob 6/9). */}
+      {/* Row 1: three evenly-spaced elements — date · time · network — no dash
+          (Jacob 6/9). justify-between spreads them edge-to-center-to-edge so each
+          gets its own room. Same-series rows, so the date is unbolded; mobile
+          drops the M/D ("Sat 6/13" → "Sat") so nothing truncates. */}
+      <div className="flex items-center justify-between gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+        <span className="min-w-0 truncate whitespace-nowrap">
           <span className="sm:hidden">{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
           <span className="hidden sm:inline">{nextGameDate}</span>
-          {nextGameDate && localTime ? " - " : ""}{localTime || ""}
         </span>
+        {localTime ? <span className="shrink-0 whitespace-nowrap">{localTime}</span> : null}
         {networkNode}
       </div>
       {/* Row 2: venue — "@ HOME". Series teams are fixed, so just the home side. */}
@@ -417,10 +415,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           </a>
         );
         return (
-          <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
-            {/* min-w-0 + truncate so the date/time cell yields first on a narrow
-                mobile column — the network keeps its slot instead of being
-                clipped off the right edge (Jacob 6/9). */}
+          <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)" }}>
+            {/* Flex (not a symmetric grid): the date/time takes all the space it
+                needs and only truncates (min-w-0) when the row is genuinely too
+                tight — so a wide card shows the full "Tomorrow - 8:30 PM" instead
+                of being capped at half the width. The network is shrink-0 and
+                pinned right so it never gets clipped (Jacob 6/9). */}
             <span className="min-w-0 truncate">
               {teamView ? (
                 <span className="text-[11px] whitespace-nowrap">
@@ -474,7 +474,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 )
               ) : null}
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1 flex justify-center">
               {hasRating ? (
                 <RatingBadge rating={game.rating!} />
               ) : tooEarly ? (
@@ -497,7 +497,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 </span>
               ) : null}
             </span>
-            <span className="block truncate text-right">
+            <span className="shrink-0 text-right">
               {hasBroadcast && (() => {
                 const networkLink = (name: string, key: string | number) => {
                   const isPrime = /\b(amazon|prime)\b/i.test(name);
@@ -544,19 +544,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // When the overlay is open, hide the inline row so it
                   // doesn't bleed through behind the expanded list.
                   if (broadcastExpanded) return null;
+                  // The WHOLE "FOX +2" chip opens the network dropdown — the bare
+                  // "+2" was too small a tap target, so taps landed on the FOX
+                  // link and went straight to FOX instead of showing the list
+                  // (Jacob 6/9). Pick the specific network from the expanded list.
                   return (
-                    <span className="text-[10px] sm:text-xs">
-                      {networkLink(game.broadcasts[0], 0)}
-                      <button
-                        type="button"
-                        className="ml-1 cursor-pointer hover:underline"
-                        style={{ color: "var(--text-muted)" }}
-                        title={game.broadcasts.slice(1).join(", ")}
-                        onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
-                      >
-                        +{game.broadcasts.length - 1}
-                      </button>
-                    </span>
+                    <button
+                      type="button"
+                      className="text-[10px] sm:text-xs cursor-pointer hover:underline whitespace-nowrap"
+                      style={{ color: "var(--text-muted)" }}
+                      title={`See all networks: ${game.broadcasts.join(", ")}`}
+                      onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
+                    >
+                      {game.broadcasts[0]} +{game.broadcasts.length - 1}
+                    </button>
                   );
                 }
                 return (
