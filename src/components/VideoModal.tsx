@@ -528,7 +528,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           or any whitespace around them dismisses. The video player and CC
           button stop propagation themselves so playback controls keep working. */}
       <div
-        className="relative w-full max-w-6xl"
+        className="relative w-full max-w-7xl" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
         style={{ zIndex: 1 }}
       >
         {/* Close button */}
