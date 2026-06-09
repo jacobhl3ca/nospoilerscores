@@ -148,6 +148,16 @@ function shortenTime(t: string | null | undefined): string {
   return t ? t.replace(/:00(\s*[AP]M)/i, "$1") : (t ?? "");
 }
 
+// Expand the short weekday ("Thu") to the full name ("Thursday") for desktop,
+// where there's room (Jacob 6/9). Non-weekday labels ("Tomorrow") pass through.
+const DOW_FULL: Record<string, string> = {
+  Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday",
+  Thu: "Thursday", Fri: "Friday", Sat: "Saturday",
+};
+function expandDow(s: string): string {
+  return DOW_FULL[s] ?? s;
+}
+
 // once, on the full lead card, instead of repeating down every row.
 export function CompactUpcomingCard({
   game,
@@ -221,7 +231,7 @@ export function CompactUpcomingCard({
           before the dash. Network pinned right (Jacob 6/9). */}
       <div className="hidden sm:flex items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
         <span className="whitespace-nowrap">
-          <span className="font-bold" style={{ color: "var(--text)" }}>{(nextGameDate || "").split(" ")[0]}</span>
+          <span className="font-bold" style={{ color: "var(--text)" }}>{expandDow((nextGameDate || "").split(" ")[0])}</span>
           {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${localTime}` : ""}
         </span>
         {networkNode ? <span className="ml-auto whitespace-nowrap">{networkNode}</span> : null}
@@ -420,7 +430,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             href={espnUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:underline transition-colors"
+            className="underline decoration-dotted underline-offset-2 hover:decoration-solid transition-colors"
             style={{ color: "inherit" }}
             title="View on ESPN"
             onClick={handleExternalClick(espnUrl)}
@@ -479,7 +489,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // Desktop: "Thu 6/11 - 7:00 PM"; mobile drops the M/D and
                   // shortens the time ("Thu 7 PM") (Jacob 6/9).
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? <><span className="sm:hidden">Tomo</span><span className="hidden sm:inline">Tomorrow</span></> : (nextGameDate || "").split(" ")[0]}</span>
+                    <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? <><span className="sm:hidden">Tomo</span><span className="hidden sm:inline">Tomorrow</span></> : <><span className="sm:hidden">{(nextGameDate || "").split(" ")[0]}</span><span className="hidden sm:inline">{expandDow((nextGameDate || "").split(" ")[0])}</span></>}</span>
                     <span className="hidden sm:inline">{(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${localTime}` : ""}</span>
                     <span className="sm:hidden">{localTime ? ` ${shortenTime(localTime)}` : ""}</span>
                   </span>
