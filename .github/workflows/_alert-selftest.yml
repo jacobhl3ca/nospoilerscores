@@ -1,0 +1,24 @@
+name: _Alert self-test (manual only)
+# Temporary: proves the failure-alert wiring end-to-end — that the workflow
+# token can open an issue (repo default perms are read-only) and that the
+# @-mention email reaches Jacob even after muting native Actions emails.
+# Run once via "Run workflow", confirm the email/issue, then delete this file.
+on:
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create a test alert issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          stamp="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          gh issue create --title "🧪 Alert self-test — safe to close" \
+            --body "$(printf 'This is a TEST of the real-failure alert. If you got an email for this, the wiring works: a workflow can open an issue and the @-mention reaches you even with native Actions emails muted.\n\nA REAL alert looks just like this, but the title will say e.g. \"🔴 Feed staleness check is failing\" and it only appears when a check genuinely fails.\n\nTime: %s\nRun: %s\n\nSafe to close. cc @jacobhl3ca' "$stamp" "$run_url")"
