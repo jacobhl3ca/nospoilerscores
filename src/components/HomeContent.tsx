@@ -432,7 +432,7 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
 }
 
 
-export default function HomeContent({ initialOffset }: { initialOffset?: number }) {
+export default function HomeContent({ initialOffset, worldCupHub }: { initialOffset?: number; worldCupHub?: boolean }) {
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -1507,6 +1507,34 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       )}
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
+        {/* World Cup hub framing — only on /worldcup. The WC column is already
+            auto-pinned to the board below (it's an active firstPref league
+            through 07-19), so this banner just sets the context for marketing
+            traffic landing on the route and gives the page a real <h1>. */}
+        {worldCupHub && (
+          <section
+            className="mt-3 mb-4 rounded-xl px-4 py-3.5 sm:px-5 sm:py-4"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              borderLeft: "3px solid var(--accent)",
+            }}
+          >
+            <h1 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--text)" }}>
+              <span aria-hidden="true">⚽</span>
+              <span>2026 World Cup, spoiler-free</span>
+            </h1>
+            <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+              104 matches, June 11 – July 19, across the US, Canada &amp; Mexico — most kicking off at 1, 4 and 7 PM ET on weekdays.
+              Watch every match on your own schedule: scores stay hidden until you tap, and the{" "}
+              <span style={{ color: "var(--text)" }}>competitiveness rating</span> tells you which games were instant classics
+              <span style={{ color: "var(--text)" }}> without revealing who won</span>. The World Cup column is below.
+            </p>
+            <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+              Free · no tracking cookies · also on the App Store
+            </p>
+          </section>
+        )}
         {showNews ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({

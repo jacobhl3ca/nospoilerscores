@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Prebaked share-card PNGs (uploaded to R2 by the share-cards workflow)
 share-cards-out/
+
+# Marketing drafts — live in ~/hidescore-backlog/worldcup-marketing/, never in the public repo
+MARKETING_*.md
