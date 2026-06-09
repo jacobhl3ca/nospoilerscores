@@ -6,7 +6,7 @@ import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { handleExternalClick } from "@/lib/openExternal";
 import GameHighlights from "@/components/GameHighlights";
-import { getETHour, getDateString } from "@/components/DateNav";
+import { getDateString } from "@/components/DateNav";
 
 interface GameCardProps {
   game: Game;
@@ -169,9 +169,30 @@ export function CompactUpcomingCard({
     ? ((/\b(amazon|prime)\b/i.test(network) && game.primeStreamUrl) || networkStreamUrl(network, game.id, game.sport) || sportStreamFallback(game.sport))
     : null;
   const cardClickable = !!onShowDetails;
+  // Date + time render crunched together after the team ("· Wed 6/10 8:00 PM"),
+  // the live hidescore format (Jacob 6/7) — not the spaced/aligned-column layout
+  // the A/B worktrees were trialing. Compact sizing/@team/network kept from that
+  // "compact" variant; the date/time just runs together and truncates if tight.
+  const networkNode = network ? (
+    networkHref ? (
+      <a
+        href={networkHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="shrink-0 text-[10px] sm:text-xs hover:underline whitespace-nowrap"
+        style={{ color: "var(--text-muted)" }}
+        title={`Watch on ${network}`}
+        onClick={handleExternalClick(networkHref)}
+      >
+        {network}
+      </a>
+    ) : (
+      <span className="shrink-0 text-[10px] sm:text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{network}</span>
+    )
+  ) : null;
   return (
     <div
-      className={`flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors${cardClickable ? " cursor-pointer" : ""}`}
+      className={`flex flex-col gap-0.5 rounded-md px-2 sm:px-4 py-1 overflow-hidden transition-colors${cardClickable ? " cursor-pointer" : ""}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
       role={cardClickable ? "button" : undefined}
@@ -179,30 +200,22 @@ export function CompactUpcomingCard({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
     >
-      <span className="shrink-0" style={{ color: "var(--text-muted)" }}>@</span>
-      {home.logo ? <img src={home.logo} alt={home.abbreviation} title={home.displayName} width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
-      <span className="shrink-0 font-medium text-xs sm:text-sm" style={{ color: "var(--text)" }} title={home.displayName}>{home.abbreviation}</span>
-      <span className="truncate text-[10px] sm:text-[11px]" style={{ color: "var(--text-muted)" }}>
-        · {nextGameDate}{nextGameDate && localTime ? " " : ""}{localTime || ""}
-      </span>
-      <span className="flex-1 min-w-0" />
-      {network ? (
-        networkHref ? (
-          <a
-            href={networkHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 text-[10px] sm:text-xs hover:underline whitespace-nowrap"
-            style={{ color: "var(--text-muted)" }}
-            title={`Watch on ${network}`}
-            onClick={handleExternalClick(networkHref)}
-          >
-            {network}
-          </a>
-        ) : (
-          <span className="shrink-0 text-[10px] sm:text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{network}</span>
-        )
-      ) : null}
+      {/* Row 1: date · time left, broadcast network pinned top-right — mirrors the
+          full GameCard's status bar so the network sits top-right everywhere
+          (Jacob 6/8), instead of a cramped inline slot after the team. */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
+          <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>
+          {nextGameDate && localTime ? " - " : ""}{localTime || ""}
+        </span>
+        {networkNode}
+      </div>
+      {/* Row 2: venue — "@ HOME". Series teams are fixed, so just the home side. */}
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0 text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>@</span>
+        {home.logo ? <img src={home.logo} alt={home.abbreviation} title={home.displayName} width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
+        <span className="font-medium text-xs sm:text-sm" style={{ color: "var(--text)" }} title={home.displayName}>{home.abbreviation}</span>
+      </div>
     </div>
   );
 }
@@ -322,14 +335,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // too (Jacob 6/1) — tapping a schedule card opens its details popup; the
   // team-name button still navigates via its own stopPropagation handler.
   const cardClickable = !!onShowDetails;
-  // Mobile only: the broadcast network moves out of the (cramped) status-bar
-  // grid to a bottom-right chip, so it stops getting cut off after the time
-  // (Jacob 6/4). Desktop keeps the full networks row in the status bar. Mirrors
-  // the status-bar href resolution for the primary network.
-  const primaryNetwork = !isFinished && game.broadcasts.length > 0 ? game.broadcasts[0] : null;
-  const primaryNetworkHref = primaryNetwork
-    ? ((/\b(amazon|prime)\b/i.test(primaryNetwork) && game.primeStreamUrl) || networkStreamUrl(primaryNetwork, game.id, game.sport) || sportStreamFallback(game.sport))
-    : null;
   return (
     <div
       className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${cardClickable ? " cursor-pointer" : ""}`}
@@ -343,19 +348,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       role={cardClickable ? "button" : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
-      {/* Playoff series state — pre-game only, today only, after the noon-ET
-          morning reset. Hidden once the game is live or finished so the series
-          score (which reflects pre-game state) never sits next to a live
-          score that could contradict it, and only shown when ratings are
-          revealed (monkey on) since the series score is itself a competitive
-          signal. When a rating is also showing in the middle cell, fall back
-          to a standalone top line; otherwise the line slots into the status
-          bar's middle cell alongside the time and network. */}
-      {game.seriesStatus && isToday && isFuture && getETHour() >= 12 && showRating && (
-        <div
-          className="mb-1 text-[10px] sm:text-[11px] text-center italic"
-          style={{ color: "var(--text-muted)" }}
-        >
+      {/* Playoff series state ("NY leads 1-0"). Two responsive placements (Jacob
+          6/5–6/7): on WIDE columns (xl) it sits INLINE in the status-bar row's
+          middle cell (same line as date/time + network — see below). On NARROW
+          columns it can't fit there without truncating ("NY L…"), so it moves to
+          its OWN row ABOVE the status bar — which also keeps the network in its
+          top-right spot instead of getting bumped. Pre-game + ratings mode only
+          (it's a spoiler); shown once (compact rows don't render it). */}
+      {game.seriesStatus && isFuture && showRatings && (
+        <div className="xl:hidden mb-1 text-[11px] text-center italic" style={{ color: "var(--text-muted)" }}>
           {formatSeriesStatus(game.seriesStatus)}
         </div>
       )}
@@ -388,13 +389,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         const hasRating = showRating;
         const hasBroadcast = !isFinished && game.broadcasts.length > 0;
         const showFinal = isFinished && !isPastDate && !teamView;
-        // Playoff series state on pre-game cards, in ratings mode. On the Today
-        // tab, hold it until after the noon-ET morning reset; on future tabs
-        // (Tomorrow/+N) the current hour is irrelevant, so show it regardless
-        // so "NY leads 1-0" appears on tomorrow's game too (Jacob 6/4).
-        const seriesInMiddle =
-          !!game.seriesStatus && isFuture && showRatings && !hasRating && (!isToday || getETHour() >= 12);
-        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView || seriesInMiddle;
+        // Series state now renders as a top banner above the card (see above),
+        // not in the status bar's middle cell, so it's gone from showBar here.
+        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView;
         if (!showBar) return null;
         // Small ESPN link wrapper for upcoming-time / date labels.
         const withEspn = (node: ReactNode) => (
@@ -475,16 +472,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 >
                   Too Early
                 </span>
-              ) : seriesInMiddle ? (
+              ) : game.seriesStatus && isFuture && showRatings ? (
+                // Series state inline in the status-bar row (same line as time +
+                // network) — ONLY on wide (xl) columns where it fits. Narrower
+                // columns render it as a row above instead (see the banner up top)
+                // so it never truncates and the network keeps its top-right spot.
                 <span
-                  className="hidden sm:block text-[11px] italic whitespace-nowrap truncate pr-0.5"
+                  className="hidden xl:block text-[11px] italic whitespace-nowrap truncate pr-0.5"
                   style={{ color: "var(--text-muted)" }}
                 >
                   {formatSeriesStatus(game.seriesStatus!)}
                 </span>
               ) : null}
             </span>
-            <span className="hidden sm:block truncate text-right">
+            <span className="block truncate text-right">
               {hasBroadcast && (() => {
                 const networkLink = (name: string, key: string | number) => {
                   const isPrime = /\b(amazon|prime)\b/i.test(name);
@@ -655,31 +656,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           </div>
         ))}
       </div>
-
-      {/* Mobile only: the broadcast network, moved below the teams and pinned
-          bottom-right so it stops getting cut off in the cramped status-bar
-          grid (Jacob 6/4). Desktop keeps it inline in the status bar above. */}
-      {primaryNetwork && (
-        <div className="sm:hidden flex justify-end mt-1.5 text-[10px]">
-          {primaryNetworkHref ? (
-            <a
-              href={primaryNetworkHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline whitespace-nowrap"
-              style={{ color: "var(--text-muted)" }}
-              title={`Watch on ${primaryNetwork}`}
-              onClick={handleExternalClick(primaryNetworkHref)}
-            >
-              {primaryNetwork}{game.broadcasts.length > 1 ? ` +${game.broadcasts.length - 1}` : ""}
-            </a>
-          ) : (
-            <span className="whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-              {primaryNetwork}{game.broadcasts.length > 1 ? ` +${game.broadcasts.length - 1}` : ""}
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Highlight buttons (official + top-search YouTube, plus NHL.com recap)
           live in the shared GameHighlights component so the score card and the
