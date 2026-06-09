@@ -1,0 +1,22 @@
+name: _Alert self-test (manual only)
+# Temporary: second email-delivery test after enabling the "Participating,
+# @mentions" Email toggle. Run once, confirm the email lands, then delete.
+on:
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create a test alert issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          stamp="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          gh issue create --title "🧪 Alert self-test #2 — email check (safe to close)" \
+            --body "$(printf 'Second test, after you turned on the @-mention Email switch. If this one emails you, real alerts will too.\n\nTime: %s\nRun: %s\n\nSafe to close. cc @jacobhl3ca' "$stamp" "$run_url")"
