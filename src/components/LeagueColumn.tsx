@@ -860,7 +860,7 @@ export default function LeagueColumn({
                       onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{ color: "var(--text-muted)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       Auto
@@ -878,7 +878,7 @@ export default function LeagueColumn({
                             fontWeight: isCurrent ? 600 : 400,
                           }}
                           title={isElsewhere ? "Already shown in another column — pick to add a second" : undefined}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           {opt.label}
@@ -894,7 +894,7 @@ export default function LeagueColumn({
                         fontWeight: 400,
                         borderTop: "1px solid var(--border)",
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--border-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       Empty
