@@ -1521,13 +1521,26 @@ async function fetchNextGameDayRange(
   const chrono = (gs: Game[]) => [...gs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
   // allDays: every upcoming fixture in the window, chronological. Used for
-  // NBA/NHL in the playoffs — only a handful remain, so show them all in one
-  // ranged request. Each card derives its own date label (see LeagueColumn).
+  // NBA/NHL in the playoffs. We want exactly ONE series — the most imminent —
+  // so a column never interleaves two simultaneous series (both conference
+  // finals run at once). Group by the unordered team pair, keep the series whose
+  // next game is soonest, and return just those games, capped at the best-of-7
+  // length. In the actual Finals there's only one pair so this is a no-op there;
+  // it's the conference round that would otherwise jumble two series (Jacob 6/5).
   if (opts?.allDays) {
     const sorted = chrono(games);
-    const first = leadDay(sorted);
+    const seriesKey = (g: Game) => [g.homeTeam.abbreviation, g.awayTeam.abbreviation].sort().join("|");
+    const bySeries = new Map<string, Game[]>();
+    for (const g of sorted) {
+      const k = seriesKey(g);
+      (bySeries.get(k) ?? bySeries.set(k, []).get(k)!).push(g);
+    }
+    // `sorted` is chronological, so the first game belongs to the most imminent
+    // series — keep only that pair's games (a series is best-of-7, so ≤7).
+    const series = bySeries.get(seriesKey(sorted[0]))!;
+    const first = leadDay(series);
     if (!first) return null;
-    return { date: first, games: sorted };
+    return { date: first, games: series.slice(0, 7) };
   }
   // maxDays: every fixture from the first N distinct ET match-days. The World
   // Cup runs a few matches per day with multi-day gaps (and a pre-tournament
