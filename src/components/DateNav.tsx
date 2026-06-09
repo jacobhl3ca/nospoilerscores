@@ -188,13 +188,16 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
   const isBefore = !isStandardDate && selectedDate < yesterday;
   const isAfter = !isStandardDate && selectedDate > tomorrow;
 
-  const dateButtons = [
+  // `wide` flags the out-of-window date slot: its short label is a full date
+  // ("Tue 5/2"), not a 4-char word, so it needs to grow past the fixed mobile
+  // pill width instead of being clipped by overflow-hidden.
+  const dateButtons: { date: string; label: string; shortLabel: string; wide?: boolean }[] = [
     isBefore
-      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayShort(selectedDate) }
+      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayShort(selectedDate), wide: true }
       : { date: yesterday, label: "Yesterday", shortLabel: "Yest" },
     { date: today, label: "Today", shortLabel: "Today" },
     isAfter
-      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayShort(selectedDate) }
+      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayShort(selectedDate), wide: true }
       : { date: tomorrow, label: "Tomorrow", shortLabel: "Tomo" },
   ];
 
@@ -233,7 +236,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
           <button
             key={btn.date}
             onClick={() => onDateChange(btn.date)}
-            className="date-nav-btn w-[2.75rem] sm:w-[5.5rem] py-2 sm:py-1.5 rounded text-[12px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden"
+            className={`date-nav-btn ${btn.wide ? "min-w-[2.75rem] w-auto px-1.5 sm:px-0" : "w-[2.75rem]"} sm:w-[5.5rem] py-2 sm:py-1.5 rounded text-[12px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden`}
             style={
               isSelected
                 ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
