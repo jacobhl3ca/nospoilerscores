@@ -205,7 +205,11 @@ export function CompactUpcomingCard({
           (Jacob 6/8), instead of a cramped inline slot after the team. */}
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-          <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate}</span>
+          {/* Same-series rows, so the date is unbolded. Mobile drops the M/D
+              ("Sat 6/13" → "Sat") so the time never truncates; desktop keeps the
+              full date (Jacob 6/9). */}
+          <span className="sm:hidden">{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
+          <span className="hidden sm:inline">{nextGameDate}</span>
           {nextGameDate && localTime ? " - " : ""}{localTime || ""}
         </span>
         {networkNode}
@@ -214,7 +218,12 @@ export function CompactUpcomingCard({
       <div className="flex items-center gap-1.5">
         <span className="shrink-0 text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>@</span>
         {home.logo ? <img src={home.logo} alt={home.abbreviation} title={home.displayName} width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
-        <span className="font-medium text-xs sm:text-sm" style={{ color: "var(--text)" }} title={home.displayName}>{home.abbreviation}</span>
+        {/* Full team name when there's room (desktop, like the lead card above);
+            abbreviation on the narrow mobile column (Jacob 6/9). */}
+        <span className="font-medium text-xs sm:text-sm min-w-0 truncate" style={{ color: "var(--text)" }} title={home.displayName}>
+          <span className="hidden sm:inline">{displayShortName(home)}</span>
+          <span className="sm:hidden">{home.abbreviation}</span>
+        </span>
       </div>
     </div>
   );
@@ -409,7 +418,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         );
         return (
           <div className="grid items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-2 sm:gap-x-3" style={{ color: "var(--text-muted)", gridTemplateColumns: "1fr auto 1fr" }}>
-            <span>
+            {/* min-w-0 + truncate so the date/time cell yields first on a narrow
+                mobile column — the network keeps its slot instead of being
+                clipped off the right edge (Jacob 6/9). */}
+            <span className="min-w-0 truncate">
               {teamView ? (
                 <span className="text-[11px] whitespace-nowrap">
                   {(() => {
