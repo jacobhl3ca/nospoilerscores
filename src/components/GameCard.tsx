@@ -226,9 +226,10 @@ export function CompactUpcomingCard({
         {/* DOW in a fixed-width box so the time starts at the same x on every row
             (the 3-letter abbreviations vary just enough — "Fri" vs "Sat" — to
             knock the times out of alignment otherwise). A constant small gap sits
-            after the box. Non-lead rows: the DOW is NOT bold — only the lead
-            card's is. Network pinned right (Jacob 6/9). */}
-        <span className="shrink-0 inline-block w-[1.7rem]" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
+            after the box. Non-lead rows: the DOW is the same muted grey as the
+            date + time next to it (not bold, not dark) — only the lead card's DOW
+            is emphasized. Network pinned right (Jacob 6/9). */}
+        <span className="shrink-0 inline-block w-[1.7rem]">{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
         {localTime ? <span className="shrink-0 whitespace-nowrap">{formatTime(localTime)}</span> : null}
         <span className="ml-auto shrink-0 text-right">{networkNode}</span>
       </div>
@@ -237,7 +238,7 @@ export function CompactUpcomingCard({
           before the dash. Network pinned right (Jacob 6/9). */}
       <div className="hidden sm:flex items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
         <span className="whitespace-nowrap">
-          <span style={{ color: "var(--text)" }}>{expandDow((nextGameDate || "").split(" ")[0])}</span>
+          {expandDow((nextGameDate || "").split(" ")[0])}
           {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${formatTime(localTime)}` : ""}
         </span>
         {networkNode ? <span className="ml-auto whitespace-nowrap">{networkNode}</span> : null}
