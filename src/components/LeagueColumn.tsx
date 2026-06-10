@@ -561,13 +561,13 @@ export default function LeagueColumn({
       const nameContainers = el.querySelectorAll(".team-name-container");
       if (!nameContainers.length) return;
 
-      // Get the longest team name from the games actually rendered. Both today's
-      // slate AND the upcoming lookahead can render together (NBA/NHL playoffs,
-      // World Cup), and on an empty slate only the lookahead shows — so measure
-      // the union. Otherwise this bails early and useAbbreviations stays stuck at
-      // its initial `true`, abbreviating names ("NY"/"SA") even when the full
-      // names ("Knicks"/"Spurs") would easily fit.
-      const measuredGames = [...league.games, ...(league.nextGameDay?.games ?? [])];
+      // Get the longest team name from the games actually rendered. Today's
+      // slate, the upcoming lookahead (NBA/NHL playoffs, World Cup), AND the
+      // empty-past-tab lookback can each be the only thing showing — so measure
+      // the union of all three. Otherwise this bails early and useAbbreviations
+      // stays stuck at its initial `true`, abbreviating names ("NY"/"SA") even
+      // when the full names ("Knicks"/"Spurs") would easily fit.
+      const measuredGames = [...league.games, ...(league.nextGameDay?.games ?? []), ...(league.previousGameDay?.games ?? [])];
       const allNames = measuredGames.flatMap(g => [
         displayShortName(g.awayTeam),
         displayShortName(g.homeTeam),
@@ -769,6 +769,33 @@ export default function LeagueColumn({
       );
     });
 
+  // Lookback slate: on an empty PAST tab, render the last game day's finished
+  // games (with highlights) in place of "No games". A small muted header notes
+  // when they were played, since they're not from the viewed date.
+  const renderPreviousSlate = (games: Game[], date: string) => (
+    <div className="flex flex-col gap-1.5 sm:gap-2">
+      <p className="text-center text-[11px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
+        Last played · {formatDateCompact(date)}
+      </p>
+      {games.map((game) => (
+        <GameCard
+          key={game.id}
+          game={game}
+          favoriteTeams={favoriteTeams}
+          onToggleFavoriteTeam={onToggleFavoriteTeam}
+          showRatings={showRatings}
+          leagueLabel={league.label}
+          onPlayHighlight={onPlayHighlight}
+          onPlayEmbed={onPlayEmbed}
+          isPastDate
+          useAbbreviations={useAbbreviations}
+          onSelectTeam={setTeamViewTeam}
+          onShowDetails={onShowDetails}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <div
       ref={columnRef}
@@ -969,7 +996,11 @@ export default function LeagueColumn({
               )}
             </div>
           ) : isPastDate ? (
-            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
+            league.previousGameDay && league.previousGameDay.games.length > 0 ? (
+              renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
+            ) : (
+              <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
+            )
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
               {/* No game today → the lead upcoming game is a full card, the

@@ -1566,6 +1566,52 @@ async function fetchNextGameDayRange(
   return { date: earliest, games: games.filter((g) => dayOf(g.date) === earliest) };
 }
 
+// Backward mirror of fetchNextGameDayRange: the most recent PAST day with
+// FINISHED games, in a single ranged request. Used to fill an empty past-date
+// column ("Yesterday" with no game) with the last game played instead of "No
+// games". Returns null when nothing finished in the window (e.g. the World Cup
+// before kickoff), so those columns correctly stay "No games".
+async function fetchPreviousGameDayRange(
+  sport: Sport,
+  fromDate?: string,
+  windowDays = 14,
+): Promise<{ date: string; games: Game[] } | null> {
+  const base = fromDate
+    ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
+    : new Date();
+  const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const end = new Date(base); end.setDate(end.getDate() - 1);            // the day BEFORE the viewed date
+  const start = new Date(base); start.setDate(start.getDate() - windowDays);
+  const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+  url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
+  let events: any[];
+  try {
+    const res = await fetchWithRetry(url.toString());
+    if (!res.ok) return null;
+    const data = await res.json();
+    events = data?.events ?? [];
+  } catch {
+    return null;
+  }
+  const games = eventsToGames(events, sport).filter((g) => g.state === "post");
+  if (!games.length) return null;
+  const dayOf = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+    } catch {
+      return "";
+    }
+  };
+  // Most RECENT day with finished games — the "last game day".
+  let latest = "";
+  for (const g of games) {
+    const d = dayOf(g.date);
+    if (d && (!latest || d > latest)) latest = d;
+  }
+  if (!latest) return null;
+  return { date: latest, games: games.filter((g) => dayOf(g.date) === latest) };
+}
+
 export async function fetchGames(
   sport: Sport,
   date?: string
@@ -2069,7 +2115,15 @@ export async function fetchAllLeagues(
       const deduped = nextGameDay.games.filter((g) => !todayIds.has(g.id));
       nextGameDay = deduped.length ? { ...nextGameDay, games: deduped } : null;
     }
-    return { sport: cfg.sport, label, games, nextGameDay, fetchFailed: failed };
+    // Lookback (mirror of the lookahead, which is suppressed on past tabs):
+    // when a PAST tab's slate is empty, surface the last game day so the column
+    // shows the most recent game played instead of a bare "No games". WC before
+    // kickoff has no finished games → stays null → "No games" (Jacob 6/10).
+    let previousGameDay: { date: string; games: Game[] } | null = null;
+    if (!failed && isPastView && games.length === 0) {
+      previousGameDay = await fetchPreviousGameDayRange(cfg.sport, date);
+    }
+    return { sport: cfg.sport, label, games, nextGameDay, previousGameDay, fetchFailed: failed };
   };
 
   // allSettled, not all: a single league throwing must not blank the whole
