@@ -181,6 +181,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
   // Brief "Copied ✓" confirmation after the copy-link button is tapped.
   const [copied, setCopied] = useState(false);
+  // controls:0 hides YouTube's native mute button, and clips autoplay muted
+  // (browsers block unmuted autoplay) — so we render a custom unmute toggle.
+  const [muted, setMuted] = useState(true);
+  // Drive the title-bar spoiler mask. YouTube re-surfaces the clip title on
+  // hover and whenever the player is paused (no embed param suppresses it
+  // since showinfo was removed), so we cover the top strip whenever the clip
+  // isn't actively playing, or the user is hovering it.
+  const [hovered, setHovered] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const hlsMode = !!playbackUrl;
   const embedMode = !!embedUrl && !playbackUrl;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
@@ -457,12 +466,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
+          // controls:0 strips YouTube's bottom control bar — the red seek line
+          // AND the elapsed/duration readout (e.g. 16:13 / 18:30), both of which
+          // spoil how far through a highlight reel you are. It also disables
+          // scrubbing (itself a spoiler vector). Mute/CC/fullscreen go with it:
+          // we render a custom unmute toggle below, and "f" still fullscreens.
+          controls: 0,
+          // Hide in-video annotations/cards — they can carry spoilers.
+          iv_load_policy: 3,
           // vq is deprecated but still hinted by some clients.
           vq: "hd1080",
         },
         events: {
           onReady: (event: any) => {
             event.target.playVideo();
+            // A freshly-built player always autoplays muted — keep the custom
+            // toggle in sync (covers fallback swaps after an unmute, too).
+            setMuted(true);
             // Watchdog: if we never reach PLAYING or BUFFERING within
             // 10s, assume the iframe is stuck on a silent error screen
             // (e.g. YT Error 153 on MLB content) and try the next
@@ -478,6 +498,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // returns the real list — onReady gives []. setPlaybackQuality is
           // a deprecated suggestion, but it's the only knob we have.
           onStateChange: (event: any) => {
+            // PLAYING(1)/BUFFERING(3) → drop the title mask; every other state
+            // (paused/ended/cued/unstarted) keeps it up so the title YouTube
+            // surfaces on pause stays covered.
+            setPlaying(event.data === 1 || event.data === 3);
             // Playback actually started — kill the watchdog.
             if ((event.data === 1 || event.data === 3) && watchdogRef.current) {
               window.clearTimeout(watchdogRef.current);
@@ -602,7 +626,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             )}
           </div>
         ) : (
-          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }} onClick={(e) => e.stopPropagation()}>
+          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }} onClick={(e) => e.stopPropagation()} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
             {hlsMode ? (
               <video
                 ref={videoRef}
@@ -622,7 +646,60 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 allowFullScreen
               />
             ) : (
-              <div id="yt-player" className="absolute inset-0 w-full h-full" />
+              <>
+                <div id="yt-player" className="absolute inset-0 w-full h-full" />
+                {/* Spoiler mask over YouTube's title bar. No embed param hides
+                    the title (showinfo was removed in 2018) and YT re-shows it
+                    on hover/pause, so we cover the top strip. pointer-events
+                    stay off so click-to-play/pause keeps working; the mask only
+                    fades in when chrome would appear, so it never crops footage
+                    during steady playback. */}
+                <div
+                  aria-hidden
+                  className="absolute top-0 inset-x-0 z-10 pointer-events-none transition-opacity duration-150"
+                  style={{
+                    height: "24%",
+                    background: "linear-gradient(to bottom, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.98) 70%, rgba(0,0,0,0) 100%)",
+                    opacity: hovered || !playing ? 1 : 0,
+                  }}
+                />
+                {/* Tap-to-unmute — controls:0 also removes YouTube's native
+                    mute button, and the clip autoplays muted. */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const p = playerRef.current;
+                    if (!p) return;
+                    if (muted) { p.unMute?.(); p.setVolume?.(100); setMuted(false); }
+                    else { p.mute?.(); setMuted(true); }
+                  }}
+                  aria-label={muted ? "Unmute" : "Mute"}
+                  className="absolute bottom-3 left-3 z-20 h-9 flex items-center gap-1.5 rounded-full text-xs font-bold text-white cursor-pointer transition-colors"
+                  style={{
+                    paddingLeft: muted ? "0.625rem" : "0.5rem",
+                    paddingRight: muted ? "0.75rem" : "0.5rem",
+                    background: muted ? "var(--accent)" : "rgba(0,0,0,0.55)",
+                    border: "1px solid rgba(255,255,255,0.25)",
+                  }}
+                >
+                  {muted ? (
+                    <>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 5 6 9H2v6h4l5 4z" />
+                        <line x1="23" y1="9" x2="17" y2="15" />
+                        <line x1="17" y1="9" x2="23" y2="15" />
+                      </svg>
+                      Tap for sound
+                    </>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 5 6 9H2v6h4l5 4z" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  )}
+                </button>
+              </>
             )}
           </div>
         )}
