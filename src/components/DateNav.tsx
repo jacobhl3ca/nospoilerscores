@@ -84,7 +84,16 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      // NOTE: two DateNav/CalendarDropdown instances (mobile + desktop) are
+      // both mounted whenever calendarOpen is true — CSS `hidden` doesn't
+      // unmount them. A single-instance `ref.contains` check made the HIDDEN
+      // dropdown's listener fire on clicks inside the VISIBLE one, closing +
+      // unmounting both before the date button's click could land (so picking
+      // a date did nothing). Match any calendar popover or toggle by attribute
+      // so a click inside either instance counts as "inside".
+      const t = e.target as Element | null;
+      if (t && t.closest("[data-cal-pop],[data-cal-toggle]")) return;
+      onClose();
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -120,6 +129,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
   return (
     <div
       ref={ref}
+      data-cal-pop
       className="absolute top-full mt-2 right-0 z-50 rounded-xl shadow-lg p-3 w-64"
       style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
     >

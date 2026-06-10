@@ -1348,6 +1348,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
                   <span className="relative inline-flex">
                     <button
+                      data-cal-toggle
                       onClick={() => setCalendarOpen(!calendarOpen)}
                       className="ml-1 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
                       style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
@@ -1500,6 +1501,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
             <span className="relative inline-flex">
               <button
+                data-cal-toggle
                 onClick={() => setCalendarOpen(!calendarOpen)}
                 className="ml-1 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
                 style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
