@@ -2012,7 +2012,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             adds crawlable copy and a link graph without changing the visual layout.
             Google renders and indexes content inside collapsed <details>, and plain
             <a href> (not next/link) is what the crawler needs to follow the routes. */}
-        <details className="mt-2 max-w-2xl text-left text-xs leading-relaxed">
+        <details className="max-w-2xl text-left text-xs leading-relaxed">
           <summary className="cursor-pointer select-none text-center" style={{ color: "var(--text-muted)" }}>
             About HideScore
           </summary>
@@ -2039,7 +2039,20 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         </details>
 
         {!isNativeApp && (
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2">
+            {/* Official Apple "Download on the App Store" badge. */}
+            <a
+              href="https://apps.apple.com/app/hidescore/id6766885311"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Download HideScore on the App Store"
+              className="inline-block transition-opacity hover:opacity-80"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+            </a>
+            {/* Compact custom Apple-logo pill — replaced by the official badge
+                above. Kept commented in case we want the smaller text version back.
             <a
               href="https://apps.apple.com/app/hidescore/id6766885311"
               target="_blank"
@@ -2059,6 +2072,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               </svg>
               <span>App Store</span>
             </a>
+            */}
             {/* Android download pill tabled — Android app is being handled
                 separately; un-table (and fix the "Google Play" label, which
                 links a sideload .apk, not a Play listing) when it's ready. */}

@@ -90,6 +90,44 @@ async function tryOpenInYouTubeApp(appUrl: string): Promise<boolean> {
   }
 }
 
+// Map an MLB.TV web URL to the MLB app's custom scheme. The MLB app registers
+// `mlbatbat://`, and `mlbatbat://watch` opens its Watch / MLB.TV screen — where
+// the nightly Big Inning whip-around lives. We remap ONLY the MLB.TV hub and
+// show-selection pages (/tv, /tv/shows/*): the MLB app's apple-app-site-
+// association does NOT list those paths, so handing the https URL to the OS via
+// AppLauncher just opens the browser (the Big Inning bug this fixes). Per-game
+// pages (/tv/g*) and news (/news/*) ARE in the AASA, so we leave them to the
+// universal-link path below, which deep-links more precisely. Big Inning itself
+// has no documented deep link, so the Watch screen is the closest landing spot.
+// Returns null for any URL we shouldn't remap.
+function mlbWatchAppUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.replace(/^www\./, "") !== "mlb.com") return null;
+    if (u.pathname === "/tv" || u.pathname.startsWith("/tv/shows/")) {
+      return "mlbatbat://watch";
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Open a custom app-scheme URL via AppLauncher.openUrl. Unlike canOpenUrl,
+// openUrl needs NO LSApplicationQueriesSchemes entry, so this ships live in the
+// WebView with no native rebuild. openUrl resolves { completed: false } when no
+// installed app handles the scheme, letting us fall back to the browser.
+// Returns true only when the OS actually handed off to an app.
+async function tryOpenAppScheme(appUrl: string): Promise<boolean> {
+  try {
+    const { AppLauncher } = await import("@capacitor/app-launcher");
+    const { completed } = await AppLauncher.openUrl({ url: appUrl });
+    return !!completed;
+  } catch {
+    return false;
+  }
+}
+
 function openInBrowser(url: string): void {
   import("@capacitor/browser")
     .then(({ Browser }) => Browser.open({ url }))
@@ -160,6 +198,13 @@ export function openExternal(url: string): void {
     const ytApp = youTubeAppUrl(url);
     if (ytApp) {
       tryOpenInYouTubeApp(ytApp).then((opened) => {
+        if (!opened) openInBrowser(url);
+      });
+      return;
+    }
+    const mlbApp = mlbWatchAppUrl(url);
+    if (mlbApp) {
+      tryOpenAppScheme(mlbApp).then((opened) => {
         if (!opened) openInBrowser(url);
       });
       return;
