@@ -392,6 +392,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       role={cardClickable ? "button" : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
+      {/* Lookback card: "Last played · {date}" centered on the card's top row,
+          normal date font/color (no ESPN link — it would spoil the score). */}
+      {pastDateLabel && (
+        <div className="mb-1 text-[11px] text-center whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
+          {pastDateLabel}
+        </div>
+      )}
       {/* Playoff series state ("NY leads 1-0"). Two responsive placements (Jacob
           6/5–6/7): on WIDE columns (xl) it sits INLINE in the status-bar row's
           middle cell (same line as date/time + network — see below). On NARROW
@@ -426,7 +433,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
 
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
-        const hasStatusText = isLive || isFuture || nextGameDate || pastDateLabel || teamView || (!isFinished);
+        const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);
         // In ratings mode the schedule shows each finished game's rating
         // (GREAT/GOOD/MEH/SKIP) so you can see which past games were worth
         // watching; in Scores mode showRating is false → cards show FINAL.
@@ -495,11 +502,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 })()
               ) : showFinal && !hasRating ? (
                 "FINAL"
-              ) : pastDateLabel ? (
-                // Lookback card: the game's date on the top-left, same size/color
-                // as a normal card date (no ESPN link — a finished-game link
-                // would spoil the score).
-                <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{pastDateLabel}</span>
               ) : nextGameDate ? (
                 withEspn(
                   // ONE link (date + time underline together on hover, like

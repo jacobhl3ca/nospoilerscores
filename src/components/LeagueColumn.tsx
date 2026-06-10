@@ -772,30 +772,36 @@ export default function LeagueColumn({
     });
 
   // Lookback slate: on an empty PAST tab, render the last game day's finished
-  // games (with highlights) in place of "No games". The "Last played · date"
-  // label rides on the first card's top row (like a normal card date) rather
-  // than floating above — only on the first card, since they share the day.
-  const renderPreviousSlate = (games: Game[], date: string) => (
-    <div className="flex flex-col gap-1.5 sm:gap-2">
-      {games.map((game, i) => (
-        <GameCard
-          key={game.id}
-          game={game}
-          favoriteTeams={favoriteTeams}
-          onToggleFavoriteTeam={onToggleFavoriteTeam}
-          showRatings={showRatings}
-          leagueLabel={league.label}
-          onPlayHighlight={onPlayHighlight}
-          onPlayEmbed={onPlayEmbed}
-          pastDateLabel={i === 0 ? `Last played · ${formatDateCompact(date)}` : undefined}
-          isPastDate
-          useAbbreviations={useAbbreviations}
-          onSelectTeam={setTeamViewTeam}
-          onShowDetails={onShowDetails}
-        />
-      ))}
-    </div>
-  );
+  // games (with highlights) in place of "No games". The "Last played" label
+  // rides centered on the first card's top row (only the first, since they
+  // share the day). The date is dropped when the game is recent (<7 days old) —
+  // "Last played" alone reads fine; older games keep the "· Mon 6/8" (Jacob 6/10).
+  const renderPreviousSlate = (games: Game[], date: string) => {
+    const y = +date.slice(0, 4), mo = +date.slice(4, 6) - 1, d = +date.slice(6, 8);
+    const daysAgo = Math.round((Date.now() - new Date(y, mo, d, 12, 0, 0).getTime()) / 86400000);
+    const label = daysAgo < 7 ? "Last played" : `Last played · ${formatDateCompact(date)}`;
+    return (
+      <div className="flex flex-col gap-1.5 sm:gap-2">
+        {games.map((game, i) => (
+          <GameCard
+            key={game.id}
+            game={game}
+            favoriteTeams={favoriteTeams}
+            onToggleFavoriteTeam={onToggleFavoriteTeam}
+            showRatings={showRatings}
+            leagueLabel={league.label}
+            onPlayHighlight={onPlayHighlight}
+            onPlayEmbed={onPlayEmbed}
+            pastDateLabel={i === 0 ? label : undefined}
+            isPastDate
+            useAbbreviations={useAbbreviations}
+            onSelectTeam={setTeamViewTeam}
+            onShowDetails={onShowDetails}
+          />
+        ))}
+      </div>
+    );
+  };
 
   // Not-started league on a past tab (empty slate, no recent games, but an
   // upcoming one exists — e.g. the World Cup before kickoff). Surfaced as the
