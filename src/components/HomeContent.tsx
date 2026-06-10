@@ -530,10 +530,21 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
   }, []);
 
+  // Track the OS color scheme in state so `resolvedTheme` re-derives live when
+  // the system flips while theme === "system" (otherwise the data-theme attr
+  // recolors the page but the "Currently rendering" readout stays stale).
+  const [systemDark, setSystemDark] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia("(prefers-color-scheme: dark)").matches : true
+  );
   useEffect(() => {
-    if (prefs.theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => document.documentElement.setAttribute("data-theme", mq.matches ? "dark" : "light");
+    const handler = () => {
+      setSystemDark(mq.matches);
+      if (prefs.theme === "system") {
+        document.documentElement.setAttribute("data-theme", mq.matches ? "dark" : "light");
+      }
+    };
+    handler();
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, [prefs.theme]);
@@ -1234,7 +1245,8 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     return Array.from(seen.values());
   }, [leagues]);
 
-  const resolvedTheme = getResolvedTheme(prefs.theme);
+  const resolvedTheme: "dark" | "light" =
+    prefs.theme === "system" ? (systemDark ? "dark" : "light") : prefs.theme;
 
   // Pull-to-refresh visual: a small spinner pill that descends from below the
   // header proportional to pullDelta, latches into a spinning state during
