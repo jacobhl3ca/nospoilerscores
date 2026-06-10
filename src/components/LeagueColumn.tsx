@@ -774,12 +774,15 @@ export default function LeagueColumn({
   // Lookback slate: on an empty PAST tab, render the last game day's finished
   // games (with highlights) in place of "No games". The "Last played" label
   // rides centered on the first card's top row (only the first, since they
-  // share the day). The date is dropped when the game is recent (<7 days old) —
-  // "Last played" alone reads fine; older games keep the "· Mon 6/8" (Jacob 6/10).
+  // share the day). Always shows the FULL weekday ("Monday"); the numeric date
+  // is appended only when the game is a week+ old, to disambiguate which Monday
+  // — a recent one reads fine as just "Last played · Monday" (Jacob 6/10).
   const renderPreviousSlate = (games: Game[], date: string) => {
     const y = +date.slice(0, 4), mo = +date.slice(4, 6) - 1, d = +date.slice(6, 8);
-    const daysAgo = Math.round((Date.now() - new Date(y, mo, d, 12, 0, 0).getTime()) / 86400000);
-    const label = daysAgo < 7 ? "Last played" : `Last played · ${formatDateCompact(date)}`;
+    const dateObj = new Date(y, mo, d, 12, 0, 0);
+    const daysAgo = Math.round((Date.now() - dateObj.getTime()) / 86400000);
+    const fullDow = dateObj.toLocaleDateString("en-US", { weekday: "long" });
+    const label = daysAgo < 7 ? `Last played · ${fullDow}` : `Last played · ${fullDow} ${mo + 1}/${d}`;
     return (
       <div className="flex flex-col gap-1.5 sm:gap-2">
         {games.map((game, i) => (
