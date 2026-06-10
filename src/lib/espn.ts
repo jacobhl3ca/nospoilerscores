@@ -2122,6 +2122,16 @@ export async function fetchAllLeagues(
     let previousGameDay: { date: string; games: Game[] } | null = null;
     if (!failed && isPastView && games.length === 0) {
       previousGameDay = await fetchPreviousGameDayRange(cfg.sport, date);
+      // No recent finished games on a past tab → the league likely hasn't
+      // started yet (e.g. the World Cup before kickoff). Find the next game so
+      // the column can read "Starts {date}" instead of a bare "No games". This
+      // is the only case the (otherwise past-suppressed) lookahead fires on a
+      // past tab, and it surfaces just a date hint — not a misleading slate.
+      if (!previousGameDay && !nextGameDay) {
+        nextGameDay = cfg.sport === "fifa"
+          ? await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 1 })
+          : await fetchNextGameDay(cfg.sport, 14, date);
+      }
     }
     return { sport: cfg.sport, label, games, nextGameDay, previousGameDay, fetchFailed: failed };
   };

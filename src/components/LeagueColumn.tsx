@@ -945,7 +945,7 @@ export default function LeagueColumn({
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} />
           )}
         </div>
       )}
@@ -998,6 +998,10 @@ export default function LeagueColumn({
           ) : isPastDate ? (
             league.previousGameDay && league.previousGameDay.games.length > 0 ? (
               renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
+            ) : league.nextGameDay && league.nextGameDay.games.length > 0 ? (
+              // No past games either → the league hasn't started yet; point to
+              // when it does instead of a bare "No games" (e.g. WC pre-kickoff).
+              <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Starts {formatDateCompact(league.nextGameDay.date)}</p>
             ) : (
               <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
             )
