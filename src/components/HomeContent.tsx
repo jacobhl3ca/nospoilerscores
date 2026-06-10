@@ -2000,9 +2000,44 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       </main>
 
       <footer className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-5 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
-        <span>Catch up on games without spoilers.</span>
+        {/* This is the page's only <h1>. Styled to match the footer text
+            (Tailwind's preflight makes headings inherit size/weight, so it
+            renders identically to the old <span>) — it just carries the
+            keyword copy SEO needs without changing the look. */}
+        <h1 className="text-sm font-normal m-0">Catch up on games without spoilers — spoiler-free sports scores &amp; highlights.</h1>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />
+
+        {/* SEO content + internal links, "rolled up" under the feedback box so it
+            adds crawlable copy and a link graph without changing the visual layout.
+            Google renders and indexes content inside collapsed <details>, and plain
+            <a href> (not next/link) is what the crawler needs to follow the routes. */}
+        <details className="mt-2 max-w-2xl text-left text-xs leading-relaxed">
+          <summary className="cursor-pointer select-none text-center" style={{ color: "var(--text-muted)" }}>
+            About HideScore
+          </summary>
+          <div className="mt-2 space-y-2" style={{ color: "var(--text-muted)" }}>
+            <p>
+              HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
+              MLB, MLS, the Premier League, the 2026 World Cup and golf without ever seeing who won —
+              every score and result stays hidden until you choose to reveal it.
+            </p>
+            <p>
+              Before you commit to a replay, our competitiveness rating tells you whether a game was a
+              blowout or an instant classic, so you can watch the best sports highlights without
+              spoilers and skip the duds — all without learning the final score.
+            </p>
+            <p>
+              It&apos;s free, has no tracking cookies, and works in any browser or as an iOS app. Jump to{" "}
+              <a href="/today" style={{ textDecoration: "underline" }}>today&apos;s games</a>,{" "}
+              <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
+              <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
+              <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
+              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a> — all spoiler-free.
+            </p>
+          </div>
+        </details>
+
         {!isNativeApp && (
           <div className="flex items-center gap-2 mt-1">
             <a
