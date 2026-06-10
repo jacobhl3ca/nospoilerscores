@@ -140,12 +140,13 @@ function formatSeriesStatus(s: string): string {
 // series (the first renders as a full GameCard). The two teams are fixed for the
 // series, so each row just needs the VENUE — "@ HOME · date · time" with the
 // broadcast network pinned right (Jacob 6/4). No series state here: it shows
-// Drop ":00" from on-the-hour times ("3:00 PM" → "3 PM") so the date + time +
-// network all fit a narrow mobile column — matters most for the World Cup cards,
-// whose games are mostly on the hour and whose network is the wide "FOX +2"
-// (Jacob 6/9). Times with real minutes ("8:30 PM") are left untouched.
-function shortenTime(t: string | null | undefined): string {
-  return t ? t.replace(/:00(\s*[AP]M)/i, "$1") : (t ?? "");
+// Display tip-off time tight: drop the space before the meridiem ("8:30 PM" →
+// "8:30PM") and KEEP the full ":00" on on-the-hour times ("7:00 PM" stays
+// "7:00PM", not "7PM"). The no-space form reads as one unit and also buys a few
+// px back on the narrow mobile columns so the lead card stops clipping the PM
+// (Jacob 6/9).
+function formatTime(t: string | null | undefined): string {
+  return (t ?? "").replace(/(\d)\s+([AP]M)\b/i, "$1$2");
 }
 
 // Expand the short weekday ("Thu") to the full name ("Thursday") for desktop,
@@ -222,12 +223,13 @@ export function CompactUpcomingCard({
           matter the DOW width (Jacob 6/9). Date bold (DOW only on mobile), time
           shortened, network right. */}
       <div className="flex sm:hidden items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-        {/* Time sits a space to the right of the DOW (not centered). The 3-letter
-            DOWs are ~the same width, so the times roughly line up across rows
-            without a fixed width (which would waste space + clip the network on a
-            narrow column). Network pinned right (Jacob 6/9). */}
-        <span className="shrink-0 font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
-        {localTime ? <span className="shrink-0 whitespace-nowrap">{shortenTime(localTime)}</span> : null}
+        {/* DOW in a fixed-width box so the time starts at the same x on every row
+            (the 3-letter abbreviations vary just enough — "Fri" vs "Sat" — to
+            knock the times out of alignment otherwise). A constant small gap sits
+            after the box. Non-lead rows: the DOW is NOT bold — only the lead
+            card's is. Network pinned right (Jacob 6/9). */}
+        <span className="shrink-0 inline-block w-[1.7rem]" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
+        {localTime ? <span className="shrink-0 whitespace-nowrap">{formatTime(localTime)}</span> : null}
         <span className="ml-auto shrink-0 text-right">{networkNode}</span>
       </div>
       {/* Desktop: bold DOW only; the M/D + time flow right after as one muted run
@@ -235,8 +237,8 @@ export function CompactUpcomingCard({
           before the dash. Network pinned right (Jacob 6/9). */}
       <div className="hidden sm:flex items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
         <span className="whitespace-nowrap">
-          <span className="font-bold" style={{ color: "var(--text)" }}>{expandDow((nextGameDate || "").split(" ")[0])}</span>
-          {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${localTime}` : ""}
+          <span style={{ color: "var(--text)" }}>{expandDow((nextGameDate || "").split(" ")[0])}</span>
+          {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${formatTime(localTime)}` : ""}
         </span>
         {networkNode ? <span className="ml-auto whitespace-nowrap">{networkNode}</span> : null}
       </div>
@@ -245,8 +247,10 @@ export function CompactUpcomingCard({
         <span className="shrink-0 text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>@</span>
         {home.logo ? <img src={home.logo} alt={home.abbreviation} title={home.displayName} width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
         {/* Full team name when there's room (desktop, like the lead card above);
-            abbreviation on the narrow mobile column (Jacob 6/9). */}
-        <span className="font-medium text-xs sm:text-sm min-w-0 truncate" style={{ color: "var(--text)" }} title={home.displayName}>
+            abbreviation on the narrow mobile column. Normal weight to match the
+            lead card + every other card's team name — font-medium made the venue
+            team read heavier than the (un-bold) date above it (Jacob 6/9). */}
+        <span className="text-xs sm:text-sm min-w-0 truncate" style={{ color: "var(--text)" }} title={home.displayName}>
           <span className="hidden sm:inline">{displayShortName(home)}</span>
           <span className="sm:hidden">{home.abbreviation}</span>
         </span>
@@ -443,21 +447,21 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           </a>
         );
         return (
-          <div className="flex items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
-            {/* Flex (not a symmetric grid): the date/time takes all the space it
-                needs and only truncates (min-w-0) when the row is genuinely too
-                tight — so a wide card shows the full "Tomorrow - 8:30 PM" instead
-                of being capped at half the width. The network is shrink-0 and
-                pinned right so it never gets clipped (Jacob 6/9). */}
-            <span className="min-w-0 truncate">
+          <div className="flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
+            {/* Date/time never shrinks or clips (shrink-0) so the time always
+                shows in full — including the ":00". When it + a wide network
+                ("Sun 12:00PM" + "FS1 +2") can't share one line on a narrow mobile
+                column, flex-wrap drops the network to its own line (still pinned
+                right via ml-auto) instead of clipping the time (Jacob 6/9). */}
+            <span className="shrink-0 whitespace-nowrap">
               {teamView ? (
                 <span className="text-[11px] whitespace-nowrap">
                   {(() => {
                     const content = (
                       <>
                         <span className="font-bold" style={{ color: "var(--text)" }}>{teamViewDateLabel}</span>
-                        {isFuture && teamViewTime ? <span style={{ color: "var(--text-muted)" }}> · {teamViewTime}</span> : null}
-                        {teamViewDhTime ? <span style={{ color: "var(--text-muted)" }}> · {teamViewDhTime}</span> : null}
+                        {isFuture && teamViewTime ? <span style={{ color: "var(--text-muted)" }}> · {formatTime(teamViewTime)}</span> : null}
+                        {teamViewDhTime ? <span style={{ color: "var(--text-muted)" }}> · {formatTime(teamViewDhTime)}</span> : null}
                         {isFinished && !hasRating ? <span style={{ color: "var(--text-muted)" }}> · FINAL</span> : null}
                       </>
                     );
@@ -494,8 +498,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // shortens the time ("Thu 7 PM") (Jacob 6/9).
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
                     <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? <><span className="sm:hidden">Tomo</span><span className="hidden sm:inline">Tomorrow</span></> : <><span className="sm:hidden">{(nextGameDate || "").split(" ")[0]}</span><span className="hidden sm:inline">{expandDow((nextGameDate || "").split(" ")[0])}</span></>}</span>
-                    <span className="hidden sm:inline">{(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${localTime}` : ""}</span>
-                    <span className="sm:hidden">{localTime ? ` ${shortenTime(localTime)}` : ""}</span>
+                    <span className="hidden sm:inline">{(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${formatTime(localTime)}` : ""}</span>
+                    <span className="sm:hidden">{localTime ? ` ${formatTime(localTime)}` : ""}</span>
                   </span>
                 )
               ) : isFuture ? (
@@ -503,8 +507,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 // (left), full ":00" on desktop, shortened on mobile.
                 withEspn(
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    <span className="sm:hidden">{shortenTime(localTime || cleanStatusDetail(game.statusDetail, false))}</span>
-                    <span className="hidden sm:inline">{localTime || cleanStatusDetail(game.statusDetail, false)}</span>
+                    <span className="sm:hidden">{formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}</span>
+                    <span className="hidden sm:inline">{formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}</span>
                   </span>
                 )
               ) : null}
