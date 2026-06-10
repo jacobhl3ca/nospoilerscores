@@ -387,6 +387,7 @@ export default function SettingsPanel({
           <Section title="League columns">
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
               Pick a league for each slot. <em>Auto</em> uses the in-season default.
+              You can also tap a column&rsquo;s header on the main screen to switch its league.
             </p>
             {[0, 1, 2].map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
