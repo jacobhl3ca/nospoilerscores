@@ -770,14 +770,12 @@ export default function LeagueColumn({
     });
 
   // Lookback slate: on an empty PAST tab, render the last game day's finished
-  // games (with highlights) in place of "No games". A small muted header notes
-  // when they were played, since they're not from the viewed date.
+  // games (with highlights) in place of "No games". The "Last played · date"
+  // label rides on the first card's top row (like a normal card date) rather
+  // than floating above — only on the first card, since they share the day.
   const renderPreviousSlate = (games: Game[], date: string) => (
     <div className="flex flex-col gap-1.5 sm:gap-2">
-      <p className="text-center text-[11px] sm:text-xs" style={{ color: "var(--text-muted)" }}>
-        Last played · {formatDateCompact(date)}
-      </p>
-      {games.map((game) => (
+      {games.map((game, i) => (
         <GameCard
           key={game.id}
           game={game}
@@ -787,6 +785,7 @@ export default function LeagueColumn({
           leagueLabel={league.label}
           onPlayHighlight={onPlayHighlight}
           onPlayEmbed={onPlayEmbed}
+          pastDateLabel={i === 0 ? `Last played · ${formatDateCompact(date)}` : undefined}
           isPastDate
           useAbbreviations={useAbbreviations}
           onSelectTeam={setTeamViewTeam}
@@ -795,6 +794,15 @@ export default function LeagueColumn({
       ))}
     </div>
   );
+
+  // Not-started league on a past tab (empty slate, no recent games, but an
+  // upcoming one exists — e.g. the World Cup before kickoff). Surfaced as the
+  // italic header subtitle ("Starts Tomorrow"), same slot as the playoff
+  // subtitle, instead of body text — so the empty column reads intentionally.
+  const notStartedDate = isPastDate && league.games.length === 0
+    && !(league.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
+    ? formatDateCompact(league.nextGameDay.date)
+    : null;
 
   return (
     <div
@@ -944,6 +952,8 @@ export default function LeagueColumn({
           </div>
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
+          ) : notStartedDate ? (
+            <span className="text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5 italic" style={{ color: "var(--text-muted)" }}>Starts {notStartedDate}</span>
           ) : (
             <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} />
           )}
@@ -998,10 +1008,10 @@ export default function LeagueColumn({
           ) : isPastDate ? (
             league.previousGameDay && league.previousGameDay.games.length > 0 ? (
               renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
-            ) : league.nextGameDay && league.nextGameDay.games.length > 0 ? (
-              // No past games either → the league hasn't started yet; point to
-              // when it does instead of a bare "No games" (e.g. WC pre-kickoff).
-              <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Starts {formatDateCompact(league.nextGameDay.date)}</p>
+            ) : notStartedDate ? (
+              // Not-started league → the "Starts {date}" hint lives in the italic
+              // header subtitle (above); the body stays empty, not "No games".
+              null
             ) : (
               <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
             )

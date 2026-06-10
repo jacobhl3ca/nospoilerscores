@@ -14,6 +14,10 @@ interface GameCardProps {
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
   nextGameDate?: string;
+  // Lookback cards (empty past tab → last game played): a date label rendered on
+  // the card's top-left like a normal card date, e.g. "Last played · Mon 6/8" —
+  // so it reads as part of the card, not floating text above it.
+  pastDateLabel?: string;
   isPastDate?: boolean;
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
@@ -260,7 +264,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
@@ -422,7 +426,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
 
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
-        const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);
+        const hasStatusText = isLive || isFuture || nextGameDate || pastDateLabel || teamView || (!isFinished);
         // In ratings mode the schedule shows each finished game's rating
         // (GREAT/GOOD/MEH/SKIP) so you can see which past games were worth
         // watching; in Scores mode showRating is false → cards show FINAL.
@@ -491,6 +495,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 })()
               ) : showFinal && !hasRating ? (
                 "FINAL"
+              ) : pastDateLabel ? (
+                // Lookback card: the game's date on the top-left, same size/color
+                // as a normal card date (no ESPN link — a finished-game link
+                // would spoil the score).
+                <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{pastDateLabel}</span>
               ) : nextGameDate ? (
                 withEspn(
                   // ONE link (date + time underline together on hover, like
