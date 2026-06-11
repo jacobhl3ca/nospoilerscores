@@ -2026,7 +2026,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             adds crawlable copy and a link graph without changing the visual layout.
             Google renders and indexes content inside collapsed <details>, and plain
             <a href> (not next/link) is what the crawler needs to follow the routes. */}
-        <details className="max-w-2xl text-left text-xs leading-relaxed">
+        <details className="my-2 max-w-2xl text-left text-xs leading-relaxed">
           <summary className="cursor-pointer select-none text-center" style={{ color: "var(--text-muted)" }}>
             About HideScore
           </summary>
