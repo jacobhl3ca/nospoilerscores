@@ -459,6 +459,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
+  // World Cup banner: "Add" expands into a replace-which-column picker when
+  // there's no emptied slot to fill (Jacob 6/11).
+  const [wcReplaceOpen, setWcReplaceOpen] = useState(false);
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; shareCard?: ShareCardMeta | null } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
@@ -914,6 +917,16 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     return options;
   }, [selectedDate]);
 
+  // Homepage switcher options = the active leagues minus the ones the user
+  // removed in Settings (hiddenLeagues). Drives the header dropdown/arrow
+  // cycling, the news swap menus, and the + button's picks. Label lookups and
+  // Settings' slot pickers keep the full thirdLeagueOptions list so a hidden
+  // league can still be pinned (or re-enabled) deliberately.
+  const switcherOptions = useMemo(
+    () => thirdLeagueOptions.filter((o) => !prefs.hiddenLeagues?.includes(o.sport)),
+    [thirdLeagueOptions, prefs.hiddenLeagues],
+  );
+
   // When the user picks a league (or Empty) for one column, lock the other two
   // to whatever's currently displayed so the auto-picker doesn't shuffle them.
   // Without this, picking NCAAM for slot 2 (with slots 1+3 unset) re-runs auto-pick
@@ -960,10 +973,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     const baseline: (Sport | "empty" | undefined)[] = SLOT_INDICES.map((i) => {
       const pref = selectedSlotLeagues[i];
       if (pref === "empty") return "empty";
-      if (pref) return pref;
-      // Auto/unset → use whichever league is currently in this slot's position.
-      // leagueQueue is in slot order (empties already dropped by fetchAllLeagues).
-      return leagueQueue[queueIdx++];
+      // Every non-empty slot consumed one rendered column (a pinned slot's
+      // column IS its pref), so advance the queue for pinned slots too —
+      // otherwise an auto slot after a pinned one reads the wrong column.
+      const shown = leagueQueue[queueIdx++];
+      return pref ?? shown;
     });
     [baseline[fromIdx], baseline[toIdx]] = [baseline[toIdx], baseline[fromIdx]];
     updatePrefs({
@@ -1573,9 +1587,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         </div>
       )}
 
-      {/* Scores board on a wide viewport stretches to max-w-7xl so five columns
-          get ~236px each; news + narrow boards keep the classic max-w-6xl. */}
-      <main className={`${!showNews && slotCount === 5 ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full`}>
+      {/* Scores board stretches to max-w-7xl when five columns are actually
+          RENDERING — keyed off the fetched data, not the viewport, so crossing
+          the 1280px breakpoint doesn't widen the still-3-column board while
+          the extra leagues load; the layout swaps once, when they arrive
+          (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
+      <main className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full`}>
         {/* World Cup hub framing — only on /worldcup. The WC column is already
             auto-pinned to the board below (it's an active firstPref league
             through 07-19), so this banner just sets the context for marketing
@@ -1810,7 +1827,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           const newsOnAddColumn = newsFirstEmptySlot !== undefined && leagueEntries.length < 3
             ? () => {
                 const shown = leagueEntries.map((e) => e.sport);
-                const eligible = thirdLeagueOptions.filter((o) => !shown.includes(o.sport));
+                const eligible = switcherOptions.filter((o) => !shown.includes(o.sport));
                 const pick = eligible[0]?.sport ?? thirdLeagueOptions[0]?.sport;
                 if (pick) setSlotLeague(newsFirstEmptySlot, pick);
               }
@@ -1846,7 +1863,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                         <div key={`title-${entry.id}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                           <NewsColumnTitle
                             title={entry.label}
-                            swappableOptions={thirdLeagueOptions}
+                            swappableOptions={switcherOptions}
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={isEspn ? ((s) => { if (s === "empty") setSlotLeague(2, "empty"); else if (s) setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
@@ -1895,7 +1912,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                       key={`nc-${entry.id}-${newsRefreshKey}`}
                       title={entry.label}
                       sources={sourcesForEntry(entry, idx)}
-                      swappableOptions={thirdLeagueOptions}
+                      swappableOptions={switcherOptions}
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={isEspn ? ((s) => { if (s === "empty") setSlotLeague(2, "empty"); else if (s) setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
@@ -1982,11 +1999,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             // gives you a second column of that league.
             const displayedSports = sortedLeagues.map((l) => l.sport);
             const swapPropsForSlot = (idx: number) => ({
-              swappableOptions: thirdLeagueOptions,
+              swappableOptions: switcherOptions,
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
               selectedThirdLeague: selectedSlotLeagues[idx],
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
               showSwapChevron: !prefs.hideLeagueChevrons,
+              switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
             });
             // Slot fetched-league queue: fetchAllLeagues skipped empty slots,
             // so we walk slot prefs and pull from the fetched queue for non-
@@ -2008,7 +2026,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             const onAddColumn = firstEmptySlot !== undefined && slotEntries.length < slotCount
               ? () => {
                   const shown = slotEntries.map((e) => e.league.sport);
-                  const eligible = thirdLeagueOptions.filter((o) => !shown.includes(o.sport));
+                  const eligible = switcherOptions.filter((o) => !shown.includes(o.sport));
                   const pick = eligible[0]?.sport ?? thirdLeagueOptions[0]?.sport;
                   if (pick) setSlotLeague(firstEmptySlot, pick);
                 }
@@ -2016,15 +2034,14 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
 
             // World Cup quick-add (Jacob 6/11): during the tournament window,
             // anyone whose visible columns don't include the World Cup gets a
-            // slim one-click banner. Fills the first emptied slot if there is
-            // one, else swaps the last visible column. Dismiss persists.
+            // slim banner. With an emptied slot the add is one click (nothing
+            // is displaced); otherwise the Add button expands into a "replace
+            // which column?" picker so the user chooses what the WC bumps
+            // (Jacob 6/11 #2). Dismiss persists.
             const wcActive = thirdLeagueOptions.some((o) => o.sport === "fifa");
             const showWcBanner = wcActive
               && !displayedSports.includes("fifa")
               && !prefs.wcBannerDismissed;
-            const addWorldCupColumn = () => {
-              setSlotLeague(firstEmptySlot !== undefined ? firstEmptySlot : slotCount - 1, "fifa");
-            };
             const wcBanner = showWcBanner ? (
               <div
                 className="mb-3 rounded-lg px-3 py-2 flex items-center gap-x-3 gap-y-1.5 flex-wrap"
@@ -2033,13 +2050,48 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 <span className="text-sm" style={{ color: "var(--text)" }}>
                   <span aria-hidden="true">⚽ </span>The 2026 World Cup is on — every match, spoiler-free.
                 </span>
-                <button
-                  onClick={addWorldCupColumn}
-                  className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
-                  style={{ background: "var(--accent)", color: "white" }}
-                >
-                  Add the World Cup column
-                </button>
+                {firstEmptySlot !== undefined ? (
+                  <button
+                    onClick={() => setSlotLeague(firstEmptySlot, "fifa")}
+                    className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
+                    style={{ background: "var(--accent)", color: "white" }}
+                  >
+                    Add the World Cup column
+                  </button>
+                ) : !wcReplaceOpen ? (
+                  <button
+                    onClick={() => setWcReplaceOpen(true)}
+                    className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
+                    style={{ background: "var(--accent)", color: "white" }}
+                  >
+                    Add the World Cup column
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm" style={{ color: "var(--text-muted)" }}>Replace:</span>
+                    {slotEntries.map((entry) => (
+                      <button
+                        key={entry.slotIdx}
+                        onClick={() => { setSlotLeague(entry.slotIdx, "fifa"); setWcReplaceOpen(false); }}
+                        className="text-sm font-medium px-2.5 py-1 rounded-md cursor-pointer transition-colors"
+                        style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        title={`Show the World Cup instead of ${entry.league.label}`}
+                      >
+                        {entry.league.label}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setWcReplaceOpen(false)}
+                      className="text-sm px-1.5 py-1 cursor-pointer"
+                      style={{ color: "var(--text-muted)" }}
+                      title="Cancel"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                )}
                 <button
                   onClick={() => updatePrefs({ wcBannerDismissed: true })}
                   aria-label="Dismiss World Cup banner"

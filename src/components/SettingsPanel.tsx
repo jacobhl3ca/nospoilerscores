@@ -54,6 +54,12 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "dark", label: "Dark" },
 ];
 
+const SWITCHER_MODE_OPTIONS: { value: "dropdown" | "arrows" | "off"; label: string; hint: string }[] = [
+  { value: "dropdown", label: "Dropdown", hint: "Tap a header to pick from a list" },
+  { value: "arrows", label: "Arrows", hint: "‹ › beside the title cycle leagues" },
+  { value: "off", label: "Off", hint: "Headers are plain — switch here instead" },
+];
+
 const SPORT_LABEL: Record<Sport, string> = {
   mlb: "MLB",
   nba: "NBA",
@@ -283,6 +289,8 @@ export default function SettingsPanel({
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
       wcBannerDismissed: undefined,
+      leagueSwitcherMode: undefined,
+      hiddenLeagues: undefined,
     });
   };
 
@@ -433,12 +441,45 @@ export default function SettingsPanel({
                 </Field>
               );
             })}
-            <ToggleRow
-              label="League switcher arrows"
-              hint="The ▾ next to each column header (tap still switches either way)"
-              checked={!prefs.hideLeagueChevrons}
-              onChange={(v) => updatePrefs({ hideLeagueChevrons: !v })}
-            />
+            <Field label="Header league switcher" hint="How tapping a column header behaves">
+              <RadioGroup
+                value={prefs.leagueSwitcherMode ?? "dropdown"}
+                options={SWITCHER_MODE_OPTIONS}
+                onChange={(v) => updatePrefs({ leagueSwitcherMode: v })}
+              />
+            </Field>
+            {(prefs.leagueSwitcherMode ?? "dropdown") === "dropdown" && (
+              <ToggleRow
+                label="Dropdown arrow (▾)"
+                hint="The hint arrow next to each header (tap still switches either way)"
+                checked={!prefs.hideLeagueChevrons}
+                onChange={(v) => updatePrefs({ hideLeagueChevrons: !v })}
+              />
+            )}
+            <Field label="Leagues in the switcher" hint="Unchecked leagues stay out of the header switcher">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                {thirdLeagueOptions.map((o) => {
+                  const hidden = prefs.hiddenLeagues?.includes(o.sport) ?? false;
+                  return (
+                    <label key={o.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
+                      <input
+                        type="checkbox"
+                        checked={!hidden}
+                        onChange={(e) => {
+                          const cur = prefs.hiddenLeagues ?? [];
+                          const next = e.target.checked
+                            ? cur.filter((s) => s !== o.sport)
+                            : [...cur, o.sport];
+                          updatePrefs({ hiddenLeagues: next.length ? next : undefined });
+                        }}
+                        className="cursor-pointer accent-[var(--accent)]"
+                      />
+                      {o.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
           </Section>
 
           {/* Favorite teams — picker first so adding a team doesn't push the

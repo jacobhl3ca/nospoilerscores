@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -13,11 +13,6 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import TeamView from "./TeamView";
-
-// JS fallback for the drag source slot — some browsers (Safari/Firefox) drop
-// custom dataTransfer MIME types across a drag, so the onDrop handler can't
-// always read back the source index via getData. Set on dragstart, read on drop.
-let dragSourceSlot: number | null = null;
 
 interface LeagueColumnProps {
   league: LeagueData;
@@ -41,6 +36,9 @@ interface LeagueColumnProps {
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
   showSwapChevron?: boolean;
+  // Header switcher style: dropdown (default), arrows (‹ › flank the title
+  // and cycle through swappableOptions), or off (plain non-tappable header).
+  switcherMode?: "dropdown" | "arrows" | "off";
   // Favorite-stars next to team names on the cards (Settings can hide them).
   // Suppressed automatically when the column is a single Finals matchup.
   showTeamStars?: boolean;
@@ -49,7 +47,7 @@ interface LeagueColumnProps {
   // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
   // covers mobile; this is the desktop-equivalent path.
   onRetry?: () => void;
-  // 0/1/2. Used by the drag handle to identify the source slot on drag start;
+  // 0-4. Identifies this column's slot for the pointer drag-to-reorder;
   // the parent owns reorder logic and writes the new slot order back to prefs.
   slotIdx?: number;
   onReorderSlots?: (fromIdx: number, toIdx: number) => void;
@@ -526,6 +524,7 @@ export default function LeagueColumn({
   selectedThirdLeague,
   onSwapLeague,
   showSwapChevron,
+  switcherMode,
   showTeamStars,
   shownElsewhere,
   onRetry,
@@ -537,14 +536,112 @@ export default function LeagueColumn({
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   const [swapOpen, setSwapOpen] = useState(false);
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
-  // Column drag-to-reorder disabled 2026-05-30 — native HTML5 DnD didn't swap
-  // reliably (the draggable handle is also the swap-dropdown button; Safari/
-  // Firefox quirks). Tabled in BACKLOG for a pointer-event rebuild. Keep the
-  // props so re-enabling is a one-line flip.
-  void onReorderSlots; void slotIdx;
-  const canDrag = false;
+  const mode = switcherMode ?? "dropdown";
+  const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague && mode !== "off";
+
+  // ── Column drag-to-reorder (pointer events) ──────────────────────────────
+  // Rebuilt 6/11 with pointer events after the HTML5 DnD version proved flaky
+  // (Safari/Firefox dropped custom dataTransfer types mid-drag; removed 5/30).
+  // Press the header title and drag onto another column to swap slots. A small
+  // movement threshold keeps plain clicks routing to the switcher; touch is
+  // excluded so the header doesn't fight page scrolling on phones.
+  const canDrag = slotIdx !== undefined && !!onReorderSlots;
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<{
+    startX: number; startY: number; active: boolean; pointerId: number;
+    hoverEl: HTMLElement | null; ghost: HTMLDivElement | null;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  const clearDragHover = () => {
+    const d = dragRef.current;
+    if (d?.hoverEl) {
+      d.hoverEl.style.background = "";
+      d.hoverEl = null;
+    }
+  };
+
+  const endDrag = (commitClientX?: number, commitClientY?: number) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    document.body.style.cursor = "";
+    if (d?.ghost) d.ghost.remove();
+    if (d?.hoverEl) d.hoverEl.style.background = "";
+    setIsDragging(false);
+    // The post-drag synthetic click only fires when the pointer ends over this
+    // same header — clear the suppress flag right after the event cycle so a
+    // drop elsewhere doesn't swallow the NEXT genuine click.
+    setTimeout(() => { suppressClickRef.current = false; }, 0);
+    if (!d?.active || commitClientX === undefined || commitClientY === undefined) return;
+    const target = document
+      .elementFromPoint(commitClientX, commitClientY)
+      ?.closest("[data-slot-idx]") as HTMLElement | null;
+    const toIdx = target ? parseInt(target.dataset.slotIdx ?? "", 10) : NaN;
+    if (Number.isFinite(toIdx) && toIdx !== slotIdx) onReorderSlots!(slotIdx!, toIdx);
+  };
+
+  const onHeaderPointerDown = (e: ReactPointerEvent) => {
+    if (!canDrag || e.pointerType === "touch" || e.button !== 0) return;
+    dragRef.current = {
+      startX: e.clientX, startY: e.clientY, active: false,
+      pointerId: e.pointerId, hoverEl: null, ghost: null,
+    };
+    const onMove = (ev: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d || ev.pointerId !== d.pointerId) return;
+      if (!d.active) {
+        // 8px threshold before it counts as a drag (clicks stay clicks).
+        if (Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 8) return;
+        d.active = true;
+        suppressClickRef.current = true;
+        setIsDragging(true);
+        setSwapOpen(false);
+        document.body.style.cursor = "grabbing";
+        // Floating label so the user sees what they're moving (a full-column
+        // drag image needs HTML5 DnD; a light ghost reads better anyway).
+        const ghost = document.createElement("div");
+        ghost.textContent = league.label;
+        ghost.style.cssText =
+          "position:fixed;z-index:100;pointer-events:none;padding:2px 10px;" +
+          "border-radius:8px;font-weight:700;font-size:14px;" +
+          "background:var(--bg-card);border:1px solid var(--border-hover);color:var(--text);" +
+          "transform:translate(-50%,-130%);";
+        document.body.appendChild(ghost);
+        d.ghost = ghost;
+      }
+      if (d.ghost) {
+        d.ghost.style.left = `${ev.clientX}px`;
+        d.ghost.style.top = `${ev.clientY}px`;
+      }
+      // Highlight the column under the pointer (direct style keeps this
+      // self-contained — no cross-column React state needed).
+      const over = document
+        .elementFromPoint(ev.clientX, ev.clientY)
+        ?.closest("[data-slot-idx]") as HTMLElement | null;
+      if (over !== d.hoverEl) {
+        if (d.hoverEl) d.hoverEl.style.background = "";
+        d.hoverEl = over && over !== columnRef.current ? over : null;
+        if (d.hoverEl) d.hoverEl.style.background = "var(--bg-card-hover)";
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== dragRef.current?.pointerId) return;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      endDrag(ev.clientX, ev.clientY);
+    };
+    const onCancel = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      clearDragHover();
+      endDrag();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+  };
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
   useEffect(() => { setTeamViewTeam(null); }, [league.sport, league.label]);
@@ -840,73 +937,67 @@ export default function LeagueColumn({
   return (
     <div
       ref={columnRef}
+      data-slot-idx={canDrag ? slotIdx : undefined}
       className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh] transition-colors"
-      style={isDragOver ? { background: "var(--bg-card-hover)" } : undefined}
-      onDragEnter={canDrag ? (e) => {
-        // Unconditional preventDefault — both dragenter + dragover need to call
-        // it for the target to accept a drop (HTML5 spec). Previously we filtered
-        // by types here, but Safari sometimes returns an empty types[] during
-        // dragenter when crossing rapidly across child boundaries (game cards),
-        // causing the drop to silently fail. The drop handler validates the
-        // payload via getData(), so non-column drags (files, text) still no-op.
-        e.preventDefault();
-      } : undefined}
-      onDragOver={canDrag ? (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        if (!isDragOver) setIsDragOver(true);
-      } : undefined}
-      onDragLeave={canDrag ? (e) => {
-        // dragLeave fires every time the cursor crosses a child boundary inside
-        // the column (game cards, swap button, etc.), even while still inside
-        // the wrapper. Only clear the highlight when relatedTarget is actually
-        // outside this column — otherwise the dropEffect/isDragOver state flickers
-        // and dragover doesn't get a chance to reapply preventDefault before
-        // the user releases.
-        const related = e.relatedTarget as Node | null;
-        if (related && e.currentTarget.contains(related)) return;
-        setIsDragOver(false);
-      } : undefined}
-      onDrop={canDrag ? (e) => {
-        e.preventDefault();
-        setIsDragOver(false);
-        // Read the custom type first, then text/plain (Safari/Firefox often
-        // drop custom MIME types across the drag → getData returns ""), then
-        // the module-level fallback (set on dragstart) as a last resort.
-        const fromStr = e.dataTransfer.getData("application/x-hidescore-slot")
-          || e.dataTransfer.getData("text/plain")
-          || (dragSourceSlot != null ? String(dragSourceSlot) : "");
-        dragSourceSlot = null;
-        if (!fromStr) return;
-        const fromIdx = parseInt(fromStr, 10);
-        if (Number.isFinite(fromIdx) && fromIdx !== slotIdx && slotIdx !== undefined) {
-          onReorderSlots!(fromIdx, slotIdx);
-        }
-      } : undefined}
+      style={isDragging ? { opacity: 0.55 } : undefined}
     >
       {showHeader && (
         <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
           <div
             className="flex items-center justify-center"
-            draggable={canDrag}
-            style={canDrag ? { cursor: "grab" } : undefined}
-            onDragStart={canDrag ? (e) => {
-              e.dataTransfer.setData("application/x-hidescore-slot", String(slotIdx));
-              // text/plain is preserved by every browser (custom MIME types are
-              // not, esp. Safari/Firefox); module-level var is the JS fallback.
-              e.dataTransfer.setData("text/plain", String(slotIdx));
-              dragSourceSlot = slotIdx ?? null;
-              e.dataTransfer.effectAllowed = "move";
-              // Use the column wrapper as the drag image so the user sees the
-              // whole column move, not just the header strip.
-              if (columnRef.current) {
-                e.dataTransfer.setDragImage(columnRef.current, 20, 20);
+            style={canDrag ? { cursor: isDragging ? "grabbing" : "grab", touchAction: "pan-y" } : undefined}
+            onPointerDown={onHeaderPointerDown}
+            onClickCapture={(e) => {
+              // A drag just ended on this header — swallow the synthetic click
+              // so the switcher dropdown doesn't pop open post-drop.
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                e.preventDefault();
+                e.stopPropagation();
               }
-            } : undefined}
+            }}
           >
-            {/* Drag-to-reorder still works on the whole title row (cursor:
-                grab) — the visual dot indicator was dropped. */}
-            {isSwappable ? (
+            {/* Drag-to-reorder works on the whole title row (cursor: grab);
+                a plain click still opens the switcher. */}
+            {isSwappable && mode === "arrows" ? (
+              // ‹ › cycle mode (Jacob 6/11): arrows flank the title and step
+              // through the switcher options in order, wrapping at the ends.
+              (() => {
+                const opts = swappableOptions!;
+                const curIdx = opts.findIndex((o) => o.sport === league.sport);
+                const cycle = (dir: 1 | -1) => {
+                  if (!opts.length) return;
+                  const next = curIdx === -1
+                    ? (dir === 1 ? 0 : opts.length - 1)
+                    : (curIdx + dir + opts.length) % opts.length;
+                  onSwapLeague!(opts[next].sport);
+                };
+                const arrowBtn = (dir: 1 | -1) => (
+                  <button
+                    onClick={() => cycle(dir)}
+                    aria-label={dir === 1 ? "Next league" : "Previous league"}
+                    title={dir === 1 ? "Next league" : "Previous league"}
+                    className="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer transition-colors shrink-0"
+                    style={{ color: "var(--text-muted)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                  >
+                    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      {dir === 1 ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
+                    </svg>
+                  </button>
+                );
+                return (
+                  <div className="flex items-center gap-0.5">
+                    {arrowBtn(-1)}
+                    <h2 className="text-base sm:text-lg font-bold tracking-wide px-0.5" style={{ color: "var(--text)" }}>
+                      {league.label}
+                    </h2>
+                    {arrowBtn(1)}
+                  </div>
+                );
+              })()
+            ) : isSwappable ? (
               <div ref={swapRef} className="relative">
                 <button
                   onClick={() => setSwapOpen(!swapOpen)}

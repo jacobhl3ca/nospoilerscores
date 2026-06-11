@@ -140,8 +140,17 @@ export interface Preferences {
   fourthLeague?: Sport | "empty"; // user-chosen 4th league slot override
   fifthLeague?: Sport | "empty"; // user-chosen 5th league slot override
   // Hide the ▾ league-switcher arrows in the column headers (tap-to-switch
-  // still works — the arrow is just the discoverability hint).
+  // still works — the arrow is just the discoverability hint). Only relevant
+  // in "dropdown" switcher mode.
   hideLeagueChevrons?: boolean;
+  // Column-header league switcher style: dropdown (default), arrows (‹ › on
+  // either side of the title cycle through the leagues), or off (plain
+  // header — switching only via Settings).
+  leagueSwitcherMode?: "dropdown" | "arrows" | "off";
+  // Leagues the user removed from the homepage switcher (header dropdown /
+  // arrow cycling / news swap / + button picks). Settings' slot pickers stay
+  // unfiltered so a hidden league can still be pinned deliberately.
+  hiddenLeagues?: Sport[];
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
   hideTeamStars?: boolean;
