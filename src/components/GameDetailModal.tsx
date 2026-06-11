@@ -141,7 +141,7 @@ export default function GameDetailModal({
         {/* Matchup — names + logos, NO score/winner */}
         <div className="flex flex-col gap-2 mb-4 pr-6">
           <TeamRow team={game.awayTeam} />
-          <span className="text-[11px] uppercase tracking-wide pl-11" style={{ color: "var(--text-muted)" }}>at</span>
+          <span className="text-[11px] pl-11" style={{ color: "var(--text-muted)" }}>@</span>
           <TeamRow team={game.homeTeam} />
         </div>
 
