@@ -611,6 +611,47 @@ async function fetchNHLVideos() {
   return out;
 }
 
+// ── Official league YouTube channels (World Cup, MLS) ─────────────
+// Leagues with no scrapeable .com video feed (FIFA+ and MLS-on-Apple are
+// DRM/geo-locked) still lead their column with a "Top Videos" card by pulling
+// the league's official YouTube uploads RSS. The feed hands us a real
+// youtubeVideoId, so the in-app player plays the clip natively — no
+// /api/youtube lookup/validation needed (unlike the .com feeds). Add a league
+// here + a jobs entry + PREBAKED_VIDEOS (src/lib/news.ts) and its column leads
+// with video, lockstep with MLB/NBA/NHL.
+async function fetchYouTubeChannelVideos(channelId, section) {
+  const xml = await getText(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
+  const items = [];
+  const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+  let m;
+  while ((m = entryRe.exec(xml)) !== null) {
+    const block = m[1];
+    const vid = (block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) || [])[1];
+    const title = decodeEntities(stripCdata((block.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || ""));
+    const pub = ((block.match(/<published>([^<]+)<\/published>/) || [])[1] || "").trim();
+    if (!vid || !title) continue;
+    // Drop Shorts and hashtag-stuffed cross-promo clips (≥2 hashtags) — they're
+    // vertical / off-topic, not the highlight reel this leading card is for.
+    if ((title.match(/#/g) || []).length >= 2) continue;
+    if (!passesArticleBlocklist(title)) continue;
+    items.push({
+      id: vid,
+      headline: title,
+      description: "",
+      published: pub ? new Date(pub).toISOString() : "",
+      // mqdefault is a clean 16:9 crop; the RSS default (hqdefault) is 4:3 and
+      // letterboxes in the card's aspect-video frame.
+      imageUrl: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`,
+      articleUrl: `https://www.youtube.com/watch?v=${vid}`,
+      byline: "",
+      section,
+      youtubeVideoId: vid,
+    });
+    if (items.length >= 10) break;
+  }
+  return items;
+}
+
 // ── ESPN homepage TOP HEADLINES (scraped for exact order) ─────────
 
 // Cached homepage HTML so the headlines + videos scrapers share one fetch.
@@ -1443,6 +1484,12 @@ const jobs = [
   ["wnba-videos", fetchWNBAVideos],
   ["nhl", fetchNHL],
   ["nhl-videos", fetchNHLVideos],
+
+  // Leagues with no usable .com video feed lead their column with their
+  // official YouTube channel instead (plays natively via youtubeVideoId).
+  // World Cup = FIFA's channel; MLS = Major League Soccer's channel.
+  ["fifa-videos", () => fetchYouTubeChannelVideos("UCpcTrCXblq78GZrTUTLWeBw", "World Cup Top Videos")],
+  ["mls-videos", () => fetchYouTubeChannelVideos("UCSZbXT5TLLW_i-5W8FZpFsg", "MLS Top Videos")],
 
   // ESPN homepage top headlines + big-format videos (both scraped from espn.com)
   ["espn-top", fetchESPNTopHeadlines],

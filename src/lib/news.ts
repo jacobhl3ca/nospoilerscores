@@ -212,6 +212,11 @@ const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string; chann
   nba: { key: "nba-videos", label: "NBA Top Videos", channel: "NBA" },
   wnba: { key: "wnba-videos", label: "WNBA Top Videos", channel: "WNBA" },
   nhl: { key: "nhl-videos", label: "NHL Top Videos", channel: "NHL" },
+  // World Cup + MLS have no scrapeable .com video feed — their leading video
+  // card is baked from the league's official YouTube channel (prebake-news.mjs
+  // fetchYouTubeChannelVideos), so items already carry youtubeVideoId.
+  fifa: { key: "fifa-videos", label: "World Cup Top Videos", channel: "FIFA" },
+  mls: { key: "mls-videos", label: "MLS Top Videos", channel: "MLS" },
 };
 
 // Per-league subreddit card — pinned just below the official news link since
