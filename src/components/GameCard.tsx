@@ -140,6 +140,20 @@ function formatSeriesStatus(s: string): string {
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
+// Compact network label for the inline status-bar chip (Jacob 6/10): the rating
+// badge centers on the card, so the network sits small and short beside it.
+// "MLB.TV" → "MLB", "MLB Network" → "MLB", "Prime Video" → "Prime", "Apple TV+"
+// → "Apple TV". Codes already short (FOX/FS1/ESPN/TBS/ABC/TNT) pass through. The
+// full name stays in the link title/aria, so nothing is lost.
+function shortNetwork(name: string): string {
+  return name
+    .replace(/\.tv$/i, "")
+    .replace(/\s*Network$/i, "")
+    .replace(/\s*Video$/i, "")
+    .replace(/\+$/, "")
+    .trim() || name;
+}
+
 // Compact upcoming-game row for the games AFTER the first in an NBA/NHL playoff
 // series (the first renders as a full GameCard). The two teams are fixed for the
 // series, so each row just needs the VENUE — "@ HOME · date · time" with the
@@ -459,7 +473,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           </a>
         );
         return (
-          <div className="flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
+          <div className="relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
             {/* Date/time never shrinks or clips (shrink-0) so the time always
                 shows in full — including the ":00". When it + a wide network
                 ("Sun 12:00PM" + "FS1 +2") can't share one line on a narrow mobile
@@ -531,9 +545,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 xl-only, so its wrapper is hidden below xl and the network's
                 ml-auto pins it right (Jacob 6/9). */}
             {hasRating ? (
-              <span className="min-w-0 flex-1 flex justify-center"><RatingBadge rating={game.rating!} /></span>
+              // Center the rating badge on the CARD, not in the flex slack: a
+              // live game's narrow inning chip (left) + wider network (right)
+              // would otherwise pull a justify-center badge left of true center
+              // (Jacob 6/10). Absolute-center it so it's dead-center regardless;
+              // the inning + network keep their normal left/right flow spots.
+              <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center"><RatingBadge rating={game.rating!} /></span>
             ) : tooEarly ? (
-              <span className="min-w-0 flex-1 flex justify-center">
+              <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center">
                 <span
                   className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-500/70 text-white uppercase whitespace-nowrap"
                   title="Too early to rate — check back after the 1st"
@@ -592,7 +611,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       title={`Watch on ${name}`}
                       onClick={handleExternalClick(href)}
                     >
-                      {name}
+                      {shortNetwork(name)}
                     </a>
                   );
                 };
@@ -612,7 +631,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       title={`See all networks: ${game.broadcasts.join(", ")}`}
                       onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
                     >
-                      {game.broadcasts[0]} +{game.broadcasts.length - 1}
+                      {shortNetwork(game.broadcasts[0])}<span className="hidden sm:inline"> +{game.broadcasts.length - 1}</span>
                     </button>
                   );
                 }
