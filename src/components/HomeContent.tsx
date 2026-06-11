@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, typ
 import { LeagueData, Sport, Game } from "@/lib/types";
 import type { ShareCardMeta } from "@/lib/shareCard";
 import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
-import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive } from "@/lib/espn";
+import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, getActiveLeagueCandidates } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import LeagueColumn from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
@@ -926,6 +926,35 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     () => thirdLeagueOptions.filter((o) => !prefs.hiddenLeagues?.includes(o.sport)),
     [thirdLeagueOptions, prefs.hiddenLeagues],
   );
+
+  // Switcher sports in RELEVANCE order — the auto-picker's own ranking
+  // (firstPref pins like the World Cup first, then LEAGUE_PRIORITY). Drives
+  // the ‹ › arrow cycling so the right arrow surfaces the most relevant
+  // unused league first (Jacob 6/11). Anything the relevance list doesn't
+  // know about tails on in menu order so it's still reachable.
+  const switcherSportsByRelevance = useMemo(() => {
+    if (!selectedDate) return [] as Sport[];
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    const { firstPref, rest } = getActiveLeagueCandidates(viewDate);
+    const allowed = new Set(switcherOptions.map((o) => o.sport));
+    const ordered: Sport[] = [];
+    for (const cfg of [...firstPref, ...rest]) {
+      if (allowed.has(cfg.sport) && !ordered.includes(cfg.sport)) ordered.push(cfg.sport);
+    }
+    for (const o of switcherOptions) {
+      if (!ordered.includes(o.sport)) ordered.push(o.sport);
+    }
+    return ordered;
+  }, [selectedDate, switcherOptions]);
+
+  // ‹ › cycling cursor, per slot. Lives up here (in a ref) because the column
+  // component remounts whenever its league changes — per-column state would
+  // reset every press and recomputing "most relevant unused" from scratch each
+  // time ping-pongs between the top two leagues. The session freezes the
+  // browse order at the first press: right walks most→least relevant through
+  // the then-unused leagues and wraps back to the starting league; left walks
+  // the same ring backwards (so right-then-left returns where you started).
+  const cycleSessionsRef = useRef<Map<number, { key: string; list: Sport[]; idx: number }>>(new Map());
 
   // When the user picks a league (or Empty) for one column, lock the other two
   // to whatever's currently displayed so the auto-picker doesn't shuffle them.
@@ -2019,6 +2048,37 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               return { slotIdx, league, isEmpty: false as const };
             }).filter((e): e is NonNullable<typeof e> => e !== null);
 
+            // ‹ › arrow cycling for a column (arrows switcher mode). The
+            // browse ring = the leagues no visible column is using, most→least
+            // relevant, with the starting league appended so the cycle wraps
+            // home. The cursor lives in cycleSessionsRef (see its comment);
+            // the session rebuilds when the other columns change, when the
+            // slot is switched from elsewhere (dropdown/Settings), or when
+            // the relevance list itself changes.
+            const cycleForEntry = (entry: { slotIdx: number; league: LeagueData }) => (dir: 1 | -1) => {
+              const pref = selectedSlotLeagues[entry.slotIdx];
+              // Prefer the pref over the rendered league: right after a press
+              // the column still shows the old league until the silent refetch
+              // lands, and validating against it would reset the session.
+              const cur = pref && pref !== "empty" ? pref : entry.league.sport;
+              const shown = slotEntries
+                .filter((e) => e.slotIdx !== entry.slotIdx)
+                .map((e) => e.league.sport);
+              const key = `${[...shown].sort().join(".")}|${switcherSportsByRelevance.join(".")}`;
+              const sessions = cycleSessionsRef.current;
+              let s = sessions.get(entry.slotIdx);
+              if (!s || s.key !== key || s.list[s.idx] !== cur) {
+                const unused = switcherSportsByRelevance.filter(
+                  (sp) => sp !== cur && !shown.includes(sp),
+                );
+                s = { key, list: [...unused, cur], idx: unused.length };
+                sessions.set(entry.slotIdx, s);
+              }
+              if (s.list.length <= 1) return;
+              s.idx = (s.idx + dir + s.list.length) % s.list.length;
+              setSlotLeague(entry.slotIdx, s.list[s.idx]);
+            };
+
             // + button: first slot the user explicitly emptied gets repopulated
             // with the first eligible league (not currently shown in another
             // visible column). Only shown when there's room (< slotCount cols).
@@ -2128,6 +2188,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                       {...commonProps}
                       showFinalSeparator
                       {...swapPropsForSlot(entry.slotIdx)}
+                      onCycleLeague={cycleForEntry(entry)}
                     />
                   ))}
                   {onAddColumn && (
@@ -2155,6 +2216,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                     onReorderSlots={reorderSlots}
                     {...commonProps}
                     {...swapPropsForSlot(entry.slotIdx)}
+                    onCycleLeague={cycleForEntry(entry)}
                   />
                 ))}
                 {onAddColumn && (

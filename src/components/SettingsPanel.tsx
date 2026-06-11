@@ -56,7 +56,7 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
 
 const SWITCHER_MODE_OPTIONS: { value: "dropdown" | "arrows" | "off"; label: string; hint: string }[] = [
   { value: "dropdown", label: "Dropdown", hint: "Tap a header to pick from a list" },
-  { value: "arrows", label: "Arrows", hint: "‹ › beside the title cycle leagues" },
+  { value: "arrows", label: "Arrows", hint: "‹ › cycle the unused leagues, most relevant first" },
   { value: "off", label: "Off", hint: "Headers are plain — switch here instead" },
 ];
 

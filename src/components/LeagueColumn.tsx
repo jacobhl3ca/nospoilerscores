@@ -37,8 +37,12 @@ interface LeagueColumnProps {
   // tapping the header still opens the league switcher either way).
   showSwapChevron?: boolean;
   // Header switcher style: dropdown (default), arrows (‹ › flank the title
-  // and cycle through swappableOptions), or off (plain non-tappable header).
+  // and cycle through the unused leagues by relevance), or off (plain
+  // non-tappable header).
   switcherMode?: "dropdown" | "arrows" | "off";
+  // Arrows-mode step callback (owned by HomeContent, which holds the
+  // relevance-ordered browse ring + cursor). dir 1 = ›, -1 = ‹.
+  onCycleLeague?: (dir: 1 | -1) => void;
   // Favorite-stars next to team names on the cards (Settings can hide them).
   // Suppressed automatically when the column is a single Finals matchup.
   showTeamStars?: boolean;
@@ -525,6 +529,7 @@ export default function LeagueColumn({
   onSwapLeague,
   showSwapChevron,
   switcherMode,
+  onCycleLeague,
   showTeamStars,
   shownElsewhere,
   onRetry,
@@ -959,19 +964,14 @@ export default function LeagueColumn({
           >
             {/* Drag-to-reorder works on the whole title row (cursor: grab);
                 a plain click still opens the switcher. */}
-            {isSwappable && mode === "arrows" ? (
-              // ‹ › cycle mode (Jacob 6/11): arrows flank the title and step
-              // through the switcher options in order, wrapping at the ends.
+            {isSwappable && mode === "arrows" && onCycleLeague ? (
+              // ‹ › cycle mode (Jacob 6/11): arrows flank the title and browse
+              // the leagues no other column is showing, most→least relevant —
+              // › starts at the most relevant unused league, ‹ walks the same
+              // ring backwards. The ring/cursor live in HomeContent (this
+              // component remounts on every league change).
               (() => {
-                const opts = swappableOptions!;
-                const curIdx = opts.findIndex((o) => o.sport === league.sport);
-                const cycle = (dir: 1 | -1) => {
-                  if (!opts.length) return;
-                  const next = curIdx === -1
-                    ? (dir === 1 ? 0 : opts.length - 1)
-                    : (curIdx + dir + opts.length) % opts.length;
-                  onSwapLeague!(opts[next].sport);
-                };
+                const cycle = (dir: 1 | -1) => onCycleLeague(dir);
                 const arrowBtn = (dir: 1 | -1) => (
                   <button
                     onClick={() => cycle(dir)}
