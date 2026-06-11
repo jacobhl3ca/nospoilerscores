@@ -2087,20 +2087,20 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <span>App Store</span>
             </a>
             */}
-            {/* Android sideload pill — direct .apk download. Not a Play
-                listing yet (the Play closed test is in progress), so the
-                badge reads "Android App"/"Download", never "Google Play".
-                The badge SVG must NOT contain the literal "APK" — CF WAF
-                500s any asset whose body has that string. */}
+            {/* Android download — HIDDEN until the Play Store closed test is
+                public. When it ships, this becomes the OFFICIAL Google Play
+                badge linking the Play listing (not the /HideScore.apk sideload).
+                Un-comment + swap href to the Play URL once it's live.
             <a
-              href="/HideScore.apk"
-              download
-              aria-label="Download the HideScore Android app"
+              href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Get HideScore on Google Play"
               className="inline-block transition-opacity hover:opacity-80"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/android-download-badge.svg" alt="Download the HideScore Android app" height={40} className="block h-10 w-auto" />
+              <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
             </a>
+            */}
           </div>
         )}
       </footer>
