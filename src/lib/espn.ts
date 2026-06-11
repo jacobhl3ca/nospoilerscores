@@ -236,9 +236,11 @@ export function getActiveLeagueCandidates(viewDate?: Date): {
   return { firstPref, rest };
 }
 
-// Pick the 3 active leagues + assign slot positions according to the documented rules.
-// Returns leagues in slot order [left, center, right] (length 1-3).
-export function pickAndAssignLeagues(viewDate: Date): LeagueConfig[] {
+// Pick the `count` active leagues + assign slot positions according to the
+// documented rules. Returns leagues in slot order — the first three follow the
+// [left, center, right] pin rules; slots beyond 3 (the wide-viewport 5-column
+// board) fill from the remaining pool by LEAGUE_PRIORITY.
+export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES): LeagueConfig[] {
   const eligible = ALL_LEAGUES.filter((l) => isLeagueActive(l, viewDate) && !l.excludeFromAuto);
 
   const mustInclude = eligible.filter((l) => l.mustInclude && !l.backfillOnly);
@@ -246,25 +248,25 @@ export function pickAndAssignLeagues(viewDate: Date): LeagueConfig[] {
   const regular     = eligible.filter((l) => !l.mustInclude && !effectiveFirstPref(l, viewDate) && !l.backfillOnly);
   const backfill    = eligible.filter((l) => l.backfillOnly);
 
-  // Build the candidate pool: hard-required leagues first, then top regulars to reach 3.
+  // Build the candidate pool: hard-required leagues first, then top regulars to reach `count`.
   const candidates: LeagueConfig[] = [...mustInclude, ...firstPref];
   const sortedRegular = regular.sort(
     (a, b) => (LEAGUE_PRIORITY[a.sport] ?? 99) - (LEAGUE_PRIORITY[b.sport] ?? 99)
   );
   for (const l of sortedRegular) {
-    if (candidates.length >= MAX_LEAGUES) break;
+    if (candidates.length >= count) break;
     candidates.push(l);
   }
   // Backfill (NFL Preseason) only joins if we still have an empty slot.
-  if (candidates.length < MAX_LEAGUES) {
+  if (candidates.length < count) {
     for (const l of backfill) {
-      if (candidates.length >= MAX_LEAGUES) break;
+      if (candidates.length >= count) break;
       candidates.push(l);
     }
   }
 
   // Assign pinned slots first; losers fall back into a generic pool to fill empty slots.
-  const slots: (LeagueConfig | null)[] = [null, null, null];
+  const slots: (LeagueConfig | null)[] = Array.from({ length: count }, () => null);
   const slotIndex: Record<"left" | "center" | "right", 0 | 1 | 2> = { left: 0, center: 1, right: 2 };
 
   for (const slotName of ["left", "center", "right"] as const) {
@@ -2003,7 +2005,10 @@ async function enrichNhlVideos(games: Game[], date: string): Promise<void> {
 export async function fetchAllLeagues(
   date?: string,
   thirdLeagueSport?: Sport | "empty",
-  slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty" },
+  slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty"; fourth?: Sport | "empty"; fifth?: Sport | "empty" },
+  // 3 on phones/laptops, 5 on wide viewports (the caller measures). Slots 4-5
+  // exist only in the 5-column board; their prefs are ignored at count 3.
+  slotCount: number = MAX_LEAGUES,
 ): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
@@ -2015,9 +2020,10 @@ export async function fetchAllLeagues(
   const todayYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replace(/-/g, "");
   const isPastView = !!date && date < todayYmd;
 
-  // Resolved slot order from the layout rules. Returns 1-3 LeagueConfigs in
-  // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top.
-  const auto = pickAndAssignLeagues(viewDate);
+  // Resolved slot order from the layout rules. The first three follow
+  // [left, center, right] order — see the "FULL YEAR SCHEDULE" comment up top;
+  // slots 4-5 (wide viewports) fill from the remaining pool by priority.
+  const auto = pickAndAssignLeagues(viewDate, slotCount);
 
   // Per-slot overrides: each slot independently swappable to any active league.
   // "empty" hides the slot entirely (no auto fallback). Falls back to legacy
@@ -2032,9 +2038,11 @@ export async function fetchAllLeagues(
   const slot1Cfg = resolveSlot(slotOverrides?.first);
   const slot2Cfg = resolveSlot(slotOverrides?.second);
   const slot3Cfg = resolveSlot(slotOverrides?.third) ?? resolveSlot(thirdLeagueSport);
+  const slot4Cfg = resolveSlot(slotOverrides?.fourth);
+  const slot5Cfg = resolveSlot(slotOverrides?.fifth);
 
   let final: LeagueConfig[];
-  if (slot1Cfg || slot2Cfg || (slotOverrides?.third && slot3Cfg)) {
+  if (slot1Cfg || slot2Cfg || slot4Cfg || slot5Cfg || (slotOverrides?.third && slot3Cfg)) {
     // Any per-slot override → user is in full manual control. Build slot-by-slot:
     // each set slot uses its override; each unset slot falls back to its position
     // default in auto.
@@ -2048,11 +2056,9 @@ export async function fetchAllLeagues(
     // unset (null) → fall back to that slot's auto pick.
     const resolveFinal = (cfg: LeagueConfig | "empty" | null, slotIdx: number): LeagueConfig | null =>
       cfg === "empty" ? null : (cfg ?? nextAutoForSlot(slotIdx));
-    const slots: (LeagueConfig | null)[] = [
-      resolveFinal(slot1Cfg, 0),
-      resolveFinal(slot2Cfg, 1),
-      resolveFinal(slot3Cfg, 2),
-    ];
+    const slots: (LeagueConfig | null)[] = [slot1Cfg, slot2Cfg, slot3Cfg, slot4Cfg, slot5Cfg]
+      .slice(0, slotCount)
+      .map((cfg, slotIdx) => resolveFinal(cfg, slotIdx));
     // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
   } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {

@@ -135,6 +135,19 @@ export interface Preferences {
   thirdLeague?: Sport | "empty"; // user-chosen 3rd league slot override
   firstLeague?: Sport | "empty"; // user-chosen 1st league slot override
   secondLeague?: Sport | "empty"; // user-chosen 2nd league slot override
+  // Slots 4-5 only render on wide viewports (the 5-column board); on narrow
+  // screens the prefs persist untouched and the board falls back to 3 slots.
+  fourthLeague?: Sport | "empty"; // user-chosen 4th league slot override
+  fifthLeague?: Sport | "empty"; // user-chosen 5th league slot override
+  // Hide the ▾ league-switcher arrows in the column headers (tap-to-switch
+  // still works — the arrow is just the discoverability hint).
+  hideLeagueChevrons?: boolean;
+  // Hide the favorite-star next to team names on game cards (favoriting stays
+  // available via the team-schedule view + settings picker).
+  hideTeamStars?: boolean;
+  // "Add the World Cup column" banner dismissed (only shows during the
+  // tournament when no visible column is the World Cup).
+  wcBannerDismissed?: boolean;
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
   // Default date on launch: smart (yesterday before 1 PM ET, today after),
   // always today, or always yesterday.

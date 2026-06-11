@@ -38,6 +38,11 @@ interface GameCardProps {
   // Clicking the card body opens a spoiler-safe details popup. (Live games still
   // jump straight to the stream from the green status / network chip.)
   onShowDetails?: (game: Game) => void;
+  // Favorite-star next to each team name (restored 6/11, off by default so the
+  // team-schedule view keeps its own header star as the only one there). The
+  // column suppresses it for single-matchup Finals views where the favorite
+  // sort can't reorder anything.
+  showStars?: boolean;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -278,7 +283,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
@@ -735,8 +740,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 );
               })()}
             </span>
-            {/* Favorite-star removed 2026-05-31 (Jacob) — favoriting still
-                available via the team-schedule view. */}
+            {/* Favorite-star: removed 2026-05-31, restored behind the Settings
+                toggle 2026-06-11 (Jacob) — favoriting also lives in the
+                team-schedule view + the Settings team picker. */}
+            {showStars ? star(team.id, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
             {!isTBD && team.record && !effectivePastDate && !isFinished ? (
               <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>

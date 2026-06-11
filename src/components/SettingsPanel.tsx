@@ -164,16 +164,24 @@ export default function SettingsPanel({
   // Each slot dropdown offers every in-season league. Duplicates are allowed —
   // picking a league already in another slot just sets this slot to it too;
   // unset slots lock to their on-screen league so the auto-picker doesn't
-  // reshuffle columns the user didn't touch.
+  // reshuffle columns the user didn't touch. Walks the displayed-league queue
+  // (each non-empty slot consumed one rendered column) so empty slots don't
+  // misalign the lock.
   const setSlot = (slotIdx: number, sport: Sport | "empty" | undefined) => {
-    const resolved: (Sport | "empty" | undefined)[] = [0, 1, 2].map(
-      (i) => slotValues[i] ?? displayedSports[i],
-    );
+    let queueIdx = 0;
+    const resolved: (Sport | "empty" | undefined)[] = [0, 1, 2, 3, 4].map((i) => {
+      const pref = slotValues[i];
+      if (pref === "empty") return "empty";
+      const shown = displayedSports[queueIdx++];
+      return pref ?? shown;
+    });
     resolved[slotIdx] = sport;
     updatePrefs({
       firstLeague: resolved[0],
       secondLeague: resolved[1],
       thirdLeague: resolved[2],
+      fourthLeague: resolved[3],
+      fifthLeague: resolved[4],
     });
   };
 
@@ -181,6 +189,8 @@ export default function SettingsPanel({
     prefs.firstLeague,
     prefs.secondLeague,
     prefs.thirdLeague,
+    prefs.fourthLeague,
+    prefs.fifthLeague,
   ];
 
   // Group favorited teams by sport, attaching display name + logo from
@@ -264,10 +274,15 @@ export default function SettingsPanel({
       firstLeague: undefined,
       secondLeague: undefined,
       thirdLeague: undefined,
+      fourthLeague: undefined,
+      fifthLeague: undefined,
       newsThirdLeague: undefined,
       defaultDateMode: "smart",
       defaultLandingView: "remember",
       defaultRatings: "auto",
+      hideLeagueChevrons: undefined,
+      hideTeamStars: undefined,
+      wcBannerDismissed: undefined,
     });
   };
 
@@ -388,15 +403,16 @@ export default function SettingsPanel({
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
               Pick a league for each slot. <em>Auto</em> uses the in-season default.
               You can also tap a column&rsquo;s header on the main screen to switch its league.
+              Slots 4&ndash;5 only appear when the window is wide enough for five columns.
             </p>
-            {[0, 1, 2].map((idx) => {
+            {[0, 1, 2, 3, 4].map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
               const value = slotValues[idx];
               const hint = value === "empty" ? "Hidden" : value ? undefined : `Auto · currently ${fallbackLabel}`;
               return (
                 <Field
                   key={idx}
-                  label={`Slot ${idx + 1}`}
+                  label={`Slot ${idx + 1}${idx >= 3 ? " (wide screens)" : ""}`}
                   hint={hint}
                 >
                   <select
@@ -417,11 +433,23 @@ export default function SettingsPanel({
                 </Field>
               );
             })}
+            <ToggleRow
+              label="League switcher arrows"
+              hint="The ▾ next to each column header (tap still switches either way)"
+              checked={!prefs.hideLeagueChevrons}
+              onChange={(v) => updatePrefs({ hideLeagueChevrons: !v })}
+            />
           </Section>
 
           {/* Favorite teams — picker first so adding a team doesn't push the
               picker off-screen, then the favorited-teams readout below. */}
           <Section title="Favorite teams">
+            <ToggleRow
+              label="Stars on game cards"
+              hint="The ★ next to team names (auto-hidden in a Finals matchup)"
+              checked={!prefs.hideTeamStars}
+              onChange={(v) => updatePrefs({ hideTeamStars: !v })}
+            />
             <TeamPicker
               sports={thirdLeagueOptions}
               favorites={prefs.favoriteTeams}
@@ -527,7 +555,7 @@ export default function SettingsPanel({
             <div className="flex flex-col gap-2">
               <button
                 onClick={onShareFavorites}
-                disabled={prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague}
+                disabled={prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague}
                 className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ background: "var(--accent)", color: "white" }}
               >

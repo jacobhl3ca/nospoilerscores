@@ -38,6 +38,12 @@ interface LeagueColumnProps {
   swappableOptions?: { sport: Sport; label: string }[];
   selectedThirdLeague?: Sport | "empty";
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // ▾ discoverability arrow on the swappable header (Settings can hide it;
+  // tapping the header still opens the league switcher either way).
+  showSwapChevron?: boolean;
+  // Favorite-stars next to team names on the cards (Settings can hide them).
+  // Suppressed automatically when the column is a single Finals matchup.
+  showTeamStars?: boolean;
   // Sports shown in the other columns — dropdown greys these (still selectable).
   shownElsewhere?: Sport[];
   // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
@@ -519,6 +525,8 @@ export default function LeagueColumn({
   swappableOptions,
   selectedThirdLeague,
   onSwapLeague,
+  showSwapChevron,
+  showTeamStars,
   shownElsewhere,
   onRetry,
   slotIdx,
@@ -729,6 +737,18 @@ export default function LeagueColumn({
   const preGames = sorted.filter((g) => g.state === "pre");
   const postGames = sorted.filter((g) => g.state === "post");
 
+  // Stars exist to float a favorite team's games to the top of the column. In
+  // a Finals view the whole column is ONE matchup (NBA Finals / Stanley Cup
+  // Final series), so starring can't reorder anything — hide the stars there
+  // (Jacob 6/11). Counts the lookahead/lookback slates too, so the upcoming
+  // series rows can't sneak a second matchup past the check.
+  const matchupKey = (g: Game) =>
+    [g.homeTeam.id || g.homeTeam.abbreviation, g.awayTeam.id || g.awayTeam.abbreviation].sort().join("|");
+  const distinctMatchups = new Set(
+    [...league.games, ...(league.nextGameDay?.games ?? []), ...(league.previousGameDay?.games ?? [])].map(matchupKey),
+  ).size;
+  const cardStars = !!showTeamStars && distinctMatchups > 1;
+
   const showHeader = section !== "finished" && !teamViewTeam;
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
@@ -767,6 +787,7 @@ export default function LeagueColumn({
           useAbbreviations={useAbbreviations}
           onSelectTeam={setTeamViewTeam}
           onShowDetails={onShowDetails}
+          showStars={cardStars}
         />
       );
     });
@@ -800,6 +821,7 @@ export default function LeagueColumn({
             useAbbreviations={useAbbreviations}
             onSelectTeam={setTeamViewTeam}
             onShowDetails={onShowDetails}
+            showStars={cardStars}
           />
         ))}
       </div>
@@ -892,8 +914,26 @@ export default function LeagueColumn({
                   style={{ color: "var(--text)" }}
                   title="Switch league"
                 >
-                  <h2 className="text-base sm:text-lg font-bold tracking-wide">
+                  <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
                     {league.label}
+                    {/* ▾ switcher affordance (Jacob 6/11). Settings → League
+                        columns can hide it; tap-to-switch works either way. */}
+                    {showSwapChevron !== false && (
+                      <svg
+                        aria-hidden="true"
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--text-muted)"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`mt-0.5 shrink-0 transition-transform ${swapOpen ? "rotate-180" : ""}`}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    )}
                   </h2>
                 </button>
                 {swapOpen && (
@@ -1052,6 +1092,7 @@ export default function LeagueColumn({
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
+              showStars={cardStars}
             />
           ))}
         </div>
@@ -1070,6 +1111,7 @@ export default function LeagueColumn({
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
+              showStars={cardStars}
             />
           ))}
           {renderUpcoming && preGames.map((game) => (
@@ -1085,6 +1127,7 @@ export default function LeagueColumn({
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
+              showStars={cardStars}
             />
           ))}
           {/* Upcoming future-day games shown alongside today's slate (NBA/NHL
@@ -1115,6 +1158,7 @@ export default function LeagueColumn({
               useAbbreviations={useAbbreviations}
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
+              showStars={cardStars}
             />
           ))}
         </div>

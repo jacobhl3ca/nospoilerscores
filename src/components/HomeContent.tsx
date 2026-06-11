@@ -431,6 +431,14 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+// 5-column board breakpoint: at ≥1280px the max-w-7xl board fits five columns
+// at ~236px each (above the 225px desktop column cap) — "room for all
+// naturally". Below it the board stays at the classic 3 columns.
+const WIDE_BOARD_QUERY = "(min-width: 1280px)";
+const isWideViewport = () =>
+  typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
+// All slot indexes the prefs system knows about (slots 4-5 render wide-only).
+const SLOT_INDICES = [0, 1, 2, 3, 4];
 
 export default function HomeContent({ initialOffset, worldCupHub }: { initialOffset?: number; worldCupHub?: boolean }) {
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
@@ -488,6 +496,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           loaded.firstLeague = decoded.slotLeagues[0];
           loaded.secondLeague = decoded.slotLeagues[1];
           if (decoded.slotLeagues[2]) loaded.thirdLeague = decoded.slotLeagues[2];
+          loaded.fourthLeague = decoded.slotLeagues[3];
+          loaded.fifthLeague = decoded.slotLeagues[4];
         }
         if (decoded.theme) loaded.theme = decoded.theme;
         if (decoded.defaultDateMode) loaded.defaultDateMode = decoded.defaultDateMode;
@@ -561,6 +571,21 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  // Track WIDE viewports for the 5-column board (Jacob 6/10 — "show 5 leagues
+  // if there's room for all naturally"). State drives the render; the fetches
+  // read the live matchMedia value via isWideViewport() so the very first load
+  // already pulls 5 leagues on a desktop (no 3-then-5 double fetch).
+  const [isWide, setIsWide] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE_BOARD_QUERY);
+    const handler = () => setIsWide(mq.matches);
+    handler();
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  // Scores-board slot count: 5 wide, 3 otherwise. News view stays 3-column.
+  const slotCount = isWide ? 5 : 3;
+
   const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => {
     setVideoModal({ videoId, fallbackUrl, shareCard });
     const params = new URLSearchParams(window.location.search);
@@ -627,7 +652,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const fetchData = useCallback(async (
     date: string,
     thirdLeague?: Sport | "empty",
-    slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty" },
+    slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty"; fourth?: Sport | "empty"; fifth?: Sport | "empty" },
     silent = false,
   ) => {
     // silent=true skips the global skeleton — used when only one slot changed
@@ -644,7 +669,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       }, 40_000);
     }
     try {
-      let data = await fetchAllLeagues(date, thirdLeague, slotOverrides);
+      // Slot count reads the live viewport so the initial desktop load fetches
+      // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
+      let data = await fetchAllLeagues(date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3);
       if (isDemoModeActive()) data = applyDemoMode(data);
       if (isNoHitAlertDemoActive()) data = applyNoHitAlertDemo(data);
       setLeagues(data);
@@ -671,20 +698,26 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       first: prefs.firstLeague,
       second: prefs.secondLeague,
       third: prefs.thirdLeague,
+      fourth: prefs.fourthLeague,
+      fifth: prefs.fifthLeague,
     }, false);
     mountedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
+  // isWide is a dep so resizing across the 5-column breakpoint silently
+  // fetches (or drops) the extra two leagues.
   useEffect(() => {
     if (!mountedRef.current || !selectedDate) return;
     fetchData(selectedDate, prefs.thirdLeague, {
       first: prefs.firstLeague,
       second: prefs.secondLeague,
       third: prefs.thirdLeague,
+      fourth: prefs.fourthLeague,
+      fifth: prefs.fifthLeague,
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
+  }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide]);
 
   // Live-clock polling: while any game on the board is in-progress, silently
   // refetch every 10s so the Q4/period and clock keep advancing (matches
@@ -699,11 +732,13 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         first: prefs.firstLeague,
         second: prefs.secondLeague,
         third: prefs.thirdLeague,
+        fourth: prefs.fourthLeague,
+        fifth: prefs.fifthLeague,
       }, true);
     }, 10_000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague]);
+  }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
 
   const updatePrefs = (update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
@@ -791,7 +826,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       prefs.favoriteTeams,
       prefs.favoriteLeagues,
       prefs.thirdLeague,
-      [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague],
+      [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague],
       {
         theme: prefs.theme,
         defaultDateMode: prefs.defaultDateMode,
@@ -833,7 +868,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       prefs.favoriteTeams,
       prefs.favoriteLeagues,
       prefs.thirdLeague,
-      [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague],
+      [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague],
       {
         theme: prefs.theme,
         defaultDateMode: prefs.defaultDateMode,
@@ -888,17 +923,29 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const setSlotLeague = (slotIdx: number, sport: Sport | "empty" | undefined) => {
     let resolved: (Sport | "empty" | undefined)[];
     if (sport === undefined) {
-      resolved = [...selectedSlotLeagues];
+      resolved = SLOT_INDICES.map((i) => selectedSlotLeagues[i]);
       resolved[slotIdx] = undefined;
     } else {
+      // Walk the displayed-league queue: every non-empty slot consumed one
+      // rendered column (a pinned slot's column IS its pref), so unset slots
+      // lock to the league actually on screen at their position — empty slots
+      // consume nothing, keeping later slots aligned.
       const displayed = sortedLeagues.map((l) => l.sport);
-      resolved = [0, 1, 2].map((i) => selectedSlotLeagues[i] ?? displayed[i]);
+      let queueIdx = 0;
+      resolved = SLOT_INDICES.map((i) => {
+        const pref = selectedSlotLeagues[i];
+        if (pref === "empty") return "empty";
+        const shown = displayed[queueIdx++];
+        return pref ?? shown;
+      });
       resolved[slotIdx] = sport;
     }
     updatePrefs({
       firstLeague: resolved[0],
       secondLeague: resolved[1],
       thirdLeague: resolved[2],
+      fourthLeague: resolved[3],
+      fifthLeague: resolved[4],
     });
   };
 
@@ -910,7 +957,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     if (fromIdx === toIdx) return;
     const leagueQueue = sortedLeagues.map((l) => l.sport);
     let queueIdx = 0;
-    const baseline: (Sport | "empty" | undefined)[] = [0, 1, 2].map((i) => {
+    const baseline: (Sport | "empty" | undefined)[] = SLOT_INDICES.map((i) => {
       const pref = selectedSlotLeagues[i];
       if (pref === "empty") return "empty";
       if (pref) return pref;
@@ -923,6 +970,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       firstLeague: baseline[0],
       secondLeague: baseline[1],
       thirdLeague: baseline[2],
+      fourthLeague: baseline[3],
+      fifthLeague: baseline[4],
     });
   };
 
@@ -930,6 +979,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     prefs.firstLeague,
     prefs.secondLeague,
     prefs.thirdLeague,
+    prefs.fourthLeague,
+    prefs.fifthLeague,
   ];
 
   // Render in slot order as returned by fetchAllLeagues. The old favoriteLeagues
@@ -1135,6 +1186,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           first: prefs.firstLeague,
           second: prefs.secondLeague,
           third: prefs.thirdLeague,
+          fourth: prefs.fourthLeague,
+          fifth: prefs.fifthLeague,
         }, true);
       }
     } finally {
@@ -1520,7 +1573,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         </div>
       )}
 
-      <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
+      {/* Scores board on a wide viewport stretches to max-w-7xl so five columns
+          get ~236px each; news + narrow boards keep the classic max-w-6xl. */}
+      <main className={`${!showNews && slotCount === 5 ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full`}>
         {/* World Cup hub framing — only on /worldcup. The WC column is already
             auto-pinned to the board below (it's an active firstPref league
             through 07-19), so this banner just sets the context for marketing
@@ -1862,7 +1917,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           );
         })() : loading ? (
           <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
-            {[1, 2, 3].map((i) => (
+            {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
               <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
                   <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
@@ -1919,6 +1974,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               onShowDetails: (g: Game) => setDetailGame(g),
               selectedDate,
               onRetry: () => doRefreshRef.current(),
+              showTeamStars: !prefs.hideTeamStars,
             };
             // Per-slot swap dropdowns: every column lists every in-season
             // league. Leagues already shown in another column come through
@@ -1930,13 +1986,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
               selectedThirdLeague: selectedSlotLeagues[idx],
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
+              showSwapChevron: !prefs.hideLeagueChevrons,
             });
             // Slot fetched-league queue: fetchAllLeagues skipped empty slots,
             // so we walk slot prefs and pull from the fetched queue for non-
             // empty slots. Empty slots collapse the column entirely (no stub
             // rendered); the + button at the end of the row brings them back.
+            const visibleSlotIndices = SLOT_INDICES.slice(0, slotCount);
             const leagueQueue = [...sortedLeagues];
-            const slotEntries = [0, 1, 2].map((slotIdx) => {
+            const slotEntries = visibleSlotIndices.map((slotIdx) => {
               if (selectedSlotLeagues[slotIdx] === "empty") return null;
               const league = leagueQueue.shift();
               if (!league) return null;
@@ -1945,9 +2003,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
 
             // + button: first slot the user explicitly emptied gets repopulated
             // with the first eligible league (not currently shown in another
-            // visible column). Only shown when there's room (<3 visible cols).
-            const firstEmptySlot = [0, 1, 2].find((i) => selectedSlotLeagues[i] === "empty");
-            const onAddColumn = firstEmptySlot !== undefined && slotEntries.length < 3
+            // visible column). Only shown when there's room (< slotCount cols).
+            const firstEmptySlot = visibleSlotIndices.find((i) => selectedSlotLeagues[i] === "empty");
+            const onAddColumn = firstEmptySlot !== undefined && slotEntries.length < slotCount
               ? () => {
                   const shown = slotEntries.map((e) => e.league.sport);
                   const eligible = thirdLeagueOptions.filter((o) => !shown.includes(o.sport));
@@ -1956,6 +2014,46 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 }
               : undefined;
 
+            // World Cup quick-add (Jacob 6/11): during the tournament window,
+            // anyone whose visible columns don't include the World Cup gets a
+            // slim one-click banner. Fills the first emptied slot if there is
+            // one, else swaps the last visible column. Dismiss persists.
+            const wcActive = thirdLeagueOptions.some((o) => o.sport === "fifa");
+            const showWcBanner = wcActive
+              && !displayedSports.includes("fifa")
+              && !prefs.wcBannerDismissed;
+            const addWorldCupColumn = () => {
+              setSlotLeague(firstEmptySlot !== undefined ? firstEmptySlot : slotCount - 1, "fifa");
+            };
+            const wcBanner = showWcBanner ? (
+              <div
+                className="mb-3 rounded-lg px-3 py-2 flex items-center gap-x-3 gap-y-1.5 flex-wrap"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
+              >
+                <span className="text-sm" style={{ color: "var(--text)" }}>
+                  <span aria-hidden="true">⚽ </span>The 2026 World Cup is on — every match, spoiler-free.
+                </span>
+                <button
+                  onClick={addWorldCupColumn}
+                  className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
+                  style={{ background: "var(--accent)", color: "white" }}
+                >
+                  Add the World Cup column
+                </button>
+                <button
+                  onClick={() => updatePrefs({ wcBannerDismissed: true })}
+                  aria-label="Dismiss World Cup banner"
+                  title="Dismiss"
+                  className="ml-auto w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
+                  style={{ color: "var(--text-muted)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null;
+
             // Full-width flex row so the flex-1 columns distribute across the
             // viewport (up to their max-w) and the group centers — matches
             // hidescore.com. The + button is a trailing flex child (like the
@@ -1963,6 +2061,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             // (the old inline-flex wrapper shrank the columns — Jacob 5/29).
             if (showFinalSplit) {
               return (
+                <>
+                {wcBanner}
                 <div className="relative flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                   {/* Invisible leading spacer balances the trailing + button so
                       the columns stay centered when a slot has been emptied. */}
@@ -1984,10 +2084,13 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                     </div>
                   )}
                 </div>
+                </>
               );
             }
 
             return (
+              <>
+              {wcBanner}
               <div className="relative flex flex-row justify-center items-stretch gap-2 sm:gap-4">
                 {/* Invisible leading spacer balances the trailing + button so
                     the columns stay centered when a slot has been emptied. */}
@@ -2008,6 +2111,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   </div>
                 )}
               </div>
+              </>
             );
           })()
         )}
