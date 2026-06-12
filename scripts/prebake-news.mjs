@@ -534,16 +534,28 @@ async function fetchNHL() {
   return raw
     .filter((i) => passesArticleBlocklist(i.title || "", i.summary || ""))
     .slice(0, 15)
-    .map((i) => ({
-      id: i._entityId || i.slug,
-      headline: i.title || "",
-      description: i.summary || "",
-      published: i.contentDate || "",
-      imageUrl: i.fields?.thumbnail?.thumbnailUrl || null,
-      articleUrl: `https://www.nhl.com/news/${i.slug}`,
-      byline: "",
-      section: "NHL.com",
-    }));
+    .map((i) => {
+      // Official-site 16:9 hero crop, same treatment as NBA.com/MLB.com. The
+      // article thumbnail lives at top-level i.thumbnail (NOT i.fields.thumbnail,
+      // which only carries description/topic — that path was always null), and
+      // its templateUrl takes a {formatInstructions} placeholder. Request the
+      // 16:9 ratio so it fills the card frame instead of letterboxing a 1:1 crop.
+      // Mirrors fetchNHLVideos() below.
+      const tmpl = i.thumbnail?.templateUrl;
+      const imageUrl = tmpl
+        ? tmpl.replace("{formatInstructions}", "t_ratio16_9-size40")
+        : (i.thumbnail?.thumbnailUrl || null);
+      return {
+        id: i._entityId || i.slug,
+        headline: i.title || "",
+        description: i.summary || "",
+        published: i.contentDate || "",
+        imageUrl,
+        articleUrl: `https://www.nhl.com/news/${i.slug}`,
+        byline: "",
+        section: "NHL.com",
+      };
+    });
 }
 
 // NHL.com videos are Brightcove-hosted (not YouTube, not a raw HLS manifest we
