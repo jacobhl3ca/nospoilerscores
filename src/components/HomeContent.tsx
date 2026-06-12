@@ -2102,7 +2102,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               && !prefs.wcBannerDismissed;
             const wcBanner = showWcBanner ? (
               <div
-                className="mb-3 rounded-lg px-3 py-2 flex items-center gap-x-3 gap-y-1.5 flex-wrap"
+                className="relative mb-3 rounded-lg px-3 py-2 pr-10 flex items-center justify-center gap-x-3 gap-y-1.5 flex-wrap"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
               >
                 <span className="text-sm" style={{ color: "var(--text)" }}>
@@ -2154,7 +2154,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   onClick={() => updatePrefs({ wcBannerDismissed: true })}
                   aria-label="Dismiss World Cup banner"
                   title="Dismiss"
-                  className="ml-auto w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
                   style={{ color: "var(--text-muted)" }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
