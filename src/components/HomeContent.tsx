@@ -1850,13 +1850,13 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           // news league column, the underlying scores slot becomes empty too,
           // so this finds the first empty slot and refills it on click.
           const newsFirstEmptySlot = [0, 1, 2].find((i) => selectedSlotLeagues[i] === "empty");
-          const newsOnAddColumn = newsFirstEmptySlot !== undefined && leagueEntries.length < 3
-            ? () => {
-                const shown = leagueEntries.map((e) => e.sport);
-                const eligible = switcherOptions.filter((o) => !shown.includes(o.sport));
-                const pick = eligible[0]?.sport ?? thirdLeagueOptions[0]?.sport;
-                if (pick) setSlotLeague(newsFirstEmptySlot, pick);
-              }
+          // Same as scores: only offer the + when there's a league not already
+          // shown, so refilling never duplicates a visible column.
+          const newsAddEligibleSport = switcherOptions.find(
+            (o) => !leagueEntries.some((e) => e.sport === o.sport),
+          )?.sport;
+          const newsOnAddColumn = newsFirstEmptySlot !== undefined && leagueEntries.length < 3 && newsAddEligibleSport
+            ? () => setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport)
             : undefined;
           const containerCls = effectiveColCount === 1
             ? "flex flex-col items-center gap-8"
@@ -2080,13 +2080,14 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             // with the first eligible league (not currently shown in another
             // visible column). Only shown when there's room (< slotCount cols).
             const firstEmptySlot = visibleSlotIndices.find((i) => selectedSlotLeagues[i] === "empty");
-            const onAddColumn = firstEmptySlot !== undefined && slotEntries.length < slotCount
-              ? () => {
-                  const shown = slotEntries.map((e) => e.league.sport);
-                  const eligible = switcherOptions.filter((o) => !shown.includes(o.sport));
-                  const pick = eligible[0]?.sport ?? thirdLeagueOptions[0]?.sport;
-                  if (pick) setSlotLeague(firstEmptySlot, pick);
-                }
+            // The first available league not already on screen. If every active,
+            // non-hidden league is shown there's nothing to add, so the + is
+            // hidden — refilling would just duplicate a visible column.
+            const addEligibleSport = switcherOptions.find(
+              (o) => !slotEntries.some((e) => e.league.sport === o.sport),
+            )?.sport;
+            const onAddColumn = firstEmptySlot !== undefined && slotEntries.length < slotCount && addEligibleSport
+              ? () => setSlotLeague(firstEmptySlot, addEligibleSport)
               : undefined;
 
             // World Cup quick-add (Jacob 6/11): during the tournament window,
