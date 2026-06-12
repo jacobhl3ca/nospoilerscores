@@ -139,7 +139,7 @@ export default function GameDetailModal({
         </button>
 
         {/* Matchup — names + logos, NO score/winner */}
-        <div className="flex flex-col gap-2 mb-4 pr-6">
+        <div className="flex flex-col gap-1 mb-4 pr-6">
           <TeamRow team={game.awayTeam} />
           <TeamRow team={game.homeTeam} />
         </div>
