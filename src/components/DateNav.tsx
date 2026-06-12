@@ -194,31 +194,38 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
   const today = getDateString(0);
   const tomorrow = getDateString(1);
 
-  const isStandardDate = selectedDate === yesterday || selectedDate === today || selectedDate === tomorrow;
-  const isBefore = !isStandardDate && selectedDate < yesterday;
-  const isAfter = !isStandardDate && selectedDate > tomorrow;
+  // Pre-hydration the page renders with selectedDate="" (HomeContent fills it
+  // in an effect). "" sorts before yesterday, so the left pill rendered
+  // formatDayName("") — parseYMD("") is new Date(0, -1, 0) = "Thu, Nov 30" —
+  // flashing on every refresh (Jacob 6/12). Treat "" as today: standard
+  // Yesterday/Today/Tomorrow labels with Today highlighted while loading.
+  const effectiveDate = selectedDate || today;
+
+  const isStandardDate = effectiveDate === yesterday || effectiveDate === today || effectiveDate === tomorrow;
+  const isBefore = !isStandardDate && effectiveDate < yesterday;
+  const isAfter = !isStandardDate && effectiveDate > tomorrow;
 
   // `wide` flags the out-of-window date slot: its short label is a full date
   // ("Tue 5/2"), not a 4-char word, so it needs to grow past the fixed mobile
   // pill width instead of being clipped by overflow-hidden.
   const dateButtons: { date: string; label: string; shortLabel: string; wide?: boolean }[] = [
     isBefore
-      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayShort(selectedDate), wide: true }
+      ? { date: effectiveDate, label: formatDayName(effectiveDate), shortLabel: formatDayShort(effectiveDate), wide: true }
       : { date: yesterday, label: "Yesterday", shortLabel: "Yest" },
     { date: today, label: "Today", shortLabel: "Today" },
     isAfter
-      ? { date: selectedDate, label: formatDayName(selectedDate), shortLabel: formatDayShort(selectedDate), wide: true }
+      ? { date: effectiveDate, label: formatDayName(effectiveDate), shortLabel: formatDayShort(effectiveDate), wide: true }
       : { date: tomorrow, label: "Tomorrow", shortLabel: "Tomo" },
   ];
 
   const goEarlier = () => {
-    const d = parseYMD(selectedDate);
+    const d = parseYMD(effectiveDate);
     d.setDate(d.getDate() - 1);
     onDateChange(toYYYYMMDD(d));
   };
 
   const goLater = () => {
-    const d = parseYMD(selectedDate);
+    const d = parseYMD(effectiveDate);
     d.setDate(d.getDate() + 1);
     onDateChange(toYYYYMMDD(d));
   };
@@ -241,7 +248,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
         ‹
       </button>
       {dateButtons.map((btn) => {
-        const isSelected = selectedDate === btn.date;
+        const isSelected = effectiveDate === btn.date;
         return (
           <button
             key={btn.date}
