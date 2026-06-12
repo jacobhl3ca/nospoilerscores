@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { shareCardUrl, type ShareCardMeta } from "@/lib/shareCard";
@@ -155,6 +155,13 @@ function sourceLabelFromUrl(url: string): string {
   }
 }
 
+// Preset jump targets for the spoiler-safe seek controls. Clicking just left/
+// right of the video to skip works for a few seconds but is tedious to reach
+// the middle of a long reel — and the native scrubber stays hidden because it
+// spoils progress. These jump to a fraction of the clip with no timeline ever
+// shown. (No 100% — that's just the ending.)
+const JUMP_PCTS = [25, 50, 60, 70, 80, 90];
+
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -190,14 +197,36 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // isn't actively playing, or the user is hovering it.
   const [hovered, setHovered] = useState(false);
   const [playing, setPlaying] = useState(false);
+  // maskOn lags `playing`: YouTube keeps the title on screen for a few seconds
+  // after playback starts/resumes/seeks, so dropping the mask the instant we
+  // hit PLAYING let the title flash through on mobile (no hover there to hold
+  // it up). We keep the mask up for a beat after each of those events.
+  const [maskOn, setMaskOn] = useState(true);
+  // Bumping holdNonce re-arms the mask-hold timer — used after a jump-seek,
+  // which makes YouTube re-surface the title for a few seconds.
+  const [holdNonce, setHoldNonce] = useState(0);
+  // Fullscreen. nativeFs tracks the Fullscreen API on the player WRAPPER —
+  // fullscreening the wrapper (not the bare iframe) keeps the spoiler mask and
+  // the control strip on top, so YouTube's title stays covered in fullscreen
+  // too. fakeFs is the CSS-overlay fallback for iPhone Safari / the iOS app's
+  // WKWebView, where element fullscreen on a non-<video> element doesn't exist.
+  const fsWrapRef = useRef<HTMLDivElement>(null);
+  const [nativeFs, setNativeFs] = useState(false);
+  const [fakeFs, setFakeFs] = useState(false);
+  const fsActive = nativeFs || fakeFs;
+  // Timestamp of the last native-fullscreen exit — some browsers deliver the
+  // Escape keydown alongside the exit, and that Escape must not also close the
+  // whole modal.
+  const fsExitAtRef = useRef(0);
   const hlsMode = !!playbackUrl;
   const embedMode = !!embedUrl && !playbackUrl;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
+  const ytMode = !hlsMode && !embedMode && !imageMode && !textMode;
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
   // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
   // text card) — used both for the footer link and the hidescore deep-link.
-  const ytId = (hlsMode || embedMode || imageMode || textMode) ? null : currentId;
+  const ytId = ytMode ? currentId : null;
   // The URL the footer points at — the YouTube watch page for YT clips,
   // otherwise the original source page.
   const sourceShareUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : (fallbackUrl || "");
@@ -234,49 +263,84 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
   };
 
-  // Reset caption state any time the modal swaps to a different stream
-  useEffect(() => {
-    setShowCC(false);
-    setHasCaptionTrack(false);
-  }, [playbackUrl]);
+  // Re-arm the spoiler mask hold (used right after a jump-seek).
+  const holdMask = useCallback(() => {
+    setMaskOn(true);
+    setHoldNonce((n) => n + 1);
+  }, []);
 
-  // Reset when the modal is opened with a different primary id
-  useEffect(() => {
-    setCurrentId(videoId);
-    failedIdsRef.current = [];
-  }, [videoId]);
+  // Jump to a fraction of the clip. Works off the YouTube player's reported
+  // duration so no timeline is ever revealed. Re-arms the mask because YT
+  // re-shows the title for a few seconds after a seek.
+  const seekToPct = useCallback((pct: number) => {
+    const p = playerRef.current;
+    if (!p?.getDuration || !p?.seekTo) return;
+    const d = p.getDuration();
+    if (!d || d <= 0) return;
+    p.seekTo((d * pct) / 100, true);
+    p.playVideo?.();
+    holdMask();
+  }, [holdMask]);
 
+  // Toggle mute on the YouTube player.
+  const toggleMute = useCallback(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    if (muted) { p.unMute?.(); p.setVolume?.(100); setMuted(false); }
+    else { p.mute?.(); setMuted(true); }
+  }, [muted]);
+
+  // Toggle fullscreen. For YouTube we expand the WRAPPER (so the spoiler mask
+  // and control bar ride along and the title stays hidden); native element
+  // fullscreen first, CSS-overlay fallback on iOS where it's unavailable.
+  // HLS/embed keep plain element fullscreen — those have no spoiler title.
+  const toggleFullscreen = useCallback(() => {
+    if (!ytMode) {
+      if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
+      const el: any = hlsMode ? videoRef.current : embedMode ? iframeRef.current : null;
+      if (!el) return;
+      if (typeof el.requestFullscreen === "function") el.requestFullscreen().catch(() => {});
+      else if (typeof el.webkitEnterFullscreen === "function") el.webkitEnterFullscreen();
+      else if (typeof el.webkitRequestFullscreen === "function") el.webkitRequestFullscreen();
+      return;
+    }
+    if (fakeFs) { setFakeFs(false); return; }
+    if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
+    const wrap: any = fsWrapRef.current;
+    if (!wrap) return;
+    if (typeof wrap.requestFullscreen === "function") {
+      wrap.requestFullscreen().catch(() => setFakeFs(true));
+    } else if (typeof wrap.webkitRequestFullscreen === "function") {
+      wrap.webkitRequestFullscreen();
+    } else {
+      setFakeFs(true); // iOS Safari / WKWebView — no element fullscreen
+    }
+  }, [ytMode, hlsMode, embedMode, fakeFs]);
+
+  // Keep nativeFs in sync with the browser, and remember when we left so a
+  // co-delivered Escape doesn't also close the modal.
   useEffect(() => {
-    // Toggle fullscreen on the active media element. Picks the <video> for
-    // HLS/MP4 clips, otherwise the iframe (Brightcove embed via iframeRef, or
-    // the YouTube player which the YT API injects as an <iframe> inside the
-    // container). requestFullscreen covers desktop + Android; webkitEnterFullscreen
-    // is the iOS path — on iPhone ONLY a <video> can go fullscreen (the Fullscreen
-    // API doesn't exist for iframes/divs there), so embeds fall through to their
-    // own native control. Promise-based requestFullscreen is .catch()'d so a
-    // rejection (e.g. an iframe without allowfullscreen) degrades to a no-op
-    // instead of an unhandled rejection.
-    const toggleFullscreen = () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen?.().catch(() => {});
-        return;
-      }
-      const el: any = hlsMode
-        ? videoRef.current
-        : embedMode
-          ? iframeRef.current
-          : containerRef.current?.querySelector("iframe");
-      if (!el) return; // text / image modes have no media to expand
-      if (typeof el.requestFullscreen === "function") {
-        el.requestFullscreen().catch(() => {});
-      } else if (typeof el.webkitEnterFullscreen === "function") {
-        el.webkitEnterFullscreen(); // iOS <video>
-      } else if (typeof el.webkitRequestFullscreen === "function") {
-        el.webkitRequestFullscreen(); // older WebKit
-      }
+    const onFsChange = () => {
+      const fsEl = (document.fullscreenElement || (document as any).webkitFullscreenElement) ?? null;
+      const active = !!fsEl && fsEl === fsWrapRef.current;
+      setNativeFs(active);
+      if (!active) fsExitAtRef.current = Date.now();
     };
+    document.addEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("webkitfullscreenchange", onFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      document.removeEventListener("webkitfullscreenchange", onFsChange);
+    };
+  }, []);
+
+  // Keyboard: Esc backs out of fullscreen first, then closes; "f" fullscreens.
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (fakeFs) { setFakeFs(false); return; }
+        if (nativeFs) return;                                  // browser exits FS itself
+        if (Date.now() - fsExitAtRef.current < 350) return;    // just left FS — swallow
         onClose();
         return;
       }
@@ -290,12 +354,37 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       }
     };
     document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen]);
+
+  // Lock body scroll while the modal is open.
+  useEffect(() => {
     document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", handler);
-      document.body.style.overflow = "";
-    };
-  }, [onClose, hlsMode, embedMode]);
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  // Spoiler-mask hold. Cover the title whenever paused; when playing, keep it
+  // up for ~3.2s after the last play/seek (covers YT's lingering title) then
+  // drop it so footage isn't cropped during steady playback.
+  useEffect(() => {
+    if (!ytMode) return;
+    if (!playing) { setMaskOn(true); return; }
+    setMaskOn(true);
+    const t = window.setTimeout(() => setMaskOn(false), 3200);
+    return () => window.clearTimeout(t);
+  }, [ytMode, playing, holdNonce]);
+
+  // Reset caption state any time the modal swaps to a different stream
+  useEffect(() => {
+    setShowCC(false);
+    setHasCaptionTrack(false);
+  }, [playbackUrl]);
+
+  // Reset when the modal is opened with a different primary id
+  useEffect(() => {
+    setCurrentId(videoId);
+    failedIdsRef.current = [];
+  }, [videoId]);
 
   // Direct-stream playback branch — handles two URL shapes:
   //   • .m3u8 manifests (MLB highlights) — Safari natively, hls.js elsewhere
@@ -470,7 +559,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // AND the elapsed/duration readout (e.g. 16:13 / 18:30), both of which
           // spoil how far through a highlight reel you are. It also disables
           // scrubbing (itself a spoiler vector). Mute/CC/fullscreen go with it:
-          // we render a custom unmute toggle below, and "f" still fullscreens.
+          // we render our own subtle control strip below the video instead.
           controls: 0,
           // Hide in-video annotations/cards — they can carry spoilers.
           iv_load_policy: 3,
@@ -498,9 +587,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // returns the real list — onReady gives []. setPlaybackQuality is
           // a deprecated suggestion, but it's the only knob we have.
           onStateChange: (event: any) => {
-            // PLAYING(1)/BUFFERING(3) → drop the title mask; every other state
-            // (paused/ended/cued/unstarted) keeps it up so the title YouTube
-            // surfaces on pause stays covered.
+            // PLAYING(1)/BUFFERING(3) → the mask-hold timer can start fading;
+            // every other state (paused/ended/cued/unstarted) keeps it up so
+            // the title YouTube surfaces on pause stays covered.
             setPlaying(event.data === 1 || event.data === 3);
             // Playback actually started — kill the watchdog.
             if ((event.data === 1 || event.data === 3) && watchdogRef.current) {
@@ -538,6 +627,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
   }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode]);
+
+  // Shared sizing for the YT video region + control bar so both line up and,
+  // in fullscreen, the video is capped to leave room for the bar underneath.
+  const FS_BAR_RESERVE = 64; // px reserved below the video for the control bar
+  const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
+  const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
   return (
     <div
@@ -587,7 +682,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         )}
 
 
-        {/* Player area — image lightbox (no aspect lock), 16:9 video, or YouTube iframe */}
+        {/* Player area — image lightbox (no aspect lock), YouTube (custom
+            chrome), or 16:9 video for HLS/embed */}
         {imageMode ? (
           <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black flex items-center justify-center" style={{ maxHeight: "85vh" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -625,8 +721,118 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               </div>
             )}
           </div>
+        ) : ytMode ? (
+          // YouTube clip. The wrapper is what we fullscreen (so the mask + the
+          // control bar come along and the title stays covered in fullscreen).
+          <div
+            ref={fsWrapRef}
+            onClick={(e) => e.stopPropagation()}
+            style={fsActive ? {
+              position: "fixed", inset: 0, zIndex: 10000, background: "#000",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            } : undefined}
+          >
+            {/* Video region — 16:9 in-flow, or capped to leave bar room in FS */}
+            <div
+              className="relative w-full overflow-hidden bg-black"
+              style={fsActive
+                ? { width: fsMediaWidth, aspectRatio: "16 / 9", borderRadius: 0 }
+                : { paddingBottom: "56.25%", borderRadius: "0.5rem" }}
+              onMouseEnter={() => setHovered(true)}
+              onMouseLeave={() => setHovered(false)}
+            >
+              <div id="yt-player" className="absolute inset-0 w-full h-full" />
+              {/* Spoiler mask over YouTube's title bar. No embed param hides
+                  the title (showinfo was removed in 2018) and YT re-shows it
+                  on hover/pause/seek, so we cover the top strip. pointer-events
+                  stay off so click-to-play/pause keeps working; height is
+                  clamped so it covers the title without cropping much footage,
+                  and it only shows when chrome would actually appear. */}
+              <div
+                aria-hidden
+                className="absolute top-0 inset-x-0 z-10 pointer-events-none transition-opacity duration-200"
+                style={{
+                  height: "clamp(56px, 15%, 92px)",
+                  background: "linear-gradient(to bottom, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.98) 62%, rgba(0,0,0,0) 100%)",
+                  opacity: hovered || maskOn ? 1 : 0,
+                }}
+              />
+            </div>
+
+            {/* Control strip — sits BELOW the video (never over the footage).
+                In fullscreen it rides along in the reserved space under the
+                centered video. Subtle, icon-first, YouTube-like. */}
+            <div
+              className="mt-2 flex items-center gap-2"
+              style={fsActive ? { width: fsMediaWidth, paddingLeft: "0.25rem", paddingRight: "0.25rem" } : { width: "100%" }}
+            >
+              {/* Mute / unmute — autoplay is muted, so invite a tap while muted */}
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                aria-label={muted ? "Unmute" : "Mute"}
+                title={muted ? "Sound on" : "Mute"}
+                className={`${btnBase} h-8 gap-1.5 px-2 text-xs font-medium shrink-0`}
+              >
+                {muted ? (
+                  <>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 5 6 9H2v6h4l5 4z" />
+                      <line x1="23" y1="9" x2="17" y2="15" />
+                      <line x1="17" y1="9" x2="23" y2="15" />
+                    </svg>
+                    <span>Tap for sound</span>
+                  </>
+                ) : (
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5 6 9H2v6h4l5 4z" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Spoiler-safe jump presets — skip ahead without a timeline */}
+              <div className="flex-1 min-w-0 flex items-center justify-center gap-0.5 flex-wrap">
+                <span className="hidden sm:inline text-[11px] text-white/35 mr-1 select-none">Skip to</span>
+                {JUMP_PCTS.map((p) => (
+                  <button
+                    key={p}
+                    onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
+                    className={`${btnBase} h-7 px-1.5 text-xs font-medium`}
+                    title={`Jump to ${p}%`}
+                  >
+                    {p}%
+                  </button>
+                ))}
+              </div>
+
+              {/* Fullscreen toggle */}
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+                aria-label={fsActive ? "Exit fullscreen" : "Fullscreen"}
+                title={fsActive ? "Exit fullscreen (Esc)" : "Fullscreen (f)"}
+                className={`${btnBase} h-8 w-8 shrink-0`}
+              >
+                {fsActive ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                    <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                    <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                    <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                    <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                    <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                    <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
         ) : (
-          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }} onClick={(e) => e.stopPropagation()} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }} onClick={(e) => e.stopPropagation()}>
             {hlsMode ? (
               <video
                 ref={videoRef}
@@ -637,7 +843,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 playsInline
                 poster={proxyImage(poster) ?? undefined}
               />
-            ) : embedMode ? (
+            ) : (
               <iframe
                 ref={iframeRef}
                 src={withAutoplay(embedUrl!)}
@@ -645,61 +851,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowFullScreen
               />
-            ) : (
-              <>
-                <div id="yt-player" className="absolute inset-0 w-full h-full" />
-                {/* Spoiler mask over YouTube's title bar. No embed param hides
-                    the title (showinfo was removed in 2018) and YT re-shows it
-                    on hover/pause, so we cover the top strip. pointer-events
-                    stay off so click-to-play/pause keeps working; the mask only
-                    fades in when chrome would appear, so it never crops footage
-                    during steady playback. */}
-                <div
-                  aria-hidden
-                  className="absolute top-0 inset-x-0 z-10 pointer-events-none transition-opacity duration-150"
-                  style={{
-                    height: "24%",
-                    background: "linear-gradient(to bottom, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.98) 70%, rgba(0,0,0,0) 100%)",
-                    opacity: hovered || !playing ? 1 : 0,
-                  }}
-                />
-                {/* Tap-to-unmute — controls:0 also removes YouTube's native
-                    mute button, and the clip autoplays muted. */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const p = playerRef.current;
-                    if (!p) return;
-                    if (muted) { p.unMute?.(); p.setVolume?.(100); setMuted(false); }
-                    else { p.mute?.(); setMuted(true); }
-                  }}
-                  aria-label={muted ? "Unmute" : "Mute"}
-                  className="absolute bottom-3 left-3 z-20 h-9 flex items-center gap-1.5 rounded-full text-xs font-bold text-white cursor-pointer transition-colors"
-                  style={{
-                    paddingLeft: muted ? "0.625rem" : "0.5rem",
-                    paddingRight: muted ? "0.75rem" : "0.5rem",
-                    background: muted ? "var(--accent)" : "rgba(0,0,0,0.55)",
-                    border: "1px solid rgba(255,255,255,0.25)",
-                  }}
-                >
-                  {muted ? (
-                    <>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 5 6 9H2v6h4l5 4z" />
-                        <line x1="23" y1="9" x2="17" y2="15" />
-                        <line x1="17" y1="9" x2="23" y2="15" />
-                      </svg>
-                      Tap for sound
-                    </>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 5 6 9H2v6h4l5 4z" />
-                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                    </svg>
-                  )}
-                </button>
-              </>
             )}
           </div>
         )}
