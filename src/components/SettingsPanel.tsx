@@ -612,25 +612,35 @@ export default function SettingsPanel({
                     </button>
                     {/* Real <a> so the browser treats it as a draggable link —
                         drag it onto the bookmarks/favorites bar and the saved
-                        bookmark restores this exact setup (named by the link
-                        text). A plain click copies instead of navigating
-                        (Jacob 6/11 — bookmarking a copied URL is fiddly). */}
+                        bookmark restores this exact setup (Jacob 6/11 —
+                        bookmarking a copied URL is fiddly). The label is the
+                        affordance ("Drag to Bookmarks Bar"); dragstart
+                        overrides the drag payload so the bookmark itself gets
+                        NAMED "HideScore" where the browser honors it (Firefox
+                        x-moz-url title, Chromium text/html) instead of the
+                        instructional label. Click copies, like the button. */}
                     {!nothingToShare && shareUrl && (
                       <a
                         href={shareUrl}
                         onClick={(e) => { e.preventDefault(); onShareFavorites(); }}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/uri-list", shareUrl);
+                          e.dataTransfer.setData("text/plain", shareUrl);
+                          e.dataTransfer.setData("text/x-moz-url", `${shareUrl}\nHideScore`);
+                          e.dataTransfer.setData("text/html", `<a href="${shareUrl}">HideScore</a>`);
+                        }}
                         className="w-full py-2 rounded-lg text-sm text-center cursor-grab transition-colors"
                         style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-                        title="Drag me to your bookmarks bar"
+                        title="Drop on your bookmarks bar to save this setup as 'HideScore'"
                       >
-                        🔖 HideScore — my setup
+                        Drag to Bookmarks Bar
                       </a>
                     )}
                     {!nothingToShare && (
                       <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
-                        Drag the 🔖 chip to your bookmarks bar to save this setup as a bookmark — or click either to copy the link.
+                        The bookmark restores this exact setup. Clicking copies the link instead.
                       </p>
                     )}
                   </>
