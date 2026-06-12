@@ -432,16 +432,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           {pastDateLabel}
         </div>
       )}
-      {/* Playoff series state ("NY leads 1-0"). Day-of-game on WIDE columns (xl)
-          it sits INLINE in the status-bar row's middle cell (same line as
-          time + network — see below). Everywhere else — narrow columns, or any
-          non-today card whose status bar already carries a date label — it gets
-          its OWN italic row ABOVE the status bar (Jacob 6/5–6/7, 6/11), which
-          also keeps the network in its top-right spot instead of getting bumped.
-          Pre-game + ratings mode only (it's a spoiler); shown once (compact rows
-          don't render it). */}
-      {game.seriesStatus && isFuture && showRatings && (
-        <div className={`${isToday ? "xl:hidden " : ""}mb-1 text-[11px] text-center italic`} style={{ color: "var(--text-muted)" }}>
+      {/* Playoff series state ("NY leads 1-0") — DAY-OF-GAME ONLY (Jacob 6/12):
+          a lookahead card ("Tomorrow - 8:30PM" on today's board, nextGameDate
+          set) already carries another day's game info, so the series line stays
+          off until the game is actually today. On game day: WIDE columns (xl)
+          render it INLINE in the status-bar row's middle cell (same line as
+          time + network — see below); NARROW columns can't fit that without
+          truncating ("NY L…"), so it moves to its OWN row ABOVE the status bar —
+          which also keeps the network in its top-right spot instead of getting
+          bumped (Jacob 6/5–6/7). Pre-game + ratings mode only (it's a spoiler);
+          shown once (compact rows don't render it). */}
+      {game.seriesStatus && isFuture && showRatings && isToday && !nextGameDate && (
+        <div className="xl:hidden mb-1 text-[11px] text-center italic" style={{ color: "var(--text-muted)" }}>
           {formatSeriesStatus(game.seriesStatus)}
         </div>
       )}
@@ -580,10 +582,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   Too Early
                 </span>
               </span>
-            ) : game.seriesStatus && isFuture && showRatings && isToday ? (
-              // Series state inline ONLY day-of-game on wide (xl) columns where
-              // it fits next to the bare time; non-today cards carry a date
-              // label there, so they render the banner above instead (Jacob 6/11).
+            ) : game.seriesStatus && isFuture && showRatings && isToday && !nextGameDate ? (
+              // Series state inline ONLY on wide (xl) columns where it fits
+              // next to the bare time; narrower columns render it as the banner
+              // above instead. Day-of-game only, same gate as the banner (6/12).
               <span className="min-w-0 flex-1 hidden xl:flex justify-center">
                 <span
                   className="text-[11px] italic whitespace-nowrap truncate pr-0.5"
