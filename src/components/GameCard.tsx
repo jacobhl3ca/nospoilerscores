@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
@@ -285,6 +285,20 @@ export function CompactUpcomingCard({
 
 export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
+  // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
+  // before this, overlays only closed via the tiny ✕ and piled up across cards.
+  // Capture phase so other handlers' stopPropagation (e.g. another card's "+N"
+  // chip) can't keep a stale overlay open.
+  const broadcastOverlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!broadcastExpanded) return;
+    const closeOnOutside = (e: PointerEvent) => {
+      if (broadcastOverlayRef.current?.contains(e.target as Node)) return;
+      setBroadcastExpanded(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutside, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutside, true);
+  }, [broadcastExpanded]);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
   const isDelayed = game.state === "in" && /delay/i.test(game.statusDetail);
@@ -418,15 +432,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           {pastDateLabel}
         </div>
       )}
-      {/* Playoff series state ("NY leads 1-0"). Two responsive placements (Jacob
-          6/5–6/7): on WIDE columns (xl) it sits INLINE in the status-bar row's
-          middle cell (same line as date/time + network — see below). On NARROW
-          columns it can't fit there without truncating ("NY L…"), so it moves to
-          its OWN row ABOVE the status bar — which also keeps the network in its
-          top-right spot instead of getting bumped. Pre-game + ratings mode only
-          (it's a spoiler); shown once (compact rows don't render it). */}
+      {/* Playoff series state ("NY leads 1-0"). Day-of-game on WIDE columns (xl)
+          it sits INLINE in the status-bar row's middle cell (same line as
+          time + network — see below). Everywhere else — narrow columns, or any
+          non-today card whose status bar already carries a date label — it gets
+          its OWN italic row ABOVE the status bar (Jacob 6/5–6/7, 6/11), which
+          also keeps the network in its top-right spot instead of getting bumped.
+          Pre-game + ratings mode only (it's a spoiler); shown once (compact rows
+          don't render it). */}
       {game.seriesStatus && isFuture && showRatings && (
-        <div className="xl:hidden mb-1 text-[11px] text-center italic" style={{ color: "var(--text-muted)" }}>
+        <div className={`${isToday ? "xl:hidden " : ""}mb-1 text-[11px] text-center italic`} style={{ color: "var(--text-muted)" }}>
           {formatSeriesStatus(game.seriesStatus)}
         </div>
       )}
@@ -565,9 +580,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   Too Early
                 </span>
               </span>
-            ) : game.seriesStatus && isFuture && showRatings ? (
-              // Series state inline ONLY on wide (xl) columns where it fits;
-              // narrower columns render it as the banner above instead.
+            ) : game.seriesStatus && isFuture && showRatings && isToday ? (
+              // Series state inline ONLY day-of-game on wide (xl) columns where
+              // it fits next to the bare time; non-today cards carry a date
+              // label there, so they render the banner above instead (Jacob 6/11).
               <span className="min-w-0 flex-1 hidden xl:flex justify-center">
                 <span
                   className="text-[11px] italic whitespace-nowrap truncate pr-0.5"
@@ -652,9 +668,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       })()}
 
       {/* Expanded-networks overlay — anchored top-right, covers the records column
-          on the team rows. Click × to collapse back to "+N". */}
+          on the team rows. Click × — or anywhere outside — to collapse back to "+N". */}
       {broadcastExpanded && game.broadcasts.length > 1 && (
         <div
+          ref={broadcastOverlayRef}
           className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 rounded-md px-1.5 py-1 max-w-[65%] shadow-md"
           style={{ background: "var(--bg)", border: "1px solid var(--border-hover)" }}
           onClick={(e) => e.stopPropagation()}
