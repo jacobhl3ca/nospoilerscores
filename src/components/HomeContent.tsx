@@ -824,7 +824,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     return () => URL.revokeObjectURL(url);
   }, [prefs.showRatings]);
 
-  const shareFavorites = () => {
+  // The full settings-restore URL for the current prefs. Recomputed each
+  // render so the Settings panel's draggable bookmark chip always carries an
+  // up-to-date href (the bookmark is created from the live DOM at drag time).
+  const buildShareUrl = () => {
+    if (typeof window === "undefined") return "";
     const params = encodeFavorites(
       prefs.favoriteTeams,
       prefs.favoriteLeagues,
@@ -838,8 +842,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         newsThirdLeague: prefs.newsThirdLeague,
       },
     );
-    const url = `${window.location.origin}?${params.toString()}`;
-    navigator.clipboard.writeText(url).then(() => {
+    return `${window.location.origin}?${params.toString()}`;
+  };
+
+  const shareFavorites = () => {
+    navigator.clipboard.writeText(buildShareUrl()).then(() => {
       setShowShareCopied(true);
       setTimeout(() => setShowShareCopied(false), 2000);
     });
@@ -867,21 +874,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   };
 
   const copyFavLink = () => {
-    const params = encodeFavorites(
-      prefs.favoriteTeams,
-      prefs.favoriteLeagues,
-      prefs.thirdLeague,
-      [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague],
-      {
-        theme: prefs.theme,
-        defaultDateMode: prefs.defaultDateMode,
-        defaultLandingView: prefs.defaultLandingView,
-        defaultRatings: prefs.defaultRatings,
-        newsThirdLeague: prefs.newsThirdLeague,
-      },
-    );
-    const url = `${window.location.origin}?${params.toString()}`;
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText(buildShareUrl()).then(() => {
       setFavToastCopied(true);
       setTimeout(() => {
         dismissFavToast();
@@ -2528,6 +2521,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         knownTeams={knownTeams}
         onShareFavorites={shareFavorites}
         shareCopied={showShareCopied}
+        shareUrl={buildShareUrl()}
       />
 
       <button

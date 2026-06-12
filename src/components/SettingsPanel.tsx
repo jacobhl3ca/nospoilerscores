@@ -28,6 +28,9 @@ interface SettingsPanelProps {
   knownTeams: { id: string; sport: Sport; displayName: string; logo?: string }[];
   onShareFavorites: () => void;
   shareCopied: boolean;
+  // The full settings-restore URL — the draggable bookmark chip's href, so
+  // dragging it to the browser's bookmarks bar saves the setup directly.
+  shareUrl?: string;
 }
 
 const DATE_MODE_OPTIONS: { value: DefaultDateMode; label: string; hint: string }[] = [
@@ -95,6 +98,7 @@ export default function SettingsPanel({
   knownTeams,
   onShareFavorites,
   shareCopied,
+  shareUrl,
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -594,14 +598,44 @@ export default function SettingsPanel({
           {/* Share & Reset */}
           <Section title="Share & reset">
             <div className="flex flex-col gap-2">
-              <button
-                onClick={onShareFavorites}
-                disabled={prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague}
-                className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ background: "var(--accent)", color: "white" }}
-              >
-                {shareCopied ? "Copied!" : "Copy settings link"}
-              </button>
+              {(() => {
+                const nothingToShare = prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague;
+                return (
+                  <>
+                    <button
+                      onClick={onShareFavorites}
+                      disabled={nothingToShare}
+                      className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ background: "var(--accent)", color: "white" }}
+                    >
+                      {shareCopied ? "Copied!" : "Save settings link"}
+                    </button>
+                    {/* Real <a> so the browser treats it as a draggable link —
+                        drag it onto the bookmarks/favorites bar and the saved
+                        bookmark restores this exact setup (named by the link
+                        text). A plain click copies instead of navigating
+                        (Jacob 6/11 — bookmarking a copied URL is fiddly). */}
+                    {!nothingToShare && shareUrl && (
+                      <a
+                        href={shareUrl}
+                        onClick={(e) => { e.preventDefault(); onShareFavorites(); }}
+                        className="w-full py-2 rounded-lg text-sm text-center cursor-grab transition-colors"
+                        style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        title="Drag me to your bookmarks bar"
+                      >
+                        🔖 HideScore — my setup
+                      </a>
+                    )}
+                    {!nothingToShare && (
+                      <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
+                        Drag the 🔖 chip to your bookmarks bar to save this setup as a bookmark — or click either to copy the link.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
               <button
                 onClick={() => {
                   if (confirm("Reset all settings to defaults? Favorites will be cleared.")) resetAll();
