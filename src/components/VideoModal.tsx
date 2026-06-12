@@ -710,21 +710,35 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 : { paddingBottom: "56.25%", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
-              {/* Spoiler mask over YouTube's title bar — always on (see note by
+              {/* Spoiler masks over YouTube's chrome — always on (see note by
                   the state declarations). pointer-events stay off so
-                  click-to-play/pause keeps working. Sized tight to the title +
-                  channel byline: solid through the text, then a short fade so
-                  the edge isn't a hard line. */}
+                  click-to-play/pause keeps working. STRAIGHT BLACK, no gradient:
+                  each bar covers the title (top) / scrubber + title link (bottom)
+                  with a hard edge instead of a fade, so it can be the thinnest
+                  height that still fully hides the chrome and crops the least
+                  footage.
+                  clamp() is the knob and the answer to "as close to the edge as
+                  possible": YouTube scales its chrome with the player SIZE, so the
+                  % tracks it across mobile → desktop, while the px min covers tiny
+                  players (where the title is a big fraction) and the px max keeps a
+                  huge desktop player from over-covering. Nudge the three numbers to
+                  crop less; if the title peeks out under the top bar on a phone,
+                  raise the min. Top is taller than bottom (title + byline vs the
+                  shorter bottom strip). */}
               <div
                 aria-hidden
                 className="absolute top-0 inset-x-0 z-10 pointer-events-none"
                 style={{
-                  // % (not fixed px): YouTube scales its title chrome with the
-                  // player size, so a percentage stays "exact over it" across
-                  // mobile → desktop. min covers tiny players; max keeps a huge
-                  // desktop player from over-covering.
-                  height: "clamp(46px, 12%, 104px)",
-                  background: "linear-gradient(to bottom, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.97) 80%, rgba(0,0,0,0) 100%)",
+                  height: "clamp(38px, 10%, 86px)",
+                  background: "#000",
+                }}
+              />
+              <div
+                aria-hidden
+                className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
+                style={{
+                  height: "clamp(30px, 8%, 68px)",
+                  background: "#000",
                 }}
               />
             </div>
