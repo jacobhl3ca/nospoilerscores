@@ -160,7 +160,7 @@ function sourceLabelFromUrl(url: string): string {
 // the middle of a long reel — and the native scrubber stays hidden because it
 // spoils progress. These jump to a fraction of the clip with no timeline ever
 // shown. (No 100% — that's just the ending.)
-const JUMP_PCTS = [25, 50, 60, 70, 80, 90];
+const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard }: VideoModalProps) {
   const playerRef = useRef<any>(null);
@@ -191,20 +191,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // controls:0 hides YouTube's native mute button, and clips autoplay muted
   // (browsers block unmuted autoplay) — so we render a custom unmute toggle.
   const [muted, setMuted] = useState(true);
-  // Drive the title-bar spoiler mask. YouTube re-surfaces the clip title on
-  // hover and whenever the player is paused (no embed param suppresses it
-  // since showinfo was removed), so we cover the top strip whenever the clip
-  // isn't actively playing, or the user is hovering it.
-  const [hovered, setHovered] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  // maskOn lags `playing`: YouTube keeps the title on screen for a few seconds
-  // after playback starts/resumes/seeks, so dropping the mask the instant we
-  // hit PLAYING let the title flash through on mobile (no hover there to hold
-  // it up). We keep the mask up for a beat after each of those events.
-  const [maskOn, setMaskOn] = useState(true);
-  // Bumping holdNonce re-arms the mask-hold timer — used after a jump-seek,
-  // which makes YouTube re-surface the title for a few seconds.
-  const [holdNonce, setHoldNonce] = useState(0);
+  // The title-bar spoiler mask is ALWAYS on for YouTube clips. YouTube
+  // re-surfaces the clip title (and channel byline) on hover, on pause, AND a
+  // few seconds into playback whenever the mouse moves — and hover over a
+  // cross-origin iframe can't be reliably detected from the parent, so any
+  // "fade it out during playback" scheme leaks the title (the whole point of
+  // the app is no spoilers). We keep it permanently covered and sized tight to
+  // the title block so it costs almost no footage.
   // Fullscreen. nativeFs tracks the Fullscreen API on the player WRAPPER —
   // fullscreening the wrapper (not the bare iframe) keeps the spoiler mask and
   // the control strip on top, so YouTube's title stays covered in fullscreen
@@ -263,15 +256,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
   };
 
-  // Re-arm the spoiler mask hold (used right after a jump-seek).
-  const holdMask = useCallback(() => {
-    setMaskOn(true);
-    setHoldNonce((n) => n + 1);
-  }, []);
-
   // Jump to a fraction of the clip. Works off the YouTube player's reported
-  // duration so no timeline is ever revealed. Re-arms the mask because YT
-  // re-shows the title for a few seconds after a seek.
+  // duration so no timeline is ever revealed.
   const seekToPct = useCallback((pct: number) => {
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
@@ -279,8 +265,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (!d || d <= 0) return;
     p.seekTo((d * pct) / 100, true);
     p.playVideo?.();
-    holdMask();
-  }, [holdMask]);
+  }, []);
 
   // Toggle mute on the YouTube player.
   const toggleMute = useCallback(() => {
@@ -362,17 +347,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
-
-  // Spoiler-mask hold. Cover the title whenever paused; when playing, keep it
-  // up for ~3.2s after the last play/seek (covers YT's lingering title) then
-  // drop it so footage isn't cropped during steady playback.
-  useEffect(() => {
-    if (!ytMode) return;
-    if (!playing) { setMaskOn(true); return; }
-    setMaskOn(true);
-    const t = window.setTimeout(() => setMaskOn(false), 3200);
-    return () => window.clearTimeout(t);
-  }, [ytMode, playing, holdNonce]);
 
   // Reset caption state any time the modal swaps to a different stream
   useEffect(() => {
@@ -587,10 +561,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // returns the real list — onReady gives []. setPlaybackQuality is
           // a deprecated suggestion, but it's the only knob we have.
           onStateChange: (event: any) => {
-            // PLAYING(1)/BUFFERING(3) → the mask-hold timer can start fading;
-            // every other state (paused/ended/cued/unstarted) keeps it up so
-            // the title YouTube surfaces on pause stays covered.
-            setPlaying(event.data === 1 || event.data === 3);
             // Playback actually started — kill the watchdog.
             if ((event.data === 1 || event.data === 3) && watchdogRef.current) {
               window.clearTimeout(watchdogRef.current);
@@ -738,40 +708,45 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               style={fsActive
                 ? { width: fsMediaWidth, aspectRatio: "16 / 9", borderRadius: 0 }
                 : { paddingBottom: "56.25%", borderRadius: "0.5rem" }}
-              onMouseEnter={() => setHovered(true)}
-              onMouseLeave={() => setHovered(false)}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
-              {/* Spoiler mask over YouTube's title bar. No embed param hides
-                  the title (showinfo was removed in 2018) and YT re-shows it
-                  on hover/pause/seek, so we cover the top strip. pointer-events
-                  stay off so click-to-play/pause keeps working; height is
-                  clamped so it covers the title without cropping much footage,
-                  and it only shows when chrome would actually appear. */}
+              {/* Spoiler mask over YouTube's title bar — always on (see note by
+                  the state declarations). pointer-events stay off so
+                  click-to-play/pause keeps working. Sized tight to the title +
+                  channel byline: solid through the text, then a short fade so
+                  the edge isn't a hard line. */}
               <div
                 aria-hidden
-                className="absolute top-0 inset-x-0 z-10 pointer-events-none transition-opacity duration-200"
+                className="absolute top-0 inset-x-0 z-10 pointer-events-none"
                 style={{
-                  height: "clamp(56px, 15%, 92px)",
-                  background: "linear-gradient(to bottom, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.98) 62%, rgba(0,0,0,0) 100%)",
-                  opacity: hovered || maskOn ? 1 : 0,
+                  // % (not fixed px): YouTube scales its title chrome with the
+                  // player size, so a percentage stays "exact over it" across
+                  // mobile → desktop. min covers tiny players; max keeps a huge
+                  // desktop player from over-covering.
+                  height: "clamp(46px, 12%, 104px)",
+                  background: "linear-gradient(to bottom, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.97) 80%, rgba(0,0,0,0) 100%)",
                 }}
               />
             </div>
 
             {/* Control strip — sits BELOW the video (never over the footage).
                 In fullscreen it rides along in the reserved space under the
-                centered video. Subtle, icon-first, YouTube-like. */}
+                centered video. A 1fr/auto/1fr grid so the jump row is dead-
+                centered (lined up with the footer) regardless of how wide the
+                mute label and fullscreen icon on either side are. Subtle,
+                icon-first, YouTube-like. */}
             <div
-              className="mt-2 flex items-center gap-2"
-              style={fsActive ? { width: fsMediaWidth, paddingLeft: "0.25rem", paddingRight: "0.25rem" } : { width: "100%" }}
+              className="mt-2 grid items-center gap-2"
+              style={fsActive
+                ? { width: fsMediaWidth, paddingLeft: "0.25rem", paddingRight: "0.25rem", gridTemplateColumns: "1fr auto 1fr" }
+                : { width: "100%", gridTemplateColumns: "1fr auto 1fr" }}
             >
               {/* Mute / unmute — autoplay is muted, so invite a tap while muted */}
               <button
                 onClick={(e) => { e.stopPropagation(); toggleMute(); }}
                 aria-label={muted ? "Unmute" : "Mute"}
                 title={muted ? "Sound on" : "Mute"}
-                className={`${btnBase} h-8 gap-1.5 px-2 text-xs font-medium shrink-0`}
+                className={`${btnBase} justify-self-start h-8 gap-1.5 px-2 text-xs font-medium`}
               >
                 {muted ? (
                   <>
@@ -792,7 +767,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               </button>
 
               {/* Spoiler-safe jump presets — skip ahead without a timeline */}
-              <div className="flex-1 min-w-0 flex items-center justify-center gap-0.5 flex-wrap">
+              <div className="min-w-0 flex items-center justify-center gap-0.5 flex-wrap">
                 <span className="hidden sm:inline text-[11px] text-white/35 mr-1 select-none">Skip to</span>
                 {JUMP_PCTS.map((p) => (
                   <button
@@ -811,7 +786,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
                 aria-label={fsActive ? "Exit fullscreen" : "Fullscreen"}
                 title={fsActive ? "Exit fullscreen (Esc)" : "Fullscreen (f)"}
-                className={`${btnBase} h-8 w-8 shrink-0`}
+                className={`${btnBase} justify-self-end h-8 w-8`}
               >
                 {fsActive ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
