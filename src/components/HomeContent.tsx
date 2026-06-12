@@ -551,13 +551,17 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   );
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    // Only a REAL OS change event may write data-theme: this effect's mount
+    // run happens while prefs is still the pre-localStorage default
+    // ("system"), so writing here stomps the saved dark/light theme the load
+    // effect just applied (every refresh flipped back to the OS color).
     const handler = () => {
       setSystemDark(mq.matches);
       if (prefs.theme === "system") {
         document.documentElement.setAttribute("data-theme", mq.matches ? "dark" : "light");
       }
     };
-    handler();
+    setSystemDark(mq.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, [prefs.theme]);
