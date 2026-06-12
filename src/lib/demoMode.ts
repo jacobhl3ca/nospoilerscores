@@ -115,6 +115,9 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
       nextGameDay: league.nextGameDay
         ? { date: league.nextGameDay.date, games: league.nextGameDay.games.map(transformGame) }
         : null,
+      previousGameDay: league.previousGameDay
+        ? { date: league.previousGameDay.date, games: league.previousGameDay.games.map(transformGame) }
+        : null,
       golfTournament: null,
     };
   });
