@@ -629,12 +629,16 @@ export default function SettingsPanel({
                           e.dataTransfer.setData("text/x-moz-url", `${shareUrl}\nHideScore`);
                           e.dataTransfer.setData("text/html", `<a href="${shareUrl}">HideScore</a>`);
                         }}
-                        className="w-full py-2 rounded-lg text-sm text-center cursor-grab transition-colors"
+                        className="w-full py-2 rounded-lg text-sm cursor-grab transition-colors flex items-center justify-center gap-1.5"
                         style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
                         title="Drop on your bookmarks bar to save this setup as 'HideScore'"
                       >
+                        {/* draggable={false} so grabbing the chip by the monkey
+                            still drags the LINK (the bookmark), not the image. */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/monkey-see-no-evil.svg" alt="" width={14} height={14} className="inline-block" draggable={false} />
                         Drag to Bookmarks Bar
                       </a>
                     )}
