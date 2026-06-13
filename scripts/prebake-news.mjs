@@ -1275,7 +1275,7 @@ function redlibMediaToReddit(path) {
   return null;
 }
 
-function parseRedlibListing(html, subreddit, sectionLabel) {
+async function parseRedlibListing(html, subreddit, sectionLabel) {
   const out = [];
   for (const block of html.split(/<div class="post[ "]/).slice(1)) {
     const head = block.slice(0, Math.max(0, block.indexOf(">")));
@@ -1300,16 +1300,64 @@ function parseRedlibListing(html, subreddit, sectionLabel) {
     const dtitle = (block.match(/class="created"[^>]*title="([^"]+)"/) || [])[1] || "";
     const ts = dtitle ? Date.parse(dtitle.replace(/\sUTC$/, " GMT")) : NaN;
     if (ts && Date.now() - ts > 21 * 864e5) continue; // drop stale pins
-    // Video: /hls/<id>/ or /vid/<id>/ → the open HLS CDN (audio + CORS:*).
+
+    let videoUrl = null;
+    let imageUrl = null;
+    let imageFullUrl = null;
+    let body = null;
+
+    // 1) Reddit-hosted video (v.redd.it) → the open HLS CDN (audio + CORS:*).
     const vm = block.match(/\/(?:hls|vid)\/([a-z0-9]{8,16})\b/i) || block.match(/v\.redd\.it\/([a-z0-9]{8,16})/i);
-    const videoUrl = vm ? `https://v.redd.it/${vm[1]}/HLSPlaylist.m3u8` : null;
-    // Image: a real image post is lightboxable (imageFullUrl); a video poster is
-    // thumbnail-only. Map redlib's proxy path back to Reddit's CDN either way.
+    if (vm) videoUrl = `https://v.redd.it/${vm[1]}/HLSPlaylist.m3u8`;
+
+    // 2) Reddit-hosted image post → lightboxable full-res (imageFullUrl).
     const imgPath = (block.match(/class="post_media_image[^"]*"[^>]*href="([^"]+)"/) || [])[1] ||
       (block.match(/<img[^>]*class="post_media_image[^"]*"[^>]*src="([^"]+)"/) || [])[1];
-    const posterPath = (block.match(/poster="([^"]+)"/) || [])[1];
-    const imageUrl = redlibMediaToReddit(imgPath || posterPath);
-    const imageFullUrl = imgPath ? redlibMediaToReddit(imgPath) : null;
+    if (imgPath) {
+      imageUrl = redlibMediaToReddit(imgPath);
+      imageFullUrl = imageUrl;
+    }
+    // 3) v.redd.it video poster → row thumbnail.
+    if (!imageUrl) {
+      const poster = (block.match(/poster="([^"]+)"/) || [])[1];
+      if (poster) imageUrl = redlibMediaToReddit(poster);
+    }
+
+    // 4) External-link / external-media post. Redlib renders these as
+    //    <a class="post_thumbnail" href="<external>"> … <img src="/preview/…"> </a>
+    //    where href is the OFF-reddit URL (streamable, youtube, bsky, a news
+    //    article, …). Use the thumbnail for the row image (this is what was
+    //    missing — link posts had no picture), and resolve the hosts we can play
+    //    inline (parity with the old OAuth path's streamable handling). Anything
+    //    we can't play keeps its thumbnail and links out, exactly as before.
+    const thumb = block.match(/<a[^>]*class="post_thumbnail"[^>]*href="([^"]+)"[\s\S]*?<img[^>]*src="([^"]+)"/);
+    if (thumb) {
+      const extUrl = decodeEntities(thumb[1]);
+      if (!imageUrl) imageUrl = redlibMediaToReddit(thumb[2]);
+      if (!videoUrl) {
+        const sm = extUrl.match(/^https?:\/\/streamable\.com\/([a-zA-Z0-9]+)/);
+        const gifv = extUrl.match(/^https?:\/\/i\.imgur\.com\/(\w+)\.gifv/i);
+        const mp4 = extUrl.match(/^https?:\/\/\S+\.mp4(?:$|\?)/i);
+        if (sm) videoUrl = await fetchStreamableMp4(sm[1]);
+        else if (gifv) videoUrl = `https://i.imgur.com/${gifv[1]}.mp4`;
+        else if (mp4) videoUrl = extUrl;
+      }
+    }
+
+    // 5) Selftext body for text posts with no media (parity with OAuth path).
+    //    Key on the actual selftext container `<div class="md">` — link posts
+    //    render an EMPTY post_body (no md div), so this skips them instead of
+    //    capturing the stray markup around an empty preview.
+    if (!videoUrl && !imageFullUrl && !imageUrl) {
+      const mi = block.indexOf('<div class="md">');
+      if (mi >= 0) {
+        const fi = block.indexOf('class="post_footer"', mi);
+        const seg = block.slice(mi, fi > mi ? fi : mi + 4000);
+        const text = decodeEntities(seg.replace(/<[^>]+>/g, " ")).trim();
+        if (text) body = text.length > 1500 ? text.slice(0, 1500) + "…" : text;
+      }
+    }
+
     out.push({
       id: postId,
       headline: title,
@@ -1321,7 +1369,7 @@ function parseRedlibListing(html, subreddit, sectionLabel) {
       section: sectionLabel,
       videoUrl,
       imageFullUrl,
-      body: null,
+      body,
     });
     if (out.length >= 12) break;
   }
@@ -1337,7 +1385,7 @@ async function fetchRedditViaRedlib(subreddit, sectionLabel) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const html = await fetchRedlibHTML(subreddit);
     if (html) {
-      const items = parseRedlibListing(html, subreddit, sectionLabel);
+      const items = await parseRedlibListing(html, subreddit, sectionLabel);
       if (items.length) return items;
     }
     if (attempt < 2) await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
