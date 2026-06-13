@@ -294,7 +294,7 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
   const isReddit = !!item.section?.startsWith("r/");
   const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
   const shouldPopModal = !!onPlay && (isReddit || hasMedia);
-  const hasInlineMedia = !!(item.videoUrl || item.imageFullUrl);
+  const hasInlineMedia = !!(item.videoUrl || item.imageFullUrl || item.youtubeVideoId);
   const showThumb = !!item.imageUrl && !imgFailed;
   const thumb = showThumb ? (
     <div
@@ -313,7 +313,7 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
       {hasInlineMedia && (
         <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
           <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-            {item.videoUrl ? (
+            {(item.videoUrl || item.youtubeVideoId) ? (
               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
             ) : (
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -353,10 +353,13 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
           }
           onPlay!({
             playbackUrl: item.videoUrl || null,
+            // YouTube reddit posts (link-outs to a YT clip) play the YT iframe.
+            videoId: item.youtubeVideoId || undefined,
             // Prefer Reddit-hosted full-res, fall back to preview for image-bearing
-            // posts. Text-only Reddit posts pass null and the modal renders its
-            // text-card layout off the headline metadata below.
-            imageUrl: item.videoUrl ? null : (item.imageFullUrl || (isReddit && item.imageUrl) || null),
+            // posts. A video/YouTube post passes null here so the modal plays
+            // instead of rendering an image. Text-only Reddit posts pass null and
+            // the modal renders its text-card layout off the headline metadata.
+            imageUrl: (item.videoUrl || item.youtubeVideoId) ? null : (item.imageFullUrl || (isReddit && item.imageUrl) || null),
             fallbackUrl: item.articleUrl,
             poster: item.imageUrl || null,
             sourceLabel: item.section || null,

@@ -1304,6 +1304,7 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     let videoUrl = null;
     let imageUrl = null;
     let imageFullUrl = null;
+    let youtubeVideoId = null;
     let body = null;
 
     // 1) Reddit-hosted video (v.redd.it) → the open HLS CDN (audio + CORS:*).
@@ -1324,21 +1325,28 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     }
 
     // 4) External-link / external-media post. Redlib renders these as
-    //    <a class="post_thumbnail" href="<external>"> … <img src="/preview/…"> </a>
-    //    where href is the OFF-reddit URL (streamable, youtube, bsky, a news
-    //    article, …). Use the thumbnail for the row image (this is what was
-    //    missing — link posts had no picture), and resolve the hosts we can play
-    //    inline (parity with the old OAuth path's streamable handling). Anything
-    //    we can't play keeps its thumbnail and links out, exactly as before.
-    const thumb = block.match(/<a[^>]*class="post_thumbnail"[^>]*href="([^"]+)"[\s\S]*?<img[^>]*src="([^"]+)"/);
-    if (thumb) {
-      const extUrl = decodeEntities(thumb[1]);
-      if (!imageUrl) imageUrl = redlibMediaToReddit(thumb[2]);
-      if (!videoUrl) {
+    //    <a class="post_thumbnail [no_thumbnail]" href="<external>"> … </a> — the
+    //    href is the OFF-reddit URL (streamable, youtube, a news article, a clip
+    //    host). "no_thumbnail" posts carry an <svg> placeholder and NO <img>, so
+    //    read the href first and pick up the thumbnail (when present) separately.
+    //    Then resolve the hosts we can play inline; anything else keeps its
+    //    thumbnail and links out, exactly as before.
+    const tHref = (block.match(/<a[^>]*class="post_thumbnail[^"]*"[^>]*href="([^"]+)"/) || [])[1];
+    if (tHref) {
+      const extUrl = decodeEntities(tHref);
+      if (!imageUrl) {
+        const tImg = block.match(/<a[^>]*class="post_thumbnail[^"]*"[\s\S]{0,500}?<img[^>]*src="([^"]+)"/);
+        if (tImg) imageUrl = redlibMediaToReddit(tImg[1]);
+      }
+      if (!videoUrl && !youtubeVideoId) {
         const sm = extUrl.match(/^https?:\/\/streamable\.com\/([a-zA-Z0-9]+)/);
+        const ym = extUrl.match(/^https?:\/\/(?:www\.|m\.)?youtube\.com\/watch\?v=([\w-]{6,})/) ||
+          extUrl.match(/^https?:\/\/youtu\.be\/([\w-]{6,})/) ||
+          extUrl.match(/^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([\w-]{6,})/);
         const gifv = extUrl.match(/^https?:\/\/i\.imgur\.com\/(\w+)\.gifv/i);
         const mp4 = extUrl.match(/^https?:\/\/\S+\.mp4(?:$|\?)/i);
         if (sm) videoUrl = await fetchStreamableMp4(sm[1]);
+        else if (ym) youtubeVideoId = ym[1];
         else if (gifv) videoUrl = `https://i.imgur.com/${gifv[1]}.mp4`;
         else if (mp4) videoUrl = extUrl;
       }
@@ -1370,6 +1378,7 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
       videoUrl,
       imageFullUrl,
       body,
+      ...(youtubeVideoId ? { youtubeVideoId } : {}),
     });
     if (out.length >= 12) break;
   }
