@@ -63,6 +63,12 @@ const SWITCHER_MODE_OPTIONS: { value: "dropdown" | "arrows" | "off"; label: stri
   { value: "off", label: "Off", hint: "Headers are plain — switch here instead" },
 ];
 
+const SEEK_CONTROL_OPTIONS: { value: "both" | "bar" | "jumps"; label: string; hint: string }[] = [
+  { value: "both", label: "Both", hint: "Progress bar + the 10% skip buttons" },
+  { value: "bar", label: "Bar", hint: "Just the draggable progress bar" },
+  { value: "jumps", label: "Skip %", hint: "Just the 10% jump buttons" },
+];
+
 const SPORT_LABEL: Record<Sport, string> = {
   mlb: "MLB",
   nba: "NBA",
@@ -605,6 +611,13 @@ export default function SettingsPanel({
               checked={prefs.maskVideoBottom ?? true}
               onChange={(v) => updatePrefs({ maskVideoBottom: v })}
             />
+            <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
+              <RadioGroup
+                value={prefs.videoSeekControl ?? "both"}
+                options={SEEK_CONTROL_OPTIONS}
+                onChange={(v) => updatePrefs({ videoSeekControl: v })}
+              />
+            </Field>
           </Section>
 
           {/* Onboarding hints */}

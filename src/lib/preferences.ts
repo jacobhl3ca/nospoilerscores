@@ -195,6 +195,11 @@ export interface Preferences {
   // spoiler-safe out of the box; users opt out per-bar in Settings.
   maskVideoTitle?: boolean;
   maskVideoBottom?: boolean;
+  // Highlight-player seek control: the progress bar + the 10% jump buttons
+  // ("both", default), just the bar, or just the jumps. The bar is custom and
+  // spoiler-safe (no YouTube hover-thumbnails; drag-seek capped at 90% so the
+  // ending can't be skipped to — same cap as the jump presets).
+  videoSeekControl?: "both" | "bar" | "jumps";
 }
 
 const defaults: Preferences = {

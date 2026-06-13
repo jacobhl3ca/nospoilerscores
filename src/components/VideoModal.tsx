@@ -46,6 +46,9 @@ interface VideoModalProps {
   // user toggles each in Settings. Only affect the YouTube highlight path.
   maskVideoTitle?: boolean;
   maskVideoBottom?: boolean;
+  // Which seek control the YouTube player shows: progress bar + jumps ("both",
+  // default), bar only, or jumps only.
+  seekControl?: "both" | "bar" | "jumps";
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -166,7 +169,7 @@ function sourceLabelFromUrl(url: string): string {
 // shown. (No 100% — that's just the ending.)
 const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, seekControl = "both" }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -192,6 +195,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
   // Brief "Copied ✓" confirmation after the copy-link button is tapped.
   const [copied, setCopied] = useState(false);
+  // Playback position (0–1) for the custom progress bar. Polled off the YT
+  // player; NO timeline/scrubber thumbnails (those are the spoiler) — just a
+  // fill. Drag-seek is capped at 90% (see seekFromClientX) so the ending can't
+  // be skipped to, matching the jump presets' "no 100%".
+  const [progress, setProgress] = useState(0);
+  const barRef = useRef<HTMLDivElement>(null);
+  const draggingBarRef = useRef(false);
   // controls:0 hides YouTube's native mute button, and clips autoplay muted
   // (browsers block unmuted autoplay) — so we render a custom unmute toggle.
   const [muted, setMuted] = useState(true);
@@ -270,6 +280,38 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     p.seekTo((d * pct) / 100, true);
     p.playVideo?.();
   }, []);
+
+  // Drag/click the progress bar to seek. Caps the target at 90% so the user
+  // can never jump to the ending (same spoiler rule as the jump presets); the
+  // fill itself still shows true position, including past 90% during normal
+  // playback. No thumbnail preview is ever shown.
+  const seekFromClientX = useCallback((clientX: number) => {
+    const el = barRef.current;
+    const p = playerRef.current;
+    if (!el || !p?.getDuration || !p?.seekTo) return;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0) return;
+    const frac = Math.max(0, Math.min(0.9, (clientX - r.left) / r.width));
+    const d = p.getDuration();
+    if (!d || d <= 0) return;
+    p.seekTo(d * frac, true);
+    p.playVideo?.();
+    setProgress(frac);
+  }, []);
+
+  // Poll the YT player's position to drive the progress-bar fill while the
+  // clip plays. Cheap (every 350ms) and only while this is a YouTube clip.
+  useEffect(() => {
+    if (!ytMode) return;
+    const id = window.setInterval(() => {
+      if (draggingBarRef.current) return; // don't fight an active drag
+      const p = playerRef.current;
+      const d = p?.getDuration?.() ?? 0;
+      const t = p?.getCurrentTime?.() ?? 0;
+      if (d > 0) setProgress(Math.min(1, t / d));
+    }, 350);
+    return () => window.clearInterval(id);
+  }, [ytMode]);
 
   // Toggle mute on the YouTube player.
   const toggleMute = useCallback(() => {
@@ -763,6 +805,37 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               )}
             </div>
 
+            {/* Custom progress bar — position + drag-to-seek. Sits BELOW the
+                video (never over footage). Spoiler-safe: a plain fill (no YT
+                thumbnail preview), and seekFromClientX caps the target at 90% so
+                the ending can't be skipped to. Hidden when the user picks
+                jumps-only in Settings. */}
+            {seekControl !== "jumps" && (
+              <div className="mt-2" style={fsActive ? { width: fsMediaWidth } : { width: "100%" }}>
+                <div
+                  ref={barRef}
+                  role="slider"
+                  aria-label="Seek"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(progress * 100)}
+                  tabIndex={0}
+                  title="Drag to seek"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => { e.stopPropagation(); draggingBarRef.current = true; (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); seekFromClientX(e.clientX); }}
+                  onPointerMove={(e) => { if (draggingBarRef.current) seekFromClientX(e.clientX); }}
+                  onPointerUp={(e) => { e.stopPropagation(); draggingBarRef.current = false; }}
+                  onPointerCancel={() => { draggingBarRef.current = false; }}
+                  className="w-full cursor-pointer"
+                  style={{ paddingTop: "7px", paddingBottom: "7px" }}
+                >
+                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.18)" }}>
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(progress, 1) * 100}%`, background: "var(--accent)" }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Control strip — sits BELOW the video (never over the footage).
                 In fullscreen it rides along in the reserved space under the
                 centered video. A 1fr/auto/1fr grid so the jump row is dead-
@@ -800,20 +873,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 )}
               </button>
 
-              {/* Spoiler-safe jump presets — skip ahead without a timeline */}
-              <div className="min-w-0 flex items-center justify-center gap-0.5 flex-wrap">
-                <span className="hidden sm:inline text-[11px] text-white/35 mr-1 select-none">Skip to</span>
-                {JUMP_PCTS.map((p) => (
-                  <button
-                    key={p}
-                    onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
-                    className={`${btnBase} h-7 px-1.5 text-xs font-medium`}
-                    title={`Jump to ${p}%`}
-                  >
-                    {p}%
-                  </button>
-                ))}
-              </div>
+              {/* Spoiler-safe jump presets — skip ahead without a timeline.
+                  Hidden when the user picks bar-only; the empty div keeps the
+                  3-column grid so the fullscreen button stays right-aligned. */}
+              {seekControl !== "bar" ? (
+                <div className="min-w-0 flex items-center justify-center gap-0.5 flex-wrap">
+                  <span className="hidden sm:inline text-[11px] text-white/35 mr-1 select-none">Skip to</span>
+                  {JUMP_PCTS.map((p) => (
+                    <button
+                      key={p}
+                      onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
+                      className={`${btnBase} h-7 px-1.5 text-xs font-medium`}
+                      title={`Jump to ${p}%`}
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                </div>
+              ) : <div />}
 
               {/* Fullscreen toggle */}
               <button

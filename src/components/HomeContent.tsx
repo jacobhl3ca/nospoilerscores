@@ -2528,6 +2528,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? true}
           maskVideoBottom={prefs.maskVideoBottom ?? true}
+          seekControl={prefs.videoSeekControl ?? "both"}
           onClose={closeVideoModal}
         />
       )}
