@@ -2500,6 +2500,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
+          maskVideoTitle={prefs.maskVideoTitle ?? true}
+          maskVideoBottom={prefs.maskVideoBottom ?? true}
           onClose={closeVideoModal}
         />
       )}

@@ -189,6 +189,12 @@ export interface Preferences {
   // Source labels the user has hidden via the per-source visibility checkbox.
   // Applied alongside the type pill (independent filters).
   newsHiddenSources?: string[];
+  // Spoiler masks on the highlight-video player. maskVideoTitle covers
+  // YouTube's title strip (top); maskVideoBottom covers the bottom strip.
+  // Both default ON (undefined ⇒ true ⇒ covered) so the player stays
+  // spoiler-safe out of the box; users opt out per-bar in Settings.
+  maskVideoTitle?: boolean;
+  maskVideoBottom?: boolean;
 }
 
 const defaults: Preferences = {

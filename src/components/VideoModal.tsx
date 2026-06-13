@@ -42,6 +42,10 @@ interface VideoModalProps {
   // uploads a preview card and shares a hidescore.com link that unfurls with
   // the two teams + date instead of the raw YouTube/source URL. Null for news.
   shareCard?: ShareCardMeta | null;
+  // Spoiler masks over the YouTube player chrome. Both default ON (covered);
+  // user toggles each in Settings. Only affect the YouTube highlight path.
+  maskVideoTitle?: boolean;
+  maskVideoBottom?: boolean;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -162,7 +166,7 @@ function sourceLabelFromUrl(url: string): string {
 // shown. (No 100% — that's just the ending.)
 const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -711,36 +715,45 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
               {/* Spoiler masks over YouTube's chrome — always on (see note by
-                  the state declarations). pointer-events stay off so
-                  click-to-play/pause keeps working. STRAIGHT BLACK, no gradient:
-                  each bar covers the title (top) / scrubber + title link (bottom)
-                  with a hard edge instead of a fade, so it can be the thinnest
-                  height that still fully hides the chrome and crops the least
-                  footage.
+                  the state declarations), each independently toggleable in
+                  Settings (maskVideoTitle / maskVideoBottom). pointer-events stay
+                  off so click-to-play/pause keeps working. STRAIGHT BLACK, no
+                  gradient: each bar covers the title (top) / bottom strip with a
+                  hard edge instead of a fade, so it's the thinnest height that
+                  still hides the chrome and crops the least footage.
                   clamp() is the knob and the answer to "as close to the edge as
                   possible": YouTube scales its chrome with the player SIZE, so the
                   % tracks it across mobile → desktop, while the px min covers tiny
                   players (where the title is a big fraction) and the px max keeps a
                   huge desktop player from over-covering. Nudge the three numbers to
                   crop less; if the title peeks out under the top bar on a phone,
-                  raise the min. Top is taller than bottom (title + byline vs the
-                  shorter bottom strip). */}
-              <div
-                aria-hidden
-                className="absolute top-0 inset-x-0 z-10 pointer-events-none"
-                style={{
-                  height: "clamp(38px, 10%, 86px)",
-                  background: "#000",
-                }}
-              />
-              <div
-                aria-hidden
-                className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
-                style={{
-                  height: "clamp(30px, 8%, 68px)",
-                  background: "#000",
-                }}
-              />
+                  raise the min.
+                  TOP is bounded by the real title chrome (title + byline), so it's
+                  near its floor. BOTTOM is NOT bounded by anything — controls:0
+                  strips YouTube's whole bottom bar (no timeline/seek line), so this
+                  bar is pure footage crop kept just thick enough to hide the
+                  bottom-corner share/title chrome that can flash on pause; safe to
+                  shrink further or toggle off. */}
+              {maskVideoTitle && (
+                <div
+                  aria-hidden
+                  className="absolute top-0 inset-x-0 z-10 pointer-events-none"
+                  style={{
+                    height: "clamp(38px, 10%, 86px)",
+                    background: "#000",
+                  }}
+                />
+              )}
+              {maskVideoBottom && (
+                <div
+                  aria-hidden
+                  className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
+                  style={{
+                    height: "clamp(22px, 5.5%, 50px)",
+                    background: "#000",
+                  }}
+                />
+              )}
             </div>
 
             {/* Control strip — sits BELOW the video (never over the footage).

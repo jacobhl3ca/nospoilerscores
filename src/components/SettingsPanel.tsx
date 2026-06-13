@@ -579,6 +579,22 @@ export default function SettingsPanel({
             </Field>
           </Section>
 
+          {/* Highlight-video spoiler masks (the black bars over the player) */}
+          <Section title="Highlight video">
+            <ToggleRow
+              label="Cover video title"
+              hint="Black bar over YouTube's title so the headline can't spoil"
+              checked={prefs.maskVideoTitle ?? true}
+              onChange={(v) => updatePrefs({ maskVideoTitle: v })}
+            />
+            <ToggleRow
+              label="Cover bottom strip"
+              hint="Black bar over the bottom of the player"
+              checked={prefs.maskVideoBottom ?? true}
+              onChange={(v) => updatePrefs({ maskVideoBottom: v })}
+            />
+          </Section>
+
           {/* Onboarding hints */}
           <Section title="Spoiler explainers">
             <ToggleRow
