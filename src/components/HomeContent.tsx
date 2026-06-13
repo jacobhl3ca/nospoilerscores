@@ -544,9 +544,17 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when
   // the system flips while theme === "system" (otherwise the data-theme attr
   // recolors the page but the "Currently rendering" readout stays stale).
-  const [systemDark, setSystemDark] = useState<boolean>(() =>
-    typeof window !== "undefined" ? window.matchMedia("(prefers-color-scheme: dark)").matches : true
-  );
+  // Initialize to `true` on BOTH the server and the first client render so this
+  // component's first paint resolves the same theme the SSR markup did
+  // (getResolvedTheme's window-less fallback is "dark"). Reading the real OS
+  // scheme in the initializer made the first client render disagree with the
+  // server on light systems (sun vs moon icon, "Switch to light/dark" title) —
+  // a hydration mismatch that forced React to recover the whole document,
+  // momentarily wiping the inline-script data-theme attr and flipping the page
+  // to light, which left the header theme/settings buttons flashing white
+  // (their .monkey-toggle background transition lags the rest snapping back).
+  // The mount effect below sets the real OS value immediately after.
+  const [systemDark, setSystemDark] = useState<boolean>(true);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     // Only a REAL OS change event may write data-theme: this effect's mount
