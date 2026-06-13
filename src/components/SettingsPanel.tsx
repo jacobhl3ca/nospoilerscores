@@ -102,6 +102,18 @@ export default function SettingsPanel({
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
 
+  // Safari ignores the text/x-moz-url + text/html drag overrides below and
+  // names a dragged bookmark after the link's visible text instead. So on
+  // Safari we make the chip's text read "HideScore" (the desired bookmark
+  // name) and move the "drag me" affordance to the caption. Detected after
+  // mount (defaults to false) so SSR and first client render match — no
+  // hydration mismatch. Chrome's UA also contains "Safari", so exclude it
+  // (plus iOS Chrome/Firefox: CriOS/FxiOS) and Chromium Edge (Edg).
+  const [isSafari, setIsSafari] = useState(false);
+  useEffect(() => {
+    setIsSafari(/^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent));
+  }, []);
+
   // Esc to close
   useEffect(() => {
     if (!open) return;
@@ -655,12 +667,18 @@ export default function SettingsPanel({
                             still drags the LINK (the bookmark), not the image. */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src="/monkey-see-no-evil.svg" alt="" width={14} height={14} className="inline-block" draggable={false} />
-                        Drag to Bookmarks Bar
+                        {/* Safari names the bookmark after this visible text,
+                            so it must read "HideScore" there. Other browsers
+                            take the name from the dragstart overrides above, so
+                            they keep the instructional label. */}
+                        {isSafari ? "HideScore" : "Drag to Bookmarks Bar"}
                       </a>
                     )}
                     {!nothingToShare && (
                       <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
-                        The bookmark restores this exact setup. Clicking copies the link instead.
+                        {isSafari
+                          ? "Drag this onto your bookmarks bar to save this setup. Clicking copies the link instead."
+                          : "The bookmark restores this exact setup. Clicking copies the link instead."}
                       </p>
                     )}
                   </>
