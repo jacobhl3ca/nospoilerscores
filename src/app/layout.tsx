@@ -127,6 +127,14 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('nss-preferences');if(t){var p=JSON.parse(t);if(p.theme==='dark'||p.theme==='light'){document.documentElement.setAttribute('data-theme',p.theme);return}}if(window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})()`,
           }}
         />
+        {/* Replay the last active view tab (scores/ratings/news) before paint so
+            the right tab is highlighted on refresh — without this the static HTML
+            paints with Scores active and flashes to Ratings once prefs load. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var v=localStorage.getItem('nss-last-view');if(v==='scores-plain'||v==='scores-rated'||v==='news'){document.documentElement.setAttribute('data-view',v);return}}catch(e){}document.documentElement.setAttribute('data-view','scores-plain')})()`,
+          }}
+        />
       </head>
       <body className="antialiased">
         {children}

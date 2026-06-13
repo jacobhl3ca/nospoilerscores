@@ -52,22 +52,20 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
     return (
       <button
         type="button"
+        data-tab={mode}
         onClick={() => onChange(mode)}
         title={title}
         aria-label={title}
         aria-pressed={active}
-        className={`flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none rounded-lg m-1 ${inline ? "h-10" : "h-12"}`}
-        style={{
-          // Match the Yesterday/Today/Tomorrow date-nav pill: a subtle
-          // bg-card-hover fill with neutral text (not accent) on the selected
-          // tab (Jacob 6/1). rounded-lg + m-1 makes it an inset pill rather
-          // than a full-height block.
-          color: active ? "var(--text)" : "var(--text-muted)",
-          background: active ? "var(--bg-card-hover)" : "transparent",
-          fontWeight: active ? 600 : 400,
-        }}
+        // Active styling (subtle bg-card-hover fill + neutral text, matching the
+        // Yesterday/Today/Tomorrow date-nav pill — Jacob 6/1) is driven by CSS
+        // keyed on html[data-view] + data-tab, NOT React inline styles, so the
+        // pre-paint inline script in layout.tsx can highlight the right tab
+        // before hydration. Inline styles would paint the default (Scores) tab
+        // first and flash before the prefs effect flips to Ratings (Jacob 6/12).
+        className={`view-tab flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors select-none rounded-lg m-1 ${inline ? "h-10" : "h-12"}`}
       >
-        <span className={`flex items-center justify-center transition-opacity ${active ? "opacity-100" : "opacity-70"}`}>
+        <span className="tab-icon flex items-center justify-center transition-opacity">
           {icon}
         </span>
         <span className="text-[10px] sm:text-[11px] font-medium leading-none">{label}</span>
@@ -827,6 +825,20 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     }
     return () => URL.revokeObjectURL(url);
   }, [prefs.showRatings]);
+
+  // Keep <html data-view> in sync with the active tab and remember it. The
+  // pre-paint inline script in layout.tsx replays this value on the next
+  // refresh so the correct tab is highlighted before hydration — otherwise the
+  // static HTML paints with Scores active and flashes to Ratings once the prefs
+  // effect runs (Jacob 6/12). Storing the already-resolved viewMode (rather than
+  // re-deriving the launch rules in the inline script) keeps the two in lockstep
+  // and self-corrects on the rare morning-reset boundary.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-view", viewMode);
+    try {
+      localStorage.setItem("nss-last-view", viewMode);
+    } catch {}
+  }, [viewMode]);
 
   // The full settings-restore URL for the current prefs. Recomputed each
   // render so the Settings panel's draggable bookmark chip always carries an

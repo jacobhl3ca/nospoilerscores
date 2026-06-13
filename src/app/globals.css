@@ -202,3 +202,29 @@ body {
   .live-clock::after { animation: none; opacity: 0.6; }
 }
 
+/* View-mode tabs (Scores / Ratings / News). Active styling is driven here off
+   html[data-view] so the pre-paint inline script in layout.tsx can highlight
+   the right tab before hydration — no Scores→Ratings flash on refresh for
+   users whose remembered view is Ratings (Jacob 6/12). Base (inactive) look
+   matches the date-nav pill. */
+.view-tab {
+  color: var(--text-muted);
+  background: transparent;
+  font-weight: 400;
+}
+.view-tab .tab-icon {
+  opacity: 0.7;
+}
+html[data-view="scores-plain"] .view-tab[data-tab="scores-plain"],
+html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"],
+html[data-view="news"] .view-tab[data-tab="news"] {
+  color: var(--text);
+  background: var(--bg-card-hover);
+  font-weight: 600;
+}
+html[data-view="scores-plain"] .view-tab[data-tab="scores-plain"] .tab-icon,
+html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"] .tab-icon,
+html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
+  opacity: 1;
+}
+
