@@ -196,6 +196,15 @@ export default {
         // of hasGolfTournament. Every other league's query lacks the token, so
         // this is inert for them.
         const isWorldCupQuery = /\bworld cup\b/i.test(query);
+        // Official WC highlight channels (lowercased ownerText). FOX is the US
+        // English rightsholder and posts a clean per-match recap for every game;
+        // FIFA's own channel adds alt-cast/extras. Reuploaders ("CJ DRIPSET",
+        // "Hậu Cao", "Watch Sports Era", …) copy ESPN's short team names so they
+        // OUT-MATCH the official video (which titles "United States", not "USA"),
+        // and they were winning the unscoped search button. For WC we accept ONLY
+        // these channels — combined with the team aliases below, the official clip
+        // wins and fan re-uploads are dropped. fifa queries only; inert elsewhere.
+        const WC_OFFICIAL_CHANNELS = ["fox sports", "fox soccer", "fifa"];
 
         // Team name aliases — ESPN shortDisplayName → common YouTube title variants.
         // Reverse-indexed below so a lookup by ANY listed variant returns the
@@ -256,6 +265,23 @@ export default {
           "københavn": ["københavn", "kobenhavn", "copenhagen", "fc copenhagen"],
           "real madrid": ["real madrid", "madrid"],
           "barcelona": ["barcelona", "barça", "barca", "fc barcelona"],
+          // World Cup national teams — ESPN shortDisplayName ↔ the full country
+          // name official broadcasters (FOX) put in titles. Only the divergent /
+          // variant-spelling teams need an entry; the rest (Brazil, France, …)
+          // substring-match directly. Without these, FOX's "United States vs
+          // Paraguay" failed hasTeams while a re-upload's "USA vs Paraguay" won.
+          // Keys are the lowercased ESPN short names the client sends.
+          "usa": ["usa", "united states", "usmnt"],
+          "bosnia-herz": ["bosnia-herz", "bosnia-herzegovina", "bosnia and herzegovina", "bosnia & herzegovina", "bosnia", "herzegovina"],
+          "south korea": ["south korea", "korea republic", "korea"],
+          "ivory coast": ["ivory coast", "côte d'ivoire", "cote d'ivoire", "cote d ivoire"],
+          "türkiye": ["türkiye", "turkiye", "turkey"],
+          "congo dr": ["congo dr", "dr congo", "dr. congo", "democratic republic of congo"],
+          "curaçao": ["curaçao", "curacao"],
+          "czechia": ["czechia", "czech republic"],
+          "iran": ["iran", "ir iran"],
+          "cape verde": ["cape verde", "cabo verde"],
+          "saudi arabia": ["saudi arabia", "saudi", "ksa"],
         };
 
         // Extract team names from query: "Away vs Home highlights ..."
@@ -397,6 +423,11 @@ export default {
           // FIFA's real recap isn't up yet the button 404s and hides, which is
           // the app's preferred "better to 404 than serve the wrong game" path.
           if (isWorldCupQuery && !titleLower.includes("world cup")) continue;
+          // …and the upload must be from an official channel (see
+          // WC_OFFICIAL_CHANNELS) — fan re-uploads copy ESPN's short team names
+          // and would otherwise out-match the official clip on the unscoped
+          // "search" button. Official-or-nothing for WC.
+          if (isWorldCupQuery && !WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase())) continue;
 
           // "EXTENDED HIGHLIGHTS" variants (common on NBA/MLB official
           // channels) — still valid highlights, but demoted so the

@@ -13,7 +13,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // NCAAF: ESPN College Football posts per-game recaps with title format
   // "Team A vs. Team B | Full Game Highlights | ESPN College Football".
   ncaaf: "ESPN College Football",
-  fifa: "FIFA",
+  // World Cup: FOX is the US English-language rightsholder and "FOX Sports"
+  // posts a clean per-match "TeamA vs TeamB Highlights | 2026 FIFA World Cup™"
+  // for every game. FIFA's own channel only posts alt-cast / limited clips, so
+  // use the broadcaster — same pattern as EPL→NBC Sports, UCL→CBS Sports Golazo,
+  // MLS→Major League Soccer. The worker further restricts WC results to an
+  // official-channel allowlist (FOX Sports / FOX Soccer / FIFA) so the unscoped
+  // "search" button can't serve fan re-uploads either.
+  fifa: "FOX Sports",
   // EPL: Premier League's own YouTube channel posts only short clips
   // (broadcast rights restrict full game recaps). NBC Sports (US broadcaster)
   // uploads the actual game-by-game highlights with title format
