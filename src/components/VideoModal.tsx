@@ -728,12 +728,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   channel byline below it ends ~51px. We cover the title (the
                   spoiler); the byline is just the channel name (NBA/MLB — not a
                   spoiler) so we let it peek rather than crop ~15px more. clamp's %
-                  only nudges mid-size; min/max keep it ~42–50px everywhere. With
-                  controls:0 the title is only shown in the POSTER/paused state
-                  (autoplay-blocked) — during muted-autoplay playback YouTube
-                  renders no title at all, so an always-on bar over-crops then; the
-                  real fix is the backlogged autoplay-aware overlay. To also hide
-                  the byline, raise to ~54px (costs more crop on phones).
+                  only nudges mid-size; min/max keep it ~42–50px everywhere. To also
+                  hide the byline, raise to ~54px (costs more crop on phones).
+                  WHY ALWAYS-ON (do not make it conditional): on desktop YouTube
+                  re-shows the title overlay on MOUSE-MOVE mid-playback, and hover
+                  over the cross-origin YT iframe is undetectable from this parent
+                  frame — so we can't show the bar only when the title appears. A
+                  prior hover/fade attempt leaked the title on PC (see the 6/12
+                  fview session). Always-on is the price of a cross-origin player.
                   BOTTOM — measured: controls:0 strips YouTube's ENTIRE bottom bar
                   (no timeline/seek line exists), so this bar covers nothing YT
                   during playback — it's pure footage crop, kept just thick enough
