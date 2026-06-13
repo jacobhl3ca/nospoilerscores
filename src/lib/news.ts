@@ -274,15 +274,14 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   if (sport === "fifa") out.push({ label: "r/soccer", key: "reddit-soccer", kind: "prebaked", logoUrl });
   const official = PREBAKED_FEEDS[sport];
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
-  // Editorial substitutes (BBC Sport / The Guardian) for the soccer/tennis/golf
-  // columns that have no league .com feed — slotted where the official feed
-  // would sit, ahead of ESPN. See SUBSTITUTE_FEEDS.
-  const subs = SUBSTITUTE_FEEDS[sport];
-  if (subs) for (const s of subs) out.push({ label: s.label, key: s.key, kind: "prebaked", logoUrl });
   // fifa's ESPN feed is the World Cup league feed (see SPORT_NEWS_PATHS) — label
   // it "ESPN World Cup" rather than the generic "ESPN FIFA".
   const espnLabel = sport === "fifa" ? "ESPN World Cup" : `ESPN ${sport.toUpperCase()}`;
   out.push({ label: espnLabel, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
+  // Editorial substitutes (BBC Sport / The Guardian) for the soccer/tennis/golf
+  // columns that have no league .com feed — placed after ESPN (Jacob 6/13).
+  const subs = SUBSTITUTE_FEEDS[sport];
+  if (subs) for (const s of subs) out.push({ label: s.label, key: s.key, kind: "prebaked", logoUrl });
   return out;
 }
 
