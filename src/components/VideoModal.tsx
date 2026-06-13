@@ -918,7 +918,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             </div>
           </div>
         ) : (
-          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }} onClick={(e) => e.stopPropagation()}>
+          <div ref={containerRef} className="relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: "min(100%, calc(78vh * 16 / 9))", aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
             {hlsMode ? (
               <video
                 ref={videoRef}
