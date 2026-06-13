@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState, type ReactNode } from "react";
+import { getEtServiceDate } from "@/lib/etDay";
 
 interface DateNavProps {
   selectedDate: string; // YYYYMMDD
@@ -42,27 +43,12 @@ function formatDayShort(yyyymmdd: string): string {
   return `${dow} ${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-// Get current date in ET (America/New_York), shifted so the "day" doesn't roll
-// over until 1AM ET. This keeps late-night games on "today" instead of jumping
-// to "yesterday" at midnight.
+// Current date in ET, shifted so the "day" doesn't roll over until 1 AM ET (so
+// late-night games stay on "today"). Delegates to the shared service-day helper
+// so the data layer's past/future boundary uses the EXACT same notion of today
+// — see src/lib/etDay.ts for why that matters.
 function getNowET(): Date {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(new Date());
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
-  const etHour = parseInt(get("hour"), 10);
-  const etMinute = parseInt(get("minute"), 10);
-  const etYear = parseInt(get("year"), 10);
-  const etMonth = parseInt(get("month"), 10) - 1;
-  const etDay = parseInt(get("day"), 10);
-  const d = new Date(etYear, etMonth, etDay);
-  // Before 1AM ET → still count as previous day
-  if (etHour < 1) {
-    d.setDate(d.getDate() - 1);
-  }
-  return d;
+  return getEtServiceDate();
 }
 
 export function getDateString(daysOffset: number): string {

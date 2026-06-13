@@ -1,5 +1,6 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer } from "./types";
 import { getApiBase } from "./youtube";
+import { getEtServiceDate, toYmd } from "./etDay";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -2016,8 +2017,11 @@ export async function fetchAllLeagues(
     : new Date();
   // Today in ET as YYYYMMDD, so the "next game day" lookahead only fires on
   // today/future tabs — on a PAST tab (e.g. Yesterday) a league with no game
-  // should read "No games", not surface a future game (Jacob 5/29).
-  const todayYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replace(/-/g, "");
+  // should read "No games", not surface a future game (Jacob 5/29). MUST use
+  // the same shifted service-day as the date-nav UI (getNowET) — see etDay.ts:
+  // a plain ET calendar day here would, between midnight and 1 AM ET, mark the
+  // UI's "today" as past, skip the lookahead, and yield "Upcoming Schedule TBD".
+  const todayYmd = toYmd(getEtServiceDate());
   const isPastView = !!date && date < todayYmd;
 
   // Resolved slot order from the layout rules. The first three follow
