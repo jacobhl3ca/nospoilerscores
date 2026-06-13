@@ -44,6 +44,32 @@ async function fetchStreamableMp4(id) {
   }
 }
 
+// streamin.link / streamin.me — the soccer-clip host that now carries most of
+// r/soccer's goal videos (direct uploads are limited, so users post the clip
+// here and link it). The /v/<id> page (link→me redirect) embeds the video as
+// <source src="…streamin.top/uploads/<id>.mp4">; we scrape that and hand back
+// the direct MP4, which VideoModal plays natively via <video> (no CORS needed —
+// verified 206 + video/mp4). Mirrors fetchStreamableMp4; null on any failure so
+// the post just stays link-only, exactly as before.
+async function fetchStreaminMp4(pageUrl) {
+  try {
+    const res = await fetch(pageUrl, {
+      headers: { "User-Agent": UA, Referer: "https://www.reddit.com/" },
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m =
+      html.match(/<source[^>]+src="([^"]+\.mp4[^"]*)"/i) ||
+      html.match(/"(https?:\/\/[^"]+\.mp4[^"]*)"/i);
+    if (!m) return null;
+    // Drop the cache-buster query + media-fragment hash → canonical CDN mp4.
+    return m[1].split(/[?#]/)[0];
+  } catch {
+    return null;
+  }
+}
+
 // ── YouTube lookup + validation + cache ───────────────────────────
 // Strategy: call the site's /api/youtube?q=&channel= worker for each news
 // video, then confirm the candidate via YouTube's public oEmbed — both the
@@ -1208,6 +1234,7 @@ async function fetchRedditVideoMap(subreddit) {
     // media element — usually the /vid/<id>/ proxy path, but match the raw and
     // /hls/ shapes too so a differently-configured instance still resolves.
     const map = new Map();
+    const streamin = new Map();
     for (const block of html.split(/<div class="post[ "]/).slice(1)) {
       const idm = block.match(new RegExp(`/r/${subreddit}/comments/(\\w+)/`, "i"));
       if (!idm) continue;
@@ -1216,10 +1243,15 @@ async function fetchRedditVideoMap(subreddit) {
         block.match(/\/vid\/([a-z0-9]{8,16})\//i) ||
         block.match(/\/hls\/([a-z0-9]{8,16})/i);
       if (vm) map.set(idm[1], vm[1]);
+      // streamin.link / streamin.me goal clips render as a "no_thumbnail" link
+      // anchor (no <img>), so capture the /v/<id> url here for fetchRedditRSS to
+      // resolve into a playable mp4 (fetchStreaminMp4). v.redd.it wins if both.
+      const sl = block.match(/href="(https?:\/\/streamin\.\w+\/v\/[^"]+)"/i);
+      if (sl && !map.has(idm[1])) streamin.set(idm[1], decodeEntities(sl[1]));
     }
-    if (map.size > 0) return map;
+    if (map.size > 0 || streamin.size > 0) return { vreddit: map, streamin };
   }
-  return new Map();
+  return { vreddit: new Map(), streamin: new Map() };
 }
 
 // ── Redlib-primary post listing ───────────────────────────────────
@@ -1352,6 +1384,16 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
       }
     }
 
+    // 4b) streamin.link / streamin.me goal clips (r/soccer's dominant video
+    //     host) render as a "no_thumbnail" link anchor with NO <img>, so the
+    //     thumbnail match above misses them entirely. Grab the /v/<id> href
+    //     directly and resolve the playable mp4 (fetchStreaminMp4, parity with
+    //     the streamable handling). Unresolved → stays a link-out, as before.
+    if (!videoUrl) {
+      const sl = block.match(/class="post_thumbnail[^"]*"[^>]*href="(https?:\/\/streamin\.\w+\/v\/[^"]+)"/i);
+      if (sl) videoUrl = await fetchStreaminMp4(decodeEntities(sl[1]));
+    }
+
     // 5) Selftext body for text posts with no media (parity with OAuth path).
     //    Key on the actual selftext container `<div class="md">` — link posts
     //    render an EMPTY post_body (no md div), so this skips them instead of
@@ -1443,7 +1485,7 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
   // RSS succeeded, so we're on a Reddit-reachable IP (the Mac mini cron — GHA
   // datacenter IPs 403 above and never get here). Only now fetch the redlib
   // video map, so GHA's doomed reddit runs never touch a volunteer instance.
-  const videoMap = await fetchRedditVideoMap(subreddit);
+  const media = await fetchRedditVideoMap(subreddit);
   const out = [];
   const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
   let m;
@@ -1471,7 +1513,14 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     // open HLS CDN (audio + CORS:*). Non-video posts and redlib-down runs leave
     // it null and fall back to the article link-out, exactly as before.
     const postId = (link.match(/\/comments\/(\w+)/) || [])[1] || "";
-    const vredditId = postId ? videoMap.get(postId) : null;
+    const vredditId = postId ? media.vreddit.get(postId) : null;
+    let videoUrl = vredditId ? `https://v.redd.it/${vredditId}/HLSPlaylist.m3u8` : null;
+    // streamin.link / streamin.me goal clips (r/soccer's main video host) →
+    // resolve the direct mp4 so they play inline instead of linking out.
+    if (!videoUrl && postId) {
+      const streaminUrl = media.streamin.get(postId);
+      if (streaminUrl) videoUrl = await fetchStreaminMp4(streaminUrl);
+    }
     out.push({
       id,
       headline: title,
@@ -1481,7 +1530,7 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
       articleUrl: link,
       byline: author ? `u/${author}` : "",
       section: sectionLabel,
-      videoUrl: vredditId ? `https://v.redd.it/${vredditId}/HLSPlaylist.m3u8` : null,
+      videoUrl,
       imageFullUrl: null,
       body: null,
     });
@@ -1552,6 +1601,8 @@ async function fetchReddit(subreddit, sectionLabel) {
     } else if (p.domain === "streamable.com") {
       const m = (p.url || "").match(/^https?:\/\/streamable\.com\/([a-zA-Z0-9]+)/);
       if (m) videoUrl = await fetchStreamableMp4(m[1]);
+    } else if (/^streamin\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
+      videoUrl = await fetchStreaminMp4(p.url);
     }
     // i.redd.it image posts: surface the original full-res URL so the client
     // can pop a lightbox instead of bouncing out to reddit.com to view a JPEG.

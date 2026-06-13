@@ -5,7 +5,7 @@ import { Game } from "@/lib/types";
 import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
-import { getYouTubeSearchUrl, getOfficialChannelName, resolveHighlightVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo } from "@/lib/youtube";
 
 // Shared highlight buttons for a finished game — the official-channel + top-
 // search YouTube clips and (NHL only) the NHL.com recap / condensed videos.
@@ -62,8 +62,12 @@ export default function GameHighlights({
   // game one day forward and 404 every labeled button. (Display time uses the
   // device's local zone; this is only the recap search key.)
   const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+  // Competition token required in highlight titles for sports where the same two
+  // teams meet across many competitions (World Cup only — see getCompetitionName).
+  // null for every other league, so their query + behaviour are unchanged.
+  const competition = getCompetitionName(game.sport);
   const highlightUrl = highlightsReady
-    ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote)
+    ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, competition)
     : null;
 
   // Matchup card for shared highlight links — built from the game so the
@@ -80,22 +84,22 @@ export default function GameHighlights({
     const series = game.seriesNote;
     if (officialChannel) {
       (async () => {
-        const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel);
+        const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel, undefined, competition);
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
-        const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId]);
+        const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId], competition);
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
       })();
     } else {
       // No official channel for this league — only the search button is rendered.
       setOfficialStatus("missing");
-      resolveHighlightVideo(away, home, dateStr, series).then((id) => {
+      resolveHighlightVideo(away, home, dateStr, series, undefined, undefined, competition).then((id) => {
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
       });
     }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel]);
+  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, competition]);
 
   const showYouTube = !!(isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
@@ -118,7 +122,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, undefined, competition);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -154,7 +158,7 @@ export default function GameHighlights({
                 }
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current]);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current], competition);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;

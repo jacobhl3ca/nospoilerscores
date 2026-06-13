@@ -187,6 +187,16 @@ export default {
           return base;
         })();
 
+        // Soccer World Cup gate — national teams meet across many competitions
+        // (friendlies, qualifiers, Gold Cup) and there are decades of old World
+        // Cup classics between the same two nations, so "Away vs Home highlights"
+        // alone can match the wrong game. The fifa client embeds "World Cup" in
+        // the query (buildQuery competition arg, lib/youtube.ts); when present we
+        // require the same token in the video title below — the soccer analogue
+        // of hasGolfTournament. Every other league's query lacks the token, so
+        // this is inert for them.
+        const isWorldCupQuery = /\bworld cup\b/i.test(query);
+
         // Team name aliases — ESPN shortDisplayName → common YouTube title variants.
         // Reverse-indexed below so a lookup by ANY listed variant returns the
         // full alias list (lets queries from ESPN's compact names match titles
@@ -380,6 +390,13 @@ export default {
             titleLower.includes("recap") ||
             roundOnlyTitleOk;
           if (!isHighlight) continue;
+
+          // World Cup gate (see isWorldCupQuery above) — drop any video whose
+          // title doesn't say "World Cup" so a friendly / qualifier / continental
+          // cup / old WC classic between the same two nations can't win. When
+          // FIFA's real recap isn't up yet the button 404s and hides, which is
+          // the app's preferred "better to 404 than serve the wrong game" path.
+          if (isWorldCupQuery && !titleLower.includes("world cup")) continue;
 
           // "EXTENDED HIGHLIGHTS" variants (common on NBA/MLB official
           // channels) — still valid highlights, but demoted so the

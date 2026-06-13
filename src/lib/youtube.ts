@@ -65,9 +65,10 @@ export function getYouTubeSearchUrl(
   awayTeam: string,
   homeTeam: string,
   dateStr: string,
-  seriesNote?: string | null
+  seriesNote?: string | null,
+  competition?: string | null
 ): string {
-  const query = buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
+  const query = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
@@ -75,9 +76,10 @@ export function getHighlightSearchQuery(
   awayTeam: string,
   homeTeam: string,
   dateStr: string,
-  seriesNote?: string | null
+  seriesNote?: string | null,
+  competition?: string | null
 ): string {
-  return buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
+  return buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
 }
 
 export function getOfficialChannelName(sport: string, label?: string): string | null {
@@ -87,6 +89,23 @@ export function getOfficialChannelName(sport: string, label?: string): string | 
     if (OFFICIAL_CHANNELS[labelKey]) return OFFICIAL_CHANNELS[labelKey];
   }
   return OFFICIAL_CHANNELS[sport] ?? null;
+}
+
+// Competition/tournament token to require in highlight titles for sports where
+// the same two teams meet across many competitions. Soccer national teams play
+// friendlies, qualifiers AND continental cups against each other, and there are
+// decades of old World Cup classics between the same nations — so without this
+// the matcher can serve a friendly (or a 2006 classic) as today's World Cup
+// game. The client embeds this token in the query (buildQuery) and the
+// /api/youtube worker requires it in the video title — the soccer analogue of
+// the golf tournament gate. World Cup (fifa) ONLY; every other league maps to
+// null and is completely unaffected.
+const COMPETITION_NAMES: Record<string, string> = {
+  fifa: "World Cup",
+};
+
+export function getCompetitionName(sport: string): string | null {
+  return COMPETITION_NAMES[sport] ?? null;
 }
 
 // Returns the full curated fallback chain of YouTube channels to try for the
@@ -113,8 +132,9 @@ function aliasTeam(name: string): string {
   return TEAM_NAME_ALIASES[name] ?? name;
 }
 
-function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
-  const parts = [`${aliasTeam(awayTeam)} vs ${aliasTeam(homeTeam)} highlights ${dateStr}`];
+function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null, competition?: string | null): string {
+  const head = `${aliasTeam(awayTeam)} vs ${aliasTeam(homeTeam)} highlights`;
+  const parts = [competition ? `${head} ${competition} ${dateStr}` : `${head} ${dateStr}`];
   if (seriesNote) parts.push(seriesNote);
   return parts.join(" ");
 }
@@ -123,8 +143,9 @@ function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesN
 // dated form returns nothing. Some official channels title their recaps
 // without a date or use a format the matcher doesn't see ("Game Recap |
 // AwayTeam @ HomeTeam") so dropping the date lets the lookup land.
-function buildUndatedQuery(awayTeam: string, homeTeam: string, seriesNote?: string | null): string {
-  const parts = [`${aliasTeam(awayTeam)} vs ${aliasTeam(homeTeam)} highlights`];
+function buildUndatedQuery(awayTeam: string, homeTeam: string, seriesNote?: string | null, competition?: string | null): string {
+  const head = `${aliasTeam(awayTeam)} vs ${aliasTeam(homeTeam)} highlights`;
+  const parts = [competition ? `${head} ${competition}` : head];
   if (seriesNote) parts.push(seriesNote);
   return parts.join(" ");
 }
@@ -176,16 +197,17 @@ export async function resolveHighlightVideo(
   dateStr: string,
   seriesNote: string | null | undefined,
   channel?: string,
-  exclude?: (string | null | undefined)[]
+  exclude?: (string | null | undefined)[],
+  competition?: string | null
 ): Promise<string | null> {
-  const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
+  const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   if (channel) {
     const hit = await fetchFirstVideoId(datedQuery, channel, exclude);
     if (hit) return hit;
   }
   const unscoped = await fetchFirstVideoId(datedQuery, undefined, exclude);
   if (unscoped) return unscoped;
-  const undated = buildUndatedQuery(awayTeam, homeTeam, seriesNote);
+  const undated = buildUndatedQuery(awayTeam, homeTeam, seriesNote, competition);
   return fetchFirstVideoId(undated, undefined, exclude);
 }
 
