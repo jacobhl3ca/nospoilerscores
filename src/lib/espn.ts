@@ -654,8 +654,9 @@ function parseTennisMatch(match: any, event: any): Game {
 }
 
 function buildTennisGames(events: any[], date?: string): Game[] {
-  const todayYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).replace(/-/g, "");
-  const target = date ?? todayYmd;
+  // No-date fallback uses the shared service day so tennis matches the rest of
+  // the app's notion of "today" (normally `date` is always passed).
+  const target = date ?? toYmd(getEtServiceDate());
   const games: Game[] = [];
   for (const event of events) {
     // Grand Slam only. The ATP scoreboard also returns the week's tune-up

@@ -10,6 +10,7 @@ import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/li
 import { handleExternalClick } from "@/lib/openExternal";
 import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
+import { getEtServiceDate } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import TeamView from "./TeamView";
@@ -500,9 +501,11 @@ function formatDateCompact(yyyymmdd: string): string {
   const m = yyyymmdd.slice(4, 6);
   const d = yyyymmdd.slice(6, 8);
   const date = new Date(`${y}-${m}-${d}T12:00:00`);
-  // Check if this date is tomorrow
-  const now = new Date();
-  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  // "Tomorrow" relative to the app's service day (ET, 1 AM-shifted, via
+  // etDay.ts) — NOT the raw device clock, which mislabels for non-ET users
+  // year-round and for everyone in the midnight-1 AM ET window.
+  const tomorrow = getEtServiceDate();
+  tomorrow.setDate(tomorrow.getDate() + 1);
   if (date.getFullYear() === tomorrow.getFullYear() && date.getMonth() === tomorrow.getMonth() && date.getDate() === tomorrow.getDate()) {
     return "Tomorrow";
   }

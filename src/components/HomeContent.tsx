@@ -25,6 +25,12 @@ function getResolvedTheme(theme: Theme): "dark" | "light" {
 }
 
 function getSmartDefaultOffset(cutoffHour = 13): number {
+  // The base date this offset applies to (getDateString → getNowET) is shifted:
+  // between midnight and 1 AM ET it has ALREADY rolled back to the prior
+  // calendar day, whose slate is complete. Subtracting another day here would
+  // land two days back (Jacob 6/13), so in that window show the service day
+  // as-is (offset 0). Gated on the ET hour to match getNowET's shift basis.
+  if (getETHour() < 1) return 0;
   // User-local hour. The cutoff represents "when today's slate has likely
   // started" from the user's wall-clock POV — Pacific user wants their own
   // 1 PM, not 1 PM ET (which is 10 AM for them).
