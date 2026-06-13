@@ -1663,6 +1663,56 @@ function parseCBSItems(xml, sectionLabel) {
   return items.slice(0, 12);
 }
 
+// ── BBC Sport / The Guardian RSS — editorial substitute feeds for the soccer,
+// tennis, and golf columns, where no league .com publishes an open feed. Both
+// are clean RSS WITH per-item images (unlike CBS): BBC carries a single
+// <media:thumbnail url> (bumped 240→480 for retina); the Guardian carries
+// several <media:content width url> — take the widest.
+function parseEditorialRSS(xml, sectionLabel) {
+  const items = [];
+  const itemRe = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = itemRe.exec(xml)) !== null) {
+    const block = m[1];
+    const title = decodeEntities(((block.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "").replace(/^<!\[CDATA\[|\]\]>$/g, "").trim());
+    const link = ((block.match(/<link>([\s\S]*?)<\/link>/) || [])[1] || "").trim();
+    const pub = ((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || "").trim();
+    if (!title || !link) continue;
+    if (!passesArticleBlocklist(title)) continue;
+    let imageUrl = null;
+    const bbc = (block.match(/<media:thumbnail[^>]*\burl="([^"]+)"/) || [])[1];
+    if (bbc) {
+      imageUrl = decodeEntities(bbc).replace("/standard/240/", "/standard/480/");
+    } else {
+      // Guardian: several <media:content> per item — keep the widest.
+      let best = null, bestW = 0, mm;
+      const mcRe = /<media:content\b([^>]*)>/g;
+      while ((mm = mcRe.exec(block)) !== null) {
+        const u = (mm[1].match(/\burl="([^"]+)"/) || [])[1];
+        const w = parseInt((mm[1].match(/\bwidth="(\d+)"/) || [])[1] || "0", 10);
+        if (u && w >= bestW) { bestW = w; best = u; }
+      }
+      imageUrl = best ? decodeEntities(best) : null;
+    }
+    items.push({
+      id: link,
+      headline: title,
+      description: "",
+      published: pub ? new Date(pub).toISOString() : "",
+      imageUrl,
+      articleUrl: link,
+      byline: "",
+      section: sectionLabel,
+    });
+  }
+  return items.slice(0, 12);
+}
+
+async function fetchEditorialRSS(url, sectionLabel) {
+  const xml = await getText(url);
+  return parseEditorialRSS(xml, sectionLabel);
+}
+
 async function fetchCBS(pathSlug, sectionLabel) {
   const url = pathSlug
     ? `https://www.cbssports.com/rss/headlines/${pathSlug}/`
@@ -1751,6 +1801,14 @@ const jobs = [
   // World Cup = FIFA's channel; MLS = Major League Soccer's channel.
   ["fifa-videos", () => fetchYouTubeChannelVideos("UCpcTrCXblq78GZrTUTLWeBw", "World Cup Top Videos")],
   ["mls-videos", () => fetchYouTubeChannelVideos("UCSZbXT5TLLW_i-5W8FZpFsg", "MLS Top Videos")],
+
+  // Editorial substitutes — world-class, geo-open RSS for the soccer / tennis /
+  // golf columns, where no league .com publishes a usable feed. Both carry
+  // per-item images. Wired into leagueSourceCascade() in src/lib/news.ts.
+  ["bbc-football", () => fetchEditorialRSS("https://feeds.bbci.co.uk/sport/football/rss.xml", "BBC Sport")],
+  ["bbc-tennis", () => fetchEditorialRSS("https://feeds.bbci.co.uk/sport/tennis/rss.xml", "BBC Sport")],
+  ["bbc-golf", () => fetchEditorialRSS("https://feeds.bbci.co.uk/sport/golf/rss.xml", "BBC Sport")],
+  ["guardian-football", () => fetchEditorialRSS("https://www.theguardian.com/football/rss", "The Guardian")],
 
   // ESPN homepage top headlines + big-format videos (both scraped from espn.com)
   ["espn-top", fetchESPNTopHeadlines],

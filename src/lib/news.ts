@@ -239,6 +239,19 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
 };
 
+// Editorial substitute feeds (BBC Sport / The Guardian) for columns with no
+// usable league .com feed — soccer, tennis, golf. Baked by prebake-news.mjs
+// (bbc-*, guardian-*); both carry per-item images like the official feeds.
+const SUBSTITUTE_FEEDS: Partial<Record<Sport, { label: string; key: string }[]>> = {
+  epl: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
+  ucl: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
+  uel: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
+  fifa: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
+  mls: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
+  tennis: [{ label: "BBC Sport", key: "bbc-tennis" }],
+  golf: [{ label: "BBC Sport", key: "bbc-golf" }],
+};
+
 // Cascade of news cards for a league column: official videos pinned first,
 // then official news → subreddit → ESPN. CBS Sports and theScore were
 // dropped at Jacob's request — their headlines duplicated ESPN coverage and
@@ -261,6 +274,11 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   if (sport === "fifa") out.push({ label: "r/soccer", key: "reddit-soccer", kind: "prebaked", logoUrl });
   const official = PREBAKED_FEEDS[sport];
   if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
+  // Editorial substitutes (BBC Sport / The Guardian) for the soccer/tennis/golf
+  // columns that have no league .com feed — slotted where the official feed
+  // would sit, ahead of ESPN. See SUBSTITUTE_FEEDS.
+  const subs = SUBSTITUTE_FEEDS[sport];
+  if (subs) for (const s of subs) out.push({ label: s.label, key: s.key, kind: "prebaked", logoUrl });
   // fifa's ESPN feed is the World Cup league feed (see SPORT_NEWS_PATHS) — label
   // it "ESPN World Cup" rather than the generic "ESPN FIFA".
   const espnLabel = sport === "fifa" ? "ESPN World Cup" : `ESPN ${sport.toUpperCase()}`;
