@@ -202,6 +202,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [progress, setProgress] = useState(0);
   const barRef = useRef<HTMLDivElement>(null);
   const draggingBarRef = useRef(false);
+  // In-player "peek" overrides for the spoiler bars — let the user momentarily
+  // uncover the title/bottom strip to glance at a broadcast scoreboard hidden
+  // under a bar (its spot varies: top-left for ESPN NHL, bottom for others).
+  // LOCAL to this modal (resets on every open) so the no-spoiler default always
+  // returns — separate from the persistent Settings toggles (maskVideo*).
+  const [revealTitle, setRevealTitle] = useState(false);
+  const [revealBottom, setRevealBottom] = useState(false);
   // controls:0 hides YouTube's native mute button, and clips autoplay muted
   // (browsers block unmuted autoplay) — so we render a custom unmute toggle.
   const [muted, setMuted] = useState(true);
@@ -783,7 +790,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   during playback — it's pure footage crop, kept just thick enough
                   to hide the poster-state "Watch on YouTube" pill / logo. Safe to
                   shrink further or toggle off. */}
-              {maskVideoTitle && (
+              {maskVideoTitle && !revealTitle && (
                 <div
                   aria-hidden
                   className="absolute top-0 inset-x-0 z-10 pointer-events-none"
@@ -793,7 +800,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   }}
                 />
               )}
-              {maskVideoBottom && (
+              {maskVideoBottom && !revealBottom && (
                 <div
                   aria-hidden
                   className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
@@ -802,6 +809,41 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     background: "#000",
                   }}
                 />
+              )}
+              {/* In-player peek toggles — a small eye in the corner of each bar
+                  that's enabled. On the black bar when covered; over the footage
+                  corner when revealed. Right-aligned so they clear the common
+                  top-LEFT scoreboard. Tap to uncover/re-cover for this clip only.
+                  z-20 (above the masks) + stopPropagation (don't pause/close). */}
+              {maskVideoTitle && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setRevealTitle((v) => !v); }}
+                  aria-label={revealTitle ? "Cover the top bar" : "Peek under the top bar"}
+                  title={revealTitle ? "Cover top" : "Peek under top bar"}
+                  className="absolute top-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition-colors cursor-pointer"
+                  style={{ background: "rgba(0,0,0,0.45)" }}
+                >
+                  {revealTitle ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
+              )}
+              {maskVideoBottom && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setRevealBottom((v) => !v); }}
+                  aria-label={revealBottom ? "Cover the bottom bar" : "Peek under the bottom bar"}
+                  title={revealBottom ? "Cover bottom" : "Peek under bottom bar"}
+                  className="absolute bottom-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition-colors cursor-pointer"
+                  style={{ background: "rgba(0,0,0,0.45)" }}
+                >
+                  {revealBottom ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
               )}
             </div>
 
@@ -830,7 +872,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   style={{ paddingTop: "7px", paddingBottom: "7px" }}
                 >
                   <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.18)" }}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(progress, 1) * 100}%`, background: "var(--accent)" }} />
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(progress, 1) * 100}%`, background: "rgba(255,255,255,0.5)" }} />
                   </div>
                 </div>
               </div>
@@ -883,7 +925,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     <button
                       key={p}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
-                      className={`${btnBase} h-7 px-1.5 text-xs font-medium`}
+                      // The late jumps (80/90%) are dimmed so they read as less
+                      // inviting — they're closest to the ending, so we don't
+                      // want them to look as tappable as the earlier ones.
+                      className={`flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
                       title={`Jump to ${p}%`}
                     >
                       {p}%
