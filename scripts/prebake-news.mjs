@@ -1377,21 +1377,17 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
           extUrl.match(/^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([\w-]{6,})/);
         const gifv = extUrl.match(/^https?:\/\/i\.imgur\.com\/(\w+)\.gifv/i);
         const mp4 = extUrl.match(/^https?:\/\/\S+\.mp4(?:$|\?)/i);
+        // streamin.link / streamin.me — r/soccer's dominant goal-clip host. The
+        // /v/<id> page embeds a direct mp4 we scrape (fetchStreaminMp4). These
+        // post as "no_thumbnail" links, which the href-first read above now
+        // catches; without this branch they went undetected and linked out.
+        const streamin = /^https?:\/\/streamin\.\w+\/v\//i.test(extUrl);
         if (sm) videoUrl = await fetchStreamableMp4(sm[1]);
+        else if (streamin) videoUrl = await fetchStreaminMp4(extUrl);
         else if (ym) youtubeVideoId = ym[1];
         else if (gifv) videoUrl = `https://i.imgur.com/${gifv[1]}.mp4`;
         else if (mp4) videoUrl = extUrl;
       }
-    }
-
-    // 4b) streamin.link / streamin.me goal clips (r/soccer's dominant video
-    //     host) render as a "no_thumbnail" link anchor with NO <img>, so the
-    //     thumbnail match above misses them entirely. Grab the /v/<id> href
-    //     directly and resolve the playable mp4 (fetchStreaminMp4, parity with
-    //     the streamable handling). Unresolved → stays a link-out, as before.
-    if (!videoUrl) {
-      const sl = block.match(/class="post_thumbnail[^"]*"[^>]*href="(https?:\/\/streamin\.\w+\/v\/[^"]+)"/i);
-      if (sl) videoUrl = await fetchStreaminMp4(decodeEntities(sl[1]));
     }
 
     // 5) Selftext body for text posts with no media (parity with OAuth path).
