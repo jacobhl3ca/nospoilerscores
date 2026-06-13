@@ -15,11 +15,15 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-      # Skip espn-top + espn-videos: ESPN's CloudFront WAF challenges GHA
-      # datacenter IPs (HTTP 202 + empty body, `x-amzn-waf-action: challenge`),
-      # so any homepage scrape returns 0 items. The residential-IP Mac mini
-      # cron owns both these feeds.
-      - run: node scripts/prebake-news.mjs --skip=espn-top,espn-videos
+      # Skip espn-* AND reddit-*: both need a residential IP. ESPN's CloudFront
+      # WAF challenges GHA datacenter IPs (HTTP 202 + empty body,
+      # `x-amzn-waf-action: challenge`), and Reddit 403s datacenter IPs on every
+      # unauthenticated endpoint (so GHA's reddit runs only burned retries and,
+      # on a lucky single success, raced the mini's authoritative copy). The
+      # residential-IP Mac mini cron (com.hidescore.reddit-prebake, hourly) owns
+      # all of these feeds and uploads them to the same R2 bucket.
+      # (quoted so the shell never globs reddit-* against the working dir)
+      - run: node scripts/prebake-news.mjs '--skip=espn-top,espn-videos,reddit-*'
         env:
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}

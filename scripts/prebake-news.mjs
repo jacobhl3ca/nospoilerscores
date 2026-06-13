@@ -1222,18 +1222,154 @@ async function fetchRedditVideoMap(subreddit) {
   return new Map();
 }
 
+// ── Redlib-primary post listing ───────────────────────────────────
+// Reddit now rate-limits the public RSS by request VOLUME per IP: a lone request
+// from the residential mini returns 200, but the cron's ~17 feeds — even fully
+// serialized — exhaust the window and 429/403 across the board (verified
+// 2026-06-12). Redlib fetches the listing through ITS server's IP, so our IP's
+// limit never applies, and one page carries title + author + date + thumbnail +
+// the v.redd.it video id all at once. We rewrite redlib's media-proxy URLs back
+// to Reddit's own open CDN (i.redd.it / preview.redd.it / v.redd.it) so the
+// client never depends on a volunteer instance staying up. fetchReddit() falls
+// back to the gated reddit.com RSS only when every mirror is down.
+let _redlibWinner = null;
+async function fetchRedlibHTML(subreddit) {
+  // Try the instance that last worked first (usually one volunteer host is up at
+  // a time), then the hash-rotated rest, so we don't re-pay dead-mirror timeouts
+  // on every sub.
+  const order = [];
+  if (_redlibWinner) order.push(_redlibWinner);
+  const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
+  for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
+    const inst = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
+    if (!order.includes(inst)) order.push(inst);
+  }
+  for (const base of order) {
+    try {
+      const res = await fetch(`${base}/r/${subreddit}/hot`, {
+        headers: { "User-Agent": UA },
+        signal: AbortSignal.timeout(9000),
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+      if (/<div class="post[ "]/.test(html)) {
+        _redlibWinner = base;
+        return html;
+      }
+    } catch {
+      continue; // dead / blocked mirror — try the next
+    }
+  }
+  return null;
+}
+
+// Rewrite a redlib media-proxy path to Reddit's own open CDN so display/playback
+// never touches the volunteer instance. Returns null for shapes we don't know.
+function redlibMediaToReddit(path) {
+  if (!path) return null;
+  const p = decodeEntities(path);
+  if (/^https?:\/\//.test(p)) return p;
+  if (p.startsWith("/img/")) return "https://i.redd.it/" + p.slice(5);
+  if (p.startsWith("/preview/external-pre/")) return "https://external-preview.redd.it/" + p.slice(22);
+  if (p.startsWith("/preview/pre/")) return "https://preview.redd.it/" + p.slice(13);
+  return null;
+}
+
+function parseRedlibListing(html, subreddit, sectionLabel) {
+  const out = [];
+  for (const block of html.split(/<div class="post[ "]/).slice(1)) {
+    const head = block.slice(0, Math.max(0, block.indexOf(">")));
+    if (/\bstickied\b/.test(head)) continue; // pinned meta/rules
+    // Canonical reddit permalink — the footer post_comments link is the most
+    // reliable (link-type posts point the title <a> at the external URL instead).
+    const permPath = (block.match(new RegExp(`href="(/r/${subreddit}/comments/\\w+/[^"#?]*)`, "i")) || [])[1];
+    if (!permPath) continue;
+    const postId = (permPath.match(/\/comments\/(\w+)/) || [])[1] || permPath;
+    // Title: h2.post_title minus the flair anchor → the remaining anchor's text.
+    const h2 = (block.match(/<h2 class="post_title">([\s\S]*?)<\/h2>/) || [])[1] || "";
+    const flair = decodeEntities((h2.match(/class="post_flair"[^>]*>\s*<span>([\s\S]*?)<\/span>/) || [])[1] || "");
+    const h2NoFlair = h2.replace(/<a[^>]*class="post_flair"[\s\S]*?<\/a>/g, "");
+    const title = decodeEntities(((h2NoFlair.match(/<a[^>]*>([\s\S]*?)<\/a>/) || [])[1] || "").replace(/<[^>]+>/g, "").trim());
+    if (!title) continue;
+    if (!passesArticleBlocklist(title)) continue;
+    if (REDDIT_META_TITLE.test(title)) continue;
+    if (/rule|mod|meta|pinned/i.test(flair)) continue;
+    const author = (block.match(/class="post_author[^"]*"[^>]*href="\/u\/([^"\/]+)"/) || [])[1] || "";
+    if (/^AutoModerator$/i.test(author)) continue;
+    // Date lives in <span class="created" title="Jun 12 2026, 08:30:10 UTC">.
+    const dtitle = (block.match(/class="created"[^>]*title="([^"]+)"/) || [])[1] || "";
+    const ts = dtitle ? Date.parse(dtitle.replace(/\sUTC$/, " GMT")) : NaN;
+    if (ts && Date.now() - ts > 21 * 864e5) continue; // drop stale pins
+    // Video: /hls/<id>/ or /vid/<id>/ → the open HLS CDN (audio + CORS:*).
+    const vm = block.match(/\/(?:hls|vid)\/([a-z0-9]{8,16})\b/i) || block.match(/v\.redd\.it\/([a-z0-9]{8,16})/i);
+    const videoUrl = vm ? `https://v.redd.it/${vm[1]}/HLSPlaylist.m3u8` : null;
+    // Image: a real image post is lightboxable (imageFullUrl); a video poster is
+    // thumbnail-only. Map redlib's proxy path back to Reddit's CDN either way.
+    const imgPath = (block.match(/class="post_media_image[^"]*"[^>]*href="([^"]+)"/) || [])[1] ||
+      (block.match(/<img[^>]*class="post_media_image[^"]*"[^>]*src="([^"]+)"/) || [])[1];
+    const posterPath = (block.match(/poster="([^"]+)"/) || [])[1];
+    const imageUrl = redlibMediaToReddit(imgPath || posterPath);
+    const imageFullUrl = imgPath ? redlibMediaToReddit(imgPath) : null;
+    out.push({
+      id: postId,
+      headline: title,
+      description: "",
+      published: ts ? new Date(ts).toISOString() : "",
+      imageUrl,
+      articleUrl: `https://www.reddit.com${permPath}`,
+      byline: author ? `u/${author}` : "",
+      section: sectionLabel,
+      videoUrl,
+      imageFullUrl,
+      body: null,
+    });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
+async function fetchRedditViaRedlib(subreddit, sectionLabel) {
+  // Usually one volunteer mirror is up and the rest are dead or behind a
+  // Cloudflare bot-wall, so an empty result almost always means that one good
+  // mirror just rate-limited this single hit (not that redlib is unusable).
+  // Retry with backoff before falling through to the gated reddit.com RSS, which
+  // is itself IP-rate-limited and likely to 429 anyway.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const html = await fetchRedlibHTML(subreddit);
+    if (html) {
+      const items = parseRedlibListing(html, subreddit, sectionLabel);
+      if (items.length) return items;
+    }
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
+  }
+  return [];
+}
+
+// Serialize every reddit network hit — the www.reddit.com RSS fetch AND the
+// redlib video scrape — through one in-flight request with a gap between. The
+// job runner fires all ~17 reddit feeds via Promise.allSettled, and that
+// parallel BURST is what trips Reddit's limiter: a single spaced RSS request
+// from the residential mini IP returns 200, but 17 at once → 429/403 across the
+// board (verified 2026-06-12). The redlib mirrors are volunteer-run too, so the
+// same gate keeps us from dog-piling the one instance that happens to be up.
+let _redditGate = Promise.resolve();
+function gateReddit(fn) {
+  const run = _redditGate.then(fn, fn);
+  const space = () => new Promise((r) => setTimeout(r, 900));
+  _redditGate = run.then(space, space);
+  return run;
+}
+
 // RSS fallback — used when no OAuth creds are configured (see header note).
 // Atom feed returns 200 with a custom UA; carries title/link/author/published
 // and, for image/highlight posts, a media:thumbnail (external-preview.redd.it
 // ~640w). No video stream, full-res image, scores, or selftext — those fields
-// are null vs the OAuth path. Reddit rate-limits RSS (~429 after a burst), so
-// the hourly cron's sequential per-sub fetch stays well within limits.
+// are null vs the OAuth path. Caller wraps this in gateReddit() so reddit hits
+// stay serialized (see the burst note above).
 async function fetchRedditRSS(subreddit, sectionLabel) {
   const url = `https://www.reddit.com/r/${subreddit}/hot/.rss?limit=25`;
-  // The job runner fires all 11 reddit feeds in parallel and Reddit rate-limits
-  // RSS (~429 after a short burst), so desync with a little jitter up front and
-  // retry 429s with backoff. Worst case a few seconds — far under the hourly cron.
-  await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 1200)));
+  // The gate guarantees one reddit.com request at a time; the retry below is a
+  // belt-and-suspenders backoff for a transient 429/403 limiter blip.
   let xml = null;
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(url, { headers: { "User-Agent": REDDIT_UA } });
@@ -1241,7 +1377,7 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
       xml = await res.text();
       break;
     }
-    if (res.status === 429 && attempt < 4) {
+    if ((res.status === 429 || res.status === 403) && attempt < 4) {
       await new Promise((r) => setTimeout(r, 1500 * (attempt + 1) + Math.floor(Math.random() * 1000)));
       continue;
     }
@@ -1299,9 +1435,18 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
 
 async function fetchReddit(subreddit, sectionLabel) {
   const token = await getRedditToken().catch(() => null);
-  // No creds → anon JSON is 403 everywhere now, so use the RSS feed (still 200).
-  // With creds, the richer oauth.reddit.com JSON path below runs instead.
-  if (!token) return fetchRedditRSS(subreddit, sectionLabel);
+  // No creds → anon reddit.com JSON/RSS is rate-limited per IP now (see redlib
+  // note above), so read the listing through redlib first; it carries title +
+  // thumbnail + video in one page and proxies via its own IP. Gated reddit.com
+  // RSS is the last-resort fallback when every redlib mirror is down. With creds,
+  // the richer oauth.reddit.com JSON path below runs instead.
+  if (!token) {
+    return gateReddit(async () => {
+      const viaRedlib = await fetchRedditViaRedlib(subreddit, sectionLabel);
+      if (viaRedlib.length) return viaRedlib;
+      return fetchRedditRSS(subreddit, sectionLabel);
+    });
+  }
   const url = `https://oauth.reddit.com/r/${subreddit}/hot?limit=25&raw_json=1`;
   const headers = { "User-Agent": REDDIT_UA, Authorization: `Bearer ${token}` };
   const res = await fetch(url, { headers });
@@ -1570,7 +1715,7 @@ const activeJobs = (ONLY_LIST.length > 0
   : ONLY_REDDIT
     ? jobs.filter(([name]) => name.startsWith("reddit-"))
     : jobs
-).filter(([name]) => !SKIP_LIST.includes(name));
+).filter(([name]) => !SKIP_LIST.some((s) => (s.endsWith("*") ? name.startsWith(s.slice(0, -1)) : s === name)));
 if (ONLY_REDDIT) console.log(`--only-reddit: running ${activeJobs.length}/${jobs.length} jobs (reddit-* only)`);
 if (ONLY_LIST.length > 0) console.log(`--only=${ONLY_LIST.join(",")}: running ${activeJobs.length}/${jobs.length} jobs`);
 if (SKIP_LIST.length > 0) console.log(`--skip=${SKIP_LIST.join(",")}: ${activeJobs.length}/${jobs.length} jobs after skip`);
