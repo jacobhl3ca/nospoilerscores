@@ -241,7 +241,15 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
         ‹
       </button>
       {dateButtons.map((btn) => {
-        const isSelected = effectiveDate === btn.date;
+        // On the bare "/" route (no initialOffset) the selected date isn't
+        // known until the effect resolves the smart default — which is
+        // *yesterday* before 1pm local time. The server can't compute that
+        // (ET + prefs + local hour are client-only), so highlight NOTHING while
+        // loading rather than flashing Today and then jumping to yesterday
+        // (Jacob 6/13). Explicit /yesterday|/today|/tomorrow routes know their
+        // pill from initialOffset and stay highlighted through load.
+        const knowsSelection = initialOffset !== undefined || selectedDate !== "";
+        const isSelected = knowsSelection && effectiveDate === btn.date;
         return (
           <button
             key={btn.date}
