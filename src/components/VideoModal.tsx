@@ -718,28 +718,33 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   the state declarations), each independently toggleable in
                   Settings (maskVideoTitle / maskVideoBottom). pointer-events stay
                   off so click-to-play/pause keeps working. STRAIGHT BLACK, no
-                  gradient: each bar covers the title (top) / bottom strip with a
-                  hard edge instead of a fade, so it's the thinnest height that
+                  gradient: a hard edge, so each bar is the thinnest height that
                   still hides the chrome and crops the least footage.
-                  clamp() is the knob and the answer to "as close to the edge as
-                  possible": YouTube scales its chrome with the player SIZE, so the
-                  % tracks it across mobile → desktop, while the px min covers tiny
-                  players (where the title is a big fraction) and the px max keeps a
-                  huge desktop player from over-covering. Nudge the three numbers to
-                  crop less; if the title peeks out under the top bar on a phone,
-                  raise the min.
-                  TOP is bounded by the real title chrome (title + byline), so it's
-                  near its floor. BOTTOM is NOT bounded by anything — controls:0
-                  strips YouTube's whole bottom bar (no timeline/seek line), so this
-                  bar is pure footage crop kept just thick enough to hide the
-                  bottom-corner share/title chrome that can flash on pause; safe to
+                  TOP — measured (full Chrome, embed framed at the modal's real
+                  player sizes, 2026-06-12): the title is a SINGLE truncated line
+                  whose bottom sits at a ~FIXED ~36px regardless of player size
+                  (33px @219h mobile, 36px @394/619h) — it does NOT scale with the
+                  player, so this is essentially a flat px strip, not a %. The
+                  channel byline below it ends ~51px. We cover the title (the
+                  spoiler); the byline is just the channel name (NBA/MLB — not a
+                  spoiler) so we let it peek rather than crop ~15px more. clamp's %
+                  only nudges mid-size; min/max keep it ~42–50px everywhere. With
+                  controls:0 the title is only shown in the POSTER/paused state
+                  (autoplay-blocked) — during muted-autoplay playback YouTube
+                  renders no title at all, so an always-on bar over-crops then; the
+                  real fix is the backlogged autoplay-aware overlay. To also hide
+                  the byline, raise to ~54px (costs more crop on phones).
+                  BOTTOM — measured: controls:0 strips YouTube's ENTIRE bottom bar
+                  (no timeline/seek line exists), so this bar covers nothing YT
+                  during playback — it's pure footage crop, kept just thick enough
+                  to hide the poster-state "Watch on YouTube" pill / logo. Safe to
                   shrink further or toggle off. */}
               {maskVideoTitle && (
                 <div
                   aria-hidden
                   className="absolute top-0 inset-x-0 z-10 pointer-events-none"
                   style={{
-                    height: "clamp(38px, 10%, 86px)",
+                    height: "clamp(42px, 7%, 50px)",
                     background: "#000",
                   }}
                 />
