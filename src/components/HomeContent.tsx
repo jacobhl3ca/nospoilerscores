@@ -1450,7 +1450,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Scores/Rated only. Calendar = bare icon after the › arrow. */}
             {!showNews && (
               <div className="sm:hidden flex justify-center">
-                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
+                <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
                   <span className="relative inline-flex">
                     <button
                       data-cal-toggle
@@ -1603,7 +1603,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           centered in max-w-6xl to line up with the middle (MLB) column. */}
       {!showNews && (
         <div className="hidden sm:flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
-          <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
+          <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
             <span className="relative inline-flex">
               <button
                 data-cal-toggle

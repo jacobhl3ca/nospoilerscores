@@ -8,6 +8,10 @@ interface DateNavProps {
   // Optional node rendered to the RIGHT of the › arrow (e.g. a bare calendar
   // icon) without shifting the Yesterday/Today/Tomorrow buttons.
   trailing?: ReactNode;
+  // Route offset (-1/0/1 for /yesterday|/today|/tomorrow; undefined for "/").
+  // Used as the pre-hydration fallback so the right pill is highlighted while
+  // selectedDate is still "" — otherwise Today flashes before the real date.
+  initialOffset?: number;
 }
 
 function toYYYYMMDD(d: Date): string {
@@ -189,7 +193,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 // Exported for use in toolbar
 export { CalendarDropdown };
 
-export default function DateNav({ selectedDate, onDateChange, trailing }: DateNavProps) {
+export default function DateNav({ selectedDate, onDateChange, trailing, initialOffset }: DateNavProps) {
   const yesterday = getDateString(-1);
   const today = getDateString(0);
   const tomorrow = getDateString(1);
@@ -197,9 +201,12 @@ export default function DateNav({ selectedDate, onDateChange, trailing }: DateNa
   // Pre-hydration the page renders with selectedDate="" (HomeContent fills it
   // in an effect). "" sorts before yesterday, so the left pill rendered
   // formatDayName("") — parseYMD("") is new Date(0, -1, 0) = "Thu, Nov 30" —
-  // flashing on every refresh (Jacob 6/12). Treat "" as today: standard
-  // Yesterday/Today/Tomorrow labels with Today highlighted while loading.
-  const effectiveDate = selectedDate || today;
+  // flashing on every refresh (Jacob 6/12). Fall back to the ROUTE's date
+  // (initialOffset, a server-known prop) rather than today, so the right pill
+  // is highlighted on the very first paint — otherwise Today flashed before
+  // settling on the selected date (e.g. /yesterday) once selectedDate loads
+  // (Jacob 6/13). Root "/" has no offset → defaults to today as before.
+  const effectiveDate = selectedDate || getDateString(initialOffset ?? 0);
 
   const isStandardDate = effectiveDate === yesterday || effectiveDate === today || effectiveDate === tomorrow;
   const isBefore = !isStandardDate && effectiveDate < yesterday;
