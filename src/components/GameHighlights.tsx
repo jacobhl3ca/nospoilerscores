@@ -87,6 +87,16 @@ export default function GameHighlights({
         const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel, undefined, competition);
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
+        // World Cup: show ONE official button. resolveHighlightVideo already
+        // falls through from the FOX-channel lookup to the unscoped search,
+        // which the worker restricts to official channels for WC — so the
+        // separate "search" button only ever re-surfaces the same official
+        // pool (or FIFA's alt-cast), i.e. a duplicate clip of the same game.
+        // Drop it. (fifa-only; competition is null for every other league.)
+        if (competition) {
+          setSearchStatus("missing");
+          return;
+        }
         const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId], competition);
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
