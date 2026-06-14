@@ -169,6 +169,9 @@ function sourceLabelFromUrl(url: string): string {
 // shown. (No 100% — that's just the ending.)
 const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
+// Seconds skipped per ←/→ arrow press, matching YouTube's own arrow keys.
+const SEEK_STEP = 5;
+
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, seekControl = "both" }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -306,6 +309,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     setProgress(frac);
   }, []);
 
+  // Skip back/forward by SEEK_STEP seconds — drives the ←/→ arrow keys, which
+  // the controls:0 YouTube player otherwise ignores. Forward is capped at 90%
+  // of the clip (the same no-ending-spoiler rule as the jump presets and the
+  // progress-bar drag) but never yanks backward if normal playback already
+  // carried past 90%; back floors at 0.
+  const seekBy = useCallback((delta: number) => {
+    const p = playerRef.current;
+    if (!p?.getDuration || !p?.seekTo) return;
+    const d = p.getDuration();
+    if (!d || d <= 0) return;
+    const t = p.getCurrentTime?.() ?? 0;
+    const cap = Math.max(d * 0.9, t);
+    const target = delta >= 0 ? Math.min(t + delta, cap) : Math.max(0, t + delta);
+    p.seekTo(target, true);
+    p.playVideo?.();
+    setProgress(Math.min(1, target / d));
+  }, []);
+
   // Poll the YT player's position to drive the progress-bar fill while the
   // clip plays. Cheap (every 350ms) and only while this is a YouTube clip.
   useEffect(() => {
@@ -390,10 +411,19 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         e.preventDefault();
         toggleFullscreen();
       }
+      // ←/→ skip back/forward on the YouTube player (the HLS <video> has native
+      // controls and handles its own arrows). Don't steal arrows from text entry
+      // or modified chords.
+      if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && ytMode && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        e.preventDefault();
+        seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP);
+      }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen]);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy]);
 
   // Lock body scroll while the modal is open.
   useEffect(() => {
