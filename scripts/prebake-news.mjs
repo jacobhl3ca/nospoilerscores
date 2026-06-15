@@ -1423,6 +1423,54 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
   return out;
 }
 
+// Some redlib mirrors render the post listing but drop the <video> / v.redd.it
+// media element, so a genuine video post lands with videoUrl=null and shows as a
+// static image. When posts are still missing a video after the primary mirror,
+// sweep the OTHER mirrors and merge any v.redd.it id they expose for those exact
+// posts, so a clip the primary mirror dropped still plays (Jacob 6/15: "retry
+// all redlib instances if not found"). Text posts (body set) and YouTube-link
+// posts are excluded — there's no v.redd.it id to find. Bounded: one pass over
+// the remaining mirrors, early-exit the moment every gap is filled.
+async function fillMissingRedlibVideos(items, subreddit) {
+  const missing = new Map();
+  for (const it of items) {
+    if (!it.videoUrl && !it.youtubeVideoId && !it.body) missing.set(it.id, it);
+  }
+  if (missing.size === 0) return items;
+  const tried = new Set(_redlibWinner ? [_redlibWinner] : []);
+  const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
+  for (let k = 0; k < REDLIB_INSTANCES.length && missing.size; k++) {
+    const base = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
+    if (tried.has(base)) continue;
+    tried.add(base);
+    let html;
+    try {
+      const res = await fetch(`${base}/r/${subreddit}/hot`, {
+        headers: { "User-Agent": UA },
+        signal: AbortSignal.timeout(9000),
+      });
+      if (!res.ok) continue;
+      html = await res.text();
+    } catch {
+      continue; // dead / blocked mirror — try the next
+    }
+    if (!/<div class="post[ "]/.test(html)) continue;
+    for (const block of html.split(/<div class="post[ "]/).slice(1)) {
+      const idm = block.match(new RegExp(`/r/${subreddit}/comments/(\\w+)/`, "i"));
+      if (!idm || !missing.has(idm[1])) continue;
+      const vm =
+        block.match(/v\.redd\.it\/([a-z0-9]{8,16})/i) ||
+        block.match(/\/vid\/([a-z0-9]{8,16})\//i) ||
+        block.match(/\/hls\/([a-z0-9]{8,16})/i);
+      if (vm) {
+        missing.get(idm[1]).videoUrl = `https://v.redd.it/${vm[1]}/HLSPlaylist.m3u8`;
+        missing.delete(idm[1]);
+      }
+    }
+  }
+  return items;
+}
+
 async function fetchRedditViaRedlib(subreddit, sectionLabel) {
   // Usually one volunteer mirror is up and the rest are dead or behind a
   // Cloudflare bot-wall, so an empty result almost always means that one good
@@ -1433,7 +1481,7 @@ async function fetchRedditViaRedlib(subreddit, sectionLabel) {
     const html = await fetchRedlibHTML(subreddit);
     if (html) {
       const items = await parseRedlibListing(html, subreddit, sectionLabel);
-      if (items.length) return items;
+      if (items.length) return await fillMissingRedlibVideos(items, subreddit);
     }
     if (attempt < 2) await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
   }
