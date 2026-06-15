@@ -2123,11 +2123,12 @@ export async function fetchAllLeagues(
     // Any per-slot override → user is in full manual control. Build slot-by-slot:
     // each set slot uses its override; each unset slot falls back to its position
     // default in auto.
-    // Auto = the slot's position default, always. No fallback when auto[N]'s
-    // sport is already pinned in another slot — duplicates are allowed (Jacob's
-    // rule: Auto on column N must equal that column's normal league regardless
-    // of what's pinned elsewhere, even if it duplicates). Explicit duplicates
-    // are already a supported intentional layout via the swap dropdown.
+    // Auto = the slot's position default, always (each unset slot falls back to
+    // its position default in auto). This can transiently put a league in two
+    // slots — e.g. World Cup pinned to the left column while the center slot's
+    // auto default is ALSO World Cup — which rendered two identical "World Cup"
+    // columns (Jacob 6/15). The dedupe-by-sport pass below removes that, so a
+    // league never appears in more than one column.
     const nextAutoForSlot = (slotIdx: number): LeagueConfig | null => auto[slotIdx] ?? null;
     // Each slot resolves to one of: explicit league (incl. "empty" → skip),
     // unset (null) → fall back to that slot's auto pick.
@@ -2144,6 +2145,20 @@ export async function fetchAllLeagues(
   } else {
     final = auto;
   }
+
+  // Never render the same league in two columns. The date nav is global, so two
+  // columns of the same league show identical games — always redundant. A league
+  // pinned to a non-default slot can collide with another slot's auto default
+  // (World Cup pinned left + center auto-defaulting to World Cup → two "World
+  // Cup" columns, Jacob 6/15). Dedupe by sport keeping the first (left-most)
+  // occurrence, so the pinned position wins and the board shrinks to the
+  // distinct leagues rather than padding with a duplicate.
+  const seenSport = new Set<Sport>();
+  final = final.filter((cfg) => {
+    if (seenSport.has(cfg.sport)) return false;
+    seenSport.add(cfg.sport);
+    return true;
+  });
 
   const fetchLeague = async (cfg: LeagueConfig): Promise<LeagueData | null> => {
     const label = effectiveLeagueLabel(cfg, viewDate);
