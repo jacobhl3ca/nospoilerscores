@@ -199,10 +199,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
   // Brief "Copied ✓" confirmation after the copy-link button is tapped.
   const [copied, setCopied] = useState(false);
-  // Playback position (0–1) for the custom progress bar. Polled off the YT
-  // player; NO timeline/scrubber thumbnails (those are the spoiler) — just a
-  // fill. Drag-seek is capped at 90% (see seekFromClientX) so the ending can't
-  // be skipped to, matching the jump presets' "no 100%".
+  // Playback position (0–1), polled off the YT player. The seek bar no longer
+  // draws a visible fill (the fill was itself a "how far through am I" spoiler),
+  // so this now only feeds the slider's accessibility value (capped at 90%).
+  // Drag-seek is capped at 90% (see seekFromClientX) so the ending can't be
+  // skipped to, matching the jump presets' "no 100%".
   const [progress, setProgress] = useState(0);
   const barRef = useRef<HTMLDivElement>(null);
   const draggingBarRef = useRef(false);
@@ -958,22 +959,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               )}
             </div>
 
-            {/* Custom progress bar — position + drag-to-seek. Sits BELOW the
-                video (never over footage). Spoiler-safe: a plain fill (no YT
-                thumbnail preview), and seekFromClientX caps the target at 90% so
-                the ending can't be skipped to. Hidden when the user picks
-                jumps-only in Settings. */}
+            {/* Seek bar — drag/tap to scrub. Sits BELOW the video (never over
+                footage). Spoiler-safe in two ways now: NO fill is drawn, so the
+                bar lets you move through the clip without ever revealing how far
+                in you are (the fill itself was a progress spoiler), and
+                seekFromClientX still caps the target at 90% so the ending can't
+                be jumped to. Hidden when the user picks jumps-only in Settings. */}
             {seekControl !== "jumps" && (
               <div className="mt-2" style={fsActive ? { width: fsMediaWidth } : { width: "100%" }}>
                 <div
                   ref={barRef}
                   role="slider"
-                  aria-label="Seek"
+                  aria-label="Seek through the clip (position hidden to avoid spoilers)"
                   aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={Math.round(progress * 100)}
+                  aria-valuemax={90}
+                  aria-valuenow={Math.round(Math.min(progress, 0.9) * 100)}
                   tabIndex={0}
-                  title="Drag to seek"
+                  title="Tap or drag to seek"
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => { e.stopPropagation(); draggingBarRef.current = true; (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); seekFromClientX(e.clientX); }}
                   onPointerMove={(e) => { if (draggingBarRef.current) seekFromClientX(e.clientX); }}
@@ -982,9 +984,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   className="w-full cursor-pointer"
                   style={{ paddingTop: "7px", paddingBottom: "7px" }}
                 >
-                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.18)" }}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(progress, 1) * 100}%`, background: "rgba(255,255,255,0.5)" }} />
-                  </div>
+                  {/* Blank track — no fill, so it never shows your position. */}
+                  <div className="h-1.5 w-full rounded-full" style={{ background: "rgba(255,255,255,0.22)" }} />
                 </div>
               </div>
             )}
