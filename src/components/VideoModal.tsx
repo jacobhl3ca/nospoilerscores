@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
 import { formatPublished, proxyImage } from "@/lib/news";
+import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, type ShareCardMeta } from "@/lib/shareCard";
 
 interface VideoModalProps {
@@ -205,13 +206,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [progress, setProgress] = useState(0);
   const barRef = useRef<HTMLDivElement>(null);
   const draggingBarRef = useRef(false);
-  // In-player "peek" overrides for the spoiler bars — let the user momentarily
-  // uncover the title/bottom strip to glance at a broadcast scoreboard hidden
-  // under a bar (its spot varies: top-left for ESPN NHL, bottom for others).
-  // LOCAL to this modal (resets on every open) so the no-spoiler default always
-  // returns — separate from the persistent Settings toggles (maskVideo*).
+  // In-player "peek" override for the title bar — let the user momentarily
+  // uncover the title strip to glance at a broadcast scoreboard hidden under it
+  // (its spot varies: top-left for ESPN NHL). LOCAL to this modal (resets on
+  // every open) so the no-spoiler default always returns — separate from the
+  // persistent Settings toggle (maskVideoTitle). (The bottom bar has no peek:
+  // controls:0 means there's nothing under it but cropped footage — no progress
+  // line, no score there — so a peek would reveal nothing useful.)
   const [revealTitle, setRevealTitle] = useState(false);
-  const [revealBottom, setRevealBottom] = useState(false);
+  // Whether the clip's real YouTube title is provably spoiler-free. When true
+  // we DON'T cover the title (the whole point of the always-on mask is to hide a
+  // score in the title; if there's no score to hide, show it). Defaults false =
+  // covered, and only flips true once onReady/PLAYING reads a clean title — so a
+  // title is never uncovered before we've checked it. The worker already skips
+  // spoiler titles for search-path clips, so most titles here are clean; this
+  // also covers reddit/unvetted clips by re-checking client-side.
+  const [titleSafe, setTitleSafe] = useState(false);
   // controls:0 hides YouTube's native mute button, and clips autoplay muted
   // (browsers block unmuted autoplay) — so we render a custom unmute toggle.
   const [muted, setMuted] = useState(true);
@@ -447,10 +457,33 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     return () => document.removeEventListener("keydown", handler);
   }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay]);
 
-  // Lock body scroll while the modal is open.
+  // Lock body scroll while the modal is open — WITHOUT losing the user's place.
+  // Plain `overflow:hidden` doesn't reliably lock scroll on iOS WebKit and, with
+  // the news feed's relayout, drops you back to the TOP of the list on close
+  // (and on rotation). The position:fixed + negative-top technique pins the body
+  // at the current offset and restores it on cleanup, so closing a news video or
+  // article returns you exactly where you were. The modal root is position:fixed,
+  // so pinning the body underneath doesn't move the modal.
   useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    return () => {
+      body.style.overflow = prev.overflow;
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+    };
   }, []);
 
   // Reset caption state any time the modal swaps to a different stream
@@ -464,6 +497,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     setCurrentId(videoId);
     failedIdsRef.current = [];
   }, [videoId]);
+
+  // Re-cover the title whenever the clip id changes (new open OR a fallback
+  // swap) until onReady/PLAYING re-confirms the new clip's title is clean.
+  useEffect(() => {
+    setTitleSafe(false);
+  }, [currentId]);
 
   // Direct-stream playback branch — handles two URL shapes:
   //   • .m3u8 manifests (MLB highlights) — Safari natively, hls.js elsewhere
@@ -651,6 +690,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // A freshly-built player always autoplays muted — keep the custom
             // toggle in sync (covers fallback swaps after an unmute, too).
             setMuted(true);
+            // Uncover the title bar only if the real YouTube title is spoiler-
+            // free (getVideoData is undocumented but reliable; may be empty this
+            // early, so we re-check on PLAYING below). Default stays covered.
+            try {
+              const t = event.target.getVideoData?.()?.title ?? "";
+              if (t) setTitleSafe(!isScoreSpoiler(t));
+            } catch { /* keep covered */ }
             // Watchdog: if we never reach PLAYING or BUFFERING within
             // 10s, assume the iframe is stuck on a silent error screen
             // (e.g. YT Error 153 on MLB content) and try the next
@@ -671,7 +717,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               window.clearTimeout(watchdogRef.current);
               watchdogRef.current = null;
             }
-            if (event.data === 1) forceBest(event.target);
+            if (event.data === 1) {
+              forceBest(event.target);
+              // By PLAYING the title metadata is reliably populated — re-run the
+              // spoiler check in case getVideoData() was empty at onReady.
+              try {
+                const t = event.target.getVideoData?.()?.title ?? "";
+                if (t) setTitleSafe(!isScoreSpoiler(t));
+              } catch { /* keep covered */ }
+            }
           },
           // If YT auto-quality downgrades us, push back up to the best level.
           onPlaybackQualityChange: (event: any) => {
@@ -860,7 +914,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   during playback — it's pure footage crop, kept just thick enough
                   to hide the poster-state "Watch on YouTube" pill / logo. Safe to
                   shrink further or toggle off. */}
-              {maskVideoTitle && !revealTitle && (
+              {maskVideoTitle && !titleSafe && !revealTitle && (
                 <div
                   aria-hidden
                   className="absolute top-0 inset-x-0 z-10 pointer-events-none"
@@ -870,7 +924,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   }}
                 />
               )}
-              {maskVideoBottom && !revealBottom && (
+              {maskVideoBottom && (
                 <div
                   aria-hidden
                   className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
@@ -880,12 +934,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   }}
                 />
               )}
-              {/* In-player peek toggles — a small eye in the corner of each bar
-                  that's enabled. On the black bar when covered; over the footage
-                  corner when revealed. Right-aligned so they clear the common
-                  top-LEFT scoreboard. Tap to uncover/re-cover for this clip only.
-                  z-20 (above the masks) + stopPropagation (don't pause/close). */}
-              {maskVideoTitle && (
+              {/* In-player peek toggle — a small eye in the corner of the title
+                  bar, shown only while the bar is actually covering the title.
+                  On the black bar when covered; over the footage corner when
+                  revealed. Right-aligned so it clears the common top-LEFT
+                  scoreboard. Tap to uncover/re-cover for this clip only. z-20
+                  (above the masks) + stopPropagation (don't pause/close). No
+                  bottom peek — controls:0 leaves nothing useful under that bar. */}
+              {maskVideoTitle && !titleSafe && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setRevealTitle((v) => !v); }}
                   aria-label={revealTitle ? "Cover the top bar" : "Peek under the top bar"}
@@ -894,21 +950,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   style={{ background: "rgba(0,0,0,0.45)" }}
                 >
                   {revealTitle ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
-                  )}
-                </button>
-              )}
-              {maskVideoBottom && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setRevealBottom((v) => !v); }}
-                  aria-label={revealBottom ? "Cover the bottom bar" : "Peek under the bottom bar"}
-                  title={revealBottom ? "Cover bottom" : "Peek under bottom bar"}
-                  className="absolute bottom-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition-colors cursor-pointer"
-                  style={{ background: "rgba(0,0,0,0.45)" }}
-                >
-                  {revealBottom ? (
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
                   ) : (
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -985,25 +1026,56 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 )}
               </button>
 
-              {/* Spoiler-safe jump presets — skip ahead without a timeline.
-                  Hidden when the user picks bar-only; the empty div keeps the
-                  3-column grid so the fullscreen button stays right-aligned. */}
+              {/* Center seek group: −5s / jump presets / +5s. The ±5s buttons
+                  give touch users the same fine seek the ←/→ keys do. The %
+                  presets shrink to QUARTERS on mobile (25/50/75) so the whole row
+                  stays on ONE line — the full 10→90 set was wrapping to two rows
+                  on phones — and expand to the full set on desktop. Hidden when
+                  the user picks bar-only; the empty div keeps the 3-column grid
+                  so the fullscreen button stays right-aligned. */}
               {seekControl !== "bar" ? (
-                <div className="min-w-0 flex items-center justify-center gap-0.5 flex-wrap">
-                  <span className="hidden sm:inline text-[11px] text-white/35 mr-1 select-none">Skip to</span>
-                  {JUMP_PCTS.map((p) => (
+                <div className="min-w-0 flex items-center justify-center gap-0.5 flex-nowrap">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); seekBy(-SEEK_STEP); }}
+                    aria-label="Back 5 seconds"
+                    title="Back 5 seconds (←)"
+                    className="flex items-center justify-center gap-0.5 rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="11 19 2 12 11 5 11 19" /><polygon points="22 19 13 12 22 5 22 19" /></svg>
+                    5s
+                  </button>
+                  {/* Mobile: quarter presets only */}
+                  {[25, 50, 75].map((p) => (
                     <button
-                      key={p}
+                      key={`m${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
-                      // The late jumps (80/90%) are dimmed so they read as less
-                      // inviting — they're closest to the ending, so we don't
-                      // want them to look as tappable as the earlier ones.
-                      className={`flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
+                      className="flex sm:hidden items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
                       title={`Jump to ${p}%`}
                     >
                       {p}%
                     </button>
                   ))}
+                  {/* Desktop: full 10→90 set (80/90 dimmed — nearest the ending) */}
+                  <span className="hidden sm:inline text-[11px] text-white/35 mx-1 select-none">Skip to</span>
+                  {JUMP_PCTS.map((p) => (
+                    <button
+                      key={`d${p}`}
+                      onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
+                      className={`hidden sm:flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
+                      title={`Jump to ${p}%`}
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); seekBy(SEEK_STEP); }}
+                    aria-label="Forward 5 seconds"
+                    title="Forward 5 seconds (→)"
+                    className="flex items-center justify-center gap-0.5 rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
+                  >
+                    5s
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 19 22 12 13 5 13 19" /><polygon points="2 19 11 12 2 5 2 19" /></svg>
+                  </button>
                 </div>
               ) : <div />}
 
