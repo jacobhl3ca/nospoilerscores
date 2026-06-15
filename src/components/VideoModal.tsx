@@ -327,6 +327,19 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     setProgress(Math.min(1, target / d));
   }, []);
 
+  // Toggle play/pause on the YouTube player — drives both the Space/k keys and a
+  // click anywhere on the video (via the click-catcher overlay). We do it through
+  // the API rather than letting the click reach the iframe so that focus never
+  // enters the cross-origin frame; if it did, every later keystroke (Esc, f, the
+  // arrows, Space) would be swallowed by YouTube instead of reaching this modal.
+  const togglePlay = useCallback(() => {
+    const p = playerRef.current;
+    if (!p?.getPlayerState) return;
+    const PLAYING = (window as any).YT?.PlayerState?.PLAYING ?? 1;
+    if (p.getPlayerState() === PLAYING) p.pauseVideo?.();
+    else p.playVideo?.();
+  }, []);
+
   // Poll the YT player's position to drive the progress-bar fill while the
   // clip plays. Cheap (every 350ms) and only while this is a YouTube clip.
   useEffect(() => {
@@ -420,10 +433,19 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         e.preventDefault();
         seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP);
       }
+      // Space (or "k", YouTube's own key) toggles play/pause on the YT clip.
+      // preventDefault stops Space from scrolling the page. Skip text entry and
+      // any focused button/link so Space still activates them normally.
+      if ((e.key === " " || e.code === "Space" || e.key === "k" || e.key === "K") && ytMode && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "BUTTON" || t.tagName === "A" || t.isContentEditable)) return;
+        e.preventDefault();
+        togglePlay();
+      }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy]);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay]);
 
   // Lock body scroll while the modal is open.
   useEffect(() => {
@@ -793,6 +815,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 : { paddingBottom: "56.25%", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
+              {/* Click-catcher over the whole player. A click anywhere on the
+                  video toggles play/pause through the YT API instead of falling
+                  through to the cross-origin iframe. This is what makes the
+                  keyboard controls behave the same whether or not you've clicked
+                  the video: a click on the iframe would move focus INTO it, after
+                  which YouTube swallows every keystroke (Esc / f / ← → / Space)
+                  and the modal's shortcuts go dead until you click back out. By
+                  catching the click here, focus stays in this document and the
+                  shortcuts keep working. controls:0 means there's nothing else to
+                  click inside the iframe, so we lose nothing. Sits below the peek
+                  buttons (z-20) so those still work; the masks are pointer-events:
+                  none and pass their clicks down to here. */}
+              <div
+                aria-hidden
+                className="absolute inset-0 z-10 cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+              />
               {/* Spoiler masks over YouTube's chrome — always on (see note by
                   the state declarations), each independently toggleable in
                   Settings (maskVideoTitle / maskVideoBottom). pointer-events stay
