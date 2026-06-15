@@ -588,14 +588,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 xl-only, so its wrapper is hidden below xl and the network's
                 ml-auto pins it right (Jacob 6/9). */}
             {hasRating ? (
-              // Center the rating badge on the CARD, not in the flex slack: a
-              // live game's narrow inning chip (left) + wider network (right)
-              // would otherwise pull a justify-center badge left of true center
-              // (Jacob 6/10). Absolute-center it so it's dead-center regardless;
-              // the inning + network keep their normal left/right flow spots.
-              <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center"><RatingBadge rating={game.rating!} /></span>
+              // In-flow centered badge (NOT absolute): an absolute-centered badge
+              // floats on top of the row, so a wide network listing ("FAN Unlmtd
+              // +3") that reaches the card center gets the badge overlaid on it
+              // (Jacob 6/15). Keeping it in flow makes it take real space, so a
+              // wide network instead wraps to its own line (flex-wrap + ml-auto)
+              // — no overlap. flex-1 still centers it in the slack; no min-w-0 so
+              // the nowrap badge can't shrink-to-zero and overflow its cell.
+              <span className="flex-1 flex justify-center"><RatingBadge rating={game.rating!} /></span>
             ) : tooEarly ? (
-              <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center">
+              <span className="flex-1 flex justify-center">
                 <span
                   className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-500/70 text-white uppercase whitespace-nowrap"
                   title="Too early to rate — check back after the 1st"
