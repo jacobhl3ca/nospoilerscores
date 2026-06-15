@@ -2152,13 +2152,27 @@ export async function fetchAllLeagues(
   // (World Cup pinned left + center auto-defaulting to World Cup → two "World
   // Cup" columns, Jacob 6/15). Dedupe by sport keeping the first (left-most)
   // occurrence, so the pinned position wins and the board shrinks to the
-  // distinct leagues rather than padding with a duplicate.
+  // distinct leagues. Then BACKFILL each freed slot with the next distinct
+  // active league (by priority) so removing the duplicate doesn't shrink the
+  // board — the user keeps a full set of columns, just without the repeat
+  // (Jacob 6/15 #2: a deduped board collapsed to one column → "should show all").
+  const targetCount = final.length;
   const seenSport = new Set<Sport>();
   final = final.filter((cfg) => {
     if (seenSport.has(cfg.sport)) return false;
     seenSport.add(cfg.sport);
     return true;
   });
+  if (final.length < targetCount) {
+    const backfill = pickAndAssignLeagues(viewDate, MAX_LEAGUES).filter(
+      (l) => !seenSport.has(l.sport),
+    );
+    for (const l of backfill) {
+      if (final.length >= targetCount) break;
+      seenSport.add(l.sport);
+      final.push(l);
+    }
+  }
 
   const fetchLeague = async (cfg: LeagueConfig): Promise<LeagueData | null> => {
     const label = effectiveLeagueLabel(cfg, viewDate);
