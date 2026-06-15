@@ -725,6 +725,58 @@ export default {
           videoId = firstAllowed ? firstAllowed[1] : null;
         }
 
+        // World Cup channel-scoped rescue. The unscoped search above ranks by
+        // YouTube relevance, and for lopsided / marquee games (e.g. a 7-1
+        // blowout, or a debut nation) the official FOX recap gets buried below
+        // page 1 by reupload spam ("7-1 ALL GOALS"), FOX's own short moment
+        // clips (anthem, single goals), and multi-hour livestream VODs. The
+        // official-only WC gate then drops everything and we 404 even though
+        // the recap exists. As a last resort, search WITHIN FOX Sports' own
+        // channel — no other uploader competes there, so the recap always
+        // surfaces. Take the standard cut, falling back to the "Extended" one.
+        // FIFA/World-Cup queries with two named teams only; inert elsewhere.
+        if (!videoId && isWorldCupQuery && queryHasSpecificTeams && teamsMatch) {
+          try {
+            const chQuery = `${teamsMatch[1]} ${teamsMatch[2]} highlights`.trim();
+            const chUrl = `https://www.youtube.com/@FOXSports/search?query=${encodeURIComponent(chQuery)}`;
+            const chRes = await fetch(chUrl, {
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+              },
+            });
+            const chHtml = await chRes.text();
+            const chBlocks = chHtml.split('"videoRenderer":{').slice(1);
+            let chStandardId = null;
+            let chExtendedId = null;
+            for (const block of chBlocks) {
+              const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
+              if (!idMatch || excludeSet.has(idMatch[1])) continue;
+              const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
+              const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
+              const titleLower = (titleMatch ? titleMatch[1] : "").toLowerCase();
+              const channelLower = (channelMatch ? channelMatch[1] : "").toLowerCase();
+              // Same gates as the main loop: official WC channel, "World Cup"
+              // in the title, a highlight/recap keyword, and BOTH named teams.
+              if (!WC_OFFICIAL_CHANNELS.includes(channelLower)) continue;
+              if (!titleLower.includes("world cup")) continue;
+              if (!titleLower.includes("highlight") && !titleLower.includes("recap")) continue;
+              if (!titleHasTeam(titleLower, queryTeams[0]) || !titleHasTeam(titleLower, queryTeams[1])) continue;
+              if (/\bextended\b/.test(titleLower)) {
+                if (!chExtendedId) chExtendedId = idMatch[1];
+              } else {
+                chStandardId = idMatch[1];
+                break; // standard recap wins outright
+              }
+            }
+            videoId = chStandardId || chExtendedId || null;
+          } catch {
+            // Channel lookup failed — fall through to the 404 below (hide the
+            // button) rather than surfacing a 500.
+          }
+        }
+
         if (!videoId) {
           return new Response(JSON.stringify({ error: "No results" }), {
             status: 404,
