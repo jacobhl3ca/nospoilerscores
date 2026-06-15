@@ -2040,8 +2040,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             // crowning a final. Off on past dates and outside ratings mode.
             const topGameId = !isPast && prefs.showRatings ? (() => {
               const all = sortedLeagues.flatMap((l) => l.games);
+              // A live game only earns the ⭐ TOP GAME star when it's actually
+              // worth tuning into — a GOOD-or-better rating (>=70, the RatingBadge
+              // "GOOD"/"GREAT" tiers). A merely "MEH" (50-69) or "SKIP" live game
+              // shouldn't be promoted as the top game — its own badge already
+              // says it's not worth it. When nothing live clears the bar, fall
+              // through to the best upcoming matchup instead (Jacob 6/15).
+              const WORTH_IT_RATING = 70;
               const liveRated = all.filter(
-                (g) => g.state === "in" && g.rating != null && !/delay/i.test(g.statusDetail),
+                (g) => g.state === "in" && g.rating != null && g.rating >= WORTH_IT_RATING && !/delay/i.test(g.statusDetail),
               );
               if (liveRated.length) {
                 return liveRated.reduce((best, g) => ((g.rating ?? 0) > (best.rating ?? 0) ? g : best)).id;
