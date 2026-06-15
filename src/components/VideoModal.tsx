@@ -236,8 +236,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // also covers reddit/unvetted clips by re-checking client-side.
   const [titleSafe, setTitleSafe] = useState(false);
   // controls:0 hides YouTube's native mute button, and clips autoplay muted
-  // (browsers block unmuted autoplay) — so we render a custom unmute toggle.
+  // (browsers block unmuted autoplay) — so we render a custom mute toggle + a
+  // volume slider. `volume` is 0–100 (the YT player's scale); it's the level we
+  // restore to when un-muting.
   const [muted, setMuted] = useState(true);
+  const [volume, setVolume] = useState(100);
+  const volRef = useRef<HTMLDivElement>(null);
+  const draggingVolRef = useRef(false);
   // The title-bar spoiler mask is ALWAYS on for YouTube clips. YouTube
   // re-surfaces the clip title (and channel byline) on hover, on pause, AND a
   // few seconds into playback whenever the mouse moves — and hover over a
@@ -407,13 +412,32 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     return () => window.clearInterval(id);
   }, [ytMode]);
 
-  // Toggle mute on the YouTube player.
+  // Toggle mute on the YouTube player. Un-muting restores the slider's level
+  // (or 100 if it was dragged to 0).
   const toggleMute = useCallback(() => {
     const p = playerRef.current;
     if (!p) return;
-    if (muted) { p.unMute?.(); p.setVolume?.(100); setMuted(false); }
-    else { p.mute?.(); setMuted(true); }
-  }, [muted]);
+    if (muted) {
+      const v = volume > 0 ? volume : 100;
+      p.unMute?.(); p.setVolume?.(v); setVolume(v); setMuted(false);
+    } else {
+      p.mute?.(); setMuted(true);
+    }
+  }, [muted, volume]);
+
+  // Drag/click the volume slider. Sets the YT player volume (0–100) and
+  // mutes/un-mutes at the extremes so the icon + level always agree.
+  const setVolFromClientX = useCallback((clientX: number) => {
+    const el = volRef.current;
+    const p = playerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0) return;
+    const v = Math.round(Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 100);
+    p?.setVolume?.(v);
+    if (v > 0) { p?.unMute?.(); setMuted(false); } else { p?.mute?.(); setMuted(true); }
+    setVolume(v);
+  }, []);
 
   // Toggle fullscreen. For YouTube we expand the WRAPPER (so the spoiler mask
   // and control bar ride along and the title stays hidden); native element
@@ -1057,7 +1081,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 confirm is gated at pointer-DOWN so a drag isn't interrupted.
                 Hidden when the user picks jumps-only in Settings. */}
             {seekControl !== "jumps" && (
-              <div className="mt-2" style={fsActive ? { width: fsMediaWidth } : { width: "100%" }}>
+              <div className="mt-2" style={fsActive ? { width: fsMediaWidth } : { width: "100%", maxWidth: 820, marginLeft: "auto", marginRight: "auto" }}>
                 <div
                   ref={barRef}
                   role="slider"
@@ -1113,32 +1137,55 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               className="mt-2 grid items-center gap-2"
               style={fsActive
                 ? { width: fsMediaWidth, paddingLeft: "0.25rem", paddingRight: "0.25rem", gridTemplateColumns: "1fr auto 1fr" }
-                : { width: "100%", gridTemplateColumns: "1fr auto 1fr" }}
+                : { width: "100%", maxWidth: 820, marginLeft: "auto", marginRight: "auto", gridTemplateColumns: "1fr auto 1fr" }}
             >
-              {/* Mute / unmute — autoplay is muted, so invite a tap while muted */}
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleMute(); }}
-                aria-label={muted ? "Unmute" : "Mute"}
-                title={muted ? "Sound on" : "Mute"}
-                className={`${btnBase} justify-self-start h-8 gap-1.5 px-2 text-xs font-medium`}
-              >
-                {muted ? (
-                  <>
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {/* Mute toggle + volume slider. Autoplay starts muted, so the
+                  slider sits at 0 with a muted icon until you raise it (or tap
+                  the icon). The icon's waves reflect the level; the fill shows
+                  the current volume. */}
+              <div className="justify-self-start flex items-center gap-1.5 min-w-0">
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                  aria-label={muted ? "Unmute" : "Mute"}
+                  title={muted ? "Sound on" : "Mute"}
+                  className={`${btnBase} h-8 w-8 shrink-0`}
+                >
+                  {muted || volume === 0 ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 5 6 9H2v6h4l5 4z" />
                       <line x1="23" y1="9" x2="17" y2="15" />
                       <line x1="17" y1="9" x2="23" y2="15" />
                     </svg>
-                    <span>Tap for sound</span>
-                  </>
-                ) : (
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 5 6 9H2v6h4l5 4z" />
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                  </svg>
-                )}
-              </button>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 5 6 9H2v6h4l5 4z" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      {volume > 55 && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
+                    </svg>
+                  )}
+                </button>
+                <div
+                  ref={volRef}
+                  role="slider"
+                  aria-label="Volume"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={muted ? 0 : volume}
+                  tabIndex={0}
+                  title="Volume"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => { e.stopPropagation(); draggingVolRef.current = true; (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); setVolFromClientX(e.clientX); }}
+                  onPointerMove={(e) => { if (draggingVolRef.current) setVolFromClientX(e.clientX); }}
+                  onPointerUp={(e) => { e.stopPropagation(); draggingVolRef.current = false; }}
+                  onPointerCancel={() => { draggingVolRef.current = false; }}
+                  className="w-14 sm:w-20 cursor-pointer shrink-0"
+                  style={{ paddingTop: "8px", paddingBottom: "8px" }}
+                >
+                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.18)" }}>
+                    <div className="h-full rounded-full" style={{ width: `${muted ? 0 : volume}%`, background: "rgba(255,255,255,0.6)" }} />
+                  </div>
+                </div>
+              </div>
 
               {/* Center seek group: −5s / jump presets / +5s. The ±5s buttons
                   give touch users the same fine seek the ←/→ keys do. The %
@@ -1153,10 +1200,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     onClick={(e) => { e.stopPropagation(); seekBy(-SEEK_STEP); }}
                     aria-label="Back 5 seconds"
                     title="Back 5 seconds (←)"
-                    className="flex items-center justify-center gap-0.5 rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
+                    className="flex items-center justify-center rounded-md transition-colors cursor-pointer h-8 w-8 text-white/55 hover:text-white"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
-                    5s
+                    {/* circular rewind arrow with "5" nested inside (YT/Firefox-PiP style) */}
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
                   </button>
                   {/* Mobile: quarter presets only */}
                   {[25, 50, 75].map((p) => (
@@ -1185,10 +1232,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     onClick={(e) => { e.stopPropagation(); seekBy(SEEK_STEP); }}
                     aria-label="Forward 5 seconds"
                     title="Forward 5 seconds (→)"
-                    className="flex items-center justify-center gap-0.5 rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
+                    className="flex items-center justify-center rounded-md transition-colors cursor-pointer h-8 w-8 text-white/55 hover:text-white"
                   >
-                    5s
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
+                    {/* circular forward arrow with "5" nested inside (YT/Firefox-PiP style) */}
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
                   </button>
                 </div>
               ) : <div />}
