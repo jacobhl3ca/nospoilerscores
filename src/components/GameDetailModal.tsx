@@ -150,14 +150,29 @@ export default function GameDetailModal({
           {timeLabel ? <span style={{ color: "var(--text-muted)" }}> · {timeLabel}</span> : null}
         </div>
 
-        {/* Series / playoff label — already non-spoiler text (e.g. "West Finals · Game 7") */}
-        {game.playoffLabel ? (
-          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel}</div>
+        {/* Series/playoff label (US sports) or cup stage (soccer) — both
+            spoiler-free: "West Finals · Game 7", "Group H", "Round of 16". */}
+        {game.playoffLabel || game.stage ? (
+          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage}</div>
         ) : null}
 
-        {/* Venue */}
+        {/* Venue — name · city/region · indoor. Indoor is shown only when true;
+            outdoor is the default and labeling every open-air venue is noise. */}
         {game.venue ? (
-          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.venue}</div>
+          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+            {game.venue}
+            {game.venueLocation ? ` · ${game.venueLocation}` : ""}
+            {game.venueIndoor ? " · Indoor" : ""}
+          </div>
+        ) : null}
+
+        {/* Probable starting pitchers — MLB, upcoming games only. Spoiler-free
+            pre-game info, ordered away-at-home to match the matchup rows. */}
+        {!isFinal && !isLive && (game.awayProbable || game.homeProbable) ? (
+          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+            <span className="uppercase tracking-wide">Probables: </span>
+            {game.awayProbable ?? "TBD"} at {game.homeProbable ?? "TBD"}
+          </div>
         ) : null}
 
         {/* Broadcasts — only useful before/while the game is on. Once it's

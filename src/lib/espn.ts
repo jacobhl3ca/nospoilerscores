@@ -685,6 +685,44 @@ function buildTennisGames(events: any[], date?: string): Game[] {
   return games;
 }
 
+// Spoiler-free cup stage/round for the detail modal. altGameNote is the
+// reliable source: "FIFA World Cup, Group H" → "Group H" (the group letter is
+// safe — it's the bracket, not the result). For knockouts the last segment is
+// the round itself ("…, Round of 16"); if altGameNote lacks one, fall back to a
+// small whitelist of season.slug knockout rounds. We deliberately ignore
+// competition.notes — for finished cup ties ESPN puts the RESULT there
+// ("Paris Saint-Germain win 4-3 on penalties"). Returns null for league play
+// so regular-season games show no stage line.
+function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
+  const seg = (altGameNote ?? "").split(",").map((s) => s.trim()).filter(Boolean).pop() ?? "";
+  if (/^(group [a-l]|round of \d+|quarter-?finals?|semi-?finals?|final|third place(?: match)?|matchday \d+|knockout(?: round)?(?: play-?offs?)?)$/i.test(seg)) {
+    return seg;
+  }
+  const slug = (seasonSlug ?? "").toLowerCase().trim();
+  const slugMap: Record<string, string> = {
+    "group-stage": "Group Stage",
+    "round-of-32": "Round of 32",
+    "round-of-16": "Round of 16",
+    "quarterfinals": "Quarterfinals",
+    "semifinals": "Semifinals",
+    "third-place": "Third Place",
+    "final": "Final",
+  };
+  return slugMap[slug] ?? null;
+}
+
+// "Z. Wheeler (5-1, 2.22)" from an ESPN competitor's probables[]. The record
+// string already arrives parenthesized; name prefers the short form. Null when
+// no probable is listed (most non-MLB sports, or before ESPN posts starters).
+function probablePitcher(competitor: any): string | null {
+  const p = (competitor?.probables ?? [])[0];
+  const ath = p?.athlete;
+  const name = ath?.shortName || ath?.fullName;
+  if (!name) return null;
+  const record = (p?.record ?? "").trim();
+  return record ? `${name} ${record}` : name;
+}
+
 function parseGame(event: any, sport: Sport): Game {
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors ?? [];
@@ -760,6 +798,35 @@ function parseGame(event: any, sport: Sport): Game {
     }
   }
 
+  // Venue location + indoor flag (the address object sits next to fullName).
+  // ESPN's address.city is usually "City"/"City, State"; state/country round it
+  // out. Guard against the occasional junk where city echoes the venue name.
+  const venueObj = competition?.venue ?? {};
+  const venueName: string = venueObj.fullName ?? "";
+  const addr = venueObj.address ?? {};
+  let venueLocation = "";
+  {
+    const city: string = (addr.city ?? "").trim();
+    const state: string = (addr.state ?? "").trim();
+    const country: string = (addr.country ?? "").trim();
+    // Prefer state; fall back to country but only when it's foreign — the
+    // audience is US, so a domestic ", USA" is noise while ", Mexico" /
+    // ", Canada" on a World Cup venue is the useful bit.
+    const region = state || (country && !/^(usa|united states)$/i.test(country) ? country : "");
+    if (city && city !== venueName) {
+      venueLocation = region && !city.includes(region) ? `${city}, ${region}` : city;
+    }
+  }
+  const venueIndoor: boolean | null = typeof venueObj.indoor === "boolean" ? venueObj.indoor : null;
+
+  // MLB probable starters (other sports don't carry them; gate to keep it cheap
+  // + intentional). Spoiler-safe pre-game info — the modal only shows them for
+  // upcoming games.
+  const homeProbable = sport === "mlb" ? probablePitcher(home) : null;
+  const awayProbable = sport === "mlb" ? probablePitcher(away) : null;
+
+  const stage = deriveStage(competition?.altGameNote, event.season?.slug);
+
   return {
     id: event.id,
     sport,
@@ -774,7 +841,12 @@ function parseGame(event: any, sport: Sport): Game {
     homeTeam: parseTeam(home ?? {}, sport),
     awayTeam: parseTeam(away ?? {}, sport),
     broadcasts,
-    venue: competition?.venue?.fullName ?? "",
+    venue: venueName,
+    venueLocation,
+    venueIndoor,
+    homeProbable,
+    awayProbable,
+    stage,
     rating: calculateRating(event),
     seriesNote,
     isPlayoff,

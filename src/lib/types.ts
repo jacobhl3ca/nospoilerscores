@@ -56,6 +56,20 @@ export interface Game {
   // fielder's choice without needing the heavier boxscore hydrate. Always
   // implies noHitterPitchingTeam is set.
   isPerfectGame?: boolean;
+  // Venue location ("Minneapolis, Minnesota" / "Santa Clara, California") and
+  // indoor flag — both sit next to the fullName in competition.venue, which we
+  // already read into `venue`. Omitted when ESPN has no/junk address data.
+  venueLocation?: string;
+  venueIndoor?: boolean | null;
+  // MLB probable starting pitchers, pre-game only. Pre-formatted as
+  // "Z. Wheeler (5-1, 2.22)" (name + ESPN's record string). Null for non-MLB.
+  homeProbable?: string | null;
+  awayProbable?: string | null;
+  // Cup-competition stage/round, spoiler-free: "Group H", "Round of 16",
+  // "Final". Derived from competition.altGameNote + event.season.slug — NEVER
+  // the notes array, which leaks results ("PSG win 4-3 on penalties"). Null for
+  // league play (the US-sports playoff label lives in `playoffLabel`).
+  stage?: string | null;
 }
 
 export interface Team {
