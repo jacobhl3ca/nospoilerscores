@@ -34,7 +34,14 @@ const NEWS_HOURLY = [
 ];
 
 const FEEDS = [
-  ...NEWS_HOURLY.map((slug) => ({ path: `/news/${slug}.json`, warnH: 6, critH: 24 })),
+  ...NEWS_HOURLY.map((slug) => {
+    // Reddit subs bake HOURLY on the mini, so a 24h crit is far too loose — a
+    // genuinely stuck feed (the r/baseball-went-static case) should page within
+    // half a day, not a full one. The GHA-baked feeds (cbs/thescore/*-videos,
+    // every 2h) keep the looser 24h that tolerates an overnight blip.
+    const reddit = slug.startsWith("reddit-");
+    return { path: `/news/${slug}.json`, warnH: reddit ? 4 : 6, critH: reddit ? 12 : 24 };
+  }),
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
   { path: "/prime-asins.json", warnH: 18, critH: 72 },           // GHA every 6h
   { path: "/big-inning-schedule.json", warnH: 36, critH: 144 },  // GHA 2×/day
