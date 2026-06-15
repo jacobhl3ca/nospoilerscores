@@ -2031,6 +2031,37 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             const hasNonFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state !== "post"));
             const hasFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state === "post"));
             const showFinalSplit = hasNonFinished && hasFinished;
+            // The single "top event" across every league, badged with a ⭐ in
+            // ratings mode. Live games win — the most competitive one in
+            // progress by rating (delayed + too-early-to-rate excluded); before
+            // anything is live, the best upcoming matchup (both teams winning >
+            // one > none, tiebreak by combined wins). Finished games never get
+            // the star — it marks what's worth watching now/next and avoids
+            // crowning a final. Off on past dates and outside ratings mode.
+            const topGameId = !isPast && prefs.showRatings ? (() => {
+              const all = sortedLeagues.flatMap((l) => l.games);
+              const liveRated = all.filter(
+                (g) => g.state === "in" && g.rating != null && !/delay/i.test(g.statusDetail),
+              );
+              if (liveRated.length) {
+                return liveRated.reduce((best, g) => ((g.rating ?? 0) > (best.rating ?? 0) ? g : best)).id;
+              }
+              const pre = all.filter((g) => g.state === "pre");
+              if (!pre.length) return undefined;
+              const wins = (rec: string) => { const m = rec.match(/^(\d+)/); return m ? +m[1] : 0; };
+              const losses = (rec: string) => { const m = rec.match(/-(\d+)/); return m ? +m[1] : 0; };
+              const isWin = (rec: string) => wins(rec) > losses(rec);
+              const tier = (g: Game) => {
+                const h = isWin(g.homeTeam.record), a = isWin(g.awayTeam.record);
+                return h && a ? 0 : h || a ? 1 : 2;
+              };
+              const combined = (g: Game) => wins(g.homeTeam.record) + wins(g.awayTeam.record);
+              return pre.reduce((best, g) => {
+                const d = tier(g) - tier(best);
+                if (d !== 0) return d < 0 ? g : best;
+                return combined(g) > combined(best) ? g : best;
+              }).id;
+            })() : undefined;
             const commonProps = {
               favoriteTeams: prefs.favoriteTeams,
               onToggleFavoriteTeam: toggleFavoriteTeam,
@@ -2044,6 +2075,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
+              topGameId,
             };
             // Per-slot swap dropdowns: every column lists every in-season
             // league. Leagues already shown in another column come through
@@ -2190,6 +2222,26 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               </div>
             ) : null;
 
+            // Single-column board (Settings → Board layout): stack every league
+            // in one centered, wider column with bigger cards. The .ns-cards-lg
+            // class scales up logos + team names (see globals.css); colWidthClass
+            // widens each column and drops the min-h-[60vh] floor so short
+            // leagues don't leave big vertical gaps when stacked. The leading
+            // spacer + trailing + are horizontal-centering devices for the row
+            // layout, so in column mode the + button moves directly below.
+            const singleColumn = prefs.singleColumn ?? false;
+            const boardRowCls = singleColumn
+              ? "relative flex flex-col items-center gap-5 ns-cards-lg"
+              : "relative flex flex-row justify-center items-stretch gap-2 sm:gap-4";
+            const colWidthClass = singleColumn ? "w-full max-w-[560px]" : undefined;
+            const addButton = onAddColumn ? (
+              singleColumn ? (
+                <div className="mt-1"><AddColumnButton onClick={onAddColumn} /></div>
+              ) : (
+                <div className="flex items-start pt-7 shrink-0"><AddColumnButton onClick={onAddColumn} /></div>
+              )
+            ) : null;
+
             // Full-width flex row so the flex-1 columns distribute across the
             // viewport (up to their max-w) and the group centers — matches
             // hidescore.com. The + button is a trailing flex child (like the
@@ -2199,10 +2251,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               return (
                 <>
                 {wcBanner}
-                <div className="relative flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+                <div className={boardRowCls}>
                   {/* Invisible leading spacer balances the trailing + button so
-                      the columns stay centered when a slot has been emptied. */}
-                  {onAddColumn && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
+                      the columns stay centered when a slot has been emptied
+                      (row layout only — single column centers the + below). */}
+                  {onAddColumn && !singleColumn && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
                   {slotEntries.map((entry) => (
                     <LeagueColumn
                       key={`${entry.league.sport}-${entry.slotIdx}`}
@@ -2213,13 +2266,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                       showFinalSeparator
                       {...swapPropsForSlot(entry.slotIdx)}
                       onCycleLeague={cycleForEntry(entry)}
+                      widthClassName={colWidthClass}
                     />
                   ))}
-                  {onAddColumn && (
-                    <div className="flex items-start pt-7 shrink-0">
-                      <AddColumnButton onClick={onAddColumn} />
-                    </div>
-                  )}
+                  {addButton}
                 </div>
                 </>
               );
@@ -2228,10 +2278,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             return (
               <>
               {wcBanner}
-              <div className="relative flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+              <div className={boardRowCls}>
                 {/* Invisible leading spacer balances the trailing + button so
-                    the columns stay centered when a slot has been emptied. */}
-                {onAddColumn && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
+                    the columns stay centered when a slot has been emptied
+                    (row layout only — single column centers the + below). */}
+                {onAddColumn && !singleColumn && <div aria-hidden className="shrink-0" style={{ width: 44 }} />}
                 {slotEntries.map((entry) => (
                   <LeagueColumn
                     key={`${entry.league.sport}-${entry.slotIdx}`}
@@ -2241,13 +2292,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                     {...commonProps}
                     {...swapPropsForSlot(entry.slotIdx)}
                     onCycleLeague={cycleForEntry(entry)}
+                    widthClassName={colWidthClass}
                   />
                 ))}
-                {onAddColumn && (
-                  <div className="flex items-start pt-7 shrink-0">
-                    <AddColumnButton onClick={onAddColumn} />
-                  </div>
-                )}
+                {addButton}
               </div>
               </>
             );

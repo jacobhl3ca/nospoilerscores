@@ -212,6 +212,12 @@ export interface Preferences {
   // for confirmation, so you don't accidentally skip into late-game action.
   // Default false (no prompt).
   videoWarnHalfway?: boolean;
+  // Single-column board layout: instead of the 3–5 side-by-side league
+  // columns, stack every league in one centered, wider column with bigger
+  // cards (larger logos + team names). Great on phones and for reading one
+  // card at a time. Default false (the multi-column board). The top-game ⭐
+  // and per-slot league switching still apply.
+  singleColumn?: boolean;
 }
 
 const defaults: Preferences = {

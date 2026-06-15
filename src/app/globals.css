@@ -228,3 +228,11 @@ html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
   opacity: 1;
 }
 
+/* Single-column board (Settings → Board layout → Single column): bigger cards.
+   Scoped to the .ns-cards-lg board wrapper so the multi-column board is
+   untouched. Bumps team logos + full team names a notch — the wider column
+   does the rest. Specificity (two classes / class+element+class) outranks the
+   Tailwind utilities (text-sm, w-4/sm:w-6) these elements ship with. */
+.ns-cards-lg img.object-contain { width: 1.75rem; height: 1.75rem; }
+.ns-cards-lg .team-name { font-size: 1rem; }
+

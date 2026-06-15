@@ -43,6 +43,12 @@ interface GameCardProps {
   // column suppresses it for single-matchup Finals views where the favorite
   // sort can't reorder anything.
   showStars?: boolean;
+  // Marks this card as the single "top event" across every league right now —
+  // the most competitive live game (by rating) or, before anything is live,
+  // the best upcoming matchup. Renders a centered ⭐ "Top game" badge at the
+  // top of the card. Ratings-mode only (a top-game hint is a mild spoiler);
+  // HomeContent picks exactly one card and only when ratings are on.
+  isTopGame?: boolean;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -283,7 +289,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, isTopGame }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
@@ -425,6 +431,21 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       role={cardClickable ? "button" : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
+      {/* Top-event badge: the single best game/event across every league right
+          now — centered ⭐ at the top of the card. Ratings-mode only (the parent
+          picks exactly one card and only when ratings are on). Distinct from the
+          gold favorite ★ on team rows (emoji star + label, accent pill). */}
+      {isTopGame && showRatings && (
+        <div className="mb-1.5 flex justify-center">
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}
+            title="Top game right now — the most competitive matchup across your leagues"
+          >
+            <span aria-hidden>⭐</span> Top game
+          </span>
+        </div>
+      )}
       {/* Lookback card: "Last played · {date}" centered on the card's top row,
           normal date font/color (no ESPN link — it would spoil the score). */}
       {pastDateLabel && (

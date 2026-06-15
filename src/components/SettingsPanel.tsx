@@ -510,6 +510,16 @@ export default function SettingsPanel({
             </Field>
           </Section>
 
+          {/* Board layout */}
+          <Section title="Board layout">
+            <ToggleRow
+              label="Single column"
+              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns"
+              checked={prefs.singleColumn ?? false}
+              onChange={(v) => updatePrefs({ singleColumn: v })}
+            />
+          </Section>
+
           {/* Favorite teams — picker first so adding a team doesn't push the
               picker off-screen, then the favorited-teams readout below. */}
           <Section title="Favorite teams">
