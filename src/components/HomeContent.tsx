@@ -2529,6 +2529,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           maskVideoTitle={prefs.maskVideoTitle ?? true}
           maskVideoBottom={prefs.maskVideoBottom ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
+          seekFill={prefs.videoSeekFill ?? "off"}
+          allowEnd={prefs.videoAllowEnd ?? false}
+          warnHalfway={prefs.videoWarnHalfway ?? false}
           onClose={closeVideoModal}
         />
       )}

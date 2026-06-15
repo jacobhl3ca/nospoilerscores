@@ -69,6 +69,12 @@ const SEEK_CONTROL_OPTIONS: { value: "both" | "bar" | "jumps"; label: string; hi
   { value: "jumps", label: "Skip %", hint: "Just the 10% jump buttons" },
 ];
 
+const SEEK_FILL_OPTIONS: { value: "off" | "grey" | "white"; label: string; hint: string }[] = [
+  { value: "off", label: "Off", hint: "Blank track — never shows how far in you are" },
+  { value: "grey", label: "Grey", hint: "Subtle low-contrast position fill" },
+  { value: "white", label: "White", hint: "Bright position fill" },
+];
+
 const SPORT_LABEL: Record<Sport, string> = {
   mlb: "MLB",
   nba: "NBA",
@@ -618,6 +624,25 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ videoSeekControl: v })}
               />
             </Field>
+            <Field label="Seek bar fill" hint="The bar shows no position by default so it can't spoil how far in you are">
+              <RadioGroup
+                value={prefs.videoSeekFill ?? "off"}
+                options={SEEK_FILL_OPTIONS}
+                onChange={(v) => updatePrefs({ videoSeekFill: v })}
+              />
+            </Field>
+            <ToggleRow
+              label="Allow seeking to the end"
+              hint="Off keeps the last 10% unreachable so the ending stays hidden"
+              checked={prefs.videoAllowEnd ?? false}
+              onChange={(v) => updatePrefs({ videoAllowEnd: v })}
+            />
+            <ToggleRow
+              label="Warn before skipping past halfway"
+              hint="Asks to confirm a click/jump that lands in the second half"
+              checked={prefs.videoWarnHalfway ?? false}
+              onChange={(v) => updatePrefs({ videoWarnHalfway: v })}
+            />
           </Section>
 
           {/* Onboarding hints */}

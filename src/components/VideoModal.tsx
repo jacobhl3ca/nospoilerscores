@@ -50,6 +50,12 @@ interface VideoModalProps {
   // Which seek control the YouTube player shows: progress bar + jumps ("both",
   // default), bar only, or jumps only.
   seekControl?: "both" | "bar" | "jumps";
+  // Seek-bar fill style — "off" (blank track, default), "grey", or "white".
+  seekFill?: "off" | "grey" | "white";
+  // Drop the 90% seek cap so the bar / ±5s can reach the clip's end.
+  allowEnd?: boolean;
+  // Confirm a click/jump that would land past the halfway point.
+  warnHalfway?: boolean;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -173,7 +179,7 @@ const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 // Seconds skipped per ←/→ arrow press, matching YouTube's own arrow keys.
 const SEEK_STEP = 5;
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, seekControl = "both" }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -207,14 +213,20 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [progress, setProgress] = useState(0);
   const barRef = useRef<HTMLDivElement>(null);
   const draggingBarRef = useRef(false);
-  // In-player "peek" override for the title bar — let the user momentarily
-  // uncover the title strip to glance at a broadcast scoreboard hidden under it
-  // (its spot varies: top-left for ESPN NHL). LOCAL to this modal (resets on
-  // every open) so the no-spoiler default always returns — separate from the
-  // persistent Settings toggle (maskVideoTitle). (The bottom bar has no peek:
-  // controls:0 means there's nothing under it but cropped footage — no progress
-  // line, no score there — so a peek would reveal nothing useful.)
+  // In-player "peek" overrides for the spoiler bars — let the user momentarily
+  // uncover a strip to glance at whatever's under it. Title bar: a broadcast
+  // scoreboard hidden under it (spot varies: top-left for ESPN NHL). Bottom
+  // bar: it covers actual game FOOTAGE (the crop is tuned tight, but a peek
+  // lets you check you're not missing a play at the bottom of frame, and lets
+  // anyone who keeps the bar on still look when they want). Both LOCAL to this
+  // modal (reset on every open) so the no-spoiler default always returns —
+  // separate from the persistent Settings toggles (maskVideoTitle/Bottom).
   const [revealTitle, setRevealTitle] = useState(false);
+  const [revealBottom, setRevealBottom] = useState(false);
+  // A seek the user must confirm because it lands past halfway (only when the
+  // warnHalfway pref is on). Holds the action to run on confirm; null = no
+  // prompt showing. Local, resets each open.
+  const [pendingSeek, setPendingSeek] = useState<null | { run: () => void; pct: number }>(null);
   // Whether the clip's real YouTube title is provably spoiler-free. When true
   // we DON'T cover the title (the whole point of the always-on mask is to hide a
   // score in the title; if there's no score to hide, show it). Defaults false =
@@ -291,6 +303,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
   };
 
+  // Cap fraction for the bar/jumps — 90% by default so the ending can't be
+  // skipped to, or 100% when the user opts into "Allow seeking to the end".
+  const seekCap = allowEnd ? 1 : 0.9;
+
+  // Run a seek, but if warnHalfway is on and the target lands in the second
+  // half while we're still in the first, hold it behind a confirm overlay
+  // instead. (Only gates a deliberate forward jump from the first half — it
+  // won't nag once you're already past the midpoint.)
+  const guardSeek = useCallback((targetFrac: number, run: () => void) => {
+    const p = playerRef.current;
+    const d = p?.getDuration?.() ?? 0;
+    const cur = d > 0 ? (p?.getCurrentTime?.() ?? 0) / d : 0;
+    if (warnHalfway && targetFrac > 0.5 && cur <= 0.5) {
+      setPendingSeek({ run, pct: Math.round(targetFrac * 100) });
+      return;
+    }
+    run();
+  }, [warnHalfway]);
+
   // Jump to a fraction of the clip. Works off the YouTube player's reported
   // duration so no timeline is ever revealed.
   const seekToPct = useCallback((pct: number) => {
@@ -298,45 +329,56 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (!p?.getDuration || !p?.seekTo) return;
     const d = p.getDuration();
     if (!d || d <= 0) return;
-    p.seekTo((d * pct) / 100, true);
-    p.playVideo?.();
-  }, []);
+    const target = Math.min(pct / 100, seekCap);
+    guardSeek(target, () => {
+      p.seekTo(d * target, true);
+      p.playVideo?.();
+      setProgress(target);
+    });
+  }, [seekCap, guardSeek]);
 
-  // Drag/click the progress bar to seek. Caps the target at 90% so the user
-  // can never jump to the ending (same spoiler rule as the jump presets); the
-  // fill itself still shows true position, including past 90% during normal
-  // playback. No thumbnail preview is ever shown.
-  const seekFromClientX = useCallback((clientX: number) => {
+  // Fraction (capped) for a given pointer x on the bar — shared by the seek and
+  // the warn-guard so they agree on the target.
+  const fracFromClientX = useCallback((clientX: number) => {
     const el = barRef.current;
-    const p = playerRef.current;
-    if (!el || !p?.getDuration || !p?.seekTo) return;
+    if (!el) return 0;
     const r = el.getBoundingClientRect();
-    if (r.width <= 0) return;
-    const frac = Math.max(0, Math.min(0.9, (clientX - r.left) / r.width));
+    if (r.width <= 0) return 0;
+    return Math.max(0, Math.min(seekCap, (clientX - r.left) / r.width));
+  }, [seekCap]);
+
+  // Drag/click the progress bar to seek. Capped at seekCap (90% unless the user
+  // allows the end) so the ending can't be skipped to. No thumbnail preview is
+  // ever shown. The warn-halfway confirm is gated at pointer-DOWN (below), not
+  // here, so an active drag isn't interrupted.
+  const seekFromClientX = useCallback((clientX: number) => {
+    const p = playerRef.current;
+    if (!p?.getDuration || !p?.seekTo) return;
+    const frac = fracFromClientX(clientX);
     const d = p.getDuration();
     if (!d || d <= 0) return;
     p.seekTo(d * frac, true);
     p.playVideo?.();
     setProgress(frac);
-  }, []);
+  }, [fracFromClientX]);
 
-  // Skip back/forward by SEEK_STEP seconds — drives the ←/→ arrow keys, which
-  // the controls:0 YouTube player otherwise ignores. Forward is capped at 90%
-  // of the clip (the same no-ending-spoiler rule as the jump presets and the
-  // progress-bar drag) but never yanks backward if normal playback already
-  // carried past 90%; back floors at 0.
+  // Skip back/forward by SEEK_STEP seconds — drives the ←/→ arrow keys and the
+  // on-screen ±5s buttons. Forward is capped at seekCap of the clip (the same
+  // no-ending-spoiler rule, relaxed by "Allow seeking to the end") but never
+  // yanks backward if normal playback already carried past it; back floors at 0.
+  // No warn-halfway prompt — a small relative nudge isn't a "click past 50%".
   const seekBy = useCallback((delta: number) => {
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
     const d = p.getDuration();
     if (!d || d <= 0) return;
     const t = p.getCurrentTime?.() ?? 0;
-    const cap = Math.max(d * 0.9, t);
+    const cap = Math.max(d * seekCap, t);
     const target = delta >= 0 ? Math.min(t + delta, cap) : Math.max(0, t + delta);
     p.seekTo(target, true);
     p.playVideo?.();
     setProgress(Math.min(1, target / d));
-  }, []);
+  }, [seekCap]);
 
   // Toggle play/pause on the YouTube player — drives both the Space/k keys and a
   // click anywhere on the video (via the click-catcher overlay). We do it through
@@ -925,7 +967,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   }}
                 />
               )}
-              {maskVideoBottom && (
+              {maskVideoBottom && !revealBottom && (
                 <div
                   aria-hidden
                   className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
@@ -935,13 +977,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   }}
                 />
               )}
-              {/* In-player peek toggle — a small eye in the corner of the title
-                  bar, shown only while the bar is actually covering the title.
-                  On the black bar when covered; over the footage corner when
-                  revealed. Right-aligned so it clears the common top-LEFT
-                  scoreboard. Tap to uncover/re-cover for this clip only. z-20
-                  (above the masks) + stopPropagation (don't pause/close). No
-                  bottom peek — controls:0 leaves nothing useful under that bar. */}
+              {/* In-player peek toggles — a small eye in the corner of each bar
+                  that's covering, on the black bar when covered / over the
+                  footage corner when revealed. Right-aligned so they clear the
+                  common top-LEFT scoreboard. Tap to uncover/re-cover for THIS
+                  clip only. The bottom eye lets you check the footage the bottom
+                  bar crops (you might be missing a play, or just prefer to keep
+                  the bar on and glance). z-20 (above the masks) + stopPropagation
+                  (don't pause/close). */}
               {maskVideoTitle && !titleSafe && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setRevealTitle((v) => !v); }}
@@ -957,35 +1000,105 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   )}
                 </button>
               )}
+              {maskVideoBottom && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setRevealBottom((v) => !v); }}
+                  aria-label={revealBottom ? "Cover the bottom bar" : "Peek under the bottom bar"}
+                  title={revealBottom ? "Cover bottom" : "Peek under bottom bar"}
+                  className="absolute bottom-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition-colors cursor-pointer"
+                  style={{ background: "rgba(0,0,0,0.45)" }}
+                >
+                  {revealBottom ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+                  )}
+                </button>
+              )}
+              {/* Warn-past-halfway confirm — shown only when the warnHalfway
+                  pref is on and a click/jump targeted the second half from the
+                  first. Holds the seek until confirmed so you don't drop into
+                  late-game action by accident. z-30 (above masks + peek);
+                  stopPropagation so taps here don't pause/close the modal. */}
+              {pendingSeek && (
+                <div
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 px-4 text-center"
+                  style={{ background: "rgba(0,0,0,0.82)" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="text-white text-sm sm:text-base font-medium max-w-xs">
+                    Skip to about {pendingSeek.pct}%? That&apos;s past halfway — you might catch up to late-game action.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPendingSeek(null); }}
+                      className="px-3 py-1.5 rounded-md text-sm font-medium text-white/80 hover:text-white cursor-pointer"
+                      style={{ border: "1px solid rgba(255,255,255,0.3)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); const run = pendingSeek.run; setPendingSeek(null); run(); }}
+                      className="px-3 py-1.5 rounded-md text-sm font-semibold text-white cursor-pointer"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      Skip anyway
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Seek bar — drag/tap to scrub. Sits BELOW the video (never over
-                footage). Spoiler-safe in two ways now: NO fill is drawn, so the
-                bar lets you move through the clip without ever revealing how far
-                in you are (the fill itself was a progress spoiler), and
-                seekFromClientX still caps the target at 90% so the ending can't
-                be jumped to. Hidden when the user picks jumps-only in Settings. */}
+                footage). Default is a BLANK track (no fill) so it never reveals
+                how far through you are; the fill can be turned on (grey/white)
+                in Settings. seekFromClientX caps the target at seekCap (90%
+                unless "Allow seeking to the end" is on). The warn-halfway
+                confirm is gated at pointer-DOWN so a drag isn't interrupted.
+                Hidden when the user picks jumps-only in Settings. */}
             {seekControl !== "jumps" && (
               <div className="mt-2" style={fsActive ? { width: fsMediaWidth } : { width: "100%" }}>
                 <div
                   ref={barRef}
                   role="slider"
-                  aria-label="Seek through the clip (position hidden to avoid spoilers)"
+                  aria-label={seekFill === "off" ? "Seek through the clip (position hidden to avoid spoilers)" : "Seek through the clip"}
                   aria-valuemin={0}
-                  aria-valuemax={90}
-                  aria-valuenow={Math.round(Math.min(progress, 0.9) * 100)}
+                  aria-valuemax={Math.round(seekCap * 100)}
+                  aria-valuenow={Math.round(Math.min(progress, seekCap) * 100)}
                   tabIndex={0}
                   title="Tap or drag to seek"
                   onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => { e.stopPropagation(); draggingBarRef.current = true; (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); seekFromClientX(e.clientX); }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    const clientX = e.clientX;
+                    const frac = fracFromClientX(clientX);
+                    const p = playerRef.current;
+                    const d = p?.getDuration?.() ?? 0;
+                    const cur = d > 0 ? (p?.getCurrentTime?.() ?? 0) / d : 0;
+                    // Gate the press itself if it would land past halfway — don't
+                    // start a drag, just hold the seek behind the confirm.
+                    if (warnHalfway && frac > 0.5 && cur <= 0.5) {
+                      setPendingSeek({ run: () => seekFromClientX(clientX), pct: Math.round(frac * 100) });
+                      return;
+                    }
+                    draggingBarRef.current = true;
+                    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+                    seekFromClientX(clientX);
+                  }}
                   onPointerMove={(e) => { if (draggingBarRef.current) seekFromClientX(e.clientX); }}
                   onPointerUp={(e) => { e.stopPropagation(); draggingBarRef.current = false; }}
                   onPointerCancel={() => { draggingBarRef.current = false; }}
                   className="w-full cursor-pointer"
                   style={{ paddingTop: "7px", paddingBottom: "7px" }}
                 >
-                  {/* Blank track — no fill, so it never shows your position. */}
-                  <div className="h-1.5 w-full rounded-full" style={{ background: "rgba(255,255,255,0.22)" }} />
+                  {seekFill === "off" ? (
+                    /* Blank track — no fill, so it never shows your position. */
+                    <div className="h-1.5 w-full rounded-full" style={{ background: "rgba(255,255,255,0.22)" }} />
+                  ) : (
+                    <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.18)" }}>
+                      <div className="h-full rounded-full" style={{ width: `${Math.min(progress, 1) * 100}%`, background: seekFill === "white" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.34)" }} />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1042,7 +1155,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     title="Back 5 seconds (←)"
                     className="flex items-center justify-center gap-0.5 rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="11 19 2 12 11 5 11 19" /><polygon points="22 19 13 12 22 5 22 19" /></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
                     5s
                   </button>
                   {/* Mobile: quarter presets only */}
@@ -1075,7 +1188,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     className="flex items-center justify-center gap-0.5 rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
                   >
                     5s
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 19 22 12 13 5 13 19" /><polygon points="2 19 11 12 2 5 2 19" /></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
                   </button>
                 </div>
               ) : <div />}

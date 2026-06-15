@@ -200,6 +200,18 @@ export interface Preferences {
   // spoiler-safe (no YouTube hover-thumbnails; drag-seek capped at 90% so the
   // ending can't be skipped to — same cap as the jump presets).
   videoSeekControl?: "both" | "bar" | "jumps";
+  // Seek-bar fill style. Default "off" = a blank track that lets you scrub
+  // without revealing how far through you are (the fill is itself a mild
+  // progress spoiler). "grey" = a subtle low-contrast fill, "white" = the
+  // original bright fill, for users who'd rather see position.
+  videoSeekFill?: "off" | "grey" | "white";
+  // When true, drop the 90% seek cap so the bar / ±5s can reach the very end of
+  // the clip. Default false keeps the ending unreachable (no-spoiler default).
+  videoAllowEnd?: boolean;
+  // When true, a click/jump that would land past the halfway point first asks
+  // for confirmation, so you don't accidentally skip into late-game action.
+  // Default false (no prompt).
+  videoWarnHalfway?: boolean;
 }
 
 const defaults: Preferences = {
