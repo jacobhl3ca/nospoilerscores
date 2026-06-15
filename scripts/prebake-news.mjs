@@ -1447,10 +1447,29 @@ async function fetchRedditViaRedlib(subreddit, sectionLabel) {
 // from the residential mini IP returns 200, but 17 at once → 429/403 across the
 // board (verified 2026-06-12). The redlib mirrors are volunteer-run too, so the
 // same gate keeps us from dog-piling the one instance that happens to be up.
+//
+// 2026-06-14: redlib has decayed to a single reachable mirror (catsarch 403,
+// kittywit timeout — only perennialte.ch renders posts). 900ms spacing isn't
+// enough: a sustained 17-feed stream against that one instance (plus the anon
+// reddit.com RSS fallback) still rate-limits, and the LATE feeds — the entire
+// World Cup / soccer family at the bottom of the job list — come back with no
+// video, killing inline autoplay. Measured: a 6-feed batch keeps its video, the
+// full 17-feed run loses it on the tail. So break the stream into batches of 6
+// with a long cooldown between them; each batch stays under the limiter's window
+// and its window resets in the gap (verified: a fresh 6-feed batch fired right
+// after a rate-limited full run recovered all video). Adds ~3 min to the reddit
+// bake (2 cooldowns) — fine for an hourly cron.
+const REDDIT_BATCH_SIZE = 6;
+const REDDIT_BATCH_COOLDOWN_MS = 90000;
 let _redditGate = Promise.resolve();
+let _redditHits = 0;
 function gateReddit(fn) {
   const run = _redditGate.then(fn, fn);
-  const space = () => new Promise((r) => setTimeout(r, 900));
+  const space = () => {
+    _redditHits++;
+    const batchEdge = _redditHits % REDDIT_BATCH_SIZE === 0;
+    return new Promise((r) => setTimeout(r, batchEdge ? REDDIT_BATCH_COOLDOWN_MS : 900));
+  };
   _redditGate = run.then(space, space);
   return run;
 }
