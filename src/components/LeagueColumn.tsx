@@ -1188,6 +1188,12 @@ export default function LeagueColumn({
                   rest compact (NBA/NHL); other leagues stay all-full. */}
               {renderUpcomingSlate(league.nextGameDay.games, true)}
             </div>
+          ) : league.previousGameDay && league.previousGameDay.games.length > 0 ? (
+            // Offseason / season over: nothing today and nothing ahead. Show the
+            // last game played (score-hidden, with highlights) — the same lookback
+            // the past tab uses — so the column stays useful instead of announcing
+            // the season ended with a bare "Upcoming Schedule TBD".
+            renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
           ) : (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Upcoming Schedule TBD</p>
           )

@@ -2245,6 +2245,16 @@ export async function fetchAllLeagues(
           : await fetchNextGameDay(cfg.sport, 14, date);
       }
     }
+    // Offseason fallback (current view): no games today AND no upcoming game in
+    // the whole lookahead window means the season is over (or on a long break).
+    // Surface the last game played — score-hidden, with highlights — so the
+    // column reads "still here, just quiet" instead of "Upcoming Schedule TBD",
+    // which announces the season ended (itself a spoiler). Only fires when there
+    // is genuinely nothing ahead, so mid-season off-days (nextGameDay set) are
+    // untouched.
+    if (!failed && !isPastView && games.length === 0 && !nextGameDay && !previousGameDay) {
+      previousGameDay = await fetchPreviousGameDayRange(cfg.sport, date);
+    }
     return { sport: cfg.sport, label, games, nextGameDay, previousGameDay, fetchFailed: failed };
   };
 
