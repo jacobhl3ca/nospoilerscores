@@ -1840,6 +1840,14 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               }
               setSlotLeague(slotIdx, s);
             };
+          // Force the ESPN "Top news" feed back as a column: clear any 3rd-league
+          // override and, if the 3rd slot was emptied, re-open it (Auto) so the
+          // espn fallback renders there again. Reachable from every column's swap
+          // menu + the + button, so the feed can't get stranded.
+          const pickEspn = () => {
+            setNewsThirdLeague(undefined);
+            if (selectedSlotLeagues[2] === "empty") setSlotLeague(2, undefined);
+          };
 
           // Which entries actually render: 1-col (mobile / Focus league) stacks
           // ALL focused leagues; otherwise the first N entries side-by-side.
@@ -1938,8 +1946,13 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           const newsAddEligibleSport = switcherOptions.find(
             (o) => !leagueEntries.some((e) => e.sport === o.sport),
           )?.sport;
-          const newsOnAddColumn = newsFirstEmptySlot !== undefined && leagueEntries.length < 3 && newsAddEligibleSport
-            ? () => setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport)
+          const newsOnAddColumn = newsFirstEmptySlot !== undefined && leagueEntries.length < 3
+            ? () => {
+                // News view: refill the 3rd column with the ESPN "Top news" feed
+                // (its natural default) rather than a random league.
+                if (newsFirstEmptySlot === 2) pickEspn();
+                else if (newsAddEligibleSport) setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport);
+              }
             : undefined;
           const containerCls = effectiveColCount === 1
             ? "flex flex-col items-center gap-8"
@@ -1976,6 +1989,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={isEspn ? ((s) => { if (s === "empty") setSlotLeague(2, "empty"); else if (s) setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                            onPickEspn={pickEspn}
+                            espnActive={isEspn}
                           />
                         </div>
                       );
@@ -2025,6 +2040,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={isEspn ? ((s) => { if (s === "empty") setSlotLeague(2, "empty"); else if (s) setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                      onPickEspn={pickEspn}
+                      espnActive={isEspn}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}

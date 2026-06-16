@@ -44,6 +44,9 @@ interface NewsColumnProps {
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // Switch this column to the ESPN "Top news" headlines feed (see NewsColumnTitle).
+  onPickEspn?: () => void;
+  espnActive?: boolean;
   // When true, the column renders only its source cards — the title row is
   // rendered separately above (e.g. as part of the page-level TitleStrip
   // that sits above AlignedVideoStrip). Keeps the league title above the
@@ -67,12 +70,19 @@ export function NewsColumnTitle({
   shownElsewhere,
   selectedSport,
   onSwapLeague,
+  onPickEspn,
+  espnActive,
 }: {
   title: string;
   swappableOptions?: { sport: Sport; label: string }[];
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // Switch this column to the ESPN "Top news" headlines feed. Provided for
+  // every news column so the feed is always one tap away, even after slot 3
+  // was emptied (it reappears as the last column).
+  onPickEspn?: () => void;
+  espnActive?: boolean;
 }) {
   const [swapOpen, setSwapOpen] = useState(false);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -138,6 +148,24 @@ export function NewsColumnTitle({
                     </button>
                   );
                 })}
+                {/* Top news = ESPN's cross-sport headlines feed. Sits in its
+                    own group so it reads as a distinct choice from the leagues
+                    and is always reachable (re-adds the column if it was gone). */}
+                {onPickEspn && (
+                  <button
+                    onClick={() => { onPickEspn(); setSwapOpen(false); }}
+                    className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
+                    style={{
+                      color: espnActive ? "var(--accent)" : "var(--text)",
+                      fontWeight: espnActive ? 600 : 400,
+                      borderTop: "1px solid var(--border)",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    Top news (ESPN)
+                  </button>
+                )}
                 {/* Empty hides the column entirely (matches the scores-view
                     behavior). User re-adds via the + button on scores or via
                     the focus pill. */}
@@ -566,6 +594,8 @@ export default function NewsColumn({
   shownElsewhere,
   selectedSport,
   onSwapLeague,
+  onPickEspn,
+  espnActive,
   hideTitle,
   widthClassName,
   onPlayVideo,
@@ -580,6 +610,8 @@ export default function NewsColumn({
           shownElsewhere={shownElsewhere}
           selectedSport={selectedSport}
           onSwapLeague={onSwapLeague}
+          onPickEspn={onPickEspn}
+          espnActive={espnActive}
         />
       )}
       <div className="flex flex-col gap-1.5 sm:gap-2">
