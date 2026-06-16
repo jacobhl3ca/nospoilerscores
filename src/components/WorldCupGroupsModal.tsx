@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fifaRank } from "@/lib/fifaRankings";
 
 interface GroupTeam {
@@ -13,14 +13,59 @@ interface WcGroup {
   teams: GroupTeam[];
 }
 
+type View = "groups" | "ranked";
+
+// View + highlight choices stick across opens (and reloads) via localStorage —
+// the same lightweight pattern the app uses for its other view prefs. Defaults
+// preserve the original behavior: grouped view, no highlighting.
+const VIEW_KEY = "wc-groups-view";
+const HL_KEY = "wc-groups-highlight";
+
+function loadView(): View {
+  if (typeof window === "undefined") return "groups";
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === "ranked" ? "ranked" : "groups";
+  } catch {
+    return "groups";
+  }
+}
+function loadHighlight(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(HL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+// Subtle tints for the top-10 (green) / bottom-10 (red) FIFA-ranked teams, with
+// an inset bar on the left edge. Semi-transparent so they read on either theme.
+const TOP_BG = "rgba(34,197,94,0.16)";
+const TOP_BAR = "inset 2px 0 0 rgba(34,197,94,0.9)";
+const BOTTOM_BG = "rgba(239,68,68,0.14)";
+const BOTTOM_BAR = "inset 2px 0 0 rgba(239,68,68,0.85)";
+
 // All 12 World Cup groups in one spoiler-safe overlay: the DRAW only (which
-// teams are in each group). Teams are listed ALPHABETICALLY — never by
-// standing/points — so it reveals nothing about who's winning or advancing.
-// Sourced from ESPN's fifa.world standings endpoint, from which we take only
-// the team name + flag and drop every standings field.
+// teams are in each group). Within a group, teams are ordered by FIFA world
+// ranking — a fixed pre-tournament fact, NOT the live standing — so it reveals
+// nothing about who's winning or advancing. "Ranked" view flattens the same
+// teams into one raw list by that ranking. Sourced from ESPN's fifa.world
+// standings endpoint, from which we take only the team name + flag and drop
+// every standings field.
 export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }) {
   const [groups, setGroups] = useState<WcGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [view, setView] = useState<View>(() => loadView());
+  const [highlight, setHighlight] = useState<boolean>(() => loadHighlight());
+
+  const changeView = (v: View) => {
+    setView(v);
+    try { window.localStorage.setItem(VIEW_KEY, v); } catch {}
+  };
+  const changeHighlight = (v: boolean) => {
+    setHighlight(v);
+    try { window.localStorage.setItem(HL_KEY, v ? "1" : "0"); } catch {}
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -69,12 +114,46 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
     return () => ctrl.abort();
   }, []);
 
-  // "A to L (12)" once loaded (strip the "Group " prefix off the first/last
-  // group names); just the plain title while loading.
+  // Flat list across all groups + which FIFA-ranked teams fall in the top 10 /
+  // bottom 10. "ranked" = every team sorted by FIFA ranking (the raw list view);
+  // unranked teams (e.g. playoff slots still TBD) sort last, alphabetically.
+  const { ranked, topNames, bottomNames } = useMemo(() => {
+    const all: Array<{ name: string; flag: string; rank: number | null; group: string }> = [];
+    for (const g of groups ?? []) {
+      for (const t of g.teams) all.push({ ...t, group: g.name });
+    }
+    const withRank = all
+      .filter((t) => t.rank != null)
+      .sort((a, b) => (a.rank as number) - (b.rank as number));
+    const withoutRank = all
+      .filter((t) => t.rank == null)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const top = new Set(withRank.slice(0, 10).map((t) => t.name));
+    // Guard the bottom slice so it can't overlap the top when few teams are
+    // ranked (early in qualification): start no earlier than index 10.
+    const bottomStart = Math.max(10, withRank.length - 10);
+    const bottom = new Set(withRank.slice(bottomStart).map((t) => t.name));
+
+    return { ranked: [...withRank, ...withoutRank], topNames: top, bottomNames: bottom };
+  }, [groups]);
+
+  const rowStyle = (name: string): React.CSSProperties => {
+    if (!highlight) return {};
+    if (topNames.has(name)) return { background: TOP_BG, boxShadow: TOP_BAR };
+    if (bottomNames.has(name)) return { background: BOTTOM_BG, boxShadow: BOTTOM_BAR };
+    return {};
+  };
+
+  // Groups view: "A to L (12)". Ranked view: total team count.
   const range =
     groups && groups.length
       ? ` ${groups[0].name.replace(/^group\s*/i, "")} to ${groups[groups.length - 1].name.replace(/^group\s*/i, "")} (${groups.length})`
       : "";
+  const title =
+    view === "ranked"
+      ? `⚽ World Cup — By FIFA ranking${ranked.length ? ` (${ranked.length})` : ""}`
+      : `⚽ World Cup — Groups${range}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -96,8 +175,43 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
           ✕
         </button>
         <h2 className="text-base sm:text-lg font-bold mb-3 pr-6" style={{ color: "var(--text)" }}>
-          ⚽ World Cup — Groups{range}
+          {title}
         </h2>
+
+        {groups ? (
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="inline-flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+              {([
+                { v: "groups" as View, label: "Groups" },
+                { v: "ranked" as View, label: "Ranked" },
+              ]).map((o) => {
+                const active = view === o.v;
+                return (
+                  <button
+                    key={o.v}
+                    onClick={() => changeView(o.v)}
+                    className="text-xs font-medium px-3 py-1 cursor-pointer transition-colors"
+                    style={{
+                      background: active ? "var(--accent)" : "var(--bg-card)",
+                      color: active ? "white" : "var(--text)",
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+            <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none" style={{ color: "var(--text-muted)" }}>
+              <input
+                type="checkbox"
+                checked={highlight}
+                onChange={(e) => changeHighlight(e.target.checked)}
+                className="accent-[var(--accent)] cursor-pointer"
+              />
+              Highlight top &amp; bottom 10
+            </label>
+          </div>
+        ) : null}
 
         {failed ? (
           <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>
@@ -107,6 +221,30 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
           <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>
             Loading groups&hellip;
           </p>
+        ) : view === "ranked" ? (
+          <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+            {ranked.map((t) => (
+              <li
+                key={t.name}
+                className="flex items-center gap-2 min-w-0 rounded px-1.5 py-1"
+                style={rowStyle(t.name)}
+              >
+                <span className="text-[11px] w-8 text-right shrink-0 tabular-nums" style={{ color: t.rank ? "var(--text)" : "var(--text-muted)", opacity: t.rank ? 1 : 0.6 }}>
+                  {t.rank ? `#${t.rank}` : "—"}
+                </span>
+                {t.flag ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={t.flag} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} />
+                ) : (
+                  <span className="w-4 h-4 shrink-0" />
+                )}
+                <span className="text-xs truncate flex-1" style={{ color: "var(--text)" }}>{t.name}</span>
+                <span className="text-[10px] shrink-0 uppercase tracking-wide" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+                  {t.group.replace(/^group\s*/i, "")}
+                </span>
+              </li>
+            ))}
+          </ol>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {groups.map((g) => (
@@ -120,7 +258,7 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
                 </div>
                 <ul className="flex flex-col gap-1">
                   {g.teams.map((t) => (
-                    <li key={t.name} className="flex items-center gap-1.5 min-w-0">
+                    <li key={t.name} className="flex items-center gap-1.5 min-w-0 rounded px-1 py-0.5" style={rowStyle(t.name)}>
                       {t.flag ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={t.flag} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} />
@@ -141,6 +279,7 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
         {groups ? (
           <p className="text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
             #N = FIFA world ranking coming into the tournament — not group position.
+            {highlight ? " Green = strongest 10, red = weakest 10 by that ranking." : ""}
           </p>
         ) : null}
       </div>
