@@ -797,7 +797,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ].map(({ team, isTBD }) => (
           <div key={team.id || team.abbreviation} className="flex items-center gap-1 sm:gap-1.5 min-w-0">
             <span className="shrink-0">{logo(team, isTBD)}</span>
-            <span className="team-name-container flex items-center shrink-0">
+            {/* items-baseline (not center) keeps the World Cup #N seated on the
+                same baseline as the name; the rank lives INSIDE this container so
+                the whole name+rank unit centers against the flag as one piece
+                (the container height is the name's, since the rank is smaller). */}
+            <span className="team-name-container flex items-baseline gap-1 sm:gap-1.5 shrink-0">
               {(() => {
                 const nameNode = useAbbreviations ? (
                   <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }} title={team.displayName}>{team.abbreviation}</span>
@@ -816,14 +820,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   </button>
                 );
               })()}
+              {/* World Cup: FIFA world ranking next to the name — the same
+                  spoiler-safe #N shown in the groups overlay (a fixed
+                  pre-tournament fact, not a result or live group position), so it
+                  also reads as a seeding in the knockout rounds. */}
+              {game.sport === "fifa" && !isTBD && fifaRank(team.displayName) != null ? (
+                <span className="text-[10px] sm:text-xs tabular-nums shrink-0 leading-none" style={{ color: "var(--text-muted)", opacity: 0.7 }} title={`FIFA world ranking: #${fifaRank(team.displayName)}`}>#{fifaRank(team.displayName)}</span>
+              ) : null}
             </span>
-            {/* World Cup: FIFA world ranking next to the name — the same
-                spoiler-safe #N shown in the groups overlay (a fixed
-                pre-tournament fact, not a result or live group position), so it
-                also reads as a seeding in the knockout rounds. */}
-            {game.sport === "fifa" && !isTBD && fifaRank(team.displayName) != null ? (
-              <span className="text-[10px] sm:text-xs tabular-nums shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)", opacity: 0.7 }} title={`FIFA world ranking: #${fifaRank(team.displayName)}`}>#{fifaRank(team.displayName)}</span>
-            ) : null}
             {/* Favorite-star: removed 2026-05-31, restored behind the Settings
                 toggle 2026-06-11 (Jacob) — favoriting also lives in the
                 team-schedule view + the Settings team picker. */}

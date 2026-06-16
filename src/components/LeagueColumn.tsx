@@ -765,7 +765,11 @@ export default function LeagueColumn({
       }
       const gapPx = parseFloat(getComputedStyle(row).columnGap || getComputedStyle(row).gap || "0") || 0;
       const totalGaps = gapPx * (row.children.length - 1);
-      const availableWidth = rowWidth - occupied - totalGaps - 4; // 4px safety
+      // World Cup cards tuck a "#N" FIFA-ranking chip INSIDE the name container,
+      // so it's not in `occupied` above — reserve room for it (≤3 chars + gap)
+      // or long names ("Bosnia-Herzegovina") could spill past the cell.
+      const rankAllowance = league.sport === "fifa" ? 30 : 0;
+      const availableWidth = rowWidth - occupied - totalGaps - 4 - rankAllowance; // 4px safety
 
       // Measure longest name using a hidden span
       const probe = document.createElement("span");
