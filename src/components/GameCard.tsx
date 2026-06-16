@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
+import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
@@ -816,6 +817,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 );
               })()}
             </span>
+            {/* World Cup: FIFA world ranking next to the name — the same
+                spoiler-safe #N shown in the groups overlay (a fixed
+                pre-tournament fact, not a result or live group position), so it
+                also reads as a seeding in the knockout rounds. */}
+            {game.sport === "fifa" && !isTBD && fifaRank(team.displayName) != null ? (
+              <span className="text-[10px] sm:text-xs tabular-nums shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)", opacity: 0.7 }} title={`FIFA world ranking: #${fifaRank(team.displayName)}`}>#{fifaRank(team.displayName)}</span>
+            ) : null}
             {/* Favorite-star: removed 2026-05-31, restored behind the Settings
                 toggle 2026-06-11 (Jacob) — favoriting also lives in the
                 team-schedule view + the Settings team picker. */}
