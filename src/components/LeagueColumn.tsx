@@ -14,6 +14,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { getEtServiceDate } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
+import EventCard from "./EventCard";
 import TeamView from "./TeamView";
 
 interface LeagueColumnProps {
@@ -1197,7 +1198,7 @@ export default function LeagueColumn({
           </div>
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
-          ) : notStartedDate ? (
+          ) : league.eventCard ? null : notStartedDate ? (
             <span className="text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5 italic" style={{ color: "var(--text-muted)" }}>Starts {notStartedDate}</span>
           ) : (
             <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : undefined} />
@@ -1228,6 +1229,8 @@ export default function LeagueColumn({
           selectedDate={selectedDate}
           onPlayHighlight={onPlayHighlight}
         />
+      ) : league.eventCard && section !== "finished" ? (
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (

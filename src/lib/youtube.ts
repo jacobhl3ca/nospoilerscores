@@ -46,6 +46,9 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   tennis_frenchopen: "Roland-Garros",
   tennis_wimbledon: "Wimbledon",
   tennis_usopen: "US Open Tennis Championships",
+  // F1 + UFC official channels
+  f1: "FORMULA 1",
+  ufc: "UFC",
 };
 
 // Curated channel chain for golf highlight buttons — used directly
@@ -66,6 +69,8 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   golf_pgachamp: ["ESPN", "PGA TOUR", "Golf Channel"],
   golf_usopen: ["ESPN", "PGA TOUR", "Golf Channel"],
   golf_theopen: ["ESPN", "Sky Sports Golf", "Golf Channel"],
+  f1: ["FORMULA 1", "ESPN", "Sky Sports F1"],
+  ufc: ["UFC", "ESPN"],
 };
 
 export function getYouTubeSearchUrl(

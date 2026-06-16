@@ -91,6 +91,8 @@ const SPORT_LABEL: Record<Sport, string> = {
   mls: "MLS",
   ucl: "UCL",
   uel: "UEL",
+  f1: "F1",
+  ufc: "UFC",
 };
 
 function teamSportFromId(id: string): Sport | null {

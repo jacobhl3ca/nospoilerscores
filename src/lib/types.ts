@@ -1,4 +1,4 @@
-export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel";
+export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "f1" | "ufc";
 
 export interface Game {
   id: string;
@@ -135,6 +135,25 @@ export interface GolfTournament {
   streamUrl?: string;
 }
 
+// A single non-two-team "event" tile — the spoiler-safe analog to a golf
+// tournament, used for F1 (a Grand Prix weekend) and UFC (a fight card).
+// Results (finishing order / fight outcomes) are deliberately omitted; the
+// card shows WHAT + WHEN + WHERE-to-watch, plus highlights once it's over.
+export interface LeagueEventCard {
+  kind: "f1" | "ufc";
+  title: string;            // "Spanish Grand Prix" / "UFC Fight Night: Kape vs. Horiguchi"
+  subtitle?: string;        // circuit + city (F1) / venue city (UFC)
+  headline?: string;        // UFC main event "Kape vs. Horiguchi"; F1 leaves null
+  state: "pre" | "in" | "post";
+  statusDetail: string;     // "Race" / "Fight Night" / "Live" / "Final"
+  date: string;             // ISO of the headline session (race / main card)
+  broadcasts: string[];
+  boutCount?: number;       // UFC: total fights on the card
+  highlightQuery?: string;  // YouTube search query for post-event highlights
+  officialChannel?: string; // preferred YouTube channel for the highlight
+  eventUrl?: string;        // ESPN event page (external fallback)
+}
+
 export interface LeagueData {
   sport: Sport;
   label: string;
@@ -146,6 +165,8 @@ export interface LeagueData {
   // the league has no recent finished games (e.g. the World Cup before kickoff).
   previousGameDay?: { date: string; games: Game[] } | null;
   golfTournament?: GolfTournament | null;
+  // Single-event tile for F1 / UFC (mutually exclusive with games/golf).
+  eventCard?: LeagueEventCard | null;
   // True when the games fetch failed (network/non-OK/non-JSON) rather than
   // ESPN returning a genuinely empty schedule. Lets the column show an
   // "unavailable" message instead of falling back to the next game day.

@@ -1,4 +1,4 @@
-import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer } from "./types";
+import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd } from "./etDay";
 
@@ -20,6 +20,8 @@ const SPORT_PATHS: Record<Sport, string> = {
   mls: "/soccer/usa.1/scoreboard",
   ucl: "/soccer/uefa.champions/scoreboard",
   uel: "/soccer/uefa.europa/scoreboard",
+  f1: "/racing/f1/scoreboard",
+  ufc: "/mma/ufc/scoreboard",
 };
 
 // Seasonal league config: show/hide based on date
@@ -94,6 +96,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // selectable from the slot-3 dropdown when in season. Listed last so it
   // sorts to the bottom of the league-header swap dropdown.
   { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", excludeFromAuto: true },
+  // ── F1 + UFC (single-event tiles, opt-in via the league switcher) ──
+  // Both excludeFromAuto so they never disturb the tuned 3-column rotation;
+  // they appear in the slot dropdown when active and render a spoiler-safe
+  // event tile (no results). F1 = Mar–early Dec season; UFC = year-round.
+  { sport: "f1",  label: "F1",  startDate: "03-01", endDate: "12-14", excludeFromAuto: true },
+  { sport: "ufc", label: "UFC", excludeFromAuto: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -200,6 +208,9 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   fifa: 13,
   ncaaw: 14,
   wnba: 15,
+  // Opt-in event leagues sort to the bottom of the switcher (like WNBA).
+  f1: 16,
+  ufc: 17,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -366,6 +377,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   uel:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
+  // F1 / UFC render as single-event tiles (no Game objects), so these are
+  // placeholders only — calculateRating never runs on them.
+  f1:     { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  ufc:    { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
 };
 
 // Regulation period length in seconds, for count-down sports where ESPN's
@@ -1043,6 +1058,10 @@ export function espnGameUrl(game: Game): string {
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
     case "golf": return `https://www.espn.com/golf/leaderboard`;
     case "tennis": return `https://www.espn.com/tennis/scoreboard`;
+    // F1/UFC render as event tiles (no Game objects) — these are here only for
+    // switch exhaustiveness.
+    case "f1": return `https://www.espn.com/f1/`;
+    case "ufc": return `https://www.espn.com/mma/`;
   }
 }
 
@@ -1066,6 +1085,8 @@ export function sportStreamFallback(sport: Sport): string {
     case "uel": return "https://www.paramountplus.com/shows/uefa-europa-league/";
     case "tennis": return "https://www.tennischannel.com/";
     case "golf": return "https://www.pgatour.com/live";
+    case "f1": return "https://f1tv.formula1.com/";
+    case "ufc": return "https://www.espn.com/watch/";
   }
 }
 
@@ -1380,6 +1401,93 @@ function countryNameFromFlagUrl(url: string): string {
   if (!match) return "";
   const code = match[1].toLowerCase();
   return COUNTRY_NAMES[code] ?? code.toUpperCase();
+}
+
+// Pull broadcast network names off an ESPN competition (handles the
+// names[]/media.shortName/name shapes the racing + mma feeds use).
+function eventBroadcasts(comp: any): string[] {
+  const out: string[] = [];
+  for (const b of comp?.broadcasts ?? []) {
+    if (Array.isArray(b?.names)) out.push(...b.names);
+    else if (b?.media?.shortName) out.push(b.media.shortName);
+    else if (typeof b?.name === "string") out.push(b.name);
+  }
+  return [...new Set(out.filter(Boolean))];
+}
+
+// F1 / UFC single-event fetch → a spoiler-safe LeagueEventCard (no results).
+// Tries the viewed date first; if ESPN has no event that day (most days), it
+// falls back to the current/next event so an opt-in column always shows the
+// upcoming race / fight card rather than going empty.
+async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<LeagueEventCard | null> {
+  const load = async (d?: string) => {
+    const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+    if (d) url.searchParams.set("dates", d);
+    try {
+      const res = await fetchWithRetry(url.toString());
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.events?.[0] ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  const event = (date ? await load(date) : null) ?? await load();
+  if (!event) return null;
+  const comps: any[] = event.competitions ?? [];
+  const eventUrl: string | undefined = event.links?.find((l: any) => l?.href)?.href;
+
+  if (sport === "f1") {
+    // The race is competition.type.id === "3"; fall back to the last session.
+    const race = comps.find((c) => String(c?.type?.id) === "3") ?? comps[comps.length - 1] ?? null;
+    const state = (race?.status?.type?.state ?? event.status?.type?.state ?? "pre") as "pre" | "in" | "post";
+    const circuit = event.circuit ?? {};
+    const loc = [circuit.address?.city, circuit.address?.country].filter(Boolean).join(", ");
+    const subtitle = [circuit.fullName, loc].filter(Boolean).join(" · ") || undefined;
+    const raceDate = race?.date ?? event.date;
+    const year = new Date(raceDate).getFullYear() || new Date().getFullYear();
+    const cleanName = (event.shortName || event.name || "Grand Prix").replace(/\bGP\b/i, "Grand Prix");
+    return {
+      kind: "f1",
+      title: event.name || event.shortName || "Grand Prix",
+      subtitle,
+      state,
+      statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Race",
+      date: raceDate,
+      broadcasts: eventBroadcasts(race),
+      highlightQuery: `Formula 1 ${year} ${cleanName} race highlights`,
+      officialChannel: "FORMULA 1",
+      eventUrl,
+    };
+  }
+
+  // UFC — the MARQUEE fight lives in the event name ("UFC 312: Jones vs.
+  // Aspinall" / "UFC Fight Night: Kape vs. Horiguchi"); ESPN orders the
+  // competitions prelims-first, so comps[0] is a prelim, not the main event.
+  // Split the name: before ":" = the series title, after ":" = the headline.
+  const main = comps[0] ?? null; // venue + broadcast are event-wide, mirror here
+  const state = (event.status?.type?.state ?? main?.status?.type?.state ?? "pre") as "pre" | "in" | "post";
+  const name = String(event.name || event.shortName || "UFC");
+  const colon = name.indexOf(":");
+  const headline = colon > -1 ? name.slice(colon + 1).trim() : undefined;
+  const title = event.shortName || (colon > -1 ? name.slice(0, colon).trim() : name) || "UFC";
+  const venue = main?.venue ?? event.venue ?? {};
+  const subtitle = [venue.address?.city, venue.address?.state || venue.address?.country].filter(Boolean).join(", ") || undefined;
+  return {
+    kind: "ufc",
+    title,
+    subtitle,
+    headline,
+    state,
+    statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Fight Night",
+    date: event.date || main?.date,
+    broadcasts: eventBroadcasts(main),
+    boutCount: comps.length,
+    highlightQuery: `${name} highlights`,
+    officialChannel: "UFC",
+    eventUrl,
+  };
 }
 
 async function fetchGolfTournament(date?: string): Promise<GolfTournament | null> {
@@ -2298,6 +2406,11 @@ export async function fetchAllLeagues(
       const golfTournament = await fetchGolfTournament(date);
       if (!golfTournament) return null;
       return { sport: cfg.sport, label, games: [], golfTournament };
+    }
+    if (cfg.sport === "f1" || cfg.sport === "ufc") {
+      const eventCard = await fetchLeagueEvent(cfg.sport, date);
+      if (!eventCard) return null;
+      return { sport: cfg.sport, label, games: [], eventCard };
     }
     const { games, failed } = await fetchGames(cfg.sport, date);
     if (cfg.sport === "nhl" && date) await enrichNhlVideos(games, date);

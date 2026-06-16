@@ -185,6 +185,8 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   // UCL = ESPN soccer league id 2; UEL = id 2310.
   ucl: "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png",
   uel: "https://a.espncdn.com/i/leaguelogos/soccer/500/2310.png",
+  f1: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/f1.png&w=40&h=40&transparent=true",
+  ufc: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
 };
 
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds
