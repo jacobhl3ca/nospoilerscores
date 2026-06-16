@@ -70,6 +70,40 @@ async function fetchStreaminMp4(pageUrl) {
   }
 }
 
+// streamff.link / streamff.com — r/soccer's CURRENT dominant goal-clip host
+// (the sub bans direct uploads, so clips rotate through external hosts; streamff
+// is what's live now, streamin before it). The /v/<id> page is a Next.js JS app
+// with no inline <source>, but its server-rendered og:image points at the open
+// CDN thumbnail (cdn.streamff.<tld>/<id>.jpg) — swap the image extension for
+// .mp4 to get the direct video, which serves 206 + video/mp4 and plays in
+// <video> with no CORS needed (verified). Mirrors fetchStreaminMp4; null on any
+// failure so the post just stays link-only.
+async function fetchStreamffMp4(pageUrl) {
+  try {
+    const res = await fetch(pageUrl, {
+      headers: { "User-Agent": UA, Referer: "https://www.reddit.com/" },
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m =
+      html.match(/property="og:image"\s+content="(https?:\/\/cdn\.streamff\.\w+\/[^"]+)"/i) ||
+      html.match(/(https?:\/\/cdn\.streamff\.\w+\/[a-z0-9]+\.(?:jpe?g|png|webp))/i);
+    if (!m) return null;
+    return m[1].replace(/\.(?:jpe?g|png|webp)(?:[?#].*)?$/i, ".mp4");
+  } catch {
+    return null;
+  }
+}
+
+// Route an external clip-host /v/<id> page URL to the matching mp4 resolver.
+// Used by the redlib + RSS paths, which capture the host URL into one map.
+function fetchClipMp4(url) {
+  if (/^https?:\/\/streamff\.\w+\/v\//i.test(url)) return fetchStreamffMp4(url);
+  if (/^https?:\/\/streamin\.\w+\/v\//i.test(url)) return fetchStreaminMp4(url);
+  return Promise.resolve(null);
+}
+
 // ── YouTube lookup + validation + cache ───────────────────────────
 // Strategy: call the site's /api/youtube?q=&channel= worker for each news
 // video, then confirm the candidate via YouTube's public oEmbed — both the
@@ -1234,7 +1268,7 @@ async function fetchRedditVideoMap(subreddit) {
     // media element — usually the /vid/<id>/ proxy path, but match the raw and
     // /hls/ shapes too so a differently-configured instance still resolves.
     const map = new Map();
-    const streamin = new Map();
+    const clips = new Map();
     for (const block of html.split(/<div class="post[ "]/).slice(1)) {
       const idm = block.match(new RegExp(`/r/${subreddit}/comments/(\\w+)/`, "i"));
       if (!idm) continue;
@@ -1243,15 +1277,15 @@ async function fetchRedditVideoMap(subreddit) {
         block.match(/\/vid\/([a-z0-9]{8,16})\//i) ||
         block.match(/\/hls\/([a-z0-9]{8,16})/i);
       if (vm) map.set(idm[1], vm[1]);
-      // streamin.link / streamin.me goal clips render as a "no_thumbnail" link
-      // anchor (no <img>), so capture the /v/<id> url here for fetchRedditRSS to
-      // resolve into a playable mp4 (fetchStreaminMp4). v.redd.it wins if both.
-      const sl = block.match(/href="(https?:\/\/streamin\.\w+\/v\/[^"]+)"/i);
-      if (sl && !map.has(idm[1])) streamin.set(idm[1], decodeEntities(sl[1]));
+      // streamff / streamin goal clips render as a "no_thumbnail" link anchor
+      // (no <img>), so capture the /v/<id> url here for fetchRedditRSS to resolve
+      // into a playable mp4 (fetchClipMp4). v.redd.it wins if both.
+      const cl = block.match(/href="(https?:\/\/(?:streamff|streamin)\.\w+\/v\/[^"]+)"/i);
+      if (cl && !map.has(idm[1])) clips.set(idm[1], decodeEntities(cl[1]));
     }
-    if (map.size > 0 || streamin.size > 0) return { vreddit: map, streamin };
+    if (map.size > 0 || clips.size > 0) return { vreddit: map, clips };
   }
-  return { vreddit: new Map(), streamin: new Map() };
+  return { vreddit: new Map(), clips: new Map() };
 }
 
 // ── Redlib-primary post listing ───────────────────────────────────
@@ -1377,12 +1411,14 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
           extUrl.match(/^https?:\/\/(?:www\.)?youtube\.com\/shorts\/([\w-]{6,})/);
         const gifv = extUrl.match(/^https?:\/\/i\.imgur\.com\/(\w+)\.gifv/i);
         const mp4 = extUrl.match(/^https?:\/\/\S+\.mp4(?:$|\?)/i);
-        // streamin.link / streamin.me — r/soccer's dominant goal-clip host. The
-        // /v/<id> page embeds a direct mp4 we scrape (fetchStreaminMp4). These
-        // post as "no_thumbnail" links, which the href-first read above now
-        // catches; without this branch they went undetected and linked out.
+        // streamff / streamin — r/soccer's goal-clip hosts (streamff is current).
+        // The /v/<id> page yields a direct mp4 we resolve (fetchStreamff/Streamin
+        // Mp4). These post as "no_thumbnail" links, which the href-first read
+        // above now catches; without these branches they linked out.
         const streamin = /^https?:\/\/streamin\.\w+\/v\//i.test(extUrl);
+        const streamff = /^https?:\/\/streamff\.\w+\/v\//i.test(extUrl);
         if (sm) videoUrl = await fetchStreamableMp4(sm[1]);
+        else if (streamff) videoUrl = await fetchStreamffMp4(extUrl);
         else if (streamin) videoUrl = await fetchStreaminMp4(extUrl);
         else if (ym) youtubeVideoId = ym[1];
         else if (gifv) videoUrl = `https://i.imgur.com/${gifv[1]}.mp4`;
@@ -1578,11 +1614,11 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     const postId = (link.match(/\/comments\/(\w+)/) || [])[1] || "";
     const vredditId = postId ? media.vreddit.get(postId) : null;
     let videoUrl = vredditId ? `https://v.redd.it/${vredditId}/HLSPlaylist.m3u8` : null;
-    // streamin.link / streamin.me goal clips (r/soccer's main video host) →
-    // resolve the direct mp4 so they play inline instead of linking out.
+    // streamff / streamin goal clips (r/soccer's video hosts) → resolve the
+    // direct mp4 so they play inline instead of linking out.
     if (!videoUrl && postId) {
-      const streaminUrl = media.streamin.get(postId);
-      if (streaminUrl) videoUrl = await fetchStreaminMp4(streaminUrl);
+      const clipUrl = media.clips.get(postId);
+      if (clipUrl) videoUrl = await fetchClipMp4(clipUrl);
     }
     out.push({
       id,
@@ -1666,6 +1702,8 @@ async function fetchReddit(subreddit, sectionLabel) {
       if (m) videoUrl = await fetchStreamableMp4(m[1]);
     } else if (/^streamin\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
       videoUrl = await fetchStreaminMp4(p.url);
+    } else if (/^streamff\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
+      videoUrl = await fetchStreamffMp4(p.url);
     }
     // i.redd.it image posts: surface the original full-res URL so the client
     // can pop a lightbox instead of bouncing out to reddit.com to view a JPEG.
