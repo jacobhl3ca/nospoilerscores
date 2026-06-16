@@ -101,6 +101,13 @@ export interface Team {
   score: string;
   winner: boolean;
   record: string;
+  // Current overall ("total league") standings rank, 1 = best in the league.
+  // Single-table leagues (EPL/UCL/UEL) use ESPN's table position; conference/
+  // division leagues (NBA/MLB/NHL/MLS) get a computed overall rank by sorting
+  // every team on the sport's primary metric (points or win%). Null when unknown
+  // or N/A (the World Cup uses the static FIFA ranking instead). Hydrated from
+  // the standings endpoint after the scoreboard fetch.
+  rank?: number | null;
 }
 
 export interface GolfPlayer {

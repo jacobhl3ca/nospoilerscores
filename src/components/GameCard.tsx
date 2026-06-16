@@ -820,13 +820,28 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   </button>
                 );
               })()}
-              {/* World Cup: FIFA world ranking next to the name — the same
-                  spoiler-safe #N shown in the groups overlay (a fixed
-                  pre-tournament fact, not a result or live group position), so it
-                  also reads as a seeding in the knockout rounds. */}
-              {game.sport === "fifa" && !isTBD && fifaRank(team.displayName) != null ? (
-                <span className="text-[10px] sm:text-xs tabular-nums shrink-0 leading-none" style={{ color: "var(--text-muted)", opacity: 0.7 }} title={`FIFA world ranking: #${fifaRank(team.displayName)}`}>#{fifaRank(team.displayName)}</span>
-              ) : null}
+              {/* Ranking chip (#N) next to the name. World Cup uses the static
+                  FIFA world ranking — a fixed pre-tournament fact, spoiler-safe
+                  in every stage (its live group standing would NOT be). Every
+                  other league uses its current overall standings rank, gated
+                  exactly like the W-L record (upcoming/live only, hidden on
+                  finished/past cards) so it leaks no more than the record does. */}
+              {(() => {
+                if (isTBD) return null;
+                let rank: number | null = null;
+                let title = "";
+                if (game.sport === "fifa") {
+                  rank = fifaRank(team.displayName);
+                  title = `FIFA world ranking: #${rank}`;
+                } else if (team.rank != null && !effectivePastDate && !isFinished) {
+                  rank = team.rank;
+                  title = `${leagueLabel} standing: #${rank}`;
+                }
+                if (rank == null) return null;
+                return (
+                  <span className="text-[10px] sm:text-xs tabular-nums shrink-0 leading-none" style={{ color: "var(--text-muted)", opacity: 0.7 }} title={title}>#{rank}</span>
+                );
+              })()}
             </span>
             {/* Favorite-star: removed 2026-05-31, restored behind the Settings
                 toggle 2026-06-11 (Jacob) — favoriting also lives in the

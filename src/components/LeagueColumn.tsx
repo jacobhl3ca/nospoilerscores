@@ -765,10 +765,15 @@ export default function LeagueColumn({
       }
       const gapPx = parseFloat(getComputedStyle(row).columnGap || getComputedStyle(row).gap || "0") || 0;
       const totalGaps = gapPx * (row.children.length - 1);
-      // World Cup cards tuck a "#N" FIFA-ranking chip INSIDE the name container,
-      // so it's not in `occupied` above — reserve room for it (≤3 chars + gap)
-      // or long names ("Bosnia-Herzegovina") could spill past the cell.
-      const rankAllowance = league.sport === "fifa" ? 30 : 0;
+      // The "#N" ranking chip is tucked INSIDE the name container, so it's not
+      // in `occupied` above — reserve room for it (≤3 chars + gap) or long names
+      // ("Bosnia-Herzegovina", "Trail Blazers") could spill past the cell. Shown
+      // for the World Cup (static FIFA rank) and any league whose teams carry a
+      // live standings rank.
+      const showsRankChip =
+        league.sport === "fifa" ||
+        measuredGames.some((g) => g.homeTeam.rank != null || g.awayTeam.rank != null);
+      const rankAllowance = showsRankChip ? 30 : 0;
       const availableWidth = rowWidth - occupied - totalGaps - 4 - rankAllowance; // 4px safety
 
       // Measure longest name using a hidden span

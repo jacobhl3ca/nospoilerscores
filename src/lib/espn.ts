@@ -347,6 +347,7 @@ function parseTeam(competitor: any, sport: Sport): Team {
     score: competitor.score ?? "0",
     winner: competitor.winner ?? false,
     record,
+    rank: null, // hydrated post-fetch from the standings endpoint
   };
 }
 
@@ -2413,6 +2414,10 @@ export async function fetchAllLeagues(
       return { sport: cfg.sport, label, games: [], eventCard };
     }
     const { games, failed } = await fetchGames(cfg.sport, date);
+    // Standings rank (#N next to the team name). Kicked off here so it overlaps
+    // with the lookahead/lookback fetches below; stamped onto every team once
+    // all the game lists are assembled, just before returning.
+    const ranksPromise = RANK_LEAGUES.has(cfg.sport) ? fetchStandingsRanks(cfg.sport) : null;
     if (cfg.sport === "nhl" && date) await enrichNhlVideos(games, date);
     let nextGameDay: { date: string; games: Game[] } | null = null;
     // Only surface the "next game day" fallback when ESPN genuinely returned
@@ -2486,6 +2491,9 @@ export async function fetchAllLeagues(
     if (!failed && !isPastView && games.length === 0 && !nextGameDay && !previousGameDay) {
       previousGameDay = await fetchPreviousGameDayRange(cfg.sport, date);
     }
+    if (ranksPromise) {
+      applyTeamRanks(cfg.sport, await ranksPromise, [games, nextGameDay?.games, previousGameDay?.games]);
+    }
     return { sport: cfg.sport, label, games, nextGameDay, previousGameDay, fetchFailed: failed };
   };
 
@@ -2538,6 +2546,105 @@ export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>
   })();
   standingsCache.set(sport, p);
   return p;
+}
+
+// Team-sport leagues that get a "#N" standings rank on the card. World Cup is
+// excluded on purpose: it uses the static FIFA world ranking (fifaRankings.ts),
+// since its live group standing would be a spoiler. Golf/tennis/F1/UFC aren't
+// team standings and never reach this path.
+const RANK_LEAGUES = new Set<Sport>([
+  "mlb", "nba", "wnba", "ncaam", "ncaaw", "ncaaf", "nfl", "nhl", "epl", "mls", "ucl", "uel",
+]);
+
+// When ESPN groups standings by conference/division (no single league-wide
+// rank), we compute an overall rank by sorting every team on the sport's
+// primary standings metric, higher = better. Point-table sports use points;
+// the rest use win%. Single-table soccer leagues skip this — their own `rank`
+// stat is the real position.
+const RANK_METRIC: Partial<Record<Sport, "points" | "winPercent">> = {
+  nhl: "points", mls: "points",
+  nba: "winPercent", wnba: "winPercent", mlb: "winPercent", nfl: "winPercent",
+  ncaam: "winPercent", ncaaw: "winPercent", ncaaf: "winPercent",
+};
+
+type StandingEntry = {
+  team?: { id?: string };
+  stats?: Array<{ name?: string; value?: number; displayValue?: string }>;
+};
+
+// ESPN standings → { teamId -> overall league rank (1 = best) }. Cached per
+// sport. Mirrors fetchStandingsRecords' grouping handling, but resolves a
+// single league-wide position: trusts ESPN's `rank` for a single combined
+// table, otherwise sorts the whole league on its primary metric.
+const standingsRankCache = new Map<Sport, Promise<Map<string, number>>>();
+export function fetchStandingsRanks(sport: Sport): Promise<Map<string, number>> {
+  const cached = standingsRankCache.get(sport);
+  if (cached) return cached;
+  const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
+  const url = `https://site.web.api.espn.com/apis/v2/sports${sportPath}/standings`;
+  const p = (async () => {
+    const map = new Map<string, number>();
+    try {
+      const res = await fetchWithRetry(url, 1, 6000);
+      if (!res.ok) return map;
+      const data = await res.json();
+      const groups = (data.children ?? []) as Array<{ standings?: { entries?: StandingEntry[] } }>;
+      const groupLists = groups
+        .map((g) => g.standings?.entries ?? [])
+        .filter((e) => e.length);
+      const flat = (data.standings?.entries ?? []) as StandingEntry[];
+      const all = groupLists.length ? groupLists.flat() : flat;
+      if (!all.length) return map;
+
+      const statVal = (e: StandingEntry, name: string): number | null => {
+        const s = e.stats?.find((x) => x.name === name);
+        if (!s) return null;
+        const v = s.value ?? (s.displayValue != null ? parseFloat(s.displayValue) : NaN);
+        return Number.isFinite(v) ? (v as number) : null;
+      };
+
+      // One combined table (most soccer leagues, UCL/UEL league phase): ESPN's
+      // `rank` is the real position (with goal-difference tiebreakers baked in).
+      const oneTable = groupLists.length <= 1;
+      if (oneTable && all.every((e) => statVal(e, "rank") != null)) {
+        for (const e of all) {
+          const id = e.team?.id;
+          const r = statVal(e, "rank");
+          if (id && r != null) map.set(id, Math.round(r));
+        }
+        return map;
+      }
+
+      // Conference/division split (or no per-row rank): rank the whole league
+      // on its primary metric so "#N" means total-league position, not seed.
+      const metric = RANK_METRIC[sport] ?? "winPercent";
+      all
+        .map((e) => ({ id: e.team?.id, v: statVal(e, metric) }))
+        .filter((x): x is { id: string; v: number } => !!x.id && x.v != null)
+        .sort((a, b) => b.v - a.v)
+        .forEach((x, i) => map.set(x.id, i + 1));
+    } catch { /* swallow — ranks just won't show */ }
+    return map;
+  })();
+  standingsRankCache.set(sport, p);
+  return p;
+}
+
+// Stamp each team's overall standings rank from a precomputed map. team.id is
+// `${sport}-${rawId}`; the standings map is keyed by the raw ESPN id.
+function applyTeamRanks(
+  sport: Sport,
+  ranks: Map<string, number>,
+  lists: Array<Game[] | undefined | null>,
+): void {
+  if (!ranks.size) return;
+  const apply = (t: Team) => {
+    if (!t.id) return;
+    const rawId = t.id.startsWith(`${sport}-`) ? t.id.slice(sport.length + 1) : t.id;
+    const r = ranks.get(rawId);
+    if (r != null) t.rank = r;
+  };
+  for (const list of lists) for (const g of list ?? []) { apply(g.homeTeam); apply(g.awayTeam); }
 }
 
 // Fetch a team's full season schedule from ESPN. team.id on our Game model is
@@ -2636,6 +2743,10 @@ export async function fetchTeamSchedule(
       if (rec) t.record = rec;
     };
     for (const g of all) { fill(g.homeTeam); fill(g.awayTeam); }
+  }
+  // Standings rank (#N) — same data the dated board hydrates onto each team.
+  if (RANK_LEAGUES.has(sport)) {
+    applyTeamRanks(sport, await fetchStandingsRanks(sport), [all]);
   }
   return all;
 }
