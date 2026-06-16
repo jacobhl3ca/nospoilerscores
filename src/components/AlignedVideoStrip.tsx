@@ -77,9 +77,13 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   const totalRows = maxItems + 1;
 
   return (
-    // 691px = 3×225 + 2×8 (gap-2). 872px xl: = 3×280 + 2×16 (gap-4).
+    // Max-width tracks the column count so the strip lines up with the title row
+    // and the NewsColumns below (each col 225px / 280px xl, gaps 8 / 16):
+    // 3-col = 691 / 872 (3×225+2×8 / 3×280+2×16); 2-col = 458 / 576.
     <div
-      className="grid gap-2 sm:gap-4 mb-1.5 sm:mb-2 mx-auto w-full max-w-[691px] xl:max-w-[872px]"
+      className={`grid gap-2 sm:gap-4 mb-1.5 sm:mb-2 mx-auto w-full ${
+        sources.length === 2 ? "max-w-[458px] xl:max-w-[576px]" : "max-w-[691px] xl:max-w-[872px]"
+      }`}
       style={{
         gridTemplateColumns: `repeat(${sources.length}, minmax(0, 1fr))`,
         gridTemplateRows: `repeat(${totalRows}, auto)`,

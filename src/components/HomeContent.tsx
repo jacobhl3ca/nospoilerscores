@@ -1183,7 +1183,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // Measure the news-view league-title strip so per-source sticky headers
   // pin flush against its bottom edge (top: header-h + news-titlebar-h).
   // Callback ref instead of useEffect because the title row only mounts
-  // after `allFirstAreVideo` flips true (which depends on async data) —
+  // after `stripActive` flips true (which depends on async data) —
   // a deps-based effect on [showNews] fires too early and finds null.
   const newsTitleRowRoRef = useRef<ResizeObserver | null>(null);
   const newsTitleRowRef = useCallback((row: HTMLDivElement | null) => {
@@ -1778,40 +1778,34 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               setSlotLeague(slotIdx, s);
             };
 
-          // Convenience aliases — the aligned-video-strip logic below still
-          // references col1All/col2All/col3All directly to detect the all-
-          // video case (3-col only). Use the rendered (post-filter) sources
-          // since the strip activation should track what's visible.
-          const col1All = focusedEntries[0] ? renderSourcesFor(focusedEntries[0]) : [];
-          const col2All = focusedEntries[1] ? renderSourcesFor(focusedEntries[1]) : [];
-          const col3All = focusedEntries[2] ? renderSourcesFor(focusedEntries[2]) : [];
-          // When all 3 columns lead with a video source, lift those into the
-          // aligned strip so video N in every column is the same vertical
-          // size. Otherwise let each column render its own first card.
-          const allFirstAreVideo =
-            col1All[0]?.variant === "video" &&
-            col2All[0]?.variant === "video" &&
-            col3All[0]?.variant === "video";
-          // Which entries actually render: 1-col stacks ALL focused leagues
-          // (Jacob's "single column view should have all leagues"); 2/3-col
-          // takes the first N entries side-by-side. AlignedVideoStrip only
-          // makes sense at exactly 3 side-by-side cols with all video-first.
-          // When a Focus league is set, there's only one entry — force 1-col.
-          // Phones → 1 stacked column; desktop → fixed 3 across. (A Focus
-          // league also collapses to 1.) The user-facing 1/2/3 selector is gone.
+          // Which entries actually render: 1-col (mobile / Focus league) stacks
+          // ALL focused leagues; otherwise the first N entries side-by-side.
           const effectiveColCount = (newsFocusLeague || isMobile) ? 1 : 3;
           const renderedEntries = effectiveColCount === 1
             ? focusedEntries
             : focusedEntries.slice(0, effectiveColCount);
-          const stripActive = effectiveColCount === 3
-            && focusedEntries.length === 3
-            && allFirstAreVideo;
-          const useEspnTopTail = stripActive && !prefs.newsThirdLeague;
+          // Aligned video strip: when EVERY rendered side-by-side column leads
+          // with a video source, lift those leads into the strip (CSS subgrid)
+          // so video N is the same height across columns and the columns line
+          // up. Works for 2 OR 3 columns now (the strip grid + max-width scale
+          // with sources.length) — previously hard-gated to exactly 3, which
+          // left the 2-column view (e.g. one league + the ESPN "News" column)
+          // unaligned (Jacob 6/15). Only 1-col opts out. stripCols is the per-
+          // column source list, reused for the strip's `sources` below.
+          const stripCols = renderedEntries.map((e) => renderSourcesFor(e));
+          const stripActive = effectiveColCount !== 1
+            && renderedEntries.length >= 2
+            && stripCols.every((sources) => sources[0]?.variant === "video");
+          // The ESPN "News" column's top headlines fold into the strip's tail so
+          // they don't push that column's reddit section below the others. Its
+          // index is dynamic (col 2 in a 3-col board, col 1 in a 2-col one).
+          const espnColIdx = renderedEntries.findIndex((e) => e.id === "espn");
+          const useEspnTopTail = stripActive && espnColIdx >= 0 && !prefs.newsThirdLeague;
           // Sources stripped of the video lead when the strip is active.
           const sourcesForEntry = (entry: typeof renderedEntries[number], idx: number) => {
             const all = renderSourcesFor(entry);
             if (!stripActive) return all;
-            if (idx === 2 && useEspnTopTail) {
+            if (idx === espnColIdx && useEspnTopTail) {
               return all.slice(1).filter((s) => s.label !== "ESPN");
             }
             return all.slice(1);
@@ -1926,10 +1920,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   </div>
                   <AlignedVideoStrip
                     key={`avs-${newsRefreshKey}`}
-                    sources={[col1All[0], col2All[0], col3All[0]]}
+                    sources={stripCols.map((s) => s[0])}
                     onPlay={playNewsVideo}
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
-                    tailColIdx={useEspnTopTail ? 2 : undefined}
+                    tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                   />
                 </>
               )}
