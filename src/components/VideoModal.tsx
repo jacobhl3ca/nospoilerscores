@@ -47,6 +47,11 @@ interface VideoModalProps {
   // user toggles each in Settings. Only affect the YouTube highlight path.
   maskVideoTitle?: boolean;
   maskVideoBottom?: boolean;
+  // Opt-in (default OFF): show YouTube's NATIVE control bar (controls:1) instead
+  // of our spoiler-safe stripped player. When on, YT's own progress/seek bar +
+  // time are visible (a spoiler trade the user accepts — useful in fullscreen),
+  // the bottom spoiler mask + click-catcher step aside so YT's controls work.
+  youtubeNativeControls?: boolean;
   // Which seek control the YouTube player shows: progress bar + jumps ("both",
   // default), bar only, or jumps only.
   seekControl?: "both" | "bar" | "jumps";
@@ -179,7 +184,7 @@ const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 // Seconds skipped per ←/→ arrow press, matching YouTube's own arrow keys.
 const SEEK_STEP = 5;
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -747,7 +752,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // spoil how far through a highlight reel you are. It also disables
           // scrubbing (itself a spoiler vector). Mute/CC/fullscreen go with it:
           // we render our own subtle control strip below the video instead.
-          controls: 0,
+          // The "Show YouTube controls" setting (default off) opts back into
+          // YouTube's native bar for users who want it (e.g. in fullscreen).
+          controls: youtubeNativeControls ? 1 : 0,
           // Hide in-video annotations/cards — they can carry spoilers.
           iv_load_policy: 3,
           // vq is deprecated but still hinted by some clients.
@@ -824,7 +831,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       }
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
-  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode]);
+  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls]);
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
@@ -950,12 +957,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   click inside the iframe, so we lose nothing. Sits below the peek
                   buttons (z-20) so those still work; the masks are pointer-events:
                   none and pass their clicks down to here. */}
-              <div
-                aria-hidden
-                className="absolute inset-0 z-10 cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
-              />
+              {/* When YouTube's native controls are on, DON'T catch clicks —
+                  let them reach the iframe so YT's own play/seek/fullscreen work. */}
+              {!youtubeNativeControls && (
+                <div
+                  aria-hidden
+                  className="absolute inset-0 z-10 cursor-pointer"
+                  onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                  onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+                />
+              )}
               {/* Spoiler masks over YouTube's chrome — always on (see note by
                   the state declarations), each independently toggleable in
                   Settings (maskVideoTitle / maskVideoBottom). pointer-events stay
@@ -993,7 +1004,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   }}
                 />
               )}
-              {maskVideoBottom && !revealBottom && (
+              {maskVideoBottom && !revealBottom && !youtubeNativeControls && (
                 <div
                   aria-hidden
                   className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
@@ -1026,7 +1037,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   )}
                 </button>
               )}
-              {maskVideoBottom && (
+              {maskVideoBottom && !youtubeNativeControls && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setRevealBottom((v) => !v); }}
                   aria-label={revealBottom ? "Cover the bottom bar" : "Peek under the bottom bar"}

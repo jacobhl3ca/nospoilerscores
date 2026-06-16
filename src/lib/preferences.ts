@@ -195,6 +195,11 @@ export interface Preferences {
   // spoiler-safe out of the box; users opt out per-bar in Settings.
   maskVideoTitle?: boolean;
   maskVideoBottom?: boolean;
+  // Opt-in (default OFF / undefined ⇒ false): show YouTube's NATIVE control bar
+  // (controls:1) on highlight clips instead of the stripped spoiler-safe player.
+  // Gives back YT's own progress/seek bar + time — a spoiler the user accepts,
+  // handy in fullscreen. When on, the bottom spoiler mask steps aside.
+  youtubeNativeControls?: boolean;
   // Highlight-player seek control: the progress bar + the 10% jump buttons
   // ("both", default), just the bar, or just the jumps. The bar is custom and
   // spoiler-safe (no YouTube hover-thumbnails; drag-seek capped at 90% so the

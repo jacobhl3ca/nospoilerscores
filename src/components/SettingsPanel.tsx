@@ -681,6 +681,12 @@ export default function SettingsPanel({
               checked={prefs.maskVideoBottom ?? true}
               onChange={(v) => updatePrefs({ maskVideoBottom: v })}
             />
+            <ToggleRow
+              label="Show YouTube's controls"
+              hint="Use YouTube's own bar (progress + time) instead of the spoiler-safe one — reveals how far you are, but handy in fullscreen"
+              checked={prefs.youtubeNativeControls ?? false}
+              onChange={(v) => updatePrefs({ youtubeNativeControls: v })}
+            />
             <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
               <RadioGroup
                 value={prefs.videoSeekControl ?? "both"}
