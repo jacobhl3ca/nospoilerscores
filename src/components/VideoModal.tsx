@@ -223,6 +223,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // separate from the persistent Settings toggles (maskVideoTitle/Bottom).
   const [revealTitle, setRevealTitle] = useState(false);
   const [revealBottom, setRevealBottom] = useState(false);
+  // Whether the YT clip is actively playing. The bottom spoiler bar covers only
+  // the poster/paused "Watch on YouTube" pill+logo — during playback controls:0
+  // leaves nothing at the bottom, so we drop the bar while playing and show the
+  // full frame. Starts false (poster state) → true on PLAYING → false on pause/end.
+  const [isPlaying, setIsPlaying] = useState(false);
   // A seek the user must confirm because it lands past halfway (only when the
   // warnHalfway pref is on). Holds the action to run on confirm; null = no
   // prompt showing. Local, resets each open.
@@ -784,6 +789,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               window.clearTimeout(watchdogRef.current);
               watchdogRef.current = null;
             }
+            // Drive the bottom-bar gate: cover the YT pill only when not playing.
+            if (event.data === 1) setIsPlaying(true);
+            else if (event.data === 2 || event.data === 0) setIsPlaying(false);
             if (event.data === 1) {
               forceBest(event.target);
               // By PLAYING the title metadata is reliably populated — re-run the
@@ -976,11 +984,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   frame — so we can't show the bar only when the title appears. A
                   prior hover/fade attempt leaked the title on PC (see the 6/12
                   fview session). Always-on is the price of a cross-origin player.
-                  BOTTOM — measured: controls:0 strips YouTube's ENTIRE bottom bar
-                  (no timeline/seek line exists), so this bar covers nothing YT
-                  during playback — it's pure footage crop, kept just thick enough
-                  to hide the poster-state "Watch on YouTube" pill / logo. Safe to
-                  shrink further or toggle off. */}
+                  BOTTOM — controls:0 strips YouTube's ENTIRE bottom bar (no
+                  timeline/seek line exists), so during PLAYBACK there's nothing
+                  to hide and the bar would only crop footage. It exists solely to
+                  hide the poster/paused "Watch on YouTube" pill + logo, which only
+                  appear when not playing — so we gate it on !isPlaying and show
+                  the full frame while the clip runs. */}
               {maskVideoTitle && !titleSafe && !revealTitle && (
                 <div
                   aria-hidden
@@ -991,7 +1000,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   }}
                 />
               )}
-              {maskVideoBottom && !revealBottom && (
+              {maskVideoBottom && !revealBottom && !isPlaying && (
                 <div
                   aria-hidden
                   className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
@@ -1024,7 +1033,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   )}
                 </button>
               )}
-              {maskVideoBottom && (
+              {maskVideoBottom && !isPlaying && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setRevealBottom((v) => !v); }}
                   aria-label={revealBottom ? "Cover the bottom bar" : "Peek under the bottom bar"}
