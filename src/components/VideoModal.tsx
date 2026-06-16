@@ -368,22 +368,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   }, [fracFromClientX]);
 
   // Skip back/forward by SEEK_STEP seconds — drives the ←/→ arrow keys and the
-  // on-screen ±5s buttons. Forward is capped at seekCap of the clip (the same
-  // no-ending-spoiler rule, relaxed by "Allow seeking to the end") but never
-  // yanks backward if normal playback already carried past it; back floors at 0.
-  // No warn-halfway prompt — a small relative nudge isn't a "click past 50%".
+  // on-screen ±5s buttons. Unlike a jump or a bar-drag, stepping ±5s isn't a
+  // "skip straight to the ending" spoiler — it's slow, deliberate scrubbing — so
+  // forward is allowed all the way to the real end (100%), independent of the
+  // 90% cap that still gates the jumps and the bar. Back floors at 0. No
+  // warn-halfway prompt — a small relative nudge isn't a "click past 50%".
   const seekBy = useCallback((delta: number) => {
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
     const d = p.getDuration();
     if (!d || d <= 0) return;
     const t = p.getCurrentTime?.() ?? 0;
-    const cap = Math.max(d * seekCap, t);
-    const target = delta >= 0 ? Math.min(t + delta, cap) : Math.max(0, t + delta);
+    const target = delta >= 0 ? Math.min(t + delta, d) : Math.max(0, t + delta);
     p.seekTo(target, true);
     p.playVideo?.();
     setProgress(Math.min(1, target / d));
-  }, [seekCap]);
+  }, []);
 
   // Toggle play/pause on the YouTube player — drives both the Space/k keys and a
   // click anywhere on the video (via the click-catcher overlay). We do it through
