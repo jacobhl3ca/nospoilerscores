@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
 import { LeagueData, Sport, Game } from "@/lib/types";
 import type { ShareCardMeta } from "@/lib/shareCard";
-import { Preferences, Theme, loadPreferences, savePreferences, encodeFavorites, decodeFavorites } from "@/lib/preferences";
+import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
+import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, getActiveLeagueCandidates } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import LeagueColumn from "@/components/LeagueColumn";
@@ -553,30 +554,58 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         setVideoModal({ videoId: sharedVideoId, fallbackUrl: "" });
       }
     }
-    // Ratings on launch: respect defaultRatings pref.
-    //   auto (default) → keep the morning-safety reset (off before noon ET)
-    //   off            → always off on launch
-    //   on             → always on on launch
-    // News view explicitly does NOT reset — it's a viewer choice, not a
-    // spoiler surface, so it persists across refresh.
-    const ratingsMode = loaded.defaultRatings ?? "auto";
-    if (ratingsMode === "on") {
-      loaded.showRatings = true;
-    } else if (ratingsMode === "off") {
-      loaded.showRatings = false;
-    } else {
-      const hour = getETHour();
-      const morningReset = hour < 12;
-      if (morningReset) loaded.showRatings = false;
-    }
-    setPrefs(loaded);
-    // Landing view: defaultLandingView pref decides whether to honor the
-    // remembered showNews state, force scores, or force news on launch.
-    const landing = loaded.defaultLandingView ?? "remember";
-    if (landing === "news") setShowNews(true);
-    else if (landing === "scores") setShowNews(false);
-    else if (loaded.showNews) setShowNews(true);
-    document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
+    // Apply launch-time normalization to a prefs blob: push it into React
+    // state, run the ratings morning-safety reset + landing-view choice, and
+    // set the theme attribute. Factored into a function so the cross-device
+    // reconcile below can re-run it on the server copy without duplicating the
+    // spoiler-safety logic.
+    //   Ratings on launch: respect defaultRatings pref.
+    //     auto (default) → keep the morning-safety reset (off before noon ET)
+    //     off            → always off on launch
+    //     on             → always on on launch
+    //   News view does NOT reset — it's a viewer choice, not a spoiler surface.
+    const applyLaunchState = (p: Preferences) => {
+      const ratingsMode = p.defaultRatings ?? "auto";
+      if (ratingsMode === "on") {
+        p.showRatings = true;
+      } else if (ratingsMode === "off") {
+        p.showRatings = false;
+      } else if (getETHour() < 12) {
+        p.showRatings = false;
+      }
+      setPrefs(p);
+      const landing = p.defaultLandingView ?? "remember";
+      if (landing === "news") setShowNews(true);
+      else if (landing === "scores") setShowNews(false);
+      else if (p.showNews) setShowNews(true);
+      document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
+    };
+    applyLaunchState(loaded);
+
+    // Cross-device preference sync (Sign in with Apple). Entirely a no-op for
+    // signed-out users: getAuthState() reports signedIn:false and we stop, so
+    // anonymous behavior (localStorage only) is unchanged. For signed-in users
+    // we register the debounced uploader so future pref changes sync, then
+    // reconcile this device with the server — the server copy wins when it
+    // exists (it's the user's canonical setup across devices), otherwise we
+    // seed the server from this device's local prefs.
+    (async () => {
+      try {
+        const auth = await getAuthState();
+        if (!auth.signedIn) return;
+        setRemoteSync(pushRemotePrefs);
+        const remote = await fetchRemotePrefs();
+        if (remote && Object.keys(remote).length > 0) {
+          const merged = { ...loadPreferences(), ...remote };
+          savePreferences(merged); // persist locally (and re-affirm to server via the hook)
+          applyLaunchState(merged);
+        } else {
+          pushRemotePrefs(loadPreferences()); // first sign-in for this account
+        }
+      } catch {
+        /* sync is best-effort; the app stays fully functional without it */
+      }
+    })();
   }, []);
 
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when

@@ -247,7 +247,17 @@ export function loadPreferences(): Preferences {
   }
 }
 
+// Optional hook: when the user is signed in (Sign in with Apple), HomeContent
+// registers a pusher here so every savePreferences() call also syncs the prefs
+// to the server. Null (the default) = anonymous, localStorage only.
+type RemoteSync = (prefs: Preferences) => void;
+let remoteSync: RemoteSync | null = null;
+export function setRemoteSync(fn: RemoteSync | null): void {
+  remoteSync = fn;
+}
+
 export function savePreferences(prefs: Preferences): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  if (remoteSync) remoteSync(prefs);
 }

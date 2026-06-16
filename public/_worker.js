@@ -45,6 +45,19 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // --- Sign in with Apple (web) + cross-device preference sync. See the
+    // SIWA_* helpers at the bottom of this file. These routes are inert until
+    // the APPLE_* / SESSION_SECRET env vars are set (handlers 503 otherwise),
+    // so deploying this is safe before the secrets are in place.
+    if (url.pathname === "/auth/apple/login")    return siwaLogin(request, env, url);
+    if (url.pathname === "/auth/apple/callback") return siwaCallback(request, env, url);
+    if (url.pathname === "/auth/logout")         return siwaLogout();
+    if (url.pathname === "/api/me")              return siwaMe(request, env);
+    if (url.pathname === "/api/prefs") {
+      if (request.method === "PUT") return prefsPut(request, env);
+      return prefsGet(request, env);
+    }
+
     // --- Serve a stored share card (rendered server-side by the prebake cron).
     if (url.pathname.startsWith("/cards/") && url.pathname.endsWith(".png")) {
       if (env.DATA) {
@@ -900,3 +913,281 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+
+// ===========================================================================
+// Sign in with Apple (web) + cross-device preference sync.
+//
+// Why this exists: all hidescore prefs live in browser localStorage, so they
+// don't follow a user between Safari/Firefox/phone. Signing in with Apple
+// gives each user a stable id (Apple's `sub`); we store their prefs JSON in R2
+// at `prefs/<sub>.json` (not in any public-serving allowlist, so it's only
+// reachable through these authenticated endpoints). The client merges the
+// server copy over its local copy on load and writes back on change.
+//
+// Required env (set as Pages secrets; handlers 503/skip until present):
+//   APPLE_SERVICES_ID   the Services ID = OAuth client_id (e.g. com.hidescore.web)
+//   APPLE_TEAM_ID       10-char Apple Team ID
+//   APPLE_KEY_ID        10-char key id of the Sign in with Apple .p8 key
+//   APPLE_PRIVATE_KEY   full PEM contents of the .p8 (BEGIN/END PRIVATE KEY)
+//   SESSION_SECRET      random string; signs our own session + login state
+//
+// The Apple "client secret" is a short-lived ES256 JWT minted per token
+// exchange (below), so there is NO 6-month secret to rotate.
+// ===========================================================================
+
+const APPLE_AUTHORIZE = "https://appleid.apple.com/auth/authorize";
+const APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token";
+const APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys";
+const SIWA_SESSION_COOKIE = "hs_session";
+const SIWA_SESSION_TTL = 60 * 60 * 24 * 90; // 90 days
+const SIWA_STATE_TTL = 60 * 10; // login round-trip must finish in 10 min
+
+const _siwaEnc = new TextEncoder();
+const _siwaDec = new TextDecoder();
+function _siwaNow() { return Math.floor(Date.now() / 1000); }
+
+// base64url helpers (JWT/JWS use base64url, no padding)
+function _b64urlFromBytes(buf) {
+  const arr = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function _bytesFromB64url(str) {
+  let s = String(str).replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function _bytesFromB64(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function _b64urlFromJSON(obj) { return _b64urlFromBytes(_siwaEnc.encode(JSON.stringify(obj))); }
+function _jsonFromB64url(str) { return JSON.parse(_siwaDec.decode(_bytesFromB64url(str))); }
+
+// --- HMAC (signs our session token and the OAuth `state`) ------------------
+async function _siwaHmacKey(secret) {
+  return crypto.subtle.importKey("raw", _siwaEnc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+async function _siwaHmacSign(secret, data) {
+  const sig = await crypto.subtle.sign("HMAC", await _siwaHmacKey(secret), _siwaEnc.encode(data));
+  return _b64urlFromBytes(sig);
+}
+async function _siwaHmacVerify(secret, data, sig) {
+  try {
+    return await crypto.subtle.verify("HMAC", await _siwaHmacKey(secret),
+      _bytesFromB64url(sig), _siwaEnc.encode(data));
+  } catch { return false; }
+}
+
+// --- Our own session token: base64url(payload).hmac, verified server-side --
+async function _siwaMakeSession(env, payload) {
+  const body = _b64urlFromJSON(payload);
+  return `${body}.${await _siwaHmacSign(env.SESSION_SECRET, body)}`;
+}
+async function _siwaReadSession(env, token) {
+  if (!token || !env.SESSION_SECRET) return null;
+  const dot = token.lastIndexOf(".");
+  if (dot < 1) return null;
+  const body = token.slice(0, dot), sig = token.slice(dot + 1);
+  if (!(await _siwaHmacVerify(env.SESSION_SECRET, body, sig))) return null;
+  let payload;
+  try { payload = _jsonFromB64url(body); } catch { return null; }
+  if (!payload.exp || payload.exp < _siwaNow()) return null;
+  return payload;
+}
+
+// --- Apple client secret: ES256 JWT signed with the .p8 private key --------
+async function _siwaImportApplePrivateKey(pem) {
+  const b64 = pem.replace(/-----BEGIN PRIVATE KEY-----/, "")
+                 .replace(/-----END PRIVATE KEY-----/, "")
+                 .replace(/\s+/g, "");
+  return crypto.subtle.importKey("pkcs8", _bytesFromB64(b64),
+    { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+}
+async function _siwaMakeClientSecret(env) {
+  const header = { alg: "ES256", kid: env.APPLE_KEY_ID };
+  const iat = _siwaNow();
+  const payload = {
+    iss: env.APPLE_TEAM_ID, iat, exp: iat + 300,
+    aud: "https://appleid.apple.com", sub: env.APPLE_SERVICES_ID,
+  };
+  const signingInput = `${_b64urlFromJSON(header)}.${_b64urlFromJSON(payload)}`;
+  const key = await _siwaImportApplePrivateKey(env.APPLE_PRIVATE_KEY);
+  // Web Crypto ECDSA returns raw r||s (IEEE P1363) = exactly the JWS ES256 form.
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key,
+    _siwaEnc.encode(signingInput));
+  return `${signingInput}.${_b64urlFromBytes(sig)}`;
+}
+
+// --- Verify Apple's id_token (RS256, keys from Apple's JWKS) ----------------
+let _siwaKeysCache = null; // { exp, keys }
+async function _siwaAppleKeys() {
+  if (_siwaKeysCache && _siwaKeysCache.exp > _siwaNow()) return _siwaKeysCache.keys;
+  const res = await fetch(APPLE_KEYS_URL);
+  const { keys } = await res.json();
+  _siwaKeysCache = { exp: _siwaNow() + 3600, keys };
+  return keys;
+}
+async function _siwaVerifyIdToken(idToken, env) {
+  if (!idToken) return null;
+  const parts = idToken.split(".");
+  if (parts.length !== 3) return null;
+  const [h, p, s] = parts;
+  let header, payload;
+  try { header = _jsonFromB64url(h); payload = _jsonFromB64url(p); } catch { return null; }
+  const jwk = (await _siwaAppleKeys()).find((k) => k.kid === header.kid);
+  if (!jwk) return null;
+  let ok = false;
+  try {
+    const key = await crypto.subtle.importKey("jwk", jwk,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key,
+      _bytesFromB64url(s), _siwaEnc.encode(`${h}.${p}`));
+  } catch { return null; }
+  if (!ok) return null;
+  if (payload.iss !== "https://appleid.apple.com") return null;
+  const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (!aud.includes(env.APPLE_SERVICES_ID)) return null;
+  if (!payload.exp || payload.exp < _siwaNow()) return null;
+  return payload; // { sub, email?, nonce?, ... }
+}
+
+// --- cookies ---------------------------------------------------------------
+function _siwaSetCookie(name, value, maxAge) {
+  return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+function _siwaGetCookie(request, name) {
+  const h = request.headers.get("Cookie") || "";
+  const m = h.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+  return m ? m[1] : null;
+}
+
+// --- route handlers --------------------------------------------------------
+function _siwaConfigured(env) {
+  return !!(env.APPLE_SERVICES_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID &&
+            env.APPLE_PRIVATE_KEY && env.SESSION_SECRET);
+}
+function _siwaJson(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
+}
+function _siwaErrRedirect(code) {
+  return new Response(null, { status: 303, headers: { Location: `/?auth_error=${code}` } });
+}
+
+// GET /auth/apple/login -> 302 to Apple's authorize endpoint.
+// State + nonce are signed (HMAC) and round-tripped via the `state` param, so
+// no pre-callback cookie is needed (Apple POSTs the callback cross-site, where
+// a SameSite=Lax cookie wouldn't be sent anyway).
+async function siwaLogin(request, env, url) {
+  if (!_siwaConfigured(env)) return new Response("Sign in is not configured yet", { status: 503 });
+  const returnToRaw = url.searchParams.get("returnTo") || "/";
+  const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
+  const nonce = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
+  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow() });
+  const state = `${stateBody}.${await _siwaHmacSign(env.SESSION_SECRET, stateBody)}`;
+  const auth = new URL(APPLE_AUTHORIZE);
+  auth.searchParams.set("response_type", "code");
+  auth.searchParams.set("response_mode", "form_post"); // required once scope is requested
+  auth.searchParams.set("client_id", env.APPLE_SERVICES_ID);
+  auth.searchParams.set("redirect_uri", `${url.origin}/auth/apple/callback`);
+  auth.searchParams.set("scope", "name email");
+  auth.searchParams.set("state", state);
+  auth.searchParams.set("nonce", nonce);
+  return Response.redirect(auth.toString(), 302);
+}
+
+// POST /auth/apple/callback (form_post from appleid.apple.com)
+async function siwaCallback(request, env, url) {
+  if (!_siwaConfigured(env)) return _siwaErrRedirect("not_configured");
+  let form;
+  try { form = await request.formData(); } catch { return _siwaErrRedirect("bad_request"); }
+  const code = form.get("code");
+  const state = form.get("state");
+  if (!code || !state) return _siwaErrRedirect("missing_code");
+
+  const dot = String(state).lastIndexOf(".");
+  if (dot < 1) return _siwaErrRedirect("bad_state");
+  const sBody = String(state).slice(0, dot), sSig = String(state).slice(dot + 1);
+  if (!(await _siwaHmacVerify(env.SESSION_SECRET, sBody, sSig))) return _siwaErrRedirect("bad_state");
+  let st;
+  try { st = _jsonFromB64url(sBody); } catch { return _siwaErrRedirect("bad_state"); }
+  if (!st.t || st.t < _siwaNow() - SIWA_STATE_TTL) return _siwaErrRedirect("expired");
+
+  let tokens;
+  try {
+    const res = await fetch(APPLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.APPLE_SERVICES_ID,
+        client_secret: await _siwaMakeClientSecret(env),
+        code: String(code),
+        grant_type: "authorization_code",
+        redirect_uri: `${url.origin}/auth/apple/callback`,
+      }),
+    });
+    if (!res.ok) return _siwaErrRedirect("token_exchange");
+    tokens = await res.json();
+  } catch { return _siwaErrRedirect("token_exchange"); }
+
+  const claims = await _siwaVerifyIdToken(tokens.id_token, env);
+  if (!claims) return _siwaErrRedirect("bad_id_token");
+  if (claims.nonce && claims.nonce !== st.n) return _siwaErrRedirect("bad_nonce");
+
+  const session = await _siwaMakeSession(env, {
+    sub: claims.sub, email: claims.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+  });
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
+    },
+  });
+}
+
+// POST /auth/logout -> clear the session cookie.
+function siwaLogout() {
+  return new Response(null, {
+    status: 303,
+    headers: { Location: "/", "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, "", 0) },
+  });
+}
+
+// GET /api/me -> { signedIn, email }
+async function siwaMe(request, env) {
+  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  return _siwaJson({ signedIn: !!u, email: (u && u.email) || null });
+}
+
+// GET /api/prefs -> { prefs } (the user's stored prefs JSON, or null)
+async function prefsGet(request, env) {
+  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  if (!env.DATA) return _siwaJson({ prefs: null });
+  const obj = await env.DATA.get(`prefs/${u.sub}.json`);
+  return _siwaJson({ prefs: obj ? await obj.json() : null });
+}
+
+// PUT /api/prefs  body = prefs JSON -> { ok: true }
+async function prefsPut(request, env) {
+  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  if (!env.DATA) return _siwaJson({ error: "no_store" }, 503);
+  const text = await request.text();
+  if (text.length > 64 * 1024) return _siwaJson({ error: "too_large" }, 413);
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { return _siwaJson({ error: "bad_json" }, 400); }
+  await env.DATA.put(`prefs/${u.sub}.json`, JSON.stringify(parsed),
+    { httpMetadata: { contentType: "application/json" } });
+  return _siwaJson({ ok: true });
+}

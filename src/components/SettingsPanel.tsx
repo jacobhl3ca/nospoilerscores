@@ -10,6 +10,7 @@ import {
   DefaultLandingView,
   DefaultRatings,
 } from "@/lib/preferences";
+import { getAuthState, signInWithApple, signOut, type AuthState } from "@/lib/prefsSync";
 
 interface LeagueOption { sport: Sport; label: string }
 
@@ -127,6 +128,16 @@ export default function SettingsPanel({
   useEffect(() => {
     setIsSafari(/^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent));
   }, []);
+
+  // Account / cross-device sync state (Sign in with Apple). Re-checked each
+  // time the panel opens so the signed-in email reflects a just-finished login.
+  const [auth, setAuth] = useState<AuthState>({ signedIn: false, email: null });
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getAuthState().then((a) => { if (alive) setAuth(a); });
+    return () => { alive = false; };
+  }, [open]);
 
   // Esc to close
   useEffect(() => {
@@ -371,6 +382,47 @@ export default function SettingsPanel({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+          {/* Account — Sign in with Apple syncs prefs across browsers/devices.
+              First so the cross-device value prop is the first thing seen. */}
+          <Section title="Account">
+            {auth.signedIn ? (
+              <div className="space-y-2">
+                <p className="text-sm" style={{ color: "var(--text)" }}>
+                  Signed in{auth.email ? <> as <span className="font-medium">{auth.email}</span></> : ""}.
+                </p>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Your teams, layout, and settings sync automatically across Safari, Firefox, and your phone.
+                </p>
+                <button
+                  onClick={() => signOut()}
+                  className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                  style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Sign in to sync your teams, layout, and settings across every browser and device — no more re-configuring each one.
+                </p>
+                <button
+                  onClick={() => signInWithApple()}
+                  className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
+                  style={{
+                    background: resolvedTheme === "dark" ? "#fff" : "#000",
+                    color: resolvedTheme === "dark" ? "#000" : "#fff",
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 17 17" fill="currentColor" aria-hidden="true">
+                    <path d="M13.79 9.06c-.02-1.86 1.52-2.75 1.59-2.79-.87-1.27-2.22-1.44-2.7-1.46-1.15-.12-2.24.68-2.82.68-.58 0-1.48-.66-2.43-.64-1.25.02-2.4.73-3.04 1.85-1.3 2.25-.33 5.58.93 7.41.62.9 1.35 1.9 2.31 1.86.93-.04 1.28-.6 2.4-.6 1.12 0 1.43.6 2.41.58 1-.02 1.63-.91 2.24-1.81.71-1.04 1-2.05 1.01-2.1-.02-.01-1.94-.74-1.96-2.95l.01-.34zM11.9 3.38c.51-.62.86-1.48.76-2.34-.74.03-1.64.49-2.17 1.11-.47.55-.89 1.43-.78 2.27.83.07 1.67-.42 2.19-1.04z"/>
+                  </svg>
+                  Sign in with Apple
+                </button>
+              </div>
+            )}
+          </Section>
+
           {/* Theme — first because the old standalone header toggle moved
               in here, and dark/light is the most-frequently-flipped setting. */}
           <Section title="Theme">
