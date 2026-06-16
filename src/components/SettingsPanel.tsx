@@ -391,7 +391,7 @@ export default function SettingsPanel({
                   Signed in{auth.email ? <> as <span className="font-medium">{auth.email}</span></> : ""}.
                 </p>
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  Your teams, layout, and settings sync automatically across Safari, Firefox, and your phone.
+                  Your teams, layout, and settings sync automatically across all your browsers and devices.
                 </p>
                 <button
                   onClick={() => signOut()}
