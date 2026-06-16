@@ -27,6 +27,9 @@ interface LeagueColumnProps {
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
   // Clicking a game card body opens a spoiler-safe details popup (owned by HomeContent).
   onShowDetails?: (game: Game) => void;
+  // Opens the World Cup all-groups overlay (used only by the fifa column's
+  // tappable "Group Stage" subtitle).
+  onShowGroups?: () => void;
   selectedDate: string; // YYYYMMDD
   section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
@@ -310,12 +313,12 @@ function getPlayoffSubtitle(
 // Module-level cache so every column shares one fetch.
 let cachedBigInningSchedule: BigInningSchedule | null = null;
 
-function PlayoffSubtitle({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
+function PlayoffSubtitle({ sport, selectedDate, games, onClick }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void }) {
   if (isDemoModeActive()) return null;
-  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} />;
+  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} />;
 }
 
-function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; selectedDate: string; games?: Game[] }) {
+function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void }) {
   const ref = useRef<HTMLElement>(null);
   const [bigInningSchedule, setBigInningSchedule] = useState<BigInningSchedule | null>(cachedBigInningSchedule);
 
@@ -451,6 +454,22 @@ function PlayoffSubtitleInner({ sport, selectedDate, games }: { sport: Sport; se
       </a>
     );
   }
+  // Tappable subtitle (e.g. the World Cup "Group Stage" line opens the all-
+  // groups overlay). A trailing ▸ hints it's interactive; styled like the link
+  // variant (italic + hover underline).
+  if (onClick && tiers.length) {
+    return (
+      <button
+        ref={ref as React.RefObject<HTMLButtonElement>}
+        type="button"
+        onClick={onClick}
+        className={`${linkCls} cursor-pointer`}
+        style={baseStyle}
+      >
+        {renderText(text)}{" ▸"}
+      </button>
+    );
+  }
   return (
     <span ref={ref as React.RefObject<HTMLSpanElement>} className={spanCls} style={baseStyle}>
       {renderText(text)}
@@ -545,6 +564,7 @@ export default function LeagueColumn({
   onPlayHighlight,
   onPlayEmbed,
   onShowDetails,
+  onShowGroups,
   selectedDate,
   section,
   showFinalSeparator,
@@ -1122,7 +1142,7 @@ export default function LeagueColumn({
           ) : notStartedDate ? (
             <span className="text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5 italic" style={{ color: "var(--text-muted)" }}>Starts {notStartedDate}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : undefined} />
           )}
         </div>
       )}

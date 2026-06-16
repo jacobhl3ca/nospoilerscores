@@ -8,6 +8,7 @@ import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, getActiveLeagueCandidates
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import LeagueColumn from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
+import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
@@ -469,6 +470,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; shareCard?: ShareCardMeta | null } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -2035,6 +2037,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               onPlayHighlight: openVideoModal,
               onPlayEmbed: openEmbedModal,
               onShowDetails: (g: Game) => setDetailGame(g),
+              onShowGroups: () => setGroupsOpen(true),
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -2568,6 +2571,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           onPlayEmbed={openEmbedModal}
         />
       )}
+
+      {groupsOpen && <WorldCupGroupsModal onClose={() => setGroupsOpen(false)} />}
 
       <SettingsPanel
         open={settingsOpen}
