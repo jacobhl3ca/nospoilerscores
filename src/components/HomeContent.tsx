@@ -2192,10 +2192,22 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             // spacer + trailing + are horizontal-centering devices for the row
             // layout, so in column mode the + button moves directly below.
             const singleColumn = prefs.singleColumn ?? false;
+            // Phones cap each row column at ~225px, so when only 1–2 leagues are
+            // showing the cards stay narrow with dead side-space (Jacob 6/15).
+            // Let them fill the screen — and scale up a lone column's logos/names
+            // via ns-cards-lg — so they read bigger and are easier to tap. Desktop
+            // and the 3-column layout are untouched.
+            const mobileCols = !singleColumn && isMobile ? slotEntries.length : 0;
             const boardRowCls = singleColumn
               ? "relative flex flex-col items-center gap-5 ns-cards-lg"
-              : "relative flex flex-row justify-center items-stretch gap-2 sm:gap-4";
-            const colWidthClass = singleColumn ? "w-full max-w-[560px]" : undefined;
+              : `relative flex flex-row justify-center items-stretch gap-2 sm:gap-4${mobileCols === 1 ? " ns-cards-lg" : ""}`;
+            const colWidthClass = singleColumn
+              ? "w-full max-w-[560px]"
+              : mobileCols === 1
+                ? "flex-1 min-w-0 max-w-[560px] min-h-[60vh]"
+                : mobileCols === 2
+                  ? "flex-1 min-w-0 min-h-[60vh]"
+                  : undefined;
             const addButton = onAddColumn ? (
               singleColumn ? (
                 <div className="mt-1"><AddColumnButton onClick={onAddColumn} /></div>
