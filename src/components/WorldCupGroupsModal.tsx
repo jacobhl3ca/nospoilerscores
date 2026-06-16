@@ -16,10 +16,12 @@ interface WcGroup {
 type View = "groups" | "ranked";
 
 // View + highlight choices stick across opens (and reloads) via localStorage —
-// the same lightweight pattern the app uses for its other view prefs. Defaults
-// preserve the original behavior: grouped view, no highlighting.
+// the same lightweight pattern the app uses for its other view prefs. Top and
+// bottom highlight are independent toggles. Defaults preserve the original
+// behavior: grouped view, no highlighting.
 const VIEW_KEY = "wc-groups-view";
-const HL_KEY = "wc-groups-highlight";
+const HL_TOP_KEY = "wc-groups-hl-top";
+const HL_BOTTOM_KEY = "wc-groups-hl-bottom";
 
 function loadView(): View {
   if (typeof window === "undefined") return "groups";
@@ -29,10 +31,10 @@ function loadView(): View {
     return "groups";
   }
 }
-function loadHighlight(): boolean {
+function loadFlag(key: string): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(HL_KEY) === "1";
+    return window.localStorage.getItem(key) === "1";
   } catch {
     return false;
   }
@@ -56,15 +58,20 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
   const [groups, setGroups] = useState<WcGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<View>(() => loadView());
-  const [highlight, setHighlight] = useState<boolean>(() => loadHighlight());
+  const [hlTop, setHlTop] = useState<boolean>(() => loadFlag(HL_TOP_KEY));
+  const [hlBottom, setHlBottom] = useState<boolean>(() => loadFlag(HL_BOTTOM_KEY));
 
   const changeView = (v: View) => {
     setView(v);
     try { window.localStorage.setItem(VIEW_KEY, v); } catch {}
   };
-  const changeHighlight = (v: boolean) => {
-    setHighlight(v);
-    try { window.localStorage.setItem(HL_KEY, v ? "1" : "0"); } catch {}
+  const changeHlTop = (v: boolean) => {
+    setHlTop(v);
+    try { window.localStorage.setItem(HL_TOP_KEY, v ? "1" : "0"); } catch {}
+  };
+  const changeHlBottom = (v: boolean) => {
+    setHlBottom(v);
+    try { window.localStorage.setItem(HL_BOTTOM_KEY, v ? "1" : "0"); } catch {}
   };
 
   useEffect(() => {
@@ -139,9 +146,8 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
   }, [groups]);
 
   const rowStyle = (name: string): React.CSSProperties => {
-    if (!highlight) return {};
-    if (topNames.has(name)) return { background: TOP_BG, boxShadow: TOP_BAR };
-    if (bottomNames.has(name)) return { background: BOTTOM_BG, boxShadow: BOTTOM_BAR };
+    if (hlTop && topNames.has(name)) return { background: TOP_BG, boxShadow: TOP_BAR };
+    if (hlBottom && bottomNames.has(name)) return { background: BOTTOM_BG, boxShadow: BOTTOM_BAR };
     return {};
   };
 
@@ -201,15 +207,30 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
                 );
               })}
             </div>
-            <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none" style={{ color: "var(--text-muted)" }}>
-              <input
-                type="checkbox"
-                checked={highlight}
-                onChange={(e) => changeHighlight(e.target.checked)}
-                className="accent-[var(--accent)] cursor-pointer"
-              />
-              Highlight top &amp; bottom 10
-            </label>
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none" style={{ color: "var(--text-muted)" }}>
+                <input
+                  type="checkbox"
+                  checked={hlTop}
+                  onChange={(e) => changeHlTop(e.target.checked)}
+                  className="cursor-pointer"
+                  style={{ accentColor: "rgb(34,197,94)" }}
+                />
+                <span className="inline-block w-2 h-2 rounded-sm" style={{ background: "rgb(34,197,94)" }} />
+                Top 10
+              </label>
+              <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none" style={{ color: "var(--text-muted)" }}>
+                <input
+                  type="checkbox"
+                  checked={hlBottom}
+                  onChange={(e) => changeHlBottom(e.target.checked)}
+                  className="cursor-pointer"
+                  style={{ accentColor: "rgb(239,68,68)" }}
+                />
+                <span className="inline-block w-2 h-2 rounded-sm" style={{ background: "rgb(239,68,68)" }} />
+                Bottom 10
+              </label>
+            </div>
           </div>
         ) : null}
 
@@ -222,14 +243,18 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
             Loading groups&hellip;
           </p>
         ) : view === "ranked" ? (
-          <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+          // One flat list of names, flowing DOWN each column then to the next
+          // (columns 1 → 2 → 3). Same column counts as the groups grid so the
+          // overlay keeps its size when you switch views. break-inside-avoid
+          // keeps a single team row from splitting across a column boundary.
+          <div className="columns-2 sm:columns-3 lg:columns-4 gap-2">
             {ranked.map((t) => (
-              <li
+              <div
                 key={t.name}
-                className="flex items-center gap-2 min-w-0 rounded px-1.5 py-1"
+                className="flex items-center gap-2 min-w-0 rounded px-1.5 py-1 break-inside-avoid"
                 style={rowStyle(t.name)}
               >
-                <span className="text-[11px] w-8 text-right shrink-0 tabular-nums" style={{ color: t.rank ? "var(--text)" : "var(--text-muted)", opacity: t.rank ? 1 : 0.6 }}>
+                <span className="text-[11px] w-7 text-right shrink-0 tabular-nums" style={{ color: t.rank ? "var(--text)" : "var(--text-muted)", opacity: t.rank ? 1 : 0.6 }}>
                   {t.rank ? `#${t.rank}` : "—"}
                 </span>
                 {t.flag ? (
@@ -239,12 +264,9 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
                   <span className="w-4 h-4 shrink-0" />
                 )}
                 <span className="text-xs truncate flex-1" style={{ color: "var(--text)" }}>{t.name}</span>
-                <span className="text-[10px] shrink-0 uppercase tracking-wide" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-                  {t.group.replace(/^group\s*/i, "")}
-                </span>
-              </li>
+              </div>
             ))}
-          </ol>
+          </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
             {groups.map((g) => (
@@ -279,7 +301,13 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
         {groups ? (
           <p className="text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
             #N = FIFA world ranking coming into the tournament — not group position.
-            {highlight ? " Green = strongest 10, red = weakest 10 by that ranking." : ""}
+            {hlTop && hlBottom
+              ? " Green = strongest 10, red = weakest 10 by that ranking."
+              : hlTop
+                ? " Green = strongest 10 by that ranking."
+                : hlBottom
+                  ? " Red = weakest 10 by that ranking."
+                  : ""}
           </p>
         ) : null}
       </div>
