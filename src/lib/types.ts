@@ -64,6 +64,17 @@ export interface Game {
   // spoiler toggle is on (it reveals a hot bat, not the score). `needs` is the
   // missing hit type ("single" | "double" | "triple" | "home run").
   cycleWatch?: { team: string; player: string; needs: string } | null;
+  // Soccer penalty shootout: a knockout match level after extra time, decided
+  // (or being decided) by spot kicks. Set for live shootouts and just-finished
+  // ones (STATUS_*_PEN / a per-competitor shootoutScore). Surfaced as a spoiler-
+  // safe "Penalty shootout" badge — gated behind the ratings/spoiler toggle; it
+  // reveals only that it went to penalties, never the winner.
+  penaltyShootout?: boolean;
+  // Tennis deciding set: a live Grand Slam singles match level on sets and into
+  // the final set (1-1 in set 3 for best-of-3 women's draws; 2-2 in set 5 for
+  // best-of-5 men's draws). The win-or-go-home stretch. Spoiler-safe "Deciding
+  // set" badge, ratings-toggle gated — reveals only that the sets are level.
+  decidingSet?: boolean;
   // Venue location ("Minneapolis, Minnesota" / "Santa Clara, California") and
   // indoor flag — both sit next to the fullName in competition.venue, which we
   // already read into `venue`. Omitted when ESPN has no/junk address data.

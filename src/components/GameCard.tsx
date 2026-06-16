@@ -489,6 +489,39 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         </div>
       )}
 
+      {/* Soccer Penalty Shootout — knockout level after extra time, decided on
+          spot kicks. Shown live AND on the just-finished match (shootouts are
+          brief); gated behind the ratings/spoiler toggle. Reveals only that it
+          went to pens, never the winner. */}
+      {showRatings && game.penaltyShootout && (
+        <div className="mb-1 flex justify-center">
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-500"
+            style={{ background: "rgba(16, 185, 129, 0.12)" }}
+            title="Level after extra time — decided by a penalty shootout"
+          >
+            <span aria-hidden>🥅</span>
+            Penalty Shootout
+          </span>
+        </div>
+      )}
+
+      {/* Tennis Deciding Set — live Grand Slam match level on sets, into the
+          final set. Gated behind the ratings/spoiler toggle; reveals only that
+          the sets are level, never who's ahead within the set. */}
+      {isLive && showRatings && game.decidingSet && (
+        <div className="mb-1 flex justify-center">
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-500"
+            style={{ background: "rgba(139, 92, 246, 0.12)" }}
+            title="Match level on sets — into the deciding set"
+          >
+            <span aria-hidden>🎾</span>
+            Deciding Set
+          </span>
+        </div>
+      )}
+
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
         const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);

@@ -561,7 +561,7 @@ function tennisEtYmd(iso: string): string {
   }
 }
 
-function parseTennisMatch(match: any, event: any): Game {
+function parseTennisMatch(match: any, event: any, slug: string): Game {
   const comps = match.competitors ?? [];
   const home = comps.find((c: any) => c.homeAway === "home") ?? comps[0];
   const away = comps.find((c: any) => c.homeAway === "away") ?? comps[1];
@@ -610,6 +610,12 @@ function parseTennisMatch(match: any, event: any): Game {
     // reserved for finished deciders. Level (e.g. 1-1) reads best.
     rating = diff === 0 ? 78 : diff === 1 ? 68 : 55;
   }
+  // Deciding set: a live match level on sets and into the final set — the
+  // win-or-go-home stretch. Best-of-3 (all women's draws) decides at 1-1 in
+  // set 3; best-of-5 (men's Slam singles) at 2-2 in set 5. The grouping slug
+  // tells us which — ESPN's `format` field is unreliable (reports 5 for both).
+  const setsToWin = /women/.test(slug) ? 2 : 3;
+  const decidingSet = state === "in" && hs === as && hs === setsToWin - 1;
   // 1st set (or pre) → rating stays null (Too Early / unrated)
   // Gather broadcasts — tennis nests these on the match (competition) object
   // with the same broadcasts[].names[] shape as team sports (see parseGame).
@@ -648,6 +654,7 @@ function parseTennisMatch(match: any, event: any): Game {
     isPlayoff: false,
     recapUrl: null,
     rating,
+    decidingSet,
     streamUrl: null,
     primeStreamUrl: null,
   };
@@ -675,7 +682,7 @@ function buildTennisGames(events: any[], date?: string): Game[] {
         const sn = match.status?.type?.name ?? "";
         if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
         try {
-          games.push(parseTennisMatch(match, event));
+          games.push(parseTennisMatch(match, event, slug));
         } catch {
           // A single malformed match must not blank the whole draw.
         }
@@ -827,9 +834,23 @@ function parseGame(event: any, sport: Sport): Game {
 
   const stage = deriveStage(competition?.altGameNote, event.season?.slug);
 
+  // Penalty shootout: a soccer knockout decided (or being decided) by spot
+  // kicks — level after extra time, the pure tune-in moment. ESPN tags it via a
+  // STATUS_*_PEN status name and a per-competitor `shootoutScore` that populates
+  // live as kicks are taken. Reveals only that it went to penalties (a draw
+  // through ET), never the winner; the card gates it behind the ratings toggle.
+  const shootoutStatus = event.status?.type?.name ?? "";
+  const penaltyShootout =
+    SOCCER_SPORTS.has(sport) &&
+    (event.status?.type?.state ?? "pre") !== "pre" &&
+    ((home?.shootoutScore != null && home.shootoutScore !== "") ||
+      (away?.shootoutScore != null && away.shootoutScore !== "") ||
+      /SHOOTOUT|_PEN\b|FINAL_PEN/i.test(shootoutStatus));
+
   return {
     id: event.id,
     sport,
+    penaltyShootout,
     date: event.date,
     name: event.name ?? "",
     shortName: event.shortName ?? "",
