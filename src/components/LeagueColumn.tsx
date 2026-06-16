@@ -62,6 +62,11 @@ interface LeagueColumnProps {
   // Outer-column width/spacing classes. Defaults to the narrow multi-column
   // width; the single-column board passes a wider one so cards have room.
   widthClassName?: string;
+  // Condensed mode (single-column board): show only TODAY's games for this
+  // league, and when there are 6+, collapse to the top 3 with a "Show N more"
+  // toggle. Leagues with ≤5 today show them all. Keeps the stacked single
+  // column scannable instead of one league flooding the feed.
+  condense?: boolean;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -580,9 +585,11 @@ export default function LeagueColumn({
   slotIdx,
   onReorderSlots,
   widthClassName = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]",
+  condense,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
+  const [condenseExpanded, setCondenseExpanded] = useState(false); // "Show more" in condensed single-column mode
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   const [swapOpen, setSwapOpen] = useState(false);
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
@@ -899,6 +906,48 @@ export default function LeagueColumn({
   const showHeader = section !== "finished" && !teamViewTeam;
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
+
+  // Condensed single-column render: TODAY's games only (no future-day
+  // lookahead, no Final separator), best-first via `sorted`. 6+ games collapse
+  // to the top 3 with a "Show N more" toggle; ≤5 show in full. `pastDate` flows
+  // to the cards so a past tab still hides records + shows highlights.
+  const CONDENSE_LIMIT = 3;
+  const renderCondensed = (games: Game[], pastDate: boolean) => {
+    const collapsible = games.length > 5;
+    const visible = !collapsible || condenseExpanded ? games : games.slice(0, CONDENSE_LIMIT);
+    return (
+      <div className="flex flex-col gap-1.5 sm:gap-2">
+        {visible.map((game) => (
+          <GameCard
+            key={game.id}
+            game={game}
+            favoriteTeams={favoriteTeams}
+            onToggleFavoriteTeam={onToggleFavoriteTeam}
+            showRatings={showRatings}
+            leagueLabel={league.label}
+            onPlayHighlight={onPlayHighlight}
+            onPlayEmbed={onPlayEmbed}
+            isPastDate={pastDate}
+            isToday={isToday}
+            useAbbreviations={useAbbreviations}
+            onSelectTeam={setTeamViewTeam}
+            onShowDetails={onShowDetails}
+            showStars={cardStars}
+          />
+        ))}
+        {collapsible && (
+          <button
+            type="button"
+            onClick={() => setCondenseExpanded((v) => !v)}
+            className="mt-0.5 mx-auto text-xs px-3 py-1.5 rounded-full cursor-pointer transition-colors"
+            style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            {condenseExpanded ? "Show less" : `Show ${games.length - CONDENSE_LIMIT} more`}
+          </button>
+        )}
+      </div>
+    );
+  };
 
   // Render the upcoming/lookahead slate. NBA/NHL are down to a single playoff
   // series with a few games left, so the lead game is a full card and the rest
@@ -1218,6 +1267,8 @@ export default function LeagueColumn({
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Upcoming Schedule TBD</p>
           )
         ) : null
+      ) : condense ? (
+        renderCondensed(sorted, isPastDate)
       ) : isPastDate ? (
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {sorted.map((game) => (

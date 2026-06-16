@@ -445,6 +445,36 @@ const isWideViewport = () =>
 // All slot indexes the prefs system knows about (slots 4-5 render wide-only).
 const SLOT_INDICES = [0, 1, 2, 3, 4];
 
+// Single-column board toggle — sits to the RIGHT of the calendar icon in the
+// date-nav (scores view only). Flips prefs.singleColumn: stack every league in
+// one wide column with bigger, condensed cards, vs the side-by-side board. The
+// glyph shows the CURRENT state (one wide bar when on, two columns when off);
+// accent-tinted when single-column is active. Mirrors the bare-icon styling of
+// the calendar button it sits beside.
+function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="ml-0.5 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+      style={{ color: active ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
+      title={active ? "Single-column view (on) — tap for columns" : "Single-column view — one wide column, bigger cards"}
+      aria-label="Toggle single-column view"
+      aria-pressed={active}
+    >
+      {active ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="6" y="3" width="12" height="18" rx="1.5" />
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="18" rx="1.5" /><rect x="14" y="3" width="7" height="18" rx="1.5" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 export default function HomeContent({ initialOffset, worldCupHub }: { initialOffset?: number; worldCupHub?: boolean }) {
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1467,7 +1497,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             {!showNews && (
               <div className="sm:hidden flex justify-center">
                 <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
-                  <span className="relative inline-flex">
+                  <span className="relative inline-flex items-center">
                     <button
                       data-cal-toggle
                       onClick={() => setCalendarOpen(!calendarOpen)}
@@ -1483,6 +1513,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                     {calendarOpen && (
                       <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
                     )}
+                    <SingleColToggle active={prefs.singleColumn ?? false} onClick={() => updatePrefs({ singleColumn: !prefs.singleColumn })} />
                   </span>
                 } />
               </div>
@@ -1620,7 +1651,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       {!showNews && (
         <div className="hidden sm:flex max-w-6xl mx-auto px-4 justify-center pt-2 pb-1">
           <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
-            <span className="relative inline-flex">
+            <span className="relative inline-flex items-center">
               <button
                 data-cal-toggle
                 onClick={() => setCalendarOpen(!calendarOpen)}
@@ -1636,6 +1667,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               {calendarOpen && (
                 <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
               )}
+              <SingleColToggle active={prefs.singleColumn ?? false} onClick={() => updatePrefs({ singleColumn: !prefs.singleColumn })} />
             </span>
           } />
         </div>
@@ -2244,6 +2276,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                       {...swapPropsForSlot(entry.slotIdx)}
                       onCycleLeague={cycleForEntry(entry)}
                       widthClassName={colWidthClass}
+                      condense={singleColumn}
                     />
                   ))}
                   {addButton}
@@ -2270,6 +2303,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                     {...swapPropsForSlot(entry.slotIdx)}
                     onCycleLeague={cycleForEntry(entry)}
                     widthClassName={colWidthClass}
+                    condense={singleColumn}
                   />
                 ))}
                 {addButton}
