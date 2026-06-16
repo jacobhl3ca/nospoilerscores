@@ -930,10 +930,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           >
             {/* Video region — 16:9 in-flow, or capped to leave bar room in FS */}
             <div
-              className="relative w-full overflow-hidden bg-black"
+              className="relative mx-auto w-full overflow-hidden bg-black"
               style={fsActive
                 ? { width: fsMediaWidth, aspectRatio: "16 / 9", borderRadius: 0 }
-                : { paddingBottom: "56.25%", borderRadius: "0.5rem" }}
+                : { width: "min(100%, calc(78vh * 16 / 9))", aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
               {/* Click-catcher over the whole player. A click anywhere on the
