@@ -733,6 +733,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     const initPlayer = () => {
       playerRef.current = new (window as any).YT.Player("yt-player", {
+        width: "100%",
+        height: "100%",
         videoId: currentId,
         playerVars: {
           autoplay: 1,
