@@ -51,15 +51,28 @@ function hourLabel(h: number): string {
   return `${h12} ${ampm}`;
 }
 
-async function geocode(city: string, region: string, signal?: AbortSignal): Promise<Geo | null> {
+async function geocode(city: string, region: string): Promise<Geo | null> {
   const key = `${city}|${region}`.toLowerCase();
   const cached = geoCache.get(key);
   if (cached !== undefined) return cached;
+  // A venue's coordinates never change, so persist hits across sessions — after
+  // the first geocode of a park it's a localStorage read, not a network hop.
+  if (typeof window !== "undefined") {
+    try {
+      const stored = window.localStorage.getItem(`nss-geo:${key}`);
+      if (stored) {
+        const geo = JSON.parse(stored) as Geo;
+        geoCache.set(key, geo);
+        return geo;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   let result: Geo | null = null;
   try {
     const r = await fetch(
       `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=5&language=en&format=json`,
-      { signal },
     );
     if (r.ok) {
       const d = await r.json();
@@ -82,26 +95,59 @@ async function geocode(city: string, region: string, signal?: AbortSignal): Prom
       }
     }
   } catch {
-    return null; // aborted / network — don't cache a transient miss
+    return null; // network — don't cache a transient miss
   }
   geoCache.set(key, result);
+  if (result && typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(`nss-geo:${key}`, JSON.stringify(result));
+    } catch {
+      /* ignore */
+    }
+  }
   return result;
+}
+
+// venueLocation|gameDateISO → in-flight-or-resolved forecast. Sharing the
+// Promise means a prefetch (card hover/tap) and the modal's own fetch dedupe
+// to ONE request, and reopening a game is instant.
+const resultCache = new Map<string, Promise<GameWeather | null>>();
+
+// Warm the cache before the modal opens — call on card hover/pointerdown so the
+// forecast is usually ready by the time the detail popup renders (kills the
+// "weather pops in a beat late" delay). No-ops for games that won't show
+// weather (finished, indoor, or no resolved location).
+export function prefetchGameWeather(game: {
+  venueLocation?: string;
+  date: string;
+  state: string;
+  venueIndoor?: boolean | null;
+}): void {
+  if (game.state === "post" || game.venueIndoor || !game.venueLocation) return;
+  void fetchGameWeather(game.venueLocation, game.date);
 }
 
 // venueLocation: "St. Louis, Missouri" / "Guadalajara, Mexico". gameDateISO is
 // the UTC ISO start; we derive the venue-LOCAL date + hour to pick the right
-// day and the gametime row.
-export async function fetchGameWeather(
-  venueLocation: string,
-  gameDateISO: string,
-  signal?: AbortSignal,
-): Promise<GameWeather | null> {
+// day and the gametime row. Cached by venue+date.
+export function fetchGameWeather(venueLocation: string, gameDateISO: string): Promise<GameWeather | null> {
+  const key = `${venueLocation}|${gameDateISO}`;
+  const hit = resultCache.get(key);
+  if (hit) return hit;
+  const p = computeWeather(venueLocation, gameDateISO).catch(() => null);
+  resultCache.set(key, p);
+  // Drop a null (failed/transient) so a later open can retry; keep real hits.
+  p.then((w) => { if (w === null) resultCache.delete(key); });
+  return p;
+}
+
+async function computeWeather(venueLocation: string, gameDateISO: string): Promise<GameWeather | null> {
   const [cityRaw, ...rest] = venueLocation.split(",");
   const city = (cityRaw ?? "").trim();
   const region = rest.join(",").trim();
   if (!city) return null;
 
-  const geo = await geocode(city, region, signal);
+  const geo = await geocode(city, region);
   if (!geo) return null;
 
   const start = new Date(gameDateISO);
@@ -118,7 +164,7 @@ export async function fetchGameWeather(
       `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}` +
       `&hourly=temperature_2m,precipitation_probability,weather_code` +
       `&temperature_unit=fahrenheit&timezone=auto&start_date=${localDate}&end_date=${localDate}`;
-    const r = await fetch(url, { signal });
+    const r = await fetch(url);
     if (!r.ok) return null;
     data = await r.json();
   } catch {

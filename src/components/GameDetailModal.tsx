@@ -41,11 +41,13 @@ export default function GameDetailModal({
   useEffect(() => {
     setWeather(null);
     if (game.state === "post" || game.venueIndoor || !game.venueLocation) return;
-    const ctrl = new AbortController();
-    fetchGameWeather(game.venueLocation, game.date, ctrl.signal)
-      .then((w) => { if (!ctrl.signal.aborted) setWeather(w); })
+    let cancelled = false;
+    // fetchGameWeather is cached + deduped, so if the card already prefetched
+    // on hover/tap this resolves instantly.
+    fetchGameWeather(game.venueLocation, game.date)
+      .then((w) => { if (!cancelled) setWeather(w); })
       .catch(() => {});
-    return () => ctrl.abort();
+    return () => { cancelled = true; };
   }, [game.id, game.venueLocation, game.venueIndoor, game.date, game.state]);
 
   const isLive = game.state === "in";
@@ -171,53 +173,53 @@ export default function GameDetailModal({
           <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage}</div>
         ) : null}
 
-        {/* Venue — name · city/region · indoor. Indoor is shown only when true;
-            outdoor is the default and labeling every open-air venue is noise. */}
-        {game.venue ? (
-          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-            {game.venue}
-            {game.venueLocation ? ` · ${game.venueLocation}` : ""}
-            {game.venueIndoor ? " · Indoor" : ""}
+        {/* Venue — name · city/region · indoor — with the ESPN-style gametime
+            weather (icon + temp + condition) pinned to the RIGHT of the stadium
+            line. Indoor shown only when true; outdoor is the norm (noise). */}
+        {game.venue || weather ? (
+          <div className="flex items-start justify-between gap-3 mb-1 text-xs" style={{ color: "var(--text-muted)" }}>
+            <span className="min-w-0">
+              {game.venue}
+              {game.venueLocation ? ` · ${game.venueLocation}` : ""}
+              {game.venueIndoor ? " · Indoor" : ""}
+            </span>
+            {weather ? (
+              <span className="shrink-0 whitespace-nowrap">
+                {weather.icon} {weather.tempF}° · {weather.label}
+                {weather.rainPct >= 30 ? ` · ${weather.rainPct}%` : ""}
+              </span>
+            ) : null}
           </div>
         ) : null}
 
-        {/* Local weather — ESPN-style gametime conditions (temp + icon) plus an
-            hourly rain-chance timeline below, shown only when meaningful rain is
-            forecast. Outdoor, non-final games only (gated in the fetch effect). */}
-        {weather ? (
-          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-            <div>
-              {weather.icon} {weather.tempF}° · {weather.label}
-              {weather.rainPct >= 30 ? ` · ${weather.rainPct}% rain` : ""}
+        {/* Rain-chance timeline — below the venue line, full width, shown only
+            when meaningful rain (peak ≥30%) is forecast for the day. */}
+        {weather && weather.peakRainPct >= 30 && weather.timeline.length ? (
+          <div className="text-xs mb-1 mt-1.5" style={{ color: "var(--text-muted)" }}>
+            <div className="text-[10px] uppercase tracking-wide mb-0.5">
+              Rain chance{weather.peakLabel ? ` · peak ${weather.peakRainPct}% ${weather.peakLabel}` : ""}
             </div>
-            {weather.peakRainPct >= 30 && weather.timeline.length ? (
-              <div className="mt-1.5">
-                <div className="text-[10px] uppercase tracking-wide mb-0.5">
-                  Rain chance{weather.peakLabel ? ` · peak ${weather.peakRainPct}% ${weather.peakLabel}` : ""}
+            <div className="flex items-end gap-[2px] h-6">
+              {weather.timeline.map((t) => (
+                <div
+                  key={t.hour24}
+                  title={`${t.label} · ${t.rainPct}% rain`}
+                  className="flex-1 rounded-sm"
+                  style={{
+                    height: `${Math.max(2, Math.round((t.rainPct / 100) * 24))}px`,
+                    background: "var(--accent)",
+                    opacity: 0.3 + 0.7 * (t.rainPct / 100),
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-[2px] mt-0.5">
+              {weather.timeline.map((t) => (
+                <div key={t.hour24} className="flex-1 text-center text-[9px] leading-none">
+                  {t.hour24 % 3 === 0 ? t.label.replace(" ", "") : ""}
                 </div>
-                <div className="flex items-end gap-[2px] h-6">
-                  {weather.timeline.map((t) => (
-                    <div
-                      key={t.hour24}
-                      title={`${t.label} · ${t.rainPct}% rain`}
-                      className="flex-1 rounded-sm"
-                      style={{
-                        height: `${Math.max(2, Math.round((t.rainPct / 100) * 24))}px`,
-                        background: "var(--accent)",
-                        opacity: 0.3 + 0.7 * (t.rainPct / 100),
-                      }}
-                    />
-                  ))}
-                </div>
-                <div className="flex gap-[2px] mt-0.5">
-                  {weather.timeline.map((t) => (
-                    <div key={t.hour24} className="flex-1 text-center text-[9px] leading-none">
-                      {t.hour24 % 3 === 0 ? t.label.replace(" ", "") : ""}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+              ))}
+            </div>
           </div>
         ) : null}
 

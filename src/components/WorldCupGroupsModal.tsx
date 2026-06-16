@@ -51,7 +51,8 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
               .sort((a, b) => a.name.localeCompare(b.name));
             return { name: g.name ?? g.abbreviation ?? "", teams };
           })
-          .filter((g) => g.teams.length);
+          .filter((g) => g.teams.length)
+          .sort((a, b) => a.name.localeCompare(b.name));
         if (!ctrl.signal.aborted) {
           if (parsed.length) setGroups(parsed);
           else setFailed(true);
@@ -62,6 +63,13 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
     })();
     return () => ctrl.abort();
   }, []);
+
+  // "A to L (12)" once loaded (strip the "Group " prefix off the first/last
+  // group names); just the plain title while loading.
+  const range =
+    groups && groups.length
+      ? ` ${groups[0].name.replace(/^group\s*/i, "")} to ${groups[groups.length - 1].name.replace(/^group\s*/i, "")} (${groups.length})`
+      : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -82,12 +90,9 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
         >
           ✕
         </button>
-        <h2 className="text-base sm:text-lg font-bold mb-1 pr-6" style={{ color: "var(--text)" }}>
-          ⚽ World Cup — Groups
+        <h2 className="text-base sm:text-lg font-bold mb-3 pr-6" style={{ color: "var(--text)" }}>
+          ⚽ World Cup — Groups{range}
         </h2>
-        <p className="text-[11px] mb-3" style={{ color: "var(--text-muted)" }}>
-          The draw only — no standings, no spoilers.
-        </p>
 
         {failed ? (
           <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>

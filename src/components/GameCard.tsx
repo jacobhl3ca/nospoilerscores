@@ -5,6 +5,7 @@ import { Game, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { handleExternalClick } from "@/lib/openExternal";
+import { prefetchGameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 
@@ -235,6 +236,8 @@ export function CompactUpcomingCard({
     <div
       className={`flex flex-col gap-0.5 rounded-md px-2 sm:px-4 py-1 overflow-hidden transition-colors${cardClickable ? " cursor-pointer" : ""}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
+      onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
       role={cardClickable ? "button" : undefined}
       title={cardClickable ? "Game details" : undefined}
@@ -421,6 +424,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+      onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
+      onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
       role={cardClickable ? "button" : undefined}
       title={cardClickable ? "Game details" : undefined}
