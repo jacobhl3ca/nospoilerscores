@@ -191,6 +191,24 @@ function getPlayoffSubtitle(
     return round ? { tiers: tennisRoundTiers(round) } : null;
   }
 
+  // World Cup: the italic subtitle is the tournament phase, read off the day's
+  // games (game.stage). During the group stage every game is "Group X", so the
+  // column shows "Group Stage" (a single column spans several groups). Once the
+  // bracket starts, the knockout round takes over ("Round of 16" → "Final") —
+  // show the deepest round if a day mixes them. No PLAYOFF_START_DATES entry,
+  // so handle it here like tennis.
+  if (sport === "fifa") {
+    const stages = (games ?? []).map((g) => g.stage).filter(Boolean) as string[];
+    if (!stages.length) return null;
+    const rounds = stages.filter((s) => !/^group/i.test(s));
+    if (rounds.length) {
+      const order = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Third Place", "Final"];
+      const deepest = rounds.reduce((best, r) => (order.indexOf(r) > order.indexOf(best) ? r : best), rounds[0]);
+      return { tiers: [deepest] };
+    }
+    return { tiers: ["Group Stage", "Groups"] };
+  }
+
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
   const y = +selectedDate.slice(0, 4);

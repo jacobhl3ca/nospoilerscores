@@ -167,11 +167,13 @@ export default function GameDetailModal({
         ) : null}
 
         {/* Probable starting pitchers — MLB, upcoming games only. Spoiler-free
-            pre-game info, ordered away-at-home to match the matchup rows. */}
+            pre-game info, one line per pitcher (away then home, matching the
+            matchup rows) with the team abbr so it's clear who throws for whom. */}
         {!isFinal && !isLive && (game.awayProbable || game.homeProbable) ? (
           <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
-            <span className="uppercase tracking-wide">Probables: </span>
-            {game.awayProbable ?? "TBD"} at {game.homeProbable ?? "TBD"}
+            <div className="uppercase tracking-wide">Probables</div>
+            <div>{game.awayTeam.abbreviation} · {game.awayProbable ?? "TBD"}</div>
+            <div>{game.homeTeam.abbreviation} · {game.homeProbable ?? "TBD"}</div>
           </div>
         ) : null}
 
