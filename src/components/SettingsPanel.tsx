@@ -403,9 +403,6 @@ export default function SettingsPanel({
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  Sign in to sync your teams, layout, and settings across every browser and device — no more re-configuring each one.
-                </p>
                 <button
                   onClick={() => signInWithApple()}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
@@ -419,6 +416,9 @@ export default function SettingsPanel({
                   </svg>
                   Sign in with Apple
                 </button>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Sign in to sync your teams, layout, and settings across every browser and device.
+                </p>
               </div>
             )}
           </Section>
