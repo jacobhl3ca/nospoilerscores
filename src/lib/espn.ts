@@ -760,6 +760,17 @@ function parseGame(event: any, sport: Sport): Game {
       if (!broadcasts.includes(name)) broadcasts.push(name);
     }
   }
+  // Drop MLB.TV on nationally-exclusive MLB games. ESPN/FOX/FS1/TBS/Apple/Roku
+  // black out the out-of-market MLB.TV stream, but ESPN's feed still tags MLB.TV
+  // on every game — so listing it here just hands the user a "not available"
+  // wall. When a national carrier is present, MLB.TV won't work, so strip it.
+  // Only this case is safe to filter: in-market RSN blackouts depend on the
+  // viewer's location, which we don't know. RSN entries are left as-is.
+  if (sport === "mlb" && broadcasts.some((b) => /\b(espn|fox|fs1|tbs|apple tv|roku)\b/i.test(b))) {
+    for (let i = broadcasts.length - 1; i >= 0; i--) {
+      if (/^mlb\.?tv$/i.test(broadcasts[i].trim())) broadcasts.splice(i, 1);
+    }
+  }
 
   // Tag sport for rating calculation
   event._sport = sport;
