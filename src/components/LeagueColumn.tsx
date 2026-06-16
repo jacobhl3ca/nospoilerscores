@@ -8,6 +8,7 @@ import { Game, LeagueData, Sport, Team } from "@/lib/types";
 import type { ShareCardMeta } from "@/lib/shareCard";
 import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/lib/espn";
 import { handleExternalClick } from "@/lib/openExternal";
+import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { getEtServiceDate } from "@/lib/etDay";
@@ -702,6 +703,14 @@ export default function LeagueColumn({
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
   useEffect(() => { setTeamViewTeam(null); }, [league.sport, league.label]);
+
+  // Eagerly warm the weather cache for this column's games so the detail modal
+  // shows weather instantly instead of popping in a beat after it opens.
+  // prefetchGameWeather no-ops for finished/indoor/locationless games and is
+  // cached, so re-runs are cheap.
+  useEffect(() => {
+    for (const g of league.games) prefetchGameWeather(g);
+  }, [league.games]);
 
   // Close swap dropdown on outside click
   useEffect(() => {

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fifaRank } from "@/lib/fifaRankings";
 
 interface GroupTeam {
   name: string;
   flag: string;
+  rank: number | null;
 }
 interface WcGroup {
   name: string;
@@ -44,11 +46,14 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
             const teams: GroupTeam[] = entries
               .map((e) => {
                 const t = e.team ?? {};
-                return { name: t.displayName ?? t.name ?? "", flag: t.logos?.[0]?.href ?? t.logo ?? "" };
+                const name = t.displayName ?? t.name ?? "";
+                return { name, flag: t.logos?.[0]?.href ?? t.logo ?? "", rank: fifaRank(name) };
               })
               .filter((t) => t.name)
-              // Alphabetical ⇒ composition only, no standings order leaked.
-              .sort((a, b) => a.name.localeCompare(b.name));
+              // Order by FIFA world ranking (strongest first) — a fixed
+              // pre-tournament fact, NOT the live group standing, so it stays
+              // spoiler-safe while reading like a seeding. Unranked teams last.
+              .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
             return { name: g.name ?? g.abbreviation ?? "", teams };
           })
           .filter((g) => g.teams.length)
@@ -122,7 +127,10 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
                       ) : (
                         <span className="w-4 h-4 shrink-0" />
                       )}
-                      <span className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{t.name}</span>
+                      <span className="text-xs truncate flex-1" style={{ color: "var(--text-muted)" }}>{t.name}</span>
+                      {t.rank ? (
+                        <span className="text-[10px] shrink-0 tabular-nums" style={{ color: "var(--text-muted)", opacity: 0.7 }}>#{t.rank}</span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -130,6 +138,11 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
             ))}
           </div>
         )}
+        {groups ? (
+          <p className="text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+            #N = FIFA world ranking coming into the tournament — not group position.
+          </p>
+        ) : null}
       </div>
     </div>
   );
