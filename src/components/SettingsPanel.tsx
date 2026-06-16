@@ -52,6 +52,22 @@ const DEFAULT_RATINGS_OPTIONS: { value: DefaultRatings; label: string; hint: str
   { value: "on", label: "On", hint: "Always start with ratings shown" },
 ];
 
+// Full IANA zone list for the Time zone picker, with a graceful fallback for
+// runtimes without Intl.supportedValuesOf.
+const TIME_ZONES: string[] = (() => {
+  try {
+    const I = Intl as typeof Intl & { supportedValuesOf?: (k: string) => string[] };
+    const v = I.supportedValuesOf?.("timeZone");
+    if (Array.isArray(v) && v.length) return v;
+  } catch { /* fall through */ }
+  return [
+    "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+    "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
+    "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo",
+    "Asia/Kolkata", "Australia/Sydney",
+  ];
+})();
+
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "system", label: "System" },
   { value: "light", label: "Light" },
@@ -116,6 +132,10 @@ export default function SettingsPanel({
   shareUrl,
 }: SettingsPanelProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
+  // The device's own zone — shown in the "Auto" option so the user knows what
+  // Auto resolves to. Computed at render (client) so it reflects their device.
+  let deviceTimeZone = "";
+  try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
 
   // Safari ignores the text/x-moz-url + text/html drag overrides below and
   // names a dragged bookmark after the link's visible text instead. So on
@@ -485,6 +505,19 @@ export default function SettingsPanel({
                 options={DEFAULT_RATINGS_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultRatings: v })}
               />
+            </Field>
+            <Field label="Time zone" hint="Used for game times AND which day counts as today">
+              <select
+                value={prefs.timezone ?? ""}
+                onChange={(e) => updatePrefs({ timezone: e.target.value || undefined })}
+                className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+              >
+                <option value="">Auto — your device{deviceTimeZone ? ` (${deviceTimeZone})` : ""}</option>
+                {TIME_ZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
+                ))}
+              </select>
             </Field>
           </Section>
 

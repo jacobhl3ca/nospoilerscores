@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import { GolfTournament } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
+import { getTimeZone } from "@/lib/etDay";
 import {
   isGolfLive,
   getGolfLiveThru,
@@ -165,7 +166,7 @@ export default function GolfLeaderboard({
       teeTimeLabel = d.toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
-        timeZone: "America/New_York",
+        timeZone: getTimeZone(),
       });
     } catch {
       /* ignore */

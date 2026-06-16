@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState, type ReactNode } from "react";
-import { getEtServiceDate } from "@/lib/etDay";
+import { getEtServiceDate, getTimeZone } from "@/lib/etDay";
 
 interface DateNavProps {
   selectedDate: string; // YYYYMMDD
@@ -60,7 +60,7 @@ export function getDateString(daysOffset: number): string {
 // Export for use in smart default offset calculation
 export function getETHour(): number {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
+    timeZone: getTimeZone(),
     hour: "2-digit", minute: "2-digit", hour12: false,
   }).formatToParts(new Date());
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";

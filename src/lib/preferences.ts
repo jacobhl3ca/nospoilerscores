@@ -1,4 +1,5 @@
 import { Sport } from "./types";
+import { setServiceTimeZone } from "./etDay";
 
 const STORAGE_KEY = "nss-preferences";
 
@@ -223,6 +224,11 @@ export interface Preferences {
   // card at a time. Default false (the multi-column board). The top-game ⭐
   // and per-slot league switching still apply.
   singleColumn?: boolean;
+  // IANA time zone (e.g. "America/Los_Angeles") used app-wide for both the
+  // "today" date boundary and every displayed time. Undefined = "Auto" = the
+  // device's own zone, so the default behavior is unchanged. Applied globally
+  // via setServiceTimeZone() in loadPreferences()/savePreferences().
+  timezone?: string;
 }
 
 const defaults: Preferences = {
@@ -245,8 +251,11 @@ export function loadPreferences(): Preferences {
   if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaults;
-    return { ...defaults, ...JSON.parse(raw) };
+    const prefs = raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    // Push the chosen zone into the shared module so the data layer + UI agree
+    // before the first fetch/render after a load.
+    setServiceTimeZone(prefs.timezone);
+    return prefs;
   } catch {
     return defaults;
   }
@@ -263,6 +272,7 @@ export function setRemoteSync(fn: RemoteSync | null): void {
 
 export function savePreferences(prefs: Preferences): void {
   if (typeof window === "undefined") return;
+  setServiceTimeZone(prefs.timezone);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
   if (remoteSync) remoteSync(prefs);
 }

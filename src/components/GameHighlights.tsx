@@ -5,6 +5,7 @@ import { Game } from "@/lib/types";
 import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
+import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo } from "@/lib/youtube";
 
 // Shared highlight buttons for a finished game — the official-channel + top-
@@ -61,7 +62,7 @@ export default function GameHighlights({
   // title's date strictly, and a UTC-shifted browser would push a late ET
   // game one day forward and 404 every labeled button. (Display time uses the
   // device's local zone; this is only the recap search key.)
-  const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+  const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: getTimeZone() });
   // Competition token required in highlight titles for sports where the same two
   // teams meet across many competitions (World Cup only — see getCompetitionName).
   // null for every other league, so their query + behaviour are unchanged.

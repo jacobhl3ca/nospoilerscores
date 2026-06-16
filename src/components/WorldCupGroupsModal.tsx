@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fifaRank } from "@/lib/fifaRankings";
+import { getTimeZone } from "@/lib/etDay";
 
 interface GroupTeam {
   name: string;
@@ -40,12 +41,12 @@ function norm(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
-// ET YYYYMMDD for an offset in days — matches how the rest of the app buckets
-// ESPN's scoreboard by calendar day.
+// YYYYMMDD for an offset in days, in the app's effective time zone (Settings →
+// Time zone) — matches how the rest of the app buckets ESPN by calendar day.
 function etDate(offsetDays: number): string {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" })
+  return new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" })
     .format(d)
     .replace(/-/g, "");
 }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
+import { getTimeZone } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
@@ -203,7 +204,7 @@ export function CompactUpcomingCard({
     if (!cleaned || cleaned.toLowerCase() === "scheduled" || !/\d{1,2}:\d{2}/.test(cleaned) || /^starts\s/i.test(cleaned)) {
       try {
         const d = new Date(game.date);
-        if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
       } catch { /* fall through */ }
     }
     return cleaned;
@@ -322,13 +323,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const teamViewDateLabel = teamView ? (() => {
     const d = new Date(game.date);
     if (isNaN(d.getTime())) return "";
-    // Bucket the game by its Eastern calendar day — the same basis the
-    // scoreboard + date nav use (getDateString). Device-local bucketing broke
+    // Bucket the game by the app's effective-zone calendar day — the same basis
+    // the scoreboard + date nav use (getDateString). Device-local bucketing broke
     // under UTC render contexts: a 9pm-ET game is past midnight UTC, so it
     // rolled into the next day and mislabeled (two "Yesterday" cards for games
-    // played on different ET days).
+    // played on different days).
     const etYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
     }).format(d);
     // getDateString returns "YYYYMMDD" (no separators); etYmd is "YYYY-MM-DD".
     // Strip non-digits so both parse regardless of format.
@@ -337,14 +338,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Tomorrow";
     if (diffDays === -1) return "Yesterday";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() });
   })() : null;
   const teamViewTime = teamView && isFuture ? (() => {
     const cleaned = cleanStatusDetail(game.statusDetail, true);
     if (cleaned && /\bTBD\b/i.test(cleaned)) return "TBD";
     try {
       const d = new Date(game.date);
-      if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
     } catch { /* fall through */ }
     return null;
   })() : null;
@@ -354,7 +355,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const teamViewDhTime = teamView && isFinished && isDoubleheader ? (() => {
     try {
       const d = new Date(game.date);
-      if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      if (!isNaN(d.getTime())) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
     } catch { /* fall through */ }
     return null;
   })() : null;
@@ -371,7 +372,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       try {
         const d = new Date(game.date);
         if (!isNaN(d.getTime())) {
-          return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+          return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
         }
       } catch { /* fall through */ }
     }

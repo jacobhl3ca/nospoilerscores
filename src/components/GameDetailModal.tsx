@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Game } from "@/lib/types";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
+import { getTimeZone } from "@/lib/etDay";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { getDateString } from "@/components/DateNav";
 import { fetchGameWeather, type GameWeather } from "@/lib/weather";
@@ -58,7 +59,7 @@ export default function GameDetailModal({
   // past games show immediately).
   const isToday = (() => {
     try {
-      const ymd = new Date(game.date).toLocaleDateString("en-CA", { timeZone: "America/New_York" }).replace(/-/g, "");
+      const ymd = new Date(game.date).toLocaleDateString("en-CA", { timeZone: getTimeZone() }).replace(/-/g, "");
       return ymd === getDateString(0);
     } catch { return false; }
   })();
@@ -70,12 +71,13 @@ export default function GameDetailModal({
     try {
       const d = new Date(game.date);
       if (!isNaN(d.getTime())) {
-        // Use the device's local timezone (Jacob 6/1) — no explicit timeZone,
-        // so the time + abbreviation render in whatever zone the device is set
-        // to, matching what the user expects on their own clock.
+        // Render in the user's chosen zone (Settings → Time zone; defaults to
+        // the device zone, so this still matches their own clock out of the
+        // box). The short abbreviation updates to match the chosen zone.
         return d.toLocaleString("en-US", {
           weekday: "short", month: "short", day: "numeric",
           hour: "numeric", minute: "2-digit", timeZoneName: "short",
+          timeZone: getTimeZone(),
         });
       }
     } catch { /* fall through */ }

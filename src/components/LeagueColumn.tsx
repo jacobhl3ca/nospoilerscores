@@ -11,7 +11,7 @@ import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
-import { getEtServiceDate } from "@/lib/etDay";
+import { getEtServiceDate, getTimeZone } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
@@ -166,7 +166,7 @@ function parseEtTime(s: string): { h: number; m: number } | null {
 // Current ET wall-clock as {y,mo,d,h,m} via toLocaleString — works in any TZ.
 function nowInEt(): { y: number; mo: number; d: number; h: number; m: number } {
   const s = new Date().toLocaleString("en-US", {
-    timeZone: "America/New_York",
+    timeZone: getTimeZone(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -536,7 +536,7 @@ function GolfSubtitle({ league, selectedDate }: { league: LeagueData; selectedDa
 function etDayString(iso: string): string {
   try {
     return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
     }).format(new Date(iso)).replace(/-/g, "");
   } catch {
     return "";

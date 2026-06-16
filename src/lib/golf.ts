@@ -4,6 +4,7 @@
 // round is being played, or which recap to show.
 
 import { GolfTournament } from "./types";
+import { getTimeZone } from "./etDay";
 
 export interface GolfDateState {
   roundNum: number; // 1-4 — the round corresponding to the selected date
@@ -33,7 +34,7 @@ export function getGolfDateState(
   const roundNum = dayIndex + 1;
 
   const now = new Date();
-  const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const todayET = new Date(now.toLocaleString("en-US", { timeZone: getTimeZone() }));
   const todayMidnight = new Date(todayET.getFullYear(), todayET.getMonth(), todayET.getDate());
   const selMidnight = new Date(selYear, selMonth - 1, selDay);
 
@@ -136,7 +137,7 @@ export function getGolfSubtitle(
     let timeLabel = "";
     if (tournament.eventDate) {
       const now = new Date();
-      const todayET = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+      const todayET = new Date(now.toLocaleString("en-US", { timeZone: getTimeZone() }));
       const tomorrowMidnight = new Date(
         todayET.getFullYear(),
         todayET.getMonth(),
@@ -152,7 +153,7 @@ export function getGolfSubtitle(
           timeLabel = ` · ${d.toLocaleTimeString("en-US", {
             hour: "numeric",
             minute: "2-digit",
-            timeZone: "America/New_York",
+            timeZone: getTimeZone(),
           })}`;
         } catch {
           /* ignore */

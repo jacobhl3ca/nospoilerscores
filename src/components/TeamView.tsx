@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, Sport, Team } from "@/lib/types";
 import { fetchTeamSchedule, fetchScheduleRatings } from "@/lib/espn";
+import { getTimeZone } from "@/lib/etDay";
 import GameCard from "./GameCard";
 import { getDateString } from "@/components/DateNav";
 
@@ -156,7 +157,7 @@ export default function TeamView({
     const byDay = new Map<string, string[]>();
     for (const g of past) {
       const ymd = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+        timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
       }).format(new Date(g.date));
       const arr = byDay.get(ymd) ?? [];
       arr.push(g.id);
@@ -207,7 +208,7 @@ export default function TeamView({
   // mislabels late-evening ET games (past midnight UTC) as the next day.
   const gameIsToday = (g: Game) => {
     const etYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
     }).format(new Date(g.date));
     // getDateString returns "YYYYMMDD"; etYmd is "YYYY-MM-DD" — drop dashes.
     return etYmd.replace(/-/g, "") === getDateString(0);

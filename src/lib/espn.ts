@@ -1,6 +1,6 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
-import { getEtServiceDate, toYmd } from "./etDay";
+import { getEtServiceDate, toYmd, getTimeZone } from "./etDay";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -571,7 +571,7 @@ function calculateRating(game: any): number | null {
 // cards already render — country flag as the "logo", set count as the score.
 function tennisEtYmd(iso: string): string {
   try {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+    return new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
   } catch {
     return "";
   }
@@ -981,7 +981,7 @@ export function loadBigInningSchedule(): Promise<BigInningSchedule> {
       if (match?.slug) {
         // en-CA locale formats as YYYY-MM-DD, matching the schedule's ISO key.
         const isoToday = new Intl.DateTimeFormat("en-CA", {
-          timeZone: "America/New_York",
+          timeZone: getTimeZone(),
           year: "numeric",
           month: "2-digit",
           day: "2-digit",
@@ -1812,7 +1812,7 @@ async function fetchNextGameDayRange(
   // Group by the fixture's ET calendar day, return the earliest day's slate.
   const dayOf = (iso: string) => {
     try {
-      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+      return new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
     } catch {
       return "";
     }
@@ -1896,7 +1896,7 @@ async function fetchPreviousGameDayRange(
   if (!games.length) return null;
   const dayOf = (iso: string) => {
     try {
-      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+      return new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
     } catch {
       return "";
     }
@@ -2109,7 +2109,7 @@ export async function fetchScheduleRatings(
   const etDay = (iso: string): string | null => {
     try {
       return new Intl.DateTimeFormat("en-CA", {
-        timeZone: "America/New_York",
+        timeZone: getTimeZone(),
         year: "numeric", month: "2-digit", day: "2-digit",
       }).format(new Date(iso)).replace(/-/g, "");
     } catch {
