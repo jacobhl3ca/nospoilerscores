@@ -2167,7 +2167,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               && !prefs.wcBannerDismissed;
             const wcBanner = showWcBanner ? (
               <div
-                className="relative mb-3 rounded-lg px-3 py-2 pr-10 flex items-center justify-center gap-x-3 gap-y-1.5 flex-wrap"
+                className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10 flex items-center justify-center gap-x-3 gap-y-1.5 flex-wrap"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
               >
                 <span className="text-sm" style={{ color: "var(--text)" }}>
