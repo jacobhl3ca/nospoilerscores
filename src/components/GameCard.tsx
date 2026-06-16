@@ -43,14 +43,6 @@ interface GameCardProps {
   // column suppresses it for single-matchup Finals views where the favorite
   // sort can't reorder anything.
   showStars?: boolean;
-  // Marks this card as the single "top event" across every league right now —
-  // the most competitive live game (by rating) or, before anything is live,
-  // the best upcoming matchup. Renders a ⭐ "Top game" badge in the CENTER of
-  // the status-bar row (between the time and the network — no extra row). For a
-  // live top game it shows there INSTEAD of the rating badge (the ⭐ already
-  // signals it's the best game). Ratings-mode only (a top-game hint is a mild
-  // spoiler); HomeContent picks exactly one card and only when ratings are on.
-  isTopGame?: boolean;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -73,23 +65,6 @@ function RatingBadge({ rating }: { rating: number }) {
   return (
     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}>
       {label}
-    </span>
-  );
-}
-
-// ⭐ "Top game" badge — the single best game/event across every league right
-// now. Lives in the status-bar's center cell (the rating-badge slot), so a
-// pre-game top pick sits between the time and network with no extra row, and a
-// live top game shows this instead of its rating (Jacob 6/15). nowrap so a wide
-// network wraps to its own line rather than overlapping the badge.
-function TopGameBadge() {
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
-      style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}
-      title="Top game right now — the most competitive matchup across your leagues"
-    >
-      <span aria-hidden>⭐</span> Top game
     </span>
   );
 }
@@ -308,7 +283,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, isTopGame }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
@@ -591,16 +566,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 lead card's date to "T.." on mobile). The series variant is
                 xl-only, so its wrapper is hidden below xl and the network's
                 ml-auto pins it right (Jacob 6/9). */}
-            {isTopGame && showRatings ? (
-              // ⭐ Top-game badge owns the center slot. For the usual pre-game /
-              // upcoming top pick the rating slot is empty anyway, so the badge
-              // just sits centered between the time and network — no extra row.
-              // For a LIVE top game it shows here INSTEAD of the rating badge:
-              // the ⭐ already marks it the best game, so the GREAT/GOOD pill is
-              // redundant (Jacob 6/15). Same in-flow centered span as the rating
-              // so a wide network still wraps below instead of overlapping.
-              <span className="flex-1 flex justify-center"><TopGameBadge /></span>
-            ) : hasRating ? (
+            {hasRating ? (
               // In-flow centered badge (NOT absolute): an absolute-centered badge
               // floats on top of the row, so a wide network listing ("FAN Unlmtd
               // +3") that reaches the card center gets the badge overlaid on it

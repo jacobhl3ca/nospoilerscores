@@ -2031,44 +2031,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             const hasNonFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state !== "post"));
             const hasFinished = !isPast && sortedLeagues.some(l => l.games.some(g => g.state === "post"));
             const showFinalSplit = hasNonFinished && hasFinished;
-            // The single "top event" across every league, badged with a ⭐ in
-            // ratings mode. Live games win — the most competitive one in
-            // progress by rating (delayed + too-early-to-rate excluded); before
-            // anything is live, the best upcoming matchup (both teams winning >
-            // one > none, tiebreak by combined wins). Finished games never get
-            // the star — it marks what's worth watching now/next and avoids
-            // crowning a final. Off on past dates and outside ratings mode.
-            const topGameId = !isPast && prefs.showRatings ? (() => {
-              const all = sortedLeagues.flatMap((l) => l.games);
-              // A live game only earns the ⭐ TOP GAME star when it's actually
-              // worth tuning into — a GOOD-or-better rating (>=70, the RatingBadge
-              // "GOOD"/"GREAT" tiers). A merely "MEH" (50-69) or "SKIP" live game
-              // shouldn't be promoted as the top game — its own badge already
-              // says it's not worth it. When nothing live clears the bar, fall
-              // through to the best upcoming matchup instead (Jacob 6/15).
-              const WORTH_IT_RATING = 70;
-              const liveRated = all.filter(
-                (g) => g.state === "in" && g.rating != null && g.rating >= WORTH_IT_RATING && !/delay/i.test(g.statusDetail),
-              );
-              if (liveRated.length) {
-                return liveRated.reduce((best, g) => ((g.rating ?? 0) > (best.rating ?? 0) ? g : best)).id;
-              }
-              const pre = all.filter((g) => g.state === "pre");
-              if (!pre.length) return undefined;
-              const wins = (rec: string) => { const m = rec.match(/^(\d+)/); return m ? +m[1] : 0; };
-              const losses = (rec: string) => { const m = rec.match(/-(\d+)/); return m ? +m[1] : 0; };
-              const isWin = (rec: string) => wins(rec) > losses(rec);
-              const tier = (g: Game) => {
-                const h = isWin(g.homeTeam.record), a = isWin(g.awayTeam.record);
-                return h && a ? 0 : h || a ? 1 : 2;
-              };
-              const combined = (g: Game) => wins(g.homeTeam.record) + wins(g.awayTeam.record);
-              return pre.reduce((best, g) => {
-                const d = tier(g) - tier(best);
-                if (d !== 0) return d < 0 ? g : best;
-                return combined(g) > combined(best) ? g : best;
-              }).id;
-            })() : undefined;
             const commonProps = {
               favoriteTeams: prefs.favoriteTeams,
               onToggleFavoriteTeam: toggleFavoriteTeam,
@@ -2082,7 +2044,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
-              topGameId,
             };
             // Per-slot swap dropdowns: every column lists every in-season
             // league. Leagues already shown in another column come through

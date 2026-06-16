@@ -56,9 +56,6 @@ interface LeagueColumnProps {
   // the parent owns reorder logic and writes the new slot order back to prefs.
   slotIdx?: number;
   onReorderSlots?: (fromIdx: number, toIdx: number) => void;
-  // The id of the single "top event" across all leagues (HomeContent picks it).
-  // The card whose game.id matches gets a ⭐ "Top game" badge (ratings mode only).
-  topGameId?: string;
   // Outer-column width/spacing classes. Defaults to the narrow multi-column
   // width; the single-column board passes a wider one so cards have room.
   widthClassName?: string;
@@ -544,7 +541,6 @@ export default function LeagueColumn({
   onRetry,
   slotIdx,
   onReorderSlots,
-  topGameId,
   widthClassName = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]",
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
@@ -901,7 +897,6 @@ export default function LeagueColumn({
           onSelectTeam={setTeamViewTeam}
           onShowDetails={onShowDetails}
           showStars={cardStars}
-          isTopGame={!!topGameId && game.id === topGameId}
         />
       );
     });
@@ -1215,7 +1210,6 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
-              isTopGame={!!topGameId && game.id === topGameId}
             />
           ))}
           {renderUpcoming && preGames.map((game) => (
@@ -1232,7 +1226,6 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
-              isTopGame={!!topGameId && game.id === topGameId}
             />
           ))}
           {/* Upcoming future-day games shown alongside today's slate (NBA/NHL
