@@ -56,6 +56,14 @@ export interface Game {
   // fielder's choice without needing the heavier boxscore hydrate. Always
   // implies noHitterPitchingTeam is set.
   isPerfectGame?: boolean;
+  // MLB cycle watch: a live batter is one hit type away from the cycle — has a
+  // single/double/triple/home run in three of the four categories and needs the
+  // fourth. Set only for live MLB games (4th inning or later), sourced from the
+  // boxscore, and cleared once the bid completes or breaks. Surfaced as a
+  // spoiler-safe "Cycle watch" badge; the card only shows it when the ratings/
+  // spoiler toggle is on (it reveals a hot bat, not the score). `needs` is the
+  // missing hit type ("single" | "double" | "triple" | "home run").
+  cycleWatch?: { team: string; player: string; needs: string } | null;
   // Venue location ("Minneapolis, Minnesota" / "Santa Clara, California") and
   // indoor flag — both sit next to the fullName in competition.venue, which we
   // already read into `venue`. Omitted when ESPN has no/junk address data.

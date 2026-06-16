@@ -1158,6 +1158,88 @@ function buildStreamUrl(game: Game): string {
   return sportStreamFallback(game.sport);
 }
 
+// ---------------------------------------------------------------------------
+// MLB Cycle Watch
+// A batter hits for the cycle with a single, double, triple, and home run in
+// one game. The most watchable moment is the *bid*: a batter sitting on three
+// of the four hit types, needing one more — so we surface a spoiler-safe
+// "Cycle watch" badge (gated behind the ratings toggle, like the No-Hit Alert)
+// to tell you to tune in (the Pete Crow-Armstrong Cubs/Rockies game, Jacob 6/15).
+//
+// Per-batter hit types live only in the boxscore (the schedule+linescore
+// hydrate is team-level), and that payload is ~170 KB/game — far too heavy for
+// the 10s score poll. So we cache per gamePk with CYCLE_TTL and refresh in the
+// background: the enrich pass reads whatever the cache holds and never blocks
+// the score fetch on a boxscore round-trip (a bid surfaces within a poll or two
+// of arising). Gated to live games in the 4th inning or later — you can't own
+// three different hit types any sooner.
+interface CycleBid {
+  side: "away" | "home";
+  player: string;
+  needs: "single" | "double" | "triple" | "home run";
+}
+const CYCLE_HIT_TYPES = [
+  { key: "singles", label: "single" as const },
+  { key: "doubles", label: "double" as const },
+  { key: "triples", label: "triple" as const },
+  { key: "homeRuns", label: "home run" as const },
+];
+// Rarity of the hit still needed — a batter chasing a triple is the marquee
+// case, so when several are on a bid we surface the rarest chase.
+const CYCLE_NEED_RANK: Record<string, number> = { triple: 0, "home run": 1, double: 2, single: 3 };
+const cycleCache = new Map<string, { ts: number; bid: CycleBid | null }>();
+const cycleInFlight = new Set<string>();
+const CYCLE_TTL = 45_000;
+
+function findCycleBid(side: "away" | "home", players: Record<string, unknown>): CycleBid | null {
+  let best: CycleBid | null = null;
+  for (const p of Object.values(players ?? {})) {
+    const b = (p as { stats?: { batting?: Record<string, number> } }).stats?.batting;
+    if (!b || !b.atBats) continue;
+    const counts: Record<string, number> = {
+      singles: (b.hits ?? 0) - (b.doubles ?? 0) - (b.triples ?? 0) - (b.homeRuns ?? 0),
+      doubles: b.doubles ?? 0,
+      triples: b.triples ?? 0,
+      homeRuns: b.homeRuns ?? 0,
+    };
+    const have = CYCLE_HIT_TYPES.filter((t) => counts[t.key] > 0);
+    if (have.length !== 3) continue; // <3 = not close; 4 = already cycled
+    const missing = CYCLE_HIT_TYPES.find((t) => counts[t.key] === 0)!;
+    const name = (p as { person?: { fullName?: string } }).person?.fullName ?? "A batter";
+    const bid: CycleBid = { side, player: name, needs: missing.label };
+    if (!best || CYCLE_NEED_RANK[bid.needs] < CYCLE_NEED_RANK[best.needs]) best = bid;
+  }
+  return best;
+}
+
+async function refreshCycleWatch(gamePk: string): Promise<void> {
+  if (cycleInFlight.has(gamePk)) return;
+  cycleInFlight.add(gamePk);
+  try {
+    const res = await fetchWithRetry(`https://statsapi.mlb.com/api/v1/game/${gamePk}/boxscore`, 1, 5000);
+    if (!res.ok) return;
+    const data = await res.json();
+    const bids = [
+      findCycleBid("away", data.teams?.away?.players ?? {}),
+      findCycleBid("home", data.teams?.home?.players ?? {}),
+    ].filter((x): x is CycleBid => x !== null);
+    bids.sort((a, b) => CYCLE_NEED_RANK[a.needs] - CYCLE_NEED_RANK[b.needs]);
+    cycleCache.set(gamePk, { ts: Date.now(), bid: bids[0] ?? null });
+  } catch {
+    // Non-critical — no badge this round.
+  } finally {
+    cycleInFlight.delete(gamePk);
+  }
+}
+
+// Cached cycle bid for a game; kicks off a background boxscore refresh when the
+// cache is cold or stale. Returns null until the first boxscore lands.
+function getCycleWatch(gamePk: string): CycleBid | null {
+  const entry = cycleCache.get(gamePk);
+  if (!entry || Date.now() - entry.ts > CYCLE_TTL) void refreshCycleWatch(gamePk);
+  return entry?.bid ?? null;
+}
+
 // MLB Stats API: fetch per-game metadata for a date, keyed by "away@home"
 // (abbreviations). Returns the gamePk for the MLB.tv deep link plus the live
 // linescore signals needed to compute the No-Hit Alert badge.
@@ -1775,6 +1857,21 @@ export async function fetchGames(
           game.rating = 110;
         } else if (game.noHitterPitchingTeam) {
           game.rating = Math.max(95, game.rating ?? 0);
+        }
+      }
+      // Cycle watch: a live batter sitting on three of the four hit types,
+      // needing the fourth. Boxscore-backed (cached + background-refreshed via
+      // getCycleWatch) so it never blocks the score fetch. Floor the rating at
+      // 90 so the chase sorts up in the live cluster; gated to the 4th+ inning.
+      if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 4) {
+        const bid = getCycleWatch(meta.gamePk);
+        if (bid) {
+          game.cycleWatch = {
+            team: bid.side === "home" ? game.homeTeam.abbreviation : game.awayTeam.abbreviation,
+            player: bid.player,
+            needs: bid.needs,
+          };
+          game.rating = Math.max(90, game.rating ?? 0);
         }
       }
     }

@@ -467,6 +467,23 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         </div>
       )}
 
+      {/* MLB Cycle Watch — a live batter is one hit type away from the cycle.
+          Like the No-Hit Alert: gated behind the ratings/spoiler toggle (it
+          reveals a hot bat, not the score) and never shown on finished games.
+          The batter + the hit they still need ride in the tooltip. */}
+      {isLive && showRatings && game.sport === "mlb" && game.cycleWatch && (
+        <div className="mb-1 flex justify-center">
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-500"
+            style={{ background: "rgba(14, 165, 233, 0.12)" }}
+            title={`${game.cycleWatch.player} needs a ${game.cycleWatch.needs} for the cycle`}
+          >
+            <span aria-hidden>💎</span>
+            Cycle Watch
+          </span>
+        </div>
+      )}
+
       {/* Status bar: hide entirely when there's nothing useful to show */}
       {(() => {
         const hasStatusText = isLive || isFuture || nextGameDate || teamView || (!isFinished);
