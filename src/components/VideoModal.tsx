@@ -248,8 +248,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // volume slider. `volume` is 0–100 (the YT player's scale); it's the level we
   // restore to when un-muting.
   const [muted, setMuted] = useState(true);
-  const [volume, setVolume] = useState(100);
+  // Volume persists across clips/sessions (the level you un-mute to). Autoplay
+  // still starts muted — only the slider level is restored.
+  const [volume, setVolume] = useState(() => {
+    if (typeof window === "undefined") return 100;
+    const v = parseInt(localStorage.getItem("hs.videoVolume") || "", 10);
+    return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 100;
+  });
   const volRef = useRef<HTMLDivElement>(null);
+  // Auto-hide the cursor over the video after a moment of no movement (a real
+  // player feel). Any mouse move brings it back via bumpCursor().
+  const [idleCursor, setIdleCursor] = useState(false);
+  const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bumpCursor = useCallback(() => {
+    setIdleCursor(false);
+    if (cursorTimerRef.current) clearTimeout(cursorTimerRef.current);
+    cursorTimerRef.current = setTimeout(() => setIdleCursor(true), 2500);
+  }, []);
   const draggingVolRef = useRef(false);
   // The title-bar spoiler mask is ALWAYS on for YouTube clips. YouTube
   // re-surfaces the clip title (and channel byline) on hover, on pause, AND a
@@ -419,6 +434,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }, 350);
     return () => window.clearInterval(id);
   }, [ytMode]);
+
+  // Persist the volume level so it carries across clips and sessions.
+  useEffect(() => {
+    try { localStorage.setItem("hs.videoVolume", String(volume)); } catch { /* ignore */ }
+  }, [volume]);
+  // Clear the idle-cursor timer on unmount.
+  useEffect(() => () => { if (cursorTimerRef.current) clearTimeout(cursorTimerRef.current); }, []);
 
   // Toggle mute on the YouTube player. Un-muting restores the slider's level
   // (or 100 if it was dragged to 0).
@@ -944,6 +966,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           >
             {/* Video region — 16:9 in-flow, or capped to leave bar room in FS */}
             <div
+              onMouseMove={bumpCursor}
               className="group relative mx-auto w-full overflow-hidden bg-black"
               style={fsActive
                 ? { width: fsMediaWidth, aspectRatio: "16 / 9", borderRadius: 0 }
@@ -967,7 +990,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               {!youtubeNativeControls && (
                 <div
                   aria-hidden
-                  className="absolute inset-0 z-10 cursor-default"
+                  className={`absolute inset-0 z-10 ${idleCursor ? "cursor-none" : "cursor-default"}`}
                   onClick={(e) => { e.stopPropagation(); togglePlay(); }}
                   onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
                 />
