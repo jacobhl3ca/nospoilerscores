@@ -214,6 +214,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
   // Brief "Copied ✓" confirmation after the copy-link button is tapped.
   const [copied, setCopied] = useState(false);
+  const [titleCopied, setTitleCopied] = useState(false);
   // Playback position (0–1), polled off the YT player. The seek bar no longer
   // draws a visible fill (the fill was itself a "how far through am I" spoiler),
   // so this now only feeds the slider's accessibility value (capped at 90%).
@@ -332,6 +333,31 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       /* throwaway affordance — the link stays tappable if copy fails */
+    }
+  };
+
+  // Copy the post title. The headline is also click-selectable in the modal (it
+  // stops propagation so selecting it doesn't dismiss), but this is the one-tap
+  // path — and the only practical one inside the iOS WKWebView.
+  const copyTitle = async () => {
+    if (!headline) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(headline);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = headline;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setTitleCopied(true);
+      window.setTimeout(() => setTitleCopied(false), 1600);
+    } catch {
+      /* throwaway affordance — the title stays selectable if copy fails */
     }
   };
 
@@ -1361,8 +1387,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             context without filling the modal. textMode renders these inside
             the card itself, so skip them here. */}
         {!textMode && headline && (
-          <div className="mt-3 text-center px-2">
-            <p className="text-sm sm:text-base text-white/90 leading-snug">{headline}</p>
+          <div className="mt-3 text-center px-2" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm sm:text-base text-white/90 leading-snug select-text cursor-text">{headline}</p>
             {(byline || published) && (
               <p className="text-xs text-white/40 mt-1">
                 {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
@@ -1396,6 +1422,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
             >
               {copied ? "Copied ✓" : "Copy link"}
+            </button>
+          )}
+          {headline && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); copyTitle(); }}
+              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
+            >
+              {titleCopied ? "Copied ✓" : "Copy title"}
             </button>
           )}
         </div>
