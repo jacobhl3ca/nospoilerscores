@@ -146,6 +146,29 @@ export interface GolfTournament {
 // tournament, used for F1 (a Grand Prix weekend) and UFC (a fight card).
 // Results (finishing order / fight outcomes) are deliberately omitted; the
 // card shows WHAT + WHEN + WHERE-to-watch, plus highlights once it's over.
+// One fighter in a bout. `flag` is a country-flag image URL (ESPN). Result is
+// deliberately omitted — the card never reveals who won.
+export interface Fighter {
+  name: string;
+  shortName: string;
+  record: string;   // "11-3-0"
+  flag?: string;    // country flag image URL
+  country?: string; // flag alt (tooltip)
+}
+
+// A single bout on a UFC card. Rendered as its own GameCard-style card; the
+// outcome is hidden (spoiler-safe), highlights surface once it's over.
+export interface FightBout {
+  id: string;
+  weightClass: string;       // "Flyweight", "Women's Bantamweight"
+  state: "pre" | "in" | "post";
+  statusDetail: string;      // time / "Live" / "Final"
+  date: string;
+  red: Fighter;
+  blue: Fighter;
+  highlightQuery: string;    // "Kape vs. Horiguchi UFC highlights"
+}
+
 export interface LeagueEventCard {
   kind: "f1" | "ufc";
   title: string;            // "Spanish Grand Prix" / "UFC Fight Night: Kape vs. Horiguchi"
@@ -156,6 +179,9 @@ export interface LeagueEventCard {
   date: string;             // ISO of the headline session (race / main card)
   broadcasts: string[];
   boutCount?: number;       // UFC: total fights on the card
+  // UFC only: every bout on the card, main event first → prelims. Each renders
+  // as its own card. ESPN has no fight-quality score, so order = card order.
+  fights?: FightBout[];
   highlightQuery?: string;  // YouTube search query for post-event highlights
   officialChannel?: string; // preferred YouTube channel for the highlight
   eventUrl?: string;        // ESPN event page (external fallback)

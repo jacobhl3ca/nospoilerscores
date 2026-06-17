@@ -1,4 +1,4 @@
-import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard } from "./types";
+import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, FightBout } from "./types";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, getTimeZone } from "./etDay";
 
@@ -1474,11 +1474,11 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     };
   }
 
-  // UFC — the MARQUEE fight lives in the event name ("UFC 312: Jones vs.
-  // Aspinall" / "UFC Fight Night: Kape vs. Horiguchi"); ESPN orders the
-  // competitions prelims-first, so comps[0] is a prelim, not the main event.
-  // Split the name: before ":" = the series title, after ":" = the headline.
-  const main = comps[0] ?? null; // venue + broadcast are event-wide, mirror here
+  // UFC — every bout becomes its own card. ESPN orders the competitions
+  // prelims-first, so REVERSE to put the main event on top. The marquee fight
+  // also lives in the event name ("UFC 312: Jones vs. Aspinall") → split on ":"
+  // for the series title vs the headline.
+  const main = comps[comps.length - 1] ?? comps[0] ?? null; // main event = last comp
   const state = (event.status?.type?.state ?? main?.status?.type?.state ?? "pre") as "pre" | "in" | "post";
   const name = String(event.name || event.shortName || "UFC");
   const colon = name.indexOf(":");
@@ -1486,6 +1486,35 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
   const title = event.shortName || (colon > -1 ? name.slice(0, colon).trim() : name) || "UFC";
   const venue = main?.venue ?? event.venue ?? {};
   const subtitle = [venue.address?.city, venue.address?.state || venue.address?.country].filter(Boolean).join(", ") || undefined;
+  const fighter = (x: any) => ({
+    name: x?.athlete?.displayName ?? "TBD",
+    shortName: x?.athlete?.shortName ?? x?.athlete?.displayName ?? "TBD",
+    record: x?.records?.[0]?.summary ?? "",
+    flag: x?.athlete?.flag?.href as string | undefined,
+    country: x?.athlete?.flag?.alt as string | undefined,
+  });
+  const fmtFightTime = (iso?: string) => {
+    if (!iso) return "Fight Night";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "Fight Night";
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  };
+  const fights: FightBout[] = comps.slice().reverse().map((c: any) => {
+    const cs = c.competitors ?? [];
+    const fState = (c.status?.type?.state ?? state ?? "pre") as "pre" | "in" | "post";
+    const red = fighter(cs[0]);
+    const blue = fighter(cs[1]);
+    return {
+      id: String(c.id),
+      weightClass: c.type?.text || c.type?.abbreviation || "",
+      state: fState,
+      statusDetail: fState === "post" ? "Final" : fState === "in" ? "Live" : fmtFightTime(c.date || event.date),
+      date: c.date || event.date,
+      red,
+      blue,
+      highlightQuery: `${red.name} vs ${blue.name} UFC highlights`,
+    };
+  });
   return {
     kind: "ufc",
     title,
@@ -1496,6 +1525,7 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     date: event.date || main?.date,
     broadcasts: eventBroadcasts(main),
     boutCount: comps.length,
+    fights,
     highlightQuery: `${name} highlights`,
     officialChannel: "UFC",
     eventUrl,
