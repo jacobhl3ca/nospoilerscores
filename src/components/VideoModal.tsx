@@ -1269,24 +1269,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     {/* circular rewind arrow with "5" nested inside (YT/Firefox-PiP style) */}
                     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
                   </button>
-                  {/* Mobile: quarter presets only */}
+                  {/* Mobile + MEDIUM windows: quarter presets only. The full
+                      10→90 set below needs ~600px of strip; on narrower windows
+                      it squeezed the side cells until the fixed-width volume
+                      slider overflowed into this row. Gate the full set on lg. */}
                   {[25, 50, 75].map((p) => (
                     <button
                       key={`m${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
-                      className="flex sm:hidden items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
+                      className="flex lg:hidden items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
                       title={`Jump to ${p}%`}
                     >
                       {p}%
                     </button>
                   ))}
-                  {/* Desktop: full 10→90 set (80/90 dimmed — nearest the ending) */}
-                  <span className="hidden sm:inline text-[11px] text-white/35 mx-1 select-none">Skip to</span>
+                  {/* Large windows: full 10→90 set (80/90 dimmed — nearest the ending) */}
+                  <span className="hidden lg:inline text-[11px] text-white/35 mx-1 select-none">Skip to</span>
                   {JUMP_PCTS.map((p) => (
                     <button
                       key={`d${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
-                      className={`hidden sm:flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
+                      className={`hidden lg:flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
                       title={`Jump to ${p}%`}
                     >
                       {p}%
