@@ -242,7 +242,7 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
       </div>
     </>
   );
-  const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.embedUrl || !!item.youtubeVideoId);
+  const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.videoUrl || !!item.embedUrl || !!item.youtubeVideoId);
   const commonCls = "block w-full text-left transition-opacity hover:opacity-90 cursor-pointer";
   const commonStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", alignSelf: "start" as const };
   if (canPlayInline) {
@@ -255,7 +255,7 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
           }
           onPlay!({
             videoId: item.youtubeVideoId || undefined,
-            playbackUrl: item.playbackUrl || null,
+            playbackUrl: item.playbackUrl || item.videoUrl || null,
             embedUrl: item.embedUrl || null,
             fallbackUrl: item.articleUrl,
             poster: item.imageUrl || null,

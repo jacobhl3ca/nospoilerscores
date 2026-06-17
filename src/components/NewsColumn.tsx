@@ -507,7 +507,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
             // league's official channel. HLS/embed are preferred since they
             // play the exact source clip. Otherwise fall through to a plain
             // anchor to the source URL.
-            const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.embedUrl || !!item.youtubeVideoId);
+            const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.videoUrl || !!item.embedUrl || !!item.youtubeVideoId);
             if (canPlayInline) {
               return (
                 <button
@@ -521,7 +521,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     }
                     onPlay!({
                       videoId: item.youtubeVideoId || undefined,
-                      playbackUrl: item.playbackUrl || null,
+                      playbackUrl: item.playbackUrl || item.videoUrl || null,
                       embedUrl: item.embedUrl || null,
                       fallbackUrl: item.articleUrl,
                       poster: item.imageUrl || null,
