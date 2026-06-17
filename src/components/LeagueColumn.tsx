@@ -1202,7 +1202,12 @@ export default function LeagueColumn({
           </div>
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
-          ) : league.eventCard ? null : notStartedDate ? (
+          ) : league.eventCard ? (
+            // Reserve the one-line subtitle slot the game columns use (e.g. MLB's
+            // Big Inning line) so the F1/UFC card tops line up with neighbours
+            // instead of riding ~16px higher.
+            <span aria-hidden className="text-[9px] sm:text-[10px] mt-0.5 block whitespace-nowrap">{" "}</span>
+          ) : notStartedDate ? (
             <span className="text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5 italic" style={{ color: "var(--text-muted)" }}>Starts {notStartedDate}</span>
           ) : (
             <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : undefined} />
