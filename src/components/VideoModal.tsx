@@ -967,7 +967,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               {!youtubeNativeControls && (
                 <div
                   aria-hidden
-                  className="absolute inset-0 z-10 cursor-pointer"
+                  className="absolute inset-0 z-10 cursor-default"
                   onClick={(e) => { e.stopPropagation(); togglePlay(); }}
                   onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
                 />
