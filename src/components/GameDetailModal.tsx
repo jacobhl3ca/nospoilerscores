@@ -74,14 +74,16 @@ export default function GameDetailModal({
   // gameHour24. Falls to null (block hidden) when no in-window hours are known.
   const rainWindow = (() => {
     if (!weather) return null;
-    const lo = weather.gameHour24 - 1;
-    const hi = weather.gameHour24 + gameLengthHours(game.sport) + 1;
-    const hours = weather.timeline.filter((t) => t.hour24 >= lo && t.hour24 <= hi);
+    const playStart = weather.gameHour24;
+    const playEnd = weather.gameHour24 + gameLengthHours(game.sport);
+    const hours = weather.timeline.filter((t) => t.hour24 >= playStart - 1 && t.hour24 <= playEnd + 1);
     if (!hours.length) return null;
     let peak = 0;
     let peakLabel = "";
     for (const t of hours) if (t.rainPct > peak) { peak = t.rainPct; peakLabel = t.label; }
-    return { hours, peak, peakLabel };
+    // playStart/playEnd let the timeline highlight the hours during the match
+    // (vs the ±1h buffer) so it's clear whether rain actually overlaps play.
+    return { hours, peak, peakLabel, playStart, playEnd };
   })();
 
   // The cup-stage line ("Group J") is tappable for World Cup group games — it
@@ -225,22 +227,20 @@ export default function GameDetailModal({
           <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage}</div>
         ) : null}
 
-        {/* Venue — name · city/region · roof — with the ESPN-style gametime
-            weather (icon + temp + condition) pinned to the RIGHT of the stadium
-            line. A "Roof"/"Indoor" tag flags a covered field (rain won't reach
-            play); open-air is the norm, so it gets no tag and the weather +
-            rain timeline below stand. */}
+        {/* Venue — name · city/region — with the ESPN-style gametime weather
+            (icon + temp + BOLD condition, so intensity reads at a glance) pinned
+            to the RIGHT of the stadium line. Covered venues (roof/indoor) carry
+            no weather at all — they're hidden in the fetch effect — so there's
+            nothing to caveat; only open-air games surface weather. */}
         {game.venue || weather ? (
           <div className="flex items-start justify-between gap-3 mb-1 text-xs" style={{ color: "var(--text-muted)" }}>
             <span className="min-w-0">
               {game.venue}
               {game.venueLocation ? ` · ${game.venueLocation}` : ""}
-              {game.venueRoof === "indoor" ? " · Indoor" : game.venueRoof === "roof" ? " · Roof (covered)" : ""}
             </span>
             {weather ? (
               <span className="shrink-0 whitespace-nowrap">
-                {weather.icon} {weather.tempF}° · {weather.label}
-                {weather.rainPct >= 30 ? ` · ${weather.rainPct}%` : ""}
+                {weather.icon} {weather.tempF}° · <span className="font-semibold">{weather.label}</span>
               </span>
             ) : null}
           </div>
@@ -251,8 +251,11 @@ export default function GameDetailModal({
             before → ~1h after the game's slotted play), not across the day. */}
         {rainWindow && rainWindow.peak >= 30 ? (
           <div className="text-xs mb-1 mt-1.5" style={{ color: "var(--text-muted)" }}>
+            {/* Impact line: exposure (only open-air games reach here) + the
+                peak chance. Intensity is the BOLD condition on the venue line
+                above (Drizzle < Rain < Showers < Thunderstorm). */}
             <div className="text-[10px] uppercase tracking-wide mb-0.5">
-              Rain chance{rainWindow.peakLabel ? ` · peak ${rainWindow.peak}% ${rainWindow.peakLabel}` : ""}
+              Open air · peak {rainWindow.peak}% rain{rainWindow.peakLabel ? ` at ${rainWindow.peakLabel}` : ""}
             </div>
             <div className="flex items-end gap-[2px] h-6">
               {rainWindow.hours.map((t) => (
@@ -269,11 +272,21 @@ export default function GameDetailModal({
               ))}
             </div>
             <div className="flex gap-[2px] mt-0.5">
-              {rainWindow.hours.map((t) => (
-                <div key={t.hour24} className="flex-1 text-center text-[9px] leading-none">
-                  {t.label.replace(" ", "")}
-                </div>
-              ))}
+              {rainWindow.hours.map((t) => {
+                const duringPlay = t.hour24 >= rainWindow.playStart && t.hour24 <= rainWindow.playEnd;
+                return (
+                  <div
+                    key={t.hour24}
+                    className="flex-1 text-center text-[9px] leading-none"
+                    style={duringPlay ? { color: "var(--accent)", fontWeight: 600 } : undefined}
+                  >
+                    {t.label.replace(" ", "")}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="text-[9px] mt-0.5" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+              Highlighted hours are during the game.
             </div>
           </div>
         ) : null}
