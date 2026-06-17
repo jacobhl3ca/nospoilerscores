@@ -1,6 +1,6 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, FightBout } from "./types";
 import { getApiBase } from "./youtube";
-import { getEtServiceDate, toYmd, getTimeZone } from "./etDay";
+import { getEtServiceDate, toYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -1946,7 +1946,16 @@ export async function fetchGames(
   date?: string
 ): Promise<{ games: Game[]; failed: boolean }> {
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
-  if (date) url.searchParams.set("dates", date);
+  // Soccer fixtures can kick off in the local midnight hour (a western-US World
+  // Cup night game is 12 AM ET). ESPN buckets those under their raw calendar
+  // day, but etSlateYmd counts them as the PREVIOUS day's slate so they line up
+  // with the date nav's 1 AM rollover. To reconcile, fetch a 2-day window
+  // [date, date+1] and keep only fixtures whose slate day is the viewed date —
+  // this pulls a midnight kickoff back onto yesterday and off today (Jacob 6/17).
+  const reconcileSoccerDay = !!date && SOCCER_SPORTS.has(sport);
+  if (date) {
+    url.searchParams.set("dates", reconcileSoccerDay ? `${date}-${nextYmd(date)}` : date);
+  }
 
   // For MLB, fetch game metadata (gamePk + live linescore) in parallel with ESPN data
   const mlbMetaPromise = sport === "mlb" ? fetchMLBGameMeta(date) : null;
@@ -1989,7 +1998,12 @@ export async function fetchGames(
     return { games: buildTennisGames(events, date), failed: false };
   }
 
-  const games: Game[] = eventsToGames(events, sport);
+  let games: Game[] = eventsToGames(events, sport);
+  // Drop the adjacent-day fixtures the 2-day soccer window pulled in, keeping
+  // only the ones whose slate day is the viewed date.
+  if (reconcileSoccerDay && date) {
+    games = games.filter((g) => etSlateYmd(g.date) === date);
+  }
 
   // Enrich MLB games with direct MLB.tv stream links + No-Hit Alert flag
   if (sport === "mlb" && mlbMetaPromise) {

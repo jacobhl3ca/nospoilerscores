@@ -11,7 +11,7 @@ import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
-import { getEtServiceDate, getTimeZone } from "@/lib/etDay";
+import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
@@ -531,16 +531,11 @@ function GolfSubtitle({ league, selectedDate }: { league: LeagueData; selectedDa
 
 // An upcoming-game slate can now span multiple days (NBA/NHL "all upcoming",
 // World Cup "next 10"), so each card derives its own date from game.date rather
-// than sharing the slate's lead date. Bucket by ET calendar day to match the
-// YYYYMMDD basis fetchNextGameDay* uses; fall back to the slate's lead date.
+// than sharing the slate's lead date. Bucket by slate day (etSlateYmd's 1 AM
+// rollover) so a midnight kickoff's card label matches the day it's filed under;
+// fall back to the slate's lead date.
 function etDayString(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(new Date(iso)).replace(/-/g, "");
-  } catch {
-    return "";
-  }
+  return etSlateYmd(iso);
 }
 
 function formatDateCompact(yyyymmdd: string): string {

@@ -51,3 +51,33 @@ export function getEtServiceDate(): Date {
 export function toYmd(d: Date): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
+
+// The "slate day" a fixture belongs to: its kickoff bucketed to a YYYYMMDD in
+// the effective time zone, using the SAME 1 AM rollover as getEtServiceDate.
+// A game kicking off before 1 AM local counts as the PREVIOUS day's slate — so
+// a western-US World Cup night match starting 9 PM PT (= 12 AM ET) shows under
+// last night, not today, matching where "today/yesterday" put the boundary.
+// ESPN buckets such a game under its raw calendar day, so the data layer has to
+// re-bucket with this to agree with the date nav (see fetchGames' soccer path).
+// YYYYMMDD → the next calendar day's YYYYMMDD. UTC math so it never trips on a
+// DST transition in the local zone.
+export function nextYmd(ymd: string): string {
+  const d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)));
+  d.setUTCDate(d.getUTCDate() + 1);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function etSlateYmd(iso: string): string {
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: getTimeZone(),
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", hour12: false,
+  }).formatToParts(dt);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  const d = new Date(parseInt(get("year"), 10), parseInt(get("month"), 10) - 1, parseInt(get("day"), 10));
+  // % 24 guards the "24" some ICU builds emit for midnight; < 1 → previous day.
+  if (parseInt(get("hour"), 10) % 24 < 1) d.setDate(d.getDate() - 1);
+  return toYmd(d);
+}
