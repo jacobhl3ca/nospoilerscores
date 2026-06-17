@@ -776,12 +776,6 @@ export default function SettingsPanel({
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
             <ToggleRow
-              label="Cover bottom strip"
-              hint="Black bar over the bottom of the player"
-              checked={prefs.maskVideoBottom ?? true}
-              onChange={(v) => updatePrefs({ maskVideoBottom: v })}
-            />
-            <ToggleRow
               label="Show YouTube's controls"
               hint="Use YouTube's own bar (progress + time) instead of the spoiler-safe one — reveals how far you are, but handy in fullscreen"
               checked={prefs.youtubeNativeControls ?? false}

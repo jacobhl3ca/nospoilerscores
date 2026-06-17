@@ -227,7 +227,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // modal (reset on every open) so the no-spoiler default always returns —
   // separate from the persistent Settings toggles (maskVideoTitle/Bottom).
   const [revealTitle, setRevealTitle] = useState(false);
-  const [revealBottom, setRevealBottom] = useState(false);
+  // Collapse the control chrome (seek bar + control strip + watch links) to give
+  // the video the whole frame — especially useful in mobile fullscreen. Toggled
+  // by the eye in the video's bottom-right corner.
+  const [controlsHidden, setControlsHidden] = useState(false);
   // A seek the user must confirm because it lands past halfway (only when the
   // warnHalfway pref is on). Holds the action to run on confirm; null = no
   // prompt showing. Local, resets each open.
@@ -835,7 +838,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
-  const FS_BAR_RESERVE = 64; // px reserved below the video for the control bar
+  // Space reserved below the fullscreen video for the control bar — drops to a
+  // sliver when the controls are hidden so the video fills (mobile fullscreen).
+  const FS_BAR_RESERVE = controlsHidden ? 8 : 64;
   const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
@@ -1004,17 +1009,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   }}
                 />
               )}
-              {maskVideoBottom && !revealBottom && !youtubeNativeControls && (
-                <div
-                  aria-hidden
-                  className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
-                  style={{
-                    height: "clamp(22px, 5.5%, 50px)",
-                    background: "#000",
-                  }}
-                />
-              )}
-              {/* In-player peek toggles — a small eye in the corner of each bar
+              {/* In-player peek toggle — a small eye in the corner of the bar
                   that's covering, on the black bar when covered / over the
                   footage corner when revealed. Right-aligned so they clear the
                   common top-LEFT scoreboard. Tap to uncover/re-cover for THIS
@@ -1037,21 +1032,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   )}
                 </button>
               )}
-              {maskVideoBottom && !youtubeNativeControls && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setRevealBottom((v) => !v); }}
-                  aria-label={revealBottom ? "Cover the bottom bar" : "Peek under the bottom bar"}
-                  title={revealBottom ? "Cover bottom" : "Peek under bottom bar"}
-                  className="absolute bottom-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition-colors cursor-pointer"
-                  style={{ background: "rgba(0,0,0,0.45)" }}
-                >
-                  {revealBottom ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
-                  )}
-                </button>
-              )}
+              {/* Hide/show the control chrome below the video to reclaim space
+                  (great in mobile fullscreen). Stays pinned to the video corner
+                  so you can bring the controls back. */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setControlsHidden((v) => !v); }}
+                aria-label={controlsHidden ? "Show controls" : "Hide controls"}
+                title={controlsHidden ? "Show controls" : "Hide controls"}
+                className="absolute bottom-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition-colors cursor-pointer"
+                style={{ background: "rgba(0,0,0,0.45)" }}
+              >
+                {controlsHidden ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6" /></svg>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                )}
+              </button>
               {/* Warn-past-halfway confirm — shown only when the warnHalfway
                   pref is on and a click/jump targeted the second half from the
                   first. Holds the seek until confirmed so you don't drop into
@@ -1086,6 +1082,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               )}
             </div>
 
+            {/* Control chrome (seek bar + strip) — collapsible via the corner
+                toggle so the video can take the whole frame. */}
+            {!controlsHidden && (<>
             {/* Seek bar — drag/tap to scrub. Sits BELOW the video (never over
                 footage). Default is a BLANK track (no fill) so it never reveals
                 how far through you are; the fill can be turned on (grey/white)
@@ -1277,6 +1276,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 )}
               </button>
             </div>
+            </>)}
           </div>
         ) : (
           <div ref={containerRef} className="relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: "min(100%, calc(78vh * 16 / 9))", aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
@@ -1318,12 +1318,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
         {/* Direct link + copy — branded per source so users know where the
             link goes; the copy button gives iOS the same grab-the-URL that
-            the browser's right-click menu does on the web. */}
+            the browser's right-click menu does on the web. Hidden with the rest
+            of the chrome when the YT controls are collapsed. */}
+        {!(ytMode && controlsHidden) && (
         <div className={`${textMode ? "mt-4" : "mt-3"} flex items-center justify-center gap-3`}>
           <a
-            href={shareUrl || "#"}
+            href={sourceShareUrl || "#"}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
             className={textMode
               ? "inline-block px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               : "text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"}
@@ -1341,6 +1344,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             </button>
           )}
         </div>
+        )}
       </div>
     </div>
   );
