@@ -851,7 +851,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0" style={{ background: "rgba(0, 0, 0, 0.985)" }} />
+      <div className="absolute inset-0" style={{ background: "#000" }} />
 
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
@@ -944,7 +944,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           >
             {/* Video region — 16:9 in-flow, or capped to leave bar room in FS */}
             <div
-              className="relative mx-auto w-full overflow-hidden bg-black"
+              className="group relative mx-auto w-full overflow-hidden bg-black"
               style={fsActive
                 ? { width: fsMediaWidth, aspectRatio: "16 / 9", borderRadius: 0 }
                 : { width: "min(100%, calc((100vh - 168px) * 16 / 9))", aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
@@ -1039,7 +1039,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 onClick={(e) => { e.stopPropagation(); setControlsHidden((v) => !v); }}
                 aria-label={controlsHidden ? "Show controls" : "Hide controls"}
                 title={controlsHidden ? "Show controls" : "Hide controls"}
-                className="absolute bottom-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition-colors cursor-pointer"
+                className="absolute bottom-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition cursor-pointer opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                 style={{ background: "rgba(0,0,0,0.45)" }}
               >
                 {controlsHidden ? (
