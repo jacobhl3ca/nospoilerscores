@@ -15,14 +15,17 @@ interface WcGroup {
 }
 
 type View = "groups" | "ranked";
+// Ranked view can be narrowed to just the strongest or weakest 10 — a real view
+// switch, not an overlay on the full list.
+type Band = "all" | "top" | "bottom";
 
 // View + highlight choices stick across opens (and reloads) via localStorage —
-// the same lightweight pattern the app uses for its other view prefs. Top and
-// bottom highlight are independent toggles. Defaults preserve the original
-// behavior: grouped view, no highlighting.
+// the same lightweight pattern the app uses for its other view prefs. Defaults
+// preserve the original behavior: grouped view, no filtering.
 const VIEW_KEY = "wc-groups-view";
-const HL_TOP_KEY = "wc-groups-hl-top";
-const HL_BOTTOM_KEY = "wc-groups-hl-bottom";
+const HL_TOP_KEY = "wc-groups-hl-top";       // legacy toggle — migrated into BAND_KEY
+const HL_BOTTOM_KEY = "wc-groups-hl-bottom"; // legacy toggle — migrated into BAND_KEY
+const BAND_KEY = "wc-groups-band";           // "all" | "top" | "bottom"
 const DAY_KEY_PREFIX = "wc-groups-day-";
 
 // The "Playing:" day pills highlight teams with a fixture on that day. SPOILER-
@@ -67,17 +70,41 @@ function loadFlag(key: string): boolean {
     return false;
   }
 }
+function loadBand(): Band {
+  if (typeof window === "undefined") return "all";
+  try {
+    const v = window.localStorage.getItem(BAND_KEY);
+    if (v === "top" || v === "bottom" || v === "all") return v;
+    // Migrate the old independent top/bottom highlight toggles: if exactly one
+    // was on, adopt it as the band; otherwise show everything.
+    const top = window.localStorage.getItem(HL_TOP_KEY) === "1";
+    const bottom = window.localStorage.getItem(HL_BOTTOM_KEY) === "1";
+    if (top && !bottom) return "top";
+    if (bottom && !top) return "bottom";
+    return "all";
+  } catch {
+    return "all";
+  }
+}
 
-// Subtle tints for the top-10 (green) / bottom-10 (red) FIFA-ranked teams, with
-// an inset bar on the left edge. Semi-transparent so they read on either theme.
-const TOP_BG = "rgba(34,197,94,0.16)";
-const TOP_BAR = "inset 2px 0 0 rgba(34,197,94,0.9)";
-const BOTTOM_BG = "rgba(239,68,68,0.14)";
-const BOTTOM_BAR = "inset 2px 0 0 rgba(239,68,68,0.85)";
 const FIND_BG = "rgba(234,179,8,0.22)";   // amber — the country you searched
 const FIND_BAR = "inset 2px 0 0 rgba(234,179,8,0.95)";
-const DAY_BG = "rgba(59,130,246,0.18)";   // blue — playing on a selected day
-const DAY_BAR = "inset 2px 0 0 rgba(59,130,246,0.9)";
+
+// One distinct color per match on the selected day(s): both teams in a fixture
+// share a color, so you can see who plays whom at a glance — even when they sit
+// far apart in the ranked list. Ordered for high contrast between adjacent
+// matches; cycles if a day has more fixtures than colors. Amber is reserved for
+// search, so it's deliberately left out.
+const PAIR_PALETTE: Array<{ bg: string; bar: string }> = [
+  { bg: "rgba(59,130,246,0.22)", bar: "inset 2px 0 0 rgba(59,130,246,0.95)" },  // blue
+  { bg: "rgba(249,115,22,0.22)", bar: "inset 2px 0 0 rgba(249,115,22,0.95)" },  // orange
+  { bg: "rgba(34,197,94,0.22)", bar: "inset 2px 0 0 rgba(34,197,94,0.95)" },    // green
+  { bg: "rgba(236,72,153,0.24)", bar: "inset 2px 0 0 rgba(236,72,153,0.95)" },  // pink
+  { bg: "rgba(168,85,247,0.24)", bar: "inset 2px 0 0 rgba(168,85,247,0.95)" },  // purple
+  { bg: "rgba(20,184,166,0.22)", bar: "inset 2px 0 0 rgba(20,184,166,0.95)" },  // teal
+  { bg: "rgba(239,68,68,0.20)", bar: "inset 2px 0 0 rgba(239,68,68,0.95)" },    // red
+  { bg: "rgba(6,182,212,0.22)", bar: "inset 2px 0 0 rgba(6,182,212,0.95)" },    // cyan
+];
 
 // All 12 World Cup groups in one spoiler-safe overlay: the DRAW only (which
 // teams are in each group). Within a group, teams are ordered by FIFA world
@@ -90,30 +117,26 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
   const [groups, setGroups] = useState<WcGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [view, setView] = useState<View>(() => loadView());
-  const [hlTop, setHlTop] = useState<boolean>(() => loadFlag(HL_TOP_KEY));
-  const [hlBottom, setHlBottom] = useState<boolean>(() => loadFlag(HL_BOTTOM_KEY));
+  const [band, setBand] = useState<Band>(() => loadBand());
   const [query, setQuery] = useState("");
   const [days, setDays] = useState<Record<DayKey, boolean>>(() => ({
     yesterday: loadFlag(DAY_KEY_PREFIX + "yesterday"),
     today: loadFlag(DAY_KEY_PREFIX + "today"),
     tomorrow: loadFlag(DAY_KEY_PREFIX + "tomorrow"),
   }));
-  // Normalized team names with a fixture on each enabled day. Fetched lazily and
-  // deduped via fetchedDays so toggling on/off doesn't refetch.
-  const [dayTeams, setDayTeams] = useState<Partial<Record<DayKey, Set<string>>>>({});
+  // The fixtures on each enabled day, as team-name PAIRS (spoiler-safe: names
+  // only). Fetched lazily and deduped via fetchedDays so toggling on/off doesn't
+  // refetch. Each pair gets its own color in the list (see pairColor).
+  const [dayMatches, setDayMatches] = useState<Partial<Record<DayKey, Array<[string, string]>>>>({});
   const fetchedDays = useRef<Set<DayKey>>(new Set());
 
   const changeView = (v: View) => {
     setView(v);
     try { window.localStorage.setItem(VIEW_KEY, v); } catch {}
   };
-  const changeHlTop = (v: boolean) => {
-    setHlTop(v);
-    try { window.localStorage.setItem(HL_TOP_KEY, v ? "1" : "0"); } catch {}
-  };
-  const changeHlBottom = (v: boolean) => {
-    setHlBottom(v);
-    try { window.localStorage.setItem(HL_BOTTOM_KEY, v ? "1" : "0"); } catch {}
+  const changeBand = (b: Band) => {
+    setBand(b);
+    try { window.localStorage.setItem(BAND_KEY, b); } catch {}
   };
   const toggleDay = (key: DayKey) => {
     setDays((prev) => {
@@ -186,16 +209,19 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
           );
           if (!r.ok) continue;
           const d = await r.json();
-          const names = new Set<string>();
+          // Collect each fixture as a [teamA, teamB] pair of normalized names.
+          const matches: Array<[string, string]> = [];
           for (const ev of d.events ?? []) {
             for (const comp of ev.competitions ?? []) {
+              const pair: string[] = [];
               for (const c of comp.competitors ?? []) {
                 const n = c.team?.displayName ?? c.team?.name;
-                if (n) names.add(norm(n));
+                if (n) pair.push(norm(n));
               }
+              if (pair.length === 2) matches.push([pair[0], pair[1]]);
             }
           }
-          if (!ctrl.signal.aborted) setDayTeams((prev) => ({ ...prev, [def.key]: names }));
+          if (!ctrl.signal.aborted) setDayMatches((prev) => ({ ...prev, [def.key]: matches }));
         } catch {
           // Allow a retry on a later toggle if this fetch failed.
           fetchedDays.current.delete(def.key);
@@ -231,18 +257,42 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
 
   const q = norm(query);
   const anyDay = days.yesterday || days.today || days.tomorrow;
-  // Most specific highlight wins: an explicit search, then a selected match day,
-  // then the strongest/weakest band.
+
+  // Map every team playing on a selected day to its match's color index. Both
+  // teams in a fixture get the same index, so a pair reads as a pair. Colors are
+  // handed out per match across the enabled days; if a team plays on more than
+  // one selected day, the later day wins (rare within a 3-day window).
+  const pairColor = useMemo(() => {
+    const map = new Map<string, number>();
+    let i = 0;
+    for (const def of DAY_DEFS) {
+      if (!days[def.key]) continue;
+      for (const [a, b] of dayMatches[def.key] ?? []) {
+        const c = i % PAIR_PALETTE.length;
+        map.set(a, c);
+        map.set(b, c);
+        i++;
+      }
+    }
+    return map;
+  }, [days, dayMatches]);
+
+  // Most specific highlight wins: an explicit search, then the color of the
+  // match this team is playing on a selected day.
   const rowStyle = (name: string): React.CSSProperties => {
     const n = norm(name);
     if (q && n.includes(q)) return { background: FIND_BG, boxShadow: FIND_BAR };
-    for (const def of DAY_DEFS) {
-      if (days[def.key] && dayTeams[def.key]?.has(n)) return { background: DAY_BG, boxShadow: DAY_BAR };
-    }
-    if (hlTop && topNames.has(name)) return { background: TOP_BG, boxShadow: TOP_BAR };
-    if (hlBottom && bottomNames.has(name)) return { background: BOTTOM_BG, boxShadow: BOTTOM_BAR };
+    const c = pairColor.get(n);
+    if (c != null) return { background: PAIR_PALETTE[c].bg, boxShadow: PAIR_PALETTE[c].bar };
     return {};
   };
+
+  // Top 10 / Bottom 10 SWITCH the ranked list to just that band — a real view
+  // change, not an overlay on the full list.
+  const rankedShown =
+    band === "top" ? ranked.filter((t) => topNames.has(t.name))
+    : band === "bottom" ? ranked.filter((t) => bottomNames.has(t.name))
+    : ranked;
 
   // Groups view: "A to L (12)". Ranked view: total team count.
   const range =
@@ -251,7 +301,11 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
       : "";
   const title =
     view === "ranked"
-      ? `⚽ World Cup — By FIFA ranking${ranked.length ? ` (${ranked.length})` : ""}`
+      ? band === "top"
+        ? "⚽ World Cup — Top 10 by FIFA ranking"
+        : band === "bottom"
+          ? "⚽ World Cup — Bottom 10 by FIFA ranking"
+          : `⚽ World Cup — By FIFA ranking${ranked.length ? ` (${ranked.length})` : ""}`
       : `⚽ World Cup — Groups${range}`;
 
   return (
@@ -279,7 +333,7 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
 
         {groups ? (
           <div className="mb-3 space-y-2">
-            {/* Row 1: view toggle · country search (center) · top/bottom highlight */}
+            {/* Row 1: view toggle · country search (center) · top/bottom band filter */}
             <div className="flex items-center gap-3 flex-wrap">
               <div className="inline-flex rounded-lg overflow-hidden shrink-0" style={{ border: "1px solid var(--border)" }}>
                 {([
@@ -311,30 +365,35 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
                 className="flex-1 min-w-[7rem] text-xs rounded-lg px-2.5 py-1.5 outline-none"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               />
-              <div className="flex items-center gap-3 flex-wrap shrink-0">
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none" style={{ color: "var(--text-muted)" }}>
-                  <input
-                    type="checkbox"
-                    checked={hlTop}
-                    onChange={(e) => changeHlTop(e.target.checked)}
-                    className="cursor-pointer"
-                    style={{ accentColor: "rgb(34,197,94)" }}
-                  />
-                  <span className="inline-block w-2 h-2 rounded-sm" style={{ background: "rgb(34,197,94)" }} />
-                  Top 10
-                </label>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none" style={{ color: "var(--text-muted)" }}>
-                  <input
-                    type="checkbox"
-                    checked={hlBottom}
-                    onChange={(e) => changeHlBottom(e.target.checked)}
-                    className="cursor-pointer"
-                    style={{ accentColor: "rgb(239,68,68)" }}
-                  />
-                  <span className="inline-block w-2 h-2 rounded-sm" style={{ background: "rgb(239,68,68)" }} />
-                  Bottom 10
-                </label>
-              </div>
+              {/* Top/Bottom 10 narrows the ranked list to that band — meaningful
+                  only there, so it's hidden in the grouped view. Mutually
+                  exclusive: tap the active one again to clear back to all. */}
+              {view === "ranked" ? (
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  {([
+                    { key: "top" as Band, label: "Top 10", color: "rgb(34,197,94)" },
+                    { key: "bottom" as Band, label: "Bottom 10", color: "rgb(239,68,68)" },
+                  ]).map((o) => {
+                    const active = band === o.key;
+                    return (
+                      <button
+                        key={o.key}
+                        onClick={() => changeBand(active ? "all" : o.key)}
+                        aria-pressed={active}
+                        className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full cursor-pointer transition-colors select-none"
+                        style={{
+                          background: active ? o.color : "var(--bg-card)",
+                          color: active ? "white" : "var(--text-muted)",
+                          border: `1px solid ${active ? o.color : "var(--border)"}`,
+                        }}
+                      >
+                        <span className="inline-block w-2 h-2 rounded-sm" style={{ background: active ? "white" : o.color }} />
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
             {/* Row 2: highlight teams playing on a given day */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -375,7 +434,7 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
           // keeps a single team row from splitting across a column boundary. The
           // list sits on a lighter card, matching the group cards.
           <div className="rounded-lg p-2 columns-2 sm:columns-3 lg:columns-4 gap-2" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            {ranked.map((t) => (
+            {rankedShown.map((t) => (
               <div
                 key={t.name}
                 className="flex items-center gap-2 min-w-0 rounded px-1.5 py-1 break-inside-avoid"
@@ -430,9 +489,7 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
             #N = FIFA world ranking coming into the tournament — not group position.
             {(() => {
               const parts: string[] = [];
-              if (hlTop) parts.push("green = strongest 10");
-              if (hlBottom) parts.push("red = weakest 10");
-              if (anyDay) parts.push("blue = playing on a selected day");
+              if (anyDay) parts.push("each color links the two teams in a match");
               if (query.trim()) parts.push("amber = your search");
               if (!parts.length) return "";
               const s = parts.join(", ");
