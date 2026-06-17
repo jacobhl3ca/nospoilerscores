@@ -16,6 +16,9 @@ import type { Preferences } from "./preferences";
 export interface AuthState {
   signedIn: boolean;
   email: string | null;
+  // Which sign-in methods are live (secrets configured). Undefined when the
+  // request failed — callers should treat Apple as available by default.
+  providers?: { apple: boolean; google: boolean };
 }
 
 export async function getAuthState(): Promise<AuthState> {
@@ -23,7 +26,7 @@ export async function getAuthState(): Promise<AuthState> {
     const r = await fetch("/api/me", { credentials: "include" });
     if (!r.ok) return { signedIn: false, email: null };
     const j = await r.json();
-    return { signedIn: !!j.signedIn, email: j.email ?? null };
+    return { signedIn: !!j.signedIn, email: j.email ?? null, providers: j.providers };
   } catch {
     return { signedIn: false, email: null };
   }
@@ -67,6 +70,12 @@ export function signInWithApple(returnTo?: string): void {
   if (typeof window === "undefined") return;
   const rt = returnTo || window.location.pathname || "/";
   window.location.href = `/auth/apple/login?returnTo=${encodeURIComponent(rt)}`;
+}
+
+export function signInWithGoogle(returnTo?: string): void {
+  if (typeof window === "undefined") return;
+  const rt = returnTo || window.location.pathname || "/";
+  window.location.href = `/auth/google/login?returnTo=${encodeURIComponent(rt)}`;
 }
 
 export function signOut(): void {

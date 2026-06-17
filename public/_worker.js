@@ -51,6 +51,8 @@ export default {
     // so deploying this is safe before the secrets are in place.
     if (url.pathname === "/auth/apple/login")    return siwaLogin(request, env, url);
     if (url.pathname === "/auth/apple/callback") return siwaCallback(request, env, url);
+    if (url.pathname === "/auth/google/login")    return googleLogin(request, env, url);
+    if (url.pathname === "/auth/google/callback") return googleCallback(request, env, url);
     if (url.pathname === "/auth/logout")         return siwaLogout();
     if (url.pathname === "/api/me")              return siwaMe(request, env);
     if (url.pathname === "/api/prefs") {
@@ -1144,7 +1146,7 @@ async function siwaCallback(request, env, url) {
   if (claims.nonce && claims.nonce !== st.n) return _siwaErrRedirect("bad_nonce");
 
   const session = await _siwaMakeSession(env, {
-    sub: claims.sub, email: claims.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+    sub: `apple:${claims.sub}`, email: claims.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
   return new Response(null, {
     status: 303,
@@ -1163,10 +1165,15 @@ function siwaLogout() {
   });
 }
 
-// GET /api/me -> { signedIn, email }
+// GET /api/me -> { signedIn, email, providers } — providers reflects which
+// sign-in methods have their secrets set, so the UI only shows live buttons.
 async function siwaMe(request, env) {
   const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
-  return _siwaJson({ signedIn: !!u, email: (u && u.email) || null });
+  return _siwaJson({
+    signedIn: !!u,
+    email: (u && u.email) || null,
+    providers: { apple: _siwaConfigured(env), google: _googleConfigured(env) },
+  });
 }
 
 // GET /api/prefs -> { prefs } (the user's stored prefs JSON, or null)
@@ -1190,4 +1197,115 @@ async function prefsPut(request, env) {
   await env.DATA.put(`prefs/${u.sub}.json`, JSON.stringify(parsed),
     { httpMetadata: { contentType: "application/json" } });
   return _siwaJson({ ok: true });
+}
+
+// ===========================================================================
+// Sign in with Google (web). Same session + R2 prefs model as Apple, keyed by
+// `google:<sub>` so the two providers never collide. Inert until the
+// GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET secrets are set.
+// ===========================================================================
+const GOOGLE_AUTHORIZE = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs";
+
+function _googleConfigured(env) {
+  return !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.SESSION_SECRET);
+}
+
+let _googleKeysCache = null;
+async function _googleKeys() {
+  if (_googleKeysCache && _googleKeysCache.exp > _siwaNow()) return _googleKeysCache.keys;
+  const res = await fetch(GOOGLE_CERTS_URL);
+  const { keys } = await res.json();
+  _googleKeysCache = { exp: _siwaNow() + 3600, keys };
+  return keys;
+}
+
+// Verify Google's id_token (RS256 via Google's JWKS).
+async function _googleVerifyIdToken(idToken, env) {
+  if (!idToken) return null;
+  const parts = idToken.split(".");
+  if (parts.length !== 3) return null;
+  const [h, p, s] = parts;
+  let header, payload;
+  try { header = _jsonFromB64url(h); payload = _jsonFromB64url(p); } catch { return null; }
+  const jwk = (await _googleKeys()).find((k) => k.kid === header.kid);
+  if (!jwk) return null;
+  let ok = false;
+  try {
+    const key = await crypto.subtle.importKey("jwk", jwk,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key,
+      _bytesFromB64url(s), _siwaEnc.encode(`${h}.${p}`));
+  } catch { return null; }
+  if (!ok) return null;
+  if (payload.iss !== "https://accounts.google.com" && payload.iss !== "accounts.google.com") return null;
+  if (payload.aud !== env.GOOGLE_CLIENT_ID) return null;
+  if (!payload.exp || payload.exp < _siwaNow()) return null;
+  return payload; // { sub, email?, nonce?, ... }
+}
+
+// GET /auth/google/login -> 302 to Google's consent screen.
+async function googleLogin(request, env, url) {
+  if (!_googleConfigured(env)) return new Response("Sign in is not configured yet", { status: 503 });
+  const returnToRaw = url.searchParams.get("returnTo") || "/";
+  const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
+  const nonce = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
+  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow() });
+  const state = `${stateBody}.${await _siwaHmacSign(env.SESSION_SECRET, stateBody)}`;
+  const auth = new URL(GOOGLE_AUTHORIZE);
+  auth.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
+  auth.searchParams.set("redirect_uri", `${url.origin}/auth/google/callback`);
+  auth.searchParams.set("response_type", "code");
+  auth.searchParams.set("scope", "openid email");
+  auth.searchParams.set("state", state);
+  auth.searchParams.set("nonce", nonce);
+  return Response.redirect(auth.toString(), 302);
+}
+
+// GET /auth/google/callback?code=&state= (Google redirects with query params).
+async function googleCallback(request, env, url) {
+  if (!_googleConfigured(env)) return _siwaErrRedirect("not_configured");
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  if (!code || !state) return _siwaErrRedirect("missing_code");
+  const dot = state.lastIndexOf(".");
+  if (dot < 1) return _siwaErrRedirect("bad_state");
+  const sBody = state.slice(0, dot), sSig = state.slice(dot + 1);
+  if (!(await _siwaHmacVerify(env.SESSION_SECRET, sBody, sSig))) return _siwaErrRedirect("bad_state");
+  let st;
+  try { st = _jsonFromB64url(sBody); } catch { return _siwaErrRedirect("bad_state"); }
+  if (!st.t || st.t < _siwaNow() - SIWA_STATE_TTL) return _siwaErrRedirect("expired");
+
+  let tokens;
+  try {
+    const res = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: `${url.origin}/auth/google/callback`,
+      }),
+    });
+    if (!res.ok) return _siwaErrRedirect("token_exchange");
+    tokens = await res.json();
+  } catch { return _siwaErrRedirect("token_exchange"); }
+
+  const claims = await _googleVerifyIdToken(tokens.id_token, env);
+  if (!claims) return _siwaErrRedirect("bad_id_token");
+  if (claims.nonce && claims.nonce !== st.n) return _siwaErrRedirect("bad_nonce");
+
+  const session = await _siwaMakeSession(env, {
+    sub: `google:${claims.sub}`, email: claims.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+  });
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
+    },
+  });
 }
