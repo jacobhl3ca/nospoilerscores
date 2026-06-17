@@ -68,6 +68,27 @@ const TIME_ZONES: string[] = (() => {
   ];
 })();
 
+// Resolve a US ZIP to its IANA time zone via Open-Meteo's geocoder — the same
+// CORS-open, key-free service the weather lookup uses. Returns the zone plus a
+// friendly place label, or null if the ZIP can't be found.
+async function lookupZipTimeZone(zip: string): Promise<{ tz: string; place: string } | null> {
+  try {
+    const r = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(zip)}&count=5&language=en&format=json&countryCode=US`,
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    const list: Array<{ name?: string; admin1?: string; country_code?: string; country?: string; timezone?: string }> = d.results ?? [];
+    const pick =
+      list.find((x) => (x.country_code === "US" || x.country === "United States") && x.timezone) ??
+      list.find((x) => x.timezone);
+    if (!pick?.timezone) return null;
+    return { tz: pick.timezone, place: [pick.name, pick.admin1].filter(Boolean).join(", ") };
+  } catch {
+    return null;
+  }
+}
+
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "system", label: "System" },
   { value: "light", label: "Light" },
@@ -136,6 +157,25 @@ export default function SettingsPanel({
   // Auto resolves to. Computed at render (client) so it reflects their device.
   let deviceTimeZone = "";
   try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
+  // ZIP → time zone helper state (Settings → Time zone).
+  const [zip, setZip] = useState("");
+  const [zipBusy, setZipBusy] = useState(false);
+  const [zipMsg, setZipMsg] = useState("");
+  const [zipErr, setZipErr] = useState(false);
+  const resolveZip = async () => {
+    if (zip.length !== 5 || zipBusy) return;
+    setZipBusy(true); setZipErr(false); setZipMsg("Looking up…");
+    const res = await lookupZipTimeZone(zip);
+    setZipBusy(false);
+    if (res) {
+      updatePrefs({ timezone: res.tz });
+      setZipErr(false);
+      setZipMsg(`${res.place} — ${res.tz.replace(/_/g, " ")}`);
+    } else {
+      setZipErr(true);
+      setZipMsg("Couldn’t find that ZIP");
+    }
+  };
 
   // Safari ignores the text/x-moz-url + text/html drag overrides below and
   // names a dragged bookmark after the link's visible text instead. So on
@@ -518,6 +558,33 @@ export default function SettingsPanel({
                   <option key={tz} value={tz}>{tz.replace(/_/g, " ")}</option>
                 ))}
               </select>
+              {/* Or just type a US ZIP and we'll pick the zone for you. */}
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={5}
+                  value={zip}
+                  onChange={(e) => { setZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setZipMsg(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); resolveZip(); } }}
+                  placeholder="or enter ZIP"
+                  className="w-28 px-3 py-2 rounded-lg text-sm"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                />
+                <button
+                  onClick={resolveZip}
+                  disabled={zip.length !== 5 || zipBusy}
+                  className="px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-default"
+                  style={{ background: "var(--accent)", color: "white" }}
+                >
+                  {zipBusy ? "…" : "Set"}
+                </button>
+              </div>
+              {zipMsg && (
+                <p className="text-[11px] mt-1" style={{ color: zipErr ? "rgb(239,68,68)" : "var(--text-muted)" }}>
+                  {zipMsg}
+                </p>
+              )}
             </Field>
           </Section>
 
