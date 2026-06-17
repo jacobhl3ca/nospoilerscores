@@ -1563,11 +1563,16 @@ async function fetchRedditViaRedlib(subreddit, sectionLabel) {
 // 2026-06-17: the lone mirror decayed FURTHER — even 6-feed batches now starve
 // every league feed after r/sports (live: r/sports had video, all 17 leagues
 // 0-video). Standalone each league still resolves video, so it's pure per-IP
-// rate-limit on that one mirror. Dropped 6→3 per batch (each batch hits the
-// mirror fewer times before the window-resetting cooldown). If the soccer/league
-// tail still loses video, drop further (2, then 1) — bake time scales but stays
-// well under the hourly cron (3/batch ≈ 6 cooldowns ≈ +9 min).
-const REDDIT_BATCH_SIZE = 3;
+// rate-limit on that one mirror. If the soccer/league tail still loses video,
+// drop further (2, then 1) — bake time scales but stays well under the hourly
+// cron. 2026-06-17 (later): batch=3 still FLAPPED bake-to-bake (one bake soccer
+// 5/fifa 7/mlb 6, the next soccer 0) — the mirror's per-hour mood varies, so a
+// borderline 3rd-in-batch request wins or loses by luck. Dropped 3→2 (soccer is
+// then 1st in its batch, not last) AND added a video-regression guard in
+// writeFeed so a 0-video bake can't clobber a still-fresh with-video file — the
+// guard is what actually stops the user-visible flapping; the batch size just
+// makes good bakes more frequent (2/batch ≈ 8 cooldowns ≈ +12 min).
+const REDDIT_BATCH_SIZE = 2;
 const REDDIT_BATCH_COOLDOWN_MS = 90000;
 let _redditGate = Promise.resolve();
 let _redditHits = 0;
@@ -1897,6 +1902,26 @@ async function writeFeed(name, items) {
   if (items.length === 0) {
     console.log(`skipped ${path} (0 items — preserving prior file)`);
     return;
+  }
+  // Video-regression guard (reddit only): the lone redlib mirror is flaky
+  // hour-to-hour, so some bakes render a feed's video posts as plain link/image
+  // thumbnails → 12 items but 0 playable video, which would clobber a perfectly
+  // good with-video file and make the column flap to static (Jacob: "some
+  // r/soccer videos aren't playing"). When a reddit feed comes back with NO
+  // video but the prior file HAD video and is still fresh (<6h), keep the prior
+  // file — clips stay playable until a bake produces video again or it ages out
+  // (after ~6h even those clips are stale, so we let the videoless render land).
+  const newHasVideo = items.some((i) => i.videoUrl || i.youtubeVideoId);
+  if (name.startsWith("reddit-") && !newHasVideo) {
+    try {
+      const prev = JSON.parse(await readFile(path, "utf8"));
+      const prevHasVideo = (prev.items || []).some((i) => i.videoUrl || i.youtubeVideoId);
+      const ageH = prev.fetchedAt ? (Date.now() - Date.parse(prev.fetchedAt)) / 3600e3 : Infinity;
+      if (prevHasVideo && ageH < 6) {
+        console.log(`skipped ${path} (0 video this bake — keeping prior with-video file, age ${ageH.toFixed(1)}h)`);
+        return;
+      }
+    } catch { /* no prior file / unreadable — fall through and write the new one */ }
   }
   const payload = { fetchedAt: new Date().toISOString(), items };
   await writeFile(path, JSON.stringify(payload));
