@@ -224,6 +224,11 @@ export interface Preferences {
   // card at a time. Default false (the multi-column board). The top-game ⭐
   // and per-slot league switching still apply.
   singleColumn?: boolean;
+  // Single-column NEWS layout: same idea as singleColumn but for the news view —
+  // stack every news column into one centered, wider column instead of
+  // side-by-side. Available on large screens too (the news view already
+  // auto-stacks on phones). Default false.
+  newsSingleColumn?: boolean;
   // IANA time zone (e.g. "America/Los_Angeles") used app-wide for both the
   // "today" date boundary and every displayed time. Undefined = "Auto" = the
   // device's own zone, so the default behavior is unchanged. Applied globally

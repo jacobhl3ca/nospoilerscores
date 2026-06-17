@@ -769,6 +769,12 @@ export default function SettingsPanel({
 
           {/* News */}
           <Section title="News">
+            <ToggleRow
+              label="Single column"
+              hint="Stack all news columns into one wide column, instead of side-by-side. Works on large screens too."
+              checked={prefs.newsSingleColumn ?? false}
+              onChange={(v) => updatePrefs({ newsSingleColumn: v })}
+            />
             <Field label="3rd news column" hint="Default league for the third news column">
               <select
                 value={prefs.newsThirdLeague ?? ""}

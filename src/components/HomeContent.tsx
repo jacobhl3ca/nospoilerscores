@@ -1597,6 +1597,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 toggle (Jacob 5/31). Source-type filters live in a funnel
                 popover instead of always-on header pill rows — keeps the news
                 header clean like hidescore.com while keeping them reachable. */}
+            {showNews && !isMobile && (
+              <SingleColToggle
+                active={prefs.newsSingleColumn ?? false}
+                onClick={() => updatePrefs({ newsSingleColumn: !prefs.newsSingleColumn })}
+              />
+            )}
             {showNews && (
               <div ref={newsFilterRef} className="relative">
                 <button
@@ -1868,7 +1874,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
 
           // Which entries actually render: 1-col (mobile / Focus league) stacks
           // ALL focused leagues; otherwise the first N entries side-by-side.
-          const effectiveColCount = (newsFocusLeague || isMobile) ? 1 : 3;
+          const effectiveColCount = (newsFocusLeague || isMobile || (prefs.newsSingleColumn ?? false)) ? 1 : 3;
           const renderedEntries = effectiveColCount === 1
             ? focusedEntries
             : focusedEntries.slice(0, effectiveColCount);
