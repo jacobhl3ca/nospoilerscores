@@ -122,9 +122,9 @@ export function prefetchGameWeather(game: {
   venueLocation?: string;
   date: string;
   state: string;
-  venueIndoor?: boolean | null;
+  venueRoof?: "indoor" | "roof" | null;
 }): void {
-  if (game.state === "post" || game.venueIndoor || !game.venueLocation) return;
+  if (game.state === "post" || game.venueRoof || !game.venueLocation) return;
   void fetchGameWeather(game.venueLocation, game.date);
 }
 

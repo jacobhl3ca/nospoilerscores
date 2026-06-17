@@ -57,7 +57,7 @@ export default function GameDetailModal({
   const [weather, setWeather] = useState<GameWeather | null>(null);
   useEffect(() => {
     setWeather(null);
-    if (game.state === "post" || game.venueIndoor || !game.venueLocation) return;
+    if (game.state === "post" || game.venueRoof || !game.venueLocation) return;
     let cancelled = false;
     // fetchGameWeather is cached + deduped, so if the card already prefetched
     // on hover/tap this resolves instantly.
@@ -65,7 +65,7 @@ export default function GameDetailModal({
       .then((w) => { if (!cancelled) setWeather(w); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [game.id, game.venueLocation, game.venueIndoor, game.date, game.state]);
+  }, [game.id, game.venueLocation, game.venueRoof, game.date, game.state]);
 
   // Rain only matters around game time. Restrict the rain-chance block to the
   // window [start − 1h → start + game length + 1h] (per-sport length) and base
@@ -225,15 +225,17 @@ export default function GameDetailModal({
           <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage}</div>
         ) : null}
 
-        {/* Venue — name · city/region · indoor — with the ESPN-style gametime
+        {/* Venue — name · city/region · roof — with the ESPN-style gametime
             weather (icon + temp + condition) pinned to the RIGHT of the stadium
-            line. Indoor shown only when true; outdoor is the norm (noise). */}
+            line. A "Roof"/"Indoor" tag flags a covered field (rain won't reach
+            play); open-air is the norm, so it gets no tag and the weather +
+            rain timeline below stand. */}
         {game.venue || weather ? (
           <div className="flex items-start justify-between gap-3 mb-1 text-xs" style={{ color: "var(--text-muted)" }}>
             <span className="min-w-0">
               {game.venue}
               {game.venueLocation ? ` · ${game.venueLocation}` : ""}
-              {game.venueIndoor ? " · Indoor" : ""}
+              {game.venueRoof === "indoor" ? " · Indoor" : game.venueRoof === "roof" ? " · Roof (covered)" : ""}
             </span>
             {weather ? (
               <span className="shrink-0 whitespace-nowrap">

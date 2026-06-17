@@ -746,6 +746,20 @@ function probablePitcher(competitor: any): string | null {
   return record ? `${name} ${record}` : name;
 }
 
+// World Cup 2026 venues whose ROOF covers the field (retractable or fixed
+// canopy), so rain can't reach play. ESPN reports indoor=null for all soccer
+// venues (unlike MLB, where it correctly flags retractable parks as indoor), so
+// we annotate these by name to avoid showing an alarming rain timeline for a
+// covered match. Normalized key = lowercased, non-alphanumerics stripped.
+const ROOFED_VENUES = new Set([
+  "attstadium",            // AT&T Stadium (Arlington) — retractable
+  "nrgstadium",            // NRG Stadium (Houston) — retractable
+  "mercedesbenzstadium",   // Mercedes-Benz Stadium (Atlanta) — retractable
+  "bcplace",               // BC Place (Vancouver) — retractable
+  "sofistadium",           // SoFi Stadium (Inglewood) — fixed canopy over field
+]);
+const normalizeVenue = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
 function parseGame(event: any, sport: Sport): Game {
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors ?? [];
@@ -851,7 +865,11 @@ function parseGame(event: any, sport: Sport): Game {
       venueLocation = region && !city.includes(region) ? `${city}, ${region}` : city;
     }
   }
-  const venueIndoor: boolean | null = typeof venueObj.indoor === "boolean" ? venueObj.indoor : null;
+  // "indoor" = fully enclosed dome (ESPN's flag — also true for MLB retractable
+  // parks); "roof" = a roofed WC venue ESPN leaves unflagged; null = open-air.
+  // Either covered value means weather/rain doesn't reach play.
+  const venueRoof: "indoor" | "roof" | null =
+    venueObj.indoor === true ? "indoor" : ROOFED_VENUES.has(normalizeVenue(venueName)) ? "roof" : null;
 
   // MLB probable starters (other sports don't carry them; gate to keep it cheap
   // + intentional). Spoiler-safe pre-game info — the modal only shows them for
@@ -891,7 +909,7 @@ function parseGame(event: any, sport: Sport): Game {
     broadcasts,
     venue: venueName,
     venueLocation,
-    venueIndoor,
+    venueRoof,
     homeProbable,
     awayProbable,
     stage,

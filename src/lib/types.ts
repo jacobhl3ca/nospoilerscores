@@ -75,11 +75,13 @@ export interface Game {
   // best-of-5 men's draws). The win-or-go-home stretch. Spoiler-safe "Deciding
   // set" badge, ratings-toggle gated — reveals only that the sets are level.
   decidingSet?: boolean;
-  // Venue location ("Minneapolis, Minnesota" / "Santa Clara, California") and
-  // indoor flag — both sit next to the fullName in competition.venue, which we
-  // already read into `venue`. Omitted when ESPN has no/junk address data.
+  // Venue location ("Minneapolis, Minnesota" / "Santa Clara, California"), read
+  // from competition.venue next to the fullName. Omitted when ESPN has no/junk
+  // address data.
   venueLocation?: string;
-  venueIndoor?: boolean | null;
+  // Roof status: "indoor" = enclosed dome, "roof" = roof/canopy covers the
+  // field (rain can't reach play), null/undefined = open-air.
+  venueRoof?: "indoor" | "roof" | null;
   // MLB probable starting pitchers, pre-game only. Pre-formatted as
   // "Z. Wheeler (5-1, 2.22)" (name + ESPN's record string). Null for non-MLB.
   homeProbable?: string | null;
