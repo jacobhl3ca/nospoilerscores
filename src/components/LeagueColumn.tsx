@@ -929,26 +929,41 @@ export default function LeagueColumn({
   const renderCondensed = (games: Game[], pastDate: boolean) => {
     const collapsible = games.length > 5;
     const visible = !collapsible || condenseExpanded ? games : games.slice(0, CONDENSE_LIMIT);
+    // Group finished games below a "Final" divider — parity with the multi-
+    // column board, which single column was missing — instead of interleaving
+    // them, whenever both finished and non-finished games are present.
+    const nonFinished = visible.filter((g) => g.state !== "post");
+    const finished = visible.filter((g) => g.state === "post");
+    const splitFinal = !!showFinalSeparator && nonFinished.length > 0 && finished.length > 0;
+    const card = (game: Game) => (
+      <GameCard
+        key={game.id}
+        game={game}
+        favoriteTeams={favoriteTeams}
+        onToggleFavoriteTeam={onToggleFavoriteTeam}
+        showRatings={showRatings}
+        leagueLabel={league.label}
+        onPlayHighlight={onPlayHighlight}
+        onPlayEmbed={onPlayEmbed}
+        isPastDate={pastDate}
+        isToday={isToday}
+        useAbbreviations={useAbbreviations}
+        onSelectTeam={setTeamViewTeam}
+        onShowDetails={onShowDetails}
+        showStars={cardStars}
+      />
+    );
     return (
       <div className="flex flex-col gap-1.5 sm:gap-2">
-        {visible.map((game) => (
-          <GameCard
-            key={game.id}
-            game={game}
-            favoriteTeams={favoriteTeams}
-            onToggleFavoriteTeam={onToggleFavoriteTeam}
-            showRatings={showRatings}
-            leagueLabel={league.label}
-            onPlayHighlight={onPlayHighlight}
-            onPlayEmbed={onPlayEmbed}
-            isPastDate={pastDate}
-            isToday={isToday}
-            useAbbreviations={useAbbreviations}
-            onSelectTeam={setTeamViewTeam}
-            onShowDetails={onShowDetails}
-            showStars={cardStars}
-          />
-        ))}
+        {(splitFinal ? nonFinished : visible).map(card)}
+        {splitFinal && (
+          <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
+            <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+            <span className="text-[9px] uppercase tracking-wide">Final</span>
+            <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+          </div>
+        )}
+        {splitFinal && finished.map(card)}
         {collapsible && (
           <button
             type="button"
