@@ -38,7 +38,11 @@ async function fetchStreamableMp4(id) {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data?.files?.mp4?.url || data?.files?.["mp4-mobile"]?.url || null;
+    const mp4 = data?.files?.mp4?.url || data?.files?.["mp4-mobile"]?.url || null;
+    if (!mp4) return null;
+    let thumb = data?.thumbnail_url || null;
+    if (thumb && thumb.startsWith("//")) thumb = `https:${thumb}`;
+    return { mp4, thumb };
   } catch {
     return null;
   }
@@ -63,8 +67,10 @@ async function fetchStreaminMp4(pageUrl) {
       html.match(/<source[^>]+src="([^"]+\.mp4[^"]*)"/i) ||
       html.match(/"(https?:\/\/[^"]+\.mp4[^"]*)"/i);
     if (!m) return null;
+    // og:image (when the page exposes one) → row poster thumbnail.
+    const og = (html.match(/property="og:image"\s+content="(https?:\/\/[^"]+)"/i) || [])[1] || null;
     // Drop the cache-buster query + media-fragment hash → canonical CDN mp4.
-    return m[1].split(/[?#]/)[0];
+    return { mp4: m[1].split(/[?#]/)[0], thumb: og ? og.split(/[?#]/)[0] : null };
   } catch {
     return null;
   }
@@ -90,7 +96,10 @@ async function fetchStreamffMp4(pageUrl) {
       html.match(/property="og:image"\s+content="(https?:\/\/cdn\.streamff\.\w+\/[^"]+)"/i) ||
       html.match(/(https?:\/\/cdn\.streamff\.\w+\/[a-z0-9]+\.(?:jpe?g|png|webp))/i);
     if (!m) return null;
-    return m[1].replace(/\.(?:jpe?g|png|webp)(?:[?#].*)?$/i, ".mp4");
+    // The same og:image doubles as the row poster — keep it alongside the mp4
+    // (just swap the extension) so r/soccer clip posts render a preview tile.
+    const thumb = m[1].split(/[?#]/)[0];
+    return { mp4: thumb.replace(/\.(?:jpe?g|png|webp)$/i, ".mp4"), thumb };
   } catch {
     return null;
   }
@@ -1412,15 +1421,23 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
         const gifv = extUrl.match(/^https?:\/\/i\.imgur\.com\/(\w+)\.gifv/i);
         const mp4 = extUrl.match(/^https?:\/\/\S+\.mp4(?:$|\?)/i);
         // streamff / streamin — r/soccer's goal-clip hosts (streamff is current).
-        // The /v/<id> page yields a direct mp4 we resolve (fetchStreamff/Streamin
-        // Mp4). These post as "no_thumbnail" links, which the href-first read
-        // above now catches; without these branches they linked out.
+        // The /v/<id> page yields a direct mp4 + an og:image poster we resolve
+        // (fetchStreamff/StreaminMp4). These post as "no_thumbnail" links, so the
+        // clip's own poster is the only preview tile they get — without it the
+        // row collapses to text, unlike image-bearing posts from other subs.
         const streamin = /^https?:\/\/streamin\.\w+\/v\//i.test(extUrl);
         const streamff = /^https?:\/\/streamff\.\w+\/v\//i.test(extUrl);
-        if (sm) videoUrl = await fetchStreamableMp4(sm[1]);
-        else if (streamff) videoUrl = await fetchStreamffMp4(extUrl);
-        else if (streamin) videoUrl = await fetchStreaminMp4(extUrl);
-        else if (ym) youtubeVideoId = ym[1];
+        if (sm || streamff || streamin) {
+          const clip = sm
+            ? await fetchStreamableMp4(sm[1])
+            : streamff
+              ? await fetchStreamffMp4(extUrl)
+              : await fetchStreaminMp4(extUrl);
+          if (clip) {
+            videoUrl = clip.mp4;
+            if (!imageUrl) imageUrl = clip.thumb;
+          }
+        } else if (ym) youtubeVideoId = ym[1];
         else if (gifv) videoUrl = `https://i.imgur.com/${gifv[1]}.mp4`;
         else if (mp4) videoUrl = extUrl;
       }
@@ -1618,7 +1635,13 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     // direct mp4 so they play inline instead of linking out.
     if (!videoUrl && postId) {
       const clipUrl = media.clips.get(postId);
-      if (clipUrl) videoUrl = await fetchClipMp4(clipUrl);
+      if (clipUrl) {
+        const clip = await fetchClipMp4(clipUrl);
+        if (clip) {
+          videoUrl = clip.mp4;
+          if (!imageUrl) imageUrl = clip.thumb;
+        }
+      }
     }
     out.push({
       id,
@@ -1699,11 +1722,16 @@ async function fetchReddit(subreddit, sectionLabel) {
       }
     } else if (p.domain === "streamable.com") {
       const m = (p.url || "").match(/^https?:\/\/streamable\.com\/([a-zA-Z0-9]+)/);
-      if (m) videoUrl = await fetchStreamableMp4(m[1]);
+      if (m) {
+        const clip = await fetchStreamableMp4(m[1]);
+        if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
+      }
     } else if (/^streamin\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
-      videoUrl = await fetchStreaminMp4(p.url);
+      const clip = await fetchStreaminMp4(p.url);
+      if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
     } else if (/^streamff\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
-      videoUrl = await fetchStreamffMp4(p.url);
+      const clip = await fetchStreamffMp4(p.url);
+      if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
     }
     // i.redd.it image posts: surface the original full-res URL so the client
     // can pop a lightbox instead of bouncing out to reddit.com to view a JPEG.
