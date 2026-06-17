@@ -19,6 +19,7 @@ export interface GameWeather {
   peakRainPct: number; // highest chance across the day's watch window
   peakLabel: string; // "2 PM"
   timeline: WeatherHour[]; // 9 AM–11 PM local, for the rain bar chart
+  gameHour24: number; // venue-local start hour (0-23), for the game-time window
 }
 
 interface Geo {
@@ -205,5 +206,6 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
     peakRainPct,
     peakLabel,
     timeline,
+    gameHour24: parseInt(times[gameIdx].slice(11, 13), 10),
   };
 }

@@ -10,6 +10,19 @@ import { getDateString } from "@/components/DateNav";
 import { fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 
+// Typical game length (hours) per sport, used to bound the rain window. Soccer
+// ~2.5h, ball sports ~3.5h; default 3h. The rain-chance block only surfaces
+// rain forecast to fall within [start − 1h, start + length + 1h] — an hour
+// before through about an hour after the game is slotted to play.
+const GAME_LENGTH_H: Record<string, number> = {
+  mlb: 3.5, nfl: 3.5, ncaaf: 3.5,
+  fifa: 2.5, mls: 2.5,
+  tennis: 3, f1: 2.5,
+};
+function gameLengthHours(sport: string): number {
+  return GAME_LENGTH_H[sport] ?? 3;
+}
+
 // Lightweight, SPOILER-SAFE game details popup. Shown when a score/ratings card
 // is tapped. Never renders score, winner, or rating unless `showRatings` is on
 // (the user has already opted into spoilers) — and even then only the rating
@@ -21,6 +34,7 @@ export default function GameDetailModal({
   leagueLabel,
   onPlayHighlight,
   onPlayEmbed,
+  onShowGroup,
 }: {
   game: Game;
   showRatings: boolean;
@@ -28,6 +42,8 @@ export default function GameDetailModal({
   leagueLabel?: string;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
+  // World Cup group games: open the all-groups overlay with this group spotlit.
+  onShowGroup?: (groupName: string) => void;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -50,6 +66,30 @@ export default function GameDetailModal({
       .catch(() => {});
     return () => { cancelled = true; };
   }, [game.id, game.venueLocation, game.venueIndoor, game.date, game.state]);
+
+  // Rain only matters around game time. Restrict the rain-chance block to the
+  // window [start − 1h → start + game length + 1h] (per-sport length) and base
+  // the gate + peak + bars on just those hours — so a dry evening game no
+  // longer shows a scary morning spike. timeline hours are venue-local, like
+  // gameHour24. Falls to null (block hidden) when no in-window hours are known.
+  const rainWindow = (() => {
+    if (!weather) return null;
+    const lo = weather.gameHour24 - 1;
+    const hi = weather.gameHour24 + gameLengthHours(game.sport) + 1;
+    const hours = weather.timeline.filter((t) => t.hour24 >= lo && t.hour24 <= hi);
+    if (!hours.length) return null;
+    let peak = 0;
+    let peakLabel = "";
+    for (const t of hours) if (t.rainPct > peak) { peak = t.rainPct; peakLabel = t.label; }
+    return { hours, peak, peakLabel };
+  })();
+
+  // The cup-stage line ("Group J") is tappable for World Cup group games — it
+  // opens the all-groups overlay with that group outlined (see onShowGroup).
+  const wcGroup =
+    game.sport === "fifa" && game.stage && /^group\s+[a-l]$/i.test(game.stage.trim())
+      ? game.stage.trim()
+      : null;
 
   const isLive = game.state === "in";
   const isFinal = game.state === "post";
@@ -171,7 +211,17 @@ export default function GameDetailModal({
 
         {/* Series/playoff label (US sports) or cup stage (soccer) — both
             spoiler-free: "West Finals · Game 7", "Group H", "Round of 16". */}
-        {game.playoffLabel || game.stage ? (
+        {wcGroup && onShowGroup ? (
+          <button
+            type="button"
+            onClick={() => onShowGroup(wcGroup)}
+            className="text-xs mb-1 underline underline-offset-2 hover:opacity-80 transition-opacity cursor-pointer text-left"
+            style={{ color: "var(--accent)" }}
+            title="See this group"
+          >
+            {game.stage} ▸
+          </button>
+        ) : game.playoffLabel || game.stage ? (
           <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage}</div>
         ) : null}
 
@@ -194,15 +244,16 @@ export default function GameDetailModal({
           </div>
         ) : null}
 
-        {/* Rain-chance timeline — below the venue line, full width, shown only
-            when meaningful rain (peak ≥30%) is forecast for the day. */}
-        {weather && weather.peakRainPct >= 30 && weather.timeline.length ? (
+        {/* Rain-chance timeline — below the venue line, full width. Shown only
+            when meaningful rain (≥30%) is forecast within the game window (1h
+            before → ~1h after the game's slotted play), not across the day. */}
+        {rainWindow && rainWindow.peak >= 30 ? (
           <div className="text-xs mb-1 mt-1.5" style={{ color: "var(--text-muted)" }}>
             <div className="text-[10px] uppercase tracking-wide mb-0.5">
-              Rain chance{weather.peakLabel ? ` · peak ${weather.peakRainPct}% ${weather.peakLabel}` : ""}
+              Rain chance{rainWindow.peakLabel ? ` · peak ${rainWindow.peak}% ${rainWindow.peakLabel}` : ""}
             </div>
             <div className="flex items-end gap-[2px] h-6">
-              {weather.timeline.map((t) => (
+              {rainWindow.hours.map((t) => (
                 <div
                   key={t.hour24}
                   title={`${t.label} · ${t.rainPct}% rain`}
@@ -216,9 +267,9 @@ export default function GameDetailModal({
               ))}
             </div>
             <div className="flex gap-[2px] mt-0.5">
-              {weather.timeline.map((t) => (
+              {rainWindow.hours.map((t) => (
                 <div key={t.hour24} className="flex-1 text-center text-[9px] leading-none">
-                  {t.hour24 % 3 === 0 ? t.label.replace(" ", "") : ""}
+                  {t.label.replace(" ", "")}
                 </div>
               ))}
             </div>

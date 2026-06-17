@@ -113,11 +113,15 @@ const PAIR_PALETTE: Array<{ bg: string; bar: string }> = [
 // teams into one raw list by that ranking. Sourced from ESPN's fifa.world
 // standings endpoint, from which we take only the team name + flag and drop
 // every standings field.
-export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }) {
+export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClose: () => void; highlightGroup?: string | null }) {
   const [groups, setGroups] = useState<WcGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
-  const [view, setView] = useState<View>(() => loadView());
+  // A specific group to spotlight (tapped from a game card) forces the grouped
+  // view so the group is visible, regardless of the saved view pref.
+  const [view, setView] = useState<View>(() => (highlightGroup ? "groups" : loadView()));
   const [band, setBand] = useState<Band>(() => loadBand());
+  // The spotlit group's card — scrolled into view once the grid renders.
+  const hlCardRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   // Single-select: at most one day active at a time. If an older multi-select
   // state is persisted, collapse to one (today wins, else the first enabled).
@@ -159,6 +163,14 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // When opened to spotlight a group, scroll its card into view — it can sit
+  // below the fold in the 12-group grid. Wait a tick for the grid to render.
+  useEffect(() => {
+    if (!highlightGroup || view !== "groups" || !groups) return;
+    const t = setTimeout(() => hlCardRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
+    return () => clearTimeout(t);
+  }, [highlightGroup, view, groups]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -463,11 +475,18 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-            {groups.map((g) => (
+            {groups.map((g) => {
+              const spotlight = !!highlightGroup && norm(g.name) === norm(highlightGroup);
+              return (
               <div
                 key={g.name}
+                ref={spotlight ? hlCardRef : undefined}
                 className="rounded-lg p-2"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+                style={{
+                  background: "var(--bg-card)",
+                  border: `1px solid ${spotlight ? "rgb(59,130,246)" : "var(--border)"}`,
+                  boxShadow: spotlight ? "0 0 0 2px rgba(59,130,246,0.9)" : undefined,
+                }}
               >
                 <div className="text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--text)" }}>
                   {g.name}
@@ -489,7 +508,8 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
                   ))}
                 </ul>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
         {groups ? (

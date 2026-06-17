@@ -502,6 +502,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
+  // A WC group to spotlight in the groups overlay (tapped from a game card).
+  const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -2115,7 +2117,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               onPlayHighlight: openVideoModal,
               onPlayEmbed: openEmbedModal,
               onShowDetails: (g: Game) => setDetailGame(g),
-              onShowGroups: () => setGroupsOpen(true),
+              onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -2650,10 +2652,16 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           leagueLabel={thirdLeagueOptions.find((o) => o.sport === detailGame.sport)?.label ?? detailGame.sport.toUpperCase()}
           onPlayHighlight={openVideoModal}
           onPlayEmbed={openEmbedModal}
+          onShowGroup={(groupName) => { setGroupsHighlight(groupName); setDetailGame(null); setGroupsOpen(true); }}
         />
       )}
 
-      {groupsOpen && <WorldCupGroupsModal onClose={() => setGroupsOpen(false)} />}
+      {groupsOpen && (
+        <WorldCupGroupsModal
+          highlightGroup={groupsHighlight}
+          onClose={() => { setGroupsOpen(false); setGroupsHighlight(null); }}
+        />
+      )}
 
       <SettingsPanel
         open={settingsOpen}
