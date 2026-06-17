@@ -119,11 +119,13 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
   const [view, setView] = useState<View>(() => loadView());
   const [band, setBand] = useState<Band>(() => loadBand());
   const [query, setQuery] = useState("");
-  const [days, setDays] = useState<Record<DayKey, boolean>>(() => ({
-    yesterday: loadFlag(DAY_KEY_PREFIX + "yesterday"),
-    today: loadFlag(DAY_KEY_PREFIX + "today"),
-    tomorrow: loadFlag(DAY_KEY_PREFIX + "tomorrow"),
-  }));
+  // Single-select: at most one day active at a time. If an older multi-select
+  // state is persisted, collapse to one (today wins, else the first enabled).
+  const [days, setDays] = useState<Record<DayKey, boolean>>(() => {
+    const on = DAY_DEFS.filter((d) => loadFlag(DAY_KEY_PREFIX + d.key)).map((d) => d.key);
+    const pick: DayKey | null = on.includes("today") ? "today" : on[0] ?? null;
+    return { yesterday: pick === "yesterday", today: pick === "today", tomorrow: pick === "tomorrow" };
+  });
   // The fixtures on each enabled day, as team-name PAIRS (spoiler-safe: names
   // only). Fetched lazily and deduped via fetchedDays so toggling on/off doesn't
   // refetch. Each pair gets its own color in the list (see pairColor).
@@ -138,10 +140,16 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
     setBand(b);
     try { window.localStorage.setItem(BAND_KEY, b); } catch {}
   };
-  const toggleDay = (key: DayKey) => {
+  // Pick one day at a time (yesterday | today | tomorrow); tapping the active one
+  // again clears it. Persist all three so an old multi-select state is cleaned up.
+  const selectDay = (key: DayKey) => {
     setDays((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
-      try { window.localStorage.setItem(DAY_KEY_PREFIX + key, next[key] ? "1" : "0"); } catch {}
+      const turnOff = prev[key];
+      const next: Record<DayKey, boolean> = { yesterday: false, today: false, tomorrow: false };
+      if (!turnOff) next[key] = true;
+      try {
+        for (const def of DAY_DEFS) window.localStorage.setItem(DAY_KEY_PREFIX + def.key, next[def.key] ? "1" : "0");
+      } catch {}
       return next;
     });
   };
@@ -403,7 +411,7 @@ export default function WorldCupGroupsModal({ onClose }: { onClose: () => void }
                 return (
                   <button
                     key={def.key}
-                    onClick={() => toggleDay(def.key)}
+                    onClick={() => selectDay(def.key)}
                     className="text-xs px-2.5 py-1 rounded-full cursor-pointer transition-colors"
                     style={{
                       background: active ? "rgb(59,130,246)" : "var(--bg-card)",
