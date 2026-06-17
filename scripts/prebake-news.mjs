@@ -1560,7 +1560,14 @@ async function fetchRedditViaRedlib(subreddit, sectionLabel) {
 // and its window resets in the gap (verified: a fresh 6-feed batch fired right
 // after a rate-limited full run recovered all video). Adds ~3 min to the reddit
 // bake (2 cooldowns) — fine for an hourly cron.
-const REDDIT_BATCH_SIZE = 6;
+// 2026-06-17: the lone mirror decayed FURTHER — even 6-feed batches now starve
+// every league feed after r/sports (live: r/sports had video, all 17 leagues
+// 0-video). Standalone each league still resolves video, so it's pure per-IP
+// rate-limit on that one mirror. Dropped 6→3 per batch (each batch hits the
+// mirror fewer times before the window-resetting cooldown). If the soccer/league
+// tail still loses video, drop further (2, then 1) — bake time scales but stays
+// well under the hourly cron (3/batch ≈ 6 cooldowns ≈ +9 min).
+const REDDIT_BATCH_SIZE = 3;
 const REDDIT_BATCH_COOLDOWN_MS = 90000;
 let _redditGate = Promise.resolve();
 let _redditHits = 0;
