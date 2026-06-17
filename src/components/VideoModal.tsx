@@ -561,14 +561,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         e.preventDefault();
         toggleFullscreen();
       }
-      // ←/→ skip back/forward on the YouTube player (the HLS <video> has native
-      // controls and handles its own arrows). Don't steal arrows from text entry
-      // or modified chords.
-      if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && ytMode && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // ←/→: step to the previous/next video when sibling navigation is
+      // available (Reddit news columns pass onPrev/onNext — same as the on-screen
+      // side arrows). Otherwise they skip ±5s on the YouTube player. Don't steal
+      // arrows from text entry or modified chords.
+      if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-        e.preventDefault();
-        seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP);
+        if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
+        else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
+        else if (ytMode) { e.preventDefault(); seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP); }
       }
       // Space (or "k", YouTube's own key) toggles play/pause on the YT clip.
       // preventDefault stops Space from scrolling the page. Skip text entry and
@@ -582,7 +584,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay]);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay, onPrev, onNext]);
 
   // Lock body scroll while the modal is open — WITHOUT losing the user's place.
   // Plain `overflow:hidden` doesn't reliably lock scroll on iOS WebKit and, with
