@@ -61,6 +61,10 @@ interface VideoModalProps {
   allowEnd?: boolean;
   // Confirm a click/jump that would land past the halfway point.
   warnHalfway?: boolean;
+  // Reddit news only: page to the previous / next post in the same column
+  // without closing the modal. Rendered as hover ‹ › overlays; absent → no arrows.
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -184,7 +188,7 @@ const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 // Seconds skipped per ←/→ arrow press, matching YouTube's own arrow keys.
 const SEEK_STEP = 5;
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -879,9 +883,34 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           or any whitespace around them dismisses. The video player and CC
           button stop propagation themselves so playback controls keep working. */}
       <div
-        className="relative w-full max-w-7xl" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
+        className="group relative w-full max-w-7xl" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
         style={{ zIndex: 1 }}
       >
+        {/* Reddit prev/next post paging — hover-revealed ‹ › on the player edges
+            (desktop only; touch has no hover). stopPropagation so the click pages
+            instead of bubbling to the backdrop and closing the modal. */}
+        {onPrev && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPrev(); }}
+            aria-label="Previous post"
+            title="Previous post"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-16 flex items-center justify-center rounded-r-lg text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+        )}
+        {onNext && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onNext(); }}
+            aria-label="Next post"
+            title="Next post"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-16 flex items-center justify-center rounded-l-lg text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        )}
         {/* Close button */}
         <button
           onClick={onClose}

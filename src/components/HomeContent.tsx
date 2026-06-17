@@ -11,7 +11,7 @@ import LeagueColumn from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import FeedbackBox from "@/components/FeedbackBox";
-import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler } from "@/components/NewsColumn";
+import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
@@ -498,7 +498,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // World Cup banner: "Add" expands into a replace-which-column picker when
   // there's no emptied slot to fill (Jacob 6/11).
   const [wcReplaceOpen, setWcReplaceOpen] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; shareCard?: ShareCardMeta | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
@@ -688,26 +688,41 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // stream is available we play it directly; otherwise we fall back to the
   // YouTube iframe path. Cards with no inline option skip this handler and
   // render as plain anchors to the source URL.
+  // PlayOpts → modal-state shape. Shared by the click handler and prev/next
+  // paging so both produce the same modal object (incl. the sibling list).
+  const optsToModal = useCallback((opts: PlayOpts) => ({
+    videoId: opts.videoId || "",
+    playbackUrl: opts.playbackUrl || null,
+    embedUrl: opts.embedUrl || null,
+    imageUrl: opts.imageUrl || null,
+    poster: opts.poster || null,
+    fallbackUrl: opts.fallbackUrl,
+    sourceLabel: opts.sourceLabel || null,
+    headline: opts.headline || null,
+    byline: opts.byline || null,
+    published: opts.published || null,
+    body: opts.body || null,
+    siblings: opts.siblings || null,
+    sibIndex: opts.index ?? null,
+  }), []);
   const playNewsVideo = useCallback<PlayHandler>((opts) => {
-    setVideoModal({
-      videoId: opts.videoId || "",
-      playbackUrl: opts.playbackUrl || null,
-      embedUrl: opts.embedUrl || null,
-      imageUrl: opts.imageUrl || null,
-      poster: opts.poster || null,
-      fallbackUrl: opts.fallbackUrl,
-      sourceLabel: opts.sourceLabel || null,
-      headline: opts.headline || null,
-      byline: opts.byline || null,
-      published: opts.published || null,
-      body: opts.body || null,
-    });
+    setVideoModal(optsToModal(opts));
     if (opts.videoId) {
       const params = new URLSearchParams(window.location.search);
       params.set("v", opts.videoId);
       window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
     }
-  }, []);
+  }, [optsToModal]);
+  // Page to the previous/next post in the same Reddit column without closing the
+  // modal (dir = -1 / +1). No-op past either edge.
+  const stepVideo = useCallback((dir: number) => {
+    setVideoModal((m) => {
+      if (!m?.siblings || m.sibIndex == null) return m;
+      const ni = m.sibIndex + dir;
+      if (ni < 0 || ni >= m.siblings.length) return m;
+      return optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni });
+    });
+  }, [optsToModal]);
 
   const closeVideoModal = useCallback(() => {
     setVideoModal(null);
@@ -2640,6 +2655,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           seekFill={prefs.videoSeekFill ?? "off"}
           allowEnd={prefs.videoAllowEnd ?? false}
           warnHalfway={prefs.videoWarnHalfway ?? false}
+          onPrev={videoModal.siblings && (videoModal.sibIndex ?? 0) > 0 ? () => stepVideo(-1) : undefined}
+          onNext={videoModal.siblings && (videoModal.sibIndex ?? 0) < videoModal.siblings.length - 1 ? () => stepVideo(1) : undefined}
           onClose={closeVideoModal}
         />
       )}

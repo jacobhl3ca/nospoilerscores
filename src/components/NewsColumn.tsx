@@ -31,8 +31,31 @@ export interface PlayOpts {
   // Selftext body (Reddit text posts). Only populated when there's no media
   // — rendered in the modal's textMode card below the headline.
   body?: string | null;
+  // For Reddit columns: the column's other posts as ready-to-play payloads, plus
+  // this post's index — lets the modal page ‹ prev / next › without closing.
+  // Unset for non-Reddit sources (so the arrows only show in Reddit columns).
+  siblings?: PlayOpts[] | null;
+  index?: number;
 }
 export type PlayHandler = (opts: PlayOpts) => void;
+
+// Build the modal payload for a news item. Single source of truth so TextRow
+// (click) and HomeContent (prev/next paging) produce identical payloads.
+export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
+  const isReddit = !!item.section?.startsWith("r/");
+  return {
+    playbackUrl: item.videoUrl || null,
+    videoId: item.youtubeVideoId || undefined,
+    imageUrl: (item.videoUrl || item.youtubeVideoId) ? null : (item.imageFullUrl || (isReddit && item.imageUrl) || null),
+    fallbackUrl: item.articleUrl,
+    poster: item.imageUrl || null,
+    sourceLabel: item.section || null,
+    headline: item.headline,
+    byline: item.byline || null,
+    published: item.published || null,
+    body: item.body || null,
+  };
+}
 
 interface NewsColumnProps {
   title: string;
@@ -259,6 +282,9 @@ function stripLeaguePrefixForMobile(label: string): string {
 }
 
 function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {
+  // Reddit columns get prev/next paging — precompute every post's payload once
+  // so each row hands the modal its siblings without rebuilding N× per row.
+  const redditSiblings = items[0]?.section?.startsWith("r/") ? items.map(newsItemToPlayOpts) : null;
   return (
     // overflow-clip (not overflow-hidden) so position: sticky on SourceHeader
     // pins to the window, not to this card. overflow-hidden establishes a
@@ -284,7 +310,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => (
-            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} />
+            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={redditSiblings} index={idx} />
           ))}
         </div>
       )}
@@ -298,7 +324,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
 // `Content-Type: image/jpeg` and Firefox sometimes refuses to render the
 // mismatch) we drop the thumb container entirely so the row degrades to
 // clean text instead of showing an empty grey placeholder box.
-function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
+function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number }) {
   const [imgFailed, setImgFailed] = useState(false);
   // sm:min-h-[7rem] forces a uniform row height across every text source card
   // — Reddit, MLB.com, NBA.com, ESPN-league. With identical row heights AND
@@ -379,23 +405,9 @@ function TextRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; 
             if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
             return;
           }
-          onPlay!({
-            playbackUrl: item.videoUrl || null,
-            // YouTube reddit posts (link-outs to a YT clip) play the YT iframe.
-            videoId: item.youtubeVideoId || undefined,
-            // Prefer Reddit-hosted full-res, fall back to preview for image-bearing
-            // posts. A video/YouTube post passes null here so the modal plays
-            // instead of rendering an image. Text-only Reddit posts pass null and
-            // the modal renders its text-card layout off the headline metadata.
-            imageUrl: (item.videoUrl || item.youtubeVideoId) ? null : (item.imageFullUrl || (isReddit && item.imageUrl) || null),
-            fallbackUrl: item.articleUrl,
-            poster: item.imageUrl || null,
-            sourceLabel: item.section || null,
-            headline: item.headline,
-            byline: item.byline || null,
-            published: item.published || null,
-            body: item.body || null,
-          });
+          // Same payload via the shared helper, plus the column's siblings so the
+          // modal can page prev/next (Reddit columns only — siblings is null else).
+          onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
         }}
         onAuxClick={(e) => {
           // Middle-click fires onAuxClick, not onClick. Mirror the modifier
