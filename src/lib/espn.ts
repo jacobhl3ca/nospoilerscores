@@ -460,6 +460,50 @@ function calcFinalPeriodMargin(competitors: any[]): number | null {
   return Math.abs(cum0 - cum1);
 }
 
+// Soccer late-drama bonus. The closeness model can't tell a stoppage-time
+// game-winner from a 1st-half one — both read as the same 1-goal final — so a
+// 90'+ winner (Panama 0-0 Ghana → 1-0 at 90'+5') wrongly landed MEH. ESPN's
+// scoreboard carries goal-by-goal timing in competition.details (scoringPlay +
+// clock like "90'+5'"), so reward the LATEST goal that swung the result (broke
+// a tie, flipped the lead, or equalized), scaled by how late it fell. Returns 0
+// when details are absent (e.g. the team-schedule API) or the last swing was
+// before ~70'. Minutes fold stoppage time in ("90'+5'" → 95).
+function soccerLateDramaBonus(competition: any): number {
+  const details: any[] = competition?.details ?? [];
+  if (!details.length) return 0;
+  const parseMin = (dv: string | undefined): number | null => {
+    const m = dv?.match(/(\d+)'?(?:\s*\+\s*(\d+))?/);
+    return m ? parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0) : null;
+  };
+  const goals = details
+    .filter((d) => d.scoringPlay)
+    .map((d) => ({ min: parseMin(d.clock?.displayValue), team: String(d.team?.id ?? "") }))
+    .filter((g) => g.min !== null && g.team)
+    .sort((a, b) => (a.min as number) - (b.min as number));
+  if (!goals.length) return 0;
+  // Walk goals chronologically, tracking the leader; capture the minute of the
+  // latest goal that CHANGED who's ahead (tie→lead, lead→tie, or a lead flip).
+  const tally: Record<string, number> = {};
+  const ids = [...new Set(goals.map((g) => g.team))];
+  const leaderOf = (): string => {
+    if (ids.length < 2) return (tally[ids[0]] ?? 0) > 0 ? ids[0] : "tie";
+    const da = (tally[ids[0]] ?? 0) - (tally[ids[1]] ?? 0);
+    return da === 0 ? "tie" : da > 0 ? ids[0] : ids[1];
+  };
+  let prevLeader = "tie";
+  let latestSwingMin = -1;
+  for (const g of goals) {
+    tally[g.team] = (tally[g.team] ?? 0) + 1;
+    const leader = leaderOf();
+    if (leader !== prevLeader) latestSwingMin = g.min as number;
+    prevLeader = leader;
+  }
+  if (latestSwingMin >= 90) return 25;
+  if (latestSwingMin >= 80) return 16;
+  if (latestSwingMin >= 70) return 9;
+  return 0;
+}
+
 function calculateRating(game: any): number | null {
   const competition = game.competitions?.[0];
   if (!competition) return null;
@@ -549,7 +593,14 @@ function calculateRating(game: any): number | null {
     lowScoringPenalty = (2 - total) * 25; // 0 goals: -50, 1 goal: -25
   }
 
-  const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus - lowScoringPenalty)));
+  // Late-drama bonus for soccer: a result swung late (e.g. a stoppage-time
+  // winner) is the most compelling soccer there is, but the closeness factors
+  // are blind to goal timing. Lifts a dramatic 1-0 out of the low-scoring
+  // penalty's MEH hole while leaving a dull early 1-0 where it is.
+  const isSoccer = sport === "epl" || sport === "mls" || sport === "fifa" || sport === "ucl" || sport === "uel";
+  const lateDramaBonus = isSoccer ? soccerLateDramaBonus(competition) : 0;
+
+  const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty)));
 
   // Confidence cap: a tied/scoreless game legitimately reads as "close," but
   // early on that closeness carries little signal — it hasn't *held up* yet.
@@ -780,7 +831,7 @@ function parseGame(event: any, sport: Sport): Game {
   // wall. When a national carrier is present, MLB.TV won't work, so strip it.
   // Only this case is safe to filter: in-market RSN blackouts depend on the
   // viewer's location, which we don't know. RSN entries are left as-is.
-  if (sport === "mlb" && broadcasts.some((b) => /\b(espn|fox|fs1|tbs|apple tv|roku)\b/i.test(b))) {
+  if (sport === "mlb" && broadcasts.some((b) => /\b(espn|fox|fs1|tbs|apple tv|roku|amazon|prime|peacock)\b/i.test(b))) {
     for (let i = broadcasts.length - 1; i >= 0; i--) {
       if (/^mlb\.?tv$/i.test(broadcasts[i].trim())) broadcasts.splice(i, 1);
     }
@@ -2065,7 +2116,8 @@ export async function fetchGames(
       // Cycle watch: a live batter sitting on three of the four hit types,
       // needing the fourth. Boxscore-backed (cached + background-refreshed via
       // getCycleWatch) so it never blocks the score fetch. Floor the rating at
-      // 90 so the chase sorts up in the live cluster; gated to the 4th+ inning.
+      // 75 (GOOD) — enough to nudge the chase up the live cluster without
+      // claiming GREAT, since a cycle rarely completes; gated to the 4th+ inning.
       if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 4) {
         const bid = getCycleWatch(meta.gamePk);
         if (bid) {
@@ -2074,7 +2126,7 @@ export async function fetchGames(
             player: bid.player,
             needs: bid.needs,
           };
-          game.rating = Math.max(90, game.rating ?? 0);
+          game.rating = Math.max(75, game.rating ?? 0);
         }
       }
     }

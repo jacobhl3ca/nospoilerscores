@@ -7,7 +7,7 @@ import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } 
 import { getTimeZone } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick } from "@/lib/openExternal";
-import { prefetchGameWeather } from "@/lib/weather";
+import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
 import { getDateString } from "@/components/DateNav";
 
@@ -304,6 +304,22 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     document.addEventListener("pointerdown", closeOnOutside, true);
     return () => document.removeEventListener("pointerdown", closeOnOutside, true);
   }, [broadcastExpanded]);
+
+  // Live outdoor games: pull current venue conditions so a small weather emoji
+  // (🌧️) can sit beside the live status when it's actively precipitating —
+  // reuses the same cached/deduped Open-Meteo fetch the detail modal uses, so
+  // it's one shared request per venue. Skips finished/upcoming, covered, and
+  // unlocated games (no fetch). Only the wet states render (see below).
+  const [cardWeather, setCardWeather] = useState<GameWeather | null>(null);
+  useEffect(() => {
+    setCardWeather(null);
+    if (game.state !== "in" || game.venueRoof || !game.venueLocation) return;
+    let cancelled = false;
+    fetchGameWeather(game.venueLocation, game.date)
+      .then((w) => { if (!cancelled) setCardWeather(w); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [game.id, game.state, game.venueRoof, game.venueLocation, game.date]);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
   const isDelayed = game.state === "in" && /delay/i.test(game.statusDetail);
@@ -587,10 +603,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     ? "text-yellow-500 font-medium hover:text-yellow-400 transition-colors"
                     : `text-green-500 font-medium hover:text-green-400 transition-colors${tickCls}`;
                   const staticCls = gameProgress.delayed ? "text-yellow-500 font-medium" : `text-green-500 font-medium${tickCls}`;
+                  // A live game in active precipitation shows its current
+                  // condition emoji right after the clock (🌧️). Spoiler-free
+                  // and only when wet, so it never clutters a clear-sky card.
+                  const wx = cardWeather?.rainingNow ? (
+                    <span className="ml-1" title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
+                  ) : null;
                   return liveUrl ? (
-                    <a href={liveUrl} target="_blank" rel="noopener noreferrer" className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>
+                    <><a href={liveUrl} target="_blank" rel="noopener noreferrer" className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
                   ) : (
-                    <span className={staticCls}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>
+                    <><span className={staticCls}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
                   );
                 })()
               ) : showFinal && !hasRating ? (
