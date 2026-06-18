@@ -179,6 +179,12 @@ const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 // Seconds skipped per ←/→ arrow press, matching YouTube's own arrow keys.
 const SEEK_STEP = 5;
 
+// Playback-speed cycle for the YouTube player's speed pill. Speed-up only
+// (no slow-mo): the use case is getting through the boring parts of a reel
+// fast. The HLS/MLB path uses the native control bar, which has its own speed
+// menu (plus 0.5× slow-mo), so this is YouTube-only.
+const RATES = [1, 1.5, 2];
+
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -263,6 +269,21 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Escape keydown alongside the exit, and that Escape must not also close the
   // whole modal.
   const fsExitAtRef = useRef(0);
+  // The clip reached its end — show a full-cover Replay shield. This also hides
+  // YouTube's end screen (the grid of related-video thumbnails YT shows after a
+  // clip ends — a prime spoiler vector that rel:0 only narrows, never removes).
+  const [ended, setEnded] = useState(false);
+  // Custom playback speed for the YouTube player (controls:0 strips YT's own
+  // speed menu). Cycles through RATES; the HLS/MLB path uses the native bar.
+  const [rate, setRate] = useState(1);
+  // YouTube captions. controls:0 also removes YT's CC button, so we drive it via
+  // the IFrame API. ytHasCC gates the button (only show it when the clip
+  // actually carries a caption track); ytCC is the on/off state; the lang ref
+  // remembers which track to (re-)enable. Probed once per player at PLAYING.
+  const [ytCC, setYtCC] = useState(false);
+  const [ytHasCC, setYtHasCC] = useState(false);
+  const ccProbedRef = useRef(false);
+  const ytCcLangRef = useRef("en");
   const hlsMode = !!playbackUrl;
   const embedMode = !!embedUrl && !playbackUrl;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
@@ -424,6 +445,48 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       p.mute?.(); setMuted(true);
     }
   }, [muted, volume]);
+
+  // Jump back to the start and play — drives both the ⏮ restart button and the
+  // end-of-clip Replay shield. Clears the ended state so the shield lifts.
+  const restart = useCallback(() => {
+    const p = playerRef.current;
+    if (!p?.seekTo) return;
+    p.seekTo(0, true);
+    p.playVideo?.();
+    setProgress(0);
+    setEnded(false);
+  }, []);
+
+  // Cycle the YouTube playback speed (1× → 1.5× → 2× → 1×). setPlaybackRate is
+  // a standard IFrame-API method; guarded so it no-ops if the player isn't up.
+  const cycleRate = useCallback(() => {
+    setRate((prev) => {
+      const next = RATES[(RATES.indexOf(prev) + 1) % RATES.length];
+      try { playerRef.current?.setPlaybackRate?.(next); } catch { /* player not ready */ }
+      return next;
+    });
+  }, []);
+
+  // Toggle YouTube captions through the IFrame API (controls:0 removed YT's own
+  // CC button). The captions module is undocumented but stable: loadModule then
+  // setOption('captions','track',{languageCode}) shows them; track:{} hides.
+  const toggleYtCC = useCallback(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    setYtCC((prev) => {
+      const next = !prev;
+      try {
+        if (next) {
+          p.loadModule?.("captions");
+          p.setOption?.("captions", "reload", true);
+          p.setOption?.("captions", "track", { languageCode: ytCcLangRef.current || "en" });
+        } else {
+          p.setOption?.("captions", "track", {});
+        }
+      } catch { /* captions module unavailable — leave as-is */ }
+      return next;
+    });
+  }, []);
 
   // Drag/click the volume slider. Sets the YT player volume (0–100) and
   // mutes/un-mutes at the extremes so the icon + level always agree.
@@ -757,6 +820,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // A freshly-built player always autoplays muted — keep the custom
             // toggle in sync (covers fallback swaps after an unmute, too).
             setMuted(true);
+            // Fresh player → reset the per-clip control state (a fallback swap
+            // recreates the player, so this also resets after a retry).
+            setEnded(false);
+            setRate(1);
+            setYtCC(false);
+            setYtHasCC(false);
+            ccProbedRef.current = false;
             // Uncover the title bar only if the real YouTube title is spoiler-
             // free (getVideoData is undocumented but reliable; may be empty this
             // early, so we re-check on PLAYING below). Default stays covered.
@@ -784,6 +854,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               window.clearTimeout(watchdogRef.current);
               watchdogRef.current = null;
             }
+            // ENDED (0) → raise the Replay shield (covers YT's related-video end
+            // screen); PLAYING (1) / BUFFERING (3) → lower it.
+            if (event.data === 0) setEnded(true);
+            if (event.data === 1 || event.data === 3) setEnded(false);
             if (event.data === 1) {
               forceBest(event.target);
               // By PLAYING the title metadata is reliably populated — re-run the
@@ -792,6 +866,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 const t = event.target.getVideoData?.()?.title ?? "";
                 if (t) setTitleSafe(!isScoreSpoiler(t));
               } catch { /* keep covered */ }
+              // Probe once for a caption track so the CC button only appears when
+              // the clip actually has one. loadModule then read the tracklist a
+              // beat later (it's empty until the module initialises); keep
+              // captions OFF by default (matches the HLS path — user opts in).
+              if (!ccProbedRef.current) {
+                ccProbedRef.current = true;
+                const pl = event.target;
+                try { pl.loadModule?.("captions"); } catch { /* no captions module */ }
+                window.setTimeout(() => {
+                  let tracks: Array<{ languageCode?: string }> = [];
+                  try { tracks = pl.getOption?.("captions", "tracklist") || []; } catch { /* none */ }
+                  if (Array.isArray(tracks) && tracks.length > 0) {
+                    ytCcLangRef.current = tracks[0]?.languageCode || "en";
+                    setYtHasCC(true);
+                  }
+                  try { pl.setOption?.("captions", "track", {}); } catch { /* none */ }
+                }, 600);
+              }
             }
           },
           // If YT auto-quality downgrades us, push back up to the best level.
@@ -1071,6 +1163,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   </div>
                 </div>
               )}
+              {/* Replay shield — shown when the clip ENDS. Two jobs: (1) a clear
+                  replay affordance, and (2) an opaque cover over YouTube's
+                  end screen (the related-video thumbnail grid YT drops in after
+                  a clip finishes — rel:0 only limits it to the same channel, it
+                  never removes it, so it's a live spoiler vector). z-40 sits
+                  above the masks (z-10), peek (z-20) and halfway confirm (z-30).
+                  A tap anywhere replays. */}
+              {ended && (
+                <div
+                  className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 cursor-pointer"
+                  style={{ background: "rgba(0,0,0,0.94)" }}
+                  onClick={(e) => { e.stopPropagation(); restart(); }}
+                >
+                  <span className="flex items-center justify-center rounded-full text-white/85" style={{ width: 54, height: 54, border: "2px solid rgba(255,255,255,0.5)" }}>
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
+                  </span>
+                  <span className="text-sm font-medium text-white/85">Replay</span>
+                </div>
+              )}
             </div>
 
             {/* Seek bar — drag/tap to scrub. Sits BELOW the video (never over
@@ -1178,7 +1289,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   onPointerMove={(e) => { if (draggingVolRef.current) setVolFromClientX(e.clientX); }}
                   onPointerUp={(e) => { e.stopPropagation(); draggingVolRef.current = false; }}
                   onPointerCancel={() => { draggingVolRef.current = false; }}
-                  className="w-14 sm:w-20 cursor-pointer shrink-0"
+                  className="hidden sm:block w-20 cursor-pointer shrink-0"
                   style={{ paddingTop: "8px", paddingBottom: "8px" }}
                 >
                   <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.18)" }}>
@@ -1196,6 +1307,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   so the fullscreen button stays right-aligned. */}
               {seekControl !== "bar" ? (
                 <div className="min-w-0 flex items-center justify-center gap-0.5 flex-nowrap">
+                  {/* Restart — jump to the very start. Sits left of −5s. */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); restart(); }}
+                    aria-label="Restart from the beginning"
+                    title="Start over"
+                    className="flex items-center justify-center rounded-md transition-colors cursor-pointer h-8 w-8 text-white/55 hover:text-white"
+                  >
+                    {/* skip-to-start (⏮): leading bar + back-pointing triangle */}
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="5" y="5" width="2.4" height="14" rx="1.1" /><path d="M20 6.3v11.4a1 1 0 0 1-1.54.84l-8.7-5.7a1 1 0 0 1 0-1.68l8.7-5.7A1 1 0 0 1 20 6.3z" /></svg>
+                  </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); seekBy(-SEEK_STEP); }}
                     aria-label="Back 5 seconds"
@@ -1205,17 +1326,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     {/* circular rewind arrow with "5" nested inside (YT/Firefox-PiP style) */}
                     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
                   </button>
-                  {/* Mobile: quarter presets only */}
-                  {[25, 50, 75].map((p) => (
-                    <button
-                      key={`m${p}`}
-                      onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
-                      className="flex sm:hidden items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
-                      title={`Jump to ${p}%`}
-                    >
-                      {p}%
-                    </button>
-                  ))}
+                  {/* Mobile drops the % presets entirely (they crowded the row
+                      once Restart + Speed were added) — phones still seek via the
+                      drag bar above + ±5s + Restart. Desktop keeps the full set. */}
                   {/* Desktop: full 10→90 set (80/90 dimmed — nearest the ending) */}
                   <span className="hidden sm:inline text-[11px] text-white/35 mx-1 select-none">Skip to</span>
                   {JUMP_PCTS.map((p) => (
@@ -1240,29 +1353,59 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 </div>
               ) : <div />}
 
-              {/* Fullscreen toggle */}
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
-                aria-label={fsActive ? "Exit fullscreen" : "Fullscreen"}
-                title={fsActive ? "Exit fullscreen (Esc)" : "Fullscreen (f)"}
-                className={`${btnBase} justify-self-end h-8 w-8`}
-              >
-                {fsActive ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M8 3v3a2 2 0 0 1-2 2H3" />
-                    <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
-                    <path d="M3 16h3a2 2 0 0 1 2 2v3" />
-                    <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-                    <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-                    <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-                    <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-                  </svg>
+              {/* Right cluster: Speed / CC / Fullscreen. Wrapped so the trio
+                  stays right-aligned as one group in the grid's third column. */}
+              <div className="justify-self-end flex items-center gap-0.5 min-w-0">
+                {/* Playback speed — controls:0 removed YT's speed menu, so cycle
+                    it ourselves. Compact pill so it survives the narrowest row. */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); cycleRate(); }}
+                  aria-label={`Playback speed ${rate}×`}
+                  title="Playback speed"
+                  className={`${btnBase} h-8 px-1.5 text-xs font-semibold tabular-nums`}
+                >
+                  {rate}×
+                </button>
+                {/* Captions — only rendered once a track is detected (ytHasCC). */}
+                {ytHasCC && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleYtCC(); }}
+                    aria-pressed={ytCC}
+                    aria-label={ytCC ? "Hide captions" : "Show captions"}
+                    title={ytCC ? "Hide captions" : "Captions"}
+                    className="h-8 px-1.5 flex items-center justify-center rounded-md text-xs font-bold transition-colors cursor-pointer"
+                    style={{
+                      color: ytCC ? "white" : "rgba(255,255,255,0.55)",
+                      background: ytCC ? "var(--accent)" : "transparent",
+                    }}
+                  >
+                    CC
+                  </button>
                 )}
-              </button>
+                {/* Fullscreen toggle */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+                  aria-label={fsActive ? "Exit fullscreen" : "Fullscreen"}
+                  title={fsActive ? "Exit fullscreen (Esc)" : "Fullscreen (f)"}
+                  className={`${btnBase} h-8 w-8`}
+                >
+                  {fsActive ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                      <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                      <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                      <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -1275,6 +1418,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
+                // MLB/HLS keeps the native control bar (speed, PiP, AirPlay, CC,
+                // scrub all built in). This just makes the AirPlay route button
+                // appear in Safari + the iOS app's WKWebView.
+                {...{ "x-webkit-airplay": "allow" }}
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (
