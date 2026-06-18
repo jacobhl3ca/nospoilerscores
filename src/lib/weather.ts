@@ -20,6 +20,14 @@ export interface GameWeather {
   peakLabel: string; // "2 PM"
   timeline: WeatherHour[]; // 9 AM–11 PM local, for the rain bar chart
   gameHour24: number; // venue-local start hour (0-23), for the game-time window
+  // Live "right now" conditions at the venue (Open-Meteo `current` block). The
+  // gametime fields above are the forecast frozen at first pitch, so a drizzle
+  // that rolls in mid-game never shows there ("said no rain, then drizzling").
+  // For an in-progress game the modal renders these instead.
+  nowTempF: number;
+  nowIcon: string; // live condition emoji
+  nowLabel: string; // live condition label ("Drizzle")
+  rainingNow: boolean; // measurable precip now, or a wet WMO code
 }
 
 interface Geo {
@@ -159,11 +167,12 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
     10,
   );
 
-  let data: { hourly?: Record<string, unknown[]>; error?: boolean };
+  let data: { hourly?: Record<string, unknown[]>; current?: Record<string, unknown>; error?: boolean };
   try {
     const url =
       `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}` +
       `&hourly=temperature_2m,precipitation_probability,weather_code` +
+      `&current=temperature_2m,precipitation,weather_code` +
       `&temperature_unit=fahrenheit&timezone=auto&start_date=${localDate}&end_date=${localDate}`;
     const r = await fetch(url);
     if (!r.ok) return null;
@@ -198,6 +207,16 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   if (gameIdx < 0) gameIdx = Math.min(Math.max(isNaN(localHour) ? 0 : localHour, 0), times.length - 1);
 
   const cond = wmo(codes[gameIdx] ?? 0);
+
+  // Live conditions — prefer the `current` block; fall back to the gametime
+  // forecast hour if it's ever missing. Wet WMO codes: 51-67 drizzle/rain,
+  // 71-86 snow/showers, 95-99 thunderstorm.
+  const cur = data.current ?? {};
+  const nowCode = typeof cur.weather_code === "number" ? cur.weather_code : (codes[gameIdx] ?? 0);
+  const nowCond = wmo(nowCode);
+  const nowPrecip = typeof cur.precipitation === "number" ? cur.precipitation : 0;
+  const wetCode = (nowCode >= 51 && nowCode <= 67) || (nowCode >= 71 && nowCode <= 86) || nowCode >= 95;
+
   return {
     tempF: Math.round(temps[gameIdx] ?? 0),
     icon: cond.icon,
@@ -207,5 +226,9 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
     peakLabel,
     timeline,
     gameHour24: parseInt(times[gameIdx].slice(11, 13), 10),
+    nowTempF: Math.round(typeof cur.temperature_2m === "number" ? cur.temperature_2m : (temps[gameIdx] ?? 0)),
+    nowIcon: nowCond.icon,
+    nowLabel: nowCond.label,
+    rainingNow: nowPrecip > 0 || wetCode,
   };
 }

@@ -221,7 +221,7 @@ export default function GameDetailModal({
             style={{ color: "var(--accent)" }}
             title="See this group"
           >
-            {game.stage} ▸
+            {game.stage}
           </button>
         ) : game.playoffLabel || game.stage ? (
           <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage}</div>
@@ -239,8 +239,15 @@ export default function GameDetailModal({
               {game.venueLocation ? ` · ${game.venueLocation}` : ""}
             </span>
             {weather ? (
+              // Live game → show the venue's CURRENT conditions (real-time
+              // emoji), so a mid-game drizzle reads even when the first-pitch
+              // forecast was dry. Pre-game → the gametime forecast.
               <span className="shrink-0 whitespace-nowrap">
-                {weather.icon} {weather.tempF}° · <span className="font-semibold">{weather.label}</span>
+                {game.state === "in" ? (
+                  <>{weather.nowIcon} {weather.nowTempF}° · <span className="font-semibold">{weather.nowLabel}{weather.rainingNow ? " now" : ""}</span></>
+                ) : (
+                  <>{weather.icon} {weather.tempF}° · <span className="font-semibold">{weather.label}</span></>
+                )}
               </span>
             ) : null}
           </div>
