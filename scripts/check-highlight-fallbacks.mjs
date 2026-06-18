@@ -20,6 +20,18 @@
 const BASE = process.env.HIDESCORE_BASE || "https://hidescore.com";
 const LOOKBACK_HOURS = 36;
 
+// Pacing. youtube.com soft-blocks the Worker's datacenter IP when /api/youtube
+// is scraped in a tight burst — it serves a renderer-less page that the endpoint
+// reports as 404 "No results", which this audit would then misread as a hidden
+// highlight button. A single lookup never trips it (a real page only fires one
+// per card), so the audit deliberately spaces its lookups out, and treats any
+// miss as suspect until it survives a slow, post-cooloff confirmation pass.
+const FIRST_PASS_GAP_MS = 200;          // between lookups during the initial scan
+const CONFIRM_COOLOFF_MS = 30_000;      // wait out the IP block before confirming
+const CONFIRM_GAP_MS = 1_500;           // very gentle spacing while confirming
+const CONFIRM_RETRY_BACKOFF_MS = 6_000; // extra wait between confirmation attempts
+const CONFIRM_ATTEMPTS = 3;             // re-resolve a flagged game up to N times
+
 // Matches src/lib/espn.ts SPORT_PATHS for the team-sport leagues currently
 // in season. NFL / NCAAM / FIFA / golf / tennis can be added year-round —
 // scoreboards for inactive leagues just return zero events.
@@ -119,17 +131,20 @@ async function youtubeLookup(query, channel) {
   }
 }
 
-// Mirrors resolveHighlightVideo() in src/lib/youtube.ts.
-async function resolve(away, home, dateStr, channel) {
+// Mirrors resolveHighlightVideo() in src/lib/youtube.ts. `gap` spaces out the
+// chained fallback lookups so a single game's cascade can't burst the endpoint.
+async function resolve(away, home, dateStr, channel, gap = 0) {
   const a = aliasTeam(away);
   const h = aliasTeam(home);
   const dated = `${a} vs ${h} highlights ${dateStr}`;
   if (channel) {
     const hit = await youtubeLookup(dated, channel);
     if (hit) return { videoId: hit, via: "channel+date" };
+    if (gap) await sleep(gap);
   }
   const unscoped = await youtubeLookup(dated);
   if (unscoped) return { videoId: unscoped, via: "no-channel+date" };
+  if (gap) await sleep(gap);
   const undated = `${a} vs ${h} highlights`;
   const fallback = await youtubeLookup(undated);
   if (fallback) return { videoId: fallback, via: "no-channel+no-date" };
@@ -162,11 +177,11 @@ for (const sport of Object.keys(ESPN_PATHS)) {
       const dateStr = fmtUIDate(ev.date);
 
       const official = channel
-        ? await resolve(teams.away, teams.home, dateStr, channel)
+        ? await resolve(teams.away, teams.home, dateStr, channel, FIRST_PASS_GAP_MS)
         : { videoId: "n/a", via: "no-official-channel" };
-      await sleep(40);
-      const search = await resolve(teams.away, teams.home, dateStr, undefined);
-      await sleep(40);
+      await sleep(FIRST_PASS_GAP_MS);
+      const search = await resolve(teams.away, teams.home, dateStr, undefined, FIRST_PASS_GAP_MS);
+      await sleep(FIRST_PASS_GAP_MS);
 
       const row = {
         sport: sport.toUpperCase(),
@@ -208,15 +223,26 @@ for (const sport of Object.keys(ESPN_PATHS)) {
 const confirmedExhausted = [];
 const recovered = [];
 if (exhausted.length) {
-  await sleep(3000); // let any transient throttle clear
+  // The fast first pass can soft-block the Worker IP, so most games flagged
+  // above are false positives. Wait out the block, then re-resolve each one
+  // slowly and up to a few times: a genuinely button-less game stays empty on
+  // every attempt, while a throttle-induced miss comes back once the block
+  // lifts. Only the games still empty after all that get emailed.
+  await sleep(CONFIRM_COOLOFF_MS);
   for (const row of exhausted) {
-    const official = row.channelKey
-      ? await resolve(row.away, row.home, row.dateStr, row.channelKey)
-      : { videoId: "n/a", via: "no-official-channel" };
-    await sleep(40);
-    const search = await resolve(row.away, row.home, row.dateStr, undefined);
-    await sleep(40);
-    // Refresh the printed results with the retry's outcome either way.
+    let official = { videoId: row.channelKey ? null : "n/a", via: "exhausted" };
+    let search = { videoId: null, via: "exhausted" };
+    for (let attempt = 0; attempt < CONFIRM_ATTEMPTS; attempt++) {
+      if (attempt > 0) await sleep(CONFIRM_RETRY_BACKOFF_MS); // let a lingering block lift
+      official = row.channelKey
+        ? await resolve(row.away, row.home, row.dateStr, row.channelKey, CONFIRM_GAP_MS)
+        : { videoId: "n/a", via: "no-official-channel" };
+      await sleep(CONFIRM_GAP_MS);
+      search = await resolve(row.away, row.home, row.dateStr, undefined, CONFIRM_GAP_MS);
+      const officialOk = row.channelKey ? !!official.videoId : true;
+      if (officialOk && search.videoId) break; // recovered — stop retrying this game
+    }
+    // Refresh the printed results with the final attempt's outcome either way.
     row.officialResult = official.videoId ? `${official.videoId} (${official.via})` : "EXHAUSTED";
     row.searchResult = search.videoId ? `${search.videoId} (${search.via})` : "EXHAUSTED";
     const officialStillEmpty = row.channelKey && !official.videoId;
