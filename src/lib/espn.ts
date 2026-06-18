@@ -1296,6 +1296,11 @@ function buildStreamUrl(game: Game): string {
 // the score fetch on a boxscore round-trip (a bid surfaces within a poll or two
 // of arising). Gated to live games in the 4th inning or later — you can't own
 // three different hit types any sooner.
+//
+// DISABLED for now (Jacob 6/17): the machinery below is kept intact but the
+// badge is suppressed and the rating is no longer floored. Flip this to true
+// to bring Cycle Watch back.
+const CYCLE_WATCH_ENABLED = false;
 interface CycleBid {
   side: "away" | "home";
   player: string;
@@ -2118,7 +2123,7 @@ export async function fetchGames(
       // getCycleWatch) so it never blocks the score fetch. Floor the rating at
       // 75 (GOOD) — enough to nudge the chase up the live cluster without
       // claiming GREAT, since a cycle rarely completes; gated to the 4th+ inning.
-      if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 4) {
+      if (CYCLE_WATCH_ENABLED && meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 4) {
         const bid = getCycleWatch(meta.gamePk);
         if (bid) {
           game.cycleWatch = {
