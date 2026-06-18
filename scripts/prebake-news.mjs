@@ -1637,6 +1637,16 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     // media:thumbnail is present for image/highlight posts only (text/video posts omit it).
     let imageUrl = ((e.match(/<media:thumbnail[^>]*\burl="([^"]+)"/) || [])[1] || "").trim();
     imageUrl = imageUrl ? decodeEntities(imageUrl) : null;
+    // Reddit's preview pipeline (preview.redd.it / media:thumbnail) lags behind a
+    // fresh post, so it's frequently missing on brand-new image posts. The raw
+    // i.redd.it link, though, is embedded in the entry <content> from the moment
+    // the post goes up — so parse it for the full-res lightbox source, and use it
+    // as the thumbnail too when no preview crop came through (mirrors the OAuth
+    // path's i.redd.it url fallback).
+    const content = (e.match(/<content[^>]*>([\s\S]*?)<\/content>/) || [])[1] || "";
+    const reddImageFull =
+      (content.match(/https?:\/\/i\.redd\.it\/[^"'&<\s]+\.(?:jpe?g|png|gif|webp)/i) || [])[0] || null;
+    if (!imageUrl && reddImageFull) imageUrl = reddImageFull;
     // redlib hands us the v.redd.it id for video posts → point straight at the
     // open HLS CDN (audio + CORS:*). Non-video posts and redlib-down runs leave
     // it null and fall back to the article link-out, exactly as before.
@@ -1665,7 +1675,7 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
       byline: author ? `u/${author}` : "",
       section: sectionLabel,
       videoUrl,
-      imageFullUrl: null,
+      imageFullUrl: reddImageFull,
       body: null,
     });
     if (out.length >= 12) break;
@@ -1753,6 +1763,21 @@ async function fetchReddit(subreddit, sectionLabel) {
     // workaround). URL extension is sufficient signal.
     if (/^https:\/\/i\.redd\.it\/.+\.(jpe?g|png|gif|webp)$/i.test(p.url || "")) {
       imageFullUrl = p.url;
+    }
+    // Reddit galleries (is_gallery) + posts Reddit only exposes via
+    // media_metadata: no top-level preview or i.redd.it url, so the checks above
+    // miss them and the post renders image-less (the Bob Uecker mural post,
+    // Jacob 6/18). Pull the first image — gallery_data gives the display order;
+    // s.u is the full-res source, p[] the preview crops (both &amp;-encoded).
+    if ((!imageUrl || !imageFullUrl) && p.media_metadata) {
+      const firstId = p.gallery_data?.items?.[0]?.media_id || Object.keys(p.media_metadata)[0];
+      const mm = firstId ? p.media_metadata[firstId] : null;
+      if (mm && (mm.e === "Image" || mm.status === "valid")) {
+        const full = mm.s?.u ? mm.s.u.replace(/&amp;/g, "&") : null;
+        const crop = mm.p?.length ? mm.p[mm.p.length - 1].u.replace(/&amp;/g, "&") : null;
+        if (!imageFullUrl && full) imageFullUrl = full;
+        if (!imageUrl) imageUrl = full || crop;
+      }
     }
     // Selftext body — only for true text posts. Skip when the post carries
     // image/video media (the lightbox already shows the visual). Cap length
