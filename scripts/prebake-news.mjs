@@ -1666,7 +1666,15 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     // open HLS CDN (audio + CORS:*). Non-video posts and redlib-down runs leave
     // it null and fall back to the article link-out, exactly as before.
     const postId = (link.match(/\/comments\/(\w+)/) || [])[1] || "";
-    const vredditId = postId ? media.vreddit.get(postId) : null;
+    // The v.redd.it id for a native video post is embedded RIGHT IN the entry
+    // <content> as the post's [link] href (https://v.redd.it/<id>) — so read it
+    // straight from the feed first. (external-preview.redd.it / i.redd.it can't
+    // false-match; neither ends in "v.redd.it".) Only fall back to the redlib
+    // map for the rare crosspost that lacks it — redlib mirrors are down/blocked
+    // most days, and depending on them ALONE is why these videos broke daily.
+    const vredditId =
+      (content.match(/v\.redd\.it\/([a-z0-9]+)/i) || [])[1] ||
+      (postId ? media.vreddit.get(postId) : null);
     let videoUrl = vredditId ? `https://v.redd.it/${vredditId}/HLSPlaylist.m3u8` : null;
     // streamff / streamin goal clips (r/soccer's video hosts) → resolve the
     // direct mp4 so they play inline instead of linking out.
