@@ -1235,13 +1235,18 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     }
     throw new Error(`${url} → ${res.status}`);
   }
-  // RSS succeeded, so we're on a Reddit-reachable IP (the Mac mini cron — GHA
-  // datacenter IPs 403 above and never get here). Only now fetch the redlib
-  // video map, so GHA's doomed reddit runs never touch a volunteer instance.
-  const videoMap = await fetchRedditVideoMap(subreddit);
+  // The v.redd.it video id for a native video post is embedded RIGHT IN the RSS
+  // <content> as the post's [link] href (e.g. https://v.redd.it/<id>), so we
+  // read it straight from the feed — no redlib needed. (The old code ignored it
+  // and leaned entirely on redlib, which is down/blocked most days → that was
+  // the "videos broken almost every day" bug.) redlib stays as a LAZY fallback
+  // for the rare video crosspost whose content links elsewhere: only hit it when
+  // the feed exposed zero ids, so the mostly-dead instances aren't pinged every
+  // bake. OAuth is not an option for us (blocked) — see reddit-oauth memory.
   const out = [];
   const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
   let m;
+  let resolvedVideos = 0;
   while ((m = entryRe.exec(xml)) !== null) {
     const e = m[1];
     const title = decodeEntities(((e.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || "").trim());
@@ -1262,11 +1267,13 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     // media:thumbnail is present for image/highlight posts only (text/video posts omit it).
     let imageUrl = ((e.match(/<media:thumbnail[^>]*\burl="([^"]+)"/) || [])[1] || "").trim();
     imageUrl = imageUrl ? decodeEntities(imageUrl) : null;
-    // redlib hands us the v.redd.it id for video posts → point straight at the
-    // open HLS CDN (audio + CORS:*). Non-video posts and redlib-down runs leave
-    // it null and fall back to the article link-out, exactly as before.
+    // Pull the v.redd.it id from the entry's [link] href (external-preview.redd.it
+    // / i.redd.it can't false-match — neither ends in "v.redd.it"). Point straight
+    // at the open HLS CDN (audio + CORS:*); non-video posts leave it null and fall
+    // back to the article link-out.
+    const vredditId = (e.match(/v\.redd\.it\/([a-z0-9]+)/i) || [])[1] || null;
+    if (vredditId) resolvedVideos++;
     const postId = (link.match(/\/comments\/(\w+)/) || [])[1] || "";
-    const vredditId = postId ? videoMap.get(postId) : null;
     out.push({
       id,
       headline: title,
@@ -1279,9 +1286,25 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
       videoUrl: vredditId ? `https://v.redd.it/${vredditId}/HLSPlaylist.m3u8` : null,
       imageFullUrl: null,
       body: null,
+      _postId: postId,
     });
     if (out.length >= 12) break;
   }
+  // Lazy redlib fallback: only when the feed itself exposed no inline video ids
+  // (format change, or an all-crosspost slate) do we scrape a redlib mirror and
+  // backfill the link-only posts that turn out to be videos. Best effort — an
+  // empty map (all mirrors down) just leaves those as link-outs, as before.
+  if (resolvedVideos === 0) {
+    const videoMap = await fetchRedditVideoMap(subreddit);
+    if (videoMap.size) {
+      for (const item of out) {
+        if (!item.videoUrl && item._postId && videoMap.has(item._postId)) {
+          item.videoUrl = `https://v.redd.it/${videoMap.get(item._postId)}/HLSPlaylist.m3u8`;
+        }
+      }
+    }
+  }
+  for (const item of out) delete item._postId;
   return out;
 }
 
