@@ -43,6 +43,7 @@ const CARD_REV = 2;
 
 export default {
   async fetch(request, env) {
+   try {
     const url = new URL(request.url);
 
     // --- Sign in with Apple (web) + cross-device preference sync. See the
@@ -913,6 +914,20 @@ export default {
 
     // Fall through to static assets
     return env.ASSETS.fetch(request);
+   } catch (err) {
+     // Last-resort guard: a transient R2 / HTMLRewriter / subrequest failure must
+     // never surface as a Cloudflare 1101 "Worker threw an exception" page. For a
+     // document request fall back to the static SPA shell (routing + data happen
+     // client-side, so the page still loads); otherwise a soft, retryable 503.
+     // (Jacob 6/18 — "should never happen, full reliability check".)
+     try {
+       const accept = request.headers.get("accept") || "";
+       if (request.method === "GET" && accept.includes("text/html")) {
+         return await env.ASSETS.fetch(request);
+       }
+     } catch { /* fall through to 503 */ }
+     return new Response("", { status: 503, headers: { "Retry-After": "2" } });
+   }
   },
 };
 

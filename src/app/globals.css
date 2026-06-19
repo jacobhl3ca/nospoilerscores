@@ -236,6 +236,23 @@ html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
 .ns-cards-lg img.object-contain { width: 1.75rem; height: 1.75rem; }
 .ns-cards-lg .team-name { font-size: 1rem; }
 
+/* Tight 3-column mobile board: each card has ~98px of content width, not enough
+   for logo + name + #rank + W-L record, so the record overflowed and clipped
+   ("scores bleed off" — Jacob 6/18). Hide the #rank chip and pull the name/rank
+   gaps in on this layout only; the record (the actually-useful field) then fits.
+   Scoped to .ns-board-tight (set on the board row only at 3 mobile columns), so
+   1–2 column mobile and every desktop layout keep the rank. */
+.ns-board-tight .team-rank { display: none; }
+.ns-board-tight .team-name-container { gap: 0; }
+/* At 3 mobile columns the date+network row ("Tomo 3:00PM" + "FOX") doesn't fit
+   on one line, so flex-wrap dropped the network to its own line (Jacob 6/18: "fox
+   is still on new line"). Nudge this row's font + gaps down on the tight layout so
+   time and network share one line; flex-wrap stays as the safety net so a wide
+   network ("FS1 +2") still wraps rather than clipping the time. */
+.ns-board-tight .game-meta-row { column-gap: 0.125rem; }
+.ns-board-tight .game-meta-row,
+.ns-board-tight .game-meta-row span { font-size: 10px; }
+
 
 /* The YouTube IFrame API REPLACES the #yt-player <div> with an <iframe> that
    keeps the id but DROPS the Tailwind `absolute inset-0 w-full h-full` classes

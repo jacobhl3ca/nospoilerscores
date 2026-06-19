@@ -1412,6 +1412,21 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
       if (!imageUrl) {
         const tImg = block.match(/<a[^>]*class="post_thumbnail[^"]*"[\s\S]{0,500}?<img[^>]*src="([^"]+)"/);
         if (tImg) imageUrl = redlibMediaToReddit(tImg[1]);
+        // "no_thumbnail" image posts: redlib draws an SVG placeholder (no <img>),
+        // but the anchor href IS the image — /img/<id>.jpg or a direct
+        // i.redd.it/preview URL. Use it as the row thumbnail AND lightbox full-res
+        // so an image post doesn't collapse to a text-only modal. r/soccer leans on
+        // this: its image posts render almost exclusively as no_thumbnail (Jacob
+        // 6/18 — "no pictures for r/soccer"). The 4f5462e1 RSS-path fix never fires
+        // here because redlib succeeds first.
+        else if (
+          /^\/(?:img|preview)\//.test(extUrl) ||
+          /^https?:\/\/(?:i|preview|external-preview)\.redd\.it\//i.test(extUrl) ||
+          /^https?:\/\/\S+\.(?:jpe?g|png|gif|webp)(?:$|\?)/i.test(extUrl)
+        ) {
+          imageUrl = redlibMediaToReddit(extUrl);
+          imageFullUrl = imageUrl;
+        }
       }
       if (!videoUrl && !youtubeVideoId) {
         const sm = extUrl.match(/^https?:\/\/streamable\.com\/([a-zA-Z0-9]+)/);
@@ -1928,25 +1943,43 @@ async function writeFeed(name, items) {
     console.log(`skipped ${path} (0 items — preserving prior file)`);
     return;
   }
-  // Video-regression guard (reddit only): the lone redlib mirror is flaky
-  // hour-to-hour, so some bakes render a feed's video posts as plain link/image
-  // thumbnails → 12 items but 0 playable video, which would clobber a perfectly
-  // good with-video file and make the column flap to static (Jacob: "some
-  // r/soccer videos aren't playing"). When a reddit feed comes back with NO
-  // video but the prior file HAD video and is still fresh (<6h), keep the prior
-  // file — clips stay playable until a bake produces video again or it ages out
-  // (after ~6h even those clips are stale, so we let the videoless render land).
+  // Media-coverage guard (reddit only). Reddit/redlib silently changes how a
+  // post type renders every few months — the video host keeps moving (streamja →
+  // streamin → streamff), and image posts now arrive as redlib "no_thumbnail"
+  // anchors — and each time the extractor quietly stops capturing that media and
+  // cards go blank until someone eyeballs the app (Jacob: "happened multiple
+  // times"). A "blank" card has no image, video, youtube, OR selftext: just a
+  // headline that links out. Defenses:
+  //   1. Video flap: 0 playable video now but a still-fresh prior HAD video →
+  //      keep prior so clips don't flap to static (the original guard).
+  //   1b. Catastrophic extractor break: this bake is mostly blank but a fresh
+  //      prior was healthy → keep prior and shout MEDIA-REGRESSION in the log.
+  //   2. Always log coverage so a *partial* degradation (e.g. images vanish while
+  //      video still works, the 6/18 r/soccer bug) is visible to the health-check
+  //      instead of failing silently. Grep the cron log for MEDIA-REGRESSION /
+  //      MEDIA-LOW to alert.
+  const isBlank = (i) => !i.imageUrl && !i.imageFullUrl && !i.videoUrl && !i.youtubeVideoId && !i.body;
+  const blankFrac = items.length ? items.filter(isBlank).length / items.length : 1;
   const newHasVideo = items.some((i) => i.videoUrl || i.youtubeVideoId);
-  if (name.startsWith("reddit-") && !newHasVideo) {
+  if (name.startsWith("reddit-")) {
     try {
       const prev = JSON.parse(await readFile(path, "utf8"));
-      const prevHasVideo = (prev.items || []).some((i) => i.videoUrl || i.youtubeVideoId);
+      const prevItems = prev.items || [];
+      const prevHasVideo = prevItems.some((i) => i.videoUrl || i.youtubeVideoId);
+      const prevBlankFrac = prevItems.length ? prevItems.filter(isBlank).length / prevItems.length : 1;
       const ageH = prev.fetchedAt ? (Date.now() - Date.parse(prev.fetchedAt)) / 3600e3 : Infinity;
-      if (prevHasVideo && ageH < 6) {
+      if (!newHasVideo && prevHasVideo && ageH < 6) {
         console.log(`skipped ${path} (0 video this bake — keeping prior with-video file, age ${ageH.toFixed(1)}h)`);
         return;
       }
+      if (blankFrac >= 0.5 && prevBlankFrac < 0.25 && ageH < 6) {
+        console.warn(`MEDIA-REGRESSION ${path}: ${(blankFrac * 100).toFixed(0)}% blank this bake vs ${(prevBlankFrac * 100).toFixed(0)}% prior (age ${ageH.toFixed(1)}h) — extractor likely broke, KEEPING PRIOR`);
+        return;
+      }
     } catch { /* no prior file / unreadable — fall through and write the new one */ }
+  }
+  if (name.startsWith("reddit-") && blankFrac >= 0.35) {
+    console.warn(`MEDIA-LOW ${path}: ${(blankFrac * 100).toFixed(0)}% of cards are blank (no image/video/text) — extractor may be missing a media type`);
   }
   const payload = { fetchedAt: new Date().toISOString(), items };
   await writeFile(path, JSON.stringify(payload));

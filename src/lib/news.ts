@@ -136,14 +136,25 @@ export async function fetchTopHeadlines(limit = 20): Promise<NewsItem[]> {
 // on a schedule and deployed with the static site. Use these for origins that
 // block direct browser fetches (MLB.com, NBA.com, NHL.com).
 export async function fetchPrebaked(name: string): Promise<NewsItem[]> {
-  try {
-    const res = await fetch(`${getApiBase()}/news/${name}.json`, { cache: "no-store" });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.items ?? []) as NewsItem[];
-  } catch {
-    return [];
+  // One quick retry before giving up: a single transient blip (CF cold-start,
+  // R2 hiccup, flaky mobile radio) otherwise blanks a whole news column to "No
+  // headlines" on what is really a momentary failure. cache:"no-store" keeps the
+  // day fresh; the service worker still serves last-good on a hard outage.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${getApiBase()}/news/${name}.json`, { cache: "no-store" });
+      if (!res.ok) {
+        if (res.status >= 500 && attempt === 0) { await new Promise((r) => setTimeout(r, 400)); continue; }
+        return [];
+      }
+      const data = await res.json();
+      return (data.items ?? []) as NewsItem[];
+    } catch {
+      if (attempt === 0) { await new Promise((r) => setTimeout(r, 400)); continue; }
+      return [];
+    }
   }
+  return [];
 }
 
 // Leagues that have a prebaked official-site feed. Add here as new scrapers land.

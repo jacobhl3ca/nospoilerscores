@@ -506,6 +506,13 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
+  // First-run league picker (shown once, only on a brand-new install — see the
+  // mount effect). pickerSel is the ordered set of chosen leagues (max 3, mapped
+  // to slots 1/2/3 on confirm); firstRunRef captures "no stored prefs" at mount
+  // so a later savePreferences() can't retroactively hide the picker.
+  const [showLeaguePicker, setShowLeaguePicker] = useState(false);
+  const [pickerSel, setPickerSel] = useState<Sport[]>([]);
+  const firstRunRef = useRef(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   // sortByMatchups removed — monkey toggle now controls both ratings visibility AND sort order
   const [prefs, setPrefs] = useState<Preferences>({
@@ -520,6 +527,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
 
   useEffect(() => {
     const loaded = loadPreferences();
+    // First-run detection for the league picker: a brand-new install has no
+    // stored prefs blob yet. Capture this BEFORE the share-link path below can
+    // call savePreferences() (which would write the blob and hide the signal).
+    // A share link carries explicit league choices, so those visitors skip the
+    // picker too.
+    let noStored = typeof window !== "undefined" && !localStorage.getItem("nss-preferences");
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const sharedVideoId = params.get("v");
@@ -546,6 +559,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         if (decoded.defaultLandingView) loaded.defaultLandingView = decoded.defaultLandingView;
         if (decoded.defaultRatings) loaded.defaultRatings = decoded.defaultRatings;
         if (decoded.newsThirdLeague) loaded.newsThirdLeague = decoded.newsThirdLeague;
+        noStored = false; // shared setup = explicit league choices, skip the picker
         savePreferences(loaded);
         const keep = new URLSearchParams();
         if (sharedVideoId) keep.set("v", sharedVideoId);
@@ -583,6 +597,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
     };
     applyLaunchState(loaded);
+    // Arm the first-run league picker for genuinely new installs. The actual
+    // open waits until the in-season league list (thirdLeagueOptions) is ready,
+    // in a separate effect below.
+    firstRunRef.current = noStored && !loaded.leaguesOnboarded;
 
     // Cross-device preference sync (Sign in with Apple). Entirely a no-op for
     // signed-out users: getAuthState() reports signedIn:false and we stop, so
@@ -1017,6 +1035,47 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     }
     return options;
   }, [selectedDate]);
+
+  // Open the first-run league picker once we know which leagues are in season
+  // (thirdLeagueOptions populates after selectedDate resolves). firstRunRef was
+  // armed at mount for new installs only; clearing it here opens exactly once.
+  useEffect(() => {
+    if (firstRunRef.current && !prefs.leaguesOnboarded && thirdLeagueOptions.length > 0) {
+      firstRunRef.current = false;
+      setShowLeaguePicker(true);
+    }
+  }, [thirdLeagueOptions, prefs.leaguesOnboarded]);
+
+  const togglePick = (sport: Sport) => {
+    setPickerSel((sel) =>
+      sel.includes(sport)
+        ? sel.filter((s) => s !== sport)
+        : sel.length >= 3
+          ? sel
+          : [...sel, sport],
+    );
+  };
+
+  // Confirm the picker: map the chosen leagues (in tap order) onto the three
+  // column slots — reusing the SAME slot prefs Settings writes (firstLeague /
+  // secondLeague / thirdLeague), so no new league logic is introduced. An
+  // unfilled slot becomes "empty" so only the chosen leagues show; choosing
+  // none falls through to the in-season auto-picker, identical to "Use defaults".
+  const confirmLeaguePicker = () => {
+    const picks = pickerSel.slice(0, 3);
+    updatePrefs({
+      firstLeague: picks[0] ?? undefined,
+      secondLeague: picks[1] ?? (picks.length ? "empty" : undefined),
+      thirdLeague: picks[2] ?? (picks.length ? "empty" : undefined),
+      leaguesOnboarded: true,
+    });
+    setShowLeaguePicker(false);
+  };
+
+  const skipLeaguePicker = () => {
+    updatePrefs({ leaguesOnboarded: true });
+    setShowLeaguePicker(false);
+  };
 
   // Homepage switcher options = the active leagues minus the ones the user
   // removed in Settings (hiddenLeagues). Drives the header dropdown/arrow
@@ -1559,7 +1618,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                     {calendarOpen && (
                       <CalendarDropdown selectedDate={selectedDate} onDateChange={(d) => { setSelectedDate(d); setCalendarOpen(false); }} onClose={() => setCalendarOpen(false)} />
                     )}
-                    <SingleColToggle active={prefs.singleColumn ?? false} onClick={() => updatePrefs({ singleColumn: !prefs.singleColumn })} />
+                    {/* The single-column "II" toggle used to sit here, but on a
+                        phone it crowded col 2 and visually collided with the moon
+                        in col 3 (Jacob 6/18). It's redundant with Settings → Board
+                        layout → Single column, so it's dropped from the mobile
+                        header; desktop keeps its own copy below. */}
                   </span>
                 } />
               </div>
@@ -2302,9 +2365,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             // via ns-cards-lg — so they read bigger and are easier to tap. Desktop
             // and the 3-column layout are untouched.
             const mobileCols = !singleColumn && isMobile ? slotEntries.length : 0;
+            // 3 columns on a ~390px phone leaves each card ~98px of content width,
+            // so the trailing W-L record overflowed the card's overflow-hidden and
+            // got clipped ("scores bleed off" — Jacob 6/18). ns-board-tight drops the
+            // #rank chip and tightens gaps on that one layout, freeing the ~22px the
+            // record needs. 1–2 column mobile + desktop are untouched.
+            const boardTight = mobileCols >= 3;
             const boardRowCls = singleColumn
               ? "relative flex flex-col items-center gap-5 ns-cards-lg"
-              : `relative flex flex-row justify-center items-stretch gap-2 sm:gap-4${mobileCols === 1 ? " ns-cards-lg" : ""}`;
+              : `relative flex flex-row justify-center items-stretch gap-2 sm:gap-4${mobileCols === 1 ? " ns-cards-lg" : ""}${boardTight ? " ns-board-tight" : ""}`;
             const colWidthClass = singleColumn
               ? "w-full max-w-[560px]"
               : mobileCols === 1
@@ -2636,6 +2705,69 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <input type="checkbox" id="dont-show-news-explainer" className="accent-[var(--accent)]" />
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
             </label>
+          </div>
+        </div>
+      )}
+
+      {showLeaguePicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={skipLeaguePicker}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center mb-2">
+              <svg className="w-9 h-9" viewBox="0 0 32 32" fill="none" aria-hidden>
+                <rect width="32" height="32" rx="6" className="header-logo-bg" />
+                <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
+              </svg>
+            </div>
+            <h3 className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
+            <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
+              Choose up to <strong>3 leagues</strong> for your score columns.<br />You can change these anytime in Settings.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 mb-4">
+              {thirdLeagueOptions.map((o) => {
+                const idx = pickerSel.indexOf(o.sport);
+                const on = idx >= 0;
+                const full = pickerSel.length >= 3 && !on;
+                return (
+                  <button
+                    key={o.sport}
+                    type="button"
+                    disabled={full}
+                    onClick={() => togglePick(o.sport)}
+                    className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={on
+                      ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
+                      : { background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                  >
+                    {on ? `${idx + 1}. ` : ""}{o.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={skipLeaguePicker}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+              >
+                Use defaults
+              </button>
+              <button
+                onClick={confirmLeaguePicker}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                style={{ background: "var(--accent)", color: "white" }}
+                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
+              >
+                {pickerSel.length ? `Show ${pickerSel.length} league${pickerSel.length > 1 ? "s" : ""}` : "Done"}
+              </button>
+            </div>
           </div>
         </div>
       )}

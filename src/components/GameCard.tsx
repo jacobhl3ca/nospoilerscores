@@ -568,7 +568,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           </a>
         );
         return (
-          <div className="relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
+          <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
             {/* Date/time never shrinks or clips (shrink-0) so the time always
                 shows in full — including the ":00". When it + a wide network
                 ("Sun 12:00PM" + "FS1 +2") can't share one line on a narrow mobile
@@ -862,7 +862,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 }
                 if (rank == null) return null;
                 return (
-                  <span className="text-[10px] sm:text-xs tabular-nums shrink-0 leading-none" style={{ color: "var(--text-muted)", opacity: 0.7 }} title={title}>#{rank}</span>
+                  <span className="team-rank text-[10px] sm:text-xs tabular-nums shrink-0 leading-none" style={{ color: "var(--text-muted)", opacity: 0.7 }} title={title}>#{rank}</span>
                 );
               })()}
             </span>

@@ -229,6 +229,13 @@ export interface Preferences {
   // side-by-side. Available on large screens too (the news view already
   // auto-stacks on phones). Default false.
   newsSingleColumn?: boolean;
+  // First-run league picker: set true once the user has seen the on-first-open
+  // "pick your leagues" modal (whether they chose leagues or tapped "Use
+  // defaults"). Absent/false = never shown. Gated together with a no-stored-prefs
+  // check so only genuinely new installs see it; because it lives in Preferences
+  // it also syncs via Sign in with Apple, so a returning signed-in user on a
+  // fresh device won't re-see the picker.
+  leaguesOnboarded?: boolean;
   // IANA time zone (e.g. "America/Los_Angeles") used app-wide for both the
   // "today" date boundary and every displayed time. Undefined = "Auto" = the
   // device's own zone, so the default behavior is unchanged. Applied globally
