@@ -49,3 +49,9 @@ next-env.d.ts
 
 # Prebaked share-card PNGs (uploaded to R2 by the share-cards workflow)
 share-cards-out/
+
+# Marketing drafts — live in ~/hidescore-backlog/worldcup-marketing/, never in the public repo
+MARKETING_*.md
+# Internal drafts kept local out of the public repo — Reddit launch copy + Play Console pack
+REDDIT_DRAFT_WORLDCUP.md
+PLAY_STORE_SUBMISSION.md

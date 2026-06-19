@@ -432,7 +432,7 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
 }
 
 
-export default function HomeContent({ initialOffset }: { initialOffset?: number }) {
+export default function HomeContent({ initialOffset, worldCupHub }: { initialOffset?: number; worldCupHub?: boolean }) {
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -496,12 +496,39 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
         if (decoded.newsThirdLeague) loaded.newsThirdLeague = decoded.newsThirdLeague;
         savePreferences(loaded);
         const keep = new URLSearchParams();
-        if (sharedVideoId) keep.set("v", sharedVideoId);
+        // Preserve any highlight deep-link params (?v= and the h*-prefixed media
+        // a non-YouTube clip carries) while stripping the consumed pref params.
+        for (const k of ["v", "hs", "he", "hi", "hu", "hl", "ht", "c"]) {
+          const val = params.get(k);
+          if (val) keep.set(k, val);
+        }
         const qs = keep.toString();
         window.history.replaceState({}, "", qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
       }
+      // Reopen a shared highlight on cold load. YouTube clips need only ?v= (the
+      // modal re-embeds by id); non-YouTube clips (redd.it/streamff MP4,
+      // Brightcove embeds, image posts) carry their media in h*-prefixed params
+      // built by buildHighlightShareUrl. The source URL/label/headline keep the
+      // "Open on …" button + title correct even without the live feed.
+      const hStream = params.get("hs");
+      const hEmbed = params.get("he");
+      const hImage = params.get("hi");
+      const hSource = params.get("hu") || "";
+      const hLabel = params.get("hl");
+      const hHead = params.get("ht");
       if (sharedVideoId) {
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: "" });
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead });
+      } else if (hStream || hEmbed || hImage) {
+        setVideoModal({
+          videoId: "",
+          fallbackUrl: hSource,
+          playbackUrl: hStream || null,
+          embedUrl: hEmbed || null,
+          imageUrl: hImage || null,
+          poster: hImage || null,
+          sourceLabel: hLabel || null,
+          headline: hHead || null,
+        });
       }
     }
     // Ratings on launch: respect defaultRatings pref.
@@ -510,6 +537,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
     //   on             → always on on launch
     // News view explicitly does NOT reset — it's a viewer choice, not a
     // spoiler surface, so it persists across refresh.
+    const persistedShowRatings = loaded.showRatings;
     const ratingsMode = loaded.defaultRatings ?? "auto";
     if (ratingsMode === "on") {
       loaded.showRatings = true;
@@ -520,13 +548,26 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       const morningReset = hour < 12;
       if (morningReset) loaded.showRatings = false;
     }
+    // Day-rollover detection for the landing view (below): has a new calendar
+    // day (ET) begun since the last app open?
+    const today = getDateString(0);
+    const newDayPassed = !!loaded.lastOpenDay && loaded.lastOpenDay !== today;
+    // Stamp this open. Persist lastOpenDay but NOT the morning ratings reset
+    // (a view-only reset, not a settings change) so stored showRatings keeps
+    // the user's real toggle.
+    savePreferences({ ...loaded, showRatings: persistedShowRatings, lastOpenDay: today });
+    loaded.lastOpenDay = today;
     setPrefs(loaded);
     // Landing view: defaultLandingView pref decides whether to honor the
     // remembered showNews state, force scores, or force news on launch.
+    // "remember" restores the last view EXCEPT across a day boundary: a new
+    // day since the last open drops a remembered News view to Scores so the
+    // user never lands on yesterday's spoilers (Jacob 6/19). Same-day reopens
+    // still restore News.
     const landing = loaded.defaultLandingView ?? "remember";
     if (landing === "news") setShowNews(true);
     else if (landing === "scores") setShowNews(false);
-    else if (loaded.showNews) setShowNews(true);
+    else if (loaded.showNews && !newDayPassed) setShowNews(true);
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
   }, []);
 
@@ -1348,6 +1389,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
                 <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
                   <span className="relative inline-flex">
                     <button
+                      data-cal-toggle
                       onClick={() => setCalendarOpen(!calendarOpen)}
                       className="ml-1 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
                       style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
@@ -1500,6 +1542,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
           <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} trailing={
             <span className="relative inline-flex">
               <button
+                data-cal-toggle
                 onClick={() => setCalendarOpen(!calendarOpen)}
                 className="ml-1 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
                 style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
@@ -1519,6 +1562,34 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       )}
 
       <main className="max-w-6xl mx-auto px-4 pt-0 pb-6 flex-1 w-full">
+        {/* World Cup hub framing — only on /worldcup. The WC column is already
+            auto-pinned to the board below (it's an active firstPref league
+            through 07-19), so this banner just sets the context for marketing
+            traffic landing on the route and gives the page a real <h1>. */}
+        {worldCupHub && (
+          <section
+            className="mt-3 mb-4 rounded-xl px-4 py-3.5 sm:px-5 sm:py-4"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              borderLeft: "3px solid var(--accent)",
+            }}
+          >
+            <h1 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--text)" }}>
+              <span aria-hidden="true">⚽</span>
+              <span>2026 World Cup, spoiler-free</span>
+            </h1>
+            <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+              104 matches, June 11 – July 19, across the US, Canada &amp; Mexico — most kicking off at 1, 4 and 7 PM ET on weekdays.
+              Watch every match on your own schedule: scores stay hidden until you tap, and the{" "}
+              <span style={{ color: "var(--text)" }}>competitiveness rating</span> tells you which games were instant classics
+              <span style={{ color: "var(--text)" }}> without revealing who won</span>. The World Cup column is below.
+            </p>
+            <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+              Free · no tracking cookies · also on the App Store
+            </p>
+          </section>
+        )}
         {showNews ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
@@ -1984,11 +2055,59 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
       </main>
 
       <footer className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-5 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
-        <span>Catch up on games without spoilers.</span>
+        {/* This is the page's only <h1>. Styled to match the footer text
+            (Tailwind's preflight makes headings inherit size/weight, so it
+            renders identically to the old <span>) — it just carries the
+            keyword copy SEO needs without changing the look. */}
+        <h1 className="text-sm font-normal m-0">Catch up on games without spoilers — spoiler-free sports scores &amp; highlights.</h1>
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />
+
+        {/* SEO content + internal links, "rolled up" under the feedback box so it
+            adds crawlable copy and a link graph without changing the visual layout.
+            Google renders and indexes content inside collapsed <details>, and plain
+            <a href> (not next/link) is what the crawler needs to follow the routes. */}
+        <details className="max-w-2xl text-left text-xs leading-relaxed">
+          <summary className="cursor-pointer select-none text-center" style={{ color: "var(--text-muted)" }}>
+            About HideScore
+          </summary>
+          <div className="mt-2 space-y-2" style={{ color: "var(--text-muted)" }}>
+            <p>
+              HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
+              MLB, MLS, the Premier League, the 2026 World Cup and golf without ever seeing who won —
+              every score and result stays hidden until you choose to reveal it.
+            </p>
+            <p>
+              Before you commit to a replay, our competitiveness rating tells you whether a game was a
+              blowout or an instant classic, so you can watch the best sports highlights without
+              spoilers and skip the duds — all without learning the final score.
+            </p>
+            <p>
+              It&apos;s free, has no tracking cookies, and works in any browser or as an iOS app. Jump to{" "}
+              <a href="/today" style={{ textDecoration: "underline" }}>today&apos;s games</a>,{" "}
+              <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
+              <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
+              <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
+              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a> — all spoiler-free.
+            </p>
+          </div>
+        </details>
+
         {!isNativeApp && (
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2">
+            {/* Official Apple "Download on the App Store" badge. */}
+            <a
+              href="https://apps.apple.com/app/hidescore/id6766885311"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Download HideScore on the App Store"
+              className="inline-block transition-opacity hover:opacity-80"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+            </a>
+            {/* Compact custom Apple-logo pill — replaced by the official badge
+                above. Kept commented in case we want the smaller text version back.
             <a
               href="https://apps.apple.com/app/hidescore/id6766885311"
               target="_blank"
@@ -2008,6 +2127,7 @@ export default function HomeContent({ initialOffset }: { initialOffset?: number 
               </svg>
               <span>App Store</span>
             </a>
+            */}
             {/* Android download pill tabled — Android app is being handled
                 separately; un-table (and fix the "Google Play" label, which
                 links a sideload .apk, not a Play listing) when it's ready. */}

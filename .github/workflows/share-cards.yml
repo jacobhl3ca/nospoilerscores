@@ -33,8 +33,29 @@ jobs:
           shopt -s nullglob
           cards=(share-cards-out/*.png)
           echo "Uploading ${#cards[@]} cards to R2…"
+          # R2 occasionally returns a transient 500 (code 10001 "internal error,
+          # please try again") on a single object PUT. Without retries one blip
+          # aborts the whole hourly job. Retry each card up to 3x with backoff;
+          # only fail the job if a card is still failing after all attempts.
+          failed=()
           for f in "${cards[@]}"; do
             key="cards/$(basename "$f")"
-            wrangler r2 object put "hidescore-data/$key" --file "$f" --remote --content-type image/png
+            ok=false
+            for attempt in 1 2 3; do
+              if wrangler r2 object put "hidescore-data/$key" --file "$f" --remote --content-type image/png; then
+                ok=true
+                break
+              fi
+              echo "Attempt $attempt failed for $key; retrying in $((attempt * 3))s…"
+              sleep $((attempt * 3))
+            done
+            if [ "$ok" = false ]; then
+              echo "::warning::Failed to upload $key after 3 attempts"
+              failed+=("$key")
+            fi
           done
-          echo "Done."
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::Failed to upload ${#failed[@]} card(s) after retries: ${failed[*]}"
+            exit 1
+          fi
+          echo "Done — uploaded ${#cards[@]} cards."

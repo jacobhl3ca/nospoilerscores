@@ -90,6 +90,48 @@ interface SubtitleResult {
   href?: string;
 }
 
+// Tennis round wording for the italic header subtitle (parallels golf's
+// "Round N of 4"). The round is a per-MATCH property, and one column can carry
+// both the men's and women's draw, which occasionally sit a round apart on the
+// same day — so headline the DEEPEST round present (Final > Semifinal > … >
+// Round 1 > qualifying). Returns [full, short] tiers so a long label like
+// "Qualifying 1st Round" can collapse on a narrow column.
+const TENNIS_ROUND_ORDER = [
+  "Qualifying 1st Round",
+  "Qualifying 2nd Round",
+  "Qualifying Final",
+  "Round 1",
+  "Round 2",
+  "Round 3",
+  "Round 4",
+  "Quarterfinal",
+  "Semifinal",
+  "Final",
+];
+function deepestTennisRound(labels: string[]): string | null {
+  let best: string | null = null;
+  let bestRank = -Infinity;
+  for (const l of labels) {
+    const rank = TENNIS_ROUND_ORDER.indexOf(l);
+    // Unknown labels (rank -1) still beat "nothing chosen yet" so we never drop
+    // a real round just because ESPN introduced wording we don't enumerate.
+    if (best === null || rank > bestRank) {
+      best = l;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+function tennisRoundTiers(label: string): string[] {
+  const short = label
+    .replace(/Quarterfinal/i, "QF")
+    .replace(/Semifinal/i, "SF")
+    .replace(/Qualifying/i, "Qual")
+    .replace(/(\d+)(?:st|nd|rd|th)?\s+Round/i, "R$1")
+    .replace(/Round (\d+)/i, "R$1");
+  return short !== label ? [label, short] : [label];
+}
+
 // Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
 function parseEtTime(s: string): { h: number; m: number } | null {
   const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -128,6 +170,15 @@ function getPlayoffSubtitle(
   games: Game[] | undefined,
   bigInningSchedule: BigInningSchedule | null,
 ): SubtitleResult | null {
+  // Tennis: no playoff countdown — the subtitle is the tournament round, read
+  // off the day's matches (golf-style). Handled before the PLAYOFF_START_DATES
+  // gate since tennis has no entry there.
+  if (sport === "tennis") {
+    const labels = (games ?? []).map((g) => g.playoffLabel).filter(Boolean) as string[];
+    const round = deepestTennisRound(labels);
+    return round ? { tiers: tennisRoundTiers(round) } : null;
+  }
+
   const config = PLAYOFF_START_DATES[sport];
   if (!config) return null;
   const y = +selectedDate.slice(0, 4);
@@ -183,11 +234,13 @@ function getPlayoffSubtitle(
     if (isLive) {
       return {
         tiers: ["● Big Inning · LIVE", "● Big Inning live", "● Big Inning"],
-        // Fallback to the MLB.TV hub: the MLB app claims mlb.com/tv as a
-        // universal link, so on mobile the subtitle (routed via openExternal)
-        // opens the app — where Big Inning lives — instead of the browser. The
-        // old /network/live URL wasn't app-claimed → browser. Precise per-night
-        // deep link still used when the scraper has entry.selectionUrl.
+        // Link to the MLB.TV hub (or tonight's selection page when the rail
+        // gives us one). The MLB app does NOT claim /tv or /tv/shows/* as
+        // universal links — only /tv/g* (per-game) and /news/* — so in the
+        // native wrapper openExternal remaps these MLB.TV URLs to the app's
+        // `mlbatbat://watch` scheme to open the Watch screen (where Big Inning
+        // lives) instead of the browser, falling back to the web URL if the
+        // MLB app isn't installed. On the web this stays the plain https link.
         href: entry.selectionUrl ?? "https://www.mlb.com/tv",
       };
     }
@@ -510,13 +563,13 @@ export default function LeagueColumn({
       const nameContainers = el.querySelectorAll(".team-name-container");
       if (!nameContainers.length) return;
 
-      // Get the longest team name from the games actually rendered. Both today's
-      // slate AND the upcoming lookahead can render together (NBA/NHL playoffs,
-      // World Cup), and on an empty slate only the lookahead shows — so measure
-      // the union. Otherwise this bails early and useAbbreviations stays stuck at
-      // its initial `true`, abbreviating names ("NY"/"SA") even when the full
-      // names ("Knicks"/"Spurs") would easily fit.
-      const measuredGames = [...league.games, ...(league.nextGameDay?.games ?? [])];
+      // Get the longest team name from the games actually rendered. Today's
+      // slate, the upcoming lookahead (NBA/NHL playoffs, World Cup), AND the
+      // empty-past-tab lookback can each be the only thing showing — so measure
+      // the union of all three. Otherwise this bails early and useAbbreviations
+      // stays stuck at its initial `true`, abbreviating names ("NY"/"SA") even
+      // when the full names ("Knicks"/"Spurs") would easily fit.
+      const measuredGames = [...league.games, ...(league.nextGameDay?.games ?? []), ...(league.previousGameDay?.games ?? [])];
       const allNames = measuredGames.flatMap(g => [
         displayShortName(g.awayTeam),
         displayShortName(g.homeTeam),
@@ -718,6 +771,50 @@ export default function LeagueColumn({
       );
     });
 
+  // Lookback slate: on an empty PAST tab, render the last game day's finished
+  // games (with highlights) in place of "No games". The "Last played" label
+  // rides centered on the first card's top row (only the first, since they
+  // share the day). Always shows the FULL weekday ("Monday"); the numeric date
+  // is appended only when the game is a week+ old, to disambiguate which Monday
+  // — a recent one reads fine as just "Last played · Monday" (Jacob 6/10).
+  const renderPreviousSlate = (games: Game[], date: string) => {
+    const y = +date.slice(0, 4), mo = +date.slice(4, 6) - 1, d = +date.slice(6, 8);
+    const dateObj = new Date(y, mo, d, 12, 0, 0);
+    const daysAgo = Math.round((Date.now() - dateObj.getTime()) / 86400000);
+    const fullDow = dateObj.toLocaleDateString("en-US", { weekday: "long" });
+    const label = daysAgo < 7 ? `Last played · ${fullDow}` : `Last played · ${fullDow} ${mo + 1}/${d}`;
+    return (
+      <div className="flex flex-col gap-1.5 sm:gap-2">
+        {games.map((game, i) => (
+          <GameCard
+            key={game.id}
+            game={game}
+            favoriteTeams={favoriteTeams}
+            onToggleFavoriteTeam={onToggleFavoriteTeam}
+            showRatings={showRatings}
+            leagueLabel={league.label}
+            onPlayHighlight={onPlayHighlight}
+            onPlayEmbed={onPlayEmbed}
+            pastDateLabel={i === 0 ? label : undefined}
+            isPastDate
+            useAbbreviations={useAbbreviations}
+            onSelectTeam={setTeamViewTeam}
+            onShowDetails={onShowDetails}
+          />
+        ))}
+      </div>
+    );
+  };
+
+  // Not-started league on a past tab (empty slate, no recent games, but an
+  // upcoming one exists — e.g. the World Cup before kickoff). Surfaced as the
+  // italic header subtitle ("Starts Tomorrow"), same slot as the playoff
+  // subtitle, instead of body text — so the empty column reads intentionally.
+  const notStartedDate = isPastDate && league.games.length === 0
+    && !(league.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
+    ? formatDateCompact(league.nextGameDay.date)
+    : null;
+
   return (
     <div
       ref={columnRef}
@@ -801,7 +898,7 @@ export default function LeagueColumn({
                 </button>
                 {swapOpen && (
                   <div
-                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[100px]"
+                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-hidden min-w-[100px]"
                     style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                   >
                     {/* Auto option — always present so the dropdown is consistent per column */}
@@ -809,12 +906,19 @@ export default function LeagueColumn({
                       onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{ color: "var(--text-muted)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       Auto
                     </button>
-                    {swappableOptions!.map((opt) => {
+                    {/* Sort leagues already shown in another column (greyed) to
+                        the bottom, just above Empty — they're the least useful to
+                        pick again (Jacob 6/9). Stable sort keeps the rest in order. */}
+                    {[...swappableOptions!].sort((a, b) => {
+                      const ae = a.sport !== league.sport && !!shownElsewhere?.includes(a.sport);
+                      const be = b.sport !== league.sport && !!shownElsewhere?.includes(b.sport);
+                      return (ae ? 1 : 0) - (be ? 1 : 0);
+                    }).map((opt) => {
                       const isCurrent = opt.sport === league.sport;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
                       return (
@@ -827,7 +931,7 @@ export default function LeagueColumn({
                             fontWeight: isCurrent ? 600 : 400,
                           }}
                           title={isElsewhere ? "Already shown in another column — pick to add a second" : undefined}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           {opt.label}
@@ -843,7 +947,7 @@ export default function LeagueColumn({
                         fontWeight: 400,
                         borderTop: "1px solid var(--border)",
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       Empty
@@ -859,8 +963,10 @@ export default function LeagueColumn({
           </div>
           {league.golfTournament ? (
             <GolfSubtitle league={league} selectedDate={selectedDate} />
+          ) : notStartedDate ? (
+            <span className="text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5 italic" style={{ color: "var(--text-muted)" }}>Starts {notStartedDate}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} />
           )}
         </div>
       )}
@@ -911,13 +1017,27 @@ export default function LeagueColumn({
               )}
             </div>
           ) : isPastDate ? (
-            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
+            league.previousGameDay && league.previousGameDay.games.length > 0 ? (
+              renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
+            ) : notStartedDate ? (
+              // Not-started league → the "Starts {date}" hint lives in the italic
+              // header subtitle (above); the body stays empty, not "No games".
+              null
+            ) : (
+              <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
+            )
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
               {/* No game today → the lead upcoming game is a full card, the
                   rest compact (NBA/NHL); other leagues stay all-full. */}
               {renderUpcomingSlate(league.nextGameDay.games, true)}
             </div>
+          ) : league.previousGameDay && league.previousGameDay.games.length > 0 ? (
+            // Offseason / season over: nothing today and nothing ahead. Show the
+            // last game played (score-hidden, with highlights) — the same lookback
+            // the past tab uses — so the column stays useful instead of announcing
+            // the season ended with a bare "Upcoming Schedule TBD".
+            renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
           ) : (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Upcoming Schedule TBD</p>
           )

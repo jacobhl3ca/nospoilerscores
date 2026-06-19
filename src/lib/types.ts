@@ -107,6 +107,11 @@ export interface LeagueData {
   label: string;
   games: Game[];
   nextGameDay?: { date: string; games: Game[] } | null;
+  // The most recent PAST game day, surfaced only on a past tab (e.g. Yesterday)
+  // when the viewed date itself has no games — so an empty column shows the last
+  // game played (with its highlights) instead of a bare "No games". Null when
+  // the league has no recent finished games (e.g. the World Cup before kickoff).
+  previousGameDay?: { date: string; games: Game[] } | null;
   golfTournament?: GolfTournament | null;
   // True when the games fetch failed (network/non-OK/non-JSON) rather than
   // ESPN returning a genuinely empty schedule. Lets the column show an

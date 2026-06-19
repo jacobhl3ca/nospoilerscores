@@ -637,7 +637,11 @@ function parseTennisMatch(match: any, event: any): Game {
     // highlight search so it can't drift to the wrong event (see above).
     seriesNote: tourneyTag || null,
     seriesStatus: null,
-    playoffLabel: null,
+    // Tournament round ("Quarterfinal", "Round 4", "Final", …). Surfaced in the
+    // italic league-header subtitle (see getPlayoffSubtitle's tennis branch),
+    // the same slot golf uses for "Round N of 4" and team sports use for the
+    // playoff round. isPlayoff stays false — tennis isn't a playoff "series".
+    playoffLabel: match.round?.displayName ?? null,
     isPlayoff: false,
     recapUrl: null,
     rating,
@@ -651,6 +655,12 @@ function buildTennisGames(events: any[], date?: string): Game[] {
   const target = date ?? todayYmd;
   const games: Game[] = [];
   for (const event of events) {
+    // Grand Slam only. The ATP scoreboard also returns the week's tune-up
+    // tournaments — e.g. during Roland Garros the grass-court Boss Open and
+    // Libéma Open appear too, with their qualifying matches. Without this gate
+    // those non-Slam matches leak into the "French Open" column (Jacob 6/7).
+    // All four Slams carry major:true; the tune-ups are major:false.
+    if (!event.major) continue;
     for (const grouping of event.groupings ?? []) {
       const slug = (grouping.grouping?.slug ?? "").toLowerCase();
       // Singles draws only.
@@ -1511,13 +1521,26 @@ async function fetchNextGameDayRange(
   const chrono = (gs: Game[]) => [...gs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
   // allDays: every upcoming fixture in the window, chronological. Used for
-  // NBA/NHL in the playoffs — only a handful remain, so show them all in one
-  // ranged request. Each card derives its own date label (see LeagueColumn).
+  // NBA/NHL in the playoffs. We want exactly ONE series — the most imminent —
+  // so a column never interleaves two simultaneous series (both conference
+  // finals run at once). Group by the unordered team pair, keep the series whose
+  // next game is soonest, and return just those games, capped at the best-of-7
+  // length. In the actual Finals there's only one pair so this is a no-op there;
+  // it's the conference round that would otherwise jumble two series (Jacob 6/5).
   if (opts?.allDays) {
     const sorted = chrono(games);
-    const first = leadDay(sorted);
+    const seriesKey = (g: Game) => [g.homeTeam.abbreviation, g.awayTeam.abbreviation].sort().join("|");
+    const bySeries = new Map<string, Game[]>();
+    for (const g of sorted) {
+      const k = seriesKey(g);
+      (bySeries.get(k) ?? bySeries.set(k, []).get(k)!).push(g);
+    }
+    // `sorted` is chronological, so the first game belongs to the most imminent
+    // series — keep only that pair's games (a series is best-of-7, so ≤7).
+    const series = bySeries.get(seriesKey(sorted[0]))!;
+    const first = leadDay(series);
     if (!first) return null;
-    return { date: first, games: sorted };
+    return { date: first, games: series.slice(0, 7) };
   }
   // maxDays: every fixture from the first N distinct ET match-days. The World
   // Cup runs a few matches per day with multi-day gaps (and a pre-tournament
@@ -1541,6 +1564,52 @@ async function fetchNextGameDayRange(
   }
   if (!earliest) return null;
   return { date: earliest, games: games.filter((g) => dayOf(g.date) === earliest) };
+}
+
+// Backward mirror of fetchNextGameDayRange: the most recent PAST day with
+// FINISHED games, in a single ranged request. Used to fill an empty past-date
+// column ("Yesterday" with no game) with the last game played instead of "No
+// games". Returns null when nothing finished in the window (e.g. the World Cup
+// before kickoff), so those columns correctly stay "No games".
+async function fetchPreviousGameDayRange(
+  sport: Sport,
+  fromDate?: string,
+  windowDays = 14,
+): Promise<{ date: string; games: Game[] } | null> {
+  const base = fromDate
+    ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
+    : new Date();
+  const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const end = new Date(base); end.setDate(end.getDate() - 1);            // the day BEFORE the viewed date
+  const start = new Date(base); start.setDate(start.getDate() - windowDays);
+  const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+  url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
+  let events: any[];
+  try {
+    const res = await fetchWithRetry(url.toString());
+    if (!res.ok) return null;
+    const data = await res.json();
+    events = data?.events ?? [];
+  } catch {
+    return null;
+  }
+  const games = eventsToGames(events, sport).filter((g) => g.state === "post");
+  if (!games.length) return null;
+  const dayOf = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso)).replace(/-/g, "");
+    } catch {
+      return "";
+    }
+  };
+  // Most RECENT day with finished games — the "last game day".
+  let latest = "";
+  for (const g of games) {
+    const d = dayOf(g.date);
+    if (d && (!latest || d > latest)) latest = d;
+  }
+  if (!latest) return null;
+  return { date: latest, games: games.filter((g) => dayOf(g.date) === latest) };
 }
 
 export async function fetchGames(
@@ -2007,19 +2076,21 @@ export async function fetchAllLeagues(
     // an empty schedule. On a fetch failure games is also [] — falling back
     // there would render tomorrow's slate labeled "Tomorrow" on the Today
     // tab, which reads as a bug. A failed league carries fetchFailed instead.
-    // NBA/NHL in the playoffs and the World Cup surface their upcoming slate
-    // even when there ARE games today, so the column shows TODAY'S games AND
-    // what's coming (Jacob 6/4). Every other league only falls back to the
-    // lookahead when today's slate is empty.
+    // NBA/NHL in the playoffs surface their upcoming slate even when there ARE
+    // games today, so the column shows TODAY'S games AND what's coming
+    // (Jacob 6/4). Every other league — including the World Cup (Jacob 6/19) —
+    // only falls back to the lookahead when today's slate is empty, so games
+    // stay on their real days instead of stacking tomorrow's slate under today.
     const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
     const nbaNhlPlayoff = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth;
-    const alwaysShowUpcoming = nbaNhlPlayoff || cfg.sport === "fifa";
+    const alwaysShowUpcoming = nbaNhlPlayoff;
     if (!failed && !isPastView && (games.length === 0 || alwaysShowUpcoming)) {
       if (cfg.sport === "fifa") {
-        // World Cup: the next 3 match-days (a few matches each). One ranged
-        // request; "3 days" counts days that actually have matches, so it works
-        // before kickoff (pre-tournament gap) and rolls forward during it.
-        nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 3 });
+        // World Cup, empty slate only: surface just the NEXT match day so a
+        // rest day (or the pre-tournament gap) shows the upcoming real day
+        // instead of a bare "No games" — not several days stacked onto today.
+        // 80-day window covers the long pre-kickoff gap; maxDays:1 = one day.
+        nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 1 });
       } else if (nbaNhlPlayoff) {
         // NBA/NHL playoffs: only a handful of games remain (Conf Finals →
         // Cup/Finals) — surface EVERY one in a single ranged request, not just
@@ -2046,7 +2117,35 @@ export async function fetchAllLeagues(
       const deduped = nextGameDay.games.filter((g) => !todayIds.has(g.id));
       nextGameDay = deduped.length ? { ...nextGameDay, games: deduped } : null;
     }
-    return { sport: cfg.sport, label, games, nextGameDay, fetchFailed: failed };
+    // Lookback (mirror of the lookahead, which is suppressed on past tabs):
+    // when a PAST tab's slate is empty, surface the last game day so the column
+    // shows the most recent game played instead of a bare "No games". WC before
+    // kickoff has no finished games → stays null → "No games" (Jacob 6/10).
+    let previousGameDay: { date: string; games: Game[] } | null = null;
+    if (!failed && isPastView && games.length === 0) {
+      previousGameDay = await fetchPreviousGameDayRange(cfg.sport, date);
+      // No recent finished games on a past tab → the league likely hasn't
+      // started yet (e.g. the World Cup before kickoff). Find the next game so
+      // the column can read "Starts {date}" instead of a bare "No games". This
+      // is the only case the (otherwise past-suppressed) lookahead fires on a
+      // past tab, and it surfaces just a date hint — not a misleading slate.
+      if (!previousGameDay && !nextGameDay) {
+        nextGameDay = cfg.sport === "fifa"
+          ? await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 1 })
+          : await fetchNextGameDay(cfg.sport, 14, date);
+      }
+    }
+    // Offseason fallback (current view): no games today AND no upcoming game in
+    // the whole lookahead window means the season is over (or on a long break).
+    // Surface the last game played — score-hidden, with highlights — so the
+    // column reads "still here, just quiet" instead of "Upcoming Schedule TBD",
+    // which announces the season ended (itself a spoiler). Only fires when there
+    // is genuinely nothing ahead, so mid-season off-days (nextGameDay set) are
+    // untouched.
+    if (!failed && !isPastView && games.length === 0 && !nextGameDay && !previousGameDay) {
+      previousGameDay = await fetchPreviousGameDayRange(cfg.sport, date);
+    }
+    return { sport: cfg.sport, label, games, nextGameDay, previousGameDay, fetchFailed: failed };
   };
 
   // allSettled, not all: a single league throwing must not blank the whole

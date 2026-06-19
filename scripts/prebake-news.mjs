@@ -611,6 +611,47 @@ async function fetchNHLVideos() {
   return out;
 }
 
+// ── Official league YouTube channels (World Cup, MLS) ─────────────
+// Leagues with no scrapeable .com video feed (FIFA+ and MLS-on-Apple are
+// DRM/geo-locked) still lead their column with a "Top Videos" card by pulling
+// the league's official YouTube uploads RSS. The feed hands us a real
+// youtubeVideoId, so the in-app player plays the clip natively — no
+// /api/youtube lookup/validation needed (unlike the .com feeds). Add a league
+// here + a jobs entry + PREBAKED_VIDEOS (src/lib/news.ts) and its column leads
+// with video, lockstep with MLB/NBA/NHL.
+async function fetchYouTubeChannelVideos(channelId, section) {
+  const xml = await getText(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
+  const items = [];
+  const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+  let m;
+  while ((m = entryRe.exec(xml)) !== null) {
+    const block = m[1];
+    const vid = (block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) || [])[1];
+    const title = decodeEntities(stripCdata((block.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || ""));
+    const pub = ((block.match(/<published>([^<]+)<\/published>/) || [])[1] || "").trim();
+    if (!vid || !title) continue;
+    // Drop Shorts and hashtag-stuffed cross-promo clips (≥2 hashtags) — they're
+    // vertical / off-topic, not the highlight reel this leading card is for.
+    if ((title.match(/#/g) || []).length >= 2) continue;
+    if (!passesArticleBlocklist(title)) continue;
+    items.push({
+      id: vid,
+      headline: title,
+      description: "",
+      published: pub ? new Date(pub).toISOString() : "",
+      // mqdefault is a clean 16:9 crop; the RSS default (hqdefault) is 4:3 and
+      // letterboxes in the card's aspect-video frame.
+      imageUrl: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`,
+      articleUrl: `https://www.youtube.com/watch?v=${vid}`,
+      byline: "",
+      section,
+      youtubeVideoId: vid,
+    });
+    if (items.length >= 10) break;
+  }
+  return items;
+}
+
 // ── ESPN homepage TOP HEADLINES (scraped for exact order) ─────────
 
 // Cached homepage HTML so the headlines + videos scrapers share one fetch.
@@ -1108,6 +1149,67 @@ async function getRedditToken() {
 const REDDIT_META_TITLE =
   /daily (discussion|game) thread|game thread index|post[- ]?game thread|free talk|sunday brunch|shitpost saturday|moronic monday|megathread|simple questions|weekly|^\s*\[?\s*off[- ]?topic/i;
 
+// ── Redlib video-id recovery ──────────────────────────────────────
+// RSS drops the one field that powers inline playback: the v.redd.it video id.
+// But Reddit's video CDN itself was never blocked — only the JSON/API was — so
+// https://v.redd.it/<id>/HLSPlaylist.m3u8 still returns 200 with audio tracks
+// and `access-control-allow-origin: *`, which VideoModal plays cross-origin via
+// hls.js (Chrome/Firefox) or Safari-native HLS. The only missing piece is the
+// <id>, and a public redlib mirror renders it on each video post's listing card
+// (through its own /vid/<id>/ proxy path). So we scrape ONE listing per sub to
+// build a postId→videoId map, then point videoUrl straight at the CDN.
+//
+// Playback never touches redlib — it streams from Reddit's CDN — so a volunteer
+// instance being down at bake time just means that run's clips stay link-only
+// (graceful), and the user never depends on redlib. Instances rotate / get
+// blocked, so we try several and degrade to an empty map. (Same one-listing-
+// per-sub trick the alerts-site flair scraper uses.)
+const REDLIB_INSTANCES = [
+  "https://redlib.perennialte.ch",
+  "https://redlib.catsarch.com",
+  "https://rl.bloat.cat",
+  "https://redlib.kittywit.ch",
+  "https://safereddit.com",
+];
+
+async function fetchRedditVideoMap(subreddit) {
+  // Desync + spread the burst: all reddit jobs fire in parallel, so stagger the
+  // start and rotate which mirror each sub tries first rather than dog-piling
+  // one volunteer instance. First non-empty result wins; failures fall through.
+  await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 1200)));
+  const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
+  for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
+    const base = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
+    let html;
+    try {
+      const res = await fetch(`${base}/r/${subreddit}/hot`, {
+        headers: { "User-Agent": UA },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) continue;
+      html = await res.text();
+    } catch {
+      continue; // dead / blocked mirror — try the next
+    }
+    // Redlib renders each post inside <div class="post ...">; the post-id is in
+    // its /r/<sub>/comments/<id>/ permalink and the v.redd.it id appears in the
+    // media element — usually the /vid/<id>/ proxy path, but match the raw and
+    // /hls/ shapes too so a differently-configured instance still resolves.
+    const map = new Map();
+    for (const block of html.split(/<div class="post[ "]/).slice(1)) {
+      const idm = block.match(new RegExp(`/r/${subreddit}/comments/(\\w+)/`, "i"));
+      if (!idm) continue;
+      const vm =
+        block.match(/v\.redd\.it\/([a-z0-9]{8,16})/i) ||
+        block.match(/\/vid\/([a-z0-9]{8,16})\//i) ||
+        block.match(/\/hls\/([a-z0-9]{8,16})/i);
+      if (vm) map.set(idm[1], vm[1]);
+    }
+    if (map.size > 0) return map;
+  }
+  return new Map();
+}
+
 // RSS fallback — used when no OAuth creds are configured (see header note).
 // Atom feed returns 200 with a custom UA; carries title/link/author/published
 // and, for image/highlight posts, a media:thumbnail (external-preview.redd.it
@@ -1133,6 +1235,10 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     }
     throw new Error(`${url} → ${res.status}`);
   }
+  // RSS succeeded, so we're on a Reddit-reachable IP (the Mac mini cron — GHA
+  // datacenter IPs 403 above and never get here). Only now fetch the redlib
+  // video map, so GHA's doomed reddit runs never touch a volunteer instance.
+  const videoMap = await fetchRedditVideoMap(subreddit);
   const out = [];
   const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
   let m;
@@ -1156,6 +1262,11 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     // media:thumbnail is present for image/highlight posts only (text/video posts omit it).
     let imageUrl = ((e.match(/<media:thumbnail[^>]*\burl="([^"]+)"/) || [])[1] || "").trim();
     imageUrl = imageUrl ? decodeEntities(imageUrl) : null;
+    // redlib hands us the v.redd.it id for video posts → point straight at the
+    // open HLS CDN (audio + CORS:*). Non-video posts and redlib-down runs leave
+    // it null and fall back to the article link-out, exactly as before.
+    const postId = (link.match(/\/comments\/(\w+)/) || [])[1] || "";
+    const vredditId = postId ? videoMap.get(postId) : null;
     out.push({
       id,
       headline: title,
@@ -1165,7 +1276,7 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
       articleUrl: link,
       byline: author ? `u/${author}` : "",
       section: sectionLabel,
-      videoUrl: null,
+      videoUrl: vredditId ? `https://v.redd.it/${vredditId}/HLSPlaylist.m3u8` : null,
       imageFullUrl: null,
       body: null,
     });
@@ -1373,6 +1484,12 @@ const jobs = [
   ["wnba-videos", fetchWNBAVideos],
   ["nhl", fetchNHL],
   ["nhl-videos", fetchNHLVideos],
+
+  // Leagues with no usable .com video feed lead their column with their
+  // official YouTube channel instead (plays natively via youtubeVideoId).
+  // World Cup = FIFA's channel; MLS = Major League Soccer's channel.
+  ["fifa-videos", () => fetchYouTubeChannelVideos("UCpcTrCXblq78GZrTUTLWeBw", "World Cup Top Videos")],
+  ["mls-videos", () => fetchYouTubeChannelVideos("UCSZbXT5TLLW_i-5W8FZpFsg", "MLS Top Videos")],
 
   // ESPN homepage top headlines + big-format videos (both scraped from espn.com)
   ["espn-top", fetchESPNTopHeadlines],
