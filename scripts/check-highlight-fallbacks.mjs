@@ -23,14 +23,19 @@ const LOOKBACK_HOURS = 36;
 // Pacing. youtube.com soft-blocks the Worker's datacenter IP when /api/youtube
 // is scraped in a tight burst — it serves a renderer-less page that the endpoint
 // reports as 404 "No results", which this audit would then misread as a hidden
-// highlight button. A single lookup never trips it (a real page only fires one
-// per card), so the audit deliberately spaces its lookups out, and treats any
-// miss as suspect until it survives a slow, post-cooloff confirmation pass.
-const FIRST_PASS_GAP_MS = 200;          // between lookups during the initial scan
-const CONFIRM_COOLOFF_MS = 30_000;      // wait out the IP block before confirming
-const CONFIRM_GAP_MS = 1_500;           // very gentle spacing while confirming
-const CONFIRM_RETRY_BACKOFF_MS = 6_000; // extra wait between confirmation attempts
-const CONFIRM_ATTEMPTS = 3;             // re-resolve a flagged game up to N times
+// highlight button. Crucially the Worker IP is SHARED with real users, so a
+// burst doesn't just produce false alerts, it briefly breaks highlights on the
+// live site too. A single lookup never trips it (a real page only fires one per
+// card), so the audit trickles its lookups out slowly enough to stay invisible
+// next to normal traffic, and treats any miss as suspect until it survives a
+// slow, post-cooloff confirmation pass. Actions minutes are free on this public
+// repo, so we trade runtime (a few minutes) for never tripping the block.
+// Tuned up from 200ms/30s after heavy World Cup days still tripped it 6/19.
+const FIRST_PASS_GAP_MS = 1_200;         // between lookups during the initial scan
+const CONFIRM_COOLOFF_MS = 60_000;       // wait out the IP block before confirming
+const CONFIRM_GAP_MS = 2_000;            // very gentle spacing while confirming
+const CONFIRM_RETRY_BACKOFF_MS = 10_000; // extra wait between confirmation attempts
+const CONFIRM_ATTEMPTS = 4;              // re-resolve a flagged game up to N times
 
 // Matches src/lib/espn.ts SPORT_PATHS for the team-sport leagues currently
 // in season. NFL / NCAAM / FIFA / golf / tennis can be added year-round —

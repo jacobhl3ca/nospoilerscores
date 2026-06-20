@@ -2554,19 +2554,21 @@ export async function fetchAllLeagues(
     // an empty schedule. On a fetch failure games is also [] — falling back
     // there would render tomorrow's slate labeled "Tomorrow" on the Today
     // tab, which reads as a bug. A failed league carries fetchFailed instead.
-    // NBA/NHL in the playoffs and the World Cup surface their upcoming slate
-    // even when there ARE games today, so the column shows TODAY'S games AND
-    // what's coming (Jacob 6/4). Every other league only falls back to the
-    // lookahead when today's slate is empty.
+    // NBA/NHL in the playoffs surface their upcoming slate even when there ARE
+    // games today, so the column shows TODAY'S games AND what's coming
+    // (Jacob 6/4). Every other league — including the World Cup (Jacob 6/19) —
+    // only falls back to the lookahead when today's slate is empty, so games
+    // stay on their real days instead of stacking tomorrow's slate under today.
     const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
     const nbaNhlPlayoff = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth;
-    const alwaysShowUpcoming = nbaNhlPlayoff || cfg.sport === "fifa";
+    const alwaysShowUpcoming = nbaNhlPlayoff;
     if (!failed && !isPastView && (games.length === 0 || alwaysShowUpcoming)) {
       if (cfg.sport === "fifa") {
-        // World Cup: the next 3 match-days (a few matches each). One ranged
-        // request; "3 days" counts days that actually have matches, so it works
-        // before kickoff (pre-tournament gap) and rolls forward during it.
-        nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 3 });
+        // World Cup, empty slate only: surface just the NEXT match day so a
+        // rest day (or the pre-tournament gap) shows the upcoming real day
+        // instead of a bare "No games" — not several days stacked onto today.
+        // 80-day window covers the long pre-kickoff gap; maxDays:1 = one day.
+        nextGameDay = await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 1 });
       } else if (nbaNhlPlayoff) {
         // NBA/NHL playoffs: only a handful of games remain (Conf Finals →
         // Cup/Finals) — surface EVERY one in a single ranged request, not just
