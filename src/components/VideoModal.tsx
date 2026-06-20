@@ -943,6 +943,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         <button
           onClick={onClose}
           className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center rounded-full text-white/60 hover:text-white transition-colors cursor-pointer"
+          aria-label="Close"
           title="Close (Esc)"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
