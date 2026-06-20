@@ -164,6 +164,10 @@ export interface Preferences {
   defaultDateMode?: DefaultDateMode;
   // Landing view on launch: remember last (default), always scores, always news.
   defaultLandingView?: DefaultLandingView;
+  // Calendar day (ET, YYYY-MM-DD) of the last app open. Lets a "remember"
+  // landing view drop a remembered News view to Scores across a day boundary,
+  // so the user never lands on yesterday's news (= spoilers). Jacob 6/19.
+  lastOpenDay?: string;
   // Ratings on launch: auto (smart morning reset), always off, always on.
   defaultRatings?: DefaultRatings;
   // News-view column count (1, 2, or 3). Default 1.

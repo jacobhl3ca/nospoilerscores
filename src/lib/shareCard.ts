@@ -64,3 +64,41 @@ export function shareCardUrl(meta: ShareCardMeta, youtubeId?: string | null): st
   const v = youtubeId ? `v=${encodeURIComponent(youtubeId)}&` : "";
   return `https://hidescore.com/?${v}c=${encodeURIComponent(meta.key)}`;
 }
+
+/** Everything a cold-loaded hidescore link needs to reopen one highlight modal. */
+export interface HighlightShareParams {
+  videoId?: string | null; // YouTube id — the short, stable ?v= form
+  playbackUrl?: string | null; // direct HLS/MP4 stream (redd.it / streamff / MLB)
+  embedUrl?: string | null; // Brightcove-style iframe (NHL recaps)
+  imageUrl?: string | null; // image-post lightbox (i.redd.it)
+  sourceUrl?: string | null; // original source — the "Open on …" fallback
+  sourceLabel?: string | null; // friendly source name ("r/worldcup")
+  headline?: string | null; // post title, for the preview/text card
+  cardKey?: string | null; // ?c= matchup-card key for the iMessage unfurl
+}
+
+/**
+ * Build the hidescore.com link that reopens THIS highlight in-app — so Copy link
+ * shares a HideScore link (like YouTube's own copy-link gives a youtube.com
+ * link), not the raw Reddit/source URL. YouTube clips need only ?v=<id> (the
+ * modal re-embeds by id). Non-YouTube clips carry their media in h*-prefixed
+ * params so a cold load can rebuild the modal (see the consumer in HomeContent);
+ * the source URL/label/headline keep the "Open on …" button + title correct even
+ * without the live feed. Returns null when there's nothing playable to encode,
+ * so the caller can fall back to the plain source URL.
+ */
+export function buildHighlightShareUrl(p: HighlightShareParams): string | null {
+  const sp = new URLSearchParams();
+  // Primary media — one of these drives the modal's render mode. Prefer the
+  // stable YouTube id; otherwise encode the direct stream/embed/image.
+  if (p.videoId) sp.set("v", p.videoId);
+  else if (p.playbackUrl) sp.set("hs", p.playbackUrl);
+  else if (p.embedUrl) sp.set("he", p.embedUrl);
+  else if (p.imageUrl) sp.set("hi", p.imageUrl);
+  else return null; // nothing playable to deep-link → caller keeps the source URL
+  if (p.sourceUrl) sp.set("hu", p.sourceUrl);
+  if (p.sourceLabel) sp.set("hl", p.sourceLabel);
+  if (p.headline) sp.set("ht", p.headline);
+  if (p.cardKey) sp.set("c", p.cardKey);
+  return `https://hidescore.com/?${sp.toString()}`;
+}

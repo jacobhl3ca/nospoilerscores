@@ -562,12 +562,39 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         noStored = false; // shared setup = explicit league choices, skip the picker
         savePreferences(loaded);
         const keep = new URLSearchParams();
-        if (sharedVideoId) keep.set("v", sharedVideoId);
+        // Preserve any highlight deep-link params (?v= and the h*-prefixed media
+        // a non-YouTube clip carries) while stripping the consumed pref params.
+        for (const k of ["v", "hs", "he", "hi", "hu", "hl", "ht", "c"]) {
+          const val = params.get(k);
+          if (val) keep.set(k, val);
+        }
         const qs = keep.toString();
         window.history.replaceState({}, "", qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
       }
+      // Reopen a shared highlight on cold load. YouTube clips need only ?v= (the
+      // modal re-embeds by id); non-YouTube clips (redd.it/streamff MP4,
+      // Brightcove embeds, image posts) carry their media in h*-prefixed params
+      // built by buildHighlightShareUrl. The source URL/label/headline keep the
+      // "Open on …" button + title correct even without the live feed.
+      const hStream = params.get("hs");
+      const hEmbed = params.get("he");
+      const hImage = params.get("hi");
+      const hSource = params.get("hu") || "";
+      const hLabel = params.get("hl");
+      const hHead = params.get("ht");
       if (sharedVideoId) {
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: "" });
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead });
+      } else if (hStream || hEmbed || hImage) {
+        setVideoModal({
+          videoId: "",
+          fallbackUrl: hSource,
+          playbackUrl: hStream || null,
+          embedUrl: hEmbed || null,
+          imageUrl: hImage || null,
+          poster: hImage || null,
+          sourceLabel: hLabel || null,
+          headline: hHead || null,
+        });
       }
     }
     // Apply launch-time normalization to a prefs blob: push it into React
@@ -590,13 +617,25 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         p.showRatings = false;
       }
       setPrefs(p);
+      // Landing view: "remember" restores the last view EXCEPT across a day
+      // boundary — a new calendar day (ET) since the last open drops a remembered
+      // News view to Scores so the user never lands on yesterday's spoilers
+      // (Jacob 6/19). Same-day reopens still restore News.
       const landing = p.defaultLandingView ?? "remember";
+      const newDayPassed = !!p.lastOpenDay && p.lastOpenDay !== getDateString(0);
       if (landing === "news") setShowNews(true);
       else if (landing === "scores") setShowNews(false);
-      else if (p.showNews) setShowNews(true);
+      else if (p.showNews && !newDayPassed) setShowNews(true);
       document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
     };
+    const storedShowRatings = loaded.showRatings;
     applyLaunchState(loaded);
+    // Stamp today's open so the next launch can detect a day rollover. Persist
+    // lastOpenDay but NOT the morning ratings reset applyLaunchState applied (a
+    // view-only reset, not a settings change) so the stored showRatings is intact.
+    const todayOpen = getDateString(0);
+    savePreferences({ ...loaded, showRatings: storedShowRatings, lastOpenDay: todayOpen });
+    loaded.lastOpenDay = todayOpen;
     // Arm the first-run league picker for genuinely new installs. The actual
     // open waits until the in-season league list (thirdLeagueOptions) is ready,
     // in a separate effect below.
