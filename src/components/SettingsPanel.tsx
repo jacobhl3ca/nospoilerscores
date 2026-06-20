@@ -1115,6 +1115,7 @@ function TeamPicker({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
+        aria-label={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
         className="w-full px-3 py-1.5 rounded-md text-sm"
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
       />
