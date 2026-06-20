@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
-import { shareCardUrl, type ShareCardMeta } from "@/lib/shareCard";
+import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 
 interface VideoModalProps {
   videoId: string;
@@ -214,7 +214,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
   // Brief "Copied ✓" confirmation after the copy-link button is tapped.
   const [copied, setCopied] = useState(false);
-  const [titleCopied, setTitleCopied] = useState(false);
   // Playback position (0–1), polled off the YT player. The seek bar no longer
   // draws a visible fill (the fill was itself a "how far through am I" spoiler),
   // so this now only feeds the slider's accessibility value (capped at 90%).
@@ -303,11 +302,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // The URL the footer points at — the YouTube watch page for YT clips,
   // otherwise the original source page.
   const sourceShareUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : (fallbackUrl || "");
-  // For game highlights we hand out a hidescore.com link instead: it opens the
-  // clip in-app (?v=) AND unfurls in iMessage as a matchup card (?c=, served by
-  // the worker from the PNG we upload in copyLink). News/non-game clips have no
-  // shareCard, so they keep the plain source URL.
-  const shareUrl = shareCard ? shareCardUrl(shareCard, ytId) : sourceShareUrl;
+  // Copy link hands out a hidescore.com link that reopens THIS highlight in-app
+  // (like YouTube's copy-link gives a youtube.com link) — not the raw
+  // Reddit/source URL. YouTube clips fold into the short ?v= form; non-YouTube
+  // clips (redd.it/streamff MP4, Brightcove embeds, image posts) encode their
+  // media so a cold load can rebuild the modal. Game highlights also carry the
+  // ?c= matchup card so the link unfurls with the two teams + date in iMessage.
+  // Only when there's nothing playable to deep-link do we fall back to the source.
+  const highlightLink = buildHighlightShareUrl({
+    videoId: ytId,
+    playbackUrl,
+    embedUrl,
+    imageUrl,
+    sourceUrl: fallbackUrl,
+    sourceLabel,
+    headline,
+    cardKey: shareCard?.key ?? null,
+  });
+  const shareUrl = highlightLink ?? (shareCard ? shareCardUrl(shareCard, ytId) : sourceShareUrl);
 
   // Copy the highlight's link to the clipboard. navigator.clipboard works in
   // both the browser and the iOS WKWebView — the app loads from the https
@@ -333,31 +345,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       /* throwaway affordance — the link stays tappable if copy fails */
-    }
-  };
-
-  // Copy the post title. The headline is also click-selectable in the modal (it
-  // stops propagation so selecting it doesn't dismiss), but this is the one-tap
-  // path — and the only practical one inside the iOS WKWebView.
-  const copyTitle = async () => {
-    if (!headline) return;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(headline);
-      } else {
-        const ta = document.createElement("textarea");
-        ta.value = headline;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      }
-      setTitleCopied(true);
-      window.setTimeout(() => setTitleCopied(false), 1600);
-    } catch {
-      /* throwaway affordance — the title stays selectable if copy fails */
     }
   };
 
@@ -525,6 +512,59 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       setFakeFs(true); // iOS Safari / WKWebView — no element fullscreen
     }
   }, [ytMode, hlsMode, embedMode, fakeFs]);
+
+  // ── Double-tap-to-seek on the video surface (mobile) ──────────────────
+  // Tapping the left/right side of the clip jumps ∓5s — the gesture every
+  // mobile video app trains for. A single tap still toggles play/pause and a
+  // double-tap in the CENTER still toggles fullscreen (the old double-click
+  // behaviour, now scoped to the middle third so the sides are free to seek).
+  // We discriminate single vs double by TIMING, not the native dblclick event
+  // — mobile browsers don't fire dblclick on a double-tap — and seek through
+  // the same API path as the on-screen ±5s buttons, so no timeline is exposed
+  // (spoiler-safe). The brief side flash is the only feedback.
+  const [seekFlash, setSeekFlash] = useState<{ side: "l" | "r"; n: number } | null>(null);
+  const surfaceTapRef = useRef<{ t: number; side: "l" | "r" | "c"; timer: number | null }>({ t: 0, side: "c", timer: null });
+  const seekFlashTimerRef = useRef<number | null>(null);
+  const seekFlashNonceRef = useRef(0);
+
+  const flashSeek = useCallback((side: "l" | "r") => {
+    seekFlashNonceRef.current += 1;
+    setSeekFlash({ side, n: seekFlashNonceRef.current });
+    if (seekFlashTimerRef.current) window.clearTimeout(seekFlashTimerRef.current);
+    seekFlashTimerRef.current = window.setTimeout(() => setSeekFlash(null), 550);
+  }, []);
+
+  const handleSurfaceTap = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0.5;
+    const side: "l" | "r" | "c" = frac < 0.34 ? "l" : frac > 0.66 ? "r" : "c";
+    const now = Date.now();
+    const prev = surfaceTapRef.current;
+    if (prev.timer) window.clearTimeout(prev.timer);
+    // A second tap on the SAME zone within 300ms is a double-tap.
+    if (now - prev.t < 300 && prev.side === side) {
+      if (side === "l") { seekBy(-SEEK_STEP); flashSeek("l"); }
+      else if (side === "r") { seekBy(SEEK_STEP); flashSeek("r"); }
+      else { toggleFullscreen(); }
+      // Keep the stamp for the seek zones so a held rhythm chains (tap-tap-tap
+      // = ∓15s); reset center so a 3rd tap doesn't immediately re-fullscreen.
+      surfaceTapRef.current = { t: side === "c" ? 0 : now, side, timer: null };
+    } else {
+      // Maybe a single tap — defer play/pause 300ms to see if a partner lands.
+      const timer = window.setTimeout(() => {
+        togglePlay();
+        surfaceTapRef.current = { ...surfaceTapRef.current, timer: null };
+      }, 300);
+      surfaceTapRef.current = { t: now, side, timer };
+    }
+  }, [seekBy, togglePlay, toggleFullscreen, flashSeek]);
+
+  // Clear pending tap/flash timers on unmount.
+  useEffect(() => () => {
+    if (surfaceTapRef.current.timer) window.clearTimeout(surfaceTapRef.current.timer);
+    if (seekFlashTimerRef.current) window.clearTimeout(seekFlashTimerRef.current);
+  }, []);
 
   // Keep nativeFs in sync with the browser, and remember when we left so a
   // co-delivered Escape doesn't also close the modal.
@@ -1048,10 +1088,26 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               {!youtubeNativeControls && (
                 <div
                   aria-hidden
-                  className={`absolute inset-0 z-10 ${idleCursor ? "cursor-none" : "cursor-default"}`}
-                  onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                  onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+                  className={`absolute inset-0 z-10 touch-manipulation ${idleCursor ? "cursor-none" : "cursor-default"}`}
+                  onClick={handleSurfaceTap}
                 />
+              )}
+              {/* Double-tap-to-seek flash — a ∓5s badge on the tapped side. */}
+              {seekFlash && (
+                <div
+                  key={seekFlash.n}
+                  aria-hidden
+                  className={`hs-seek-flash pointer-events-none absolute top-1/2 z-20 flex flex-col items-center gap-1 text-white ${seekFlash.side === "l" ? "left-[14%]" : "right-[14%]"}`}
+                >
+                  <span className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full" style={{ background: "rgba(0,0,0,0.5)" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      {seekFlash.side === "l"
+                        ? (<><polyline points="11 17 6 12 11 7" /><polyline points="18 17 13 12 18 7" /></>)
+                        : (<><polyline points="13 17 18 12 13 7" /><polyline points="6 17 11 12 6 7" /></>)}
+                    </svg>
+                  </span>
+                  <span className="text-xs font-bold" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>5s</span>
+                </div>
               )}
               {/* Spoiler masks over YouTube's chrome — always on (see note by
                   the state declarations), each independently toggleable in
@@ -1425,15 +1481,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
             >
               {copied ? "Copied ✓" : "Copy link"}
-            </button>
-          )}
-          {headline && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); copyTitle(); }}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
-            >
-              {titleCopied ? "Copied ✓" : "Copy title"}
             </button>
           )}
         </div>
