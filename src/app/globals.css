@@ -152,6 +152,12 @@ body {
 .animate-fade-in {
   animation: fade-in 0.25s ease forwards;
 }
+@media (prefers-reduced-motion: reduce) {
+  /* Show the final state instantly — no slide-up (translateY) for users who
+     ask for reduced motion. Matches the .live-clock / .hs-seek-flash overrides
+     below. */
+  .animate-fade-in { animation: none; opacity: 1; transform: none; }
+}
 
 @keyframes ptr-spin {
   from { transform: rotate(0deg); }
