@@ -43,7 +43,16 @@ const FEEDS = [
     return { path: `/news/${slug}.json`, warnH: reddit ? 4 : 6, critH: reddit ? 12 : 24 };
   }),
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
-  { path: "/prime-asins.json", warnH: 18, critH: 72 },           // GHA every 6h
+  // prime-asins is a best-effort nicety: it deep-links Prime broadcasts to the
+  // exact game page, and scrape-prime-asins.mjs is explicitly non-fatal — if
+  // Prime blocks the runner or changes its markup, the site silently falls back
+  // to the generic Prime sports page. So a stale feed here is graceful
+  // degradation, NOT a page-someone outage: warn-only (critH = Infinity). It
+  // still shows in the table without failing the workflow. NB: the scraper has
+  // been returning 0 fresh matchups since ~2026-05-13 (Prime anti-bot) — the
+  // deep-link feature is effectively dead and wants a real fix or removal,
+  // tracked separately; this just stops it emailing.
+  { path: "/prime-asins.json", warnH: 18, critH: Infinity },     // GHA every 6h — best-effort, warn-only
   { path: "/big-inning-schedule.json", warnH: 36, critH: 144 },  // GHA 2×/day
 ];
 
