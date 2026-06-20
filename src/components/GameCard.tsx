@@ -339,11 +339,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // once play resumes.
   const isDelayed = game.state === "in" && /delay/i.test(game.statusDetail);
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null && !isDelayed;
-  // A live game whose rating is withheld because it's still in its 1st period
-  // (see calculateRating's insufficient-signal gate). Surface a muted "Too
-  // Early" pill where the rating badge would go so the empty slot reads as
-  // intentional, not a missing/broken rating.
-  const tooEarly = showRatings && game.state === "in" && game.rating === null && !isDelayed;
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
@@ -669,15 +664,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               // — no overlap. flex-1 still centers it in the slack; no min-w-0 so
               // the nowrap badge can't shrink-to-zero and overflow its cell.
               <span className="flex-1 flex justify-center"><RatingBadge rating={game.rating!} /></span>
-            ) : tooEarly ? (
-              <span className="flex-1 flex justify-center">
-                <span
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-500/70 text-white uppercase whitespace-nowrap"
-                  title="Too early to rate — check back after the 1st"
-                >
-                  Too Early
-                </span>
-              </span>
             ) : game.seriesStatus && isFuture && showRatings && isToday && !nextGameDate ? (
               // Series state inline ONLY on wide (xl) columns where it fits
               // next to the bare time; narrower columns render it as the banner
