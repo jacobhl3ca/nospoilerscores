@@ -526,6 +526,59 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
   }, [ytMode, hlsMode, embedMode, fakeFs]);
 
+  // ── Double-tap-to-seek on the video surface (mobile) ──────────────────
+  // Tapping the left/right side of the clip jumps ∓5s — the gesture every
+  // mobile video app trains for. A single tap still toggles play/pause and a
+  // double-tap in the CENTER still toggles fullscreen (the old double-click
+  // behaviour, now scoped to the middle third so the sides are free to seek).
+  // We discriminate single vs double by TIMING, not the native dblclick event
+  // — mobile browsers don't fire dblclick on a double-tap — and seek through
+  // the same API path as the on-screen ±5s buttons, so no timeline is exposed
+  // (spoiler-safe). The brief side flash is the only feedback.
+  const [seekFlash, setSeekFlash] = useState<{ side: "l" | "r"; n: number } | null>(null);
+  const surfaceTapRef = useRef<{ t: number; side: "l" | "r" | "c"; timer: number | null }>({ t: 0, side: "c", timer: null });
+  const seekFlashTimerRef = useRef<number | null>(null);
+  const seekFlashNonceRef = useRef(0);
+
+  const flashSeek = useCallback((side: "l" | "r") => {
+    seekFlashNonceRef.current += 1;
+    setSeekFlash({ side, n: seekFlashNonceRef.current });
+    if (seekFlashTimerRef.current) window.clearTimeout(seekFlashTimerRef.current);
+    seekFlashTimerRef.current = window.setTimeout(() => setSeekFlash(null), 550);
+  }, []);
+
+  const handleSurfaceTap = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0.5;
+    const side: "l" | "r" | "c" = frac < 0.34 ? "l" : frac > 0.66 ? "r" : "c";
+    const now = Date.now();
+    const prev = surfaceTapRef.current;
+    if (prev.timer) window.clearTimeout(prev.timer);
+    // A second tap on the SAME zone within 300ms is a double-tap.
+    if (now - prev.t < 300 && prev.side === side) {
+      if (side === "l") { seekBy(-SEEK_STEP); flashSeek("l"); }
+      else if (side === "r") { seekBy(SEEK_STEP); flashSeek("r"); }
+      else { toggleFullscreen(); }
+      // Keep the stamp for the seek zones so a held rhythm chains (tap-tap-tap
+      // = ∓15s); reset center so a 3rd tap doesn't immediately re-fullscreen.
+      surfaceTapRef.current = { t: side === "c" ? 0 : now, side, timer: null };
+    } else {
+      // Maybe a single tap — defer play/pause 300ms to see if a partner lands.
+      const timer = window.setTimeout(() => {
+        togglePlay();
+        surfaceTapRef.current = { ...surfaceTapRef.current, timer: null };
+      }, 300);
+      surfaceTapRef.current = { t: now, side, timer };
+    }
+  }, [seekBy, togglePlay, toggleFullscreen, flashSeek]);
+
+  // Clear pending tap/flash timers on unmount.
+  useEffect(() => () => {
+    if (surfaceTapRef.current.timer) window.clearTimeout(surfaceTapRef.current.timer);
+    if (seekFlashTimerRef.current) window.clearTimeout(seekFlashTimerRef.current);
+  }, []);
+
   // Keep nativeFs in sync with the browser, and remember when we left so a
   // co-delivered Escape doesn't also close the modal.
   useEffect(() => {
@@ -1047,10 +1100,26 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               {!youtubeNativeControls && (
                 <div
                   aria-hidden
-                  className={`absolute inset-0 z-10 ${idleCursor ? "cursor-none" : "cursor-default"}`}
-                  onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                  onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+                  className={`absolute inset-0 z-10 touch-manipulation ${idleCursor ? "cursor-none" : "cursor-default"}`}
+                  onClick={handleSurfaceTap}
                 />
+              )}
+              {/* Double-tap-to-seek flash — a ∓5s badge on the tapped side. */}
+              {seekFlash && (
+                <div
+                  key={seekFlash.n}
+                  aria-hidden
+                  className={`hs-seek-flash pointer-events-none absolute top-1/2 z-20 flex flex-col items-center gap-1 text-white ${seekFlash.side === "l" ? "left-[14%]" : "right-[14%]"}`}
+                >
+                  <span className="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full" style={{ background: "rgba(0,0,0,0.5)" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      {seekFlash.side === "l"
+                        ? (<><polyline points="11 17 6 12 11 7" /><polyline points="18 17 13 12 18 7" /></>)
+                        : (<><polyline points="13 17 18 12 13 7" /><polyline points="6 17 11 12 6 7" /></>)}
+                    </svg>
+                  </span>
+                  <span className="text-xs font-bold" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>5s</span>
+                </div>
               )}
               {/* Spoiler masks over YouTube's chrome — always on (see note by
                   the state declarations), each independently toggleable in

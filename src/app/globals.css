@@ -270,3 +270,18 @@ iframe#yt-player {
   height: 100%;
   border: 0;
 }
+/* Double-tap-to-seek pop on the VideoModal player (∓5s side flash). The
+   key={nonce} remount restarts this each tap. translateY(-50%) is baked into
+   every frame so the badge stays vertically centered while it scales. */
+.hs-seek-flash {
+  animation: hsSeekFlash 550ms ease-out forwards;
+}
+@keyframes hsSeekFlash {
+  0% { opacity: 0; transform: translateY(-50%) scale(0.8); }
+  15% { opacity: 1; transform: translateY(-50%) scale(1); }
+  100% { opacity: 0; transform: translateY(-50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Hold it steady — no scale/fade churn; JS still clears it at 550ms. */
+  .hs-seek-flash { animation: none; opacity: 1; transform: translateY(-50%); }
+}
