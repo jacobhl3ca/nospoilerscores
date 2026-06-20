@@ -151,13 +151,16 @@ function formatSeriesStatus(s: string): string {
 // Compact network label for the inline status-bar chip (Jacob 6/10): the rating
 // badge centers on the card, so the network sits small and short beside it.
 // "MLB.TV" → "MLB", "MLB Network" → "MLB", "Prime Video" → "Prime", "Apple TV+"
-// → "Apple TV". Codes already short (FOX/FS1/ESPN/TBS/ABC/TNT) pass through. The
-// full name stays in the link title/aria, so nothing is lost.
+// → "Apple TV", "ESPN Unlimited" → "ESPN" (the long form wrapped to a 2nd line
+// once ratings pushed the badge into the center — Jacob 6/18). Codes already
+// short (FOX/FS1/ESPN/TBS/ABC/TNT) pass through. The full name stays in the
+// link title/aria, so nothing is lost.
 function shortNetwork(name: string): string {
   return name
     .replace(/\.tv$/i, "")
     .replace(/\s*Network$/i, "")
     .replace(/\s*Video$/i, "")
+    .replace(/\s*\bUnlimited\b/i, "")
     .replace(/\+$/, "")
     .trim() || name;
 }
@@ -324,11 +327,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // once play resumes.
   const isDelayed = game.state === "in" && /delay/i.test(game.statusDetail);
   const showRating = showRatings && (game.state === "post" || game.state === "in") && game.rating !== null && !isDelayed;
-  // A live game whose rating is withheld because it's still in its 1st period
-  // (see calculateRating's insufficient-signal gate). Surface a muted "Too
-  // Early" pill where the rating badge would go so the empty slot reads as
-  // intentional, not a missing/broken rating.
-  const tooEarly = showRatings && game.state === "in" && game.rating === null && !isDelayed;
+  // A live game whose rating is still withheld (1st-period insufficient-signal
+  // gate) just shows NOTHING in the rating slot — no "Too Early" pill. The pill
+  // ate width and shoved the network name out of place (Jacob 6/18); an empty
+  // centered slot reads fine and the network stays put.
   const isFinished = game.state === "post";
   const isFuture = game.state === "pre";
   const isLive = game.state === "in";
@@ -654,15 +656,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               // — no overlap. flex-1 still centers it in the slack; no min-w-0 so
               // the nowrap badge can't shrink-to-zero and overflow its cell.
               <span className="flex-1 flex justify-center"><RatingBadge rating={game.rating!} /></span>
-            ) : tooEarly ? (
-              <span className="flex-1 flex justify-center">
-                <span
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-500/70 text-white uppercase whitespace-nowrap"
-                  title="Too early to rate — check back after the 1st"
-                >
-                  Too Early
-                </span>
-              </span>
             ) : game.seriesStatus && isFuture && showRatings && isToday && !nextGameDate ? (
               // Series state inline ONLY on wide (xl) columns where it fits
               // next to the bare time; narrower columns render it as the banner
@@ -820,11 +813,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         ].map(({ team, isTBD }) => (
           <div key={team.id || team.abbreviation} className="flex items-center gap-1 sm:gap-1.5 min-w-0">
             <span className="shrink-0">{logo(team, isTBD)}</span>
-            {/* items-baseline (not center) keeps the World Cup #N seated on the
-                same baseline as the name; the rank lives INSIDE this container so
-                the whole name+rank unit centers against the flag as one piece
-                (the container height is the name's, since the rank is smaller). */}
-            <span className="team-name-container flex items-baseline gap-1 sm:gap-1.5 shrink-0">
+            {/* items-center so the flag, name AND #rank share one vertical
+                midline (Jacob 6/18 — the baseline-aligned rank used to sit low
+                vs the flag/name). The rank already drops out on the tight 3-up
+                mobile board via .ns-board-tight, so nothing here needs to clip. */}
+            <span className="team-name-container flex items-center gap-1 sm:gap-1.5 shrink-0">
               {(() => {
                 const nameNode = useAbbreviations ? (
                   <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }} title={team.displayName}>{team.abbreviation}</span>

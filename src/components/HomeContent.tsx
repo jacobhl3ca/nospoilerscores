@@ -1356,6 +1356,56 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     };
   }, []);
 
+  // Keep the News feed's scroll position across orientation changes. The feed is
+  // window-scrolled and reflows hard on rotate, so a raw scrollY no longer maps
+  // to the same place (Jacob 6/18: "not exactly where I left off" turning the
+  // phone). We track whatever element sits just under the header and, after the
+  // rotation settles, scroll so that element returns to the same spot. Gated to
+  // News (Scores is short). Return-from-clip is handled in VideoModal instead.
+  useEffect(() => {
+    if (!showNews) return;
+    const headerH = () => {
+      const el = rootRef.current || document.documentElement;
+      const n = parseFloat(getComputedStyle(el).getPropertyValue("--header-h"));
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    let anchorEl: Element | null = null;
+    let anchorTop = 0;
+    let raf = 0;
+    const capture = () => {
+      raf = 0;
+      const x = Math.round(window.innerWidth / 2);
+      const y = Math.round(headerH() + 48); // ~into the feed, below any sticky source header
+      const el = document.elementFromPoint(x, y);
+      if (el && el !== document.body && el !== document.documentElement) {
+        anchorEl = el;
+        anchorTop = el.getBoundingClientRect().top;
+      }
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(capture); };
+    const restore = () => {
+      if (!anchorEl || !anchorEl.isConnected) return;
+      const delta = anchorEl.getBoundingClientRect().top - anchorTop;
+      if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+    };
+    // Rotation reflow lands over a few hundred ms (matches the header-measure
+    // burst above), so re-assert across a short window.
+    const onFlip = () => {
+      requestAnimationFrame(() => requestAnimationFrame(restore));
+      for (const ms of [120, 300, 520]) window.setTimeout(restore, ms);
+    };
+    capture();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("orientationchange", onFlip);
+    screen.orientation?.addEventListener("change", onFlip);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("orientationchange", onFlip);
+      screen.orientation?.removeEventListener("change", onFlip);
+    };
+  }, [showNews]);
+
   // Measure the news-view league-title strip so per-source sticky headers
   // pin flush against its bottom edge (top: header-h + news-titlebar-h).
   // Callback ref instead of useEffect because the title row only mounts

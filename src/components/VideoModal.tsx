@@ -651,7 +651,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       body.style.position = prev.position;
       body.style.top = prev.top;
       body.style.width = prev.width;
+      // Restore immediately AND after layout settles. On iOS WebKit, scrolling
+      // in the same tick we unset position:fixed lands on a momentarily-shorter
+      // document and gets clamped toward the top — so closing a clip/article
+      // dropped you above where you were (Jacob 6/18: "not exactly where I left
+      // off"). The double rAF re-applies the offset once the reflow is done.
       window.scrollTo(0, scrollY);
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY);
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      });
     };
   }, []);
 

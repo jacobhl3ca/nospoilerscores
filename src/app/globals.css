@@ -213,13 +213,15 @@ body {
   font-weight: 400;
 }
 .view-tab .tab-icon {
-  opacity: 0.7;
+  opacity: 0.5;
 }
+/* Active tab: NO background pill (Jacob 6/18) — reads from the white label +
+   full-opacity icon against the dimmed inactive tabs. */
 html[data-view="scores-plain"] .view-tab[data-tab="scores-plain"],
 html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"],
 html[data-view="news"] .view-tab[data-tab="news"] {
   color: var(--text);
-  background: var(--bg-card-hover);
+  background: transparent;
   font-weight: 600;
 }
 html[data-view="scores-plain"] .view-tab[data-tab="scores-plain"] .tab-icon,
