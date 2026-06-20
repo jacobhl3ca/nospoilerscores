@@ -241,7 +241,9 @@ export function CompactUpcomingCard({
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
+      onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
+      tabIndex={cardClickable ? 0 : undefined}
       title={cardClickable ? "Game details" : undefined}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -445,7 +447,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
+      onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
+      tabIndex={cardClickable ? 0 : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
       {/* Lookback card: "Last played · {date}" centered on the card's top row,
