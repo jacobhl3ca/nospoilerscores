@@ -14,6 +14,12 @@ export const metadata: Metadata = {
     type: "website",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630 }],
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Yesterday's Sports Scores — No Spoilers | HideScore",
+    description: "Yesterday's completed games, spoiler-free. Tap to see scores or watch highlights.",
+    images: ["https://hidescore.com/og-image.png"],
+  },
 };
 
 export default function YesterdayPage() {
