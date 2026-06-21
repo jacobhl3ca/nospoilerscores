@@ -953,6 +953,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       <div
         className="group relative w-full max-w-7xl" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
         style={{ zIndex: 1 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Video player"
       >
         {/* Reddit prev/next post paging — hover-revealed ‹ › on the player edges
             (desktop only; touch has no hover). stopPropagation so the click pages
