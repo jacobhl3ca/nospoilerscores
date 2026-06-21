@@ -1434,6 +1434,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               <iframe
                 ref={iframeRef}
                 src={withAutoplay(embedUrl!)}
+                title={headline || "Video player"}
                 className="absolute inset-0 w-full h-full"
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowFullScreen
