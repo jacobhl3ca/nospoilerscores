@@ -189,6 +189,7 @@ export default function GameDetailModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-label="Game details"
       >
         <button
           onClick={onClose}
