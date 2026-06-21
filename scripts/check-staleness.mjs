@@ -33,14 +33,31 @@ const NEWS_HOURLY = [
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",
 ];
 
+// The low-volume soccer/World-Cup + college reddit tail is the family the
+// hourly bake rate-limits FIRST (Reddit throttles one sub across several
+// consecutive bake runs while the busy subs sail through). When that happens
+// the feed just serves slightly older posts — graceful degradation, not an
+// outage — and it self-heals within a day (observed reddit-fifa drift to ~13h
+// on 6/20, fresh again the next bake). The 11 high-volume year-round subs all
+// bake through the same mini → scraper → R2 path, so they remain the strict
+// 12h canaries: if the infra actually dies, THEY page. Giving the flaky tail a
+// looser 24h crit (warn still 4h, so drift stays visible in the table) stops
+// the self-healing rate-limit blips from paging, the same call already made for
+// prime-asins below. NB: these stay <4h in practice even off-season because the
+// bake rewrites fetchedAt every run, so 24h only fires on a genuinely stuck feed.
+const RATE_LIMIT_PRONE_REDDIT = new Set([
+  "reddit-fifa", "reddit-ucl", "reddit-uel", "reddit-ncaaf", "reddit-ncaaw",
+]);
+
 const FEEDS = [
   ...NEWS_HOURLY.map((slug) => {
-    // Reddit subs bake HOURLY on the mini, so a 24h crit is far too loose — a
-    // genuinely stuck feed (the r/baseball-went-static case) should page within
-    // half a day, not a full one. The GHA-baked feeds (cbs/thescore/*-videos,
-    // every 2h) keep the looser 24h that tolerates an overnight blip.
+    // Reddit subs bake HOURLY on the mini, so a 24h crit is far too loose for the
+    // busy ones — a genuinely stuck feed (the r/baseball-went-static case) should
+    // page within half a day, not a full one. The GHA-baked feeds (cbs/thescore/
+    // *-videos, every 2h) keep the looser 24h that tolerates an overnight blip.
     const reddit = slug.startsWith("reddit-");
-    return { path: `/news/${slug}.json`, warnH: reddit ? 4 : 6, critH: reddit ? 12 : 24 };
+    const critH = reddit ? (RATE_LIMIT_PRONE_REDDIT.has(slug) ? 24 : 12) : 24;
+    return { path: `/news/${slug}.json`, warnH: reddit ? 4 : 6, critH };
   }),
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
   // prime-asins is a best-effort nicety: it deep-links Prime broadcasts to the
