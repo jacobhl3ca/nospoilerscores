@@ -2541,7 +2541,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               className="inline-block transition-opacity hover:opacity-80"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+              <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
             </a>
             {/* Compact custom Apple-logo pill — replaced by the official badge
                 above. Kept commented in case we want the smaller text version back.
