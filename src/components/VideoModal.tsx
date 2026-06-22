@@ -1445,8 +1445,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             context without filling the modal. textMode renders these inside
             the card itself, so skip them here. */}
         {!textMode && headline && (
-          <div className="mt-3 text-center px-2" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm sm:text-base text-white/90 leading-snug select-text cursor-text">{headline}</p>
+          <div className="mt-3 text-center px-2">
+            {/* Only the text itself swallows the click (so selecting the headline
+                doesn't close); the surrounding whitespace strip stays a dismiss
+                target, so a tap just below the video exits instead of dead-zoning. */}
+            <p className="text-sm sm:text-base text-white/90 leading-snug select-text cursor-text" onClick={(e) => e.stopPropagation()}>{headline}</p>
             {(byline || published) && (
               <p className="text-xs text-white/40 mt-1">
                 {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
