@@ -17,6 +17,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, M
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
+import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -1598,7 +1599,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             without pushing the settings gear off-screen. Desktop keeps the
             symmetric 1fr_auto_1fr so the view tabs sit dead-center under MLB. */}
         <div className="max-w-6xl mx-auto relative grid grid-cols-[auto_1fr_auto] sm:grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
-          <a
+          <Link
             href="/"
             onClick={(e) => {
               // In the news view, the logo acts as "back to scores" — toggle
@@ -1620,7 +1621,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <rect width="32" height="32" rx="6" className="header-logo-bg" />
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
-          </a>
+          </Link>
 
           {/* Top-row middle (col 2): the view tabs on sm+ (page-centered between
               two 1fr cols → lines up with the middle MLB column). On small screens
