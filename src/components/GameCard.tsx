@@ -79,7 +79,7 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
       className="opacity-40 hover:opacity-70 transition-opacity flex-shrink-0"
       title={title || "View on ESPN"}>
       <img src="https://a.espncdn.com/combiner/i?img=/i/espn/misc_logos/500/espn.png&w=40&h=40"
-        alt="ESPN" className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
+        alt="ESPN" loading="lazy" width={20} height={20} className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
     </a>
   );
 }
