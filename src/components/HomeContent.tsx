@@ -2497,7 +2497,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             renders identically to the old <span>) — it just carries the
             keyword copy SEO needs without changing the look. */}
         <h1 className="text-sm font-normal m-0">Catch up on games without spoilers — spoiler-free sports scores &amp; highlights.</h1>
-        <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
+        <span className="inline-flex items-center gap-1">Select {/* eslint-disable-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />
 
         {/* SEO content + internal links, "rolled up" under the feedback box so it
