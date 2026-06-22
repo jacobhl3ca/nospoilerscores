@@ -938,6 +938,30 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
+  // Reddit prev/next paging arrows. Rendered ON the player edges (inside the
+  // video box), NOT at the wrapper edges — otherwise they sit in the dark
+  // margin beside the centred video and a click there (where you reach to
+  // dismiss) hits the arrow's stopPropagation instead of closing the modal.
+  // z-30 keeps them above the YT click-catcher; hover-revealed via the box's group.
+  const pager = (onPrev || onNext) ? (
+    <>
+      {onPrev && (
+        <button onClick={(e) => { e.stopPropagation(); onPrev(); }} aria-label="Previous post" title="Previous post"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-30 w-10 h-16 flex items-center justify-center rounded-r-lg text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          style={{ background: "rgba(0,0,0,0.5)" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
+      )}
+      {onNext && (
+        <button onClick={(e) => { e.stopPropagation(); onNext(); }} aria-label="Next post" title="Next post"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-30 w-10 h-16 flex items-center justify-center rounded-l-lg text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          style={{ background: "rgba(0,0,0,0.5)" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        </button>
+      )}
+    </>
+  ) : null;
+
   return (
     <div
       className="fixed inset-0 flex items-center justify-center p-4 sm:p-8"
@@ -957,28 +981,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         {/* Reddit prev/next post paging — hover-revealed ‹ › on the player edges
             (desktop only; touch has no hover). stopPropagation so the click pages
             instead of bubbling to the backdrop and closing the modal. */}
-        {onPrev && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onPrev(); }}
-            aria-label="Previous post"
-            title="Previous post"
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-16 flex items-center justify-center rounded-r-lg text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-            style={{ background: "rgba(0,0,0,0.5)" }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-          </button>
-        )}
-        {onNext && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onNext(); }}
-            aria-label="Next post"
-            title="Next post"
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-16 flex items-center justify-center rounded-l-lg text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-            style={{ background: "rgba(0,0,0,0.5)" }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-          </button>
-        )}
+        {/* Paging arrows now live INSIDE each player box (see `pager`) so the
+            dark margin beside the video stays a dismiss target. Image/text modes
+            have no inner player box, so they keep the arrows here at the edges. */}
+        {(imageMode || textMode) && pager}
         {/* Close button */}
         <button
           onClick={onClose}
@@ -1055,7 +1061,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // control bar come along and the title stays covered in fullscreen).
           <div
             ref={fsWrapRef}
-            onClick={(e) => e.stopPropagation()}
+            // A click on the dark margin BESIDE the centred video (target is this
+            // wrapper itself, not a child) dismisses when not fullscreen; clicks
+            // bubbling up from the player/controls still stop here so they keep
+            // working. The video surface stops propagation in handleSurfaceTap.
+            onClick={(e) => { if (!fsActive && e.target === e.currentTarget) onClose(); else e.stopPropagation(); }}
             style={fsActive ? {
               position: "fixed", inset: 0, zIndex: 10000, background: "#000",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -1070,6 +1080,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 : { width: "min(100%, calc((100vh - 168px) * 16 / 9))", aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
+              {pager}
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
                   through to the cross-origin iframe. This is what makes the
@@ -1418,7 +1429,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             </>)}
           </div>
         ) : (
-          <div ref={containerRef} className="relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: "min(100%, calc(78vh * 16 / 9))", aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
+          <div ref={containerRef} className="group relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: "min(100%, calc(78vh * 16 / 9))", aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
             {hlsMode ? (
               <video
                 ref={videoRef}
@@ -1438,6 +1449,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 allowFullScreen
               />
             )}
+            {pager}
           </div>
         )}
 
