@@ -172,6 +172,9 @@ body {
   display: inline-block;
   animation: live-pulse 1.6s ease-in-out 2;
 }
+@media (prefers-reduced-motion: reduce) {
+  .live-pulse-dot { animation: none; opacity: 1; }
+}
 
 /* Google-style sliding underline for live game clocks (Q4 02:05). A short
    green bar sweeps left→right under the text on a slow loop, signaling
