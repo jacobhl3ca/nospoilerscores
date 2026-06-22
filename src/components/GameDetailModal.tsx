@@ -23,6 +23,28 @@ function gameLengthHours(sport: string): number {
   return GAME_LENGTH_H[sport] ?? 3;
 }
 
+// Matchup row — logo + name + W-L record, no score/winner. Stateless and
+// dependent only on `team`, so it lives at module scope rather than inside the
+// component body (declaring a component during render remounts it every render
+// and resets any state).
+function TeamRow({ team }: { team: Game["homeTeam"] }) {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      {team.logo
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={team.logo} alt="" width={32} height={32} className="w-8 h-8 object-contain shrink-0" />
+        : <span className="w-8 h-8 flex items-center justify-center rounded text-xs shrink-0" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>}
+      <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>
+        {team.displayName || team.shortDisplayName || team.abbreviation}
+      </span>
+      {/* W-L record is not a spoiler of THIS game — safe to show. */}
+      {team.record ? (
+        <span className="ml-auto text-xs tabular-nums shrink-0" style={{ color: "var(--text-muted)" }}>{team.record}</span>
+      ) : null}
+    </div>
+  );
+}
+
 // Lightweight, SPOILER-SAFE game details popup. Shown when a score/ratings card
 // is tapped. Never renders score, winner, or rating unless `showRatings` is on
 // (the user has already opted into spoilers) — and even then only the rating
@@ -127,22 +149,6 @@ export default function GameDetailModal({
   })();
 
   const statusLabel = isFinal ? "Final" : isLive ? "In progress" : "Upcoming";
-
-  const TeamRow = ({ team }: { team: Game["homeTeam"] }) => (
-    <div className="flex items-center gap-3 min-w-0">
-      {team.logo
-        // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={team.logo} alt="" width={32} height={32} className="w-8 h-8 object-contain shrink-0" />
-        : <span className="w-8 h-8 flex items-center justify-center rounded text-xs shrink-0" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>}
-      <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>
-        {team.displayName || team.shortDisplayName || team.abbreviation}
-      </span>
-      {/* W-L record is not a spoiler of THIS game — safe to show. */}
-      {team.record ? (
-        <span className="ml-auto text-xs tabular-nums shrink-0" style={{ color: "var(--text-muted)" }}>{team.record}</span>
-      ) : null}
-    </div>
-  );
 
   const ratingTier = (r: number) =>
     r >= 80 ? { label: "GREAT", bg: "bg-green-600" }
