@@ -153,9 +153,24 @@ function formatSeriesStatus(s: string): string {
 // "MLB.TV" → "MLB", "MLB Network" → "MLB", "Prime Video" → "Prime", "Apple TV+"
 // → "Apple TV". Codes already short (FOX/FS1/ESPN/TBS/ABC/TNT) pass through. The
 // full name stays in the link title/aria, so nothing is lost.
+// Explicit shortenings the generic suffix-stripping below can't derive — a long
+// network name wraps to a second line and grows the card (Jacob 6/23: "ESPN
+// Unlmtd" sat on its own line — "just call it ESPN"). The full name still shows
+// in the "+N" expanded list and the "Watch on …" tooltips.
+const NETWORK_SHORT: Record<string, string> = {
+  "ESPN Unlmtd": "ESPN",
+  "ESPN Unlimited": "ESPN",
+  "Marquee Sports Net": "Marquee",
+  "Space City Home Network": "Space City",
+};
 function shortNetwork(name: string): string {
+  if (NETWORK_SHORT[name]) return NETWORK_SHORT[name];
+  // "NBC Sports Bay Area" / "NBC Sports California" / "NBC Sports Phil" → "NBCS …"
+  const nbcs = name.match(/^NBC Sports (.+)$/i);
+  if (nbcs) return `NBCS ${nbcs[1]}`;
   return name
     .replace(/\.tv$/i, "")
+    .replace(/\s*Sports Network$/i, "")
     .replace(/\s*Network$/i, "")
     .replace(/\s*Video$/i, "")
     .replace(/\+$/, "")
@@ -228,10 +243,10 @@ export function CompactUpcomingCard({
         title={`Watch on ${network}`}
         onClick={handleExternalClick(networkHref)}
       >
-        {network}
+        {shortNetwork(network)}
       </a>
     ) : (
-      <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{network}</span>
+      <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{shortNetwork(network)}</span>
     )
   ) : null;
   return (
@@ -714,7 +729,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hover:underline transition-colors"
+                      className="hover:underline transition-colors whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
                       title={`Watch on ${name}`}
                       onClick={handleExternalClick(href)}
