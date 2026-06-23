@@ -478,6 +478,9 @@ export default function GolfLeaderboard({
                   src={player.flag}
                   alt={player.flagCountry || ""}
                   title={player.flagCountry || undefined}
+                  loading="lazy"
+                  width={20}
+                  height={20}
                   className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0"
                 />
               )}
