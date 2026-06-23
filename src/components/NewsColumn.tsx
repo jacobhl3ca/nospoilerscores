@@ -129,10 +129,13 @@ export function NewsColumnTitle({
         {isSwappable ? (
           <div ref={swapRef} className="relative">
             <button
+              type="button"
               onClick={() => setSwapOpen(!swapOpen)}
               className="cursor-pointer transition-colors hover:opacity-80"
               style={{ color: "var(--text)" }}
               title="Switch news league"
+              aria-haspopup="menu"
+              aria-expanded={swapOpen}
             >
               <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
             </button>
