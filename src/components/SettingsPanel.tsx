@@ -535,6 +535,7 @@ export default function SettingsPanel({
                 <select
                   value={prefs.smartCutoffHour ?? 13}
                   onChange={(e) => updatePrefs({ smartCutoffHour: Number(e.target.value) })}
+                  aria-label="Smart switch time"
                   className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 >
@@ -567,6 +568,7 @@ export default function SettingsPanel({
               <select
                 value={prefs.timezone ?? ""}
                 onChange={(e) => updatePrefs({ timezone: e.target.value || undefined })}
+                aria-label="Time zone"
                 className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               >
@@ -629,6 +631,7 @@ export default function SettingsPanel({
                       const v = e.target.value;
                       setSlot(idx, v === "" ? undefined : v === "empty" ? "empty" : (v as Sport));
                     }}
+                    aria-label={`Slot ${idx + 1} league`}
                     className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
@@ -789,6 +792,7 @@ export default function SettingsPanel({
               <select
                 value={prefs.newsThirdLeague ?? ""}
                 onChange={(e) => updatePrefs({ newsThirdLeague: e.target.value ? (e.target.value as Sport) : undefined })}
+                aria-label="3rd news column league"
                 className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               >
