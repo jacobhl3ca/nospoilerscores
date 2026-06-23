@@ -52,6 +52,7 @@ export default {
     // so deploying this is safe before the secrets are in place.
     if (url.pathname === "/auth/apple/login")    return siwaLogin(request, env, url);
     if (url.pathname === "/auth/apple/callback") return siwaCallback(request, env, url);
+    if (url.pathname === "/auth/apple/native" && request.method === "POST") return siwaNative(request, env);
     if (url.pathname === "/auth/google/login")    return googleLogin(request, env, url);
     if (url.pathname === "/auth/google/callback") return googleCallback(request, env, url);
     if (url.pathname === "/auth/logout")         return siwaLogout();
@@ -1052,7 +1053,7 @@ async function _siwaAppleKeys() {
   _siwaKeysCache = { exp: _siwaNow() + 3600, keys };
   return keys;
 }
-async function _siwaVerifyIdToken(idToken, env) {
+async function _siwaVerifyIdToken(idToken, env, expectedAud) {
   if (!idToken) return null;
   const parts = idToken.split(".");
   if (parts.length !== 3) return null;
@@ -1071,7 +1072,7 @@ async function _siwaVerifyIdToken(idToken, env) {
   if (!ok) return null;
   if (payload.iss !== "https://appleid.apple.com") return null;
   const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-  if (!aud.includes(env.APPLE_SERVICES_ID)) return null;
+  if (!aud.includes(expectedAud || env.APPLE_SERVICES_ID)) return null;
   if (!payload.exp || payload.exp < _siwaNow()) return null;
   return payload; // { sub, email?, nonce?, ... }
 }
@@ -1167,6 +1168,41 @@ async function siwaCallback(request, env, url) {
     status: 303,
     headers: {
       Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
+    },
+  });
+}
+
+// POST /auth/apple/native — body { identityToken, nonce?, email? } from the
+// in-app NATIVE Sign in with Apple (Capacitor @capacitor-community/apple-sign-in).
+// The iOS app's WebView loads hidescore.com, so the Set-Cookie here lands in the
+// app's own cookie jar -> the in-app site is signed in. (The web /auth/apple/login
+// redirect can't: it logs in inside Safari, not the app's WebView.) The native
+// id_token's aud is the APP BUNDLE ID (com.jacobhl.hidescore), not the web Services
+// ID, so verify against APPLE_APP_BUNDLE_ID. No client_secret / code exchange
+// needed -- the identityToken is already an Apple-signed JWT.
+async function siwaNative(request, env) {
+  if (!env.SESSION_SECRET) return _siwaJson({ error: "not_configured" }, 503);
+  let body;
+  try { body = await request.json(); } catch { return _siwaJson({ error: "bad_request" }, 400); }
+  const idToken = body && body.identityToken;
+  if (!idToken) return _siwaJson({ error: "missing_token" }, 400);
+  const expectedAud = env.APPLE_APP_BUNDLE_ID || "com.jacobhl.hidescore";
+  const claims = await _siwaVerifyIdToken(idToken, env, expectedAud);
+  if (!claims) return _siwaJson({ error: "bad_id_token" }, 401);
+  if (body.nonce && claims.nonce && claims.nonce !== body.nonce) {
+    return _siwaJson({ error: "bad_nonce" }, 401);
+  }
+  const session = await _siwaMakeSession(env, {
+    sub: `apple:${claims.sub}`,
+    email: claims.email || body.email || null,
+    exp: _siwaNow() + SIWA_SESSION_TTL,
+  });
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });
