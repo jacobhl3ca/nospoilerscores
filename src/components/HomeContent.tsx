@@ -564,7 +564,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         const keep = new URLSearchParams();
         // Preserve any highlight deep-link params (?v= and the h*-prefixed media
         // a non-YouTube clip carries) while stripping the consumed pref params.
-        for (const k of ["v", "hs", "he", "hi", "hu", "hl", "ht", "c"]) {
+        for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c"]) {
           const val = params.get(k);
           if (val) keep.set(k, val);
         }
@@ -582,8 +582,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       const hSource = params.get("hu") || "";
       const hLabel = params.get("hl");
       const hHead = params.get("ht");
+      const hPoster = params.get("hp");
       if (sharedVideoId) {
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead });
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster });
       } else if (hStream || hEmbed || hImage) {
         setVideoModal({
           videoId: "",
@@ -591,7 +592,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           playbackUrl: hStream || null,
           embedUrl: hEmbed || null,
           imageUrl: hImage || null,
-          poster: hImage || null,
+          poster: hImage || hPoster || null,
           sourceLabel: hLabel || null,
           headline: hHead || null,
         });

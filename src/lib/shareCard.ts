@@ -71,6 +71,7 @@ export interface HighlightShareParams {
   playbackUrl?: string | null; // direct HLS/MP4 stream (redd.it / streamff / MLB)
   embedUrl?: string | null; // Brightcove-style iframe (NHL recaps)
   imageUrl?: string | null; // image-post lightbox (i.redd.it)
+  posterUrl?: string | null; // video poster/thumbnail — drives the link-preview image for VIDEO shares (image posts already preview via imageUrl→hi)
   sourceUrl?: string | null; // original source — the "Open on …" fallback
   sourceLabel?: string | null; // friendly source name ("r/worldcup")
   headline?: string | null; // post title, for the preview/text card
@@ -99,6 +100,10 @@ export function buildHighlightShareUrl(p: HighlightShareParams): string | null {
   if (p.sourceUrl) sp.set("hu", p.sourceUrl);
   if (p.sourceLabel) sp.set("hl", p.sourceLabel);
   if (p.headline) sp.set("ht", p.headline);
+  // Poster for the social unfurl of a VIDEO share — the worker uses ?hp as the
+  // OG image so the link previews the clip's still (redd.it / NHL / MLB videos).
+  // Image posts already carry their picture in ?hi, so skip ?hp there.
+  if (p.posterUrl && !p.imageUrl) sp.set("hp", p.posterUrl);
   if (p.cardKey) sp.set("c", p.cardKey);
   return `https://hidescore.com/?${sp.toString()}`;
 }

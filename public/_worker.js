@@ -41,6 +41,19 @@ class AttrSetter {
 // and the CDN fetch a fresh URL instead of a stale cached image.
 const CARD_REV = 2;
 
+// Wrap an arbitrary news image (Reddit photo, preview thumb, league poster, or
+// YouTube still) for use as the social-card image. Routed through weserv — the
+// SAME proxy the app already uses for every redd.it thumbnail (see proxyImage in
+// src/lib/news.ts): it normalizes Reddit's webp-as-jpeg + hotlink blocks, crops
+// to the 1.91:1 OG frame with a smart focal point, and — via &default= — serves
+// the branded site card if the source ever 404s, so a dead link can never beat
+// the default blob.
+function newsOgImage(raw) {
+  const src = raw.replace(/^https?:\/\//, "");
+  const fallback = encodeURIComponent("https://hidescore.com/og-image.png");
+  return `https://images.weserv.nl/?url=${encodeURIComponent(src)}&w=1200&h=630&fit=cover&a=attention&output=jpg&q=82&default=${fallback}`;
+}
+
 export default {
   async fetch(request, env) {
    try {
@@ -104,6 +117,49 @@ export default {
         .on('meta[name="twitter:title"]', new AttrSetter("content", meta.title))
         .on('meta[property="og:description"]', new AttrSetter("content", meta.desc))
         .on('meta[name="twitter:description"]', new AttrSetter("content", meta.desc))
+        .on('meta[property="og:url"]', new AttrSetter("content", url.toString()))
+        .transform(assetRes);
+    }
+
+    // --- News / highlight social preview: when a shared link carries a news
+    // item's media (image post, video poster, or YouTube id) but NO matchup
+    // card, unfurl with the actual photo / video still instead of the generic
+    // site blob. This is the fix for "links to a news pic/video show my generic
+    // blob." Producer: buildHighlightShareUrl in src/lib/shareCard.ts.
+    //   hi = image-post URL · hp = video poster · v = YouTube id
+    //   ht = headline (OG title) · hl = source label (e.g. "r/soccer")
+    // Game recaps (?c=) are handled above and KEEP their spoiler-free teams+date
+    // card on purpose; news items have no card and land here.
+    const newsImg = url.searchParams.get("hi");
+    const newsPoster = url.searchParams.get("hp");
+    const newsVid = url.searchParams.get("v");
+    const newsHead = url.searchParams.get("ht");
+    const newsLabel = url.searchParams.get("hl");
+    if (
+      (url.pathname === "/" || url.pathname === "/index.html") &&
+      (newsImg || newsPoster || newsHead || newsVid)
+    ) {
+      // Prefer the explicit image/poster; fall back to YouTube's own thumbnail
+      // for video shares that carry only a ?v= id (ESPN / NBA / MLB top videos).
+      let rawImg = newsImg || newsPoster;
+      if (!rawImg && newsVid && /^[A-Za-z0-9_-]{6,15}$/.test(newsVid)) {
+        rawImg = `https://i.ytimg.com/vi/${newsVid}/hqdefault.jpg`;
+      }
+      const image = rawImg ? newsOgImage(rawImg) : "https://hidescore.com/og-image.png";
+      const title = newsHead
+        ? (newsHead.length > 110 ? `${newsHead.slice(0, 109)}…` : newsHead)
+        : "HideScore — No Spoiler Sports";
+      const desc = newsLabel
+        ? `${newsLabel} · Watch on HideScore — catch up without seeing the score.`
+        : "Watch the highlight on HideScore — catch up without seeing the score.";
+      const assetRes = await env.ASSETS.fetch(new Request(new URL("/", url), { method: "GET" }));
+      return new HTMLRewriter()
+        .on('meta[property="og:image"]', new AttrSetter("content", image))
+        .on('meta[name="twitter:image"]', new AttrSetter("content", image))
+        .on('meta[property="og:title"]', new AttrSetter("content", title))
+        .on('meta[name="twitter:title"]', new AttrSetter("content", title))
+        .on('meta[property="og:description"]', new AttrSetter("content", desc))
+        .on('meta[name="twitter:description"]', new AttrSetter("content", desc))
         .on('meta[property="og:url"]', new AttrSetter("content", url.toString()))
         .transform(assetRes);
     }
