@@ -13,6 +13,7 @@
 
 import { createCanvas, loadImage } from "canvas";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const BASE = "https://site.api.espn.com/apis/site/v2/sports";
 // Two-team leagues only — golf/tennis highlights aren't a matchup card.
@@ -64,94 +65,229 @@ async function safeLoad(url) {
   }
 }
 
-async function renderCard(meta) {
+// Rounded-rect path helper — ctx.roundRect isn't guaranteed across node-canvas
+// versions, so trace it by hand.
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Small "hidden eye" glyph drawn as vectors — the spoiler-free cue. (node-canvas
+// can't render the 🙈 emoji in CI without a color-emoji font, so it's drawn.)
+function drawEyeOff(ctx, cx, cy, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx - 9, cy);
+  ctx.quadraticCurveTo(cx, cy - 7, cx + 9, cy);
+  ctx.quadraticCurveTo(cx, cy + 7, cx - 9, cy);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.3, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx - 11, cy + 9);
+  ctx.lineTo(cx + 11, cy - 9);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Render one spoiler-free matchup card (1200×630). Shares the design language of
+// the default site card (public/og-image.png): deep gradient + accent glow + dot
+// grid + vignette + the rounded-square H mark. Shows the two teams + date — never
+// a score or a spoiler-y thumbnail. Exported for the local preview harness.
+export async function renderCard(meta) {
   const W = 1200, H = 630;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
-  const ACCENT = "#60a5fa", MUTED = "#94a3b8", BRAND = "#3b82f6";
+  const ACCENT = "#60a5fa", MUTED = "#9ca3af", INK = "#f8fafc";
 
+  // background gradient
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, "#0f172a");
-  bg.addColorStop(1, "#0a0a0a");
+  bg.addColorStop(0, "#0b1322");
+  bg.addColorStop(1, "#070708");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
-  const glow = ctx.createRadialGradient(W / 2, 250, 40, W / 2, 250, 520);
-  glow.addColorStop(0, "rgba(96,165,250,0.10)");
+
+  // accent glow (top center) + soft lower glow
+  let glow = ctx.createRadialGradient(W / 2, 140, 30, W / 2, 140, 640);
+  glow.addColorStop(0, "rgba(37,99,235,0.32)");
+  glow.addColorStop(1, "rgba(37,99,235,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+  glow = ctx.createRadialGradient(W / 2, H + 70, 40, W / 2, H + 70, 480);
+  glow.addColorStop(0, "rgba(96,165,250,0.12)");
   glow.addColorStop(1, "rgba(96,165,250,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  // Brand mark: blue circle + white "H" (matches the site logo), then wordmark.
-  ctx.beginPath();
-  ctx.arc(84, 80, 22, 0, Math.PI * 2);
-  ctx.fillStyle = BRAND;
+  // dot-grid texture
+  ctx.fillStyle = "rgba(255,255,255,0.04)";
+  for (let y = 26; y < H; y += 26) {
+    for (let x = 26; x < W; x += 26) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // vignette
+  const vig = ctx.createRadialGradient(W / 2, H / 2, 220, W / 2, H / 2, 780);
+  vig.addColorStop(0, "rgba(0,0,0,0)");
+  vig.addColorStop(1, "rgba(0,0,0,0.55)");
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+
+  // top accent hairline
+  const hair = ctx.createLinearGradient(0, 0, W, 0);
+  hair.addColorStop(0, "rgba(37,99,235,0)");
+  hair.addColorStop(0.5, "#3b82f6");
+  hair.addColorStop(1, "rgba(37,99,235,0)");
+  ctx.fillStyle = hair;
+  ctx.fillRect(0, 0, W, 5);
+
+  // ---- header: rounded-square H mark + wordmark + spoiler-free pill ----
+  const mX = 64, mY = 50, mS = 64, mR = 16;
+  ctx.save();
+  ctx.shadowColor = "rgba(37,99,235,0.55)";
+  ctx.shadowBlur = 26;
+  ctx.shadowOffsetY = 8;
+  const mg = ctx.createLinearGradient(mX, mY, mX + mS, mY + mS);
+  mg.addColorStop(0, "#3b82f6");
+  mg.addColorStop(1, "#1d4ed8");
+  ctx.fillStyle = mg;
+  roundRect(ctx, mX, mY, mS, mS, mR);
   ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = "rgba(255,255,255,0.20)";
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, mX + 1, mY + 1, mS - 2, mS - 2, mR - 1);
+  ctx.stroke();
   ctx.fillStyle = "#fff";
-  ctx.font = `700 26px ${SANS}`;
+  ctx.font = `800 38px ${SANS}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("H", 84, 82);
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = "#f8fafc";
-  ctx.font = `700 38px ${SANS}`;
-  ctx.fillText("HideScore", 118, 92);
-  ctx.textAlign = "right";
-  ctx.fillStyle = ACCENT;
-  ctx.font = `600 26px ${SANS}`;
-  ctx.fillText("SPOILER-FREE", W - 64, 90);
+  ctx.fillText("H", mX + mS / 2, mY + mS / 2 + 2);
 
+  ctx.textAlign = "left";
+  ctx.fillStyle = INK;
+  ctx.font = `800 40px ${SANS}`;
+  ctx.fillText("HideScore", mX + mS + 22, mY + mS / 2 + 1);
+
+  ctx.font = `700 22px ${SANS}`;
+  const pTxt = "SPOILER-FREE";
+  const pTw = ctx.measureText(pTxt).width;
+  const pPad = 20, pH = 42, pW = pPad + 24 + 8 + pTw + pPad, pX = W - 64 - pW, pY = mY + (mS - pH) / 2;
+  ctx.fillStyle = "rgba(37,99,235,0.16)";
+  roundRect(ctx, pX, pY, pW, pH, pH / 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(96,165,250,0.55)";
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, pX, pY, pW, pH, pH / 2);
+  ctx.stroke();
+  drawEyeOff(ctx, pX + pPad + 10, pY + pH / 2, ACCENT);
+  ctx.fillStyle = ACCENT;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(pTxt, pX + pPad + 24 + 8, pY + pH / 2 + 1);
+
+  // ---- matchup: logos + @ + names ----
   const [awayLogo, homeLogo] = await Promise.all([safeLoad(meta.away.logo), safeLoad(meta.home.logo)]);
-  const cy = 270, box = 188, leftX = 348, rightX = W - 348;
+  const cy = 292, box = 180, leftX = 352, rightX = W - 352;
   const drawLogo = (img, cx, abbr) => {
     if (img) {
       const s = Math.min(box / img.width, box / img.height);
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.45)";
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 8;
       ctx.drawImage(img, cx - (img.width * s) / 2, cy - (img.height * s) / 2, img.width * s, img.height * s);
+      ctx.restore();
       return;
     }
-    ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, box / 2, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
     ctx.fill();
     ctx.fillStyle = "#e5e7eb";
-    ctx.font = `700 ${Math.round(box * 0.34)}px ${SANS}`;
+    ctx.font = `800 ${Math.round(box * 0.32)}px ${SANS}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText((abbr || "?").slice(0, 4).toUpperCase(), cx, cy + 2);
-    ctx.restore();
   };
   drawLogo(awayLogo, leftX, meta.away.abbr);
   drawLogo(homeLogo, rightX, meta.home.abbr);
 
+  // center "@" in a soft ring
+  ctx.beginPath();
+  ctx.arc(W / 2, cy, 38, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
   ctx.fillStyle = MUTED;
-  ctx.font = `300 64px ${SANS}`;
+  ctx.font = `400 40px ${SANS}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("@", W / 2, cy);
+  ctx.fillText("@", W / 2, cy + 2);
 
+  // team names (auto-fit to ~470px)
   const drawName = (name, x) => {
-    let size = 48;
+    let size = 46;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     do {
-      ctx.font = `700 ${size}px ${SANS}`;
-      if (ctx.measureText(name.toUpperCase()).width <= 460) break;
+      ctx.font = `800 ${size}px ${SANS}`;
+      if (ctx.measureText(name.toUpperCase()).width <= 470) break;
       size -= 2;
-    } while (size > 26);
-    ctx.fillStyle = "#f8fafc";
-    ctx.fillText(name.toUpperCase(), x, cy + box / 2 + 64);
+    } while (size > 24);
+    ctx.fillStyle = INK;
+    ctx.fillText(name.toUpperCase(), x, cy + box / 2 + 60);
   };
   drawName(meta.away.name, leftX);
   drawName(meta.home.name, rightX);
 
+  // ---- footer: date · league + Watch-the-highlight pill ----
   ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
   ctx.fillStyle = MUTED;
-  ctx.font = `500 30px ${SANS}`;
-  ctx.fillText(`${meta.dateLabel} · ${meta.league}`, W / 2, 540);
+  ctx.font = `500 29px ${SANS}`;
+  ctx.fillText(`${meta.dateLabel}  ·  ${meta.league}`, W / 2, 524);
+
+  ctx.font = `700 26px ${SANS}`;
+  const wTxt = "Watch the highlight";
+  const wTw = ctx.measureText(wTxt).width;
+  const wPad = 26, wH = 52, wW = wPad + 16 + 12 + wTw + wPad, wX = (W - wW) / 2, wY = 556;
+  ctx.fillStyle = "rgba(37,99,235,0.18)";
+  roundRect(ctx, wX, wY, wW, wH, wH / 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(96,165,250,0.5)";
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, wX, wY, wW, wH, wH / 2);
+  ctx.stroke();
+  const tX = wX + wPad, tY = wY + wH / 2;
   ctx.fillStyle = ACCENT;
-  ctx.font = `600 30px ${SANS}`;
-  ctx.fillText("▸ Watch the highlight", W / 2, 588);
+  ctx.beginPath();
+  ctx.moveTo(tX, tY - 9);
+  ctx.lineTo(tX, tY + 9);
+  ctx.lineTo(tX + 16, tY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#dbeafe";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(wTxt, tX + 16 + 12, tY + 1);
 
   return canvas.toBuffer("image/png");
 }
@@ -229,4 +365,8 @@ async function main() {
   console.log(`Rendered ${rendered} share cards to ${OUT_DIR} (dates: ${dates.join(", ")})`);
 }
 
-await main();
+// Run main() only when executed directly (node scripts/prebake-share-cards.mjs),
+// not when imported by the local preview harness.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  await main();
+}
