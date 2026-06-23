@@ -65,6 +65,28 @@ async function safeLoad(url) {
   }
 }
 
+// Mean luminance (0=black … 1=white) of a logo's opaque pixels. Dark logos
+// (Yankees navy, all-black marks) vanish on the dark card, so we detect them and
+// drop a light backing chip behind ONLY those — colorful/light logos (Red Sox
+// red ≈0.25, most others 0.3+) are left exactly as they were.
+function logoLuminance(img) {
+  const s = 48;
+  const c = createCanvas(s, s).getContext("2d");
+  const k = Math.min(s / img.width, s / img.height);
+  const w = img.width * k, h = img.height * k;
+  c.drawImage(img, (s - w) / 2, (s - h) / 2, w, h);
+  const { data } = c.getImageData(0, 0, s, s);
+  let sum = 0, n = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3];
+    if (a < 40) continue; // ignore transparent padding
+    const L = (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
+    sum += L * (a / 255);
+    n += a / 255;
+  }
+  return n > 0 ? sum / n : 1;
+}
+
 // Rounded-rect path helper — ctx.roundRect isn't guaranteed across node-canvas
 // versions, so trace it by hand.
 function roundRect(ctx, x, y, w, h, r) {
@@ -206,11 +228,33 @@ export async function renderCard(meta) {
   const cy = 292, box = 180, leftX = 352, rightX = W - 352;
   const drawLogo = (img, cx, abbr) => {
     if (img) {
-      const s = Math.min(box / img.width, box / img.height);
+      // Back dark logos with a light chip so they read on the dark card; leave
+      // colorful/light logos untouched (see logoLuminance).
+      const dark = logoLuminance(img) < 0.20;
+      if (dark) {
+        ctx.save();
+        ctx.shadowColor = "rgba(0,0,0,0.45)";
+        ctx.shadowBlur = 22;
+        ctx.shadowOffsetY = 8;
+        ctx.fillStyle = "rgba(246,248,251,0.96)";
+        ctx.beginPath();
+        ctx.arc(cx, cy, box / 2 + 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = "rgba(255,255,255,0.45)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, box / 2 + 10, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // Inset dark logos a touch so they sit inside the chip with padding.
+      const s = Math.min(box / img.width, box / img.height) * (dark ? 0.82 : 1);
       ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.45)";
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 8;
+      if (!dark) {
+        ctx.shadowColor = "rgba(0,0,0,0.45)";
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 8;
+      }
       ctx.drawImage(img, cx - (img.width * s) / 2, cy - (img.height * s) / 2, img.width * s, img.height * s);
       ctx.restore();
       return;

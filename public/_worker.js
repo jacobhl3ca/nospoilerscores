@@ -39,7 +39,7 @@ class AttrSetter {
 
 // Bump when the card design changes — appended to og:image as ?r=N so crawlers
 // and the CDN fetch a fresh URL instead of a stale cached image.
-const CARD_REV = 3;
+const CARD_REV = 4;
 
 // Wrap an arbitrary news image (Reddit photo, preview thumb, league poster, or
 // YouTube still) for use as the social-card image. Routed through weserv — the
