@@ -1662,6 +1662,16 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     const reddImageFull =
       (content.match(/https?:\/\/i\.redd\.it\/[^"'&<\s]+\.(?:jpe?g|png|gif|webp)/i) || [])[0] || null;
     if (!imageUrl && reddImageFull) imageUrl = reddImageFull;
+    // Last resort when media:thumbnail AND the i.redd.it link are both missing
+    // (an intermittent stripped RSS variant — same flakiness as ESPN's homepage —
+    // is what left r/worldcup image posts showing text-only, Jacob 6/23). The
+    // post's <img> is still in the body, but <content> is HTML-entity-encoded, so
+    // decode before matching the tag. Catches preview.redd.it / external-preview
+    // crops (galleries, crossposts) that aren't an i.redd.it URL.
+    if (!imageUrl) {
+      const bodyImg = (decodeEntities(content).match(/<img[^>]+\bsrc="([^"]+)"/) || [])[1] || "";
+      if (bodyImg) imageUrl = bodyImg;
+    }
     // redlib hands us the v.redd.it id for video posts → point straight at the
     // open HLS CDN (audio + CORS:*). Non-video posts and redlib-down runs leave
     // it null and fall back to the article link-out, exactly as before.

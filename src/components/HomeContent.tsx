@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
 import { LeagueData, Sport, Game } from "@/lib/types";
-import type { ShareCardMeta } from "@/lib/shareCard";
+import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, getActiveLeagueCandidates } from "@/lib/espn";
@@ -565,7 +565,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         const keep = new URLSearchParams();
         // Preserve any highlight deep-link params (?v= and the h*-prefixed media
         // a non-YouTube clip carries) while stripping the consumed pref params.
-        for (const k of ["v", "hs", "he", "hi", "hu", "hl", "ht", "c"]) {
+        for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c"]) {
           const val = params.get(k);
           if (val) keep.set(k, val);
         }
@@ -583,8 +583,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       const hSource = params.get("hu") || "";
       const hLabel = params.get("hl");
       const hHead = params.get("ht");
+      const hPoster = params.get("hp");
       if (sharedVideoId) {
-        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead });
+        setVideoModal({ videoId: sharedVideoId, fallbackUrl: hSource, sourceLabel: hLabel, headline: hHead, poster: hPoster });
       } else if (hStream || hEmbed || hImage) {
         setVideoModal({
           videoId: "",
@@ -592,7 +593,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           playbackUrl: hStream || null,
           embedUrl: hEmbed || null,
           imageUrl: hImage || null,
-          poster: hImage || null,
+          poster: hImage || hPoster || null,
           sourceLabel: hLabel || null,
           headline: hHead || null,
         });
@@ -726,20 +727,46 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // Scores-board slot count: 5 wide, 3 otherwise. News view stays 3-column.
   const slotCount = isWide ? 5 : 3;
 
-  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => {
-    setVideoModal({ videoId, fallbackUrl, shareCard });
-    const params = new URLSearchParams(window.location.search);
-    params.set("v", videoId);
-    window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
+  // The shareable hidescore link for a modal payload — identical to the modal's
+  // own "Copy link" (see buildHighlightShareUrl). Returned root-relative ("/?…")
+  // so (a) pushState is same-origin in every shell (prod / iOS app / localhost)
+  // and (b) it lands on "/", where the worker injects the per-share OG preview.
+  // Carries NO pref params, so copying the address bar shares the clip cleanly —
+  // the recipient keeps their own leagues — exactly like Copy link. Syncing this
+  // into the URL bar is why "copy the URL bar" == "Copy link".
+  const modalShareHref = useCallback((m: {
+    videoId?: string | null; playbackUrl?: string | null; embedUrl?: string | null;
+    imageUrl?: string | null; poster?: string | null; fallbackUrl?: string | null;
+    sourceLabel?: string | null; headline?: string | null; shareCard?: ShareCardMeta | null;
+  }) => {
+    const abs = buildHighlightShareUrl({
+      videoId: m.videoId || null,
+      playbackUrl: m.playbackUrl || null,
+      embedUrl: m.embedUrl || null,
+      imageUrl: m.imageUrl || null,
+      posterUrl: m.poster || null,
+      sourceUrl: m.fallbackUrl || null,
+      sourceLabel: m.sourceLabel || null,
+      headline: m.headline || null,
+      cardKey: m.shareCard?.key ?? null,
+    });
+    return abs ? abs.replace(/^https?:\/\/[^/]+/, "") : null;
   }, []);
 
+  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => {
+    setVideoModal({ videoId, fallbackUrl, shareCard });
+    const href = modalShareHref({ videoId, fallbackUrl, shareCard });
+    if (href) window.history.pushState({ videoModal: true }, "", href);
+  }, [modalShareHref]);
+
   // Game-card click → play a non-YouTube embed (NHL recaps via Brightcove)
-  // inside the same modal. No ?v= param: the embed URL isn't a shareable
-  // YouTube id, so we just push a history entry so Back / Esc dismiss it.
+  // inside the same modal. Pushes the shareable deep-link (?he=…&c=…) so Back /
+  // Esc dismiss it AND copying the URL bar matches Copy link (the matchup card).
   const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => {
     setVideoModal({ videoId: "", fallbackUrl, embedUrl, sourceLabel, shareCard });
-    window.history.pushState({ videoModal: true }, "", window.location.href);
-  }, []);
+    const href = modalShareHref({ embedUrl, fallbackUrl, sourceLabel, shareCard });
+    window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
+  }, [modalShareHref]);
 
   // News video card click → open the in-app modal. The card passes either a
   // prebake-matched YouTube videoId OR a direct HLS stream URL (MLB). If the
@@ -764,23 +791,32 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     sibIndex: opts.index ?? null,
   }), []);
   const playNewsVideo = useCallback<PlayHandler>((opts) => {
-    setVideoModal(optsToModal(opts));
-    if (opts.videoId) {
-      const params = new URLSearchParams(window.location.search);
-      params.set("v", opts.videoId);
-      window.history.pushState({ videoModal: true }, "", `${window.location.pathname}?${params.toString()}`);
-    }
-  }, [optsToModal]);
+    const m = optsToModal(opts);
+    setVideoModal(m);
+    // Sync the address bar to the share link for EVERY news item (pics, redd.it
+    // videos, NHL embeds — not just YouTube), so copying the URL bar previews the
+    // pic/video just like Copy link. Back/Esc still dismiss (?v-less links close
+    // via the popstate handler below, which fires on any non-?v entry).
+    const href = modalShareHref(m);
+    if (href) window.history.pushState({ videoModal: true }, "", href);
+  }, [optsToModal, modalShareHref]);
   // Page to the previous/next post in the same Reddit column without closing the
-  // modal (dir = -1 / +1). No-op past either edge.
+  // modal (dir = -1 / +1). No-op past either edge. replaceState (not push) keeps
+  // the URL bar pointed at the post you're actually looking at, without spamming
+  // history with one entry per arrow press.
   const stepVideo = useCallback((dir: number) => {
     setVideoModal((m) => {
       if (!m?.siblings || m.sibIndex == null) return m;
       const ni = m.sibIndex + dir;
       if (ni < 0 || ni >= m.siblings.length) return m;
-      return optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni });
+      const nm = optsToModal({ ...m.siblings[ni], siblings: m.siblings, index: ni });
+      if (typeof window !== "undefined") {
+        const href = modalShareHref(nm);
+        if (href) window.history.replaceState(window.history.state, "", href);
+      }
+      return nm;
     });
-  }, [optsToModal]);
+  }, [optsToModal, modalShareHref]);
 
   const closeVideoModal = useCallback(() => {
     setVideoModal(null);
@@ -1868,7 +1904,14 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <span style={{ color: "var(--text)" }}> without revealing who won</span>. The World Cup column is below.
             </p>
             <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
-              Free · no tracking cookies · also on the App Store
+              Free · no tracking cookies · also on the App Store ·{" "}
+              <a
+                href="/watch-world-cup-without-spoilers"
+                className="underline underline-offset-2"
+                style={{ color: "var(--accent)" }}
+              >
+                How to watch without spoilers →
+              </a>
             </p>
           </section>
         )}
