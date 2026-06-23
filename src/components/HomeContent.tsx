@@ -1554,6 +1554,16 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
 
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
+          jumps a Tab user past the sticky header / date nav straight to the
+          scores board. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:px-4 focus:py-2 focus:shadow-lg focus:outline-none"
+        style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }}
+      >
+        Skip to main content
+      </a>
       {ptrVisible && (
         <div
           aria-hidden="true"
@@ -1833,7 +1843,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           the 1280px breakpoint doesn't widen the still-3-column board while
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
-      <main className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full`}>
+      <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none`}>
         {/* World Cup hub framing — only on /worldcup. The WC column is already
             auto-pinned to the board below (it's an active firstPref league
             through 07-19), so this banner just sets the context for marketing
