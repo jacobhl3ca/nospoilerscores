@@ -585,6 +585,7 @@ export default function SettingsPanel({
                   onChange={(e) => { setZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setZipMsg(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); resolveZip(); } }}
                   placeholder="or enter ZIP"
+                  aria-label="US ZIP code for time zone"
                   className="w-28 px-3 py-2 rounded-lg text-sm"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 />
