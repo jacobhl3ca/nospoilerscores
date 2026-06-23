@@ -1027,6 +1027,16 @@ export type BigInningSchedule = Record<
   string,
   { timeET: string; selectionUrl?: string }
 >;
+// The MLB.TV featured-rail slug encodes the day's start time, e.g.
+// "8-00pm-et-today-mlb-big-inning-212882" → "8:00 PM". Returns null unless the
+// slug is a same-day ("-et-today") item with a leading time, in which case it
+// is the authoritative start time (see loadBigInningSchedule).
+function parseRailSlugTime(slug: string): string | null {
+  const m = slug.match(/^(\d{1,2})-(\d{2})(am|pm)-et-today/i);
+  if (!m) return null;
+  return `${parseInt(m[1], 10)}:${m[2]} ${m[3].toUpperCase()}`;
+}
+
 let bigInningPromise: Promise<BigInningSchedule> | null = null;
 export function loadBigInningSchedule(): Promise<BigInningSchedule> {
   if (!bigInningPromise) {
@@ -1055,9 +1065,20 @@ export function loadBigInningSchedule(): Promise<BigInningSchedule> {
           month: "2-digit",
           day: "2-digit",
         }).format(new Date());
+        const selectionUrl = `https://www.mlb.com/tv/shows/selection/${match.slug}`;
+        // The rail slug carries the authoritative same-day start time. Prefer it
+        // over the scraped schedule: MLB rolls today's row off the upcoming-
+        // shows page once it starts airing, so the scraper freezes today's time
+        // and never catches a later same-day change (a 9:30 PM scrape stayed put
+        // when the show actually moved to 8:00 PM). Backfill the row entirely if
+        // the schedule is missing today.
+        const slugTime = parseRailSlugTime(match.slug);
         const todayEntry = schedule[isoToday];
         if (todayEntry) {
-          todayEntry.selectionUrl = `https://www.mlb.com/tv/shows/selection/${match.slug}`;
+          todayEntry.selectionUrl = selectionUrl;
+          if (slugTime) todayEntry.timeET = slugTime;
+        } else if (slugTime) {
+          schedule[isoToday] = { timeET: slugTime, selectionUrl };
         }
       }
       return schedule;
