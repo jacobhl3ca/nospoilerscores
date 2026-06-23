@@ -1858,7 +1858,14 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <span style={{ color: "var(--text)" }}> without revealing who won</span>. The World Cup column is below.
             </p>
             <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
-              Free · no tracking cookies · also on the App Store
+              Free · no tracking cookies · also on the App Store ·{" "}
+              <a
+                href="/watch-world-cup-without-spoilers"
+                className="underline underline-offset-2"
+                style={{ color: "var(--accent)" }}
+              >
+                How to watch without spoilers →
+              </a>
             </p>
           </section>
         )}
