@@ -163,6 +163,10 @@ body {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+.ptr-spinner { animation: ptr-spin 700ms linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ptr-spinner { animation: none; }
+}
 
 @keyframes live-pulse {
   0%, 100% { opacity: 1; }
