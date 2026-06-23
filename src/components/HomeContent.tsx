@@ -1628,9 +1628,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
+              className={refreshing ? "ptr-spinner" : undefined}
               style={{
                 transform: refreshing ? undefined : `rotate(${ptrProgress * 270}deg)`,
-                animation: refreshing ? "ptr-spin 700ms linear infinite" : undefined,
               }}
             >
               <polyline points="23 4 23 10 17 10" />
