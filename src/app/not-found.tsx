@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Page Not Found | HideScore",
+  description: "Sorry, we couldn't find that page. Head back to HideScore for spoiler-free sports scores and highlights.",
+  robots: { index: false, follow: true },
+};
 
 export default function NotFound() {
   return (
