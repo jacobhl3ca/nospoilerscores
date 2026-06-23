@@ -38,13 +38,25 @@ export const metadata: Metadata = {
     url: "https://hidescore.com",
     siteName: "HideScore",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630 }],
+    images: [
+      {
+        url: "https://hidescore.com/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "HideScore — spoiler-free sports scores and highlights",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESC,
-    images: ["https://hidescore.com/og-image.png"],
+    images: [
+      {
+        url: "https://hidescore.com/og-image.png",
+        alt: "HideScore — spoiler-free sports scores and highlights",
+      },
+    ],
   },
   robots: {
     index: true,
