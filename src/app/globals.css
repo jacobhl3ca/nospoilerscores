@@ -298,3 +298,11 @@ iframe#yt-player {
   /* Hold it steady — no scale/fade churn; JS still clears it at 550ms. */
   .hs-seek-flash { animation: none; opacity: 1; transform: translateY(-50%); }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Tailwind's built-in looping utilities (loading skeletons use animate-pulse)
+     don't honor reduced-motion on their own — silence them so the rest of the
+     reduced-motion overrides above aren't undercut by a perpetually pulsing
+     skeleton or spinner. */
+  .animate-pulse, .animate-spin, .animate-bounce, .animate-ping { animation: none; }
+}
