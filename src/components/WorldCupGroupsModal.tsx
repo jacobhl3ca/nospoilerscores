@@ -424,6 +424,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
                   <button
                     key={def.key}
                     onClick={() => selectDay(def.key)}
+                    aria-pressed={active}
                     className="text-xs px-2.5 py-1 rounded-full cursor-pointer transition-colors"
                     style={{
                       background: active ? "rgb(59,130,246)" : "var(--bg-card)",
