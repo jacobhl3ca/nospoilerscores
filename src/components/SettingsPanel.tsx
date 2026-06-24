@@ -601,7 +601,7 @@ export default function SettingsPanel({
                 </button>
               </div>
               {zipMsg && (
-                <p className="text-[11px] mt-1" style={{ color: zipErr ? "rgb(239,68,68)" : "var(--text-muted)" }}>
+                <p role="status" aria-live="polite" className="text-[11px] mt-1" style={{ color: zipErr ? "rgb(239,68,68)" : "var(--text-muted)" }}>
                   {zipMsg}
                 </p>
               )}
