@@ -38,13 +38,25 @@ export const metadata: Metadata = {
     url: "https://hidescore.com",
     siteName: "HideScore",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630 }],
+    images: [
+      {
+        url: "https://hidescore.com/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "HideScore — spoiler-free sports scores and highlights",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESC,
-    images: ["https://hidescore.com/og-image.png"],
+    images: [
+      {
+        url: "https://hidescore.com/og-image.png",
+        alt: "HideScore — spoiler-free sports scores and highlights",
+      },
+    ],
   },
   robots: {
     index: true,
@@ -54,7 +66,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  // Match the browser chrome to the page background per color scheme. The
+  // default theme follows prefers-color-scheme (see the inline script below),
+  // so a light-mode device should get the light --bg (#ffffff), not a dark bar.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
   viewportFit: "cover",
 };
 
@@ -72,14 +90,14 @@ const JSON_LD = {
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
+      // No SearchAction: the site has no URL-driven search endpoint (team
+      // search is local state, never a ?q= route), so a Sitelinks Searchbox
+      // target would point nowhere — and Google retired that feature in late
+      // 2024. A broken SearchAction earns no rich result and risks a Search
+      // Console structured-data error, so the WebSite node stands on its own.
       "@type": "WebSite",
       name: "HideScore",
       url: "https://hidescore.com",
-      potentialAction: {
-        "@type": "SearchAction",
-        target: "https://hidescore.com/?q={search_term_string}",
-        "query-input": "required name=search_term_string",
-      },
     },
     {
       "@type": "MobileApplication",
@@ -108,13 +126,23 @@ export default function RootLayout({
   return (
     <html lang="en" className={geistSans.variable} suppressHydrationWarning>
       <head>
+        {/* Team & league logos load from ESPN's image CDN above the fold on
+            nearly every game card. Warm the DNS + TCP + TLS connection before
+            the parser reaches those <img> tags so the first logos paint sooner.
+            No crossOrigin — plain <img> fetches are no-cors, so a CORS-mode
+            preconnect would open a separate connection the images can't reuse.
+            dns-prefetch is the fallback for browsers that ignore preconnect. */}
+        <link rel="preconnect" href="https://a.espncdn.com" />
+        <link rel="dns-prefetch" href="https://a.espncdn.com" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#0a0a0a" />
+        {/* theme-color is emitted from the `viewport` export above (light/dark) */}
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="HideScore" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <script
           type="application/ld+json"

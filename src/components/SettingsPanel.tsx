@@ -535,6 +535,7 @@ export default function SettingsPanel({
                 <select
                   value={prefs.smartCutoffHour ?? 13}
                   onChange={(e) => updatePrefs({ smartCutoffHour: Number(e.target.value) })}
+                  aria-label="Smart switch time"
                   className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 >
@@ -567,6 +568,7 @@ export default function SettingsPanel({
               <select
                 value={prefs.timezone ?? ""}
                 onChange={(e) => updatePrefs({ timezone: e.target.value || undefined })}
+                aria-label="Time zone"
                 className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               >
@@ -585,6 +587,7 @@ export default function SettingsPanel({
                   onChange={(e) => { setZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setZipMsg(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); resolveZip(); } }}
                   placeholder="or enter ZIP"
+                  aria-label="US ZIP code for time zone"
                   className="w-28 px-3 py-2 rounded-lg text-sm"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 />
@@ -598,7 +601,7 @@ export default function SettingsPanel({
                 </button>
               </div>
               {zipMsg && (
-                <p className="text-[11px] mt-1" style={{ color: zipErr ? "rgb(239,68,68)" : "var(--text-muted)" }}>
+                <p role="status" aria-live="polite" className="text-[11px] mt-1" style={{ color: zipErr ? "rgb(239,68,68)" : "var(--text-muted)" }}>
                   {zipMsg}
                 </p>
               )}
@@ -628,6 +631,7 @@ export default function SettingsPanel({
                       const v = e.target.value;
                       setSlot(idx, v === "" ? undefined : v === "empty" ? "empty" : (v as Sport));
                     }}
+                    aria-label={`Slot ${idx + 1} league`}
                     className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
@@ -788,6 +792,7 @@ export default function SettingsPanel({
               <select
                 value={prefs.newsThirdLeague ?? ""}
                 onChange={(e) => updatePrefs({ newsThirdLeague: e.target.value ? (e.target.value as Sport) : undefined })}
+                aria-label="3rd news column league"
                 className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
               >
@@ -1124,6 +1129,7 @@ function TeamPicker({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
+        aria-label={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
         className="w-full px-3 py-1.5 rounded-md text-sm"
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
       />

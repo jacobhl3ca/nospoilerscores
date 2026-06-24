@@ -41,8 +41,11 @@ export function getEtServiceDate(): Date {
   }).formatToParts(new Date());
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
   const d = new Date(parseInt(get("year"), 10), parseInt(get("month"), 10) - 1, parseInt(get("day"), 10));
-  // Before 1 AM local → still count as the previous day.
-  if (parseInt(get("hour"), 10) < 1) d.setDate(d.getDate() - 1);
+  // Before 1 AM local → still count as the previous day. % 24 guards the "24"
+  // some ICU builds emit for midnight (same guard as etSlateYmd); without it a
+  // "24" hour skips the rollback and drifts the service day vs. the date nav
+  // between midnight and 1 AM — the exact disagreement this file prevents.
+  if (parseInt(get("hour"), 10) % 24 < 1) d.setDate(d.getDate() - 1);
   return d;
 }
 

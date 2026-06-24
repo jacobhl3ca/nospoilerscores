@@ -25,13 +25,13 @@ export const metadata: Metadata = {
     url: "https://hidescore.com/watch-world-cup-without-spoilers",
     siteName: "HideScore",
     type: "article",
-    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630 }],
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — watch the 2026 World Cup without spoilers" }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESC,
-    images: ["https://hidescore.com/og-image.png"],
+    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — watch the 2026 World Cup without spoilers" }],
   },
 };
 
@@ -206,8 +206,15 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 "@type": "Article",
                 headline: "How to Watch the 2026 World Cup Without Spoilers",
                 description: DESC,
+                // image is a recommended Article field for Google rich results;
+                // reuse the page's OG card (a real, valid 1200×630 image).
+                image: "https://hidescore.com/og-image.png",
                 author: { "@type": "Organization", name: "HideScore" },
-                publisher: { "@type": "Organization", name: "HideScore" },
+                publisher: {
+                  "@type": "Organization",
+                  name: "HideScore",
+                  logo: { "@type": "ImageObject", url: "https://hidescore.com/icon-512.png" },
+                },
                 mainEntityOfPage: "https://hidescore.com/watch-world-cup-without-spoilers",
               },
               {

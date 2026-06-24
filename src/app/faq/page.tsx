@@ -1,12 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+const FAQ_TITLE = "FAQ — Spoiler-Free Sports Scores | HideScore";
+const FAQ_DESC =
+  "Answers about HideScore: how spoiler-free scores and game ratings work, which leagues are covered, and whether HideScore is free.";
+
 export const metadata: Metadata = {
-  title: "FAQ — Spoiler-Free Sports Scores | HideScore",
-  description:
-    "Answers about HideScore: how spoiler-free scores and game ratings work, which leagues are covered, and whether HideScore is free.",
+  title: FAQ_TITLE,
+  description: FAQ_DESC,
   alternates: { canonical: "/faq" },
   robots: { index: true, follow: true },
+  openGraph: {
+    title: FAQ_TITLE,
+    description: FAQ_DESC,
+    url: "https://hidescore.com/faq",
+    siteName: "HideScore",
+    type: "website",
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — spoiler-free sports scores, frequently asked questions" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: FAQ_TITLE,
+    description: FAQ_DESC,
+    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — spoiler-free sports scores, frequently asked questions" }],
+  },
 };
 
 const FAQ: { q: string; a: string }[] = [

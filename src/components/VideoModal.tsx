@@ -978,6 +978,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       <div
         className="group relative w-full max-w-7xl" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
         style={{ zIndex: 1 }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Video player"
       >
         {/* Reddit prev/next post paging — hover-revealed ‹ › on the player edges
             (desktop only; touch has no hover). stopPropagation so the click pages
@@ -990,6 +993,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         <button
           onClick={onClose}
           className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center rounded-full text-white/60 hover:text-white transition-colors cursor-pointer"
+          aria-label="Close"
           title="Close (Esc)"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1445,6 +1449,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               <iframe
                 ref={iframeRef}
                 src={withAutoplay(embedUrl!)}
+                title={headline || "Video player"}
                 className="absolute inset-0 w-full h-full"
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowFullScreen
