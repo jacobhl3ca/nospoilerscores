@@ -1414,7 +1414,14 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
 
     // 2) Reddit-hosted image post → lightboxable full-res (imageFullUrl).
     const imgPath = (block.match(/class="post_media_image[^"]*"[^>]*href="([^"]+)"/) || [])[1] ||
-      (block.match(/<img[^>]*class="post_media_image[^"]*"[^>]*src="([^"]+)"/) || [])[1];
+      (block.match(/<img[^>]*class="post_media_image[^"]*"[^>]*src="([^"]+)"/) || [])[1] ||
+      // redlib (perennialte.ch current build) emits the anchor as
+      // <a href="/preview/pre/<id>.jpeg?..." class="post_media_image short"> — href
+      // BEFORE class, and the inner <img> carries no class — so both regexes above
+      // miss it and EVERY i.redd.it/preview image post renders image-less (the
+      // RSS image fix never runs because redlib "succeeds" first). Grab the
+      // <img src> after the post_media_image anchor, attribute-order-agnostic.
+      (block.match(/post_media_image[^>]*>\s*<img[^>]+\bsrc="([^"]+)"/) || [])[1];
     if (imgPath) {
       imageUrl = redlibMediaToReddit(imgPath);
       imageFullUrl = imageUrl;
