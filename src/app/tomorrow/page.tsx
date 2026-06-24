@@ -12,13 +12,13 @@ export const metadata: Metadata = {
     url: "https://hidescore.com/tomorrow",
     siteName: "HideScore",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630 }],
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — tomorrow's sports schedule, spoiler-free" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Tomorrow's Sports Schedule — No Spoilers | HideScore",
     description: "Tomorrow's games, spoiler-free.",
-    images: ["https://hidescore.com/og-image.png"],
+    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — tomorrow's sports schedule, spoiler-free" }],
   },
 };
 
