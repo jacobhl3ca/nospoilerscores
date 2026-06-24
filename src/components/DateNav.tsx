@@ -255,6 +255,10 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
           <button
             key={btn.date}
             onClick={() => onDateChange(btn.date)}
+            // The selected pill is styled only via background + weight; mark it
+            // aria-current="date" so screen readers announce which day is active
+            // (the visual highlight alone isn't exposed to assistive tech).
+            aria-current={isSelected ? "date" : undefined}
             className={`date-nav-btn ${btn.wide ? "min-w-[2.75rem] w-auto px-1.5 sm:px-0" : "w-[2.75rem]"} sm:w-[5.5rem] py-2 sm:py-1.5 rounded text-[12px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden`}
             style={
               isSelected
