@@ -446,7 +446,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         style={rowStyle}
       >
         {thumb}
-        <span className="min-w-0 line-clamp-5">{item.headline}</span>
+        <span className="news-title min-w-0 line-clamp-5">{item.headline}</span>
       </button>
     );
   }
@@ -460,7 +460,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       style={rowStyle}
     >
       {thumb}
-      <span className="min-w-0 line-clamp-5">{item.headline}</span>
+      <span className="news-title min-w-0 line-clamp-5">{item.headline}</span>
     </a>
   );
 }
@@ -523,7 +523,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
               {/* minHeight 2.5rem floors each row at ~2 lines so first cards
                   line up across columns; line-clamp-3 lets long headlines
                   use a third line instead of truncating. */}
-              <div className="px-3 py-2 text-sm leading-snug line-clamp-3" style={{ color: "var(--text)", minHeight: "2.5rem" }}>
+              <div className="news-title px-3 py-2 text-sm leading-snug line-clamp-3" style={{ color: "var(--text)", minHeight: "2.5rem" }}>
                 {item.headline}
               </div>
               </>

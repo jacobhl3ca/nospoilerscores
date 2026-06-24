@@ -245,6 +245,11 @@ export interface Preferences {
   // device's own zone, so the default behavior is unchanged. Applied globally
   // via setServiceTimeZone() in loadPreferences()/savePreferences().
   timezone?: string;
+  // News headlines are spoilers (a highlight's title gives away the result), so
+  // every headline in the news view + modal is blurred by default. The "Titles"
+  // eye toggle in the news header flips this on to reveal them all at once.
+  // Undefined/false = blurred (default); true = revealed.
+  revealNewsTitles?: boolean;
 }
 
 const defaults: Preferences = {
