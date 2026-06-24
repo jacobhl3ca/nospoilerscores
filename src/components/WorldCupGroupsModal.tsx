@@ -168,7 +168,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
   // below the fold in the 12-group grid. Wait a tick for the grid to render.
   useEffect(() => {
     if (!highlightGroup || view !== "groups" || !groups) return;
-    const t = setTimeout(() => hlCardRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
+    const t = setTimeout(() => hlCardRef.current?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }), 60);
     return () => clearTimeout(t);
   }, [highlightGroup, view, groups]);
 
