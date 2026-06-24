@@ -22,19 +22,23 @@
   top: calc(var(--header-h, 0px) + var(--news-titlebar-h, 0px));
 }
 
-/* News headlines are spoilers (a highlight's title gives away the result), so
-   every headline carrying .news-title is blurred by DEFAULT — no class needed,
-   so there's no un-blurred flash before JS runs. The "Titles" eye toggle in the
-   news header adds .reveal-news-titles to <html> to un-blur every headline at
-   once (columns, video strip, and the modal). */
+/* News headlines (and Reddit selftext bodies) are spoilers — they give away the
+   result — so anything carrying .news-title is blurred by DEFAULT (no class
+   needed, so there's no un-blurred flash before JS runs). Two ways to reveal:
+   the global "Headlines" toggle adds .reveal-news-titles to <html> (un-blurs
+   everything at once), or a single tap on one item adds .peek to just that one
+   (modal headline + body). cursor:pointer hints the tap-to-reveal. */
 .news-title {
   filter: blur(7px);
   transition: filter 0.15s ease;
+  cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
 }
-html.reveal-news-titles .news-title {
+html.reveal-news-titles .news-title,
+.news-title.peek {
   filter: none;
+  cursor: auto;
   user-select: auto;
   -webkit-user-select: auto;
 }
