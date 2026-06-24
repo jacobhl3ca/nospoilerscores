@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
+import { getTimeZone } from "@/lib/etDay";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
 // bout). Never shows results (finishing order / fight outcome). Highlights
@@ -17,11 +18,17 @@ function whenLabel(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
-  const now = new Date();
-  const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  // Show times in the effective time zone (the Settings "Time zone" override,
+  // or the device's own zone by default) — same as every game card. Without
+  // this, an F1/UFC tile showed kickoff times in the device's zone even when
+  // the user had picked another, disagreeing with the cards beside it.
+  const tz = getTimeZone();
+  const ymd = (date: Date) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  const sameDay = ymd(d) === ymd(new Date());
   const midnight = d.getHours() === 0 && d.getMinutes() === 0;
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const wd = d.toLocaleDateString("en-US", { weekday: "short" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
+  const wd = d.toLocaleDateString("en-US", { weekday: "short", timeZone: tz });
   if (sameDay) return midnight ? "" : time;
   return midnight ? wd : `${wd} ${time}`;
 }
@@ -164,7 +171,7 @@ export default function EventCard({
   const fullWhen = (() => {
     const d = new Date(event.date);
     if (isNaN(d.getTime())) return "";
-    return d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
   })();
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
 
