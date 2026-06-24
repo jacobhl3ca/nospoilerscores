@@ -2625,7 +2625,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           </div>
         )}
 
-        {/* Tip jar — gentle, on-brand support link (keeps HideScore free & ad-free). */}
+        {/* Tip jar — temporarily hidden 2026-06-24; restore by un-commenting:
         <a
           href="https://ko-fi.com/jacobhl"
           target="_blank"
@@ -2637,6 +2637,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           <span aria-hidden="true">☕</span>
           HideScore is free &amp; ad-free — support it
         </a>
+        */}
       </footer>
 
       {showFavToast && (
