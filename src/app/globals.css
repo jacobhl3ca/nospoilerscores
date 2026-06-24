@@ -98,6 +98,17 @@ body {
 .date-nav-arrow:focus {
   outline: none;
 }
+/* Restore a visible keyboard focus ring (WCAG 2.4.7 Focus Visible). The :focus
+   rules above suppress the default outline so mouse clicks stay clean;
+   :focus-visible re-adds an accent ring only for keyboard navigation — without
+   it, Tab-ing through the day pills and ‹/› arrows showed no focus indicator.
+   Placed after the :focus rules so it wins for keyboard focus (equal
+   specificity). Matches the accent ring used by the toggle buttons below. */
+.date-nav-btn:focus-visible,
+.date-nav-arrow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .theme-toggle {
   box-shadow: 0 0 0 0px var(--accent);
@@ -152,10 +163,20 @@ body {
 .animate-fade-in {
   animation: fade-in 0.25s ease forwards;
 }
+@media (prefers-reduced-motion: reduce) {
+  /* Show the final state instantly — no slide-up (translateY) for users who
+     ask for reduced motion. Matches the .live-clock / .hs-seek-flash overrides
+     below. */
+  .animate-fade-in { animation: none; opacity: 1; transform: none; }
+}
 
 @keyframes ptr-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+.ptr-spinner { animation: ptr-spin 700ms linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ptr-spinner { animation: none; }
 }
 
 @keyframes live-pulse {
@@ -165,6 +186,9 @@ body {
 .live-pulse-dot {
   display: inline-block;
   animation: live-pulse 1.6s ease-in-out 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-pulse-dot { animation: none; opacity: 1; }
 }
 
 /* Google-style sliding underline for live game clocks (Q4 02:05). A short
@@ -227,6 +251,14 @@ html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"] .tab-icon,
 html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
   opacity: 1;
 }
+/* Visible keyboard focus ring on the primary view tabs (WCAG 2.4.7). Without
+   it these buttons fell back to the inconsistent default browser outline;
+   :focus-visible re-uses the same accent ring as the date-nav pills/arrows and
+   monkey-toggle, and only shows for keyboard nav (not mouse/touch). */
+.view-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* Single-column board (Settings → Board layout → Single column): bigger cards.
    Scoped to the .ns-cards-lg board wrapper so the multi-column board is
@@ -284,4 +316,12 @@ iframe#yt-player {
 @media (prefers-reduced-motion: reduce) {
   /* Hold it steady — no scale/fade churn; JS still clears it at 550ms. */
   .hs-seek-flash { animation: none; opacity: 1; transform: translateY(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Tailwind's built-in looping utilities (loading skeletons use animate-pulse)
+     don't honor reduced-motion on their own — silence them so the rest of the
+     reduced-motion overrides above aren't undercut by a perpetually pulsing
+     skeleton or spinner. */
+  .animate-pulse, .animate-spin, .animate-bounce, .animate-ping { animation: none; }
 }

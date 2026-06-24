@@ -1,11 +1,28 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+const PRIVACY_TITLE = "Privacy Policy | HideScore";
+const PRIVACY_DESC = "HideScore does not collect, store, or share personal data.";
+
 export const metadata: Metadata = {
-  title: "Privacy Policy | HideScore",
-  description: "HideScore does not collect, store, or share personal data.",
+  title: PRIVACY_TITLE,
+  description: PRIVACY_DESC,
   alternates: { canonical: "/privacy" },
   robots: { index: true, follow: true },
+  openGraph: {
+    title: PRIVACY_TITLE,
+    description: PRIVACY_DESC,
+    url: "https://hidescore.com/privacy",
+    siteName: "HideScore",
+    type: "website",
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — spoiler-free sports scores, privacy policy" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: PRIVACY_TITLE,
+    description: PRIVACY_DESC,
+    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — spoiler-free sports scores, privacy policy" }],
+  },
 };
 
 export default function PrivacyPage() {

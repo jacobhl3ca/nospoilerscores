@@ -79,7 +79,7 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
       className="opacity-40 hover:opacity-70 transition-opacity flex-shrink-0"
       title={title || "View on ESPN"}>
       <img src="https://a.espncdn.com/combiner/i?img=/i/espn/misc_logos/500/espn.png&w=40&h=40"
-        alt="ESPN" className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
+        alt="ESPN" loading="lazy" width={20} height={20} className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
     </a>
   );
 }
@@ -256,7 +256,9 @@ export function CompactUpcomingCard({
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
+      onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
+      tabIndex={cardClickable ? 0 : undefined}
       title={cardClickable ? "Game details" : undefined}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -422,10 +424,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
       <button
+        type="button"
         onClick={(e) => { e.stopPropagation(); onToggleFavoriteTeam(teamId); }}
         className={`text-xs sm:text-sm leading-none transition-colors cursor-pointer ${isFav ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
         style={isFav ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
         title={isFav ? "Remove from favorites" : "Add to favorites"}
+        aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
+        aria-pressed={isFav}
       >★</button>
     ) : null;
 
@@ -455,7 +460,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
+      onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
+      tabIndex={cardClickable ? 0 : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
       {/* Lookback card: "Last played · {date}" centered on the card's top row,
@@ -859,7 +866,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   title = `FIFA world ranking: #${rank}`;
                 } else if (team.rank != null && !effectivePastDate && !isFinished) {
                   rank = team.rank;
-                  title = `${leagueLabel} standing: #${rank}`;
+                  title = `${leagueLabel || "League"} standing: #${rank}`;
                 }
                 if (rank == null) return null;
                 return (

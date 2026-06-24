@@ -275,6 +275,8 @@ export default function TeamView({
               className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ml-1.5 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
               style={favoriteTeams.includes(team.id) ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
               title={favoriteTeams.includes(team.id) ? "Remove from favorites" : "Add to favorites"}
+              aria-label={favoriteTeams.includes(team.id) ? "Remove from favorites" : "Add to favorites"}
+              aria-pressed={favoriteTeams.includes(team.id)}
             >★</button>
           </div>
         </div>

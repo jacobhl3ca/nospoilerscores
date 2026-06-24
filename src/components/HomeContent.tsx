@@ -17,6 +17,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, M
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
+import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -1589,6 +1590,16 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
 
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
+          jumps a Tab user past the sticky header / date nav straight to the
+          scores board. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:px-4 focus:py-2 focus:shadow-lg focus:outline-none"
+        style={{ background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)" }}
+      >
+        Skip to main content
+      </a>
       {ptrVisible && (
         <div
           aria-hidden="true"
@@ -1617,9 +1628,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
+              className={refreshing ? "ptr-spinner" : undefined}
               style={{
                 transform: refreshing ? undefined : `rotate(${ptrProgress * 270}deg)`,
-                animation: refreshing ? "ptr-spin 700ms linear infinite" : undefined,
               }}
             >
               <polyline points="23 4 23 10 17 10" />
@@ -1634,7 +1645,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             without pushing the settings gear off-screen. Desktop keeps the
             symmetric 1fr_auto_1fr so the view tabs sit dead-center under MLB. */}
         <div className="max-w-6xl mx-auto relative grid grid-cols-[auto_1fr_auto] sm:grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
-          <a
+          <Link
             href="/"
             onClick={(e) => {
               // In the news view, the logo acts as "back to scores" — toggle
@@ -1656,7 +1667,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <rect width="32" height="32" rx="6" className="header-logo-bg" />
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
-          </a>
+          </Link>
 
           {/* Top-row middle (col 2): the view tabs on sm+ (page-centered between
               two 1fr cols → lines up with the middle MLB column). On small screens
@@ -1709,6 +1720,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 bottom of the settings panel. */}
             {hasFavorites && (
               <button
+                type="button"
                 onClick={shareFavorites}
                 className="monkey-toggle hidden xl:flex w-10 h-10 items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
                 style={{
@@ -1717,6 +1729,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   color: showShareCopied ? "var(--accent)" : "var(--text-muted)",
                 }}
                 title={showShareCopied ? "Link copied!" : "Copy settings link"}
+                aria-label={showShareCopied ? "Link copied!" : "Copy settings link"}
               >
                 {showShareCopied ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1868,7 +1881,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           the 1280px breakpoint doesn't widen the still-3-column board while
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
-      <main className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full`}>
+      <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none`}>
         {/* World Cup hub framing — only on /worldcup. The WC column is already
             auto-pinned to the board below (it's an active firstPref league
             through 07-19), so this banner just sets the context for marketing
@@ -2540,7 +2553,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             renders identically to the old <span>) — it just carries the
             keyword copy SEO needs without changing the look. */}
         <h1 className="text-sm font-normal m-0">Catch up on games without spoilers — spoiler-free sports scores &amp; highlights.</h1>
-        <span className="inline-flex items-center gap-1">Select {/* eslint-disable-next-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
+        <span className="inline-flex items-center gap-1">Select {/* eslint-disable-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />
 
         {/* SEO content + internal links, "rolled up" under the feedback box so it
@@ -2584,7 +2597,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               className="inline-block transition-opacity hover:opacity-80"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+              <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
             </a>
             {/* Compact custom Apple-logo pill — replaced by the official badge
                 above. Kept commented in case we want the smaller text version back.
@@ -2932,7 +2945,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         type="button"
         aria-label="Scroll to top"
         title="Scroll to top"
-        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}
         className={`monkey-toggle fixed z-40 w-11 h-11 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 shadow-lg ${showScrollTop ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         style={{
           right: "2rem",

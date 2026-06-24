@@ -10,6 +10,15 @@ export const metadata: Metadata = {
     title: "Today's Sports Scores — No Spoilers | HideScore",
     description: "Today's games, spoiler-free. Ratings tell you what's worth watching.",
     url: "https://hidescore.com/today",
+    siteName: "HideScore",
+    type: "website",
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — today's sports scores, spoiler-free" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Today's Sports Scores — No Spoilers | HideScore",
+    description: "Today's games, spoiler-free. Ratings tell you what's worth watching.",
+    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — today's sports scores, spoiler-free" }],
   },
 };
 

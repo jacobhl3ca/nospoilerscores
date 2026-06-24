@@ -408,7 +408,8 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
   useIsoLayoutEffect(() => {
     setTierIdx(pickTier());
     setReady(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // exhaustive-deps does not analyze the custom useIsoLayoutEffect hook, so
+    // no directive is needed here; re-measure only when the tier set changes.
   }, [tiersKey]);
 
   useEffect(() => {

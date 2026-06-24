@@ -124,11 +124,11 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
       style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
     >
       <div className="flex items-center justify-between mb-2">
-        <button onClick={prevMonth} className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
+        <button onClick={prevMonth} aria-label="Previous month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
           {"<"}
         </button>
         <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{monthLabel}</span>
-        <button onClick={nextMonth} className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
+        <button onClick={nextMonth} aria-label="Next month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
           {">"}
         </button>
       </div>
@@ -236,6 +236,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
         onClick={goEarlier}
         className="date-nav-arrow w-8 h-8 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
+        aria-label="Go back one day"
         title="Go back one day"
       >
         ‹
@@ -270,6 +271,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
         onClick={goLater}
         className="date-nav-arrow w-8 h-8 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
+        aria-label="Go forward one day"
         title="Go forward one day"
       >
         ›

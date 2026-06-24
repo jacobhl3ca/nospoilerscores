@@ -182,6 +182,7 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
+              aria-label="Top search result highlights"
               title="Top search result highlights"
             >
               {fetchingOnClick === "search" ? (
@@ -212,6 +213,7 @@ export default function GameHighlights({
               }}
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label="NHL.com recap (~5 min)"
               title="NHL.com recap (~5 min)"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
@@ -229,6 +231,7 @@ export default function GameHighlights({
               }}
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label="NHL.com condensed game (~10 min)"
               title="NHL.com condensed game (~10 min)"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
