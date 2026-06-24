@@ -1720,6 +1720,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 bottom of the settings panel. */}
             {hasFavorites && (
               <button
+                type="button"
                 onClick={shareFavorites}
                 className="monkey-toggle hidden xl:flex w-10 h-10 items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
                 style={{
@@ -1728,6 +1729,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   color: showShareCopied ? "var(--accent)" : "var(--text-muted)",
                 }}
                 title={showShareCopied ? "Link copied!" : "Copy settings link"}
+                aria-label={showShareCopied ? "Link copied!" : "Copy settings link"}
               >
                 {showShareCopied ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
