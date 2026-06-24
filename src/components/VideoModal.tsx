@@ -188,6 +188,31 @@ const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 // Seconds skipped per ←/→ arrow press, matching YouTube's own arrow keys.
 const SEEK_STEP = 5;
 
+// A blurred text block whose individual tap reveals (or re-blurs) just itself,
+// independent of the global Headlines toggle — for the modal's spoiler-bearing
+// headline and the Reddit selftext body. stopPropagation so a peek tap doesn't
+// also dismiss the modal (the dark backdrop is what closes it).
+function PeekBlur({ tag = "div", className, style, children }: {
+  tag?: "div" | "h2" | "p";
+  className?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  const [peek, setPeek] = useState(false);
+  const Tag = tag as React.ElementType;
+  const cls = `news-title${peek ? " peek" : ""}${className ? ` ${className}` : ""}`;
+  return (
+    <Tag
+      className={cls}
+      style={style}
+      onClick={(e: React.MouseEvent) => { e.stopPropagation(); setPeek((p) => !p); }}
+      title={peek ? "Tap to blur" : "Tap to reveal"}
+    >
+      {children}
+    </Tag>
+  );
+}
+
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1045,7 +1070,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
             )}
             {headline && (
-              <h2 className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</h2>
+              <PeekBlur tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
             )}
             {(byline || published) && (
               <p className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
@@ -1053,12 +1078,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               </p>
             )}
             {body && (
-              <div
+              <PeekBlur
                 className="text-sm sm:text-base leading-relaxed mt-4 pt-4"
                 style={{ color: "var(--text)", borderTop: "1px solid var(--border)" }}
               >
                 {renderRedditBody(body)}
-              </div>
+              </PeekBlur>
             )}
           </div>
         ) : ytMode ? (
@@ -1467,7 +1492,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             {/* Only the text itself swallows the click (so selecting the headline
                 doesn't close); the surrounding whitespace strip stays a dismiss
                 target, so a tap just below the video exits instead of dead-zoning. */}
-            <p className="text-sm sm:text-base text-white/90 leading-snug select-text cursor-text" onClick={(e) => e.stopPropagation()}>{headline}</p>
+            <PeekBlur tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
             {(byline || published) && (
               <p className="text-xs text-white/40 mt-1">
                 {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
