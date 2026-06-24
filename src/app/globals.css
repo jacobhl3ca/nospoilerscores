@@ -98,6 +98,17 @@ body {
 .date-nav-arrow:focus {
   outline: none;
 }
+/* Restore a visible keyboard focus ring (WCAG 2.4.7 Focus Visible). The :focus
+   rules above suppress the default outline so mouse clicks stay clean;
+   :focus-visible re-adds an accent ring only for keyboard navigation — without
+   it, Tab-ing through the day pills and ‹/› arrows showed no focus indicator.
+   Placed after the :focus rules so it wins for keyboard focus (equal
+   specificity). Matches the accent ring used by the toggle buttons below. */
+.date-nav-btn:focus-visible,
+.date-nav-arrow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .theme-toggle {
   box-shadow: 0 0 0 0px var(--accent);
