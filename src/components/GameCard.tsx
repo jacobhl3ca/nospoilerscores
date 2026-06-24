@@ -429,10 +429,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
       <button
+        type="button"
         onClick={(e) => { e.stopPropagation(); onToggleFavoriteTeam(teamId); }}
         className={`text-xs sm:text-sm leading-none transition-colors cursor-pointer ${isFav ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
         style={isFav ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
         title={isFav ? "Remove from favorites" : "Add to favorites"}
+        aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
+        aria-pressed={isFav}
       >★</button>
     ) : null;
 
