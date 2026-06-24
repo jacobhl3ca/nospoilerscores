@@ -204,8 +204,15 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 "@type": "Article",
                 headline: "How to Watch the 2026 World Cup Without Spoilers",
                 description: DESC,
+                // image is a recommended Article field for Google rich results;
+                // reuse the page's OG card (a real, valid 1200×630 image).
+                image: "https://hidescore.com/og-image.png",
                 author: { "@type": "Organization", name: "HideScore" },
-                publisher: { "@type": "Organization", name: "HideScore" },
+                publisher: {
+                  "@type": "Organization",
+                  name: "HideScore",
+                  logo: { "@type": "ImageObject", url: "https://hidescore.com/icon-512.png" },
+                },
                 mainEntityOfPage: "https://hidescore.com/watch-world-cup-without-spoilers",
               },
               {
