@@ -90,14 +90,14 @@ const JSON_LD = {
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
+      // No SearchAction: the site has no URL-driven search endpoint (team
+      // search is local state, never a ?q= route), so a Sitelinks Searchbox
+      // target would point nowhere — and Google retired that feature in late
+      // 2024. A broken SearchAction earns no rich result and risks a Search
+      // Console structured-data error, so the WebSite node stands on its own.
       "@type": "WebSite",
       name: "HideScore",
       url: "https://hidescore.com",
-      potentialAction: {
-        "@type": "SearchAction",
-        target: "https://hidescore.com/?q={search_term_string}",
-        "query-input": "required name=search_term_string",
-      },
     },
     {
       "@type": "MobileApplication",
