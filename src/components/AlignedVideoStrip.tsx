@@ -237,7 +237,7 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
       {/* Un-clamped — subgrid sizes the row to the tallest headline at that
           row across cols, so a 3-line title in col 3 makes col 1+2 the same
           row height with align-self: start anchoring shorter cells up top. */}
-      <div className="px-3 py-2 text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
+      <div className="news-title px-3 py-2 text-xs sm:text-sm leading-snug" style={{ color: "var(--text)" }}>
         {item.headline}
       </div>
     </>
@@ -345,14 +345,14 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
         style={rowStyle}
       >
         {thumb}
-        <span className="min-w-0 line-clamp-2">{item.headline}</span>
+        <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
       </button>
     );
   }
   return (
     <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" className={rowCls} style={rowStyle}>
       {thumb}
-      <span className="min-w-0 line-clamp-2">{item.headline}</span>
+      <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
     </a>
   );
 }

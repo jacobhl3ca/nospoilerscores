@@ -22,6 +22,23 @@
   top: calc(var(--header-h, 0px) + var(--news-titlebar-h, 0px));
 }
 
+/* News headlines are spoilers (a highlight's title gives away the result), so
+   every headline carrying .news-title is blurred by DEFAULT — no class needed,
+   so there's no un-blurred flash before JS runs. The "Titles" eye toggle in the
+   news header adds .reveal-news-titles to <html> to un-blur every headline at
+   once (columns, video strip, and the modal). */
+.news-title {
+  filter: blur(7px);
+  transition: filter 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+html.reveal-news-titles .news-title {
+  filter: none;
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
 :root {
   --bg: #ffffff;
   --bg-card: #f5f5f5;

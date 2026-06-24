@@ -1045,7 +1045,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
             )}
             {headline && (
-              <h2 className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</h2>
+              <h2 className="news-title text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</h2>
             )}
             {(byline || published) && (
               <p className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
@@ -1467,7 +1467,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             {/* Only the text itself swallows the click (so selecting the headline
                 doesn't close); the surrounding whitespace strip stays a dismiss
                 target, so a tap just below the video exits instead of dead-zoning. */}
-            <p className="text-sm sm:text-base text-white/90 leading-snug select-text cursor-text" onClick={(e) => e.stopPropagation()}>{headline}</p>
+            <p className="news-title text-sm sm:text-base text-white/90 leading-snug select-text cursor-text" onClick={(e) => e.stopPropagation()}>{headline}</p>
             {(byline || published) && (
               <p className="text-xs text-white/40 mt-1">
                 {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
