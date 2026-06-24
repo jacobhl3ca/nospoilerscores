@@ -2635,6 +2635,19 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             */}
           </div>
         )}
+
+        {/* Tip jar — gentle, on-brand support link (keeps HideScore free & ad-free). */}
+        <a
+          href="https://ko-fi.com/jacobhl"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
+          style={{ color: "var(--text-muted)" }}
+          aria-label="Support HideScore on Ko-fi"
+        >
+          <span aria-hidden="true">☕</span>
+          HideScore is free &amp; ad-free — support it
+        </a>
       </footer>
 
       {showFavToast && (

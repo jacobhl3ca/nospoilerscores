@@ -171,6 +171,16 @@ export default function WatchWorldCupWithoutSpoilersPage() {
             style={{ color: "var(--text-muted)" }}
           >
             also on the App Store
+          </a>{" "}
+          ·{" "}
+          <a
+            href="https://ko-fi.com/jacobhl"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+            style={{ color: "var(--text-muted)" }}
+          >
+            support it ☕
           </a>
         </p>
       </div>
