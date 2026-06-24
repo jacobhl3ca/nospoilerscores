@@ -251,6 +251,14 @@ html[data-view="scores-rated"] .view-tab[data-tab="scores-rated"] .tab-icon,
 html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
   opacity: 1;
 }
+/* Visible keyboard focus ring on the primary view tabs (WCAG 2.4.7). Without
+   it these buttons fell back to the inconsistent default browser outline;
+   :focus-visible re-uses the same accent ring as the date-nav pills/arrows and
+   monkey-toggle, and only shows for keyboard nav (not mouse/touch). */
+.view-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* Single-column board (Settings → Board layout → Single column): bigger cards.
    Scoped to the .ns-cards-lg board wrapper so the multi-column board is
