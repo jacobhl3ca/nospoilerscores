@@ -126,6 +126,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={geistSans.variable} suppressHydrationWarning>
       <head>
+        {/* Team & league logos load from ESPN's image CDN above the fold on
+            nearly every game card. Warm the DNS + TCP + TLS connection before
+            the parser reaches those <img> tags so the first logos paint sooner.
+            No crossOrigin — plain <img> fetches are no-cors, so a CORS-mode
+            preconnect would open a separate connection the images can't reuse.
+            dns-prefetch is the fallback for browsers that ignore preconnect. */}
+        <link rel="preconnect" href="https://a.espncdn.com" />
+        <link rel="dns-prefetch" href="https://a.espncdn.com" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
