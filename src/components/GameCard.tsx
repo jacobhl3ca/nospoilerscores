@@ -880,7 +880,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   title = `FIFA world ranking: #${rank}`;
                 } else if (team.rank != null && !effectivePastDate && !isFinished) {
                   rank = team.rank;
-                  title = `${leagueLabel} standing: #${rank}`;
+                  title = `${leagueLabel || "League"} standing: #${rank}`;
                 }
                 if (rank == null) return null;
                 return (
