@@ -171,8 +171,9 @@ export default function WatchWorldCupWithoutSpoilersPage() {
             style={{ color: "var(--text-muted)" }}
           >
             also on the App Store
-          </a>{" "}
-          ·{" "}
+          </a>
+          {/* tip jar hidden for now 2026-06-24; restore by un-commenting:
+          {" "}·{" "}
           <a
             href="https://ko-fi.com/jacobhl"
             target="_blank"
@@ -182,6 +183,7 @@ export default function WatchWorldCupWithoutSpoilersPage() {
           >
             support it ☕
           </a>
+          */}
         </p>
       </div>
 
