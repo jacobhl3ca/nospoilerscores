@@ -146,6 +146,7 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              aria-label={`${officialChannel} highlights`}
               title={`${officialChannel} highlights`}
             >
               {fetchingOnClick === "official" ? (
