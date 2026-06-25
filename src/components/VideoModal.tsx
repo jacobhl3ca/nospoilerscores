@@ -201,12 +201,23 @@ function PeekBlur({ tag = "div", className, style, children }: {
   const [peek, setPeek] = useState(false);
   const Tag = tag as React.ElementType;
   const cls = `news-title${peek ? " peek" : ""}${className ? ` ${className}` : ""}`;
+  const toggle = () => setPeek((p) => !p);
   return (
     <Tag
       className={cls}
       style={style}
-      onClick={(e: React.MouseEvent) => { e.stopPropagation(); setPeek((p) => !p); }}
+      // Operable by pointer AND keyboard — without role/tabIndex/onKeyDown this
+      // clickable element would be invisible to keyboard and screen-reader users
+      // (WCAG 2.1.1). aria-pressed mirrors the blur state for assistive tech.
+      role="button"
+      tabIndex={0}
+      aria-pressed={peek}
+      onClick={(e: React.MouseEvent) => { e.stopPropagation(); toggle(); }}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); toggle(); }
+      }}
       title={peek ? "Tap to blur" : "Tap to reveal"}
+      aria-label={peek ? "Hide spoiler text" : "Reveal spoiler text"}
     >
       {children}
     </Tag>
