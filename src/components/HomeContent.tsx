@@ -2593,11 +2593,16 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       </main>
 
       <footer className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-5 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
-        {/* This is the page's only <h1>. Styled to match the footer text
-            (Tailwind's preflight makes headings inherit size/weight, so it
-            renders identically to the old <span>) — it just carries the
-            keyword copy SEO needs without changing the look. */}
-        <h1 className="text-sm font-normal m-0">Catch up on games without spoilers — spoiler-free sports scores &amp; highlights.</h1>
+        {/* Normally the page's only <h1>. On /worldcup the banner above already
+            provides that route's <h1>, so demote this one to <h2> there — keeping
+            exactly one <h1> per page instead of two. Styled to match the footer
+            text (Tailwind's preflight makes headings inherit size/weight, so it
+            renders identically to the old <span> regardless of level) — it just
+            carries the keyword copy SEO needs without changing the look. */}
+        {(() => {
+          const Heading = worldCupHub ? "h2" : "h1";
+          return <Heading className="text-sm font-normal m-0">Catch up on games without spoilers — spoiler-free sports scores &amp; highlights.</Heading>;
+        })()}
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />
 
