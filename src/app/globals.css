@@ -167,6 +167,14 @@ body {
     outline: 2px solid var(--accent);
   }
 }
+/* Visible keyboard focus ring on the theme toggle (WCAG 2.4.7). The base rule
+   above replaces the browser outline with a 1px border and the accent ring is
+   gated behind (hover: hover), so Tab-ing to this button showed no focus
+   indicator on keyboard nav. Re-use the same accent ring as the date-nav pills
+   and view tabs — shows only for keyboard focus, never mouse/touch. */
+.monkey-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+}
 
 
 .highlight-btn {
