@@ -49,7 +49,11 @@ export default function GlobalError({
               Try again
             </button>
             {/* Plain anchor (full reload) — after a root-layout failure a clean
-                navigation is safer than client-side routing. */}
+                navigation is safer than client-side routing, and next/link's
+                router context isn't guaranteed here since this REPLACES the root
+                layout. The no-html-link-for-pages rule is a false positive in a
+                global-error boundary, so it's disabled for this line. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a className="ge-btn ge-btn--secondary" href="/">
               Back to HideScore
             </a>
