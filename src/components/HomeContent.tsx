@@ -507,6 +507,19 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
+  // Escape closes the ratings/news explainer warnings, matching their existing
+  // backdrop-tap dismissal and the rest of the app's modals (GameDetailModal,
+  // VideoModal, WorldCupGroupsModal all close on Escape).
+  useEffect(() => {
+    if (!showRatingsExplainer && !showNewsExplainer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setShowRatingsExplainer(false);
+      setShowNewsExplainer(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showRatingsExplainer, showNewsExplainer]);
   // First-run league picker (shown once, only on a brand-new install — see the
   // mount effect). pickerSel is the ordered set of chosen leagues (max 3, mapped
   // to slots 1/2/3 on confirm); firstRunRef captures "no stored prefs" at mount
