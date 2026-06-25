@@ -2712,6 +2712,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 onClick={dismissFavToast}
                 className="text-xs shrink-0 mt-0.5 cursor-pointer"
                 style={{ color: "var(--text-muted)" }}
+                aria-label="Dismiss"
               >
                 {"\u2715"}
               </button>
