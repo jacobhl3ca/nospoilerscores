@@ -2367,7 +2367,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
-              selectedThirdLeague: selectedSlotLeagues[idx],
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
               showSwapChevron: !prefs.hideLeagueChevrons,
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
