@@ -2753,6 +2753,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowRatingsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ratings-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
             style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
             onClick={(e) => e.stopPropagation()}
@@ -2764,7 +2767,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
-            <h3 className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>Show Game Ratings?</h3>
+            <h3 id="ratings-explainer-title" className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>Show Game Ratings?</h3>
             {/* Previous wording (finished games only):
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
               This will reveal how competitive each game was. Ratings are based on how close the game was —<br />not who won — but they can hint at the outcome.
@@ -2832,6 +2835,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowNewsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="news-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
             style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
             onClick={(e) => e.stopPropagation()}
@@ -2843,7 +2849,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
-            <h3 className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>
+            <h3 id="news-explainer-title" className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>
               Warning
               <br />
               FULL OF SPOILERS
@@ -2886,6 +2892,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={skipLeaguePicker}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="league-picker-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
             style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
             onClick={(e) => e.stopPropagation()}
@@ -2896,7 +2905,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
               </svg>
             </div>
-            <h3 className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
+            <h3 id="league-picker-title" className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
             <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
               Choose up to <strong>3 leagues</strong> for your score columns.<br />You can change these anytime in Settings.
             </p>
