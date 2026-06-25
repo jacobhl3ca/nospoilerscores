@@ -23,7 +23,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: "var(--bg)", color: "var(--text)" }}>
+    <main className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: "var(--bg)", color: "var(--text)" }}>
       <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
       <p className="mb-5" style={{ color: "var(--text-muted)" }}>
         That didn&apos;t load right. Try again — your scores are still hidden.
@@ -44,6 +44,6 @@ export default function Error({
           Back to HideScore
         </Link>
       </div>
-    </div>
+    </main>
   );
 }
