@@ -1500,6 +1500,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
+                aria-label={headline || "Video player"}
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (
