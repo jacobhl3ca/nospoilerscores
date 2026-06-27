@@ -321,6 +321,7 @@ export default function TeamView({
                 <button
                   type="button"
                   onClick={() => setPastLimit((n) => n + PAGE_SIZE)}
+                  aria-label="Show more recent games"
                   className="py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
@@ -352,6 +353,7 @@ export default function TeamView({
                 <button
                   type="button"
                   onClick={() => setUpcomingLimit((n) => n + PAGE_SIZE)}
+                  aria-label="Show more upcoming games"
                   className="py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
