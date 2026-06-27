@@ -1178,6 +1178,17 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     setShowLeaguePicker(false);
   };
 
+  // Escape closes the first-run league picker too — same as tapping its
+  // backdrop (both fall back to default leagues). Brings it in line with the
+  // ratings/news explainers and every other modal in the app, which all
+  // dismiss on Escape.
+  useEffect(() => {
+    if (!showLeaguePicker) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") skipLeaguePicker(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showLeaguePicker, skipLeaguePicker]);
+
   // Homepage switcher options = the active leagues minus the ones the user
   // removed in Settings (hiddenLeagues). Drives the header dropdown/arrow
   // cycling, the news swap menus, and the + button's picks. Label lookups and
