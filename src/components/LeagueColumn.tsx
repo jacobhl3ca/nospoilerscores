@@ -1126,6 +1126,8 @@ export default function LeagueColumn({
                   className="cursor-pointer transition-colors hover:opacity-80"
                   style={{ color: "var(--text)" }}
                   title="Switch league"
+                  aria-haspopup="menu"
+                  aria-expanded={swapOpen}
                 >
                   <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
                     {league.label}
