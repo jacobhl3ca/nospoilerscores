@@ -116,8 +116,17 @@ export function NewsColumnTitle({
         setSwapOpen(false);
       }
     };
+    // Keyboard parity with the app's other dropdowns/modals: Escape dismisses
+    // the popup the swap button promises via aria-haspopup="menu".
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSwapOpen(false);
+    };
     document.addEventListener("mousedown", onAway);
-    return () => document.removeEventListener("mousedown", onAway);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onAway);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [swapOpen]);
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
   return (

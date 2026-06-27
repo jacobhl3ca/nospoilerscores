@@ -271,10 +271,19 @@ export default function GameDetailModal({
             <div className="text-[10px] uppercase tracking-wide mb-0.5">
               Open air · peak {rainWindow.peak}% rain{rainWindow.peakLabel ? ` at ${rainWindow.peakLabel}` : ""}
             </div>
-            <div className="flex items-end gap-[2px] h-6">
+            {/* The bars encode each hour's rain chance by height/opacity alone —
+                the per-bar `title` only surfaces on mouse hover, so screen-reader
+                and touch users got nothing. role="img" + a spelled-out aria-label
+                exposes the full hourly breakdown as a single accessible figure. */}
+            <div
+              className="flex items-end gap-[2px] h-6"
+              role="img"
+              aria-label={`Rain chance by hour: ${rainWindow.hours.map((t) => `${t.label} ${t.rainPct}%`).join(", ")}`}
+            >
               {rainWindow.hours.map((t) => (
                 <div
                   key={t.hour24}
+                  aria-hidden="true"
                   title={`${t.label} · ${t.rainPct}% rain`}
                   className="flex-1 rounded-sm"
                   style={{
@@ -285,7 +294,7 @@ export default function GameDetailModal({
                 />
               ))}
             </div>
-            <div className="flex gap-[2px] mt-0.5">
+            <div className="flex gap-[2px] mt-0.5" aria-hidden="true">
               {rainWindow.hours.map((t) => {
                 const duringPlay = t.hour24 >= rainWindow.playStart && t.hour24 <= rainWindow.playEnd;
                 return (
@@ -299,7 +308,7 @@ export default function GameDetailModal({
                 );
               })}
             </div>
-            <div className="text-[9px] mt-0.5" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+            <div className="text-[9px] mt-0.5" style={{ color: "var(--text-muted)", opacity: 0.7 }} aria-hidden="true">
               Highlighted hours are during the game.
             </div>
           </div>

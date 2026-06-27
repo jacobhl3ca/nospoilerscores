@@ -507,6 +507,19 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
+  // Escape closes the ratings/news explainer warnings, matching their existing
+  // backdrop-tap dismissal and the rest of the app's modals (GameDetailModal,
+  // VideoModal, WorldCupGroupsModal all close on Escape).
+  useEffect(() => {
+    if (!showRatingsExplainer && !showNewsExplainer) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setShowRatingsExplainer(false);
+      setShowNewsExplainer(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showRatingsExplainer, showNewsExplainer]);
   // First-run league picker (shown once, only on a brand-new install — see the
   // mount effect). pickerSel is the ordered set of chosen leagues (max 3, mapped
   // to slots 1/2/3 on confirm); firstRunRef captures "no stored prefs" at mount
@@ -1778,6 +1791,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   }}
                   title="Filter news"
                   aria-label="Filter news"
+                  aria-haspopup="true"
+                  aria-expanded={newsFilterOpen}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
@@ -2354,7 +2369,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
-              selectedThirdLeague: selectedSlotLeagues[idx],
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
               showSwapChevron: !prefs.hideLeagueChevrons,
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
@@ -2593,11 +2607,16 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       </main>
 
       <footer className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-5 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
-        {/* This is the page's only <h1>. Styled to match the footer text
-            (Tailwind's preflight makes headings inherit size/weight, so it
-            renders identically to the old <span>) — it just carries the
-            keyword copy SEO needs without changing the look. */}
-        <h1 className="text-sm font-normal m-0">Catch up on games without spoilers — spoiler-free sports scores &amp; highlights.</h1>
+        {/* Normally the page's only <h1>. On /worldcup the banner above already
+            provides that route's <h1>, so demote this one to <h2> there — keeping
+            exactly one <h1> per page instead of two. Styled to match the footer
+            text (Tailwind's preflight makes headings inherit size/weight, so it
+            renders identically to the old <span> regardless of level) — it just
+            carries the keyword copy SEO needs without changing the look. */}
+        {(() => {
+          const Heading = worldCupHub ? "h2" : "h1";
+          return <Heading className="text-sm font-normal m-0">Catch up on games without spoilers — spoiler-free sports scores &amp; highlights.</Heading>;
+        })()}
         <span className="inline-flex items-center gap-1">Select {/* eslint-disable-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
         <FeedbackBox />
 
@@ -2712,6 +2731,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 onClick={dismissFavToast}
                 className="text-xs shrink-0 mt-0.5 cursor-pointer"
                 style={{ color: "var(--text-muted)" }}
+                aria-label="Dismiss"
               >
                 {"\u2715"}
               </button>
@@ -2734,6 +2754,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowRatingsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ratings-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
             style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
             onClick={(e) => e.stopPropagation()}
@@ -2745,7 +2768,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
-            <h3 className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>Show Game Ratings?</h3>
+            <h3 id="ratings-explainer-title" className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>Show Game Ratings?</h3>
             {/* Previous wording (finished games only):
             <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
               This will reveal how competitive each game was. Ratings are based on how close the game was —<br />not who won — but they can hint at the outcome.
@@ -2813,6 +2836,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowNewsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="news-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
             style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
             onClick={(e) => e.stopPropagation()}
@@ -2824,7 +2850,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
-            <h3 className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>
+            <h3 id="news-explainer-title" className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>
               Warning
               <br />
               FULL OF SPOILERS
@@ -2867,6 +2893,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={skipLeaguePicker}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="league-picker-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
             style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
             onClick={(e) => e.stopPropagation()}
@@ -2877,7 +2906,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
               </svg>
             </div>
-            <h3 className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
+            <h3 id="league-picker-title" className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
             <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
               Choose up to <strong>3 leagues</strong> for your score columns.<br />You can change these anytime in Settings.
             </p>
