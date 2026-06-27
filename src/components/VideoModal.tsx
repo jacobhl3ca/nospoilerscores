@@ -509,19 +509,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
   }, [muted, volume]);
 
-  // Drag/click the volume slider. Sets the YT player volume (0–100) and
+  // Apply a volume level (0–100) from any source — shared by the pointer
+  // handler and the keyboard handler below. Sets the YT player volume and
   // mutes/un-mutes at the extremes so the icon + level always agree.
-  const setVolFromClientX = useCallback((clientX: number) => {
-    const el = volRef.current;
+  const setVolLevel = useCallback((level: number) => {
+    const v = Math.round(Math.max(0, Math.min(100, level)));
     const p = playerRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.width <= 0) return;
-    const v = Math.round(Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 100);
     p?.setVolume?.(v);
     if (v > 0) { p?.unMute?.(); setMuted(false); } else { p?.mute?.(); setMuted(true); }
     setVolume(v);
   }, []);
+
+  // Drag/click the volume slider.
+  const setVolFromClientX = useCallback((clientX: number) => {
+    const el = volRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0) return;
+    setVolLevel(Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 100);
+  }, [setVolLevel]);
 
   // Toggle fullscreen. For YouTube we expand the WRAPPER (so the spoiler mask
   // and control bar ride along and the title stays hidden); native element
@@ -1374,6 +1380,21 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   tabIndex={0}
                   title="Volume"
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    // Make the focusable role="slider" actually keyboard-operable
+                    // (WCAG 2.1.1): ←/↓ lower and →/↑ raise by 5, Home/End jump to
+                    // mute/full. Without this the slider takes focus but ignores keys.
+                    const cur = muted ? 0 : volume;
+                    let next: number | null = null;
+                    if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = cur - 5;
+                    else if (e.key === "ArrowRight" || e.key === "ArrowUp") next = cur + 5;
+                    else if (e.key === "Home") next = 0;
+                    else if (e.key === "End") next = 100;
+                    if (next === null) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setVolLevel(next);
+                  }}
                   onPointerDown={(e) => { e.stopPropagation(); draggingVolRef.current = true; (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); setVolFromClientX(e.clientX); }}
                   onPointerMove={(e) => { if (draggingVolRef.current) setVolFromClientX(e.clientX); }}
                   onPointerUp={(e) => { e.stopPropagation(); draggingVolRef.current = false; }}
