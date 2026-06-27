@@ -153,7 +153,7 @@ export default function GameHighlights({
                 <span className="text-[10px]">Loading...</span>
               ) : (
                 <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                   <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : game.sport.toUpperCase()}</span>
                 </>
               )}
@@ -189,7 +189,7 @@ export default function GameHighlights({
               {fetchingOnClick === "search" ? (
                 <span className="text-[10px]">Loading...</span>
               ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               )}
             </button>
           )}
@@ -217,7 +217,7 @@ export default function GameHighlights({
               aria-label="NHL.com recap (~5 min)"
               title="NHL.com recap (~5 min)"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               <span className="text-[10px] font-medium">5<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
@@ -235,7 +235,7 @@ export default function GameHighlights({
               aria-label="NHL.com condensed game (~10 min)"
               title="NHL.com condensed game (~10 min)"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               <span className="text-[10px] font-medium">10<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
