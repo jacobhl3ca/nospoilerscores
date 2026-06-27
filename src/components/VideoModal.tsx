@@ -201,12 +201,23 @@ function PeekBlur({ tag = "div", className, style, children }: {
   const [peek, setPeek] = useState(false);
   const Tag = tag as React.ElementType;
   const cls = `news-title${peek ? " peek" : ""}${className ? ` ${className}` : ""}`;
+  const toggle = () => setPeek((p) => !p);
   return (
     <Tag
       className={cls}
       style={style}
-      onClick={(e: React.MouseEvent) => { e.stopPropagation(); setPeek((p) => !p); }}
+      // Operable by pointer AND keyboard — without role/tabIndex/onKeyDown this
+      // clickable element would be invisible to keyboard and screen-reader users
+      // (WCAG 2.1.1). aria-pressed mirrors the blur state for assistive tech.
+      role="button"
+      tabIndex={0}
+      aria-pressed={peek}
+      onClick={(e: React.MouseEvent) => { e.stopPropagation(); toggle(); }}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); toggle(); }
+      }}
       title={peek ? "Tap to blur" : "Tap to reveal"}
+      aria-label={peek ? "Hide spoiler text" : "Reveal spoiler text"}
     >
       {children}
     </Tag>
@@ -498,19 +509,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
   }, [muted, volume]);
 
-  // Drag/click the volume slider. Sets the YT player volume (0–100) and
+  // Apply a volume level (0–100) from any source — shared by the pointer
+  // handler and the keyboard handler below. Sets the YT player volume and
   // mutes/un-mutes at the extremes so the icon + level always agree.
-  const setVolFromClientX = useCallback((clientX: number) => {
-    const el = volRef.current;
+  const setVolLevel = useCallback((level: number) => {
+    const v = Math.round(Math.max(0, Math.min(100, level)));
     const p = playerRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    if (r.width <= 0) return;
-    const v = Math.round(Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 100);
     p?.setVolume?.(v);
     if (v > 0) { p?.unMute?.(); setMuted(false); } else { p?.mute?.(); setMuted(true); }
     setVolume(v);
   }, []);
+
+  // Drag/click the volume slider.
+  const setVolFromClientX = useCallback((clientX: number) => {
+    const el = volRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0) return;
+    setVolLevel(Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 100);
+  }, [setVolLevel]);
 
   // Toggle fullscreen. For YouTube we expand the WRAPPER (so the spoiler mask
   // and control bar ride along and the title stays hidden); native element
@@ -1363,6 +1380,21 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   tabIndex={0}
                   title="Volume"
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    // Make the focusable role="slider" actually keyboard-operable
+                    // (WCAG 2.1.1): ←/↓ lower and →/↑ raise by 5, Home/End jump to
+                    // mute/full. Without this the slider takes focus but ignores keys.
+                    const cur = muted ? 0 : volume;
+                    let next: number | null = null;
+                    if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = cur - 5;
+                    else if (e.key === "ArrowRight" || e.key === "ArrowUp") next = cur + 5;
+                    else if (e.key === "Home") next = 0;
+                    else if (e.key === "End") next = 100;
+                    if (next === null) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setVolLevel(next);
+                  }}
                   onPointerDown={(e) => { e.stopPropagation(); draggingVolRef.current = true; (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); setVolFromClientX(e.clientX); }}
                   onPointerMove={(e) => { if (draggingVolRef.current) setVolFromClientX(e.clientX); }}
                   onPointerUp={(e) => { e.stopPropagation(); draggingVolRef.current = false; }}
@@ -1468,6 +1500,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
+                aria-label={headline || "Video player"}
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (

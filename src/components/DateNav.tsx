@@ -144,16 +144,26 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
         ))}
         {cells.map((day, i) => {
           if (day === null) return <div key={`empty-${i}`} />;
-          const dateStr = toYYYYMMDD(new Date(year, month, day));
+          const cellDate = new Date(year, month, day);
+          const dateStr = toYYYYMMDD(cellDate);
           const isSelected = dateStr === selectedDate;
           const isToday = dateStr === todayStr;
           const dow = (i % 7); // 0=Mon ... 6=Sun
           const isWeekend = dow >= 5;
+          // The visible label is just the day number — give assistive tech the
+          // full date plus the today/selected state that's otherwise conveyed
+          // only by the underline/background styling it can't see.
+          const fullDate = cellDate.toLocaleDateString("en-US", {
+            weekday: "long", month: "long", day: "numeric", year: "numeric",
+          });
+          const ariaLabel = isToday ? `${fullDate} (today)` : fullDate;
 
           return (
             <button
               key={dateStr}
               onClick={() => { onDateChange(dateStr); onClose(); }}
+              aria-label={ariaLabel}
+              aria-current={isSelected ? "date" : undefined}
               className="w-8 h-8 flex items-center justify-center rounded-full text-xs cursor-pointer transition-colors"
               style={
                 isSelected
@@ -255,6 +265,10 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
           <button
             key={btn.date}
             onClick={() => onDateChange(btn.date)}
+            // The selected pill is styled only via background + weight; mark it
+            // aria-current="date" so screen readers announce which day is active
+            // (the visual highlight alone isn't exposed to assistive tech).
+            aria-current={isSelected ? "date" : undefined}
             className={`date-nav-btn ${btn.wide ? "min-w-[2.75rem] w-auto px-1.5 sm:px-0" : "w-[2.75rem]"} sm:w-[5.5rem] py-2 sm:py-1.5 rounded text-[12px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden`}
             style={
               isSelected

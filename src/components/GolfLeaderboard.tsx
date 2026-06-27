@@ -593,6 +593,11 @@ export default function GolfLeaderboard({
                 }}
                 className="highlight-btn flex items-center justify-center py-1.5 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
                 style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+                aria-label={
+                  isMainSlot
+                    ? `ESPN — Round ${completedRounds} highlights`
+                    : `Round ${completedRounds} highlights — more on YouTube`
+                }
                 title={
                   isMainSlot
                     ? `ESPN — Round ${completedRounds} highlights`

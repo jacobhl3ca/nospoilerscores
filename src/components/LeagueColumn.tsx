@@ -37,7 +37,6 @@ interface LeagueColumnProps {
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
   // 3rd league slot swapping
   swappableOptions?: { sport: Sport; label: string }[];
-  selectedThirdLeague?: Sport | "empty";
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
@@ -572,7 +571,6 @@ export default function LeagueColumn({
   section,
   showFinalSeparator,
   swappableOptions,
-  selectedThirdLeague,
   onSwapLeague,
   showSwapChevron,
   switcherMode,
@@ -1128,6 +1126,8 @@ export default function LeagueColumn({
                   className="cursor-pointer transition-colors hover:opacity-80"
                   style={{ color: "var(--text)" }}
                   title="Switch league"
+                  aria-haspopup="menu"
+                  aria-expanded={swapOpen}
                 >
                   <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
                     {league.label}
