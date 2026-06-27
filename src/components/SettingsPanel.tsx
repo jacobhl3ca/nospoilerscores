@@ -877,6 +877,11 @@ export default function SettingsPanel({
                     >
                       {shareCopied ? "Copied!" : "Save settings link"}
                     </button>
+                    {nothingToShare && (
+                      <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
+                        Pick a favorite team or league first — then this saves a link that restores your setup.
+                      </p>
+                    )}
                     {/* Real <a> so the browser treats it as a draggable link —
                         drag it onto the bookmarks/favorites bar and the saved
                         bookmark restores this exact setup (Jacob 6/11 —
@@ -954,9 +959,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-1">
-        <label className="text-sm font-medium" style={{ color: "var(--text)" }}>{label}</label>
-        {hint && <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{hint}</span>}
+      {/* Stack the hint UNDER the label on phones — the old side-by-side
+          (label | hint) crushed long hints into a narrow right column that
+          clipped and overlapped on mobile (esp. the player rows). sm+ keeps
+          them on one row, hint right-aligned, to preserve the dense desktop look. */}
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3 mb-1">
+        <label className="text-sm font-medium shrink-0" style={{ color: "var(--text)" }}>{label}</label>
+        {hint && <span className="text-[11px] leading-snug sm:text-right" style={{ color: "var(--text-muted)" }}>{hint}</span>}
       </div>
       {children}
     </div>
