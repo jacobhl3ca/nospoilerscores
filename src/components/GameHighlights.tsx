@@ -8,6 +8,17 @@ import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo } from "@/lib/youtube";
 
+// Per-league buffer (hrs from game start) before showing the highlight button,
+// and regulation period counts for the OT-extra calc below. Both are constant
+// lookup tables with no per-render input, so they live at module scope rather
+// than being re-allocated on every render of every game card.
+// Buffers based on actual YouTube upload-timing research (April 2026).
+const highlightBufferHours: Record<string, number> = {
+  nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, mlb: 5,
+  nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
+};
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 2, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
+
 // Shared highlight buttons for a finished game — the official-channel + top-
 // search YouTube clips and (NHL only) the NHL.com recap / condensed videos.
 // Extracted from GameCard so the score card AND the details popup render the
@@ -42,13 +53,6 @@ export default function GameHighlights({
 
   const isFinished = game.state === "post";
 
-  // Per-league buffer (hrs from game start) before showing highlight button.
-  // Based on actual YouTube upload timing research (April 2026).
-  const highlightBufferHours: Record<string, number> = {
-    nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, mlb: 5,
-    nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
-  };
-  const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 2, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
