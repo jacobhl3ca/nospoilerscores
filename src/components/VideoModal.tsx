@@ -1435,6 +1435,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       key={`m${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
                       className="flex lg:hidden items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
+                      aria-label={`Jump to ${p}%`}
                       title={`Jump to ${p}%`}
                     >
                       {p}%
@@ -1447,6 +1448,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       key={`d${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
                       className={`hidden lg:flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
+                      aria-label={`Jump to ${p}%`}
                       title={`Jump to ${p}%`}
                     >
                       {p}%
