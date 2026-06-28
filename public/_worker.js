@@ -520,6 +520,24 @@ export default {
             /\bextended\b/i.test(titleLower) ||
             /\bfull[\s-]?game\b/i.test(titleLower);
 
+          // MLB single-play clip demote — the official "MLB" channel
+          // posts lots of one-play shorts ("Tsung-Che Cheng collects
+          // his first MLB hit! | MLB Highlights (Red Sox vs. Yankees)")
+          // that carry both team names and so win the channelTeams tier,
+          // beating the channel's actual full-game recap. Demote any
+          // from-MLB-channel highlight that ISN'T a real game recap
+          // (no "game/full/condensed/recap" phrase and no matching date
+          // token) below the extended tier so the full-game recap wins
+          // the MLB channel button. Gated to the MLB channel so no other
+          // league's ranking changes.
+          const looksLikeFullRecap =
+            /\b(game highlights|full game|condensed|recap|full match)\b/i.test(titleLower);
+          const isMlbChannelClip =
+            preferChannelLower === "mlb" &&
+            !isExtended &&
+            !looksLikeFullRecap &&
+            !(titleHasExplicitDate && titleDateMatches);
+
           // Recap-keyword detection — titles with "recap", "all
           // highlights", or "full round" are strongly biased toward
           // full-day broadcast recaps (vs player reels which rarely
@@ -640,6 +658,15 @@ export default {
           const SIM_RX = /\b(2k\d{2}|nba\s*2k|nhl\s*2k|mlb\s*the\s*show|fifa\s*\d{2}|madden\s*\d{2}|gameplay|simulation|simulated)\b/i;
           if (SIM_RX.test(title)) continue;
 
+          // Reaction/watch-along hard-skip — fan channels reupload a recap's
+          // thumbnail under "TEAM vs TEAM Highlights M/D/YY (REACTION)" with
+          // teams+date that match the query, so they win the unscoped best-
+          // match tier when the real recap is excluded (the 2nd highlight
+          // button). They're never what the user wants and the title emotion
+          // ("I'M DISGUSTED!") routinely spoils the result.
+          const REACTION_RX = /\b(reaction|react|watch[- ]?along|watchalong|watch party)\b/i;
+          if (REACTION_RX.test(title)) continue;
+
           // Check if series game number matches (e.g. "Game 2" in title)
           const hasGameNum = queryGameNum && titleLower.includes(`game ${queryGameNum}`);
 
@@ -661,17 +688,21 @@ export default {
           // Track channel-specific matches
           if (isFromChannel) {
             if (hasTeams && hasYear && (!queryGameNum || hasGameNum)) {
-              if (!isExtended && !channelBestId) channelBestId = videoId;
+              if (!isExtended && !isMlbChannelClip && !channelBestId) channelBestId = videoId;
               if (isExtended && !channelBestExtendedId) channelBestExtendedId = videoId;
             }
             if (hasTeams && hasYear) {
-              if (!isExtended && !channelTeamsYearId) channelTeamsYearId = videoId;
+              if (!isExtended && !isMlbChannelClip && !channelTeamsYearId) channelTeamsYearId = videoId;
               if (isExtended && !channelTeamsYearExtendedId) channelTeamsYearExtendedId = videoId;
             }
             if (hasTeams) {
-              if (!isExtended && !channelTeamsId) channelTeamsId = videoId;
+              if (!isExtended && !isMlbChannelClip && !channelTeamsId) channelTeamsId = videoId;
               if (isExtended && !channelTeamsExtendedId) channelTeamsExtendedId = videoId;
             }
+            // Single-play MLB clip — sits below the extended tier so the
+            // channel's full-game recap wins, but still serves as a last
+            // resort if the channel has nothing but clips.
+            if (isMlbChannelClip && !channelPlayerReelId) channelPlayerReelId = videoId;
             // Golf round/recap tiers — gated on tournament match OR
             // the channel itself implying the tournament (The Masters
             // channel for a Masters query). Without the waiver, a
