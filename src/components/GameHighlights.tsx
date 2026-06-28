@@ -81,6 +81,16 @@ export default function GameHighlights({
   const shareCard = useMemo(() => buildShareCard(game, leagueLabel), [game, leagueLabel]);
 
   const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
+  // MLB swap: the official "MLB" channel no longer posts the short game
+  // recap — it now posts a long "Full Game Highlights" plus single-play
+  // clips, while the normal-length "Game Highlights (M/D/YY)" recap lives on
+  // the team channels (surfaced by the unscoped search). So for MLB the FIRST
+  // (official-labeled) button resolves UNSCOPED to get the short recap, and
+  // the SECOND button resolves the MLB channel to get the long full-game.
+  // Every other league keeps channel-first for the primary button.
+  const isMlb = game.sport === "mlb";
+  const primaryChannel = isMlb ? undefined : (officialChannel ?? undefined);
+  const secondaryChannel = isMlb ? (officialChannel ?? undefined) : undefined;
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
@@ -89,7 +99,7 @@ export default function GameHighlights({
     const series = game.seriesNote;
     if (officialChannel) {
       (async () => {
-        const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel, undefined, competition);
+        const officialId = await resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
         // World Cup: show ONE official button. resolveHighlightVideo already
@@ -102,7 +112,7 @@ export default function GameHighlights({
           setSearchStatus("missing");
           return;
         }
-        const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId], competition);
+        const id = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition);
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
       })();
@@ -114,7 +124,7 @@ export default function GameHighlights({
         setSearchStatus(id ? "found" : "missing");
       });
     }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, competition]);
+  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition]);
 
   const showYouTube = !!(isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
@@ -137,7 +147,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, undefined, competition);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -174,7 +184,7 @@ export default function GameHighlights({
                 }
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current], competition);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;
@@ -187,8 +197,8 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-              aria-label="Top search result highlights"
-              title="Top search result highlights"
+              aria-label={isMlb ? "MLB full game highlights" : "Top search result highlights"}
+              title={isMlb ? "MLB full game highlights" : "Top search result highlights"}
             >
               {fetchingOnClick === "search" ? (
                 <span className="text-[10px]">Loading...</span>
