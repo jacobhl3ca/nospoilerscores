@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fifaRank } from "@/lib/fifaRankings";
 import { getTimeZone } from "@/lib/etDay";
+import WorldCupBracket from "./WorldCupBracket";
+import { KNOCKOUT_START_YMD } from "@/lib/wcBracket";
 
 interface GroupTeam {
   name: string;
@@ -14,7 +16,7 @@ interface WcGroup {
   teams: GroupTeam[];
 }
 
-type View = "groups" | "ranked";
+type View = "groups" | "ranked" | "bracket";
 // Ranked view can be narrowed to just the strongest or weakest 10 — a real view
 // switch, not an overlay on the full list.
 type Band = "all" | "top" | "bottom";
@@ -114,11 +116,16 @@ const PAIR_PALETTE: Array<{ bg: string; bar: string }> = [
 // standings endpoint, from which we take only the team name + flag and drop
 // every standings field.
 export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClose: () => void; highlightGroup?: string | null }) {
+  // Once the knockout stage is under way, the bracket is the headline view — so
+  // offer the Bracket tab and default to it (unless we were opened to spotlight
+  // a specific group, which forces the grouped view). Date-gated so we don't add
+  // an empty Bracket tab during the group stage. See lib/wcBracket.
+  const knockoutActive = etDate(0) >= KNOCKOUT_START_YMD;
   const [groups, setGroups] = useState<WcGroup[] | null>(null);
   const [failed, setFailed] = useState(false);
   // A specific group to spotlight (tapped from a game card) forces the grouped
   // view so the group is visible, regardless of the saved view pref.
-  const [view, setView] = useState<View>(() => (highlightGroup ? "groups" : loadView()));
+  const [view, setView] = useState<View>(() => (highlightGroup ? "groups" : knockoutActive ? "bracket" : loadView()));
   const [band, setBand] = useState<Band>(() => loadBand());
   // The spotlit group's card — scrolled into view once the grid renders.
   const hlCardRef = useRef<HTMLDivElement | null>(null);
@@ -320,19 +327,21 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
       ? ` ${groups[0].name.replace(/^group\s*/i, "")} to ${groups[groups.length - 1].name.replace(/^group\s*/i, "")} (${groups.length})`
       : "";
   const title =
-    view === "ranked"
-      ? band === "top"
-        ? "⚽ World Cup — Top 10 by FIFA ranking"
-        : band === "bottom"
-          ? "⚽ World Cup — Bottom 10 by FIFA ranking"
-          : `⚽ World Cup — By FIFA ranking${ranked.length ? ` (${ranked.length})` : ""}`
-      : `⚽ World Cup — Groups${range}`;
+    view === "bracket"
+      ? "⚽ World Cup — Bracket"
+      : view === "ranked"
+        ? band === "top"
+          ? "⚽ World Cup — Top 10 by FIFA ranking"
+          : band === "bottom"
+            ? "⚽ World Cup — Bottom 10 by FIFA ranking"
+            : `⚽ World Cup — By FIFA ranking${ranked.length ? ` (${ranked.length})` : ""}`
+        : `⚽ World Cup — Groups${range}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
       <div
-        className="relative rounded-xl p-4 sm:p-5 w-full max-w-3xl max-h-[85vh] overflow-y-auto shadow-xl"
+        className={`relative rounded-xl p-4 sm:p-5 w-full ${view === "bracket" ? "max-w-6xl" : "max-w-3xl"} max-h-[85vh] overflow-y-auto shadow-xl`}
         style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -351,71 +360,75 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
           {title}
         </h2>
 
-        {groups ? (
-          <div className="mb-3 space-y-2">
-            {/* Row 1: view toggle · country search (center) · top/bottom band filter */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="inline-flex rounded-lg overflow-hidden shrink-0" style={{ border: "1px solid var(--border)" }}>
-                {([
-                  { v: "groups" as View, label: "Groups" },
-                  { v: "ranked" as View, label: "Ranked" },
-                ]).map((o) => {
-                  const active = view === o.v;
-                  return (
-                    <button
-                      key={o.v}
-                      onClick={() => changeView(o.v)}
-                      className="text-xs font-medium px-3 py-1 cursor-pointer transition-colors"
-                      style={{
-                        background: active ? "var(--accent)" : "var(--bg-card)",
-                        color: active ? "white" : "var(--text)",
-                      }}
-                    >
-                      {o.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Highlight a country…"
-                aria-label="Highlight a country"
-                className="flex-1 min-w-[7rem] text-xs rounded-lg px-2.5 py-1.5 outline-none"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-              />
-              {/* Top/Bottom 10 narrows the ranked list to that band — meaningful
-                  only there, so it's hidden in the grouped view. Mutually
-                  exclusive: tap the active one again to clear back to all. */}
-              {view === "ranked" ? (
-                <div className="flex items-center gap-2 flex-wrap shrink-0">
-                  {([
-                    { key: "top" as Band, label: "Top 10", color: "rgb(34,197,94)" },
-                    { key: "bottom" as Band, label: "Bottom 10", color: "rgb(239,68,68)" },
-                  ]).map((o) => {
-                    const active = band === o.key;
-                    return (
-                      <button
-                        key={o.key}
-                        onClick={() => changeBand(active ? "all" : o.key)}
-                        aria-pressed={active}
-                        className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full cursor-pointer transition-colors select-none"
-                        style={{
-                          background: active ? o.color : "var(--bg-card)",
-                          color: active ? "white" : "var(--text-muted)",
-                          border: `1px solid ${active ? o.color : "var(--border)"}`,
-                        }}
-                      >
-                        <span className="inline-block w-2 h-2 rounded-sm" style={{ background: active ? "white" : o.color }} />
-                        {o.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
+        <div className="mb-3 space-y-2">
+          {/* Row 1: view toggle (always) · country search + band (groups/ranked only) */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="inline-flex rounded-lg overflow-hidden shrink-0" style={{ border: "1px solid var(--border)" }}>
+              {([
+                ...(knockoutActive ? [{ v: "bracket" as View, label: "Bracket" }] : []),
+                { v: "groups" as View, label: "Groups" },
+                { v: "ranked" as View, label: "Ranked" },
+              ]).map((o) => {
+                const active = view === o.v;
+                return (
+                  <button
+                    key={o.v}
+                    onClick={() => changeView(o.v)}
+                    className="text-xs font-medium px-3 py-1 cursor-pointer transition-colors"
+                    style={{
+                      background: active ? "var(--accent)" : "var(--bg-card)",
+                      color: active ? "white" : "var(--text)",
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
             </div>
-            {/* Row 2: highlight teams playing on a given day */}
+            {groups && view !== "bracket" ? (
+              <>
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Highlight a country…"
+                  aria-label="Highlight a country"
+                  className="flex-1 min-w-[7rem] text-xs rounded-lg px-2.5 py-1.5 outline-none"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                />
+                {/* Top/Bottom 10 narrows the ranked list to that band — meaningful
+                    only there, so it's hidden in the grouped view. */}
+                {view === "ranked" ? (
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    {([
+                      { key: "top" as Band, label: "Top 10", color: "rgb(34,197,94)" },
+                      { key: "bottom" as Band, label: "Bottom 10", color: "rgb(239,68,68)" },
+                    ]).map((o) => {
+                      const active = band === o.key;
+                      return (
+                        <button
+                          key={o.key}
+                          onClick={() => changeBand(active ? "all" : o.key)}
+                          aria-pressed={active}
+                          className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full cursor-pointer transition-colors select-none"
+                          style={{
+                            background: active ? o.color : "var(--bg-card)",
+                            color: active ? "white" : "var(--text-muted)",
+                            border: `1px solid ${active ? o.color : "var(--border)"}`,
+                          }}
+                        >
+                          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: active ? "white" : o.color }} />
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+          {/* Row 2: highlight teams playing on a given day (groups/ranked only) */}
+          {groups && view !== "bracket" ? (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>Playing:</span>
               {DAY_DEFS.map((def) => {
@@ -437,10 +450,14 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
                 );
               })}
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
-        {failed ? (
+        {view === "bracket" ? (
+          // Bracket loads its own data live from ESPN (independent of the groups
+          // standings fetch), so it renders regardless of the groups state.
+          <WorldCupBracket />
+        ) : failed ? (
           <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>
             Couldn&rsquo;t load groups right now.
           </p>
@@ -513,7 +530,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
             })}
           </div>
         )}
-        {groups ? (
+        {groups && view !== "bracket" ? (
           <p className="text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
             #N = FIFA world ranking coming into the tournament — not group position.
             {(() => {
