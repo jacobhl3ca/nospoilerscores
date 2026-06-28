@@ -1,8 +1,15 @@
 // HideScore service worker.
 // Goals: faster repeat visits (precache shell), graceful offline fallback,
 // never cache /api/youtube responses long-term (results stale fast).
-
-const CACHE_VERSION = "hidescore-v2";
+//
+// ⚠️ BUMP CACHE_VERSION on any deploy that changes the app shell / JS chunks.
+// Static assets are served stale-while-revalidate, and Turbopack chunk names
+// are stable across builds, so returning users keep running OLD chunk content
+// until this byte-changes (forcing the SW to reinstall and `activate` to purge
+// the prior cache). Symptom of forgetting: a shipped UI/logic change is live
+// for fresh visitors but invisible to everyone who already has the SW
+// (e.g. the 2026-06-28 MLB two-button highlights fix). v2 → v3.
+const CACHE_VERSION = "hidescore-v3";
 const PRECACHE_URLS = [
   "/",
   "/today",
