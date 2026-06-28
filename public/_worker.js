@@ -502,10 +502,23 @@ export default {
           // "search" button. Official-or-nothing for WC.
           if (isWorldCupQuery && !WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase())) continue;
 
-          // "EXTENDED HIGHLIGHTS" variants (common on NBA/MLB official
-          // channels) — still valid highlights, but demoted so the
-          // standard recap wins the primary slot when both exist.
-          const isExtended = /\bextended\b/i.test(titleLower);
+          // Longer-version variants — still valid highlights, but
+          // demoted so the standard recap wins the primary slot when
+          // both exist. Two title markers:
+          //   • "EXTENDED HIGHLIGHTS" (NBA, CBS Golazo soccer)
+          //   • "Full Game Highlights" — MLB's official channel now
+          //     posts BOTH a long "Yankees vs. Red Sox: Official Full
+          //     Game Highlights (June 26) | 2026 MLB Season" AND the
+          //     standard short "Yankees vs. Red Sox Game Highlights
+          //     (6/26/26) | MLB Highlights". The long one lists first
+          //     on YouTube, so without this it won slot 0. Demoting
+          //     "full game" is safe for NCAAF (whose ONLY/standard
+          //     title is "... | Full Game Highlights | ESPN College
+          //     Football") — with no standard competitor it still
+          //     wins via the extended fallback tier.
+          const isExtended =
+            /\bextended\b/i.test(titleLower) ||
+            /\bfull[\s-]?game\b/i.test(titleLower);
 
           // Recap-keyword detection — titles with "recap", "all
           // highlights", or "full round" are strongly biased toward
