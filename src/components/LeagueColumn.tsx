@@ -589,6 +589,11 @@ export default function LeagueColumn({
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   const [swapOpen, setSwapOpen] = useState(false);
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
+  // Capture "now" once at mount so the day-granular "Last played" label below
+  // (renderPreviousSlate) stays a pure render — reading Date.now() during render
+  // is flagged by react-hooks/purity, and a single read is indistinguishable
+  // for a label that only changes across a midnight boundary.
+  const [nowMs] = useState(() => Date.now());
   const mode = switcherMode ?? "dropdown";
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague && mode !== "off";
 
@@ -697,7 +702,10 @@ export default function LeagueColumn({
   };
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
-  useEffect(() => { setTeamViewTeam(null); }, [league.sport, league.label]);
+  // Done in the effect cleanup (fires before the next run on a league change and
+  // on unmount) rather than synchronously in the effect body, which React flags
+  // as a cascading-render setState-in-effect. Same reset semantics.
+  useEffect(() => () => setTeamViewTeam(null), [league.sport, league.label]);
 
   // Eagerly warm the weather cache for this column's games so the detail modal
   // shows weather instantly instead of popping in a beat after it opens.
@@ -1025,7 +1033,7 @@ export default function LeagueColumn({
   const renderPreviousSlate = (games: Game[], date: string) => {
     const y = +date.slice(0, 4), mo = +date.slice(4, 6) - 1, d = +date.slice(6, 8);
     const dateObj = new Date(y, mo, d, 12, 0, 0);
-    const daysAgo = Math.round((Date.now() - dateObj.getTime()) / 86400000);
+    const daysAgo = Math.round((nowMs - dateObj.getTime()) / 86400000);
     const dow = dateObj.toLocaleDateString("en-US", { weekday: "short" });
     const label = daysAgo < 7 ? `Last played · ${dow}` : `Last played · ${dow} ${mo + 1}/${d}`;
     return (
