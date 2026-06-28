@@ -17,6 +17,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, M
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
+import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -1121,6 +1122,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
 
   const isToday = selectedDate === getDateString(0);
 
+  // Whether the World Cup is in season for the viewed date — gates the
+  // "What matters today" card so it doesn't fetch standings year-round.
+  const worldCupActive = useMemo(() => {
+    if (!selectedDate) return false;
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    const fifa = ALL_LEAGUES.find((l) => l.sport === "fifa");
+    return fifa ? isLeagueActive(fifa, viewDate) : false;
+  }, [selectedDate]);
+
   // Compute which leagues are available for the 3rd slot dropdown
   const thirdLeagueOptions = useMemo(() => {
     if (!selectedDate) return [];
@@ -1988,6 +1998,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             </p>
           </section>
         )}
+        {/* "What matters today" — spoiler-safe, tap-to-reveal qualification
+            stakes for the day's World Cup matches. Sits atop the board on both
+            the main page and the /worldcup hub; self-hides when the viewed date
+            has no WC matches. */}
+        {worldCupActive && <WorldCupMattersCard date={selectedDate} />}
         {showNews ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
