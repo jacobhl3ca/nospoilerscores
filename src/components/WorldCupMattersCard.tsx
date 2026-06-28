@@ -52,14 +52,19 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       <button
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left"
+        className="w-full flex items-start gap-2 px-3 py-2 text-left"
         style={{ background: "transparent", color: "var(--text)" }}
       >
-        <span aria-hidden="true" className="text-sm leading-none">
+        <span aria-hidden="true" className="text-sm leading-none mt-0.5">
           ⚽
         </span>
-        <span className="flex-1 min-w-0 text-[13px] font-semibold tracking-tight">
-          What matters today
+        <span className="flex-1 min-w-0">
+          <span className="block text-[13px] font-semibold tracking-tight leading-tight">
+            What matters today
+          </span>
+          <span className="block text-[10px] leading-snug mt-0.5" style={{ color: "var(--text-muted)" }}>
+            Reveals some standings (who&apos;s through, out, or topped their group)
+          </span>
         </span>
         <svg
           width="16"
@@ -70,6 +75,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
+          className="shrink-0 mt-0.5"
           style={{
             color: "var(--text-muted)",
             transform: expanded ? "rotate(180deg)" : "none",
@@ -81,10 +87,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       </button>
 
       {expanded && (
-        <div className="px-3 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
-          <p className="text-[10px] mt-2 mb-2 leading-snug" style={{ color: "var(--text-muted)" }}>
-            Reveals some standings (who&apos;s through, out, or topped their group).
-          </p>
+        <div className="px-3 pt-2.5 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
           <ul className="flex flex-col gap-2">
             {stakes.matches.map((m, i) => {
               const meta = TIER_META[m.tier];

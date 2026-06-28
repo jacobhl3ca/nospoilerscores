@@ -116,6 +116,7 @@ interface Fixture {
   awayName: string;
   state: "pre" | "in" | "post";
   knockoutLabel: string | null;
+  roundSlug: string; // ESPN event.season.slug, e.g. "round-of-32", "final"
 }
 
 function parseFixtures(data: unknown): Fixture[] {
@@ -132,6 +133,7 @@ function parseFixtures(data: unknown): Fixture[] {
     const ht = h.team as { abbreviation?: string; displayName?: string };
     const at = a.team as { abbreviation?: string; displayName?: string };
     const status = e.status as { type?: { state?: string } } | undefined;
+    const season = e.season as { slug?: string } | undefined;
     const notes = (c.notes as Array<{ headline?: string }> | undefined) ?? [];
     const headline = notes[0]?.headline ?? "";
     out.push({
@@ -143,6 +145,7 @@ function parseFixtures(data: unknown): Fixture[] {
       knockoutLabel: /round of|final|quarter|semi|knockout|playoff/i.test(headline)
         ? headline
         : null,
+      roundSlug: String(season?.slug ?? ""),
     });
   }
   return out;
@@ -281,56 +284,59 @@ const TIER_RANK: Record<WcTier, number> = {
   lopsided: 2,
 };
 
-// ── Knockout "what matters": rank ties by marquee value (two strong sides) and
-// balance (a real toss-up), using each team's group-stage form as a strength
-// proxy. Group-stage tables stay available all tournament, so this keeps
-// working through the later rounds (form just gets progressively staler).
+// ── Knockout "what matters" = the STAKES of the tie ──────────────────────────
+// Each knockout match is win-or-out; the round (from ESPN's season slug) tells
+// us what the winner plays for next, which escalates naturally toward the final.
+const ROUND_NEXT: Record<string, { label: string; next: string }> = {
+  "round-of-32": { label: "Round of 32", next: "the Round of 16" },
+  "round-of-16": { label: "Round of 16", next: "the quarterfinals" },
+  quarterfinals: { label: "Quarterfinals", next: "the semifinals" },
+  semifinals: { label: "Semifinals", next: "the final" },
+};
+
+function knockoutStakes(roundSlug: string): { tier: WcTier; round: string; copy: string } {
+  if (roundSlug === "final") {
+    return { tier: "mustwin", round: "Final", copy: "The final — win it and they're world champions." };
+  }
+  if (/3rd|third/i.test(roundSlug)) {
+    return { tier: "mustwin", round: "Third place", copy: "The third-place playoff — the tournament's last match for both." };
+  }
+  const r = ROUND_NEXT[roundSlug];
+  if (r) {
+    return { tier: "mustwin", round: r.label, copy: `Win to reach ${r.next} — lose and they're out.` };
+  }
+  // Unknown / not-yet-labelled knockout round.
+  return { tier: "mustwin", round: "Knockout", copy: "Single-elimination — the winner advances, the loser is out." };
+}
+
+/* FUTURE — marquee/balance ranking of knockout ties, kept for reference.
+   Ranks each tie by combined strength + balance from group-stage form, so the
+   heavyweight clashes and genuine toss-ups bubble up (vs. the flat win-or-out
+   stakes used now). To re-enable: call classifyKnockout() instead of
+   knockoutStakes() in the knockouts loop below — the marquee / competitive /
+   lopsided tiers are already wired into TIER_META + TIER_RANK.
+
 function strengthOf(r: Row): number {
-  // Points carry most weight; goal difference refines; group finish matters
-  // (winning a group beats scraping through third, even at equal points).
+  // Points dominate; goal difference refines; group winners get a bump.
   const rankBonus = r.rank === 1 ? 1.5 : r.rank >= 3 ? -1.5 : 0;
   return r.pts + r.gd * 0.5 + rankBonus;
 }
 
-interface KnockoutCall {
-  tier: WcTier;
-  copy: string;
-}
-
-function classifyKnockout(
-  away: Row | undefined,
-  home: Row | undefined,
-  awayName: string,
-  homeName: string,
-): KnockoutCall {
+function classifyKnockout(away: Row | undefined, home: Row | undefined, awayName: string, homeName: string): { tier: WcTier; copy: string } {
   if (!away || !home) return { tier: "competitive", copy: "Knockout tie — win or go home." };
-
   const gap = Math.abs(strengthOf(away) - strengthOf(home));
   const bothStrong = away.pts >= 6 && home.pts >= 6;
   const awayFav = strengthOf(away) >= strengthOf(home);
   const favName = awayFav ? awayName : homeName;
   const dogName = awayFav ? homeName : awayName;
-
   if (bothStrong && gap <= 4) {
     const bothWon = away.rank === 1 && home.rank === 1;
-    return {
-      tier: "marquee",
-      copy: `Heavyweight tie — two of the group stage's strongest sides, and a real toss-up.${
-        bothWon ? " Two group winners collide." : ""
-      } The pick of the round.`,
-    };
+    return { tier: "marquee", copy: `Heavyweight tie — two of the group stage's strongest sides, and a real toss-up.${bothWon ? " Two group winners collide." : ""} The pick of the round.` };
   }
-  if (gap >= 7) {
-    return {
-      tier: "lopsided",
-      copy: `${favName} were the standout side in the groups — ${dogName} will need an upset.`,
-    };
-  }
-  return {
-    tier: "competitive",
-    copy: `Evenly matched on group-stage form — this one could go either way.`,
-  };
+  if (gap >= 7) return { tier: "lopsided", copy: `${favName} were the standout side in the groups — ${dogName} will need an upset.` };
+  return { tier: "competitive", copy: `Evenly matched on group-stage form — this one could go either way.` };
 }
+*/
 
 export async function getWorldCupStakes(date: string): Promise<WcStakes | null> {
   const [standingsData, scoreData] = await Promise.all([
@@ -389,14 +395,14 @@ export async function getWorldCupStakes(date: string): Promise<WcStakes | null> 
   }
 
   for (const f of knockouts) {
-    const call = classifyKnockout(byAbbr.get(f.away), byAbbr.get(f.home), f.awayName, f.homeName);
+    const k = knockoutStakes(f.roundSlug);
     matches.push({
-      group: f.knockoutLabel ?? "Knockout",
-      tier: call.tier,
+      group: f.knockoutLabel ?? k.round,
+      tier: k.tier,
       away: f.awayName,
       home: f.homeName,
       state: f.state,
-      copy: call.copy,
+      copy: k.copy,
     });
   }
 
