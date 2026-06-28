@@ -1035,19 +1035,19 @@ function TeamPicker({
   );
   // Start with no league selected — search across all leagues until the user
   // picks one to narrow the list.
-  const [activeSport, setActiveSport] = useState<Sport | null>(null);
+  const [selectedSport, setSelectedSport] = useState<Sport | null>(null);
   const [query, setQuery] = useState("");
   const favSet = useMemo(() => new Set(favorites), [favorites]);
   const trimmedQuery = query.trim().toLowerCase();
 
-  // If the active sport disappears from the active-leagues list (e.g., season
-  // ended while the picker was open), clear it back to "nothing selected"
-  // instead of jumping to another sport.
-  useEffect(() => {
-    if (activeSport && !tabSports.some((s) => s.sport === activeSport)) {
-      setActiveSport(null);
-    }
-  }, [tabSports, activeSport]);
+  // If the selected sport disappears from the active-leagues list (e.g., season
+  // ended while the picker was open), treat it as "nothing selected" instead of
+  // jumping to another sport. Derived during render rather than reset via an
+  // effect so there's no cascading set-state-in-effect re-render.
+  const activeSport =
+    selectedSport && tabSports.some((s) => s.sport === selectedSport)
+      ? selectedSport
+      : null;
 
   // Fetch the active sport's teams when one is picked.
   useEffect(() => {
@@ -1116,7 +1116,7 @@ function TeamPicker({
           return (
             <button
               key={s.sport}
-              onClick={() => setActiveSport(active ? null : s.sport)}
+              onClick={() => setSelectedSport(active ? null : s.sport)}
               className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
               style={{
                 background: active ? "var(--accent)" : "var(--bg-card)",
