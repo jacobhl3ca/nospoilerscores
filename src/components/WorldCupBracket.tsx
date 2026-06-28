@@ -103,7 +103,11 @@ export default function WorldCupBracket() {
 
   return (
     <div>
-      <div className="overflow-x-auto pb-1">
+      {/* The tree is wider than a phone column, so it scrolls horizontally.
+          A scrollable region must be keyboard-operable (WCAG 2.1.1): tabIndex
+          makes it focusable so arrow keys can scroll it, and role+label give
+          assistive tech a named container to announce. */}
+      <div className="overflow-x-auto pb-1" tabIndex={0} role="group" aria-label="World Cup knockout bracket">
         <div className="flex gap-2 sm:gap-3" style={{ minWidth: "min-content" }}>
           {treeRounds.map((round) => (
             <div key={round.key} className="flex flex-col shrink-0" style={{ width: 150 }}>
