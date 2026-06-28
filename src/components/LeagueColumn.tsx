@@ -546,13 +546,19 @@ function formatDateCompact(yyyymmdd: string): string {
   // "Tomorrow" relative to the app's service day (ET, 1 AM-shifted, via
   // etDay.ts) — NOT the raw device clock, which mislabels for non-ET users
   // year-round and for everyone in the midnight-1 AM ET window.
-  const tomorrow = getEtServiceDate();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  if (date.getFullYear() === tomorrow.getFullYear() && date.getMonth() === tomorrow.getMonth() && date.getDate() === tomorrow.getDate()) {
-    return "Tomorrow";
-  }
+  const today = getEtServiceDate();
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startDate.getTime() - startToday.getTime()) / 86400000);
+  if (diffDays === 1) return "Tomorrow";
+  const md = `${parseInt(m)}/${parseInt(d)}`;
+  // A weekday name only reads unambiguously within a week ("Thursday" 9 days out
+  // could be either Thursday). 7+ days out, show just the date — the card bolds
+  // the first token, so a far game reads "7/16 - 7:30 PM" instead of a vague
+  // "Thursday"; within the week keep the weekday for at-a-glance day. (Jacob 6/28)
+  if (diffDays >= 7) return md;
   const dow = date.toLocaleDateString("en-US", { weekday: "short" });
-  return `${dow} ${parseInt(m)}/${parseInt(d)}`;
+  return `${dow} ${md}`;
 }
 
 export default function LeagueColumn({
