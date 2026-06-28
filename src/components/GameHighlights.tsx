@@ -50,6 +50,12 @@ export default function GameHighlights({
   type HighlightStatus = "loading" | "found" | "missing";
   const [officialStatus, setOfficialStatus] = useState<HighlightStatus>("loading");
   const [searchStatus, setSearchStatus] = useState<HighlightStatus>("loading");
+  // Capture "now" once at mount so the highlights-ready gate below stays a pure
+  // render — reading Date.now() during render is flagged by react-hooks/purity.
+  // The buffer is multi-hour and the component remounts on every score refresh,
+  // so a single read is indistinguishable in practice (matches the nowMs pattern
+  // already used in LeagueColumn's "Last played" slate label).
+  const [nowMs] = useState(() => Date.now());
 
   const isFinished = game.state === "post";
 
@@ -59,7 +65,7 @@ export default function GameHighlights({
     const otPeriods = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
     const otExtra = otPeriods * (game.sport === "mlb" ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
-    return Date.now() > gameStart + bufferMs;
+    return nowMs > gameStart + bufferMs;
   })();
 
   // Pin the highlight query date to ET — the worker matches the YouTube
