@@ -22,13 +22,21 @@ const TIER_META: Record<WcTier, { dot: string; chip: string; label: string }> = 
 export default function WorldCupMattersCard({ date }: { date: string }) {
   const [stakes, setStakes] = useState<WcStakes | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [prevDate, setPrevDate] = useState(date);
+
+  // Collapse and clear whenever the viewed date changes — never auto-reveal
+  // stakes, and never flash the previous day's matches. Doing this during render
+  // (React's recommended pattern for resetting state on a prop change) avoids the
+  // cascading re-render that the same setState calls cause inside an effect.
+  if (date !== prevDate) {
+    setPrevDate(date);
+    setExpanded(false);
+    setStakes(null);
+  }
 
   useEffect(() => {
     if (!date) return;
     let alive = true;
-    // Collapse whenever the viewed date changes — never auto-reveal stakes.
-    setExpanded(false);
-    setStakes(null);
     getWorldCupStakes(date)
       .then((s) => {
         if (alive) setStakes(s);
