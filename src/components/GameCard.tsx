@@ -274,7 +274,7 @@ export function CompactUpcomingCard({
             after the box. Non-lead rows: the DOW is the same muted grey as the
             date + time next to it (not bold, not dark) — only the lead card's DOW
             is emphasized. Network pinned right (Jacob 6/9). */}
-        <span className="shrink-0 inline-block w-[1.7rem]">{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
+        <span className="shrink-0 inline-block min-w-[1.7rem]">{nextGameDate === "Tomorrow" ? "Tomo" : (nextGameDate || "").split(" ")[0]}</span>
         {localTime ? <span className="shrink-0 whitespace-nowrap">{formatTime(localTime)}</span> : null}
         <span className="ml-auto shrink-0 text-right">{networkNode}</span>
       </div>
