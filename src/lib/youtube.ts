@@ -37,9 +37,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // because nothing else competes at the same tier.
   ucl: "CBS Sports Golazo",
   uel: "CBS Sports Golazo",
-  // Golf majors — each tournament has its own channel
+  // Golf majors — each tournament has its own channel. Keys must match the
+  // label-derived lookup key `golf_${label.toLowerCase().replace(/\s+/g,"")}`
+  // (see getOfficialChannelName), so the PGA Championship — whose league label
+  // is "PGA Champ" — keys to golf_pgachamp, NOT golf_pga (which never matched,
+  // dropping its official channel from the highlight chain). Mirrors the
+  // golf_pgachamp key in SECONDARY_CHANNELS below.
   golf_masters: "The Masters",
-  golf_pga: "PGA Championship",
+  golf_pgachamp: "PGA Championship",
   golf_usopen: "USGA",
   golf_theopen: "The Open",
   // Tennis Grand Slams

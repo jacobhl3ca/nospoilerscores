@@ -73,6 +73,34 @@ export default function GameDetailModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Lock body scroll while the modal is open (same technique as VideoModal /
+  // SettingsPanel). Plain overflow:hidden doesn't reliably stop iOS WebKit from
+  // scrolling the feed behind the dialog; pinning the body at its current offset
+  // with position:fixed + negative top does, and restoring it on close returns
+  // you exactly where you were. The modal root is position:fixed, so pinning the
+  // body underneath doesn't move the dialog.
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    return () => {
+      body.style.overflow = prev.overflow;
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
   // Local venue weather (outdoor, non-final games with a known location). Fetched
   // on open via Open-Meteo; null while loading, on failure, or for games beyond
   // the ~15-day forecast horizon — in all those cases the block simply hides.

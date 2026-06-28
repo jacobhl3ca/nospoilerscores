@@ -167,6 +167,8 @@ export default function WatchWorldCupWithoutSpoilersPage() {
           Free · no account · no tracking ·{" "}
           <a
             href="https://apps.apple.com/app/hidescore/id6766885311"
+            target="_blank"
+            rel="noopener noreferrer"
             className="underline underline-offset-2"
             style={{ color: "var(--text-muted)" }}
           >
