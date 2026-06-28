@@ -354,3 +354,13 @@ iframe#yt-player {
      skeleton or spinner. */
   .animate-pulse, .animate-spin, .animate-bounce, .animate-ping { animation: none; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The monkey-toggle buttons (theme/menu/scroll-top) and the World Cup banner
+     pill grow on hover via Tailwind's `hover:scale-110` / `hover:scale-105`.
+     In Tailwind v4 those compile to the native `scale` property (not the
+     `transform`-based overrides above), so reduced-motion doesn't reach them
+     on its own — reset `scale` so these stay put for motion-sensitive users.
+     transition-all remains a no-op once there's no scale change to animate. */
+  .hover\:scale-110:hover, .hover\:scale-105:hover { scale: none; }
+}
