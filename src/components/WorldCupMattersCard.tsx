@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { getWorldCupStakes, WcStakes, WcTier } from "@/lib/wcStakes";
 
 // "What matters today" — a spoiler-safe, tap-to-reveal summary of which World
-// Cup matches on the viewed date actually decide qualification before the next
-// round. Collapsed by default (reveals nothing); expanding is opt-in because
-// the stakes copy necessarily says who's already through or out.
+// Cup matches on the viewed date actually matter (qualification stakes in the
+// group stage; marquee/balance in the knockouts). Renders as a compact pill at
+// the bottom of the World Cup column, directly under the day's match(es), so
+// the games stay on top. Collapsed by default — expanding is opt-in because the
+// copy reveals standings.
 
 const TIER_META: Record<WcTier, { dot: string; chip: string; label: string }> = {
   // Group-stage tiers (qualification stakes)
@@ -49,38 +51,27 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
 
   if (!stakes || stakes.matches.length === 0) return null;
 
-  const count = stakes.matches.length;
-
   return (
-    <section
-      className="mt-3 mb-4 rounded-xl overflow-hidden"
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border)",
-        borderLeft: "3px solid var(--accent)",
-      }}
+    <div
+      className="mt-2 mb-1 rounded-xl overflow-hidden"
+      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
     >
+      {/* Collapsed pill — one line, ~1 card height. Spoiler-safe (no stakes). */}
       <button
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="w-full flex items-center gap-2.5 px-4 py-3 sm:px-5 text-left"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left"
         style={{ background: "transparent", color: "var(--text)" }}
       >
-        <span aria-hidden="true" className="text-lg leading-none">
+        <span aria-hidden="true" className="text-sm leading-none">
           ⚽
         </span>
-        <span className="flex-1 min-w-0">
-          <span className="block text-sm sm:text-base font-bold tracking-tight">
-            What matters today
-          </span>
-          <span className="block text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {count} World Cup {count === 1 ? "match" : "matches"} ·{" "}
-            {expanded ? "tap to hide" : "tap to see what's at stake (reveals standings)"}
-          </span>
+        <span className="flex-1 min-w-0 text-[13px] font-semibold tracking-tight">
+          What matters today
         </span>
         <svg
-          width="18"
-          height="18"
+          width="16"
+          height="16"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -103,41 +94,33 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       </button>
 
       {expanded && (
-        <div className="px-4 pb-3.5 sm:px-5" style={{ borderTop: "1px solid var(--border)" }}>
-          <p className="text-xs mt-2.5 mb-2.5" style={{ color: "var(--text-muted)" }}>
-            Heads up — this draws on results from earlier rounds (who&apos;s
-            through or out, who topped their group), so it reveals some
-            standings.
+        <div className="px-3 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
+          <p className="text-[10px] mt-2 mb-2 leading-snug" style={{ color: "var(--text-muted)" }}>
+            Reveals some standings (who&apos;s through, out, or topped their group).
           </p>
-          <ul className="flex flex-col gap-2.5">
+          <ul className="flex flex-col gap-2">
             {stakes.matches.map((m, i) => {
               const meta = TIER_META[m.tier];
               return (
-                <li key={i} className="flex gap-2.5">
+                <li key={i} className="flex gap-2">
                   <span
                     aria-hidden="true"
-                    className="mt-1.5 shrink-0 rounded-full"
-                    style={{ width: 8, height: 8, background: meta.dot }}
+                    className="mt-1 shrink-0 rounded-full"
+                    style={{ width: 7, height: 7, background: meta.dot }}
                   />
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[12.5px] font-semibold leading-tight" style={{ color: "var(--text)" }}>
                         {m.away} v {m.home}
                       </span>
                       <span
-                        className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                        className="text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded"
                         style={{ background: meta.chip, color: meta.dot }}
                       >
                         {meta.label}
                       </span>
-                      <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                        {m.group}
-                      </span>
                     </div>
-                    <p
-                      className="text-[13px] leading-snug mt-0.5"
-                      style={{ color: "var(--text-muted)" }}
-                    >
+                    <p className="text-[11.5px] leading-snug mt-0.5" style={{ color: "var(--text-muted)" }}>
                       {m.copy}
                     </p>
                   </div>
@@ -147,6 +130,6 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
           </ul>
         </div>
       )}
-    </section>
+    </div>
   );
 }

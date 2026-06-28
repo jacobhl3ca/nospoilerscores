@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -68,6 +68,9 @@ interface LeagueColumnProps {
   // toggle. Leagues with ≤5 today show them all. Keeps the stacked single
   // column scannable instead of one league flooding the feed.
   condense?: boolean;
+  // Optional content rendered at the very bottom of the column, under the
+  // games (e.g. the World Cup "What matters today" stakes pill).
+  footer?: ReactNode;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -588,6 +591,7 @@ export default function LeagueColumn({
   onReorderSlots,
   widthClassName = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]",
   condense,
+  footer,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -1407,6 +1411,7 @@ export default function LeagueColumn({
           ))}
         </div>
       )}
+      {footer}
     </div>
   );
 }

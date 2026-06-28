@@ -1998,11 +1998,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             </p>
           </section>
         )}
-        {/* "What matters today" — spoiler-safe, tap-to-reveal qualification
-            stakes for the day's World Cup matches. Sits atop the board on both
-            the main page and the /worldcup hub; self-hides when the viewed date
-            has no WC matches. */}
-        {worldCupActive && <WorldCupMattersCard date={selectedDate} />}
         {showNews ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
@@ -2595,6 +2590,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                       onCycleLeague={cycleForEntry(entry)}
                       widthClassName={colWidthClass}
                       condense={singleColumn}
+                      footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
                     />
                   ))}
                   {addButton}
@@ -2622,6 +2618,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                     onCycleLeague={cycleForEntry(entry)}
                     widthClassName={colWidthClass}
                     condense={singleColumn}
+                    footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
                   />
                 ))}
                 {addButton}
