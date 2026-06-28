@@ -124,7 +124,9 @@ export default function GameHighlights({
       })();
     } else {
       // No official channel for this league — only the search button is rendered.
-      setOfficialStatus("missing");
+      // officialStatus is derived to "missing" below (effectiveOfficialStatus)
+      // rather than set synchronously here, which would trigger a cascading
+      // render (react-hooks/set-state-in-effect).
       resolveHighlightVideo(away, home, dateStr, series, undefined, undefined, competition).then((id) => {
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
@@ -132,7 +134,10 @@ export default function GameHighlights({
     }
   }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition]);
 
-  const showYouTube = !!(isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing"));
+  // When there is no official channel the official button never renders, so
+  // treat officialStatus as "missing" without storing it in state.
+  const effectiveOfficialStatus = officialChannel ? officialStatus : "missing";
+  const showYouTube = !!(isFinished && highlightUrl && (effectiveOfficialStatus !== "missing" || searchStatus !== "missing"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   if (!showYouTube && !showNhl) return null;
 
