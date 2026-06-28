@@ -106,7 +106,6 @@ export default function GameDetailModal({
   // the ~15-day forecast horizon — in all those cases the block simply hides.
   const [weather, setWeather] = useState<GameWeather | null>(null);
   useEffect(() => {
-    setWeather(null);
     if (game.state === "post" || game.venueRoof || !game.venueLocation) return;
     let cancelled = false;
     // fetchGameWeather is cached + deduped, so if the card already prefetched
@@ -114,7 +113,10 @@ export default function GameDetailModal({
     fetchGameWeather(game.venueLocation, game.date)
       .then((w) => { if (!cancelled) setWeather(w); })
       .catch(() => {});
-    return () => { cancelled = true; };
+    // Clear in cleanup (before the next run / on close) rather than at the top
+    // of the effect body — same reset semantics without a synchronous setState
+    // in the effect, which triggers a cascading render (react-hooks lint).
+    return () => { cancelled = true; setWeather(null); };
   }, [game.id, game.venueLocation, game.venueRoof, game.date, game.state]);
 
   // Rain only matters around game time. Restrict the rain-chance block to the
