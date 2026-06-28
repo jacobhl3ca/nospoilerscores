@@ -23,13 +23,13 @@ export const metadata: Metadata = {
     url: "https://hidescore.com/worldcup",
     siteName: "HideScore",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — the 2026 FIFA World Cup, spoiler-free" }],
+    images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore — the 2026 FIFA World Cup, spoiler-free" }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: "The 2026 World Cup, spoiler-free. Watch on your own schedule — scores hidden until you tap.",
-    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — the 2026 FIFA World Cup, spoiler-free" }],
+    images: [{ url: "https://hidescore.com/og-worldcup.png", alt: "HideScore — the 2026 FIFA World Cup, spoiler-free" }],
   },
 };
 
