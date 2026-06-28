@@ -329,13 +329,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // unlocated games (no fetch). Only the wet states render (see below).
   const [cardWeather, setCardWeather] = useState<GameWeather | null>(null);
   useEffect(() => {
-    setCardWeather(null);
     if (game.state !== "in" || game.venueRoof || !game.venueLocation) return;
     let cancelled = false;
     fetchGameWeather(game.venueLocation, game.date)
       .then((w) => { if (!cancelled) setCardWeather(w); })
       .catch(() => {});
-    return () => { cancelled = true; };
+    // Clear in cleanup (before the next run) rather than synchronously at the
+    // top of the effect body — same reset semantics without a synchronous
+    // setState in the effect, which triggers a cascading render (react-hooks lint).
+    return () => { cancelled = true; setCardWeather(null); };
   }, [game.id, game.state, game.venueRoof, game.venueLocation, game.date]);
   // Hide the rating badge while a live game is in a delay — rating returns
   // once play resumes.
