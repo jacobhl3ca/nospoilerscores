@@ -63,7 +63,7 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
         <span className="text-[10px]">Loading…</span>
       ) : (
         <>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+          <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
           <span className="text-[10px] font-medium">{label}</span>
         </>
       )}
