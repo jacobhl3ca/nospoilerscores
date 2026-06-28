@@ -79,10 +79,15 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
+          // transition lives in the class (not inline) so the motion-reduce
+          // variant can switch it off — an inline `transition` would outrank a
+          // class override and keep animating for users who ask for less motion.
+          // The page's other reduced-motion overrides are class-scoped and never
+          // reached this inline rotation.
+          className="transition-transform duration-[180ms] ease motion-reduce:transition-none"
           style={{
             color: "var(--text-muted)",
             transform: expanded ? "rotate(180deg)" : "none",
-            transition: "transform 0.18s ease",
           }}
         >
           <polyline points="6 9 12 15 18 9" />
