@@ -269,6 +269,11 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
             // aria-current="date" so screen readers announce which day is active
             // (the visual highlight alone isn't exposed to assistive tech).
             aria-current={isSelected ? "date" : undefined}
+            // On phones the visible text is the abbreviated shortLabel ("Yest",
+            // "Tomo"); the full `label` span is display:none and so dropped from
+            // the accessibility tree. Pin the full word as the accessible name so
+            // screen-reader users hear "Yesterday"/"Tomorrow" on every viewport.
+            aria-label={btn.label}
             className={`date-nav-btn ${btn.wide ? "min-w-[2.75rem] w-auto px-1.5 sm:px-0" : "w-[2.75rem]"} sm:w-[5.5rem] py-2 sm:py-1.5 rounded text-[12px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden`}
             style={
               isSelected

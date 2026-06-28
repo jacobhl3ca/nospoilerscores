@@ -27,6 +27,12 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   mls: "/soccer/usa.1",
   ucl: "/soccer/uefa.champions",
   uel: "/soccer/uefa.europa",
+  // Racing/combat leagues share ESPN's league-base + /news pattern (the path is
+  // the scoreboard path minus /scoreboard — see espn.ts). Without these, the
+  // "ESPN F1"/"ESPN UFC" cards that leagueSourceCascade() builds for every sport
+  // always came back empty, since fetchLeagueNews() bails on a missing path.
+  f1: "/racing/f1",
+  ufc: "/mma/ufc",
 };
 
 export interface NewsItem {
