@@ -815,6 +815,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               className="text-[11px] leading-none cursor-pointer shrink-0"
               style={{ color: "var(--text-muted)" }}
               title="Hide networks"
+              aria-label="Hide networks"
             >
               ✕
             </button>
