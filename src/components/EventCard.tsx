@@ -26,7 +26,14 @@ function whenLabel(iso?: string): string {
   const ymd = (date: Date) =>
     new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
   const sameDay = ymd(d) === ymd(new Date());
-  const midnight = d.getHours() === 0 && d.getMinutes() === 0;
+  // Detect the midnight (TBD) placeholder in the SAME zone the time is shown in
+  // (tz), not the device's own zone. Reading d.getHours()/getMinutes() uses the
+  // device zone, so a Settings "Time zone" override desyncs it from the
+  // displayed time — a real kickoff could be mistaken for a placeholder (or
+  // vice-versa). "24:00" guards the value some ICU builds emit for midnight
+  // (same guard as weather.ts / etDay.ts / DateNav.ts).
+  const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+  const midnight = hm === "00:00" || hm === "24:00";
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
   const wd = d.toLocaleDateString("en-US", { weekday: "short", timeZone: tz });
   if (sameDay) return midnight ? "" : time;
