@@ -291,7 +291,11 @@ export function CompactUpcomingCard({
       {/* Row 2: venue — "@ HOME". Series teams are fixed, so just the home side. */}
       <div className="flex items-center gap-1.5">
         <span className="shrink-0 text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>@</span>
-        {home.logo ? <img src={home.logo} alt={home.abbreviation} title={home.displayName} width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
+        {/* Decorative: the team name renders right beside this logo, so an alt
+            of the abbreviation made screen readers announce the team twice
+            ("MIA MIA Heat"). Empty alt matches GameDetailModal's TeamRow logo;
+            title stays for the sighted-hover tooltip. */}
+        {home.logo ? <img src={home.logo} alt="" title={home.displayName} width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
         {/* Full team name when there's room (desktop, like the lead card above);
             abbreviation on the narrow mobile column. Normal weight to match the
             lead card + every other card's team name — font-medium made the venue
@@ -440,7 +444,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     isTBD ? (
       <span className="w-4 h-4 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-xs rounded" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>
     ) : (
-      <img src={team.logo} alt={team.abbreviation} title={team.displayName} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
+      // Decorative: the team name renders beside this logo (see the row at the
+      // logo() call site), so alt="" avoids a duplicate screen-reader read of
+      // the team; title stays for the sighted-hover tooltip.
+      <img src={team.logo} alt="" title={team.displayName} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
     );
 
   // Clicking the card body opens a spoiler-safe details popup. Inner
