@@ -725,7 +725,7 @@ export default function LeagueColumn({
     for (const g of league.games) prefetchGameWeather(g);
   }, [league.games]);
 
-  // Close swap dropdown on outside click
+  // Close swap dropdown on outside click or Escape
   useEffect(() => {
     if (!swapOpen) return;
     const handler = (e: MouseEvent) => {
@@ -733,8 +733,17 @@ export default function LeagueColumn({
         setSwapOpen(false);
       }
     };
+    // Keyboard parity with the app's other dropdowns/modals: Escape dismisses
+    // the popup the swap button promises via aria-haspopup="menu".
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSwapOpen(false);
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [swapOpen]);
 
   // Measure whether full names would fit in the available column width
