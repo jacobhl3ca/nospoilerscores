@@ -991,6 +991,7 @@ function RadioGroup<T extends string>({
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
+            aria-pressed={active}
             className="px-2 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors text-center"
             style={{
               background: active ? "var(--accent)" : "var(--bg-card)",
