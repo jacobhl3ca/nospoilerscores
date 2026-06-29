@@ -211,6 +211,13 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 // image is a recommended Article field for Google rich results;
                 // reuse the page's OG card (a real, valid 1200×630 image).
                 image: "https://hidescore.com/og-worldcup.png",
+                // datePublished/dateModified are recommended Article fields —
+                // they tell Google when the guide first went up and when it was
+                // last revised, a freshness signal for the rich result. Dates
+                // are the page file's real git create/last-edit days; bump
+                // dateModified whenever the copy here meaningfully changes.
+                datePublished: "2026-06-23",
+                dateModified: "2026-06-29",
                 author: { "@type": "Organization", name: "HideScore" },
                 publisher: {
                   "@type": "Organization",
