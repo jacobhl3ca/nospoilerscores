@@ -36,7 +36,10 @@ export default function FeedbackBox() {
     <div className="relative w-full" style={{ height: 18 }}>
       <div className="absolute inset-0 flex items-center justify-center">
       {sent ? (
-        <div className="inline-flex items-center gap-1.5">
+        // role=status/aria-live so screen readers hear the optimistic
+        // confirmation — the submit gives no other feedback (matches the
+        // SettingsPanel ZIP-status pattern).
+        <div role="status" aria-live="polite" className="inline-flex items-center gap-1.5">
           <span>thanks for the feedback 🙏</span>
           <button
             type="button"
