@@ -64,7 +64,12 @@ export function getETHour(): number {
     hour: "2-digit", minute: "2-digit", hour12: false,
   }).formatToParts(new Date());
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
-  return parseInt(get("hour"), 10);
+  // % 24 guards the "24" some ICU builds emit for midnight (same guard as
+  // getEtServiceDate/etSlateYmd in lib/etDay.ts). Without it the consumers that
+  // compare the hour against a low cutoff — getSmartDefaultOffset's `< 1`
+  // midnight check and the ratings-auto `< 12` morning check in HomeContent —
+  // would see 24 instead of 0 and skip the branch for the whole 12–1 AM window.
+  return parseInt(get("hour"), 10) % 24;
 }
 
 // Custom calendar dropdown — starts Monday, blue weekends
