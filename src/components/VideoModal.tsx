@@ -1297,6 +1297,20 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   aria-valuenow={Math.round(Math.min(progress, seekCap) * 100)}
                   tabIndex={0}
                   title="Tap or drag to seek"
+                  onKeyDown={(e) => {
+                    // A focusable role="slider" must be keyboard-operable (WCAG
+                    // 2.1.1). ←/↓ nudge back, →/↑ nudge forward by the same ±5s
+                    // step the on-screen buttons use — a slow, deliberate scrub
+                    // that's deliberately exempt from the spoiler cap/warn (see
+                    // seekBy). stopPropagation so the modal's global arrow
+                    // handler doesn't ALSO fire (it would step to the prev/next
+                    // post, or double-seek, instead of just nudging the bar).
+                    if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+                      e.preventDefault(); e.stopPropagation(); seekBy(-SEEK_STEP);
+                    } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+                      e.preventDefault(); e.stopPropagation(); seekBy(SEEK_STEP);
+                    }
+                  }}
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => {
                     e.stopPropagation();
