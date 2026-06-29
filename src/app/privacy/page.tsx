@@ -29,7 +29,7 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: 2026-05-06</p>
+      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-05-06">2026-05-06</time></p>
 
       <section className="space-y-4">
         <p>
