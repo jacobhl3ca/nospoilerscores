@@ -162,10 +162,13 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   const start = new Date(gameDateISO);
   if (isNaN(start.getTime())) return null;
   const localDate = start.toLocaleDateString("en-CA", { timeZone: geo.tz }); // YYYY-MM-DD
+  // % 24 guards the "24" some ICU builds emit for midnight (same guard as
+  // etDay/DateNav). Open-meteo's hourly times run 0–23, so an unguarded "24"
+  // would never match `hr === localHour` below and lose the gametime row.
   const localHour = parseInt(
     start.toLocaleString("en-US", { timeZone: geo.tz, hour: "2-digit", hour12: false }).slice(0, 2),
     10,
-  );
+  ) % 24;
 
   let data: { hourly?: Record<string, unknown[]>; current?: Record<string, unknown>; error?: boolean };
   try {
