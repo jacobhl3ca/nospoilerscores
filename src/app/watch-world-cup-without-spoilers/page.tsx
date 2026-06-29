@@ -227,6 +227,18 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 mainEntityOfPage: "https://hidescore.com/watch-world-cup-without-spoilers",
               },
               {
+                // BreadcrumbList lets Google render a Home › World Cup › this-guide
+                // trail in the search result instead of the bare URL. The hierarchy
+                // mirrors the page's own links (it points readers to /worldcup), so
+                // the trail matches how the site is actually navigated.
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+                  { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
+                  { "@type": "ListItem", position: 3, name: "Watch Without Spoilers", item: "https://hidescore.com/watch-world-cup-without-spoilers" },
+                ],
+              },
+              {
                 "@type": "FAQPage",
                 mainEntity: FAQ.map((item) => ({
                   "@type": "Question",
