@@ -424,6 +424,7 @@ export default function GolfLeaderboard({
                         className="ml-1 cursor-pointer hover:underline"
                         style={{ color: "var(--text-muted)" }}
                         title={tournament.broadcasts.slice(1).join(", ")}
+                        aria-label={`Show ${tournament.broadcasts.length - 1} more network${tournament.broadcasts.length - 1 === 1 ? "" : "s"}`}
                         onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(true); }}
                       >
                         +{tournament.broadcasts.length - 1}
