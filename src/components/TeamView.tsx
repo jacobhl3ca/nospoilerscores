@@ -255,8 +255,9 @@ export default function TeamView({
             className="absolute left-0 flex items-center gap-0.5 text-[11px] sm:text-xs cursor-pointer hover:underline"
             style={{ color: "var(--text-muted)" }}
             title={`Back to ${leagueLabel}`}
+            aria-label={`Back to ${leagueLabel}`}
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
             <span>{leagueLabel}</span>
