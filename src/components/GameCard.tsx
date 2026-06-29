@@ -778,7 +778,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         >
           <div className="flex items-start gap-1.5">
             <div className="flex flex-col gap-0.5 text-[10px] sm:text-xs leading-tight">
-              {game.broadcasts.map((b, i) => {
+              {game.broadcasts.map((b) => {
                 const isPrime = /\b(amazon|prime)\b/i.test(b);
                 const isEspn = /\b(espn|abc)\b/i.test(b);
                 const espnStream =
@@ -802,7 +802,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   sportStreamFallback(game.sport);
                 return (
                   <a
-                    key={i}
+                    key={b}
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
