@@ -735,6 +735,7 @@ export default function SettingsPanel({
                       </span>
                       <button
                         onClick={() => clearTeamsForSport(sport)}
+                        aria-label={`Clear ${SPORT_LABEL[sport] ?? sport} teams`}
                         className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
                         style={{ color: "var(--text-muted)" }}
                       >
