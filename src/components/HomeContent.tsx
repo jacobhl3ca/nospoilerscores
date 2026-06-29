@@ -1693,6 +1693,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="max-w-6xl mx-auto relative grid grid-cols-[auto_1fr_auto] sm:grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
           <Link
             href="/"
+            aria-label="HideScore home"
             onClick={(e) => {
               // In the news view, the logo acts as "back to scores" — toggle
               // news off in place instead of navigating, since "/" would
@@ -1709,7 +1710,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             style={{ color: "var(--text)" }}
           >
             <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
-            <svg className="xl:hidden w-7 h-7 header-logo" viewBox="0 0 32 32" fill="none">
+            <svg className="xl:hidden w-7 h-7 header-logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
               <rect width="32" height="32" rx="6" className="header-logo-bg" />
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
