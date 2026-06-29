@@ -78,6 +78,25 @@ export default function PrivacyPage() {
       <div className="mt-10">
         <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>← Back to HideScore</Link>
       </div>
+
+      {/* BreadcrumbList lets Google render a Home › Privacy trail in the search
+          result instead of the bare /privacy URL — matching the /faq, /worldcup,
+          and /watch-world-cup-without-spoilers pages that already declare the same
+          hierarchy. Server-rendered: this page has no "use client", so the script
+          ships in the static HTML for crawlers. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+              { "@type": "ListItem", position: 2, name: "Privacy Policy", item: "https://hidescore.com/privacy" },
+            ],
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
     </main>
   );
 }
