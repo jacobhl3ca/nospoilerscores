@@ -556,7 +556,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         params.has("th") || params.has("dd") || params.has("dv") || params.has("dr") || params.has("n")
       ) {
         // Support new compact format (f=m1.n15&l=m.n) and old format (f=mlb-1,mlb-2&fl=mlb,nba)
-        const oldTeams = params.get("f")?.includes("-") ? params.get("f")!.split(",").filter(Boolean) : null;
+        const fParam = params.get("f");
+        const oldTeams = fParam?.includes("-") ? fParam.split(",").filter(Boolean) : null;
         const oldLeagues = params.get("fl")?.split(",").filter(Boolean) as Sport[] | null;
         const decoded = decodeFavorites(params);
         loaded.favoriteTeams = oldTeams ?? decoded.teams ?? loaded.favoriteTeams;
