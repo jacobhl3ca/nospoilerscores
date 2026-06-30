@@ -36,7 +36,7 @@ function Side({ side, bracket }: { side: BracketSide; bracket: Bracket }) {
       <div className="flex items-center gap-1.5 min-w-0">
         {side.team.flag ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={side.team.flag} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} />
+          <img src={side.team.flag} alt="" loading="lazy" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} />
         ) : (
           <span className="w-4 h-4 shrink-0" />
         )}
