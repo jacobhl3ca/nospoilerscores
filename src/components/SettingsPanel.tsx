@@ -1187,7 +1187,7 @@ function TeamPicker({
                 >
                   {t.logo && (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={t.logo} alt="" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" />
+                    <img src={t.logo} alt="" loading="lazy" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" />
                   )}
                   <span className="min-w-0 truncate flex-1">{t.shortDisplayName}</span>
                   {/* Sport badge — only in cross-league view so the user can
