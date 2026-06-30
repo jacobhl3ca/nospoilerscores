@@ -83,7 +83,7 @@ function FighterRow({ f }: { f: FightBout["red"] }) {
     <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
       {f.flag ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={f.flag} alt={f.country ?? ""} title={f.country} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain shrink-0" />
+        <img src={f.flag} alt={f.country ?? ""} title={f.country} loading="lazy" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain shrink-0" />
       ) : (
         <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
       )}
