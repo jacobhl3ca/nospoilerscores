@@ -605,7 +605,7 @@ export default function GolfLeaderboard({
                     : `Round ${completedRounds} highlights — more on YouTube`
                 }
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               </button>
             );
           })}
