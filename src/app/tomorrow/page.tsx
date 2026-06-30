@@ -23,5 +23,27 @@ export const metadata: Metadata = {
 };
 
 export default function TomorrowPage() {
-  return <HomeContent initialOffset={1} />;
+  return (
+    <>
+      <HomeContent initialOffset={1} />
+      {/* BreadcrumbList lets Google render a Home › Tomorrow trail in the search
+          result instead of the bare /tomorrow URL — matching the /faq, /privacy,
+          /worldcup, and guide pages that already declare the same hierarchy.
+          Server-rendered: this page has no "use client", so the script ships in
+          the static HTML for crawlers. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+              { "@type": "ListItem", position: 2, name: "Tomorrow", item: "https://hidescore.com/tomorrow" },
+            ],
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
+    </>
+  );
 }
