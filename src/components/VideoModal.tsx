@@ -67,6 +67,25 @@ interface VideoModalProps {
   onNext?: () => void;
 }
 
+// Minimal slice of the YouTube IFrame Player API this modal actually drives.
+// The real player is built by the injected YT script (window.YT.Player) and is
+// untyped (no @types/youtube dependency), so we type just the methods we call.
+// A ready YT.Player exposes all of these, so they're typed as present — the
+// `?.` guards the code uses on them stay valid (optional calls on required
+// methods compile fine) while direct calls after a guard narrow cleanly.
+interface YTPlayer {
+  getDuration: () => number;
+  getCurrentTime: () => number;
+  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
+  playVideo: () => void;
+  pauseVideo: () => void;
+  getPlayerState: () => number;
+  setVolume: (volume: number) => void;
+  mute: () => void;
+  unMute: () => void;
+  destroy: () => void;
+}
+
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
 // re-query /api/youtube for an alternate videoId when the primary embed fails.
 function extractSearchQuery(fallbackUrl: string): string | null {
@@ -225,7 +244,7 @@ function PeekBlur({ tag = "div", className, style, children }: {
 }
 
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
