@@ -346,7 +346,10 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="World Cup groups"
+        // Keep the dialog's accessible name in sync with the view on screen —
+        // a static "World Cup groups" mislabels the Bracket view (the default
+        // once the knockout stage starts) and the Ranked view for screen readers.
+        aria-label={view === "bracket" ? "World Cup bracket" : view === "ranked" ? "World Cup teams by FIFA ranking" : "World Cup groups"}
       >
         <button
           onClick={onClose}
