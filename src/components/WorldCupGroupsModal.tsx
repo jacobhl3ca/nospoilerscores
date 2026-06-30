@@ -377,6 +377,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
                   <button
                     key={o.v}
                     onClick={() => changeView(o.v)}
+                    aria-pressed={active}
                     className="text-xs font-medium px-3 py-1 cursor-pointer transition-colors"
                     style={{
                       background: active ? "var(--accent)" : "var(--bg-card)",
