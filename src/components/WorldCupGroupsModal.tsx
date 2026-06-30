@@ -396,8 +396,8 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Highlight a country…"
                   aria-label="Highlight a country"
-                  className="flex-1 min-w-[7rem] text-xs rounded-lg px-2.5 py-1.5 outline-none"
-                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                  className="basis-full sm:basis-0 sm:flex-1 min-w-0 text-xs rounded-lg px-2.5 py-1.5 outline-none"
+                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)", fontFamily: "inherit" }}
                 />
                 {/* Top/Bottom 10 narrows the ranked list to that band — meaningful
                     only there, so it's hidden in the grouped view. */}
