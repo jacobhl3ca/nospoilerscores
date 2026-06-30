@@ -1,4 +1,4 @@
-name: Check feed staleness + highlight fallbacks
+name: Check feed staleness
 
 on:
   schedule:
@@ -28,11 +28,13 @@ jobs:
         continue-on-error: true
       - if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
         run: node scripts/check-staleness.mjs
-      # Folded in from the former standalone highlight-fallback-check.yml so it
-      # costs 0 extra Actions minutes. Runs even if the staleness step failed
-      # (as long as the infra steps succeeded) so both alerts stay independent.
-      - if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.setup.outcome == 'success' }}
-        run: node scripts/check-highlight-fallbacks.mjs
+      # NOTE: the highlight-fallback check moved OFF GitHub Actions on 2026-06-30.
+      # hidescore.com is behind Cloudflare, which bot-challenges GHA runner IPs,
+      # so every /api/youtube lookup timed out and ALL games falsely reported
+      # "EXHAUSTED" (62-min runs, daily false email on issue #7). It now runs on
+      # the Mac mini's residential IP via launchd com.jacob.highlight-fallback-monitor
+      # (wrapper ~/bin/highlight-fallback-cron.sh) → ntfy on real misses.
+      # check-highlight-fallbacks.mjs stays in the repo; the mini runs it from main.
       # Real-failure alert. This step only runs when an actual check step above
       # FAILED — a job that never got a runner ("not acquired by Runner of type
       # hosted") runs zero steps, so GitHub-infra blips stay silent here. Lets us

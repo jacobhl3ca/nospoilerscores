@@ -81,11 +81,20 @@ const fmtUIDate = (iso) =>
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Per-request timeout. This check runs from the Mac mini's residential IP
+// (GitHub Actions runner IPs get Cloudflare bot-challenged, which hung every
+// /api/youtube fetch and falsely flagged all games — see issue #7). The
+// timeout still bounds any transient stall so a run can't drag on for an hour.
+const FETCH_TIMEOUT_MS = 8000;
+const UA = "nospoilerscores-staleness-check/1.0 (+https://hidescore.com)";
+const tfetch = (url) =>
+  fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers: { "user-agent": UA } });
+
 async function fetchScoreboard(sport, date) {
   const url = `${ESPN_BASE}${ESPN_PATHS[sport]}?dates=${fmtESPN(date)}`;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch(url);
+      const res = await tfetch(url);
       if (res.ok) return (await res.json()).events ?? [];
     } catch {
       // fall through and retry
@@ -127,7 +136,7 @@ async function youtubeLookup(query, channel) {
   let url = `${BASE}/api/youtube?q=${encodeURIComponent(query)}`;
   if (channel) url += `&channel=${encodeURIComponent(channel)}`;
   try {
-    const res = await fetch(url);
+    const res = await tfetch(url);
     if (!res.ok) return null;
     const data = await res.json();
     return data.videoId ?? null;
@@ -289,7 +298,31 @@ if (recovered.length) {
 }
 
 if (confirmedExhausted.length) {
+  // Endpoint health gate. If the /api/youtube endpoint is unreachable from
+  // wherever this runs, EVERY lookup fails and masquerades as dozens of broken
+  // buttons. Before alerting, probe with evergreen queries that must resolve if
+  // YouTube search works at all. If even those come back empty, the endpoint is
+  // blocked/down — an infra issue, not a real regression — so skip (exit 0).
+  const PROBES = [
+    "Lakers vs Celtics highlights",
+    "Yankees vs Red Sox highlights",
+    "Real Madrid vs Barcelona highlights",
+  ];
+  let probeHits = 0;
+  for (const q of PROBES) {
+    if (await youtubeLookup(q)) probeHits++;
+    await sleep(200);
+  }
+  if (probeHits === 0) {
+    console.log("--- SKIP: /api/youtube unreachable from this runner ---");
+    console.log(`All ${PROBES.length} evergreen probes returned empty, so the ${confirmedExhausted.length}`);
+    console.log("exhausted game(s) above reflect a blocked endpoint, not hidden highlight");
+    console.log("buttons. Not alerting.");
+    process.exit(0);
+  }
+
   console.log("--- EXHAUSTED (UI hides the button) ---");
+  console.log(`(endpoint healthy: ${probeHits}/${PROBES.length} evergreen probes resolved)\n`);
   confirmedExhausted.forEach(printRow);
   console.log("Fix path: add a TEAM_NAME_ALIASES entry in src/lib/youtube.ts and mirror it in this script,");
   console.log("or extend the chain in resolveHighlightVideo() with an additional retry.");
