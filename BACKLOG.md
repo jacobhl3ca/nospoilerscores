@@ -2,6 +2,8 @@
 
 ## 🔝 Top priority
 
+- [ ] **🏎️🥊 F1 & UFC cards — redesign to match, then un-hide (hidden from UI 2026-06-29).** The `EventCard` tiles (F1 single-race tile, UFC one-card-per-bout — `src/components/EventCard.tsx`) don't look like the rest of the score cards, so F1 + UFC were hidden from the league switcher for now. They're flagged `hidden: true` in `ALL_LEAGUES` (`src/lib/espn.ts`) and filtered out of `thirdLeagueOptions` (`HomeContent.tsx`); data + ESPN endpoints are intact. **To re-enable:** rework `EventCard` to match `GameCard`'s card chrome (spacing, header, spoiler treatment), then flip `hidden` off on the two entries. _src: 2026-06-29; mobile cleanup pass_
+
 - [ ] **📣 World Cup marketing push — EXECUTE (~June 8–11, before/at the 6/11 kickoff). ⬅ #1.** The once-every-4-years window (WC on home soil + simultaneous NBA/NHL Finals) is the moment to market HideScore — lead with the World Cup, anchor on the competitiveness rating ("which games were classics without revealing who won"). Full plan: memory `project_hidescore_worldcup_marketing_push`. Drafts now live in `~/hidescore-backlog/worldcup-marketing/`: `MARKETING_LAUNCH_POSTS.md` (Show HN + Product Hunt + held Reddit post), `MARKETING_VIDEO_SCRIPTS.md` (5 short-form scripts for Emilio), `MARKETING_COMMUNITIES.md` (tiered Discord/forum list).
   > **Channels:** Show HN + Product Hunt around/just before kickoff (Tue–Thu ~9am PT); Emilio posts the video scripts to IG/TikTok/X; Discord/forum outreach led by r/SideProject ("free no-spoiler World Cup scoreboard," post 6/10–11); Reddit promo **only after the ban appeal clears** (never ban-evade — domain-flag risk).
   > **Point the campaign at `/worldcup`** once it's shipped (next item).
