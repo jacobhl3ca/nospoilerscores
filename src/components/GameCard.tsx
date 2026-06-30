@@ -526,22 +526,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         </div>
       )}
 
-      {/* Soccer Penalty Shootout — knockout level after extra time, decided on
-          spot kicks. Shown live AND on the just-finished match (shootouts are
-          brief); gated behind the ratings/spoiler toggle. Reveals only that it
-          went to pens, never the winner. */}
-      {showRatings && game.penaltyShootout && (
-        <div className="mb-1 flex justify-center">
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-500"
-            style={{ background: "rgba(16, 185, 129, 0.12)" }}
-            title="Level after extra time — decided by a penalty shootout"
-          >
-            <span aria-hidden>🥅</span>
-            Penalty Shootout
-          </span>
-        </div>
-      )}
+      {/* Penalty Shootout badge removed 2026-06-30 (Jacob): knowing a match went to
+          a shootout reveals it was level after extra time — a result spoiler, even
+          gated behind the ratings toggle. */}
 
       {/* Tennis Deciding Set — live Grand Slam match level on sets, into the
           final set. Gated behind the ratings/spoiler toggle; reveals only that

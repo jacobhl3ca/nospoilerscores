@@ -43,6 +43,29 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
 
   if (!stakes || stakes.matches.length === 0) return null;
 
+  // Once the tournament reaches the knockouts there are no standings to weigh —
+  // every match is win-or-go-home. The group-stage "what matters" breakdown
+  // doesn't apply, so show a plain, spoiler-safe one-liner instead of the
+  // expandable standings card. (Knockout tiers never mix with group tiers on a
+  // given day — see wcStakes TIER_RANK comment.)
+  // In the knockouts every match is win-or-go-home, so there are no standings to
+  // weigh. Show a plain spoiler-safe note instead of the group-stage breakdown.
+  const KNOCKOUT_TIERS: WcTier[] = ["marquee", "competitive", "lopsided"];
+  const isKnockout = stakes.matches.every((m) => KNOCKOUT_TIERS.includes(m.tier));
+  if (isKnockout) {
+    return (
+      <div
+        className="mt-2 mb-1 rounded-xl flex items-center gap-2 px-3 py-2"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <span aria-hidden="true" className="text-sm leading-none">⚽</span>
+        <span className="text-[12.5px] font-semibold tracking-tight" style={{ color: "var(--text)" }}>
+          Single elimination through the end of the tournament
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       className="mt-2 mb-1 rounded-xl overflow-hidden"

@@ -36,6 +36,7 @@ export interface LeagueConfig {
   firstPref?: boolean;       // Tier 1: always gets a slot when active (bumps lower leagues)
   mustInclude?: boolean;     // NBA/MLB/NHL/NFL — always picked when active
   excludeFromAuto?: boolean; // Skipped from auto-pick; still selectable via slot-3 dropdown
+  hidden?: boolean;          // BACKLOG — fully hidden from the UI (not in the switcher) until the card design is finished; data kept here
   backfillOnly?: boolean;    // NFL Preseason — only added when fewer than 3 active picks
   displaySlot?: "left" | "center" | "right"; // pinned slot preference
   slotPrecedence?: number;   // tiebreak within a pinned slot — lower wins
@@ -96,12 +97,13 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // selectable from the slot-3 dropdown when in season. Listed last so it
   // sorts to the bottom of the league-header swap dropdown.
   { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", excludeFromAuto: true },
-  // ── F1 + UFC (single-event tiles, opt-in via the league switcher) ──
-  // Both excludeFromAuto so they never disturb the tuned 3-column rotation;
-  // they appear in the slot dropdown when active and render a spoiler-safe
-  // event tile (no results). F1 = Mar–early Dec season; UFC = year-round.
-  { sport: "f1",  label: "F1",  startDate: "03-01", endDate: "12-14", excludeFromAuto: true },
-  { sport: "ufc", label: "UFC", excludeFromAuto: true },
+  // ── F1 + UFC (single-event tiles) ──
+  // BACKLOG (hidden 2026-06-29): the EventCard tiles don't yet match the look of
+  // the rest of the cards, so they're hidden from the switcher for now. Kept here
+  // (data + endpoints intact) so re-enabling is a one-line flag flip once the
+  // card design is reworked. F1 = Mar–early Dec season; UFC = year-round.
+  { sport: "f1",  label: "F1",  startDate: "03-01", endDate: "12-14", excludeFromAuto: true, hidden: true },
+  { sport: "ufc", label: "UFC", excludeFromAuto: true, hidden: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
