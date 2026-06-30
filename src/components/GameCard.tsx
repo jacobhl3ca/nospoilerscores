@@ -750,6 +750,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       className="text-[11px] cursor-pointer hover:underline whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
                       title={`See all networks: ${game.broadcasts.join(", ")}`}
+                      // The "+N" is hidden on mobile (sm:inline), so the visible
+                      // label is just the lead network — announce the popup and
+                      // its open/closed state to screen readers, matching the
+                      // aria-haspopup/aria-expanded pattern on LeagueColumn's
+                      // league-switch button.
+                      aria-haspopup="true"
+                      aria-expanded={broadcastExpanded}
                       onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
                     >
                       {shortNetwork(game.broadcasts[0])}<span className="hidden sm:inline"> +{game.broadcasts.length - 1}</span>
