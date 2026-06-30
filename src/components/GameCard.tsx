@@ -308,7 +308,7 @@ export function CompactUpcomingCard({
             of the abbreviation made screen readers announce the team twice
             ("MIA MIA Heat"). Empty alt matches GameDetailModal's TeamRow logo;
             title stays for the sighted-hover tooltip. */}
-        {home.logo ? <img src={home.logo} alt="" title={home.displayName} width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
+        {home.logo ? <img src={home.logo} alt="" title={home.displayName} loading="lazy" width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
         {/* Full team name when there's room (desktop, like the lead card above);
             abbreviation on the narrow mobile column. Normal weight to match the
             lead card + every other card's team name — font-medium made the venue
@@ -460,7 +460,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       // Decorative: the team name renders beside this logo (see the row at the
       // logo() call site), so alt="" avoids a duplicate screen-reader read of
       // the team; title stays for the sighted-hover tooltip.
-      <img src={team.logo} alt="" title={team.displayName} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
+      <img src={team.logo} alt="" title={team.displayName} loading="lazy" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
     );
 
   // Clicking the card body opens a spoiler-safe details popup. Inner
