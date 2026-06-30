@@ -23,5 +23,27 @@ export const metadata: Metadata = {
 };
 
 export default function TodayPage() {
-  return <HomeContent initialOffset={0} />;
+  return (
+    <>
+      <HomeContent initialOffset={0} />
+      {/* BreadcrumbList lets Google render a Home › Today trail in the search
+          result instead of the bare /today URL — matching the /faq, /privacy,
+          /worldcup, and guide pages that already declare the same hierarchy.
+          Server-rendered: this page has no "use client", so the script ships in
+          the static HTML for crawlers. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+              { "@type": "ListItem", position: 2, name: "Today", item: "https://hidescore.com/today" },
+            ],
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
+    </>
+  );
 }
