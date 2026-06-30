@@ -86,7 +86,17 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
 */
 
 
-function formatGameProgress(game: Game): { full: string; short: string; delayed?: boolean } {
+// "5" → "5th", "1" → "1st", etc. — for spelling out the inning to screen readers.
+function ordinal(n: number): string {
+  const v = n % 100;
+  const suffix = v >= 11 && v <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] || "th");
+  return `${n}${suffix}`;
+}
+
+// `label`, when present, is a spoken form for screen readers (applied as an
+// aria-label on the live-status element). Only MLB sets it: the ▲/▼ inning
+// glyphs read as a meaningless "up-pointing triangle 5" otherwise.
+function formatGameProgress(game: Game): { full: string; short: string; delayed?: boolean; label?: string } {
   const { sport, statusDetail, clock, period } = game;
   if (sport === "mlb") {
     // Delayed games arrive as "Rain Delay, Top 1st" / "Heat Delay, ..." —
@@ -103,8 +113,11 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
       const inn = m[2];
       const arrow = (half === "top" || half === "mid") ? "▲" : "▼";
       const base = `${arrow}${inn}`;
-      if (delayed) return { full: `${base} ${reason}`, short: `${base} ${reason}`, delayed: true };
-      return { full: base, short: base };
+      // Spoken inning for screen readers — "▲5" alone is meaningless read aloud.
+      const halfWord = half === "top" ? "Top" : half === "mid" ? "Middle" : half === "end" ? "End" : "Bottom";
+      const label = `${halfWord} of the ${ordinal(parseInt(inn, 10))} inning`;
+      if (delayed) return { full: `${base} ${reason}`, short: `${base} ${reason}`, delayed: true, label: `${label}, ${reason}` };
+      return { full: base, short: base, label };
     }
     if (delayed) return { full: reason, short: reason, delayed: true };
     return { full: statusDetail, short: statusDetail.slice(0, 3) };
@@ -623,9 +636,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     <span className="ml-1" title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
                   ) : null;
                   return liveUrl ? (
-                    <><a href={liveUrl} target="_blank" rel="noopener noreferrer" className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
+                    <><a href={liveUrl} target="_blank" rel="noopener noreferrer" aria-label={gameProgress.label || undefined} className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
                   ) : (
-                    <><span className={staticCls}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
+                    <><span className={staticCls} aria-label={gameProgress.label || undefined}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
                   );
                 })()
               ) : showFinal && !hasRating ? (
