@@ -228,7 +228,7 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
             style={{ background: "linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.4))" }}
           >
             <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)", color: "white" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
