@@ -132,7 +132,11 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
         <button onClick={prevMonth} aria-label="Previous month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
           {"<"}
         </button>
-        <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{monthLabel}</span>
+        {/* Live region: the ‹/› buttons swap the grid in place, so without
+            this a screen reader announces nothing when the month changes.
+            aria-live="polite" + atomic re-reads the full "July 2026" caption
+            on each navigation so SR users know which month they're viewing. */}
+        <span className="text-sm font-semibold" style={{ color: "var(--text)" }} aria-live="polite" aria-atomic="true">{monthLabel}</span>
         <button onClick={nextMonth} aria-label="Next month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
           {">"}
         </button>
