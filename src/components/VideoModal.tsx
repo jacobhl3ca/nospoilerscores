@@ -1041,7 +1041,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         style={{ zIndex: 1 }}
         role="dialog"
         aria-modal="true"
-        aria-label="Video player"
+        // Keep the dialog's accessible name in sync with what it's actually
+        // showing — this same modal also serves an image lightbox (imageMode)
+        // and a Reddit text-post preview (textMode), so a static "Video player"
+        // mislabels both for screen readers. Don't surface the headline here:
+        // it's deliberately spoiler-blurred (PeekBlur) because it can carry a
+        // score, and an accessible name would read it aloud unblurred.
+        aria-label={imageMode ? "Image viewer" : textMode ? "Post" : "Video player"}
       >
         {/* Reddit prev/next post paging — hover-revealed ‹ › on the player edges
             (desktop only; touch has no hover). stopPropagation so the click pages
