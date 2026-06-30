@@ -260,6 +260,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
           <img
             src={logoUrl}
             alt=""
+            loading="lazy"
             width={24}
             height={24}
             className="w-6 h-6 object-contain shrink-0"
