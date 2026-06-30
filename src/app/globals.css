@@ -81,11 +81,20 @@ html.reveal-news-titles .news-title,
   }
 }
 
+/* Paint the document background too (not just <body>) and stop rubber-band
+   overscroll — otherwise pulling past the sticky header / footer on mobile
+   exposes the html canvas behind body as a black band. */
+html {
+  background: var(--bg);
+  overscroll-behavior-y: none;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-geist-sans), system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   transition: background-color 0.2s, color 0.2s;
+  overscroll-behavior-y: none;
 }
 
 /* Light mode: blue bg + white H */

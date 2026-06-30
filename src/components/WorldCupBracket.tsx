@@ -59,13 +59,13 @@ function MatchCard({ match, bracket }: { match: Bracket["rounds"][number]["match
     ? new Date(match.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : null;
   return (
-    <div className="rounded-lg p-1.5 w-full" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+    <div className={`relative rounded-lg p-1.5 w-full ${dateLabel ? "pr-8" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      {dateLabel ? (
+        <div className="absolute top-1 right-1.5 text-[9px] tabular-nums" style={{ color: "var(--text-muted)", opacity: 0.6 }}>{dateLabel}</div>
+      ) : null}
       <Side side={match.home} bracket={bracket} />
       <div className="my-0.5 h-px" style={{ background: "var(--border)", opacity: 0.6 }} />
       <Side side={match.away} bracket={bracket} />
-      {dateLabel ? (
-        <div className="text-[9px] mt-0.5 text-right tabular-nums" style={{ color: "var(--text-muted)", opacity: 0.6 }}>{dateLabel}</div>
-      ) : null}
     </div>
   );
 }
