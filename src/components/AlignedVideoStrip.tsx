@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
+import { handleExternalClick } from "@/lib/openExternal";
 import { NewsSource, PlayHandler } from "./NewsColumn";
 
 interface Props {
@@ -277,7 +278,7 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
     );
   }
   return (
-    <a key={item.id} href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" className={commonCls} style={commonStyle}>
+    <a key={item.id} href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
       {body}
     </a>
   );
@@ -350,7 +351,7 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
     );
   }
   return (
-    <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" className={rowCls} style={rowStyle}>
+    <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
     </a>
