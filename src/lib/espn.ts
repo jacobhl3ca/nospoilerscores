@@ -1555,7 +1555,8 @@ function countryNameFromFlagUrl(url: string): string {
 
 // Pull broadcast network names off an ESPN competition (handles the
 // names[]/media.shortName/name shapes the racing + mma feeds use).
-function eventBroadcasts(comp: any): string[] {
+type BroadcastEntry = { names?: string[]; media?: { shortName?: string }; name?: string };
+function eventBroadcasts(comp: { broadcasts?: BroadcastEntry[] } | null | undefined): string[] {
   const out: string[] = [];
   for (const b of comp?.broadcasts ?? []) {
     if (Array.isArray(b?.names)) out.push(...b.names);
