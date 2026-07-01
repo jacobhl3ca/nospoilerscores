@@ -750,6 +750,7 @@ export default function SettingsPanel({
                           className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
                           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                           title="Remove from favorites"
+                          aria-label={`Remove ${t.displayName} from favorites`}
                         >
                           {t.logo && (
                             // eslint-disable-next-line @next/next/no-img-element
