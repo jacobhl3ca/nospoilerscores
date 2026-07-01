@@ -635,13 +635,38 @@ function tennisEtYmd(iso: string): string {
   }
 }
 
-function parseTennisMatch(match: any, event: any, slug: string): Game {
+// Minimal shapes of ESPN's tennis scoreboard payload — only the fields the
+// parser below reads. Real matches are athlete-based competitors nested in
+// event.groupings[] (see buildTennisGames), not team-based like other sports.
+type TennisAthlete = { shortName?: string; displayName?: string; flag?: { href?: string } };
+type TennisLineScore = { winner?: boolean };
+type TennisCompetitor = {
+  homeAway?: string;
+  athlete?: TennisAthlete;
+  linescores?: TennisLineScore[];
+  winner?: boolean;
+};
+type TennisMatch = {
+  id?: string;
+  date?: string;
+  competitors?: TennisCompetitor[];
+  status?: {
+    type?: { state?: string; shortDetail?: string; detail?: string; completed?: boolean };
+    period?: number;
+    displayClock?: string;
+  };
+  broadcasts?: { names?: string[] }[];
+  round?: { displayName?: string };
+};
+type TennisEvent = { id?: string; date: string; name?: string };
+
+function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string): Game {
   const comps = match.competitors ?? [];
-  const home = comps.find((c: any) => c.homeAway === "home") ?? comps[0];
-  const away = comps.find((c: any) => c.homeAway === "away") ?? comps[1];
-  const mkTeam = (c: any): Team => {
+  const home = comps.find((c) => c.homeAway === "home") ?? comps[0];
+  const away = comps.find((c) => c.homeAway === "away") ?? comps[1];
+  const mkTeam = (c: TennisCompetitor): Team => {
     const a = c?.athlete ?? {};
-    const setsWon = (c?.linescores ?? []).filter((l: any) => l.winner).length;
+    const setsWon = (c?.linescores ?? []).filter((l) => l.winner).length;
     return {
       // Empty id → GameCard renders the name as plain text (no team-schedule
       // view, which doesn't exist for individual players).
