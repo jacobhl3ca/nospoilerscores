@@ -1691,6 +1691,22 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
   };
 }
 
+// Shape of the ESPN golf scoreboard competitor/linescore data this parser reads.
+// linescores nests two levels: per-round scores, each with per-hole scores.
+type GolfHoleScore = { value?: number | null };
+type GolfRoundScore = { value?: number | null; linescores?: GolfHoleScore[] };
+type GolfAthlete = {
+  displayName?: string;
+  shortName?: string;
+  flag?: { href?: string; alt?: string };
+};
+type GolfCompetitor = {
+  order?: number;
+  score?: string;
+  athlete?: GolfAthlete;
+  linescores?: GolfRoundScore[];
+};
+
 async function fetchGolfTournament(date?: string): Promise<GolfTournament | null> {
   const url = new URL(BASE_URL + SPORT_PATHS.golf);
   if (date) url.searchParams.set("dates", date);
@@ -1721,7 +1737,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
 
   // Determine current round from linescores
   const currentRound = competitors.length > 0
-    ? (competitors[0].linescores ?? []).filter((r: any) => r.value !== null && r.value !== undefined).length
+    ? (competitors[0].linescores ?? []).filter((r: GolfRoundScore) => r.value !== null && r.value !== undefined).length
     : 0;
 
   let statusDetail = "Upcoming";
@@ -1729,7 +1745,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     statusDetail = "Final";
   } else if (state === "in") {
     // Check if any player is mid-round (has holes played in current round but round not complete)
-    const anyMidRound = competitors.some((c: any) => {
+    const anyMidRound = competitors.some((c: GolfCompetitor) => {
       const rounds = c.linescores ?? [];
       const nextRound = rounds[currentRound]; // 0-indexed: currentRound is the in-progress one
       if (!nextRound) return false;
@@ -1745,20 +1761,20 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     }
   }
 
-  const players: GolfPlayer[] = competitors.map((c: any) => {
-    const athlete = c.athlete ?? {};
-    const linescores: any[] = c.linescores ?? [];
+  const players: GolfPlayer[] = competitors.map((c: GolfCompetitor) => {
+    const athlete: GolfAthlete = c.athlete ?? {};
+    const linescores: GolfRoundScore[] = c.linescores ?? [];
 
     // Completed rounds
     const rounds = linescores
-      .filter((r: any) => r.value !== null && r.value !== undefined)
-      .map((r: any) => String(Math.round(r.value)));
+      .filter((r): r is GolfRoundScore & { value: number } => r.value !== null && r.value !== undefined)
+      .map((r) => String(Math.round(r.value)));
 
     // Thru: check if currently mid-round
     let thru = "";
     const inProgressRound = linescores[rounds.length]; // next round after completed ones
     if (inProgressRound) {
-      const holes = (inProgressRound.linescores ?? []).filter((h: any) => h.value !== null && h.value !== undefined);
+      const holes = (inProgressRound.linescores ?? []).filter((h: GolfHoleScore) => h.value !== null && h.value !== undefined);
       if (holes.length > 0 && holes.length < 18) {
         thru = String(holes.length);
       } else if (holes.length === 18) {
