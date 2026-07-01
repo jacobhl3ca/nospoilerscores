@@ -161,12 +161,20 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
 
   const start = new Date(gameDateISO);
   if (isNaN(start.getTime())) return null;
-  const localDate = start.toLocaleDateString("en-CA", { timeZone: geo.tz }); // YYYY-MM-DD
+  // geo.tz is an IANA zone from the geocoder, but it can be the "auto" sentinel
+  // when that result carried no timezone (see geocode's `?? "auto"`). "auto" is
+  // valid for Open-Meteo's `timezone=` API param below, but NOT for Intl —
+  // toLocale*({ timeZone: "auto" }) throws a RangeError, which (these calls sit
+  // outside the try) would reject the whole forecast and silently drop weather
+  // for the venue. Coerce it to the device zone so the intended graceful
+  // fallback actually works; a real IANA tz is used unchanged.
+  const tz = geo.tz && geo.tz !== "auto" ? geo.tz : undefined;
+  const localDate = start.toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
   // % 24 guards the "24" some ICU builds emit for midnight (same guard as
   // etDay/DateNav). Open-meteo's hourly times run 0–23, so an unguarded "24"
   // would never match `hr === localHour` below and lose the gametime row.
   const localHour = parseInt(
-    start.toLocaleString("en-US", { timeZone: geo.tz, hour: "2-digit", hour12: false }).slice(0, 2),
+    start.toLocaleString("en-US", { timeZone: tz, hour: "2-digit", hour12: false }).slice(0, 2),
     10,
   ) % 24;
 
