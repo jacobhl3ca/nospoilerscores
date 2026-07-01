@@ -671,7 +671,7 @@ type TennisMatch = {
   date?: string;
   competitors?: TennisCompetitor[];
   status?: {
-    type?: { state?: string; shortDetail?: string; detail?: string; completed?: boolean };
+    type?: { state?: string; shortDetail?: string; detail?: string; completed?: boolean; name?: string };
     period?: number;
     displayClock?: string;
   };
@@ -679,6 +679,10 @@ type TennisMatch = {
   round?: { displayName?: string };
 };
 type TennisEvent = { id?: string; date: string; name?: string };
+// The scoreboard event that wraps the draws: singles/doubles live under
+// groupings[], each grouping holding the actual matches (competitions[]).
+type TennisGrouping = { grouping?: { slug?: string }; competitions?: TennisMatch[] };
+type TennisScoreboardEvent = TennisEvent & { major?: boolean; groupings?: TennisGrouping[] };
 
 function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string): Game {
   const comps = match.competitors ?? [];
@@ -779,7 +783,7 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   };
 }
 
-function buildTennisGames(events: any[], date?: string): Game[] {
+function buildTennisGames(events: TennisScoreboardEvent[], date?: string): Game[] {
   // No-date fallback uses the shared service day so tennis matches the rest of
   // the app's notion of "today" (normally `date` is always passed).
   const target = date ?? toYmd(getEtServiceDate());
@@ -797,7 +801,7 @@ function buildTennisGames(events: any[], date?: string): Game[] {
       if (!slug.includes("singles") || slug.includes("doubles")) continue;
       for (const match of grouping.competitions ?? []) {
         if ((match.competitors?.length ?? 0) < 2) continue;
-        if (tennisEtYmd(match.date) !== target) continue;
+        if (tennisEtYmd(match.date ?? "") !== target) continue;
         const sn = match.status?.type?.name ?? "";
         if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
         try {
@@ -2150,7 +2154,7 @@ export async function fetchGames(
   // athlete-based competitors — flattened by a dedicated parser, not the
   // team-based path below (which would drop the 0-competitor tournament wrapper).
   if (sport === "tennis") {
-    return { games: buildTennisGames(events, date), failed: false };
+    return { games: buildTennisGames(events as TennisScoreboardEvent[], date), failed: false };
   }
 
   let games: Game[] = eventsToGames(events, sport);
