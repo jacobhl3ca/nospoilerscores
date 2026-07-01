@@ -109,7 +109,13 @@ export function decodeFavorites(params: URLSearchParams): {
   const s = params.get("s");
   if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
-  if (t) result.thirdLeague = t === "0" ? "empty" : SHORT_TO_SPORT[t];
+  // Guard the unknown-code case: SHORT_TO_SPORT is typed Record<string, Sport>,
+  // so an unrecognized `t` (malformed/hand-edited share URL) silently yields
+  // `undefined` that the type claims can't happen, landing an out-of-type
+  // `thirdLeague: undefined` on the result. Only assign a real Sport (or the
+  // "empty" sentinel), matching how every sibling decode below guards its code.
+  if (t === "0") result.thirdLeague = "empty";
+  else if (t && SHORT_TO_SPORT[t]) result.thirdLeague = SHORT_TO_SPORT[t];
   if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : tok === "0" ? "empty" : SHORT_TO_SPORT[tok]));
   const th = params.get("th");
   const dd = params.get("dd");
