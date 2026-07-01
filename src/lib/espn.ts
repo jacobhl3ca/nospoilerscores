@@ -792,10 +792,17 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
   return slugMap[slug] ?? null;
 }
 
+// A single ESPN "probables[]" entry — the starting pitcher (MLB) plus their
+// season record. Only the fields this helper reads are modeled.
+interface ProbableStarter {
+  athlete?: { shortName?: string; fullName?: string };
+  record?: string;
+}
+
 // "Z. Wheeler (5-1, 2.22)" from an ESPN competitor's probables[]. The record
 // string already arrives parenthesized; name prefers the short form. Null when
 // no probable is listed (most non-MLB sports, or before ESPN posts starters).
-function probablePitcher(competitor: any): string | null {
+function probablePitcher(competitor: { probables?: ProbableStarter[] } | null | undefined): string | null {
   const p = (competitor?.probables ?? [])[0];
   const ath = p?.athlete;
   const name = ath?.shortName || ath?.fullName;
