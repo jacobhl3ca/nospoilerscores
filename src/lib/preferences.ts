@@ -116,7 +116,13 @@ export function decodeFavorites(params: URLSearchParams): {
   // "empty" sentinel), matching how every sibling decode below guards its code.
   if (t === "0") result.thirdLeague = "empty";
   else if (t && SHORT_TO_SPORT[t]) result.thirdLeague = SHORT_TO_SPORT[t];
-  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : tok === "0" ? "empty" : SHORT_TO_SPORT[tok]));
+  // Same unknown-code guard as thirdLeague above: an unrecognized slot token in a
+  // malformed/hand-edited share URL makes SHORT_TO_SPORT[tok] undefined, which the
+  // Sport-typed index signature hides — smuggling an out-of-type value into the
+  // Sport branch. Coalesce it to the same `undefined` the "_" unset-slot sentinel
+  // uses, so a bad code degrades to an auto slot instead. Runtime-identical (an
+  // unknown code already yielded undefined); this just makes the intent explicit.
+  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : tok === "0" ? "empty" : SHORT_TO_SPORT[tok] ?? undefined));
   const th = params.get("th");
   const dd = params.get("dd");
   const dv = params.get("dv");
