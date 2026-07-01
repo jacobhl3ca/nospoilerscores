@@ -44,6 +44,15 @@ html.reveal-news-titles .news-title,
 }
 
 :root {
+  /* Tell the browser which theme its native UI (scrollbars, the text-input
+     caret + selection highlight, form controls, autofill) should paint in.
+     The app's theme is user-driven via [data-theme] (see the pre-paint script
+     in layout.tsx), so map color-scheme onto that rather than prefers-color-
+     scheme: light is the default here, dark is set alongside data-theme="dark"
+     below. Without this, native controls stayed light in dark mode (e.g. a
+     light caret + light scrollbar against the dark feedback input). Mirrors the
+     color-scheme already declared in global-error.tsx. */
+  color-scheme: light;
   --bg: #ffffff;
   --bg-card: #f5f5f5;
   --bg-card-hover: #ebebeb;
@@ -57,6 +66,7 @@ html.reveal-news-titles .news-title,
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0a0a0a;
   --bg-card: rgba(255, 255, 255, 0.05);
   --bg-card-hover: rgba(255, 255, 255, 0.08);
