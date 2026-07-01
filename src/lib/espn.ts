@@ -331,7 +331,21 @@ export function displayShortName(team: Team): string {
   return DISPLAY_SHORT_NAME_OVERRIDES[team.shortDisplayName] ?? team.shortDisplayName;
 }
 
-function parseTeam(competitor: any, sport: Sport): Team {
+type RawCompetitor = {
+  team?: {
+    id?: string | number;
+    abbreviation?: string;
+    displayName?: string;
+    shortDisplayName?: string;
+    logo?: string;
+    color?: string;
+  };
+  records?: { summary?: string }[];
+  score?: string;
+  winner?: boolean;
+};
+
+function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
   let record = competitor.records?.[0]?.summary ?? "";
   // MLB spring training and NHL records include a 3rd segment (ties / OTL) — strip to W-L
