@@ -1937,12 +1937,20 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
   }
 }
 
+// The subset of a raw ESPN scoreboard event that the filter below reads; the
+// full event is handed to parseGame (which accepts the untyped shape).
+type ScoreboardEvent = {
+  status?: { type?: { name?: string } };
+  season?: { type?: number };
+  competitions?: Array<{ competitors?: unknown[] }>;
+};
+
 // Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
 // the single-day fetch and the soccer range-lookahead so both apply the same
 // postponed/preseason/0-competitor filtering + per-event failure isolation.
-function eventsToGames(events: any[], sport: Sport): Game[] {
+function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
   return events
-    .filter((e: any) => {
+    .filter((e) => {
       // Filter out postponed/canceled/suspended games
       const statusName = e.status?.type?.name ?? "";
       if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
@@ -1955,7 +1963,7 @@ function eventsToGames(events: any[], sport: Sport): Game[] {
       return true;
     })
     // A single malformed event must not take down the whole league.
-    .map((e: any) => {
+    .map((e) => {
       try {
         return parseGame(e, sport);
       } catch {
@@ -1987,7 +1995,7 @@ async function fetchNextGameDayRange(
   const end = new Date(base); end.setDate(end.getDate() + windowDays);
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
-  let events: any[];
+  let events: ScoreboardEvent[];
   try {
     const res = await fetchWithRetry(url.toString());
     if (!res.ok) return null;
@@ -2072,7 +2080,7 @@ async function fetchPreviousGameDayRange(
   const start = new Date(base); start.setDate(start.getDate() - windowDays);
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
-  let events: any[];
+  let events: ScoreboardEvent[];
   try {
     const res = await fetchWithRetry(url.toString());
     if (!res.ok) return null;
@@ -2157,7 +2165,7 @@ export async function fetchGames(
     return { games: buildTennisGames(events as TennisScoreboardEvent[], date), failed: false };
   }
 
-  let games: Game[] = eventsToGames(events, sport);
+  let games: Game[] = eventsToGames(events as ScoreboardEvent[], sport);
   // Drop the adjacent-day fixtures the 2-day soccer window pulled in, keeping
   // only the ones whose slate day is the viewed date.
   if (reconcileSoccerDay && date) {
@@ -2354,7 +2362,7 @@ export async function fetchScheduleRatings(
       const res = await fetchWithRetry(url.toString());
       if (!res.ok) return [];
       const data: { events?: unknown[] } | null = await res.json();
-      return eventsToGames(data?.events ?? [], sport);
+      return eventsToGames((data?.events ?? []) as ScoreboardEvent[], sport);
     } catch {
       return [];
     }
