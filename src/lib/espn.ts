@@ -426,11 +426,16 @@ function gameProgress(game: any, sport: Sport, regulationPeriods: number, state:
   return coarse;
 }
 
+// Minimal shape of an ESPN competitor's per-period linescores — the only field
+// the margin helpers below read off the raw scoreboard payload.
+type LineScore = { value?: number };
+type MarginCompetitor = { linescores?: LineScore[] };
+
 // Calculate running margin from linescores: average absolute margin across all periods
 // Returns null if linescore data is insufficient
-function calcRunningMargin(competitors: any[]): number | null {
-  const ls0: any[] = competitors[0].linescores ?? [];
-  const ls1: any[] = competitors[1].linescores ?? [];
+function calcRunningMargin(competitors: MarginCompetitor[]): number | null {
+  const ls0: LineScore[] = competitors[0].linescores ?? [];
+  const ls1: LineScore[] = competitors[1].linescores ?? [];
   const periods = Math.min(ls0.length, ls1.length);
   if (periods < 2) return null; // need at least 2 periods for this to be meaningful
 
@@ -446,9 +451,9 @@ function calcRunningMargin(competitors: any[]): number | null {
 }
 
 // Was the game close entering the final period?
-function calcFinalPeriodMargin(competitors: any[]): number | null {
-  const ls0: any[] = competitors[0].linescores ?? [];
-  const ls1: any[] = competitors[1].linescores ?? [];
+function calcFinalPeriodMargin(competitors: MarginCompetitor[]): number | null {
+  const ls0: LineScore[] = competitors[0].linescores ?? [];
+  const ls1: LineScore[] = competitors[1].linescores ?? [];
   const periods = Math.min(ls0.length, ls1.length);
   if (periods < 2) return null;
 
