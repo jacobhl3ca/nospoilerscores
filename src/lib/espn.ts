@@ -400,12 +400,16 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
 const SOCCER_SPORTS = new Set<Sport>(["epl", "mls", "ucl", "uel", "fifa"]);
 const FULL_MATCH_SECONDS = 5400;
 
+// Minimal shape of an ESPN game's live status — the only fields this progress
+// estimate reads: the current period/inning and the (optionally numeric) clock.
+type GameStatusLike = { status?: { period?: number; clock?: number } };
+
 // Fraction of regulation elapsed, [0,1]. Uses the live game clock for smooth
 // within-period progress (so the "too early" gate trips *during* period 1, and
 // every sport behaves like MLB/tennis — an honest "Too Early" at the start
 // rather than a misleading low badge). Falls back to a coarse period-midpoint
 // estimate when there's no usable clock (MLB innings, or missing data).
-function gameProgress(game: any, sport: Sport, regulationPeriods: number, state: string): number {
+function gameProgress(game: GameStatusLike, sport: Sport, regulationPeriods: number, state: string): number {
   if (state === "post") return 1;
   const clamp = (x: number) => Math.max(0, Math.min(1, x));
   const period = game.status?.period ?? 0;
