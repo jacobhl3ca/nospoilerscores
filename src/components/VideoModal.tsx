@@ -489,7 +489,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const togglePlay = useCallback(() => {
     const p = playerRef.current;
     if (!p?.getPlayerState) return;
-    const PLAYING = (window as any).YT?.PlayerState?.PLAYING ?? 1;
+    const PLAYING = (window as unknown as { YT?: { PlayerState?: { PLAYING?: number } } }).YT?.PlayerState?.PLAYING ?? 1;
     if (p.getPlayerState() === PLAYING) p.pauseVideo?.();
     else p.playVideo?.();
   }, []);
@@ -555,7 +555,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const toggleFullscreen = useCallback(() => {
     if (!ytMode) {
       if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-      const el: any = hlsMode ? videoRef.current : embedMode ? iframeRef.current : null;
+      const el = (hlsMode ? videoRef.current : embedMode ? iframeRef.current : null) as
+        (HTMLElement & { webkitEnterFullscreen?: () => void; webkitRequestFullscreen?: () => void }) | null;
       if (!el) return;
       if (typeof el.requestFullscreen === "function") el.requestFullscreen().catch(() => {});
       else if (typeof el.webkitEnterFullscreen === "function") el.webkitEnterFullscreen();
@@ -564,7 +565,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
     if (fakeFs) { setFakeFs(false); return; }
     if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-    const wrap: any = fsWrapRef.current;
+    const wrap = fsWrapRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
     if (!wrap) return;
     if (typeof wrap.requestFullscreen === "function") {
       wrap.requestFullscreen().catch(() => setFakeFs(true));
@@ -632,7 +633,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // co-delivered Escape doesn't also close the modal.
   useEffect(() => {
     const onFsChange = () => {
-      const fsEl = (document.fullscreenElement || (document as any).webkitFullscreenElement) ?? null;
+      const fsEl = (document.fullscreenElement || (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement) ?? null;
       const active = !!fsEl && fsEl === fsWrapRef.current;
       setNativeFs(active);
       if (!active) fsExitAtRef.current = Date.now();
@@ -770,33 +771,34 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // short highlight clips (MLB ~30-90s, v.redd.it), so the default ABR — which
     // starts on a low/mid level and ramps up over several segments — would often
     // let the clip end before it ever reached max quality.
-    let hls: any = null;
+    let hls: InstanceType<typeof import("hls.js").default> | null = null;
     let cancelled = false;
     import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
       if (!Hls.isSupported()) return;
-      hls = new Hls({
+      const player = new Hls({
         // Don't let the (deliberately small) modal cap the level, and assume
         // broadband so the very first segment isn't fetched at a low rendition.
         capLevelToPlayerSize: false,
         abrEwmaDefaultEstimate: 5_000_000,
       });
+      hls = player;
       // Stop the SubtitleTrackController from auto-promoting a DEFAULT=YES
       // track. Setter, not config — this version's HlsConfig doesn't expose
       // subtitleDisplay. The enforce loop below is the real source of truth;
       // this just keeps hls.js from fighting it during init.
-      try { hls.subtitleDisplay = false; } catch {}
-      hls.loadSource(playbackUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      try { player.subtitleDisplay = false; } catch {}
+      player.loadSource(playbackUrl);
+      player.attachMedia(video);
+      player.on(Hls.Events.MANIFEST_PARSED, () => {
         // Pin to the highest rendition. For these short clips we want max
         // quality immediately rather than waiting for ABR to climb to it
         // mid-clip; setting currentLevel disables auto-switching, which is
         // safe here — the clips are seconds-to-minutes long, not live streams.
         // (The longer ~10-min NHL condensed games go through Brightcove embeds,
         // not this path, so nothing here is long enough to risk a stall.)
-        if (hls.levels && hls.levels.length > 0) {
-          hls.currentLevel = hls.levels.length - 1;
+        if (player.levels && player.levels.length > 0) {
+          player.currentLevel = player.levels.length - 1;
         }
         video.play().catch(() => {});
       });
