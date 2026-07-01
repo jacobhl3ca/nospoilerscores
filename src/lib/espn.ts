@@ -479,8 +479,10 @@ function calcFinalPeriodMargin(competitors: MarginCompetitor[]): number | null {
 // a tie, flipped the lead, or equalized), scaled by how late it fell. Returns 0
 // when details are absent (e.g. the team-schedule API) or the last swing was
 // before ~70'. Minutes fold stoppage time in ("90'+5'" → 95).
-function soccerLateDramaBonus(competition: any): number {
-  const details: any[] = competition?.details ?? [];
+type SoccerPlay = { scoringPlay?: boolean; clock?: { displayValue?: string }; team?: { id?: string | number } };
+type SoccerCompetition = { details?: SoccerPlay[] };
+function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined): number {
+  const details: SoccerPlay[] = competition?.details ?? [];
   if (!details.length) return 0;
   const parseMin = (dv: string | undefined): number | null => {
     const m = dv?.match(/(\d+)'?(?:\s*\+\s*(\d+))?/);
