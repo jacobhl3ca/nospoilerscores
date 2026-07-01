@@ -84,6 +84,46 @@ interface YTPlayer {
   mute: () => void;
   unMute: () => void;
   destroy: () => void;
+  // Undocumented but reliable helpers used by the quality/title-spoiler logic.
+  // Optional because they aren't guaranteed present on every API revision.
+  getAvailableQualityLevels?: () => string[];
+  setPlaybackQuality?: (quality: string) => void;
+  getVideoData?: () => { title?: string } | undefined;
+}
+
+// Event object the YT IFrame API hands to onReady/onStateChange/etc. `data` is
+// a numeric player state on onStateChange but a quality string on
+// onPlaybackQualityChange, so it can be either.
+interface YTPlayerEvent {
+  target: YTPlayer;
+  data: number | string;
+}
+
+// The slice of the global YouTube IFrame API we touch. It's injected at runtime
+// from https://www.youtube.com/iframe_api, so it isn't in any @types package.
+interface YTNamespace {
+  Player: new (
+    elementId: string,
+    config: {
+      width?: string | number;
+      height?: string | number;
+      videoId?: string;
+      playerVars?: Record<string, string | number>;
+      events?: {
+        onReady?: (event: YTPlayerEvent) => void;
+        onStateChange?: (event: YTPlayerEvent) => void;
+        onPlaybackQualityChange?: (event: YTPlayerEvent) => void;
+        onError?: (event: YTPlayerEvent) => void;
+      };
+    }
+  ) => YTPlayer;
+}
+
+declare global {
+  interface Window {
+    YT?: YTNamespace;
+    onYouTubeIframeAPIReady?: () => void;
+  }
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -854,7 +894,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
 
-    if (!(window as any).YT) {
+    if (!window.YT) {
       document.head.appendChild(tag);
     }
 
@@ -892,13 +932,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       for (const q of QUALITY_PREF) if (levels.includes(q)) return q;
       return null;
     };
-    const forceBest = (player: any) => {
+    const forceBest = (player: YTPlayer) => {
       const levels: string[] = player.getAvailableQualityLevels?.() || [];
       const best = pickBest(levels);
       if (best) player.setPlaybackQuality?.(best);
     };
     const initPlayer = () => {
-      playerRef.current = new (window as any).YT.Player("yt-player", {
+      const YT = window.YT;
+      if (!YT) return;
+      playerRef.current = new YT.Player("yt-player", {
         width: "100%",
         height: "100%",
         videoId: currentId,
@@ -922,7 +964,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           vq: "hd1080",
         },
         events: {
-          onReady: (event: any) => {
+          onReady: (event: YTPlayerEvent) => {
             event.target.playVideo();
             // A freshly-built player always autoplays muted — keep the custom
             // toggle in sync (covers fallback swaps after an unmute, too).
@@ -948,7 +990,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // PLAYING (1) is the first state where getAvailableQualityLevels()
           // returns the real list — onReady gives []. setPlaybackQuality is
           // a deprecated suggestion, but it's the only knob we have.
-          onStateChange: (event: any) => {
+          onStateChange: (event: YTPlayerEvent) => {
             // Playback actually started — kill the watchdog.
             if ((event.data === 1 || event.data === 3) && watchdogRef.current) {
               window.clearTimeout(watchdogRef.current);
@@ -965,7 +1007,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             }
           },
           // If YT auto-quality downgrades us, push back up to the best level.
-          onPlaybackQualityChange: (event: any) => {
+          onPlaybackQualityChange: (event: YTPlayerEvent) => {
             const levels: string[] = event.target.getAvailableQualityLevels?.() || [];
             const best = pickBest(levels);
             if (best && event.data !== best) event.target.setPlaybackQuality?.(best);
@@ -979,10 +1021,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       });
     };
 
-    if ((window as any).YT && (window as any).YT.Player) {
+    if (window.YT && window.YT.Player) {
       initPlayer();
     } else {
-      (window as any).onYouTubeIframeAPIReady = initPlayer;
+      window.onYouTubeIframeAPIReady = initPlayer;
     }
 
     return () => {
