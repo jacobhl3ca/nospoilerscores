@@ -886,12 +886,67 @@ const ROOFED_VENUES = new Set([
 ]);
 const normalizeVenue = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-function parseGame(event: any, sport: Sport): Game {
+// A team-sport competitor inside a scoreboard event's competition: the
+// team-parse fields (RawCompetitor) plus the extras parseGame reads — the
+// home/away side, the soccer penalty-shootout score, the MLB probable starter,
+// and the linescores/score the closeness scorer needs (MarginCompetitor).
+type ScoreboardCompetitor = RawCompetitor &
+  MarginCompetitor & {
+    homeAway?: string;
+    shootoutScore?: string | number | null;
+    probables?: ProbableStarter[];
+  };
+
+// The venue block on a competition — name, dome flag, and address.
+type ScoreboardVenue = {
+  fullName?: string;
+  indoor?: boolean;
+  address?: { city?: string; state?: string; country?: string };
+};
+
+// A raw ESPN scoreboard event, modelling only the fields parseGame reads before
+// it (and calculateRating — see RatingGame, which this is assignable to) turn it
+// into a Game. `_sport` is stamped in place here so the rating scorer reads it
+// back off the same object.
+type ScoreboardEvent = {
+  id: string;
+  date: string;
+  name?: string;
+  shortName?: string;
+  _sport?: Sport;
+  season?: { type?: number; slug?: string };
+  status?: {
+    displayClock?: string;
+    period?: number;
+    clock?: number;
+    type?: {
+      name?: string;
+      state?: "pre" | "in" | "post";
+      detail?: string;
+      shortDetail?: string;
+      completed?: boolean;
+    };
+  };
+  links?: { rel?: string[]; href?: string }[];
+  competitions?: Array<
+    SoccerCompetition & {
+      competitors?: ScoreboardCompetitor[];
+      broadcasts?: { names?: string[] }[];
+      headlines?: { video?: { links?: { web?: { href?: string } } }[] }[];
+      notes?: { headline?: string }[];
+      series?: { type?: string; summary?: string };
+      venue?: ScoreboardVenue;
+      altGameNote?: string;
+    }
+  >;
+};
+
+function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors ?? [];
 
-  const home = competitors.find((c: any) => c.homeAway === "home");
-  const away = competitors.find((c: any) => c.homeAway === "away");
+  const home = competitors.find((c) => c.homeAway === "home");
+  const away = competitors.find((c) => c.homeAway === "away");
 
   // Gather broadcasts
   const broadcasts: string[] = [];
@@ -954,7 +1009,7 @@ function parseGame(event: any, sport: Sport): Game {
   // Only present on playoff competitions; regular-season series has no field.
   const rawSeriesSummary: string | null =
     competition?.series?.type === "playoff"
-      ? (competition.series.summary ?? null)
+      ? (competition.series?.summary ?? null)
       : null;
   // Before Game 1 ESPN sets series.summary to a schedule note like
   // "Series starts 5/19" — not an actual series score. Rendered as-is it
@@ -967,7 +1022,7 @@ function parseGame(event: any, sport: Sport): Game {
   let recapUrl: string | null = null;
   for (const link of event.links ?? []) {
     if (link.rel?.includes("summary") || link.rel?.includes("event")) {
-      recapUrl = link.href;
+      recapUrl = link.href ?? null;
       break;
     }
   }
@@ -975,9 +1030,9 @@ function parseGame(event: any, sport: Sport): Game {
   // Venue location + indoor flag (the address object sits next to fullName).
   // ESPN's address.city is usually "City"/"City, State"; state/country round it
   // out. Guard against the occasional junk where city echoes the venue name.
-  const venueObj = competition?.venue ?? {};
+  const venueObj: ScoreboardVenue = competition?.venue ?? {};
   const venueName: string = venueObj.fullName ?? "";
-  const addr = venueObj.address ?? {};
+  const addr: NonNullable<ScoreboardVenue["address"]> = venueObj.address ?? {};
   let venueLocation = "";
   {
     const city: string = (addr.city ?? "").trim();
@@ -1993,14 +2048,6 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
     // Quota exceeded / private mode / disabled storage — silent.
   }
 }
-
-// The subset of a raw ESPN scoreboard event that the filter below reads; the
-// full event is handed to parseGame (which accepts the untyped shape).
-type ScoreboardEvent = {
-  status?: { type?: { name?: string } };
-  season?: { type?: number };
-  competitions?: Array<{ competitors?: unknown[] }>;
-};
 
 // Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
 // the single-day fetch and the soccer range-lookahead so both apply the same
