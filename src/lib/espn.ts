@@ -531,11 +531,23 @@ function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined)
   return 0;
 }
 
-function calculateRating(game: any): number | null {
+// The raw ESPN event calculateRating scores, tagged with _sport by parseGame.
+// Reads only the closeness signals: per-competitor score + linescores (via the
+// margin helpers), the soccer scoring-play details (via soccerLateDramaBonus),
+// and the live status/clock (via gameProgress, whose GameStatusLike this fits).
+type RatingGame = {
+  _sport?: Sport;
+  status?: { type?: { state?: string }; period?: number; clock?: number };
+  competitions?: Array<
+    SoccerCompetition & { competitors?: (MarginCompetitor & { score?: string })[] }
+  >;
+};
+
+function calculateRating(game: RatingGame): number | null {
   const competition = game.competitions?.[0];
   if (!competition) return null;
 
-  const state = game.status?.type?.state;
+  const state = game.status?.type?.state ?? "";
   if (state === "pre") return null;
 
   const competitors = competition.competitors;
