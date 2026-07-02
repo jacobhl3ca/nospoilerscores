@@ -189,10 +189,14 @@ export default function GameDetailModal({
   const homeName = game.homeTeam.displayName || game.homeTeam.shortDisplayName || game.homeTeam.abbreviation;
   const dialogLabel = awayName && homeName ? `${awayName} at ${homeName} — game details` : "Game details";
 
+  // Thresholds MUST match the score-card badge (GameCard/GolfLeaderboard
+  // RatingBadge: 85/70/50) — this modal renders the identical label+color for
+  // the same game.rating, so a mismatch made the SAME game read e.g. "GOOD" on
+  // the card yet "GREAT" here (a rating of 82). Keep these three in sync.
   const ratingTier = (r: number) =>
-    r >= 80 ? { label: "GREAT", bg: "bg-green-600" }
-    : r >= 55 ? { label: "GOOD", bg: "bg-yellow-600" }
-    : r >= 30 ? { label: "MEH", bg: "bg-orange-600" }
+    r >= 85 ? { label: "GREAT", bg: "bg-green-600" }
+    : r >= 70 ? { label: "GOOD", bg: "bg-yellow-600" }
+    : r >= 50 ? { label: "MEH", bg: "bg-orange-600" }
     : { label: "SKIP", bg: "bg-red-700" };
 
   // A clickable broadcaster name — same resolution as the score card's network
