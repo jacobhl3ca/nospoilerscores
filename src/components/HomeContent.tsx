@@ -3049,6 +3049,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         type="button"
         aria-label="Scroll to top"
         title="Scroll to top"
+        // opacity-0 + pointer-events-none hides it from sight and the mouse, but
+        // a plain <button> stays in the tab order — so when it's hidden, keyboard
+        // users would still Tab onto an invisible control (WCAG 2.4.3/4.1.2).
+        // Pull it out of the tab order and hide it from the a11y tree while off.
+        tabIndex={showScrollTop ? 0 : -1}
+        aria-hidden={!showScrollTop}
         onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}
         className={`monkey-toggle fixed z-40 w-11 h-11 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 shadow-lg ${showScrollTop ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         style={{
