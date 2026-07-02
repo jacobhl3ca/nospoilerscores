@@ -203,7 +203,12 @@ function analyzeGroup(rows: Row[], pairs: [string, string][]): Map<string, Statu
     const drawSub = combos.filter((c) => c.kind[t] === "D");
     const drawClinches = drawSub.length > 0 && drawSub.every((c) => inTop2(c.pts, t, false));
     const noWin = combos.filter((c) => c.kind[t] !== "W");
-    const winNeeded = noWin.every((c) => !inTop2(c.pts, t, true));
+    // "Only a win reaches top-2" — but that's only meaningful if a win CAN get
+    // there. Without the canReach guard, a team that can't reach top-2 in ANY
+    // outcome (winning included) makes every non-win combo vacuously fail the
+    // inTop2 test, so winNeeded went true and the team was mislabeled "mustwin"
+    // instead of falling through to best8 / eliminated.
+    const winNeeded = canReach && noWin.every((c) => !inTop2(c.pts, t, true));
     let s: Status;
     if (clinched) s = "through";
     else if (drawClinches) s = "drawsafe";
