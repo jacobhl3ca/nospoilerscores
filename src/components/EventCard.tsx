@@ -65,6 +65,14 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
       className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer disabled:opacity-50"
       style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
       title={`${label} highlights`}
+      // Pin the accessible name to the button's purpose so a screen reader
+      // hears "UFC highlights" / "Search highlights" — otherwise the name fell
+      // back to the bare visible text ("Search" alone is ambiguous) while
+      // loading swapped it to "Loading…", losing what the button does. aria-busy
+      // conveys the in-flight fetch that the visible "Loading…" shows sighted
+      // users. Matches the title+aria-label pairing every other button here uses.
+      aria-label={`${label} highlights`}
+      aria-busy={loading}
     >
       {loading ? (
         <span className="text-[10px]">Loading…</span>
