@@ -627,7 +627,7 @@ function calculateRating(game: RatingGame): number | null {
   }
 
   // Low-scoring penalty for soccer: a 0-0 draw isn't exciting regardless of "closeness".
-  // Use the canonical SOCCER_SPORTS set (same set the closeness model, isSoccer late-
+  // Use the canonical SOCCER_SPORTS set (same set the closeness model, the late-
   // drama bonus below, and day-reconcile all key off) so every soccer league is covered.
   // A hand-listed subset silently dropped ucl/uel, letting a goalless UCL/UEL draw skip
   // the penalty and rate 100 ("GREAT") where the identical EPL/FIFA match rates ~50.
@@ -639,9 +639,11 @@ function calculateRating(game: RatingGame): number | null {
   // Late-drama bonus for soccer: a result swung late (e.g. a stoppage-time
   // winner) is the most compelling soccer there is, but the closeness factors
   // are blind to goal timing. Lifts a dramatic 1-0 out of the low-scoring
-  // penalty's MEH hole while leaving a dull early 1-0 where it is.
-  const isSoccer = sport === "epl" || sport === "mls" || sport === "fifa" || sport === "ucl" || sport === "uel";
-  const lateDramaBonus = isSoccer ? soccerLateDramaBonus(competition) : 0;
+  // penalty's MEH hole while leaving a dull early 1-0 where it is. Gate off the
+  // canonical SOCCER_SPORTS set (same as the low-scoring penalty above) — a
+  // hand-listed subset here would silently drop the bonus for any soccer league
+  // added to the set later, the exact ucl/uel drift the penalty comment warns of.
+  const lateDramaBonus = SOCCER_SPORTS.has(sport) ? soccerLateDramaBonus(competition) : 0;
 
   const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty)));
 
