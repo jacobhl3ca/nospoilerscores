@@ -827,6 +827,36 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
   }, [hlsMode, playbackUrl, showCC]);
 
+  // YouTube caption enforcer — YouTube's IFrame API auto-shows captions when
+  // the viewer's account/device has CC turned on, and no player var can force
+  // them off (cc_load_policy only requests the default). The only reliable
+  // knob is (un)loadModule, so we drive it off showCC (default OFF) — this is
+  // what makes homepage highlights actually let you turn CC off. Poll briefly
+  // because the captions module only exists once the player has loaded, and
+  // re-apply after a fallback swap (currentId change rebuilds the player).
+  useEffect(() => {
+    if (!ytMode) return;
+    const apply = () => {
+      const p = playerRef.current;
+      if (!p || typeof p.loadModule !== "function") return;
+      try {
+        if (showCC) {
+          p.loadModule("captions");
+          p.loadModule("cc");
+          p.setOption?.("captions", "track", { languageCode: "en" });
+          p.setOption?.("cc", "track", { languageCode: "en" });
+        } else {
+          p.unloadModule("captions");
+          p.unloadModule("cc");
+        }
+      } catch { /* module not ready yet — the poll retries */ }
+    };
+    apply();
+    const pollId = window.setInterval(apply, 250);
+    const stopPoll = window.setTimeout(() => window.clearInterval(pollId), 3000);
+    return () => { window.clearInterval(pollId); window.clearTimeout(stopPoll); };
+  }, [ytMode, showCC, currentId]);
+
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
     if (hlsMode || embedMode || imageMode || textMode) return; // HLS / iframe / image / text branches handle rendering instead
@@ -897,6 +927,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           controls: youtubeNativeControls ? 1 : 0,
           // Hide in-video annotations/cards — they can carry spoilers.
           iv_load_policy: 3,
+          // Don't auto-load captions. cc_load_policy alone can't force them OFF
+          // when the viewer's YouTube account/device has CC enabled, so the
+          // real enforcement is the (un)loadModule effect below — this just
+          // avoids the initial caption flash on a clean load.
+          cc_load_policy: 0,
           // vq is deprecated but still hinted by some clients.
           vq: "hd1080",
         },
@@ -990,14 +1025,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     <>
       {onPrev && (
         <button onClick={(e) => { e.stopPropagation(); onPrev(); }} aria-label="Previous post" title="Previous post"
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-30 w-10 h-16 flex items-center justify-center rounded-r-lg text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-30 w-10 h-16 flex items-center justify-center rounded-r-lg text-white/70 hover:text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
           style={{ background: "rgba(0,0,0,0.5)" }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
       )}
       {onNext && (
         <button onClick={(e) => { e.stopPropagation(); onNext(); }} aria-label="Next post" title="Next post"
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-30 w-10 h-16 flex items-center justify-center rounded-l-lg text-white/70 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-30 w-10 h-16 flex items-center justify-center rounded-l-lg text-white/70 hover:text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
           style={{ background: "rgba(0,0,0,0.5)" }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
         </button>
@@ -1044,10 +1079,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           </svg>
         </button>
 
-        {/* Captions toggle — only when the source carries a CC track. Sits
-            beside the close button so it's always reachable instead of buried
-            in Safari's overflow menu. */}
-        {hlsMode && hasCaptionTrack && (
+        {/* Captions toggle — HLS sources that carry a CC track, plus every
+            YouTube clip (homepage highlights): the YT player auto-shows captions
+            off the viewer's account pref and there's no native control in our
+            spoiler-safe chrome, so this is the only way to turn them off. Sits
+            beside the close button so it's always reachable. */}
+        {((hlsMode && hasCaptionTrack) || ytMode) && (
           <button
             onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
             aria-pressed={showCC}
