@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getTimeZone } from "@/lib/etDay";
 import {
   fetchBracket,
   type Bracket,
@@ -56,7 +57,7 @@ function Side({ side, bracket }: { side: BracketSide; bracket: Bracket }) {
 
 function MatchCard({ match, bracket }: { match: Bracket["rounds"][number]["matches"][number]; bracket: Bracket }) {
   const dateLabel = match.date
-    ? new Date(match.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    ? new Date(match.date).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() })
     : null;
   return (
     <div className={`relative rounded-lg p-1.5 w-full ${dateLabel ? "pr-8" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
