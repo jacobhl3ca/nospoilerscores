@@ -626,9 +626,13 @@ function calculateRating(game: RatingGame): number | null {
     comebackBonus = Math.min(deficitErased * config.multiplier * 0.4, 30);
   }
 
-  // Low-scoring penalty for soccer: a 0-0 draw isn't exciting regardless of "closeness"
+  // Low-scoring penalty for soccer: a 0-0 draw isn't exciting regardless of "closeness".
+  // Use the canonical SOCCER_SPORTS set (same set the closeness model, isSoccer late-
+  // drama bonus below, and day-reconcile all key off) so every soccer league is covered.
+  // A hand-listed subset silently dropped ucl/uel, letting a goalless UCL/UEL draw skip
+  // the penalty and rate 100 ("GREAT") where the identical EPL/FIFA match rates ~50.
   let lowScoringPenalty = 0;
-  if ((sport === "epl" || sport === "mls" || sport === "fifa") && total < 2) {
+  if (SOCCER_SPORTS.has(sport) && total < 2) {
     lowScoringPenalty = (2 - total) * 25; // 0 goals: -50, 1 goal: -25
   }
 
