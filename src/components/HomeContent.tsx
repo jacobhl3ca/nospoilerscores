@@ -2328,9 +2328,14 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             </>
           );
         })() : loading ? (
-          <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+          // Screen readers get an announced loading status; the pulsing card
+          // placeholders below are purely decorative (empty styled divs), so
+          // they're aria-hidden and only the sr-only text is voiced (WCAG 4.1.3,
+          // matching the role=status pattern in FeedbackBox / SettingsPanel).
+          <div role="status" aria-live="polite" className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+            <span className="sr-only">Loading games…</span>
             {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
-              <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
+              <div key={i} aria-hidden="true" className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
                   <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
                   <span className="text-[9px] sm:text-[10px] italic mt-0.5 block" style={{ color: "transparent" }}>{"\u00A0"}</span>
