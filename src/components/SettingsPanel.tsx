@@ -582,6 +582,7 @@ export default function SettingsPanel({
                 <input
                   type="text"
                   inputMode="numeric"
+                  autoComplete="postal-code"
                   maxLength={5}
                   value={zip}
                   onChange={(e) => { setZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setZipMsg(""); }}
