@@ -180,6 +180,15 @@ export default function GameDetailModal({
 
   const statusLabel = isFinal ? "Final" : isLive ? "In progress" : "Upcoming";
 
+  // Name the dialog after the matchup so screen readers announce which game's
+  // details opened (e.g. "Yankees at Red Sox — game details") instead of a
+  // generic "Game details" on every card. Mirrors VideoModal's content-specific
+  // dialog name. Team names carry no score, so this stays spoiler-safe; falls
+  // back to the generic label if either name is missing.
+  const awayName = game.awayTeam.displayName || game.awayTeam.shortDisplayName || game.awayTeam.abbreviation;
+  const homeName = game.homeTeam.displayName || game.homeTeam.shortDisplayName || game.homeTeam.abbreviation;
+  const dialogLabel = awayName && homeName ? `${awayName} at ${homeName} — game details` : "Game details";
+
   const ratingTier = (r: number) =>
     r >= 80 ? { label: "GREAT", bg: "bg-green-600" }
     : r >= 55 ? { label: "GOOD", bg: "bg-yellow-600" }
@@ -225,7 +234,7 @@ export default function GameDetailModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Game details"
+        aria-label={dialogLabel}
       >
         <button
           onClick={onClose}
