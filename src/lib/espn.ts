@@ -1586,6 +1586,35 @@ function eventBroadcasts(comp: { broadcasts?: BroadcastEntry[] } | null | undefi
   return [...new Set(out.filter(Boolean))];
 }
 
+// Minimal shapes of ESPN's F1/UFC single-event payload — only the fields
+// fetchLeagueEvent reads. `competitions` are the race sessions (F1) or the
+// individual bouts (UFC); each bout's competitors are the two fighters.
+type LeagueEventVenue = { address?: { city?: string; state?: string; country?: string } };
+type LeagueEventCircuit = { fullName?: string; address?: { city?: string; country?: string } };
+type LeagueEventCompetitor = {
+  athlete?: { displayName?: string; shortName?: string; flag?: { href?: string; alt?: string } };
+  records?: { summary?: string }[];
+};
+type LeagueEventCompetition = {
+  id?: string | number;
+  date?: string;
+  type?: { id?: string | number; text?: string; abbreviation?: string };
+  status?: { type?: { state?: string } };
+  venue?: LeagueEventVenue;
+  competitors?: LeagueEventCompetitor[];
+  broadcasts?: BroadcastEntry[];
+};
+type LeagueEvent = {
+  date: string;
+  name?: string;
+  shortName?: string;
+  links?: { href?: string }[];
+  status?: { type?: { state?: string } };
+  circuit?: LeagueEventCircuit;
+  venue?: LeagueEventVenue;
+  competitions?: LeagueEventCompetition[];
+};
+
 // F1 / UFC single-event fetch → a spoiler-safe LeagueEventCard (no results).
 // Tries the viewed date first; if ESPN has no event that day (most days), it
 // falls back to the current/next event so an opt-in column always shows the
@@ -1604,16 +1633,16 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     }
   };
 
-  const event = (date ? await load(date) : null) ?? await load();
+  const event: LeagueEvent | null = (date ? await load(date) : null) ?? await load();
   if (!event) return null;
-  const comps: any[] = event.competitions ?? [];
-  const eventUrl: string | undefined = event.links?.find((l: any) => l?.href)?.href;
+  const comps: LeagueEventCompetition[] = event.competitions ?? [];
+  const eventUrl: string | undefined = event.links?.find((l) => l?.href)?.href;
 
   if (sport === "f1") {
     // The race is competition.type.id === "3"; fall back to the last session.
     const race = comps.find((c) => String(c?.type?.id) === "3") ?? comps[comps.length - 1] ?? null;
     const state = (race?.status?.type?.state ?? event.status?.type?.state ?? "pre") as "pre" | "in" | "post";
-    const circuit = event.circuit ?? {};
+    const circuit: LeagueEventCircuit = event.circuit ?? {};
     const loc = [circuit.address?.city, circuit.address?.country].filter(Boolean).join(", ");
     const subtitle = [circuit.fullName, loc].filter(Boolean).join(" · ") || undefined;
     const raceDate = race?.date ?? event.date;
@@ -1643,9 +1672,9 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
   const colon = name.indexOf(":");
   const headline = colon > -1 ? name.slice(colon + 1).trim() : undefined;
   const title = event.shortName || (colon > -1 ? name.slice(0, colon).trim() : name) || "UFC";
-  const venue = main?.venue ?? event.venue ?? {};
+  const venue: LeagueEventVenue = main?.venue ?? event.venue ?? {};
   const subtitle = [venue.address?.city, venue.address?.state || venue.address?.country].filter(Boolean).join(", ") || undefined;
-  const fighter = (x: any) => ({
+  const fighter = (x: LeagueEventCompetitor | undefined) => ({
     name: x?.athlete?.displayName ?? "TBD",
     shortName: x?.athlete?.shortName ?? x?.athlete?.displayName ?? "TBD",
     record: x?.records?.[0]?.summary ?? "",
@@ -1658,7 +1687,7 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     if (isNaN(d.getTime())) return "Fight Night";
     return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   };
-  const fights: FightBout[] = comps.slice().reverse().map((c: any) => {
+  const fights: FightBout[] = comps.slice().reverse().map((c: LeagueEventCompetition) => {
     const cs = c.competitors ?? [];
     const fState = (c.status?.type?.state ?? state ?? "pre") as "pre" | "in" | "post";
     const red = fighter(cs[0]);
@@ -1681,7 +1710,7 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     headline,
     state,
     statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Fight Night",
-    date: event.date || main?.date,
+    date: event.date || main?.date || "",
     broadcasts: eventBroadcasts(main),
     boutCount: comps.length,
     fights,
