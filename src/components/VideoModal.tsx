@@ -43,14 +43,13 @@ interface VideoModalProps {
   // uploads a preview card and shares a hidescore.com link that unfurls with
   // the two teams + date instead of the raw YouTube/source URL. Null for news.
   shareCard?: ShareCardMeta | null;
-  // Spoiler masks over the YouTube player chrome. Both default ON (covered);
-  // user toggles each in Settings. Only affect the YouTube highlight path.
+  // Spoiler mask over the YouTube player title chrome. Defaults ON (covered);
+  // user toggles it in Settings. Only affects the YouTube highlight path.
   maskVideoTitle?: boolean;
-  maskVideoBottom?: boolean;
   // Opt-in (default OFF): show YouTube's NATIVE control bar (controls:1) instead
   // of our spoiler-safe stripped player. When on, YT's own progress/seek bar +
   // time are visible (a spoiler trade the user accepts — useful in fullscreen),
-  // the bottom spoiler mask + click-catcher step aside so YT's controls work.
+  // the click-catcher steps aside so YT's controls work.
   youtubeNativeControls?: boolean;
   // Which seek control the YouTube player shows: progress bar + jumps ("both",
   // default), bar only, or jumps only.
@@ -283,7 +282,7 @@ function PeekBlur({ tag = "div", className, style, children }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1235,12 +1234,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   <span className="text-xs font-bold" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>5s</span>
                 </div>
               )}
-              {/* Spoiler masks over YouTube's chrome — always on (see note by
-                  the state declarations), each independently toggleable in
-                  Settings (maskVideoTitle / maskVideoBottom). pointer-events stay
-                  off so click-to-play/pause keeps working. STRAIGHT BLACK, no
-                  gradient: a hard edge, so each bar is the thinnest height that
-                  still hides the chrome and crops the least footage.
+              {/* Spoiler mask over YouTube's title chrome — always on (see note
+                  by the state declarations), toggleable in Settings
+                  (maskVideoTitle). pointer-events stay off so click-to-play/pause
+                  keeps working. STRAIGHT BLACK, no gradient: a hard edge, so the
+                  bar is the thinnest height that still hides the title and crops
+                  the least footage.
                   TOP — measured (full Chrome, embed framed at the modal's real
                   player sizes, 2026-06-12): the title is a SINGLE truncated line
                   whose bottom sits at a ~FIXED ~36px regardless of player size
@@ -1257,11 +1256,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   frame — so we can't show the bar only when the title appears. A
                   prior hover/fade attempt leaked the title on PC (see the 6/12
                   fview session). Always-on is the price of a cross-origin player.
-                  BOTTOM — measured: controls:0 strips YouTube's ENTIRE bottom bar
-                  (no timeline/seek line exists), so this bar covers nothing YT
-                  during playback — it's pure footage crop, kept just thick enough
-                  to hide the poster-state "Watch on YouTube" pill / logo. Safe to
-                  shrink further or toggle off. */}
+                  NO BOTTOM BAR: controls:0 already strips YouTube's ENTIRE bottom
+                  bar (no timeline/seek line exists), so nothing there needs
+                  covering during playback. */}
               {maskVideoTitle && !titleSafe && !revealTitle && (
                 <div
                   aria-hidden
