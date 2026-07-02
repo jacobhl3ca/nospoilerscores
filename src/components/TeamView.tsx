@@ -105,8 +105,12 @@ export default function TeamView({
   const { past, upcoming } = useMemo(() => {
     if (!allGames) return { past: [] as Game[], upcoming: [] as Game[] };
     const now = Date.now();
+    // Future-dated "post" games (e.g. a suspended/rescheduled fixture ESPN still
+    // tags final) belong under Upcoming, per the liveAndPre clause below. Anchor
+    // Recent to post games at/before now so such a game lands in exactly one
+    // section — otherwise it rendered in BOTH Recent and Upcoming.
     const finished = allGames
-      .filter((g) => g.state === "post")
+      .filter((g) => g.state === "post" && new Date(g.date).getTime() <= now)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const liveAndPre = allGames
       .filter((g) => g.state === "in" || g.state === "pre" || (g.state === "post" && new Date(g.date).getTime() > now))
