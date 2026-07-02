@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Game } from "@/lib/types";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { getDateString } from "@/components/DateNav";
 import { fetchGameWeather, type GameWeather } from "@/lib/weather";
@@ -151,12 +151,12 @@ export default function GameDetailModal({
   // Whether this game is on today's (ET) slate — drives the highlight-ready
   // buffer in GameHighlights (today's finals wait for the recap upload window;
   // past games show immediately).
-  const isToday = (() => {
-    try {
-      const ymd = new Date(game.date).toLocaleDateString("en-CA", { timeZone: getTimeZone() }).replace(/-/g, "");
-      return ymd === getDateString(0);
-    } catch { return false; }
-  })();
+  // Bucket the game to its ET slate day the SAME way getDateString(0) derives
+  // "today" (getEtServiceDate's 1 AM rollover), so a game kicking off between
+  // midnight and 1 AM stays on the same day both sides call it. A raw calendar
+  // day here would drift from the service day in that window and make the modal
+  // disagree with the card on isToday (GameHighlights must "just match" the card).
+  const isToday = etSlateYmd(game.date) === getDateString(0);
 
   // Start time / status WITHOUT score. For live we say "In progress" rather
   // than the period/clock (the clock alone is fine, but keep it minimal +
