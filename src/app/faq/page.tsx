@@ -9,7 +9,10 @@ export const metadata: Metadata = {
   title: FAQ_TITLE,
   description: FAQ_DESC,
   alternates: { canonical: "/faq" },
-  robots: { index: true, follow: true },
+  // No `robots` override: a child `robots` object fully replaces the root
+  // layout's, which would drop its googleBot directives (max-image-preview:large,
+  // max-snippet:-1). index/follow is already inherited from the layout, so this
+  // page stays indexable AND keeps the richer snippet/image-preview hints.
   openGraph: {
     title: FAQ_TITLE,
     description: FAQ_DESC,
