@@ -514,6 +514,14 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     loading="lazy"
                     className="w-full h-full object-cover"
                     draggable={false}
+                    // A 404'd thumbnail would otherwise show the browser's
+                    // broken-image glyph; hide it so the card degrades to the
+                    // bg-card-hover placeholder + play overlay (a sibling),
+                    // matching NewsCard's onError guard and AlignedVideoStrip's
+                    // VideoRow. Rows are keyed by item.id, so this node is never
+                    // reused for another item — display:none can't leak onto a
+                    // later valid thumbnail.
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
                   />
                   <div
                     className="absolute inset-0 flex items-center justify-center pointer-events-none"
