@@ -41,6 +41,14 @@ export type PlayHandler = (opts: PlayOpts) => void;
 
 // Build the modal payload for a news item. Single source of truth so TextRow
 // (click) and HomeContent (prev/next paging) produce identical payloads.
+// A "text post" is a headline-only item with no pic/video (no thumbnail,
+// inline clip, YouTube id, or Brightcove embed). Blur is for pics/videos, so
+// these are hidden-by-default and gated behind the "Show text posts" toggle
+// (see .news-textpost / .show-text-posts in globals.css).
+export function itemIsTextPost(item: NewsItem): boolean {
+  return !(item.videoUrl || item.imageFullUrl || item.imageUrl || item.youtubeVideoId || item.embedUrl);
+}
+
 export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
   const isReddit = !!item.section?.startsWith("r/");
   return {
@@ -201,7 +209,7 @@ export function NewsColumnTitle({
                     Top news (ESPN)
                   </button>
                 )}
-                {/* Empty hides the column entirely (matches the scores-view
+                {/* Remove col hides the column entirely (matches the scores-view
                     behavior). User re-adds via the + button on scores or via
                     the focus pill. */}
                 <button
@@ -214,7 +222,7 @@ export function NewsColumnTitle({
                   onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 >
-                  Empty
+                  Remove col
                 </button>
               </div>
             )}
@@ -298,6 +306,11 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
   // Reddit columns get prev/next paging — precompute every post's payload once
   // so each row hands the modal its siblings without rebuilding N× per row.
   const redditSiblings = items[0]?.section?.startsWith("r/") ? items.map(newsItemToPlayOpts) : null;
+  // When every row is a text post (e.g. an all-text ESPN/MLB.com headlines
+  // card), collapse the whole card while text posts are hidden — otherwise a
+  // bare header with no rows would sit there. Mixed cards keep the header and
+  // just hide their individual text rows.
+  const allText = items.length > 0 && items.every(itemIsTextPost);
   return (
     // overflow-clip (not overflow-hidden) so position: sticky on SourceHeader
     // pins to the window, not to this card. overflow-hidden establishes a
@@ -306,7 +319,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
     // + borderTop overlaps the parent's top edge as a single 1px line —
     // real borders push the inner 1px inward, creating nested curves at top.
     <div
-      className="rounded-lg overflow-clip"
+      className={`rounded-lg overflow-clip${allText ? " news-card-alltext" : ""}`}
       style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)" }}
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
@@ -352,7 +365,12 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // the floor at sm+ where the 3 columns align. text-sm (not text-xs) on
   // mobile too — the phone is the primary surface, so size headlines for
   // readability rather than to pack the narrow desktop column.
-  const rowCls = "flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]";
+  // Text posts (no pic/video) are hidden while headlines are blurred and shown
+  // (readable, unblurred) once "Show text posts" is on — so they carry the
+  // .news-textpost marker and their headline skips the .news-title blur.
+  const isTextPost = itemIsTextPost(item);
+  const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]${isTextPost ? " news-textpost" : ""}`;
+  const titleCls = `${isTextPost ? "" : "news-title "}min-w-0 line-clamp-5`;
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Reddit posts always pop the modal so the user can read the post (and any
   // attached photo / video) without leaving hidescore. Other sources (ESPN
@@ -456,7 +474,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         style={rowStyle}
       >
         {thumb}
-        <span className="news-title min-w-0 line-clamp-5">{item.headline}</span>
+        <span className={titleCls}>{item.headline}</span>
       </button>
     );
   }
@@ -470,7 +488,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       style={rowStyle}
     >
       {thumb}
-      <span className="news-title min-w-0 line-clamp-5">{item.headline}</span>
+      <span className={titleCls}>{item.headline}</span>
     </a>
   );
 }

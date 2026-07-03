@@ -43,6 +43,19 @@ html.reveal-news-titles .news-title,
   -webkit-user-select: auto;
 }
 
+/* Text posts (headline-only items — no pic/video). Blurring their headline
+   leaves a useless blank box, so instead of blurring them we HIDE them while
+   headlines are blurred, and expose them (readable, unblurred) when the user
+   opts in. Blur = pics/videos only; text posts are gated behind their own
+   "Show text posts" toggle (.show-text-posts on <html>). When headlines are
+   revealed globally, text posts show too. .news-textpost marks a single mixed-
+   column row; .news-card-alltext marks a whole all-text source card so it
+   collapses instead of leaving an empty header. */
+html:not(.reveal-news-titles):not(.show-text-posts) .news-textpost,
+html:not(.reveal-news-titles):not(.show-text-posts) .news-card-alltext {
+  display: none;
+}
+
 :root {
   /* Tell the browser which theme its native UI (scrollbars, the text-input
      caret + selection highlight, form controls, autofill) should paint in.

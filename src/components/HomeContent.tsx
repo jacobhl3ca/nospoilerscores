@@ -488,6 +488,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       // Apply the headline reveal state at launch (mirrored in the effect below)
       // so reveal-on users don't see a one-frame blur flash before it runs.
       document.documentElement.classList.toggle("reveal-news-titles", !!p.revealNewsTitles);
+      document.documentElement.classList.toggle("show-text-posts", !!p.showTextPosts);
     };
     const storedShowRatings = loaded.showRatings;
     applyLaunchState(loaded);
@@ -567,6 +568,14 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   useEffect(() => {
     document.documentElement.classList.toggle("reveal-news-titles", !!prefs.revealNewsTitles);
   }, [prefs.revealNewsTitles]);
+
+  // Show/hide text posts (headline-only items). Blurring a text-only headline
+  // leaves a useless blank, so they're hidden while headlines are blurred and
+  // this toggle exposes them (readable). .show-text-posts on <html>, same
+  // pattern as reveal-news-titles so it reaches every column and card.
+  useEffect(() => {
+    document.documentElement.classList.toggle("show-text-posts", !!prefs.showTextPosts);
+  }, [prefs.showTextPosts]);
 
   // Track narrow viewports so the news view can force a single stacked column
   // on phones (Jacob 5/30 — mobile news = 1 col, order News → the two score
@@ -1732,7 +1741,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           a header icon, and shown on mobile + desktop). Headlines are blurred
           by default; tap to reveal/hide them all. */}
       {showNews && (
-        <div className="max-w-6xl mx-auto px-4 flex justify-center pt-2 pb-1">
+        <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap gap-2 pt-2 pb-1">
           <button
             onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105 cursor-pointer"
@@ -1757,6 +1766,30 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             )}
             <span>{prefs.revealNewsTitles ? "Headlines shown" : "Headlines hidden"}</span>
           </button>
+          {/* Text posts are headline-only (no pic/video) — blurring them leaves a
+              blank, so they're hidden while headlines are blurred. This pill only
+              appears when headlines are hidden (when revealed, text posts show
+              anyway) and exposes them readable without unblurring pics/videos. */}
+          {!prefs.revealNewsTitles && (
+            <button
+              onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
+              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105 cursor-pointer"
+              style={{
+                background: prefs.showTextPosts ? "var(--accent)" : "var(--bg-card)",
+                border: `1px solid ${prefs.showTextPosts ? "var(--accent)" : "var(--border)"}`,
+                color: prefs.showTextPosts ? "white" : "var(--text-muted)",
+              }}
+              title="Text posts have no pic or video, so they're hidden while headlines are blurred. Tap to show them (readable)."
+              aria-pressed={!!prefs.showTextPosts}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6" />
+                <line x1="4" y1="12" x2="14" y2="12" />
+                <line x1="4" y1="18" x2="18" y2="18" />
+              </svg>
+              <span>{prefs.showTextPosts ? "Text posts shown" : "Text posts hidden"}</span>
+            </button>
+          )}
         </div>
       )}
 

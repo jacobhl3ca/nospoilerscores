@@ -130,7 +130,9 @@ async function tryOpenAppScheme(appUrl: string): Promise<boolean> {
 
 function openInBrowser(url: string): void {
   import("@capacitor/browser")
-    .then(({ Browser }) => Browser.open({ url }))
+    // toolbarColor tints the SFSafariViewController chrome dark so the in-app
+    // reader/player opens in dark mode instead of the default bright white bar.
+    .then(({ Browser }) => Browser.open({ url, toolbarColor: "#0b0e14" }))
     .catch(() => {
       window.open(url, "_blank", "noopener,noreferrer");
     });
