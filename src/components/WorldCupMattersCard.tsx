@@ -56,8 +56,6 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
   // doesn't apply, so show a plain, spoiler-safe one-liner instead of the
   // expandable standings card. (Knockout tiers never mix with group tiers on a
   // given day — see wcStakes TIER_RANK comment.)
-  // In the knockouts every match is win-or-go-home, so there are no standings to
-  // weigh. Show a plain spoiler-safe note instead of the group-stage breakdown.
   const KNOCKOUT_TIERS: WcTier[] = ["marquee", "competitive", "lopsided"];
   const isKnockout = stakes.matches.every((m) => KNOCKOUT_TIERS.includes(m.tier));
   if (isKnockout) {
