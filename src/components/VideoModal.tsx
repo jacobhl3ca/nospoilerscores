@@ -88,6 +88,11 @@ interface YTPlayer {
   getAvailableQualityLevels?: () => string[];
   setPlaybackQuality?: (quality: string) => void;
   getVideoData?: () => { title?: string } | undefined;
+  // Caption modules for the CC toggle. loadModule presence is verified at the
+  // call site (typeof check); setOption is called with optional chaining.
+  loadModule: (module: string) => void;
+  unloadModule: (module: string) => void;
+  setOption?: (module: string, option: string, value: { languageCode: string }) => void;
 }
 
 // Event object the YT IFrame API hands to onReady/onStateChange/etc. `data` is
