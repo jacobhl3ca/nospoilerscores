@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { getEtServiceDate, getTimeZone } from "@/lib/etDay";
 
 interface DateNavProps {
@@ -74,7 +74,6 @@ export function getETHour(): number {
 
 // Custom calendar dropdown — starts Monday, blue weekends
 function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps & { onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
   const [viewDate, setViewDate] = useState(() => parseYMD(selectedDate));
 
   useEffect(() => {
@@ -123,7 +122,6 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 
   return (
     <div
-      ref={ref}
       data-cal-pop
       className="absolute top-full mt-2 right-0 z-50 rounded-xl shadow-lg p-3 w-64"
       style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
