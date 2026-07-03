@@ -1164,6 +1164,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <button
             onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
             aria-pressed={showCC}
+            aria-label={showCC ? "Hide captions" : "Show captions"}
             className="absolute -top-10 right-10 h-8 px-2 flex items-center justify-center rounded-md text-xs font-bold transition-colors cursor-pointer"
             style={{
               color: showCC ? "white" : "rgba(255,255,255,0.6)",
