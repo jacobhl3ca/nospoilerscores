@@ -1862,11 +1862,19 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             label: "News",
             orderedCascade: applyOrder(GENERIC_CASCADE, prefs.newsSourceOrder?.["espn"]),
           };
+          // fetchAllLeagues collapses empty slots out of the returned array, so
+          // walk it as a shifting queue — one pull per non-empty slot — exactly
+          // like the scores view (see leagueQueue below) and setSlotLeague. A
+          // direct sortedLeagues[slotIdx] index is only correct when every empty
+          // slot is trailing; an empty slot BEFORE a populated one would shift
+          // each later league's index down and drop/mislabel its news column.
+          const newsLeagueQueue = [...sortedLeagues];
           const leagueEntries = [0, 1, 2].map((slotIdx) => {
             if (selectedSlotLeagues[slotIdx] === "empty") return null;
+            const queued = newsLeagueQueue.shift();
             const sport: Sport | undefined = slotIdx === 2 && prefs.newsThirdLeague
               ? prefs.newsThirdLeague
-              : sortedLeagues[slotIdx]?.sport;
+              : queued?.sport;
             if (!sport) return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const cascade = leagueSourceCascade(sport);
