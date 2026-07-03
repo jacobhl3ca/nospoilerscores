@@ -2470,7 +2470,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         )}
       </main>
 
-      <footer className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-5 text-center text-sm flex flex-col items-center gap-1" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+      <footer className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-5 text-center text-sm flex flex-col items-center gap-2" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
         {/* Normally the page's only <h1>. On /worldcup the banner above already
             provides that route's <h1>, so demote this one to <h2> there — keeping
             exactly one <h1> per page instead of two. Styled to match the footer
@@ -2488,7 +2488,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             adds crawlable copy and a link graph without changing the visual layout.
             Google renders and indexes content inside collapsed <details>, and plain
             <a href> (not next/link) is what the crawler needs to follow the routes. */}
-        <details className="my-2 max-w-2xl text-left text-xs leading-relaxed">
+        <details className="max-w-2xl text-left text-xs leading-relaxed">
           <summary className="cursor-pointer select-none text-center" style={{ color: "var(--text-muted)" }}>
             About HideScore
           </summary>
