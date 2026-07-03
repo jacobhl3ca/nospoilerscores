@@ -483,6 +483,10 @@ export default function GolfLeaderboard({
                   width={20}
                   height={20}
                   className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0"
+                  // Hide a 404'd/blocked flag so it degrades to the player row
+                  // without the broken-image glyph (matches the remote-image
+                  // onError guards in GameCard/NewsColumn/WorldCupGroupsModal).
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               )}
 
