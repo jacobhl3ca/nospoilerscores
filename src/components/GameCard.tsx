@@ -880,7 +880,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 let title = "";
                 if (game.sport === "fifa") {
                   rank = fifaRank(team.displayName);
-                  title = `FIFA world ranking: #${rank}`;
+                  // Guard the interpolation: fifaRank returns null for a team
+                  // not in the snapshot table, and the render only bails on
+                  // rank == null below — building the title unconditionally
+                  // would bake a literal "#null" into it if that guard ever
+                  // moved. Set it only when we actually have a rank.
+                  if (rank != null) title = `FIFA world ranking: #${rank}`;
                 } else if (team.rank != null && !effectivePastDate && !isFinished) {
                   rank = team.rank;
                   title = `${leagueLabel || "League"} standing: #${rank}`;
