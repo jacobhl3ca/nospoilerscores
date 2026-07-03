@@ -117,7 +117,7 @@ export function NewsColumnTitle({
       }
     };
     // Keyboard parity with the app's other dropdowns/modals: Escape dismisses
-    // the popup the swap button promises via aria-haspopup="menu".
+    // the popup the swap button promises via aria-haspopup.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSwapOpen(false);
     };
@@ -143,7 +143,7 @@ export function NewsColumnTitle({
               className="cursor-pointer transition-colors hover:opacity-80"
               style={{ color: "var(--text)" }}
               title="Switch news league"
-              aria-haspopup="menu"
+              aria-haspopup="true"
               aria-expanded={swapOpen}
             >
               <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>

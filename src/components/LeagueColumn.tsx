@@ -734,7 +734,7 @@ export default function LeagueColumn({
       }
     };
     // Keyboard parity with the app's other dropdowns/modals: Escape dismisses
-    // the popup the swap button promises via aria-haspopup="menu".
+    // the popup the swap button promises via aria-haspopup.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSwapOpen(false);
     };
@@ -1153,7 +1153,7 @@ export default function LeagueColumn({
                   className="cursor-pointer transition-colors hover:opacity-80"
                   style={{ color: "var(--text)" }}
                   title="Switch league"
-                  aria-haspopup="menu"
+                  aria-haspopup="true"
                   aria-expanded={swapOpen}
                 >
                   <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
