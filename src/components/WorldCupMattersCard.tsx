@@ -54,10 +54,19 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
   // Once the tournament reaches the knockouts there are no standings to weigh —
   // every match is win-or-go-home. The group-stage "what matters" breakdown
   // doesn't apply, so show a plain, spoiler-safe one-liner instead of the
-  // expandable standings card. (Knockout tiers never mix with group tiers on a
-  // given day — see wcStakes TIER_RANK comment.)
-  const KNOCKOUT_TIERS: WcTier[] = ["marquee", "competitive", "lopsided"];
-  const isKnockout = stakes.matches.every((m) => KNOCKOUT_TIERS.includes(m.tier));
+  // expandable standings card.
+  //
+  // Detect the knockouts by the round LABEL, not the tier: the active
+  // knockoutStakes() tags every knockout tie "mustwin" — a GROUP-stage tier
+  // (the marquee/competitive/lopsided knockout tiers come only from the
+  // commented-out classifyKnockout()). So the old `tier ∈ knockout-tiers` test
+  // was false in every reachable state, this pill never rendered, and knockout
+  // days wrongly fell through to the group-standings card (subtitle "Reveals
+  // some standings…" — nonsensical once the groups are done). wcStakes sets
+  // each match's `group` to the round ("Round of 32" … "Final") in the
+  // knockouts and to "Group X" in the group stage, so the absence of the word
+  // "group" is the reliable knockout signal.
+  const isKnockout = stakes.matches.every((m) => !/\bgroup\b/i.test(m.group));
   if (isKnockout) {
     return (
       <div
