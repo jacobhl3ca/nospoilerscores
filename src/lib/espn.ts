@@ -1571,8 +1571,22 @@ async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>
           homeLeftOnBase: ls.teams?.home?.leftOnBase,
           currentInning: ls.currentInning,
         };
-        // Key by "away@home" to handle doubleheaders
-        map.set(`${awayAbbrev}@${homeAbbrev}`, meta);
+        // Key by "away@home". A doubleheader is two games with the SAME
+        // away/home team on the same date, so both collide on one key — and
+        // the ESPN consumer (which also keys by away@home, with no game number
+        // to tell the two cards apart) can't attribute the metadata to the
+        // right card. Rather than let game 2 silently overwrite game 1 and
+        // stamp its stream link + No-Hit Alert onto BOTH ESPN cards (a wrong
+        // deep link, and a score-revealing no-hit badge on the wrong game),
+        // drop the key on collision so both games fall through the consumer's
+        // `if (!meta) continue` — no deep link / no alert, the same graceful
+        // degradation the fetch-failure path already yields.
+        const key = `${awayAbbrev}@${homeAbbrev}`;
+        if (map.has(key)) {
+          map.delete(key);
+          continue;
+        }
+        map.set(key, meta);
       }
     }
   } catch {
