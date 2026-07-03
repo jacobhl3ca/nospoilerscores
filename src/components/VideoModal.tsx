@@ -287,6 +287,37 @@ function PeekBlur({ tag = "div", className, style, children }: {
   );
 }
 
+// Byline · relative-time meta line under an article's headline. The relative
+// timestamp ("3h ago") is wrapped in a semantic <time dateTime> so assistive
+// tech and any crawler get the machine-readable ISO date instead of only the
+// fuzzy relative text, and a title tooltip surfaces the exact publish time on
+// hover. Mirrors the <time dateTime> treatment on the privacy page's "Last
+// updated" date. Visible text is unchanged: byline and "3h ago" render exactly
+// as before, joined by " · " only when both are present. formatPublished
+// returns "" for an unparseable date, in which case the <time> is omitted (the
+// same drop the previous .filter(Boolean) join produced).
+function ArticleMeta({ byline, published, className, style }: {
+  byline?: string | null;
+  published?: string | null;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const rel = published ? formatPublished(published) : "";
+  if (!byline && !rel) return null;
+  const exact = published && rel
+    ? new Date(published).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    : undefined;
+  return (
+    <p className={className} style={style}>
+      {byline}
+      {byline && rel ? " · " : null}
+      {published && rel ? (
+        <time dateTime={published} title={exact}>{rel}</time>
+      ) : null}
+    </p>
+  );
+}
+
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1203,11 +1234,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             {headline && (
               <PeekBlur tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
             )}
-            {(byline || published) && (
-              <p className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
-                {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
-              </p>
-            )}
+            <ArticleMeta byline={byline} published={published} className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }} />
             {body && (
               <PeekBlur
                 className="text-sm sm:text-base leading-relaxed mt-4 pt-4"
@@ -1655,11 +1682,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 doesn't close); the surrounding whitespace strip stays a dismiss
                 target, so a tap just below the video exits instead of dead-zoning. */}
             <PeekBlur tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
-            {(byline || published) && (
-              <p className="text-xs text-white/40 mt-1">
-                {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
-              </p>
-            )}
+            <ArticleMeta byline={byline} published={published} className="text-xs text-white/40 mt-1" />
           </div>
         )}
 
