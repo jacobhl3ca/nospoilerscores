@@ -696,15 +696,6 @@ export default function SettingsPanel({
             />
           </Section>
 
-          <Section title="Highlights player">
-            <ToggleRow
-              label="Use standard YouTube player"
-              hint="Shows YouTube's native controls (play bar, settings, related clips) on highlight clips. Off by default — the native progress bar can hint how far through a highlight you are."
-              checked={prefs.youtubeNativeControls ?? false}
-              onChange={(v) => updatePrefs({ youtubeNativeControls: v })}
-            />
-          </Section>
-
           {/* Favorite teams — picker first so adding a team doesn't push the
               picker off-screen, then the favorited-teams readout below. */}
           <Section title="Favorite teams">
