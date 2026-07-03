@@ -304,6 +304,16 @@ export function setRemoteSync(fn: RemoteSync | null): void {
 export function savePreferences(prefs: Preferences): void {
   if (typeof window === "undefined") return;
   setServiceTimeZone(prefs.timezone);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  // localStorage.setItem can throw — quota exceeded, or storage blocked in a
+  // sandboxed/private context — and savePreferences runs straight out of click
+  // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a
+  // failed write never bubbles up and trips the route error boundary. The
+  // remote sync below is the durable store for signed-in users, so it must
+  // still fire even when the local write can't land.
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    /* storage full/unavailable — in-memory prefs still apply this session */
+  }
   if (remoteSync) remoteSync(prefs);
 }
