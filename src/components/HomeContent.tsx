@@ -2203,7 +2203,19 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <p style={{ color: "var(--text-muted)" }}>Failed to load games</p>
             <button
-              onClick={() => fetchData(selectedDate)}
+              // Retry with the user's configured columns (thirdLeague + slot
+              // overrides), matching every other fetchData call. Passing only
+              // the date let thirdLeague/slotOverrides default to undefined, so
+              // fetchAllLeagues fell back to the auto-picker — a retry after an
+              // error silently discarded the user's board (emptied/pinned
+              // columns reverted to auto-picked leagues).
+              onClick={() => fetchData(selectedDate, prefs.thirdLeague, {
+                first: prefs.firstLeague,
+                second: prefs.secondLeague,
+                third: prefs.thirdLeague,
+                fourth: prefs.fourthLeague,
+                fifth: prefs.fifthLeague,
+              })}
               className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
             >
