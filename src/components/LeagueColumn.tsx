@@ -1211,7 +1211,7 @@ export default function LeagueColumn({
                         </button>
                       );
                     })}
-                    {/* Empty — hides the column entirely until switched back. */}
+                    {/* Remove col — hides the column entirely until switched back. */}
                     <button
                       onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
@@ -1223,7 +1223,7 @@ export default function LeagueColumn({
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
-                      Empty
+                      Remove col
                     </button>
                   </div>
                 )}

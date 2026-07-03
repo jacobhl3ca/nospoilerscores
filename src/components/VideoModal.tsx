@@ -326,8 +326,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Escape keydown alongside the exit, and that Escape must not also close the
   // whole modal.
   const fsExitAtRef = useRef(0);
-  const hlsMode = !!playbackUrl;
-  const embedMode = !!embedUrl && !playbackUrl;
+  // Player priority: when the prebake found a validated YouTube id for a clip,
+  // prefer the YouTube player over the source's own HLS/Brightcove stream
+  // (Jacob 7/3 — "revert to youtube player by default for now"). The assorted
+  // news players (native HLS / redlib / Brightcove) behave inconsistently
+  // across Firefox / YouTube / mobile; the YouTube player is the consistent one
+  // AND already ships our spoiler-safe no-bottom-bar chrome. A videoId therefore
+  // wins, and only clips with no YouTube id (e.g. MLB statsapi HLS) fall through
+  // to hlsMode/embedMode.
+  const hlsMode = !!playbackUrl && !videoId;
+  const embedMode = !!embedUrl && !playbackUrl && !videoId;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
   const ytMode = !hlsMode && !embedMode && !imageMode && !textMode;
@@ -1016,28 +1024,26 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
-  // Reddit prev/next paging arrows. Rendered ON the player edges (inside the
-  // video box), NOT at the wrapper edges — otherwise they sit in the dark
-  // margin beside the centred video and a click there (where you reach to
-  // dismiss) hits the arrow's stopPropagation instead of closing the modal.
-  // z-30 keeps them above the YT click-catcher; hover-revealed via the box's group.
+  // Reddit prev/next paging — rendered as a labelled control row BELOW the
+  // video (not overlaid on it), so on mobile the arrows never cover footage or
+  // fight the tap-to-dismiss / tap-to-seek zones (Jacob 7/3). Both buttons
+  // always render; the unavailable direction (first/last post) is disabled so
+  // the row doesn't jump. stopPropagation so a tap pages instead of closing.
   const pager = (onPrev || onNext) ? (
-    <>
-      {onPrev && (
-        <button onClick={(e) => { e.stopPropagation(); onPrev(); }} aria-label="Previous post" title="Previous post"
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-30 w-10 h-16 flex items-center justify-center rounded-r-lg text-white/70 hover:text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
-          style={{ background: "rgba(0,0,0,0.5)" }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
-      )}
-      {onNext && (
-        <button onClick={(e) => { e.stopPropagation(); onNext(); }} aria-label="Next post" title="Next post"
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-30 w-10 h-16 flex items-center justify-center rounded-l-lg text-white/70 hover:text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
-          style={{ background: "rgba(0,0,0,0.5)" }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-        </button>
-      )}
-    </>
+    <div className="mt-2 flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
+        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
+        style={{ background: "rgba(255,255,255,0.12)" }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        Prev
+      </button>
+      <button onClick={(e) => { e.stopPropagation(); onNext?.(); }} disabled={!onNext} aria-label="Next post" title="Next post"
+        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
+        style={{ background: "rgba(255,255,255,0.12)" }}>
+        Next
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+      </button>
+    </div>
   ) : null;
 
   return (
@@ -1059,13 +1065,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         aria-modal="true"
         aria-label="Video player"
       >
-        {/* Reddit prev/next post paging — hover-revealed ‹ › on the player edges
-            (desktop only; touch has no hover). stopPropagation so the click pages
-            instead of bubbling to the backdrop and closing the modal. */}
-        {/* Paging arrows now live INSIDE each player box (see `pager`) so the
-            dark margin beside the video stays a dismiss target. Image/text modes
-            have no inner player box, so they keep the arrows here at the edges. */}
-        {(imageMode || textMode) && pager}
+        {/* Reddit prev/next post paging now renders as a labelled row BELOW the
+            media (see `pager`, inserted after the player) instead of overlaid on
+            the video — keeps mobile footage/dismiss/seek zones clear. */}
         {/* Close button */}
         <button
           onClick={onClose}
@@ -1164,7 +1166,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 : { width: "min(100%, calc((100vh - 168px) * 16 / 9))", aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
-              {pager}
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
                   through to the cross-origin iframe. This is what makes the
@@ -1550,9 +1551,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 allowFullScreen
               />
             )}
-            {pager}
           </div>
         )}
+        {/* Prev/next paging row — below the media for every mode (Reddit news
+            columns only; onPrev/onNext are unset elsewhere so this is null). */}
+        {pager}
 
         {/* Headline + byline below media — for image / video modes, gives
             context without filling the modal. textMode renders these inside

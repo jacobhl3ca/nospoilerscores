@@ -639,7 +639,7 @@ export default function SettingsPanel({
                     {thirdLeagueOptions.map((o) => (
                       <option key={o.sport} value={o.sport}>{o.label}</option>
                     ))}
-                    <option value="empty">Empty</option>
+                    <option value="empty">Remove col</option>
                   </select>
                 </Field>
               );
