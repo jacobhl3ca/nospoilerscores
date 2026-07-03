@@ -1186,30 +1186,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // it so the 1/2/3 column selector (default 3) is authoritative.
   const newsFocusLeague: Sport | "espn" | undefined = undefined;
   const newsHiddenSources = prefs.newsHiddenSources ?? [];
-  const toggleNewsSourceHidden = (label: string) => {
-    const next = newsHiddenSources.includes(label)
-      ? newsHiddenSources.filter((l) => l !== label)
-      : [...newsHiddenSources, label];
-    updatePrefs({ newsHiddenSources: next });
-  };
-  // Focus-pill options for the news view header. Built at component level
-  // so the header can render the pills regardless of where in the render
-  // tree visibleNewsEntries is computed. ESPN is always present + each
-  // non-empty league slot appears.
-  const newsHeaderFocusOptions: { value: string; label: string }[] = (() => {
-    const opts: { value: string; label: string }[] = [
-      { value: "all", label: "All" },
-      { value: "espn", label: "ESPN" },
-    ];
-    [0, 1, 2].forEach((slotIdx) => {
-      if (selectedSlotLeagues[slotIdx] === "empty") return;
-      const sport = slotIdx === 2 && prefs.newsThirdLeague ? prefs.newsThirdLeague : sortedLeagues[slotIdx]?.sport;
-      if (!sport) return;
-      const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
-      opts.push({ value: sport, label });
-    });
-    return opts;
-  })();
 
   const headerRef = useRef<HTMLElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1428,8 +1404,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     document.addEventListener("mousedown", onClickAway);
     return () => document.removeEventListener("mousedown", onClickAway);
   }, [newsFilterOpen]);
-  const newsColCount = (prefs.newsColCount ?? 3) as 1 | 2 | 3;
-  const setNewsColCount = (n: 1 | 2 | 3) => updatePrefs({ newsColCount: n });
   // Aggregate teams seen across loaded leagues so the settings panel can map
   // favorite-team IDs to display names + logos. Teams favorited but not
   // currently in any loaded game fall through to "id-only" rendering.
