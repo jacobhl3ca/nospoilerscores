@@ -1157,31 +1157,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
 
-  // News-order persistence. Custom per-sport ordering of the source labels
-  // inside a single news column. Drag-reorder in the ☰ menu writes here;
-  // applyOrder reads from it to reshuffle the cascade-default source list
-  // (unknown labels fall through to the tail so new sources still surface).
-  // The ☰ dropdown manages whichever league is currently "primary": the
-  // focused league if Focus is set, otherwise the first visible scores slot.
-  // ESPN focus is handled separately (sport=undefined → dropdown isn't
-  // sport-keyed; we'll wire ESPN order using a sentinel key in prefs).
-  const newsCol1Sport: Sport | undefined = (prefs.newsFocusLeague && prefs.newsFocusLeague !== "espn")
-    ? prefs.newsFocusLeague
-    : sortedLeagues[0]?.sport;
-  const newsOrderForCol1: string[] | undefined = newsCol1Sport
-    ? prefs.newsSourceOrder?.[newsCol1Sport]
-    : undefined;
-  const setNewsSourceOrder = (sport: Sport, order: string[]) => {
-    const existing = prefs.newsSourceOrder ?? {};
-    updatePrefs({ newsSourceOrder: { ...existing, [sport]: order } });
-  };
-  const clearNewsSourceOrder = (sport: Sport) => {
-    const existing = prefs.newsSourceOrder ?? {};
-    if (!existing[sport]) return;
-    const next = { ...existing };
-    delete next[sport];
-    updatePrefs({ newsSourceOrder: next });
-  };
+  // News source-ordering is applied read-only from prefs.newsSourceOrder (a
+  // per-sport order of source labels). The news cascade reads it via `orderFor`
+  // below to reshuffle each column's default source list, honoring any order a
+  // prior build's ☰ drag-reorder menu had persisted. That reorder UI was
+  // removed, so nothing writes newsSourceOrder anymore; unknown labels still
+  // fall through to the tail so new sources keep surfacing.
   const newsTypeFilter = prefs.newsTypeFilter ?? "all";
   const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
   // Source-filter options + the user's drag-reordered order. Unknown labels in
