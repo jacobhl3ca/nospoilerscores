@@ -273,6 +273,12 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
             height={24}
             className="w-6 h-6 object-contain shrink-0"
             draggable={false}
+            // These source marks are remote (ESPN CDN + Wikimedia hotlinks for
+            // NCAA/ITF), so a 404 or blocked hotlink would otherwise leave the
+            // browser's broken-image glyph in the sticky header. Hide it so the
+            // header degrades to its always-present label text, matching the
+            // thumbnail onError guards elsewhere in this file.
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         )}
         {mobileLabel !== label ? (
