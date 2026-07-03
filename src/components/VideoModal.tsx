@@ -1024,22 +1024,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
-  // Reddit prev/next paging — rendered as a labelled control row BELOW the
-  // video (not overlaid on it), so on mobile the arrows never cover footage or
-  // fight the tap-to-dismiss / tap-to-seek zones (Jacob 7/3). Both buttons
-  // always render; the unavailable direction (first/last post) is disabled so
-  // the row doesn't jump. stopPropagation so a tap pages instead of closing.
+  // Reddit prev/next paging — a labelled ‹ Prev / Next › bar PINNED to the
+  // bottom-centre of the modal (Jacob 7/3: off the video, and in a consistent
+  // spot instead of jumping as the media height changes between posts). Fixed
+  // to the viewport bottom (above the home indicator) so it's always the same
+  // thumb target. Both buttons always render; the unavailable direction
+  // (first/last post) is disabled. stopPropagation so a tap pages, not closes.
   const pager = (onPrev || onNext) ? (
-    <div className="mt-2 flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
       <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
-        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
-        style={{ background: "rgba(255,255,255,0.12)" }}>
+        className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
+        style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         Prev
       </button>
       <button onClick={(e) => { e.stopPropagation(); onNext?.(); }} disabled={!onNext} aria-label="Next post" title="Next post"
-        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
-        style={{ background: "rgba(255,255,255,0.12)" }}>
+        className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
+        style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         Next
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
       </button>
