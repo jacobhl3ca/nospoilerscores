@@ -852,15 +852,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     }
   };
 
-  // Param kept optional + ignored: callers may still pass the old
-  // "don't show again" checkbox value, but the popup is now first-time-only
-  // (always marked seen), so the value no longer matters.
-  const confirmRatings = (_dontShowAgain?: boolean) => {
+  // The explainer popups are first-time-only — `skipExplainer`/`skipNewsExplainer`
+  // is set the moment each one is shown (see handleViewModeClick / the news
+  // brancher above), so confirming just flips the corresponding view on.
+  const confirmRatings = () => {
     setShowRatingsExplainer(false);
     updatePrefs({ showRatings: true, skipExplainer: true });
   };
 
-  const confirmNews = (_dontShowAgain?: boolean) => {
+  const confirmNews = () => {
     setShowNewsExplainer(false);
     setShowNews(true);
     updatePrefs({ showNews: true, skipNewsExplainer: true });
@@ -2703,10 +2703,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const cb = document.getElementById("dont-show-explainer") as HTMLInputElement | null;
-                  confirmRatings(cb?.checked ?? false);
-                }}
+                onClick={() => confirmRatings()}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
                 onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
@@ -2715,10 +2712,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Show Ratings
               </button>
             </div>
-            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none justify-end">
-              <input type="checkbox" id="dont-show-explainer" className="accent-[var(--accent)]" />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
-            </label>
           </div>
         </div>
       )}
@@ -2760,10 +2753,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const cb = document.getElementById("dont-show-news-explainer") as HTMLInputElement | null;
-                  confirmNews(cb?.checked ?? false);
-                }}
+                onClick={() => confirmNews()}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
                 onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
@@ -2772,10 +2762,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Show News
               </button>
             </div>
-            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none justify-end">
-              <input type="checkbox" id="dont-show-news-explainer" className="accent-[var(--accent)]" />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
-            </label>
           </div>
         </div>
       )}
