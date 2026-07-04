@@ -169,7 +169,21 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
       >
         {logoUrl && (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={logoUrl} alt="" width={24} height={24} className="w-6 h-6 object-contain shrink-0" draggable={false} />
+          <img
+            src={logoUrl}
+            alt=""
+            loading="lazy"
+            width={24}
+            height={24}
+            className="w-6 h-6 object-contain shrink-0"
+            draggable={false}
+            // Remote source mark (ESPN CDN + Wikimedia hotlinks) — a 404 or
+            // blocked hotlink would otherwise leave the browser's broken-image
+            // glyph in the sticky header. Hide it so the header degrades to its
+            // always-present label text, matching the identical guard on its
+            // twin NewsColumn.SourceHeader (this one was missed when that landed).
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
         )}
         {mobileLabel !== label ? (
           <>
