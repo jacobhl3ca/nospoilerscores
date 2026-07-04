@@ -43,9 +43,10 @@ interface VideoModalProps {
   // uploads a preview card and shares a hidescore.com link that unfurls with
   // the two teams + date instead of the raw YouTube/source URL. Null for news.
   shareCard?: ShareCardMeta | null;
-  // Spoiler mask over the YouTube player title chrome. Defaults ON (covered);
-  // user toggles it in Settings. Only affects the YouTube highlight path.
+  // Spoiler masks over the YouTube player chrome. Both default ON (covered);
+  // user toggles each in Settings. Only affect the YouTube highlight path.
   maskVideoTitle?: boolean;
+  maskVideoBottom?: boolean;
   // Opt-in (default OFF): show YouTube's NATIVE control bar (controls:1) instead
   // of our spoiler-safe stripped player. When on, YT's own progress/seek bar +
   // time are visible (a spoiler trade the user accepts — useful in fullscreen),
@@ -318,7 +319,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
