@@ -318,6 +318,10 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
       height={18}
       className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
       draggable={false}
+      // Remote league mark (ESPN CDN); a 404/blocked hotlink would otherwise
+      // leave the browser's broken-image glyph in the strip. Hide it so the
+      // row degrades cleanly, matching the thumbnail onError guard above.
+      onError={(e) => { e.currentTarget.style.display = "none"; }}
     />
   ) : null;
   // flex-1 + items-center spreads the rows vertically when we have fewer
