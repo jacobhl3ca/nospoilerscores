@@ -1298,6 +1298,12 @@ export default function LeagueColumn({
                 <button
                   type="button"
                   onClick={onRetry}
+                  // Context-specific name so multiple simultaneously-failed
+                  // columns (e.g. a network drop on first paint) don't all
+                  // read as a bare "Retry" — a screen-reader/voice-control user
+                  // can tell which league each button reloads. Keeps "Retry" in
+                  // the name so it still matches the visible label (WCAG 2.5.3).
+                  aria-label={`Retry loading ${league.label}`}
                   className="text-xs sm:text-sm px-3 py-1 rounded border hover:opacity-80 transition-opacity"
                   style={{ color: "var(--text)", borderColor: "var(--border)" }}
                 >
