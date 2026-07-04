@@ -1548,7 +1548,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             {!showNews && (
               <div className="sm:hidden flex justify-center">
                 <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
-                  <span className="relative inline-flex items-center">
+                  <span className="relative inline-flex items-center mr-2">
                     <button
                       data-cal-toggle
                       onClick={() => setCalendarOpen(!calendarOpen)}
