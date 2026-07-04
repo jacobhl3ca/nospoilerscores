@@ -1148,7 +1148,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   return (
     <div
       className="fixed inset-0 flex items-center justify-center p-4 sm:p-8"
-      style={{ zIndex: 9999 }}
+      // When the prev/next pager is present it's pinned to the bottom-centre, so
+      // reserve that band: pad the bottom of the centring box by the pager's
+      // height + safe area, which lifts the centred content (incl. the byline /
+      // Open-on / Copy-link row) clear of it instead of letting them overlap
+      // (Jacob 7/4). No reservation when there's no pager (e.g. highlights).
+      style={{ zIndex: 9999, ...((onPrev || onNext) ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 4.5rem)" } : {}) }}
       onClick={onClose}
     >
       {/* Backdrop */}
@@ -1339,6 +1344,19 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     height: "clamp(42px, 7%, 50px)",
                     background: "#000",
                   }}
+                />
+              )}
+              {/* Bottom mask — a thin always-on black strip along the very bottom
+                  edge to guarantee YouTube's red progress line never shows in the
+                  spoiler-safe player (Jacob 7/4). controls:0 usually strips YT's
+                  whole bottom bar, but this is belt-and-suspenders for the iOS
+                  WKWebView, where the red line can still flash. Only in spoiler-
+                  safe mode (native controls off) and when maskVideoBottom is on. */}
+              {maskVideoBottom && !youtubeNativeControls && (
+                <div
+                  aria-hidden
+                  className="absolute bottom-0 inset-x-0 z-10 pointer-events-none"
+                  style={{ height: "6px", background: "#000" }}
                 />
               )}
               {/* In-player peek toggle — a small eye in the corner of the bar
