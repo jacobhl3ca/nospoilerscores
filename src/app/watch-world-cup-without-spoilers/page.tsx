@@ -18,7 +18,11 @@ export const metadata: Metadata = {
     "world cup hidden scores",
   ],
   alternates: { canonical: "/watch-world-cup-without-spoilers" },
-  robots: { index: true, follow: true },
+  // No `robots` override: metadata is shallowly merged, so a child `robots`
+  // object fully replaces the root layout's — which would drop its googleBot
+  // directives (max-image-preview:large, max-snippet:-1). index/follow is
+  // already inherited from the layout, so this page stays indexable AND keeps
+  // the richer snippet/image-preview hints (matches /faq and /privacy).
   openGraph: {
     title: TITLE,
     description: DESC,
