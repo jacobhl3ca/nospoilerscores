@@ -242,6 +242,15 @@ export function CompactUpcomingCard({
     ? ((/\b(amazon|prime)\b/i.test(network) && game.primeStreamUrl) || networkStreamUrl(network, game.id, game.sport) || sportStreamFallback(game.sport))
     : null;
   const cardClickable = !!onShowDetails;
+  // Name the clickable card after the matchup so screen readers announce which
+  // game opens (e.g. "Yankees at Red Sox — game details") instead of reading
+  // the whole card's concatenated text — including nested control labels — as
+  // the button name. Mirrors the GameDetailModal dialog name it opens. Team
+  // names carry no score, so this stays spoiler-safe; falls back to the generic
+  // label if either name is missing.
+  const cardAwayName = game.awayTeam.displayName || game.awayTeam.shortDisplayName || game.awayTeam.abbreviation;
+  const cardHomeName = game.homeTeam.displayName || game.homeTeam.shortDisplayName || game.homeTeam.abbreviation;
+  const cardLabel = cardAwayName && cardHomeName ? `${cardAwayName} at ${cardHomeName} — game details` : "Game details";
   // Position-agnostic network link (the row wrappers below place it). Same
   // text-[11px] as the date/time so they sit level (Jacob 6/9 — the time looked
   // high next to a smaller network).
@@ -272,6 +281,7 @@ export function CompactUpcomingCard({
       onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
       tabIndex={cardClickable ? 0 : undefined}
+      aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -477,6 +487,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // too (Jacob 6/1) — tapping a schedule card opens its details popup; the
   // team-name button still navigates via its own stopPropagation handler.
   const cardClickable = !!onShowDetails;
+  // Concise, spoiler-safe accessible name for the clickable card, matching the
+  // GameDetailModal dialog it opens ("Yankees at Red Sox — game details") — so
+  // screen readers announce the matchup instead of the card's whole run of
+  // concatenated text (which otherwise absorbs nested control labels like "Add
+  // to favorites"). Team names carry no score; falls back if a name is missing.
+  const cardAwayName = game.awayTeam.displayName || game.awayTeam.shortDisplayName || game.awayTeam.abbreviation;
+  const cardHomeName = game.homeTeam.displayName || game.homeTeam.shortDisplayName || game.homeTeam.abbreviation;
+  const cardLabel = cardAwayName && cardHomeName ? `${cardAwayName} at ${cardHomeName} — game details` : "Game details";
   return (
     <div
       className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${cardClickable ? " cursor-pointer" : ""}`}
@@ -492,6 +510,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
       tabIndex={cardClickable ? 0 : undefined}
+      aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
       {/* Lookback card: "Last played · {date}" centered on the card's top row,
