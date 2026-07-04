@@ -1016,7 +1016,7 @@ export default {
 
     // Fall through to static assets
     return env.ASSETS.fetch(request);
-   } catch (err) {
+   } catch {
      // Last-resort guard: a transient R2 / HTMLRewriter / subrequest failure must
      // never surface as a Cloudflare 1101 "Worker threw an exception" page. For a
      // document request fall back to the static SPA shell (routing + data happen
