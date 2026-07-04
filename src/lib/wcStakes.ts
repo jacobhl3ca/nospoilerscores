@@ -260,6 +260,14 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
     if (safe.length === 1 && live.length === 1) {
       return `${cap(safe[0].name)} go through with a draw; ${live[0].name} need a win to stay in the top two. The loser drops into the best-third-place scramble.`;
     }
+    // One side is already out (ESPN "Eliminated") while the other's top-two
+    // fate is still live — a dead rubber for the eliminated team. "Both are
+    // fighting for it" (below) would misdescribe it, so name only who's still
+    // playing for something. In this tier the live side is always a "bubble"
+    // team (mustwin/best8 route to the mustwin tier), i.e. result-dependent.
+    if (out.length === 1 && live.length === 1) {
+      return `${live[0].name} are still playing for a top-two spot; ${out[0].name} are already out.`;
+    }
     return `Both are fighting for it — the winner books a Round-of-32 spot and the loser drops into the best-third-place scramble.`;
   }
 
