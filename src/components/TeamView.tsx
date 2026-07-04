@@ -295,12 +295,18 @@ export default function TeamView({
         </span>
       </div>
 
+      {/* Announce the async schedule fetch to screen readers. Tapping a team
+          swaps the column to this view, but the loading / error / empty text was
+          silent — an SR user got no feedback that the schedule was loading,
+          failed, or came back empty. role=status + aria-live=polite voices each
+          transition, matching the loading-skeleton pattern in HomeContent and
+          the status lines in FeedbackBox / SettingsPanel (WCAG 4.1.3). */}
       {loading ? (
-        <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Loading schedule…</p>
+        <p role="status" aria-live="polite" className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Loading schedule…</p>
       ) : error ? (
-        <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Failed to load schedule</p>
+        <p role="status" aria-live="polite" className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Failed to load schedule</p>
       ) : allGames && allGames.length === 0 ? (
-        <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
+        <p role="status" aria-live="polite" className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
       ) : (
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {pastShown.length > 0 && (
