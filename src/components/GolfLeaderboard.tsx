@@ -411,9 +411,9 @@ export default function GolfLeaderboard({
                 <span className="text-[10px] sm:text-xs">
                   {broadcastExpanded ? (
                     tournament.broadcasts.map((b, i) => (
-                      <span key={i}>
+                      <span key={b}>
                         {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
-                        {networkLink(b, i)}
+                        {networkLink(b, b)}
                       </span>
                     ))
                   ) : (
