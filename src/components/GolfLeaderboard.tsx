@@ -475,6 +475,7 @@ export default function GolfLeaderboard({
 
               {/* Flag */}
               {player.flag && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={player.flag}
                   alt={player.flagCountry || ""}
