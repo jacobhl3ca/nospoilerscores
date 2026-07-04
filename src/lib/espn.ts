@@ -1991,8 +1991,16 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
 
   // Look up the tournament's start date (MM-DD) from the league config so the
   // client can do date-aware round labeling (yesterday=R1, today=R2, etc).
+  // Match punctuation-insensitively: ESPN names the US Open golf major
+  // "U.S. Open", which the bare label used as a regex (/US Open/i) never
+  // matched — the periods break the "US Open" substring — so startDate came
+  // back undefined and golf.ts silently dropped that major's round subtitle,
+  // recap highlights, and rating for the whole week. Folding out non-
+  // alphanumerics maps both "U.S. Open" and "US Open" to "usopen"; the four
+  // golf labels stay mutually distinct under this key, so no false matches.
+  const golfKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const tournamentLabel = ALL_LEAGUES.find(
-    (l) => l.sport === "golf" && new RegExp(l.label, "i").test(event.name ?? "")
+    (l) => l.sport === "golf" && golfKey(event.name ?? "").includes(golfKey(l.label))
   );
 
   // Drop tournament if the viewed date falls outside its 4-day window.
