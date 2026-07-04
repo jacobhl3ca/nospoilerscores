@@ -451,6 +451,10 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       height={18}
       className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
       draggable={false}
+      // Remote league mark (ESPN CDN); a 404/blocked hotlink would otherwise
+      // leave the browser's broken-image glyph. Hide it so the card degrades to
+      // its label text, matching SourceHeader's logoUrl onError guard above.
+      onError={(e) => { e.currentTarget.style.display = "none"; }}
     />
   ) : null;
   if (shouldPopModal) {
