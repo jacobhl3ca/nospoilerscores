@@ -2529,7 +2529,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
               <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
               <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
-              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a> — all spoiler-free.
+              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a> — all spoiler-free. Or read our{" "}
+              <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
           </div>
         </details>
