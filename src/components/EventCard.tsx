@@ -90,11 +90,11 @@ function FighterRow({ f }: { f: FightBout["red"] }) {
   return (
     <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
       {f.flag ? (
-        // eslint-disable-next-line @next/next/no-img-element
         // onError hides a 404'd/blocked remote flag so it degrades to the empty
         // slot instead of the browser's broken-image glyph — matches the onError
         // guards on every other remote flag/logo in the app (GameCard,
         // GolfLeaderboard, WorldCupGroupsModal/Bracket, NewsColumn, …).
+        // eslint-disable-next-line @next/next/no-img-element
         <img src={f.flag} alt={f.country ?? ""} title={f.country} loading="lazy" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
       ) : (
         <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
