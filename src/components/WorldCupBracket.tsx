@@ -41,15 +41,19 @@ function Side({ side, bracket }: { side: BracketSide; bracket: Bracket }) {
         ) : (
           <span className="w-4 h-4 shrink-0" />
         )}
-        <span className="text-xs truncate" style={{ color: "var(--text)" }}>{side.team.name}</span>
+        {/* title surfaces the full name when the 150px bracket column truncates
+            it ("Bosnia and Herzegovina", "Saudi Arabia") — matches GameCard and
+            EventCard, which already title their own truncated team/fighter names. */}
+        <span className="text-xs truncate" style={{ color: "var(--text)" }} title={side.team.name}>{side.team.name}</span>
       </div>
     );
   }
+  const label = side.feeder ? feederLabel(bracket, side.feeder) : "—";
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       <span className="w-4 h-4 shrink-0" />
-      <span className="text-[11px] italic truncate" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
-        {side.feeder ? feederLabel(bracket, side.feeder) : "—"}
+      <span className="text-[11px] italic truncate" style={{ color: "var(--text-muted)", opacity: 0.8 }} title={label}>
+        {label}
       </span>
     </div>
   );
