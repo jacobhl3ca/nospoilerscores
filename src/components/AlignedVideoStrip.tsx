@@ -121,7 +121,18 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
           >
             <SourceHeader label={source.label} logoUrl={source.logoUrl} />
             {items === null
-              ? Array.from({ length: maxItems }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)
+              ? (
+                  // Announce the loading state; the pulsing SkeletonRows are
+                  // purely decorative (aria-hidden below), so only this sr-only
+                  // status is voiced (WCAG 4.1.3, matching the role=status
+                  // skeletons in NewsColumn + HomeContent's games column). The
+                  // span is sr-only (position:absolute), so it stays out of the
+                  // subgrid row flow and can't shift the skeleton layout.
+                  <>
+                    <span role="status" aria-live="polite" className="sr-only">Loading videos…</span>
+                    {Array.from({ length: maxItems }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)}
+                  </>
+                )
               : items.slice(0, itemCount).map((item, rowIdx) => (
                   <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} />
                 ))}
@@ -215,7 +226,9 @@ function stripLeaguePrefixForMobile(label: string): string {
 
 function SkeletonRow({ isFirst }: { isFirst: boolean }) {
   return (
-    <div className="animate-pulse" style={{ borderTop: isFirst ? "none" : "1px solid var(--border)" }}>
+    // Decorative pulse placeholder — the sibling sr-only role=status span voices
+    // the loading state, so hide these empty styled divs from assistive tech.
+    <div aria-hidden="true" className="animate-pulse" style={{ borderTop: isFirst ? "none" : "1px solid var(--border)" }}>
       <div className="w-full aspect-video" style={{ background: "var(--bg-card-hover)" }} />
       <div className="px-3 py-2">
         <div className="h-3 w-4/5 rounded" style={{ background: "var(--bg-card-hover)" }} />
