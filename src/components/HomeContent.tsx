@@ -1656,6 +1656,13 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 </button>
                 {newsFilterOpen && (
                   <div
+                    // The filter button declares aria-haspopup + aria-expanded, so
+                    // give the panel it opens a matching role + accessible name —
+                    // otherwise it surfaces to assistive tech as an anonymous,
+                    // role-less region. Same role="dialog" + aria-label pattern the
+                    // DateNav calendar popover and every other overlay in the app use.
+                    role="dialog"
+                    aria-label="Filter news by source"
                     className="absolute top-full mt-1 right-0 rounded-lg shadow-lg z-50 p-3 min-w-[210px]"
                     style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                   >
