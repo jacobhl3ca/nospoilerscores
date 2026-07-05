@@ -10,8 +10,15 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <h1 className="text-4xl font-bold mb-2">404</h1>
-      <p className="mb-4" style={{ color: "var(--text-muted)" }}>Page not found</p>
+      {/* The big "404" is decorative — the descriptive <h1> below is the page's
+          real heading, so a screen reader navigating by heading lands on
+          "Page not found" instead of a bare, meaningless number. This matches
+          every other page's descriptive h1 ("Privacy Policy", "Frequently
+          asked questions", …); the 404 page was the lone outlier. Tailwind's
+          preflight resets heading font-size/weight to inherit, so the tag swap
+          is purely semantic — the layout renders pixel-for-pixel unchanged. */}
+      <div aria-hidden="true" className="text-4xl font-bold mb-2">404</div>
+      <h1 className="mb-4" style={{ color: "var(--text-muted)" }}>Page not found</h1>
       <Link
         href="/"
         className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
