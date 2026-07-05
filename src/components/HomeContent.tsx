@@ -1509,12 +1509,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         </div>
       )}
       <header ref={headerRef} className="px-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
-        // In the native iOS app the WKWebView reports env(safe-area-inset-top) as
-        // ~0 (intermittently), so the header collides with the status bar. Floor
-        // it at 50px in the app so the bar always clears the notch/status bar;
-        // when the inset reports correctly (e.g. 59px) max() keeps that. Web
-        // browsers manage their own chrome, so leave the raw inset there.
-        paddingTop: isNativeApp ? "calc(max(env(safe-area-inset-top), 50px) + 0.5rem)" : "calc(env(safe-area-inset-top) + 0.5rem)", paddingBottom: "0.5rem" }}>
+        // In the native iOS app the WKWebView reports env(safe-area-inset-top)
+        // unreliably — sometimes ~0 (header collides with the status bar),
+        // sometimes an inflated stale value from a rotation/resume transition
+        // (a large empty gap opens above the header). Clamp it to the real-world
+        // range of iPhone insets (20-59px) so either glitch self-corrects; a
+        // correctly-reported value anywhere in that range passes through
+        // untouched. Web browsers manage their own chrome, so leave the raw
+        // inset there.
+        paddingTop: isNativeApp ? "calc(clamp(50px, env(safe-area-inset-top), 60px) + 0.5rem)" : "calc(env(safe-area-inset-top) + 0.5rem)", paddingBottom: "0.5rem" }}>
         {/* Mobile uses auto_1fr_auto so the middle column gets all the leftover
             width (logo + icons size to content) → the date nav fits on one line
             without pushing the settings gear off-screen. Desktop keeps the
