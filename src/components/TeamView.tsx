@@ -270,7 +270,7 @@ export default function TeamView({
             <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
             {team.logo && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={team.logo} alt="" width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" />
+              <img src={team.logo} alt="" width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" onError={(e) => { e.currentTarget.style.display = "none"; }} />
             )}
             <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }} title={team.displayName}>
               {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}
