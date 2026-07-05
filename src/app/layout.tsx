@@ -109,11 +109,26 @@ const JSON_LD = {
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
+      // The Android build ships on Google Play too (the footer links this exact
+      // listing). Declare it alongside the iOS node so search engines see both
+      // native apps, not just iOS — same shape as the node above.
+      "@type": "MobileApplication",
+      name: "HideScore",
+      operatingSystem: "Android",
+      applicationCategory: "SportsApplication",
+      url: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
+      installUrl: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    },
+    {
       "@type": "Organization",
       name: "HideScore",
       url: "https://hidescore.com",
       logo: "https://hidescore.com/icon-512.png",
-      sameAs: ["https://apps.apple.com/app/hidescore/id6766885311"],
+      sameAs: [
+        "https://apps.apple.com/app/hidescore/id6766885311",
+        "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
+      ],
     },
   ],
 };
