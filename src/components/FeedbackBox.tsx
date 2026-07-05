@@ -55,13 +55,17 @@ export default function FeedbackBox() {
       ) : (
         <form onSubmit={submit} className="relative inline-flex items-center">
           {/* Caption sits absolutely to the left of the input (right-full) so
-              it doesn't shift the bubble — the input stays dead-centered. */}
-          <span className="absolute right-full mr-1.5 whitespace-nowrap">Feedback</span>
+              it doesn't shift the bubble — the input stays dead-centered. A real
+              <label htmlFor> (not a bare span) ties this visible text to the
+              input programmatically, so clicking it focuses the field and the
+              accessible name comes from the label itself — no separate
+              aria-label to keep in sync (WCAG 1.3.1). */}
+          <label htmlFor="hs-feedback-input" className="absolute right-full mr-1.5 whitespace-nowrap cursor-text">Feedback</label>
           <input
+            id="hs-feedback-input"
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            aria-label="Feedback"
             className="w-36 text-xs px-2 py-0 leading-none rounded outline-none"
             style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
           />
