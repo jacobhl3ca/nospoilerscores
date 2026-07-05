@@ -1433,6 +1433,22 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const resolvedTheme: "dark" | "light" =
     prefs.theme === "system" ? (systemDark ? "dark" : "light") : prefs.theme;
 
+  // Keep the browser-chrome tint (<meta name="theme-color">) in sync with the
+  // theme actually rendered, not just the OS scheme. The `viewport` export in
+  // layout.tsx emits two media-based theme-color metas (light -> #ffffff,
+  // dark -> #0a0a0a), so a user who overrides the theme in Settings against
+  // their device scheme (e.g. forces dark on a light-mode phone) got a dark
+  // page under a light toolbar. resolvedTheme already folds in both the explicit
+  // override and the live OS scheme, so writing its color to BOTH metas makes
+  // whichever one the browser picks ("first matching media") show the right
+  // color either way. Kept in step with layout.tsx's viewport themeColor values.
+  useEffect(() => {
+    const color = resolvedTheme === "dark" ? "#0a0a0a" : "#ffffff";
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((m) => m.setAttribute("content", color));
+  }, [resolvedTheme]);
+
   // Pull-to-refresh visual: a small spinner pill that descends from below the
   // header proportional to pullDelta, latches into a spinning state during
   // refresh, then fades out. translate3d so it composites on the GPU and
