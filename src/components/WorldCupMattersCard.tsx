@@ -24,13 +24,21 @@ const TIER_META: Record<WcTier, { dot: string; chip: string; label: string }> = 
 export default function WorldCupMattersCard({ date }: { date: string }) {
   const [stakes, setStakes] = useState<WcStakes | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [prevDate, setPrevDate] = useState(date);
+
+  // Collapse and clear whenever the viewed date changes — never auto-reveal
+  // stakes, and never flash the previous day's matches. Doing this during render
+  // (React's recommended pattern for resetting state on a prop change) avoids the
+  // cascading re-render that the same setState calls cause inside an effect.
+  if (date !== prevDate) {
+    setPrevDate(date);
+    setExpanded(false);
+    setStakes(null);
+  }
 
   useEffect(() => {
     if (!date) return;
     let alive = true;
-    // Collapse whenever the viewed date changes — never auto-reveal stakes.
-    setExpanded(false);
-    setStakes(null);
     getWorldCupStakes(date)
       .then((s) => {
         if (alive) setStakes(s);
@@ -46,12 +54,19 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
   // Once the tournament reaches the knockouts there are no standings to weigh —
   // every match is win-or-go-home. The group-stage "what matters" breakdown
   // doesn't apply, so show a plain, spoiler-safe one-liner instead of the
-  // expandable standings card. (Knockout tiers never mix with group tiers on a
-  // given day — see wcStakes TIER_RANK comment.)
-  // In the knockouts every match is win-or-go-home, so there are no standings to
-  // weigh. Show a plain spoiler-safe note instead of the group-stage breakdown.
-  const KNOCKOUT_TIERS: WcTier[] = ["marquee", "competitive", "lopsided"];
-  const isKnockout = stakes.matches.every((m) => KNOCKOUT_TIERS.includes(m.tier));
+  // expandable standings card.
+  //
+  // Detect the knockouts by the round LABEL, not the tier: the active
+  // knockoutStakes() tags every knockout tie "mustwin" — a GROUP-stage tier
+  // (the marquee/competitive/lopsided knockout tiers come only from the
+  // commented-out classifyKnockout()). So the old `tier ∈ knockout-tiers` test
+  // was false in every reachable state, this pill never rendered, and knockout
+  // days wrongly fell through to the group-standings card (subtitle "Reveals
+  // some standings…" — nonsensical once the groups are done). wcStakes sets
+  // each match's `group` to the round ("Round of 32" … "Final") in the
+  // knockouts and to "Group X" in the group stage, so the absence of the word
+  // "group" is the reliable knockout signal.
+  const isKnockout = stakes.matches.every((m) => !/\bgroup\b/i.test(m.group));
   if (isKnockout) {
     return (
       <div
@@ -90,6 +105,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
           </span>
         </span>
         <svg
+          aria-hidden="true"
           width="16"
           height="16"
           viewBox="0 0 24 24"
@@ -102,7 +118,6 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
           style={{
             color: "var(--text-muted)",
             transform: expanded ? "rotate(180deg)" : "none",
-            transition: "transform 0.18s ease",
           }}
         >
           <polyline points="6 9 12 15 18 9" />
@@ -112,10 +127,17 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       {expanded && (
         <div className="px-3 pt-2.5 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
           <ul className="flex flex-col gap-2">
-            {stakes.matches.map((m, i) => {
+            {stakes.matches.map((m) => {
               const meta = TIER_META[m.tier];
               return (
-                <li key={i} className="flex gap-2">
+                // Key by the matchup's stable identity (round/group + the two
+                // sides), not the array index: stakes.matches is sorted by tier
+                // and each entry's state flips pre→in→post on a live refresh, so
+                // the list can reorder while this card stays mounted+expanded.
+                // An index key would then reconcile the wrong rows in place —
+                // the same fix already applied to GameCard/GolfLeaderboard chips.
+                // Two teams meet once per day, so group+away+home is unique here.
+                <li key={`${m.group}|${m.away}|${m.home}`} className="flex gap-2">
                   <span
                     aria-hidden="true"
                     className="mt-1 shrink-0 rounded-full"

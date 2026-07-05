@@ -133,7 +133,12 @@ export function getSecondaryChannels(sport: string, label?: string): string[] {
     const labelKey = `${sport}_${label.toLowerCase().replace(/\s+/g, "")}`;
     if (SECONDARY_CHANNELS[labelKey]) return SECONDARY_CHANNELS[labelKey];
   }
-  return [];
+  // Fall back to the bare-sport key — mirrors getOfficialChannelName. Without
+  // this the label-less entries (f1, ufc) were unreachable: a labelKey lookup
+  // like `f1_<label>` never matches the bare `f1` key, so their curated chains
+  // fell through to []. Golf callers pass a label that hits the labelKey above,
+  // so their behavior is unchanged.
+  return SECONDARY_CHANNELS[sport] ?? [];
 }
 
 // ESPN's `shortDisplayName` occasionally diverges from how official league

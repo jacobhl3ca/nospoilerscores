@@ -86,7 +86,17 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
 */
 
 
-function formatGameProgress(game: Game): { full: string; short: string; delayed?: boolean } {
+// "5" → "5th", "1" → "1st", etc. — for spelling out the inning to screen readers.
+function ordinal(n: number): string {
+  const v = n % 100;
+  const suffix = v >= 11 && v <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] || "th");
+  return `${n}${suffix}`;
+}
+
+// `label`, when present, is a spoken form for screen readers (applied as an
+// aria-label on the live-status element). Only MLB sets it: the ▲/▼ inning
+// glyphs read as a meaningless "up-pointing triangle 5" otherwise.
+function formatGameProgress(game: Game): { full: string; short: string; delayed?: boolean; label?: string } {
   const { sport, statusDetail, clock, period } = game;
   if (sport === "mlb") {
     // Delayed games arrive as "Rain Delay, Top 1st" / "Heat Delay, ..." —
@@ -103,8 +113,11 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
       const inn = m[2];
       const arrow = (half === "top" || half === "mid") ? "▲" : "▼";
       const base = `${arrow}${inn}`;
-      if (delayed) return { full: `${base} ${reason}`, short: `${base} ${reason}`, delayed: true };
-      return { full: base, short: base };
+      // Spoken inning for screen readers — "▲5" alone is meaningless read aloud.
+      const halfWord = half === "top" ? "Top" : half === "mid" ? "Middle" : half === "end" ? "End" : "Bottom";
+      const label = `${halfWord} of the ${ordinal(parseInt(inn, 10))} inning`;
+      if (delayed) return { full: `${base} ${reason}`, short: `${base} ${reason}`, delayed: true, label: `${label}, ${reason}` };
+      return { full: base, short: base, label };
     }
     if (delayed) return { full: reason, short: reason, delayed: true };
     return { full: statusDetail, short: statusDetail.slice(0, 3) };
@@ -229,6 +242,15 @@ export function CompactUpcomingCard({
     ? ((/\b(amazon|prime)\b/i.test(network) && game.primeStreamUrl) || networkStreamUrl(network, game.id, game.sport) || sportStreamFallback(game.sport))
     : null;
   const cardClickable = !!onShowDetails;
+  // Name the clickable card after the matchup so screen readers announce which
+  // game opens (e.g. "Yankees at Red Sox — game details") instead of reading
+  // the whole card's concatenated text — including nested control labels — as
+  // the button name. Mirrors the GameDetailModal dialog name it opens. Team
+  // names carry no score, so this stays spoiler-safe; falls back to the generic
+  // label if either name is missing.
+  const cardAwayName = game.awayTeam.displayName || game.awayTeam.shortDisplayName || game.awayTeam.abbreviation;
+  const cardHomeName = game.homeTeam.displayName || game.homeTeam.shortDisplayName || game.homeTeam.abbreviation;
+  const cardLabel = cardAwayName && cardHomeName ? `${cardAwayName} at ${cardHomeName} — game details` : "Game details";
   // Position-agnostic network link (the row wrappers below place it). Same
   // text-[11px] as the date/time so they sit level (Jacob 6/9 — the time looked
   // high next to a smaller network).
@@ -259,6 +281,7 @@ export function CompactUpcomingCard({
       onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
       tabIndex={cardClickable ? 0 : undefined}
+      aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -291,7 +314,14 @@ export function CompactUpcomingCard({
       {/* Row 2: venue — "@ HOME". Series teams are fixed, so just the home side. */}
       <div className="flex items-center gap-1.5">
         <span className="shrink-0 text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>@</span>
-        {home.logo ? <img src={home.logo} alt={home.abbreviation} title={home.displayName} width={16} height={16} className="w-4 h-4 object-contain shrink-0" /> : null}
+        {/* Decorative: the team name renders right beside this logo, so an alt
+            of the abbreviation made screen readers announce the team twice
+            ("MIA MIA Heat"). Empty alt matches GameDetailModal's TeamRow logo;
+            title stays for the sighted-hover tooltip. */}
+        {home.logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={home.logo} alt="" title={home.displayName} loading="lazy" width={16} height={16} className="w-4 h-4 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+        ) : null}
         {/* Full team name when there's room (desktop, like the lead card above);
             abbreviation on the narrow mobile column. Normal weight to match the
             lead card + every other card's team name — font-medium made the venue
@@ -440,7 +470,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     isTBD ? (
       <span className="w-4 h-4 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-xs rounded" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>
     ) : (
-      <img src={team.logo} alt={team.abbreviation} title={team.displayName} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" />
+      // Decorative: the team name renders beside this logo (see the row at the
+      // logo() call site), so alt="" avoids a duplicate screen-reader read of
+      // the team; title stays for the sighted-hover tooltip.
+      // onError hides a 404'd/blocked ESPN logo so it degrades to the team name
+      // beside it rather than the browser's broken-image glyph (matches the
+      // remote-image guards in NewsColumn/AlignedVideoStrip/VideoModal).
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={team.logo} alt="" title={team.displayName} loading="lazy" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
     );
 
   // Clicking the card body opens a spoiler-safe details popup. Inner
@@ -450,6 +487,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // too (Jacob 6/1) — tapping a schedule card opens its details popup; the
   // team-name button still navigates via its own stopPropagation handler.
   const cardClickable = !!onShowDetails;
+  // Concise, spoiler-safe accessible name for the clickable card, matching the
+  // GameDetailModal dialog it opens ("Yankees at Red Sox — game details") — so
+  // screen readers announce the matchup instead of the card's whole run of
+  // concatenated text (which otherwise absorbs nested control labels like "Add
+  // to favorites"). Team names carry no score; falls back if a name is missing.
+  const cardAwayName = game.awayTeam.displayName || game.awayTeam.shortDisplayName || game.awayTeam.abbreviation;
+  const cardHomeName = game.homeTeam.displayName || game.homeTeam.shortDisplayName || game.homeTeam.abbreviation;
+  const cardLabel = cardAwayName && cardHomeName ? `${cardAwayName} at ${cardHomeName} — game details` : "Game details";
   return (
     <div
       className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${cardClickable ? " cursor-pointer" : ""}`}
@@ -465,6 +510,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
       tabIndex={cardClickable ? 0 : undefined}
+      aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
       {/* Lookback card: "Last played · {date}" centered on the card's top row,
@@ -616,9 +662,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                     <span className="ml-1" title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
                   ) : null;
                   return liveUrl ? (
-                    <><a href={liveUrl} target="_blank" rel="noopener noreferrer" className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
+                    <><a href={liveUrl} target="_blank" rel="noopener noreferrer" aria-label={gameProgress.label || undefined} className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
                   ) : (
-                    <><span className={staticCls}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
+                    <><span className={staticCls} aria-label={gameProgress.label || undefined}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
                   );
                 })()
               ) : showFinal && !hasRating ? (
@@ -730,6 +776,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       className="text-[11px] cursor-pointer hover:underline whitespace-nowrap"
                       style={{ color: "var(--text-muted)" }}
                       title={`See all networks: ${game.broadcasts.join(", ")}`}
+                      // The "+N" is hidden on mobile (sm:inline), so the visible
+                      // label is just the lead network — announce the popup and
+                      // its open/closed state to screen readers, matching the
+                      // aria-haspopup/aria-expanded pattern on LeagueColumn's
+                      // league-switch button.
+                      aria-haspopup="true"
+                      aria-expanded={broadcastExpanded}
                       onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
                     >
                       {shortNetwork(game.broadcasts[0])}<span className="hidden sm:inline"> +{game.broadcasts.length - 1}</span>
@@ -758,7 +811,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         >
           <div className="flex items-start gap-1.5">
             <div className="flex flex-col gap-0.5 text-[10px] sm:text-xs leading-tight">
-              {game.broadcasts.map((b, i) => {
+              {game.broadcasts.map((b) => {
                 const isPrime = /\b(amazon|prime)\b/i.test(b);
                 const isEspn = /\b(espn|abc)\b/i.test(b);
                 const espnStream =
@@ -782,7 +835,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   sportStreamFallback(game.sport);
                 return (
                   <a
-                    key={i}
+                    key={b}
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -802,6 +855,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               className="text-[11px] leading-none cursor-pointer shrink-0"
               style={{ color: "var(--text-muted)" }}
               title="Hide networks"
+              aria-label="Hide networks"
             >
               ✕
             </button>
@@ -852,7 +906,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 let title = "";
                 if (game.sport === "fifa") {
                   rank = fifaRank(team.displayName);
-                  title = `FIFA world ranking: #${rank}`;
+                  // Guard the interpolation: fifaRank returns null for a team
+                  // not in the snapshot table, and the render only bails on
+                  // rank == null below — building the title unconditionally
+                  // would bake a literal "#null" into it if that guard ever
+                  // moved. Set it only when we actually have a rank.
+                  if (rank != null) title = `FIFA world ranking: #${rank}`;
                 } else if (team.rank != null && !effectivePastDate && !isFinished) {
                   rank = team.rank;
                   title = `${leagueLabel || "League"} standing: #${rank}`;

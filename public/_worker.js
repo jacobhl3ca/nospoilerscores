@@ -626,7 +626,7 @@ export default {
           //     three points" — soccer-cliché for a 3-point win that
           //     bypassed every prior keyword.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat|defeats|beats|leads?|leader|winning|winner|wins|loses|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeats|beats|leads?|leader|winning|winner|wins|loses|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
           if (SCORE_RX.test(title) || SPOILER_RX.test(title)) continue;
 
           // Simulation/videogame hard-skip — NBA 2K, MLB The Show, FIFA,
@@ -1016,7 +1016,7 @@ export default {
 
     // Fall through to static assets
     return env.ASSETS.fetch(request);
-   } catch (err) {
+   } catch {
      // Last-resort guard: a transient R2 / HTMLRewriter / subrequest failure must
      // never surface as a Cloudflare 1101 "Worker threw an exception" page. For a
      // document request fall back to the static SPA shell (routing + data happen

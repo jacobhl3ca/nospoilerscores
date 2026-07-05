@@ -433,7 +433,7 @@ export default function SettingsPanel({
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -582,6 +582,7 @@ export default function SettingsPanel({
                 <input
                   type="text"
                   inputMode="numeric"
+                  autoComplete="postal-code"
                   maxLength={5}
                   value={zip}
                   onChange={(e) => { setZip(e.target.value.replace(/\D/g, "").slice(0, 5)); setZipMsg(""); }}
@@ -695,15 +696,6 @@ export default function SettingsPanel({
             />
           </Section>
 
-          <Section title="Highlights player">
-            <ToggleRow
-              label="Use standard YouTube player"
-              hint="Shows YouTube's native controls (play bar, settings, related clips) on highlight clips. Off by default — the native progress bar can hint how far through a highlight you are."
-              checked={prefs.youtubeNativeControls ?? false}
-              onChange={(v) => updatePrefs({ youtubeNativeControls: v })}
-            />
-          </Section>
-
           {/* Favorite teams — picker first so adding a team doesn't push the
               picker off-screen, then the favorited-teams readout below. */}
           <Section title="Favorite teams">
@@ -735,6 +727,7 @@ export default function SettingsPanel({
                       </span>
                       <button
                         onClick={() => clearTeamsForSport(sport)}
+                        aria-label={`Clear ${SPORT_LABEL[sport] ?? sport} teams`}
                         className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
                         style={{ color: "var(--text-muted)" }}
                       >
@@ -749,13 +742,19 @@ export default function SettingsPanel({
                           className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
                           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                           title="Remove from favorites"
+                          aria-label={`Remove ${t.displayName} from favorites`}
                         >
                           {t.logo && (
+                            // onError hides a 404'd/blocked ESPN logo so the chip
+                            // degrades to the team name instead of the browser's
+                            // broken-image glyph — matches the onError guard on
+                            // every other remote team logo (GameCard, GameDetailModal,
+                            // WorldCupGroupsModal, …).
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={t.logo} alt="" width={14} height={14} className="w-3.5 h-3.5" />
+                            <img src={t.logo} alt="" loading="lazy" width={14} height={14} className="w-3.5 h-3.5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                           )}
                           <span>{t.displayName}</span>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
+                          <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
                             <line x1="18" y1="6" x2="6" y2="18" />
                             <line x1="6" y1="6" x2="18" y2="18" />
                           </svg>
@@ -990,6 +989,7 @@ function RadioGroup<T extends string>({
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
+            aria-pressed={active}
             className="px-2 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors text-center"
             style={{
               background: active ? "var(--accent)" : "var(--bg-card)",
@@ -1117,6 +1117,10 @@ function TeamPicker({
             <button
               key={s.sport}
               onClick={() => setSelectedSport(active ? null : s.sport)}
+              // State is otherwise conveyed only by accent color; expose the
+              // active filter to assistive tech (matches the aria-pressed toggle
+              // convention used by RadioGroup and the HomeContent tab buttons).
+              aria-pressed={active}
               className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
               style={{
                 background: active ? "var(--accent)" : "var(--bg-card)",
@@ -1175,6 +1179,11 @@ function TeamPicker({
                 <button
                   key={t.id}
                   onClick={() => onToggle(t.id)}
+                  // Favorited state is otherwise conveyed only by accent color;
+                  // expose it to assistive tech so a screen-reader user hears
+                  // which teams are already favorited (same aria-pressed toggle
+                  // convention used elsewhere in the app).
+                  aria-pressed={isFav}
                   className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-colors text-left"
                   style={{
                     background: isFav ? "var(--accent)" : "var(--bg-card)",
@@ -1184,8 +1193,11 @@ function TeamPicker({
                   title={isFav ? "Remove from favorites" : `Add ${t.displayName} to favorites`}
                 >
                   {t.logo && (
+                    /* onError hides a 404'd/blocked ESPN logo so the row degrades
+                       to the team name instead of the browser's broken-image glyph
+                       — matches the onError guard on every other remote team logo. */
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={t.logo} alt="" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" />
+                    <img src={t.logo} alt="" loading="lazy" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                   )}
                   <span className="min-w-0 truncate flex-1">{t.shortDisplayName}</span>
                   {/* Sport badge — only in cross-league view so the user can

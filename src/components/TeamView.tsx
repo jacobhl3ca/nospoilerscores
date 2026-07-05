@@ -105,8 +105,12 @@ export default function TeamView({
   const { past, upcoming } = useMemo(() => {
     if (!allGames) return { past: [] as Game[], upcoming: [] as Game[] };
     const now = Date.now();
+    // Future-dated "post" games (e.g. a suspended/rescheduled fixture ESPN still
+    // tags final) belong under Upcoming, per the liveAndPre clause below. Anchor
+    // Recent to post games at/before now so such a game lands in exactly one
+    // section — otherwise it rendered in BOTH Recent and Upcoming.
     const finished = allGames
-      .filter((g) => g.state === "post")
+      .filter((g) => g.state === "post" && new Date(g.date).getTime() <= now)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const liveAndPre = allGames
       .filter((g) => g.state === "in" || g.state === "pre" || (g.state === "post" && new Date(g.date).getTime() > now))
@@ -255,8 +259,9 @@ export default function TeamView({
             className="absolute left-0 flex items-center gap-0.5 text-[11px] sm:text-xs cursor-pointer hover:underline"
             style={{ color: "var(--text-muted)" }}
             title={`Back to ${leagueLabel}`}
+            aria-label={`Back to ${leagueLabel}`}
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
             <span>{leagueLabel}</span>
@@ -265,7 +270,7 @@ export default function TeamView({
             <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
             {team.logo && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={team.logo} alt={team.abbreviation} width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" />
+              <img src={team.logo} alt="" width={20} height={20} className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" onError={(e) => { e.currentTarget.style.display = "none"; }} />
             )}
             <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }} title={team.displayName}>
               {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}
@@ -290,12 +295,18 @@ export default function TeamView({
         </span>
       </div>
 
+      {/* Announce the async schedule fetch to screen readers. Tapping a team
+          swaps the column to this view, but the loading / error / empty text was
+          silent — an SR user got no feedback that the schedule was loading,
+          failed, or came back empty. role=status + aria-live=polite voices each
+          transition, matching the loading-skeleton pattern in HomeContent and
+          the status lines in FeedbackBox / SettingsPanel (WCAG 4.1.3). */}
       {loading ? (
-        <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Loading schedule…</p>
+        <p role="status" aria-live="polite" className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Loading schedule…</p>
       ) : error ? (
-        <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Failed to load schedule</p>
+        <p role="status" aria-live="polite" className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>Failed to load schedule</p>
       ) : allGames && allGames.length === 0 ? (
-        <p className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
+        <p role="status" aria-live="polite" className="text-center text-xs py-6" style={{ color: "var(--text-muted)" }}>No games found</p>
       ) : (
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {pastShown.length > 0 && (

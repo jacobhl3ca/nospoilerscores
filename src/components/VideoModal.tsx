@@ -50,7 +50,7 @@ interface VideoModalProps {
   // Opt-in (default OFF): show YouTube's NATIVE control bar (controls:1) instead
   // of our spoiler-safe stripped player. When on, YT's own progress/seek bar +
   // time are visible (a spoiler trade the user accepts — useful in fullscreen),
-  // the bottom spoiler mask + click-catcher step aside so YT's controls work.
+  // the click-catcher steps aside so YT's controls work.
   youtubeNativeControls?: boolean;
   // Which seek control the YouTube player shows: progress bar + jumps ("both",
   // default), bar only, or jumps only.
@@ -65,6 +65,70 @@ interface VideoModalProps {
   // without closing the modal. Rendered as hover ‹ › overlays; absent → no arrows.
   onPrev?: () => void;
   onNext?: () => void;
+}
+
+// Minimal slice of the YouTube IFrame Player API this modal actually drives.
+// The real player is built by the injected YT script (window.YT.Player) and is
+// untyped (no @types/youtube dependency), so we type just the methods we call.
+// A ready YT.Player exposes all of these, so they're typed as present — the
+// `?.` guards the code uses on them stay valid (optional calls on required
+// methods compile fine) while direct calls after a guard narrow cleanly.
+interface YTPlayer {
+  getDuration: () => number;
+  getCurrentTime: () => number;
+  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
+  playVideo: () => void;
+  pauseVideo: () => void;
+  getPlayerState: () => number;
+  setVolume: (volume: number) => void;
+  mute: () => void;
+  unMute: () => void;
+  destroy: () => void;
+  // Undocumented but reliable helpers used by the quality/title-spoiler logic.
+  // Optional because they aren't guaranteed present on every API revision.
+  getAvailableQualityLevels?: () => string[];
+  setPlaybackQuality?: (quality: string) => void;
+  getVideoData?: () => { title?: string } | undefined;
+  // Caption modules for the CC toggle. loadModule presence is verified at the
+  // call site (typeof check); setOption is called with optional chaining.
+  loadModule: (module: string) => void;
+  unloadModule: (module: string) => void;
+  setOption?: (module: string, option: string, value: { languageCode: string }) => void;
+}
+
+// Event object the YT IFrame API hands to onReady/onStateChange/etc. `data` is
+// a numeric player state on onStateChange but a quality string on
+// onPlaybackQualityChange, so it can be either.
+interface YTPlayerEvent {
+  target: YTPlayer;
+  data: number | string;
+}
+
+// The slice of the global YouTube IFrame API we touch. It's injected at runtime
+// from https://www.youtube.com/iframe_api, so it isn't in any @types package.
+interface YTNamespace {
+  Player: new (
+    elementId: string,
+    config: {
+      width?: string | number;
+      height?: string | number;
+      videoId?: string;
+      playerVars?: Record<string, string | number>;
+      events?: {
+        onReady?: (event: YTPlayerEvent) => void;
+        onStateChange?: (event: YTPlayerEvent) => void;
+        onPlaybackQualityChange?: (event: YTPlayerEvent) => void;
+        onError?: (event: YTPlayerEvent) => void;
+      };
+    }
+  ) => YTPlayer;
+}
+
+declare global {
+  interface Window {
+    YT?: YTNamespace;
+    onYouTubeIframeAPIReady?: () => void;
+  }
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -224,8 +288,39 @@ function PeekBlur({ tag = "div", className, style, children }: {
   );
 }
 
+// Byline · relative-time meta line under an article's headline. The relative
+// timestamp ("3h ago") is wrapped in a semantic <time dateTime> so assistive
+// tech and any crawler get the machine-readable ISO date instead of only the
+// fuzzy relative text, and a title tooltip surfaces the exact publish time on
+// hover. Mirrors the <time dateTime> treatment on the privacy page's "Last
+// updated" date. Visible text is unchanged: byline and "3h ago" render exactly
+// as before, joined by " · " only when both are present. formatPublished
+// returns "" for an unparseable date, in which case the <time> is omitted (the
+// same drop the previous .filter(Boolean) join produced).
+function ArticleMeta({ byline, published, className, style }: {
+  byline?: string | null;
+  published?: string | null;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const rel = published ? formatPublished(published) : "";
+  if (!byline && !rel) return null;
+  const exact = published && rel
+    ? new Date(published).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    : undefined;
+  return (
+    <p className={className} style={style}>
+      {byline}
+      {byline && rel ? " · " : null}
+      {published && rel ? (
+        <time dateTime={published} title={exact}>{rel}</time>
+      ) : null}
+    </p>
+  );
+}
+
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -478,7 +573,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const togglePlay = useCallback(() => {
     const p = playerRef.current;
     if (!p?.getPlayerState) return;
-    const PLAYING = (window as any).YT?.PlayerState?.PLAYING ?? 1;
+    const PLAYING = (window as unknown as { YT?: { PlayerState?: { PLAYING?: number } } }).YT?.PlayerState?.PLAYING ?? 1;
     if (p.getPlayerState() === PLAYING) p.pauseVideo?.();
     else p.playVideo?.();
   }, []);
@@ -544,7 +639,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const toggleFullscreen = useCallback(() => {
     if (!ytMode) {
       if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-      const el: any = hlsMode ? videoRef.current : embedMode ? iframeRef.current : null;
+      const el = (hlsMode ? videoRef.current : embedMode ? iframeRef.current : null) as
+        (HTMLElement & { webkitEnterFullscreen?: () => void; webkitRequestFullscreen?: () => void }) | null;
       if (!el) return;
       if (typeof el.requestFullscreen === "function") el.requestFullscreen().catch(() => {});
       else if (typeof el.webkitEnterFullscreen === "function") el.webkitEnterFullscreen();
@@ -553,7 +649,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
     if (fakeFs) { setFakeFs(false); return; }
     if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-    const wrap: any = fsWrapRef.current;
+    const wrap = fsWrapRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
     if (!wrap) return;
     if (typeof wrap.requestFullscreen === "function") {
       wrap.requestFullscreen().catch(() => setFakeFs(true));
@@ -621,7 +717,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // co-delivered Escape doesn't also close the modal.
   useEffect(() => {
     const onFsChange = () => {
-      const fsEl = (document.fullscreenElement || (document as any).webkitFullscreenElement) ?? null;
+      const fsEl = (document.fullscreenElement || (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement) ?? null;
       const active = !!fsEl && fsEl === fsWrapRef.current;
       setNativeFs(active);
       if (!active) fsExitAtRef.current = Date.now();
@@ -759,33 +855,34 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // short highlight clips (MLB ~30-90s, v.redd.it), so the default ABR — which
     // starts on a low/mid level and ramps up over several segments — would often
     // let the clip end before it ever reached max quality.
-    let hls: any = null;
+    let hls: InstanceType<typeof import("hls.js").default> | null = null;
     let cancelled = false;
     import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
       if (!Hls.isSupported()) return;
-      hls = new Hls({
+      const player = new Hls({
         // Don't let the (deliberately small) modal cap the level, and assume
         // broadband so the very first segment isn't fetched at a low rendition.
         capLevelToPlayerSize: false,
         abrEwmaDefaultEstimate: 5_000_000,
       });
+      hls = player;
       // Stop the SubtitleTrackController from auto-promoting a DEFAULT=YES
       // track. Setter, not config — this version's HlsConfig doesn't expose
       // subtitleDisplay. The enforce loop below is the real source of truth;
       // this just keeps hls.js from fighting it during init.
-      try { hls.subtitleDisplay = false; } catch {}
-      hls.loadSource(playbackUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      try { player.subtitleDisplay = false; } catch {}
+      player.loadSource(playbackUrl);
+      player.attachMedia(video);
+      player.on(Hls.Events.MANIFEST_PARSED, () => {
         // Pin to the highest rendition. For these short clips we want max
         // quality immediately rather than waiting for ABR to climb to it
         // mid-clip; setting currentLevel disables auto-switching, which is
         // safe here — the clips are seconds-to-minutes long, not live streams.
         // (The longer ~10-min NHL condensed games go through Brightcove embeds,
         // not this path, so nothing here is long enough to risk a stall.)
-        if (hls.levels && hls.levels.length > 0) {
-          hls.currentLevel = hls.levels.length - 1;
+        if (player.levels && player.levels.length > 0) {
+          player.currentLevel = player.levels.length - 1;
         }
         video.play().catch(() => {});
       });
@@ -871,7 +968,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
 
-    if (!(window as any).YT) {
+    if (!window.YT) {
       document.head.appendChild(tag);
     }
 
@@ -909,13 +1006,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       for (const q of QUALITY_PREF) if (levels.includes(q)) return q;
       return null;
     };
-    const forceBest = (player: any) => {
+    const forceBest = (player: YTPlayer) => {
       const levels: string[] = player.getAvailableQualityLevels?.() || [];
       const best = pickBest(levels);
       if (best) player.setPlaybackQuality?.(best);
     };
     const initPlayer = () => {
-      playerRef.current = new (window as any).YT.Player("yt-player", {
+      const YT = window.YT;
+      if (!YT) return;
+      playerRef.current = new YT.Player("yt-player", {
         width: "100%",
         height: "100%",
         videoId: currentId,
@@ -944,7 +1043,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           vq: "hd1080",
         },
         events: {
-          onReady: (event: any) => {
+          onReady: (event: YTPlayerEvent) => {
             event.target.playVideo();
             // A freshly-built player always autoplays muted — keep the custom
             // toggle in sync (covers fallback swaps after an unmute, too).
@@ -970,7 +1069,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // PLAYING (1) is the first state where getAvailableQualityLevels()
           // returns the real list — onReady gives []. setPlaybackQuality is
           // a deprecated suggestion, but it's the only knob we have.
-          onStateChange: (event: any) => {
+          onStateChange: (event: YTPlayerEvent) => {
             // Playback actually started — kill the watchdog.
             if ((event.data === 1 || event.data === 3) && watchdogRef.current) {
               window.clearTimeout(watchdogRef.current);
@@ -987,7 +1086,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             }
           },
           // If YT auto-quality downgrades us, push back up to the best level.
-          onPlaybackQualityChange: (event: any) => {
+          onPlaybackQualityChange: (event: YTPlayerEvent) => {
             const levels: string[] = event.target.getAvailableQualityLevels?.() || [];
             const best = pickBest(levels);
             if (best && event.data !== best) event.target.setPlaybackQuality?.(best);
@@ -1001,10 +1100,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       });
     };
 
-    if ((window as any).YT && (window as any).YT.Player) {
+    if (window.YT && window.YT.Player) {
       initPlayer();
     } else {
-      (window as any).onYouTubeIframeAPIReady = initPlayer;
+      window.onYouTubeIframeAPIReady = initPlayer;
     }
 
     return () => {
@@ -1035,14 +1134,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         Prev
       </button>
       <button onClick={(e) => { e.stopPropagation(); onNext?.(); }} disabled={!onNext} aria-label="Next post" title="Next post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         Next
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
       </button>
     </div>
   ) : null;
@@ -1076,7 +1175,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         style={{ zIndex: 1 }}
         role="dialog"
         aria-modal="true"
-        aria-label="Video player"
+        // Keep the dialog's accessible name in sync with what it's actually
+        // showing — this same modal also serves an image lightbox (imageMode)
+        // and a Reddit text-post preview (textMode), so a static "Video player"
+        // mislabels both for screen readers. Don't surface the headline here:
+        // it's deliberately spoiler-blurred (PeekBlur) because it can carry a
+        // score, and an accessible name would read it aloud unblurred.
+        aria-label={imageMode ? "Image viewer" : textMode ? "Post" : "Video player"}
       >
         {/* Reddit prev/next post paging now renders as a labelled row BELOW the
             media (see `pager`, inserted after the player) instead of overlaid on
@@ -1088,7 +1193,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           aria-label="Close"
           title="Close (Esc)"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
@@ -1103,6 +1208,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <button
             onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
             aria-pressed={showCC}
+            aria-label={showCC ? "Hide captions" : "Show captions"}
             className="absolute -top-10 right-10 h-8 px-2 flex items-center justify-center rounded-md text-xs font-bold transition-colors cursor-pointer"
             style={{
               color: showCC ? "white" : "rgba(255,255,255,0.6)",
@@ -1141,11 +1247,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             {headline && (
               <PeekBlur tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
             )}
-            {(byline || published) && (
-              <p className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
-                {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
-              </p>
-            )}
+            <ArticleMeta byline={byline} published={published} className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }} />
             {body && (
               <PeekBlur
                 className="text-sm sm:text-base leading-relaxed mt-4 pt-4"
@@ -1217,12 +1319,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   <span className="text-xs font-bold" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>5s</span>
                 </div>
               )}
-              {/* Spoiler masks over YouTube's chrome — always on (see note by
-                  the state declarations), each independently toggleable in
-                  Settings (maskVideoTitle / maskVideoBottom). pointer-events stay
-                  off so click-to-play/pause keeps working. STRAIGHT BLACK, no
-                  gradient: a hard edge, so each bar is the thinnest height that
-                  still hides the chrome and crops the least footage.
+              {/* Spoiler mask over YouTube's title chrome — always on (see note
+                  by the state declarations), toggleable in Settings
+                  (maskVideoTitle). pointer-events stay off so click-to-play/pause
+                  keeps working. STRAIGHT BLACK, no gradient: a hard edge, so the
+                  bar is the thinnest height that still hides the title and crops
+                  the least footage.
                   TOP — measured (full Chrome, embed framed at the modal's real
                   player sizes, 2026-06-12): the title is a SINGLE truncated line
                   whose bottom sits at a ~FIXED ~36px regardless of player size
@@ -1239,11 +1341,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   frame — so we can't show the bar only when the title appears. A
                   prior hover/fade attempt leaked the title on PC (see the 6/12
                   fview session). Always-on is the price of a cross-origin player.
-                  BOTTOM — measured: controls:0 strips YouTube's ENTIRE bottom bar
-                  (no timeline/seek line exists), so this bar covers nothing YT
-                  during playback — it's pure footage crop, kept just thick enough
-                  to hide the poster-state "Watch on YouTube" pill / logo. Safe to
-                  shrink further or toggle off. */}
+                  NO BOTTOM BAR: controls:0 already strips YouTube's ENTIRE bottom
+                  bar (no timeline/seek line exists), so nothing there needs
+                  covering during playback. */}
               {maskVideoTitle && !titleSafe && !revealTitle && (
                 <div
                   aria-hidden
@@ -1284,9 +1384,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   style={{ background: "rgba(0,0,0,0.45)" }}
                 >
                   {revealTitle ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
+                    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
                   ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+                    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
                   )}
                 </button>
               )}
@@ -1301,9 +1401,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 style={{ background: "rgba(0,0,0,0.45)" }}
               >
                 {controlsHidden ? (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6" /></svg>
+                  <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6" /></svg>
                 ) : (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                  <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
                 )}
               </button>
               {/* Warn-past-halfway confirm — shown only when the warnHalfway
@@ -1361,6 +1461,20 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   aria-valuenow={Math.round(Math.min(progress, seekCap) * 100)}
                   tabIndex={0}
                   title="Tap or drag to seek"
+                  onKeyDown={(e) => {
+                    // A focusable role="slider" must be keyboard-operable (WCAG
+                    // 2.1.1). ←/↓ nudge back, →/↑ nudge forward by the same ±5s
+                    // step the on-screen buttons use — a slow, deliberate scrub
+                    // that's deliberately exempt from the spoiler cap/warn (see
+                    // seekBy). stopPropagation so the modal's global arrow
+                    // handler doesn't ALSO fire (it would step to the prev/next
+                    // post, or double-seek, instead of just nudging the bar).
+                    if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+                      e.preventDefault(); e.stopPropagation(); seekBy(-SEEK_STEP);
+                    } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+                      e.preventDefault(); e.stopPropagation(); seekBy(SEEK_STEP);
+                    }
+                  }}
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => {
                     e.stopPropagation();
@@ -1421,13 +1535,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   className={`${btnBase} h-8 w-8 shrink-0`}
                 >
                   {muted || volume === 0 ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 5 6 9H2v6h4l5 4z" />
                       <line x1="23" y1="9" x2="17" y2="15" />
                       <line x1="17" y1="9" x2="23" y2="15" />
                     </svg>
                   ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 5 6 9H2v6h4l5 4z" />
                       <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
                       {volume > 55 && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
@@ -1488,7 +1602,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     className="flex items-center justify-center rounded-md transition-colors cursor-pointer h-8 w-8 text-white/55 hover:text-white"
                   >
                     {/* circular rewind arrow with "5" nested inside (YT/Firefox-PiP style) */}
-                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
+                    <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
                   </button>
                   {/* Mobile + MEDIUM windows: quarter presets only. The full
                       10→90 set below needs ~600px of strip; on narrower windows
@@ -1499,6 +1613,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       key={`m${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
                       className="flex lg:hidden items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
+                      aria-label={`Jump to ${p}%`}
                       title={`Jump to ${p}%`}
                     >
                       {p}%
@@ -1511,6 +1626,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       key={`d${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
                       className={`hidden lg:flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
+                      aria-label={`Jump to ${p}%`}
                       title={`Jump to ${p}%`}
                     >
                       {p}%
@@ -1523,7 +1639,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     className="flex items-center justify-center rounded-md transition-colors cursor-pointer h-8 w-8 text-white/55 hover:text-white"
                   >
                     {/* circular forward arrow with "5" nested inside (YT/Firefox-PiP style) */}
-                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
+                    <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><text x="12" y="15.5" fontSize="9" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">5</text></svg>
                   </button>
                 </div>
               ) : <div />}
@@ -1536,14 +1652,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 className={`${btnBase} justify-self-end h-8 w-8`}
               >
                 {fsActive ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 3v3a2 2 0 0 1-2 2H3" />
                     <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
                     <path d="M3 16h3a2 2 0 0 1 2 2v3" />
                     <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
                   </svg>
                 ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 3H5a2 2 0 0 0-2 2v3" />
                     <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
                     <path d="M3 16v3a2 2 0 0 0 2 2h3" />
@@ -1592,11 +1708,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 doesn't close); the surrounding whitespace strip stays a dismiss
                 target, so a tap just below the video exits instead of dead-zoning. */}
             <PeekBlur tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
-            {(byline || published) && (
-              <p className="text-xs text-white/40 mt-1">
-                {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
-              </p>
-            )}
+            <ArticleMeta byline={byline} published={published} className="text-xs text-white/40 mt-1" />
           </div>
         )}
 

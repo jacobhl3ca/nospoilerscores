@@ -57,6 +57,15 @@ html:not(.reveal-news-titles):not(.show-text-posts) .news-card-alltext {
 }
 
 :root {
+  /* Tell the browser which theme its native UI (scrollbars, the text-input
+     caret + selection highlight, form controls, autofill) should paint in.
+     The app's theme is user-driven via [data-theme] (see the pre-paint script
+     in layout.tsx), so map color-scheme onto that rather than prefers-color-
+     scheme: light is the default here, dark is set alongside data-theme="dark"
+     below. Without this, native controls stayed light in dark mode (e.g. a
+     light caret + light scrollbar against the dark feedback input). Mirrors the
+     color-scheme already declared in global-error.tsx. */
+  color-scheme: light;
   --bg: #ffffff;
   --bg-card: #f5f5f5;
   --bg-card-hover: #ebebeb;
@@ -70,6 +79,7 @@ html:not(.reveal-news-titles):not(.show-text-posts) .news-card-alltext {
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0a0a0a;
   --bg-card: rgba(255, 255, 255, 0.05);
   --bg-card-hover: rgba(255, 255, 255, 0.08);
@@ -375,4 +385,14 @@ iframe#yt-player {
      reduced-motion overrides above aren't undercut by a perpetually pulsing
      skeleton or spinner. */
   .animate-pulse, .animate-spin, .animate-bounce, .animate-ping { animation: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The monkey-toggle buttons (theme/menu/scroll-top) and the World Cup banner
+     pill grow on hover via Tailwind's `hover:scale-110` / `hover:scale-105`.
+     In Tailwind v4 those compile to the native `scale` property (not the
+     `transform`-based overrides above), so reduced-motion doesn't reach them
+     on its own — reset `scale` so these stay put for motion-sensitive users.
+     transition-all remains a no-op once there's no scale change to animate. */
+  .hover\:scale-110:hover, .hover\:scale-105:hover { scale: none; }
 }

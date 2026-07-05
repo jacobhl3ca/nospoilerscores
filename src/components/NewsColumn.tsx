@@ -125,7 +125,7 @@ export function NewsColumnTitle({
       }
     };
     // Keyboard parity with the app's other dropdowns/modals: Escape dismisses
-    // the popup the swap button promises via aria-haspopup="menu".
+    // the popup the swap button promises via aria-haspopup.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSwapOpen(false);
     };
@@ -151,7 +151,7 @@ export function NewsColumnTitle({
               className="cursor-pointer transition-colors hover:opacity-80"
               style={{ color: "var(--text)" }}
               title="Switch news league"
-              aria-haspopup="menu"
+              aria-haspopup="true"
               aria-expanded={swapOpen}
             >
               <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
@@ -268,10 +268,17 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
           <img
             src={logoUrl}
             alt=""
+            loading="lazy"
             width={24}
             height={24}
             className="w-6 h-6 object-contain shrink-0"
             draggable={false}
+            // These source marks are remote (ESPN CDN + Wikimedia hotlinks for
+            // NCAA/ITF), so a 404 or blocked hotlink would otherwise leave the
+            // browser's broken-image glyph in the sticky header. Hide it so the
+            // header degrades to its always-present label text, matching the
+            // thumbnail onError guards elsewhere in this file.
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         )}
         {mobileLabel !== label ? (
@@ -293,7 +300,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
 function stripLeaguePrefixForMobile(label: string): string {
   let s = label;
   for (let i = 0; i < 3; i++) {
-    const m = s.match(/^(?:NBA|MLB|NHL|NFL|EPL|MLS|NCAAM|NCAAF|ESPN|GOLF|TENNIS|F1|WNBA)\s+/i);
+    const m = s.match(/^(?:NBA|MLB|NHL|NFL|EPL|MLS|UCL|UEL|NCAAM|NCAAW|NCAAF|ESPN|GOLF|TENNIS|F1|WNBA)\s+/i);
     if (!m) break;
     s = s.slice(m[0].length);
   }
@@ -323,9 +330,14 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
-        <div className="flex flex-col">
+        // Screen readers get an announced loading status; the pulsing row
+        // placeholders are purely decorative (empty styled divs), so they're
+        // aria-hidden and only the sr-only text is voiced (WCAG 4.1.3, matching
+        // the role=status skeleton in HomeContent's games column).
+        <div role="status" aria-live="polite" className="flex flex-col">
+          <span className="sr-only">Loading headlines…</span>
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="px-3 py-2 animate-pulse" style={{ borderTop: i === 1 ? "none" : "1px solid var(--border)" }}>
+            <div key={i} aria-hidden="true" className="px-3 py-2 animate-pulse" style={{ borderTop: i === 1 ? "none" : "1px solid var(--border)" }}>
               <div className="h-3 w-full rounded" style={{ background: "var(--bg-card-hover)" }} />
             </div>
           ))}
@@ -444,6 +456,10 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       height={18}
       className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
       draggable={false}
+      // Remote league mark (ESPN CDN); a 404/blocked hotlink would otherwise
+      // leave the browser's broken-image glyph. Hide it so the card degrades to
+      // its label text, matching SourceHeader's logoUrl onError guard above.
+      onError={(e) => { e.currentTarget.style.display = "none"; }}
     />
   ) : null;
   if (shouldPopModal) {
@@ -503,9 +519,12 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
-        <div className="flex flex-col gap-px" style={{ background: "var(--border)" }}>
+        // See TextSourceCard: sr-only status is announced, decorative pulse
+        // placeholders are aria-hidden (WCAG 4.1.3, matching HomeContent).
+        <div role="status" aria-live="polite" className="flex flex-col gap-px" style={{ background: "var(--border)" }}>
+          <span className="sr-only">Loading videos…</span>
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse" style={{ background: "var(--bg-card)" }}>
+            <div key={i} aria-hidden="true" className="animate-pulse" style={{ background: "var(--bg-card)" }}>
               <div className="w-full aspect-video" style={{ background: "var(--bg-card-hover)" }} />
               <div className="px-3 py-2">
                 <div className="h-3 w-4/5 rounded" style={{ background: "var(--bg-card-hover)" }} />
@@ -531,6 +550,14 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     loading="lazy"
                     className="w-full h-full object-cover"
                     draggable={false}
+                    // A 404'd thumbnail would otherwise show the browser's
+                    // broken-image glyph; hide it so the card degrades to the
+                    // bg-card-hover placeholder + play overlay (a sibling),
+                    // matching NewsCard's onError guard and AlignedVideoStrip's
+                    // VideoRow. Rows are keyed by item.id, so this node is never
+                    // reused for another item — display:none can't leak onto a
+                    // later valid thumbnail.
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
                   />
                   <div
                     className="absolute inset-0 flex items-center justify-center pointer-events-none"
