@@ -123,6 +123,15 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
   return (
     <div
       data-cal-pop
+      // The calendar toggle button declares aria-haspopup + aria-expanded, so
+      // give the popover it opens a matching role + accessible name — otherwise
+      // it surfaces to assistive tech as an anonymous, role-less region. Matches
+      // the role="dialog" + aria-label pattern every other overlay in the app
+      // uses (GameDetailModal, WorldCupGroupsModal, the HomeContent explainers).
+      // The month caption (aria-live) and day cells (aria-current) already carry
+      // their own state; this just names the container they live in.
+      role="dialog"
+      aria-label="Choose a date"
       className="absolute top-full mt-2 right-0 z-50 rounded-xl shadow-lg p-3 w-64"
       style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
     >
