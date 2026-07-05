@@ -868,8 +868,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         {[
           { team: game.awayTeam, isTBD: awayTBD },
           { team: game.homeTeam, isTBD: homeTBD },
-        ].map(({ team, isTBD }) => (
-          <div key={team.id || team.abbreviation} className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+        ].map(({ team, isTBD }, idx) => (
+          // Key by row slot (idx), not team identity: a "TBD vs TBD" playoff/World
+          // Cup placeholder leaves BOTH teams with an empty id AND empty
+          // abbreviation (see espn.ts — id/abbreviation fall back to ""), so
+          // `team.id || team.abbreviation` collides to "" on both rows and trips
+          // React's duplicate-key warning. The list is a fixed [away, home] pair,
+          // so the index is the stable, unique identity here.
+          <div key={idx} className="flex items-center gap-1 sm:gap-1.5 min-w-0">
             <span className="shrink-0">{logo(team, isTBD)}</span>
             {/* items-baseline (not center) keeps the World Cup #N seated on the
                 same baseline as the name; the rank lives INSIDE this container so
