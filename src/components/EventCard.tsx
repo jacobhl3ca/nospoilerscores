@@ -44,12 +44,12 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const play = async (id: string, query: string, channel?: string) => {
     const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    if (!onPlayHighlight) { window.open(fallback, "_blank", "noopener"); return; }
+    if (!onPlayHighlight) { window.open(fallback, "_blank", "noopener,noreferrer"); return; }
     setLoadingId(id);
     const videoId = await fetchFirstVideoId(query, channel);
     setLoadingId(null);
     if (videoId) onPlayHighlight(videoId, fallback);
-    else window.open(fallback, "_blank", "noopener");
+    else window.open(fallback, "_blank", "noopener,noreferrer");
   };
   return { loadingId, play };
 }
