@@ -306,7 +306,13 @@ export default function GolfLeaderboard({
           if (!id) return;
           seen.add(id);
           setHighlightSlots((prev) => {
-            if (prev[0]) return prev;
+            // Skip if slot 0 is taken OR this id already landed in a later slot:
+            // the backfill queries race in parallel and a generic search often
+            // returns the same upload as the ESPN channel, so without the
+            // prev.includes(id) guard the identical recap could fill slot 0 while
+            // already sitting in slot 1-3 and render as two identical play
+            // buttons (mirrors tryFill's dedup above).
+            if (prev[0] || prev.includes(id)) return prev;
             const next = [...prev];
             next[0] = id;
             return next;
