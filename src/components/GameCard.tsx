@@ -875,19 +875,19 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 same baseline as the name; the rank lives INSIDE this container so
                 the whole name+rank unit centers against the flag as one piece
                 (the container height is the name's, since the rank is smaller). */}
-            <span className="team-name-container flex items-baseline gap-1 sm:gap-1.5 shrink-0">
+            <span className="team-name-container flex items-baseline gap-1 sm:gap-1.5 min-w-0">
               {(() => {
                 const nameNode = useAbbreviations ? (
                   <span className="text-xs sm:text-sm whitespace-nowrap leading-none" style={{ color: "var(--text)" }} title={team.displayName}>{team.abbreviation}</span>
                 ) : (
-                  <span className="text-sm whitespace-nowrap leading-none team-name" style={{ color: "var(--text)" }} title={team.displayName}>{displayShortName(team)}</span>
+                  <span className="text-sm leading-none team-name truncate min-w-0" style={{ color: "var(--text)" }} title={team.displayName}>{displayShortName(team)}</span>
                 );
                 if (isTBD || !onSelectTeam || !team.id) return nameNode;
                 return (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onSelectTeam(team); }}
-                    className="cursor-pointer hover:underline decoration-dotted underline-offset-2"
+                    className="cursor-pointer hover:underline decoration-dotted underline-offset-2 min-w-0"
                     title={`View ${team.displayName} schedule`}
                   >
                     {nameNode}
