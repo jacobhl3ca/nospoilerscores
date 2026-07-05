@@ -1117,6 +1117,10 @@ function TeamPicker({
             <button
               key={s.sport}
               onClick={() => setSelectedSport(active ? null : s.sport)}
+              // State is otherwise conveyed only by accent color; expose the
+              // active filter to assistive tech (matches the aria-pressed toggle
+              // convention used by RadioGroup and the HomeContent tab buttons).
+              aria-pressed={active}
               className="px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide cursor-pointer transition-colors"
               style={{
                 background: active ? "var(--accent)" : "var(--bg-card)",
@@ -1175,6 +1179,11 @@ function TeamPicker({
                 <button
                   key={t.id}
                   onClick={() => onToggle(t.id)}
+                  // Favorited state is otherwise conveyed only by accent color;
+                  // expose it to assistive tech so a screen-reader user hears
+                  // which teams are already favorited (same aria-pressed toggle
+                  // convention used elsewhere in the app).
+                  aria-pressed={isFav}
                   className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs cursor-pointer transition-colors text-left"
                   style={{
                     background: isFav ? "var(--accent)" : "var(--bg-card)",
