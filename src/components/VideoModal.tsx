@@ -1148,18 +1148,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 sm:p-8"
-      // When the prev/next pager is present it's pinned to the bottom-centre, so
-      // reserve that band: pad the bottom of the centring box by the pager's
-      // height + safe area, which lifts the centred content (incl. the byline /
-      // Open-on / Copy-link row) clear of it instead of letting them overlap
-      // (Jacob 7/4). No reservation when there's no pager (e.g. highlights).
-      style={{ zIndex: 9999, ...((onPrev || onNext) ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 4.5rem)" } : {}) }}
+      className="fixed inset-0 overflow-y-auto"
+      style={{ zIndex: 9999 }}
       onClick={onClose}
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0" style={{ background: "#000" }} />
+      {/* Backdrop — fixed so it stays covering the viewport while a tall post
+          scrolls inside the container above it. */}
+      <div className="fixed inset-0" style={{ background: "#000" }} />
 
+      {/* Centring / scroll wrapper — min-h-full centres short posts, but when a
+          post is taller than the viewport (long Reddit body → card hits
+          max-h-[85vh], plus the byline / Open-on / Copy-link row) the wrapper
+          grows past the viewport and the whole thing SCROLLS instead of
+          overflowing symmetrically and bleeding the footer under the fixed
+          pager. The bottom reserve keeps that footer clear of the pager band
+          (Jacob 7/4). No reservation when there's no pager (e.g. highlights). */}
+      <div
+        className="relative flex min-h-full items-center justify-center p-4 sm:p-8"
+        style={(onPrev || onNext) ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 4.5rem)" } : undefined}
+      >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
           button stop propagation themselves so playback controls keep working. */}
@@ -1734,6 +1741,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           )}
         </div>
         )}
+      </div>
       </div>
     </div>
   );
