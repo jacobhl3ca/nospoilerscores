@@ -129,6 +129,8 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
   const [band, setBand] = useState<Band>(() => loadBand());
   // The spotlit group's card — scrolled into view once the grid renders.
   const hlCardRef = useRef<HTMLDivElement | null>(null);
+  // The dialog container — focused on open for keyboard/SR users (see below).
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   // Single-select: at most one day active at a time. If an older multi-select
   // state is persisted, collapse to one (today wins, else the first enabled).
@@ -170,6 +172,21 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Focus management (WCAG 2.4.3): move focus into the dialog on open so
+  // keyboard / screen-reader users land inside the overlay instead of being
+  // stranded on the page behind it, and restore focus to the opener on close.
+  // Focusing the dialog CONTAINER (tabIndex=-1) rather than a control keeps mouse
+  // users from seeing a focus ring while still handing the dialog + its aria-label
+  // to assistive tech; the first Tab then reaches the close button. preventScroll
+  // keeps the container's own scroll (and the spotlight scroll-into-view below)
+  // undisturbed. The modal mounts fresh per open (parent guards it behind
+  // `groupsOpen &&`), so this fires on every open/close — matching GameDetailModal.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus({ preventScroll: true });
+    return () => opener?.focus?.();
+  }, []);
 
   // When opened to spotlight a group, scroll its card into view — it can sit
   // below the fold in the 12-group grid. Wait a tick for the grid to render.
@@ -341,8 +358,13 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
       <div
+        ref={dialogRef}
+        // tabIndex=-1 makes the container programmatically focusable (see the
+        // focus-management effect) without adding it to the tab order; outline
+        // none suppresses the ring since it's focused only to seat assistive tech.
+        tabIndex={-1}
         className={`relative rounded-xl p-4 sm:p-5 w-full ${view === "bracket" ? "max-w-6xl" : "max-w-3xl"} max-h-[85vh] overflow-y-auto shadow-xl`}
-        style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+        style={{ background: "var(--bg)", border: "1px solid var(--border)", outline: "none" }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
