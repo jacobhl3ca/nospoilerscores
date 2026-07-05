@@ -306,7 +306,13 @@ export default function GolfLeaderboard({
           if (!id) return;
           seen.add(id);
           setHighlightSlots((prev) => {
-            if (prev[0]) return prev;
+            // Skip if slot 0 is taken OR this id already landed in a later slot:
+            // the backfill queries race in parallel and a generic search often
+            // returns the same upload as the ESPN channel, so without the
+            // prev.includes(id) guard the identical recap could fill slot 0 while
+            // already sitting in slot 1-3 and render as two identical play
+            // buttons (mirrors tryFill's dedup above).
+            if (prev[0] || prev.includes(id)) return prev;
             const next = [...prev];
             next[0] = id;
             return next;
@@ -411,9 +417,9 @@ export default function GolfLeaderboard({
                 <span className="text-[10px] sm:text-xs">
                   {broadcastExpanded ? (
                     tournament.broadcasts.map((b, i) => (
-                      <span key={i}>
+                      <span key={b}>
                         {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
-                        {networkLink(b, i)}
+                        {networkLink(b, b)}
                       </span>
                     ))
                   ) : (
@@ -424,6 +430,7 @@ export default function GolfLeaderboard({
                         className="ml-1 cursor-pointer hover:underline"
                         style={{ color: "var(--text-muted)" }}
                         title={tournament.broadcasts.slice(1).join(", ")}
+                        aria-label={`Show ${tournament.broadcasts.length - 1} more network${tournament.broadcasts.length - 1 === 1 ? "" : "s"}`}
                         onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(true); }}
                       >
                         +{tournament.broadcasts.length - 1}
@@ -474,6 +481,7 @@ export default function GolfLeaderboard({
 
               {/* Flag */}
               {player.flag && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={player.flag}
                   alt={player.flagCountry || ""}
@@ -482,6 +490,10 @@ export default function GolfLeaderboard({
                   width={20}
                   height={20}
                   className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0"
+                  // Hide a 404'd/blocked flag so it degrades to the player row
+                  // without the broken-image glyph (matches the remote-image
+                  // onError guards in GameCard/NewsColumn/WorldCupGroupsModal).
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
               )}
 
@@ -604,7 +616,7 @@ export default function GolfLeaderboard({
                     : `Round ${completedRounds} highlights — more on YouTube`
                 }
               >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               </button>
             );
           })}

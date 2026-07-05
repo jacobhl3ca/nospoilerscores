@@ -8,7 +8,10 @@ export const metadata: Metadata = {
   title: PRIVACY_TITLE,
   description: PRIVACY_DESC,
   alternates: { canonical: "/privacy" },
-  robots: { index: true, follow: true },
+  // No `robots` override: a child `robots` object fully replaces the root
+  // layout's, which would drop its googleBot directives (max-image-preview:large,
+  // max-snippet:-1). index/follow is already inherited from the layout, so this
+  // page stays indexable AND keeps the richer snippet/image-preview hints.
   openGraph: {
     title: PRIVACY_TITLE,
     description: PRIVACY_DESC,
@@ -29,7 +32,7 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: 2026-05-06</p>
+      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-05-06">2026-05-06</time></p>
 
       <section className="space-y-4">
         <p>
@@ -78,6 +81,25 @@ export default function PrivacyPage() {
       <div className="mt-10">
         <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>← Back to HideScore</Link>
       </div>
+
+      {/* BreadcrumbList lets Google render a Home › Privacy trail in the search
+          result instead of the bare /privacy URL — matching the /faq, /worldcup,
+          and /watch-world-cup-without-spoilers pages that already declare the same
+          hierarchy. Server-rendered: this page has no "use client", so the script
+          ships in the static HTML for crawlers. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+              { "@type": "ListItem", position: 2, name: "Privacy Policy", item: "https://hidescore.com/privacy" },
+            ],
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
     </main>
   );
 }

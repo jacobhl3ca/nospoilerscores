@@ -128,7 +128,7 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
 // Vertical, one-per-row source-type filter used inside the funnel popover.
 // Each row is tappable to select that filter; a drag handle reorders the
 // rows (order persisted in prefs). Pointer-based drag (not HTML5) so it
-// works on iOS — same approach as NewsOrderMenu. `dropIdx` is the insertion
+// works on iOS. `dropIdx` is the insertion
 // slot drawn as a thin accent bar between rows.
 function NewsFilterList({ options, value, onSelect, onReorder }: {
   options: { value: string; label: string }[];
@@ -201,7 +201,7 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
                 style={{ color: "var(--text-muted)" }}
                 aria-label="Drag to reorder"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" />
                 </svg>
               </span>
@@ -244,165 +244,6 @@ function applyOrder<T extends { label: string }>(sources: T[], order: string[] |
   return out;
 }
 
-// Drag-reorderable list of news source labels inside the ☰ menu. Pointer
-// events (not HTML5 drag) so it works on iOS — captured on the handle, then
-// window-level move/up listeners track the drag across re-renders even if
-// the pointer leaves the row. `dropIdx` is the insertion slot (0..n), drawn
-// as a thin accent bar between rows so the user can see where the item
-// will land before releasing.
-function NewsOrderMenu({
-  cascadeOrder,
-  currentOrder,
-  hiddenLabels,
-  onChange,
-  onToggleHide,
-  onReset,
-}: {
-  cascadeOrder: string[];        // default order from leagueSourceCascade
-  currentOrder: string[] | undefined; // user's custom order, or undefined for Smart
-  hiddenLabels: string[];        // sources the user has hidden via checkbox
-  onChange: (order: string[]) => void;
-  onToggleHide: (label: string) => void;
-  onReset: () => void;
-}) {
-  const smartActive = !currentOrder || currentOrder.length === 0;
-  // Visible order = custom (if any), with unknown labels filtered out.
-  // When smart, show cascade.
-  const visible = smartActive
-    ? cascadeOrder
-    : applyOrder(cascadeOrder.map((l) => ({ label: l })), currentOrder).map((s) => s.label);
-  const listRef = useRef<HTMLDivElement>(null);
-  const [dragLabel, setDragLabel] = useState<string | null>(null);
-  const [dropIdx, setDropIdx] = useState<number | null>(null);
-
-  const startDrag = (e: React.PointerEvent, label: string) => {
-    e.preventDefault();
-    setDragLabel(label);
-    const startIdx = visible.indexOf(label);
-    setDropIdx(startIdx);
-    const onMove = (ev: PointerEvent) => {
-      const list = listRef.current;
-      if (!list) return;
-      const rows = Array.from(list.querySelectorAll<HTMLElement>("[data-row]"));
-      let next = rows.length;
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i].getBoundingClientRect();
-        if (ev.clientY < r.top + r.height / 2) { next = i; break; }
-      }
-      setDropIdx(next);
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      setDragLabel((curLabel) => {
-        setDropIdx((curDrop) => {
-          if (curLabel != null && curDrop != null) {
-            const without = visible.filter((l) => l !== curLabel);
-            const from = visible.indexOf(curLabel);
-            // When dragging downward, the removal shifts every index after
-            // `from` up by 1 — so we have to compensate the insertion slot.
-            const insertAt = curDrop > from ? curDrop - 1 : curDrop;
-            without.splice(insertAt, 0, curLabel);
-            // No-op if order didn't actually change.
-            const changed = without.some((l, i) => l !== visible[i]);
-            if (changed) onChange(without);
-          }
-          return null;
-        });
-        return null;
-      });
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  };
-
-  return (
-    <div
-      className="absolute right-0 mt-2 w-64 rounded-lg shadow-lg z-50 overflow-hidden"
-      style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
-    >
-      <button
-        type="button"
-        className="w-full text-left px-3 py-2 text-sm flex items-center justify-between cursor-pointer transition-colors"
-        style={{ color: smartActive ? "var(--accent)" : "var(--text)", borderBottom: "1px solid var(--border)" }}
-        onClick={onReset}
-        title="Reset to default order"
-      >
-        <span className="font-medium">Smart {smartActive ? "(default)" : ""}</span>
-        {smartActive && <span aria-hidden="true">✓</span>}
-      </button>
-      <div ref={listRef} className="py-1 select-none">
-        {visible.map((label, i) => {
-          const isDragging = dragLabel === label;
-          return (
-            <div key={label} className="relative">
-              {/* drop indicator above this row */}
-              {dropIdx === i && !isDragging && (
-                <div className="absolute left-2 right-2 -top-px h-0.5 rounded" style={{ background: "var(--accent)" }} />
-              )}
-              <div
-                data-row
-                className="px-3 py-2 text-sm flex items-center gap-2"
-                style={{
-                  background: isDragging ? "var(--bg-card-hover)" : "transparent",
-                  opacity: isDragging ? 0.6 : 1,
-                  touchAction: "none",
-                }}
-              >
-                {/* Drag handle — only this part captures the drag pointer so
-                    the checkbox + label remain tappable for their own actions. */}
-                <span
-                  onPointerDown={(e) => startDrag(e, label)}
-                  className="shrink-0 cursor-grab active:cursor-grabbing"
-                  style={{ color: "var(--text-muted)" }}
-                  aria-label="Drag to reorder"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="4" y1="9" x2="20" y2="9" />
-                    <line x1="4" y1="15" x2="20" y2="15" />
-                  </svg>
-                </span>
-                {/* Visibility checkbox — toggles the source on/off without
-                    removing it from the order, so user can re-show later. */}
-                <button
-                  type="button"
-                  onClick={() => onToggleHide(label)}
-                  className="shrink-0 flex items-center justify-center rounded cursor-pointer"
-                  style={{
-                    width: "16px",
-                    height: "16px",
-                    background: hiddenLabels.includes(label) ? "transparent" : "var(--accent)",
-                    border: "1px solid " + (hiddenLabels.includes(label) ? "var(--border)" : "var(--accent)"),
-                  }}
-                  aria-pressed={!hiddenLabels.includes(label)}
-                  aria-label={hiddenLabels.includes(label) ? `Show ${label}` : `Hide ${label}`}
-                  title={hiddenLabels.includes(label) ? "Hidden — tap to show" : "Visible — tap to hide"}
-                >
-                  {!hiddenLabels.includes(label) && (
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-                <span
-                  className="flex-1 min-w-0 truncate"
-                  style={{ color: hiddenLabels.includes(label) ? "var(--text-muted)" : "var(--text)" }}
-                >{label}</span>
-              </div>
-            </div>
-          );
-        })}
-        {/* drop indicator at the very end */}
-        {dropIdx === visible.length && (
-          <div className="relative h-0.5 -mt-px mx-2 rounded" style={{ background: "var(--accent)" }} />
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Subtle + button rendered after the visible league columns when at least
 // one slot has been emptied. Click repopulates that slot with the first
 // eligible league. Narrow column-shaped target so it visually slots into
@@ -431,7 +272,7 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
         e.currentTarget.style.color = "var(--text-muted)";
       }}
     >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
       </svg>
@@ -466,11 +307,11 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
       aria-pressed={active}
     >
       {active ? (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="6" y="3" width="12" height="18" rx="1.5" />
         </svg>
       ) : (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="7" height="18" rx="1.5" /><rect x="14" y="3" width="7" height="18" rx="1.5" />
         </svg>
       )}
@@ -556,7 +397,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         params.has("th") || params.has("dd") || params.has("dv") || params.has("dr") || params.has("n")
       ) {
         // Support new compact format (f=m1.n15&l=m.n) and old format (f=mlb-1,mlb-2&fl=mlb,nba)
-        const oldTeams = params.get("f")?.includes("-") ? params.get("f")!.split(",").filter(Boolean) : null;
+        const fParam = params.get("f");
+        const oldTeams = fParam?.includes("-") ? fParam.split(",").filter(Boolean) : null;
         const oldLeagues = params.get("fl")?.split(",").filter(Boolean) as Sport[] | null;
         const decoded = decodeFavorites(params);
         loaded.favoriteTeams = oldTeams ?? decoded.teams ?? loaded.favoriteTeams;
@@ -1010,15 +852,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     }
   };
 
-  // Param kept optional + ignored: callers may still pass the old
-  // "don't show again" checkbox value, but the popup is now first-time-only
-  // (always marked seen), so the value no longer matters.
-  const confirmRatings = (_dontShowAgain?: boolean) => {
+  // The explainer popups are first-time-only — `skipExplainer`/`skipNewsExplainer`
+  // is set the moment each one is shown (see handleViewModeClick / the news
+  // brancher above), so confirming just flips the corresponding view on.
+  const confirmRatings = () => {
     setShowRatingsExplainer(false);
     updatePrefs({ showRatings: true, skipExplainer: true });
   };
 
-  const confirmNews = (_dontShowAgain?: boolean) => {
+  const confirmNews = () => {
     setShowNewsExplainer(false);
     setShowNews(true);
     updatePrefs({ showNews: true, skipNewsExplainer: true });
@@ -1324,31 +1166,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
 
-  // News-order persistence. Custom per-sport ordering of the source labels
-  // inside a single news column. Drag-reorder in the ☰ menu writes here;
-  // applyOrder reads from it to reshuffle the cascade-default source list
-  // (unknown labels fall through to the tail so new sources still surface).
-  // The ☰ dropdown manages whichever league is currently "primary": the
-  // focused league if Focus is set, otherwise the first visible scores slot.
-  // ESPN focus is handled separately (sport=undefined → dropdown isn't
-  // sport-keyed; we'll wire ESPN order using a sentinel key in prefs).
-  const newsCol1Sport: Sport | undefined = (prefs.newsFocusLeague && prefs.newsFocusLeague !== "espn")
-    ? prefs.newsFocusLeague
-    : sortedLeagues[0]?.sport;
-  const newsOrderForCol1: string[] | undefined = newsCol1Sport
-    ? prefs.newsSourceOrder?.[newsCol1Sport]
-    : undefined;
-  const setNewsSourceOrder = (sport: Sport, order: string[]) => {
-    const existing = prefs.newsSourceOrder ?? {};
-    updatePrefs({ newsSourceOrder: { ...existing, [sport]: order } });
-  };
-  const clearNewsSourceOrder = (sport: Sport) => {
-    const existing = prefs.newsSourceOrder ?? {};
-    if (!existing[sport]) return;
-    const next = { ...existing };
-    delete next[sport];
-    updatePrefs({ newsSourceOrder: next });
-  };
+  // News source-ordering is applied read-only from prefs.newsSourceOrder (a
+  // per-sport order of source labels). The news cascade reads it via `orderFor`
+  // below to reshuffle each column's default source list, honoring any order a
+  // prior build's ☰ drag-reorder menu had persisted. That reorder UI was
+  // removed, so nothing writes newsSourceOrder anymore; unknown labels still
+  // fall through to the tail so new sources keep surfacing.
   const newsTypeFilter = prefs.newsTypeFilter ?? "all";
   const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
   // Source-filter options + the user's drag-reordered order. Unknown labels in
@@ -1372,30 +1195,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // it so the 1/2/3 column selector (default 3) is authoritative.
   const newsFocusLeague: Sport | "espn" | undefined = undefined;
   const newsHiddenSources = prefs.newsHiddenSources ?? [];
-  const toggleNewsSourceHidden = (label: string) => {
-    const next = newsHiddenSources.includes(label)
-      ? newsHiddenSources.filter((l) => l !== label)
-      : [...newsHiddenSources, label];
-    updatePrefs({ newsHiddenSources: next });
-  };
-  // Focus-pill options for the news view header. Built at component level
-  // so the header can render the pills regardless of where in the render
-  // tree visibleNewsEntries is computed. ESPN is always present + each
-  // non-empty league slot appears.
-  const newsHeaderFocusOptions: { value: string; label: string }[] = (() => {
-    const opts: { value: string; label: string }[] = [
-      { value: "all", label: "All" },
-      { value: "espn", label: "ESPN" },
-    ];
-    [0, 1, 2].forEach((slotIdx) => {
-      if (selectedSlotLeagues[slotIdx] === "empty") return;
-      const sport = slotIdx === 2 && prefs.newsThirdLeague ? prefs.newsThirdLeague : sortedLeagues[slotIdx]?.sport;
-      if (!sport) return;
-      const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
-      opts.push({ value: sport, label });
-    });
-    return opts;
-  })();
 
   const headerRef = useRef<HTMLElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1614,8 +1413,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     document.addEventListener("mousedown", onClickAway);
     return () => document.removeEventListener("mousedown", onClickAway);
   }, [newsFilterOpen]);
-  const newsColCount = (prefs.newsColCount ?? 3) as 1 | 2 | 3;
-  const setNewsColCount = (n: 1 | 2 | 3) => updatePrefs({ newsColCount: n });
   // Aggregate teams seen across loaded leagues so the settings panel can map
   // favorite-team IDs to display names + logos. Teams favorited but not
   // currently in any loaded game fall through to "id-only" rendering.
@@ -1635,6 +1432,22 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
 
   const resolvedTheme: "dark" | "light" =
     prefs.theme === "system" ? (systemDark ? "dark" : "light") : prefs.theme;
+
+  // Keep the browser-chrome tint (<meta name="theme-color">) in sync with the
+  // theme actually rendered, not just the OS scheme. The `viewport` export in
+  // layout.tsx emits two media-based theme-color metas (light -> #ffffff,
+  // dark -> #0a0a0a), so a user who overrides the theme in Settings against
+  // their device scheme (e.g. forces dark on a light-mode phone) got a dark
+  // page under a light toolbar. resolvedTheme already folds in both the explicit
+  // override and the live OS scheme, so writing its color to BOTH metas makes
+  // whichever one the browser picks ("first matching media") show the right
+  // color either way. Kept in step with layout.tsx's viewport themeColor values.
+  useEffect(() => {
+    const color = resolvedTheme === "dark" ? "#0a0a0a" : "#ffffff";
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((m) => m.setAttribute("content", color));
+  }, [resolvedTheme]);
 
   // Pull-to-refresh visual: a small spinner pill that descends from below the
   // header proportional to pullDelta, latches into a spinning state during
@@ -1709,6 +1522,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="max-w-6xl mx-auto relative grid grid-cols-[auto_1fr_auto] sm:grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
           <Link
             href="/"
+            aria-label="HideScore home"
             onClick={(e) => {
               // In the news view, the logo acts as "back to scores" — toggle
               // news off in place instead of navigating, since "/" would
@@ -1725,7 +1539,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             style={{ color: "var(--text)" }}
           >
             <span className="hidden xl:inline text-lg font-bold tracking-tight">HideScore</span>
-            <svg className="xl:hidden w-7 h-7 header-logo" viewBox="0 0 32 32" fill="none">
+            <svg className="xl:hidden w-7 h-7 header-logo" viewBox="0 0 32 32" fill="none" aria-hidden="true">
               <rect width="32" height="32" rx="6" className="header-logo-bg" />
               <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
             </svg>
@@ -1758,8 +1572,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                       style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                       title="Pick a date"
                       aria-label="Pick a date"
+                      aria-haspopup="true"
+                      aria-expanded={calendarOpen}
                     >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                       </svg>
                     </button>
@@ -1794,11 +1610,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 aria-label={showShareCopied ? "Link copied!" : "Copy settings link"}
               >
                 {showShareCopied ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                   </svg>
@@ -1831,7 +1647,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   aria-haspopup="true"
                   aria-expanded={newsFilterOpen}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
                   </svg>
                 </button>
@@ -1874,10 +1690,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
               title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              aria-label="Toggle theme"
+              aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {resolvedTheme === "dark" ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="5" />
                   <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
                   <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
@@ -1885,7 +1701,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
                 </svg>
               ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                 </svg>
               )}
@@ -1902,7 +1718,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               title="Settings"
               aria-label="Open settings"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
@@ -1926,8 +1742,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                 title="Pick a date"
                 aria-label="Pick a date"
+                aria-haspopup="true"
+                aria-expanded={calendarOpen}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
               </button>
@@ -1958,12 +1776,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             aria-pressed={!!prefs.revealNewsTitles}
           >
             {prefs.revealNewsTitles ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
                 <circle cx="12" cy="12" r="3" />
               </svg>
             ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                 <line x1="1" y1="1" x2="23" y2="23" />
               </svg>
@@ -1986,7 +1804,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               title="Text posts have no pic or video, so they're hidden while headlines are blurred. Tap to show them (readable)."
               aria-pressed={!!prefs.showTextPosts}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="4" y1="6" x2="20" y2="6" />
                 <line x1="4" y1="12" x2="14" y2="12" />
                 <line x1="4" y1="18" x2="18" y2="18" />
@@ -2066,11 +1884,19 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             label: "News",
             orderedCascade: applyOrder(GENERIC_CASCADE, prefs.newsSourceOrder?.["espn"]),
           };
+          // fetchAllLeagues collapses empty slots out of the returned array, so
+          // walk it as a shifting queue — one pull per non-empty slot — exactly
+          // like the scores view (see leagueQueue below) and setSlotLeague. A
+          // direct sortedLeagues[slotIdx] index is only correct when every empty
+          // slot is trailing; an empty slot BEFORE a populated one would shift
+          // each later league's index down and drop/mislabel its news column.
+          const newsLeagueQueue = [...sortedLeagues];
           const leagueEntries = [0, 1, 2].map((slotIdx) => {
             if (selectedSlotLeagues[slotIdx] === "empty") return null;
+            const queued = newsLeagueQueue.shift();
             const sport: Sport | undefined = slotIdx === 2 && prefs.newsThirdLeague
               ? prefs.newsThirdLeague
-              : sortedLeagues[slotIdx]?.sport;
+              : queued?.sport;
             if (!sport) return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const cascade = leagueSourceCascade(sport);
@@ -2361,9 +2187,14 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             </>
           );
         })() : loading ? (
-          <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+          // Screen readers get an announced loading status; the pulsing card
+          // placeholders below are purely decorative (empty styled divs), so
+          // they're aria-hidden and only the sr-only text is voiced (WCAG 4.1.3,
+          // matching the role=status pattern in FeedbackBox / SettingsPanel).
+          <div role="status" aria-live="polite" className="flex flex-row justify-center items-stretch gap-2 sm:gap-4">
+            <span className="sr-only">Loading games…</span>
             {Array.from({ length: slotCount }, (_, i) => i + 1).map((i) => (
-              <div key={i} className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
+              <div key={i} aria-hidden="true" className="min-w-0 flex-1 max-w-[225px] xl:max-w-[280px]">
                 <div className="flex flex-col items-center pb-2 sm:pb-3" style={{ paddingTop: "1.75rem" }}>
                   <div className="h-6 sm:h-7 w-20 sm:w-24 rounded" style={{ background: "var(--bg-card)" }} />
                   <span className="text-[9px] sm:text-[10px] italic mt-0.5 block" style={{ color: "transparent" }}>{"\u00A0"}</span>
@@ -2394,7 +2225,19 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <p style={{ color: "var(--text-muted)" }}>Failed to load games</p>
             <button
-              onClick={() => fetchData(selectedDate)}
+              // Retry with the user's configured columns (thirdLeague + slot
+              // overrides), matching every other fetchData call. Passing only
+              // the date let thirdLeague/slotOverrides default to undefined, so
+              // fetchAllLeagues fell back to the auto-picker — a retry after an
+              // error silently discarded the user's board (emptied/pinned
+              // columns reverted to auto-picked leagues).
+              onClick={() => fetchData(selectedDate, prefs.thirdLeague, {
+                first: prefs.firstLeague,
+                second: prefs.secondLeague,
+                third: prefs.thirdLeague,
+                fourth: prefs.fourthLeague,
+                fifth: prefs.fifthLeague,
+              })}
               className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
             >
@@ -2708,7 +2551,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
               <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
               <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
-              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a> — all spoiler-free.
+              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a> — all spoiler-free. Or read our{" "}
+              <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
           </div>
         </details>
@@ -2825,7 +2669,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="warning">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="warning">
                 <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
                 <line x1="12" y1="9" x2="12" y2="13" />
                 <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -2875,10 +2719,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const cb = document.getElementById("dont-show-explainer") as HTMLInputElement | null;
-                  confirmRatings(cb?.checked ?? false);
-                }}
+                onClick={() => confirmRatings()}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
                 onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
@@ -2887,10 +2728,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Show Ratings
               </button>
             </div>
-            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none justify-end">
-              <input type="checkbox" id="dont-show-explainer" className="accent-[var(--accent)]" />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
-            </label>
           </div>
         </div>
       )}
@@ -2907,7 +2744,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="warning">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="warning">
                 <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
                 <line x1="12" y1="9" x2="12" y2="13" />
                 <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -2932,10 +2769,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const cb = document.getElementById("dont-show-news-explainer") as HTMLInputElement | null;
-                  confirmNews(cb?.checked ?? false);
-                }}
+                onClick={() => confirmNews()}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
                 onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
@@ -2944,10 +2778,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 Show News
               </button>
             </div>
-            <label className="flex items-center gap-2 mt-3 cursor-pointer select-none justify-end">
-              <input type="checkbox" id="dont-show-news-explainer" className="accent-[var(--accent)]" />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>Don&apos;t show this again</span>
-            </label>
           </div>
         </div>
       )}
@@ -3033,7 +2863,6 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           body={videoModal.body}
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? true}
-          maskVideoBottom={prefs.maskVideoBottom ?? true}
           youtubeNativeControls={prefs.youtubeNativeControls ?? false}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
@@ -3082,6 +2911,12 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         type="button"
         aria-label="Scroll to top"
         title="Scroll to top"
+        // opacity-0 + pointer-events-none hides it from sight and the mouse, but
+        // a plain <button> stays in the tab order — so when it's hidden, keyboard
+        // users would still Tab onto an invisible control (WCAG 2.4.3/4.1.2).
+        // Pull it out of the tab order and hide it from the a11y tree while off.
+        tabIndex={showScrollTop ? 0 : -1}
+        aria-hidden={!showScrollTop}
         onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}
         className={`monkey-toggle fixed z-40 w-11 h-11 rounded-full flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 shadow-lg ${showScrollTop ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         style={{
@@ -3099,7 +2934,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="18 15 12 9 6 15" />
         </svg>
       </button>

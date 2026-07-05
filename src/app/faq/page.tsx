@@ -9,7 +9,10 @@ export const metadata: Metadata = {
   title: FAQ_TITLE,
   description: FAQ_DESC,
   alternates: { canonical: "/faq" },
-  robots: { index: true, follow: true },
+  // No `robots` override: a child `robots` object fully replaces the root
+  // layout's, which would drop its googleBot directives (max-image-preview:large,
+  // max-snippet:-1). index/follow is already inherited from the layout, so this
+  // page stays indexable AND keeps the richer snippet/image-preview hints.
   openGraph: {
     title: FAQ_TITLE,
     description: FAQ_DESC,
@@ -78,6 +81,25 @@ export default function FaqPage() {
               name: item.q,
               acceptedAnswer: { "@type": "Answer", text: item.a },
             })),
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
+
+      {/* BreadcrumbList lets Google render a Home › FAQ trail in the search
+          result instead of the bare /faq URL — matching the /worldcup and
+          /watch-world-cup-without-spoilers pages that already declare the same
+          hierarchy. Server-rendered: this page has no "use client", so the
+          script ships in the static HTML for crawlers. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+              { "@type": "ListItem", position: 2, name: "FAQ", item: "https://hidescore.com/faq" },
+            ],
           }).replace(/</g, "\\u003c"),
         }}
       />

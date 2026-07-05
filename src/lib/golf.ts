@@ -4,7 +4,7 @@
 // round is being played, or which recap to show.
 
 import { GolfTournament } from "./types";
-import { getTimeZone } from "./etDay";
+import { getTimeZone, getEtServiceDate } from "./etDay";
 
 export interface GolfDateState {
   roundNum: number; // 1-4 — the round corresponding to the selected date
@@ -33,9 +33,13 @@ export function getGolfDateState(
   if (dayIndex < 0 || dayIndex > 3) return null;
   const roundNum = dayIndex + 1;
 
-  const now = new Date();
-  const todayET = new Date(now.toLocaleString("en-US", { timeZone: getTimeZone() }));
-  const todayMidnight = new Date(todayET.getFullYear(), todayET.getMonth(), todayET.getDate());
+  // "Today" is the app's canonical service day — local midnight of the
+  // effective-tz day WITH the 1 AM rollover the date nav and data layer use
+  // (see getEtServiceDate). Computing it here with a raw `new Date(toLocale…)`
+  // parse rolled over at midnight instead, so between midnight and 1 AM local
+  // golf marked the date nav's still-"today" date as "past" — the exact UI/data
+  // drift getEtServiceDate exists to prevent.
+  const todayMidnight = getEtServiceDate();
   const selMidnight = new Date(selYear, selMonth - 1, selDay);
 
   let relativeDay: "past" | "today" | "future" = "today";
@@ -136,12 +140,11 @@ export function getGolfSubtitle(
     // column on narrow screens ("Round 3 · 10:30 AM ET" got cut off).
     let timeLabel = "";
     if (tournament.eventDate) {
-      const now = new Date();
-      const todayET = new Date(now.toLocaleString("en-US", { timeZone: getTimeZone() }));
+      const today = getEtServiceDate();
       const tomorrowMidnight = new Date(
-        todayET.getFullYear(),
-        todayET.getMonth(),
-        todayET.getDate() + 1
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() + 1
       );
       const selY = parseInt(selectedDate.slice(0, 4), 10);
       const selM = parseInt(selectedDate.slice(4, 6), 10) - 1;

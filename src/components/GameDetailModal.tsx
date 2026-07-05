@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { getDateString } from "@/components/DateNav";
 import { fetchGameWeather, type GameWeather } from "@/lib/weather";
@@ -32,7 +32,7 @@ function TeamRow({ team }: { team: Game["homeTeam"] }) {
     <div className="flex items-center gap-3 min-w-0">
       {team.logo
         // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={team.logo} alt="" width={32} height={32} className="w-8 h-8 object-contain shrink-0" />
+        ? <img src={team.logo} alt="" width={32} height={32} className="w-8 h-8 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
         : <span className="w-8 h-8 flex items-center justify-center rounded text-xs shrink-0" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>}
       <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>
         {team.displayName || team.shortDisplayName || team.abbreviation}
@@ -72,6 +72,22 @@ export default function GameDetailModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Focus management (WCAG 2.4.3): move focus into the dialog on open so
+  // keyboard / screen-reader users land inside the overlay instead of being
+  // stranded on the page behind it, and restore focus to the element that
+  // opened it on close. Focusing the dialog CONTAINER (tabIndex=-1) rather than
+  // a control keeps mouse users from seeing a focus ring while still handing the
+  // dialog + its aria-label to assistive tech; the first Tab then reaches the
+  // close button. The modal mounts fresh per open (parent renders it behind a
+  // `detailGame &&` guard), so this fires on every open/close — same lifecycle
+  // as the Escape + scroll-lock effects. Empty deps: capture the opener once.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => opener?.focus?.();
+  }, []);
 
   // Lock body scroll while the modal is open (same technique as VideoModal /
   // SettingsPanel). Plain overflow:hidden doesn't reliably stop iOS WebKit from
@@ -151,12 +167,12 @@ export default function GameDetailModal({
   // Whether this game is on today's (ET) slate — drives the highlight-ready
   // buffer in GameHighlights (today's finals wait for the recap upload window;
   // past games show immediately).
-  const isToday = (() => {
-    try {
-      const ymd = new Date(game.date).toLocaleDateString("en-CA", { timeZone: getTimeZone() }).replace(/-/g, "");
-      return ymd === getDateString(0);
-    } catch { return false; }
-  })();
+  // Bucket the game to its ET slate day the SAME way getDateString(0) derives
+  // "today" (getEtServiceDate's 1 AM rollover), so a game kicking off between
+  // midnight and 1 AM stays on the same day both sides call it. A raw calendar
+  // day here would drift from the service day in that window and make the modal
+  // disagree with the card on isToday (GameHighlights must "just match" the card).
+  const isToday = etSlateYmd(game.date) === getDateString(0);
 
   // Start time / status WITHOUT score. For live we say "In progress" rather
   // than the period/clock (the clock alone is fine, but keep it minimal +
@@ -180,10 +196,23 @@ export default function GameDetailModal({
 
   const statusLabel = isFinal ? "Final" : isLive ? "In progress" : "Upcoming";
 
+  // Name the dialog after the matchup so screen readers announce which game's
+  // details opened (e.g. "Yankees at Red Sox — game details") instead of a
+  // generic "Game details" on every card. Mirrors VideoModal's content-specific
+  // dialog name. Team names carry no score, so this stays spoiler-safe; falls
+  // back to the generic label if either name is missing.
+  const awayName = game.awayTeam.displayName || game.awayTeam.shortDisplayName || game.awayTeam.abbreviation;
+  const homeName = game.homeTeam.displayName || game.homeTeam.shortDisplayName || game.homeTeam.abbreviation;
+  const dialogLabel = awayName && homeName ? `${awayName} at ${homeName} — game details` : "Game details";
+
+  // Thresholds MUST match the score-card badge (GameCard/GolfLeaderboard
+  // RatingBadge: 85/70/50) — this modal renders the identical label+color for
+  // the same game.rating, so a mismatch made the SAME game read e.g. "GOOD" on
+  // the card yet "GREAT" here (a rating of 82). Keep these three in sync.
   const ratingTier = (r: number) =>
-    r >= 80 ? { label: "GREAT", bg: "bg-green-600" }
-    : r >= 55 ? { label: "GOOD", bg: "bg-yellow-600" }
-    : r >= 30 ? { label: "MEH", bg: "bg-orange-600" }
+    r >= 85 ? { label: "GREAT", bg: "bg-green-600" }
+    : r >= 70 ? { label: "GOOD", bg: "bg-yellow-600" }
+    : r >= 50 ? { label: "MEH", bg: "bg-orange-600" }
     : { label: "SKIP", bg: "bg-red-700" };
 
   // A clickable broadcaster name — same resolution as the score card's network
@@ -220,12 +249,17 @@ export default function GameDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
       <div
+        ref={dialogRef}
+        // tabIndex=-1 makes the container programmatically focusable (see the
+        // focus-management effect) without adding it to the tab order; outline
+        // none suppresses the ring since it's focused only to seat assistive tech.
+        tabIndex={-1}
         className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-        style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+        style={{ background: "var(--bg)", border: "1px solid var(--border)", outline: "none" }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Game details"
+        aria-label={dialogLabel}
       >
         <button
           onClick={onClose}
@@ -233,7 +267,7 @@ export default function GameDetailModal({
           style={{ color: "var(--text-muted)" }}
           aria-label="Close"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
 
         {/* Matchup — names + logos, NO score/winner */}
@@ -245,7 +279,11 @@ export default function GameDetailModal({
         {/* Status + time */}
         <div className="text-sm mb-1" style={{ color: "var(--text)" }}>
           <span className="font-medium">{statusLabel}</span>
-          {timeLabel ? <span style={{ color: "var(--text-muted)" }}> · {timeLabel}</span> : null}
+          {/* Wrap the start time in a semantic <time> so the machine-readable
+              ISO (game.date) is exposed to assistive tech / crawlers while the
+              visible, zone-formatted text stays unchanged. Mirrors VideoModal's
+              <time dateTime> treatment of the article timestamp. */}
+          {timeLabel ? <span style={{ color: "var(--text-muted)" }}> · <time dateTime={game.date}>{timeLabel}</time></span> : null}
         </div>
 
         {/* Series/playoff label (US sports) or cup stage (soccer) — both

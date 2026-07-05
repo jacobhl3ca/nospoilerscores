@@ -725,7 +725,7 @@ export default function LeagueColumn({
     for (const g of league.games) prefetchGameWeather(g);
   }, [league.games]);
 
-  // Close swap dropdown on outside click
+  // Close swap dropdown on outside click or Escape
   useEffect(() => {
     if (!swapOpen) return;
     const handler = (e: MouseEvent) => {
@@ -733,8 +733,17 @@ export default function LeagueColumn({
         setSwapOpen(false);
       }
     };
+    // Keyboard parity with the app's other dropdowns/modals: Escape dismisses
+    // the popup the swap button promises via aria-haspopup.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSwapOpen(false);
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [swapOpen]);
 
   // Measure whether full names would fit in the available column width
@@ -1144,7 +1153,7 @@ export default function LeagueColumn({
                   className="cursor-pointer transition-colors hover:opacity-80"
                   style={{ color: "var(--text)" }}
                   title="Switch league"
-                  aria-haspopup="menu"
+                  aria-haspopup="true"
                   aria-expanded={swapOpen}
                 >
                   <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
@@ -1289,6 +1298,12 @@ export default function LeagueColumn({
                 <button
                   type="button"
                   onClick={onRetry}
+                  // Context-specific name so multiple simultaneously-failed
+                  // columns (e.g. a network drop on first paint) don't all
+                  // read as a bare "Retry" — a screen-reader/voice-control user
+                  // can tell which league each button reloads. Keeps "Retry" in
+                  // the name so it still matches the visible label (WCAG 2.5.3).
+                  aria-label={`Retry loading ${league.label}`}
                   className="text-xs sm:text-sm px-3 py-1 rounded border hover:opacity-80 transition-opacity"
                   style={{ color: "var(--text)", borderColor: "var(--border)" }}
                 >

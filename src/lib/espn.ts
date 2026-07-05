@@ -331,7 +331,21 @@ export function displayShortName(team: Team): string {
   return DISPLAY_SHORT_NAME_OVERRIDES[team.shortDisplayName] ?? team.shortDisplayName;
 }
 
-function parseTeam(competitor: any, sport: Sport): Team {
+type RawCompetitor = {
+  team?: {
+    id?: string | number;
+    abbreviation?: string;
+    displayName?: string;
+    shortDisplayName?: string;
+    logo?: string;
+    color?: string;
+  };
+  records?: { summary?: string }[];
+  score?: string;
+  winner?: boolean;
+};
+
+function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
   let record = competitor.records?.[0]?.summary ?? "";
   // MLB spring training and NHL records include a 3rd segment (ties / OTL) — strip to W-L
@@ -400,12 +414,16 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
 const SOCCER_SPORTS = new Set<Sport>(["epl", "mls", "ucl", "uel", "fifa"]);
 const FULL_MATCH_SECONDS = 5400;
 
+// Minimal shape of an ESPN game's live status — the only fields this progress
+// estimate reads: the current period/inning and the (optionally numeric) clock.
+type GameStatusLike = { status?: { period?: number; clock?: number } };
+
 // Fraction of regulation elapsed, [0,1]. Uses the live game clock for smooth
 // within-period progress (so the "too early" gate trips *during* period 1, and
 // every sport behaves like MLB/tennis — an honest "Too Early" at the start
 // rather than a misleading low badge). Falls back to a coarse period-midpoint
 // estimate when there's no usable clock (MLB innings, or missing data).
-function gameProgress(game: any, sport: Sport, regulationPeriods: number, state: string): number {
+function gameProgress(game: GameStatusLike, sport: Sport, regulationPeriods: number, state: string): number {
   if (state === "post") return 1;
   const clamp = (x: number) => Math.max(0, Math.min(1, x));
   const period = game.status?.period ?? 0;
@@ -426,11 +444,16 @@ function gameProgress(game: any, sport: Sport, regulationPeriods: number, state:
   return coarse;
 }
 
+// Minimal shape of an ESPN competitor's per-period linescores — the only field
+// the margin helpers below read off the raw scoreboard payload.
+type LineScore = { value?: number };
+type MarginCompetitor = { linescores?: LineScore[] };
+
 // Calculate running margin from linescores: average absolute margin across all periods
 // Returns null if linescore data is insufficient
-function calcRunningMargin(competitors: any[]): number | null {
-  const ls0: any[] = competitors[0].linescores ?? [];
-  const ls1: any[] = competitors[1].linescores ?? [];
+function calcRunningMargin(competitors: MarginCompetitor[]): number | null {
+  const ls0: LineScore[] = competitors[0].linescores ?? [];
+  const ls1: LineScore[] = competitors[1].linescores ?? [];
   const periods = Math.min(ls0.length, ls1.length);
   if (periods < 2) return null; // need at least 2 periods for this to be meaningful
 
@@ -446,9 +469,9 @@ function calcRunningMargin(competitors: any[]): number | null {
 }
 
 // Was the game close entering the final period?
-function calcFinalPeriodMargin(competitors: any[]): number | null {
-  const ls0: any[] = competitors[0].linescores ?? [];
-  const ls1: any[] = competitors[1].linescores ?? [];
+function calcFinalPeriodMargin(competitors: MarginCompetitor[]): number | null {
+  const ls0: LineScore[] = competitors[0].linescores ?? [];
+  const ls1: LineScore[] = competitors[1].linescores ?? [];
   const periods = Math.min(ls0.length, ls1.length);
   if (periods < 2) return null;
 
@@ -470,8 +493,10 @@ function calcFinalPeriodMargin(competitors: any[]): number | null {
 // a tie, flipped the lead, or equalized), scaled by how late it fell. Returns 0
 // when details are absent (e.g. the team-schedule API) or the last swing was
 // before ~70'. Minutes fold stoppage time in ("90'+5'" → 95).
-function soccerLateDramaBonus(competition: any): number {
-  const details: any[] = competition?.details ?? [];
+type SoccerPlay = { scoringPlay?: boolean; clock?: { displayValue?: string }; team?: { id?: string | number } };
+type SoccerCompetition = { details?: SoccerPlay[] };
+function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined): number {
+  const details: SoccerPlay[] = competition?.details ?? [];
   if (!details.length) return 0;
   const parseMin = (dv: string | undefined): number | null => {
     const m = dv?.match(/(\d+)'?(?:\s*\+\s*(\d+))?/);
@@ -506,11 +531,23 @@ function soccerLateDramaBonus(competition: any): number {
   return 0;
 }
 
-function calculateRating(game: any): number | null {
+// The raw ESPN event calculateRating scores, tagged with _sport by parseGame.
+// Reads only the closeness signals: per-competitor score + linescores (via the
+// margin helpers), the soccer scoring-play details (via soccerLateDramaBonus),
+// and the live status/clock (via gameProgress, whose GameStatusLike this fits).
+type RatingGame = {
+  _sport?: Sport;
+  status?: { type?: { state?: string }; period?: number; clock?: number };
+  competitions?: Array<
+    SoccerCompetition & { competitors?: (MarginCompetitor & { score?: string })[] }
+  >;
+};
+
+function calculateRating(game: RatingGame): number | null {
   const competition = game.competitions?.[0];
   if (!competition) return null;
 
-  const state = game.status?.type?.state;
+  const state = game.status?.type?.state ?? "";
   if (state === "pre") return null;
 
   const competitors = competition.competitors;
@@ -589,18 +626,24 @@ function calculateRating(game: any): number | null {
     comebackBonus = Math.min(deficitErased * config.multiplier * 0.4, 30);
   }
 
-  // Low-scoring penalty for soccer: a 0-0 draw isn't exciting regardless of "closeness"
+  // Low-scoring penalty for soccer: a 0-0 draw isn't exciting regardless of "closeness".
+  // Use the canonical SOCCER_SPORTS set (same set the closeness model, the late-
+  // drama bonus below, and day-reconcile all key off) so every soccer league is covered.
+  // A hand-listed subset silently dropped ucl/uel, letting a goalless UCL/UEL draw skip
+  // the penalty and rate 100 ("GREAT") where the identical EPL/FIFA match rates ~50.
   let lowScoringPenalty = 0;
-  if ((sport === "epl" || sport === "mls" || sport === "fifa") && total < 2) {
+  if (SOCCER_SPORTS.has(sport) && total < 2) {
     lowScoringPenalty = (2 - total) * 25; // 0 goals: -50, 1 goal: -25
   }
 
   // Late-drama bonus for soccer: a result swung late (e.g. a stoppage-time
   // winner) is the most compelling soccer there is, but the closeness factors
   // are blind to goal timing. Lifts a dramatic 1-0 out of the low-scoring
-  // penalty's MEH hole while leaving a dull early 1-0 where it is.
-  const isSoccer = sport === "epl" || sport === "mls" || sport === "fifa" || sport === "ucl" || sport === "uel";
-  const lateDramaBonus = isSoccer ? soccerLateDramaBonus(competition) : 0;
+  // penalty's MEH hole while leaving a dull early 1-0 where it is. Gate off the
+  // canonical SOCCER_SPORTS set (same as the low-scoring penalty above) — a
+  // hand-listed subset here would silently drop the bonus for any soccer league
+  // added to the set later, the exact ucl/uel drift the penalty comment warns of.
+  const lateDramaBonus = SOCCER_SPORTS.has(sport) ? soccerLateDramaBonus(competition) : 0;
 
   const raw = Math.max(0, Math.min(100, Math.round(baseScore + overtimeBonus + scoringBonus + comebackBonus + lateDramaBonus - lowScoringPenalty)));
 
@@ -630,13 +673,42 @@ function tennisEtYmd(iso: string): string {
   }
 }
 
-function parseTennisMatch(match: any, event: any, slug: string): Game {
+// Minimal shapes of ESPN's tennis scoreboard payload — only the fields the
+// parser below reads. Real matches are athlete-based competitors nested in
+// event.groupings[] (see buildTennisGames), not team-based like other sports.
+type TennisAthlete = { shortName?: string; displayName?: string; flag?: { href?: string } };
+type TennisLineScore = { winner?: boolean };
+type TennisCompetitor = {
+  homeAway?: string;
+  athlete?: TennisAthlete;
+  linescores?: TennisLineScore[];
+  winner?: boolean;
+};
+type TennisMatch = {
+  id?: string;
+  date?: string;
+  competitors?: TennisCompetitor[];
+  status?: {
+    type?: { state?: string; shortDetail?: string; detail?: string; completed?: boolean; name?: string };
+    period?: number;
+    displayClock?: string;
+  };
+  broadcasts?: { names?: string[] }[];
+  round?: { displayName?: string };
+};
+type TennisEvent = { id?: string; date: string; name?: string };
+// The scoreboard event that wraps the draws: singles/doubles live under
+// groupings[], each grouping holding the actual matches (competitions[]).
+type TennisGrouping = { grouping?: { slug?: string }; competitions?: TennisMatch[] };
+type TennisScoreboardEvent = TennisEvent & { major?: boolean; groupings?: TennisGrouping[] };
+
+function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string): Game {
   const comps = match.competitors ?? [];
-  const home = comps.find((c: any) => c.homeAway === "home") ?? comps[0];
-  const away = comps.find((c: any) => c.homeAway === "away") ?? comps[1];
-  const mkTeam = (c: any): Team => {
+  const home = comps.find((c) => c.homeAway === "home") ?? comps[0];
+  const away = comps.find((c) => c.homeAway === "away") ?? comps[1];
+  const mkTeam = (c: TennisCompetitor): Team => {
     const a = c?.athlete ?? {};
-    const setsWon = (c?.linescores ?? []).filter((l: any) => l.winner).length;
+    const setsWon = (c?.linescores ?? []).filter((l) => l.winner).length;
     return {
       // Empty id → GameCard renders the name as plain text (no team-schedule
       // view, which doesn't exist for individual players).
@@ -729,7 +801,7 @@ function parseTennisMatch(match: any, event: any, slug: string): Game {
   };
 }
 
-function buildTennisGames(events: any[], date?: string): Game[] {
+function buildTennisGames(events: TennisScoreboardEvent[], date?: string): Game[] {
   // No-date fallback uses the shared service day so tennis matches the rest of
   // the app's notion of "today" (normally `date` is always passed).
   const target = date ?? toYmd(getEtServiceDate());
@@ -747,7 +819,7 @@ function buildTennisGames(events: any[], date?: string): Game[] {
       if (!slug.includes("singles") || slug.includes("doubles")) continue;
       for (const match of grouping.competitions ?? []) {
         if ((match.competitors?.length ?? 0) < 2) continue;
-        if (tennisEtYmd(match.date) !== target) continue;
+        if (tennisEtYmd(match.date ?? "") !== target) continue;
         const sn = match.status?.type?.name ?? "";
         if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
         try {
@@ -787,10 +859,17 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
   return slugMap[slug] ?? null;
 }
 
+// A single ESPN "probables[]" entry — the starting pitcher (MLB) plus their
+// season record. Only the fields this helper reads are modeled.
+interface ProbableStarter {
+  athlete?: { shortName?: string; fullName?: string };
+  record?: string;
+}
+
 // "Z. Wheeler (5-1, 2.22)" from an ESPN competitor's probables[]. The record
 // string already arrives parenthesized; name prefers the short form. Null when
 // no probable is listed (most non-MLB sports, or before ESPN posts starters).
-function probablePitcher(competitor: any): string | null {
+function probablePitcher(competitor: { probables?: ProbableStarter[] } | null | undefined): string | null {
   const p = (competitor?.probables ?? [])[0];
   const ath = p?.athlete;
   const name = ath?.shortName || ath?.fullName;
@@ -813,12 +892,67 @@ const ROOFED_VENUES = new Set([
 ]);
 const normalizeVenue = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-function parseGame(event: any, sport: Sport): Game {
+// A team-sport competitor inside a scoreboard event's competition: the
+// team-parse fields (RawCompetitor) plus the extras parseGame reads — the
+// home/away side, the soccer penalty-shootout score, the MLB probable starter,
+// and the linescores/score the closeness scorer needs (MarginCompetitor).
+type ScoreboardCompetitor = RawCompetitor &
+  MarginCompetitor & {
+    homeAway?: string;
+    shootoutScore?: string | number | null;
+    probables?: ProbableStarter[];
+  };
+
+// The venue block on a competition — name, dome flag, and address.
+type ScoreboardVenue = {
+  fullName?: string;
+  indoor?: boolean;
+  address?: { city?: string; state?: string; country?: string };
+};
+
+// A raw ESPN scoreboard event, modelling only the fields parseGame reads before
+// it (and calculateRating — see RatingGame, which this is assignable to) turn it
+// into a Game. `_sport` is stamped in place here so the rating scorer reads it
+// back off the same object.
+type ScoreboardEvent = {
+  id: string;
+  date: string;
+  name?: string;
+  shortName?: string;
+  _sport?: Sport;
+  season?: { type?: number; slug?: string };
+  status?: {
+    displayClock?: string;
+    period?: number;
+    clock?: number;
+    type?: {
+      name?: string;
+      state?: "pre" | "in" | "post";
+      detail?: string;
+      shortDetail?: string;
+      completed?: boolean;
+    };
+  };
+  links?: { rel?: string[]; href?: string }[];
+  competitions?: Array<
+    SoccerCompetition & {
+      competitors?: ScoreboardCompetitor[];
+      broadcasts?: { names?: string[] }[];
+      headlines?: { video?: { links?: { web?: { href?: string } } }[] }[];
+      notes?: { headline?: string }[];
+      series?: { type?: string; summary?: string };
+      venue?: ScoreboardVenue;
+      altGameNote?: string;
+    }
+  >;
+};
+
+function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors ?? [];
 
-  const home = competitors.find((c: any) => c.homeAway === "home");
-  const away = competitors.find((c: any) => c.homeAway === "away");
+  const home = competitors.find((c) => c.homeAway === "home");
+  const away = competitors.find((c) => c.homeAway === "away");
 
   // Gather broadcasts
   const broadcasts: string[] = [];
@@ -881,7 +1015,7 @@ function parseGame(event: any, sport: Sport): Game {
   // Only present on playoff competitions; regular-season series has no field.
   const rawSeriesSummary: string | null =
     competition?.series?.type === "playoff"
-      ? (competition.series.summary ?? null)
+      ? (competition.series?.summary ?? null)
       : null;
   // Before Game 1 ESPN sets series.summary to a schedule note like
   // "Series starts 5/19" — not an actual series score. Rendered as-is it
@@ -894,7 +1028,7 @@ function parseGame(event: any, sport: Sport): Game {
   let recapUrl: string | null = null;
   for (const link of event.links ?? []) {
     if (link.rel?.includes("summary") || link.rel?.includes("event")) {
-      recapUrl = link.href;
+      recapUrl = link.href ?? null;
       break;
     }
   }
@@ -902,9 +1036,9 @@ function parseGame(event: any, sport: Sport): Game {
   // Venue location + indoor flag (the address object sits next to fullName).
   // ESPN's address.city is usually "City"/"City, State"; state/country round it
   // out. Guard against the occasional junk where city echoes the venue name.
-  const venueObj = competition?.venue ?? {};
+  const venueObj: ScoreboardVenue = competition?.venue ?? {};
   const venueName: string = venueObj.fullName ?? "";
-  const addr = venueObj.address ?? {};
+  const addr: NonNullable<ScoreboardVenue["address"]> = venueObj.address ?? {};
   let venueLocation = "";
   {
     const city: string = (addr.city ?? "").trim();
@@ -1437,8 +1571,22 @@ async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>
           homeLeftOnBase: ls.teams?.home?.leftOnBase,
           currentInning: ls.currentInning,
         };
-        // Key by "away@home" to handle doubleheaders
-        map.set(`${awayAbbrev}@${homeAbbrev}`, meta);
+        // Key by "away@home". A doubleheader is two games with the SAME
+        // away/home team on the same date, so both collide on one key — and
+        // the ESPN consumer (which also keys by away@home, with no game number
+        // to tell the two cards apart) can't attribute the metadata to the
+        // right card. Rather than let game 2 silently overwrite game 1 and
+        // stamp its stream link + No-Hit Alert onto BOTH ESPN cards (a wrong
+        // deep link, and a score-revealing no-hit badge on the wrong game),
+        // drop the key on collision so both games fall through the consumer's
+        // `if (!meta) continue` — no deep link / no alert, the same graceful
+        // degradation the fetch-failure path already yields.
+        const key = `${awayAbbrev}@${homeAbbrev}`;
+        if (map.has(key)) {
+          map.delete(key);
+          continue;
+        }
+        map.set(key, meta);
       }
     }
   } catch {
@@ -1514,7 +1662,8 @@ function countryNameFromFlagUrl(url: string): string {
 
 // Pull broadcast network names off an ESPN competition (handles the
 // names[]/media.shortName/name shapes the racing + mma feeds use).
-function eventBroadcasts(comp: any): string[] {
+type BroadcastEntry = { names?: string[]; media?: { shortName?: string }; name?: string };
+function eventBroadcasts(comp: { broadcasts?: BroadcastEntry[] } | null | undefined): string[] {
   const out: string[] = [];
   for (const b of comp?.broadcasts ?? []) {
     if (Array.isArray(b?.names)) out.push(...b.names);
@@ -1523,6 +1672,35 @@ function eventBroadcasts(comp: any): string[] {
   }
   return [...new Set(out.filter(Boolean))];
 }
+
+// Minimal shapes of ESPN's F1/UFC single-event payload — only the fields
+// fetchLeagueEvent reads. `competitions` are the race sessions (F1) or the
+// individual bouts (UFC); each bout's competitors are the two fighters.
+type LeagueEventVenue = { address?: { city?: string; state?: string; country?: string } };
+type LeagueEventCircuit = { fullName?: string; address?: { city?: string; country?: string } };
+type LeagueEventCompetitor = {
+  athlete?: { displayName?: string; shortName?: string; flag?: { href?: string; alt?: string } };
+  records?: { summary?: string }[];
+};
+type LeagueEventCompetition = {
+  id?: string | number;
+  date?: string;
+  type?: { id?: string | number; text?: string; abbreviation?: string };
+  status?: { type?: { state?: string } };
+  venue?: LeagueEventVenue;
+  competitors?: LeagueEventCompetitor[];
+  broadcasts?: BroadcastEntry[];
+};
+type LeagueEvent = {
+  date: string;
+  name?: string;
+  shortName?: string;
+  links?: { href?: string }[];
+  status?: { type?: { state?: string } };
+  circuit?: LeagueEventCircuit;
+  venue?: LeagueEventVenue;
+  competitions?: LeagueEventCompetition[];
+};
 
 // F1 / UFC single-event fetch → a spoiler-safe LeagueEventCard (no results).
 // Tries the viewed date first; if ESPN has no event that day (most days), it
@@ -1542,16 +1720,16 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     }
   };
 
-  const event = (date ? await load(date) : null) ?? await load();
+  const event: LeagueEvent | null = (date ? await load(date) : null) ?? await load();
   if (!event) return null;
-  const comps: any[] = event.competitions ?? [];
-  const eventUrl: string | undefined = event.links?.find((l: any) => l?.href)?.href;
+  const comps: LeagueEventCompetition[] = event.competitions ?? [];
+  const eventUrl: string | undefined = event.links?.find((l) => l?.href)?.href;
 
   if (sport === "f1") {
     // The race is competition.type.id === "3"; fall back to the last session.
     const race = comps.find((c) => String(c?.type?.id) === "3") ?? comps[comps.length - 1] ?? null;
     const state = (race?.status?.type?.state ?? event.status?.type?.state ?? "pre") as "pre" | "in" | "post";
-    const circuit = event.circuit ?? {};
+    const circuit: LeagueEventCircuit = event.circuit ?? {};
     const loc = [circuit.address?.city, circuit.address?.country].filter(Boolean).join(", ");
     const subtitle = [circuit.fullName, loc].filter(Boolean).join(" · ") || undefined;
     const raceDate = race?.date ?? event.date;
@@ -1581,9 +1759,9 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
   const colon = name.indexOf(":");
   const headline = colon > -1 ? name.slice(colon + 1).trim() : undefined;
   const title = event.shortName || (colon > -1 ? name.slice(0, colon).trim() : name) || "UFC";
-  const venue = main?.venue ?? event.venue ?? {};
+  const venue: LeagueEventVenue = main?.venue ?? event.venue ?? {};
   const subtitle = [venue.address?.city, venue.address?.state || venue.address?.country].filter(Boolean).join(", ") || undefined;
-  const fighter = (x: any) => ({
+  const fighter = (x: LeagueEventCompetitor | undefined) => ({
     name: x?.athlete?.displayName ?? "TBD",
     shortName: x?.athlete?.shortName ?? x?.athlete?.displayName ?? "TBD",
     record: x?.records?.[0]?.summary ?? "",
@@ -1596,7 +1774,7 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     if (isNaN(d.getTime())) return "Fight Night";
     return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   };
-  const fights: FightBout[] = comps.slice().reverse().map((c: any) => {
+  const fights: FightBout[] = comps.slice().reverse().map((c: LeagueEventCompetition) => {
     const cs = c.competitors ?? [];
     const fState = (c.status?.type?.state ?? state ?? "pre") as "pre" | "in" | "post";
     const red = fighter(cs[0]);
@@ -1619,7 +1797,7 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     headline,
     state,
     statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Fight Night",
-    date: event.date || main?.date,
+    date: event.date || main?.date || "",
     broadcasts: eventBroadcasts(main),
     boutCount: comps.length,
     fights,
@@ -1628,6 +1806,22 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     eventUrl,
   };
 }
+
+// Shape of the ESPN golf scoreboard competitor/linescore data this parser reads.
+// linescores nests two levels: per-round scores, each with per-hole scores.
+type GolfHoleScore = { value?: number | null };
+type GolfRoundScore = { value?: number | null; linescores?: GolfHoleScore[] };
+type GolfAthlete = {
+  displayName?: string;
+  shortName?: string;
+  flag?: { href?: string; alt?: string };
+};
+type GolfCompetitor = {
+  order?: number;
+  score?: string;
+  athlete?: GolfAthlete;
+  linescores?: GolfRoundScore[];
+};
 
 async function fetchGolfTournament(date?: string): Promise<GolfTournament | null> {
   const url = new URL(BASE_URL + SPORT_PATHS.golf);
@@ -1659,7 +1853,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
 
   // Determine current round from linescores
   const currentRound = competitors.length > 0
-    ? (competitors[0].linescores ?? []).filter((r: any) => r.value !== null && r.value !== undefined).length
+    ? (competitors[0].linescores ?? []).filter((r: GolfRoundScore) => r.value !== null && r.value !== undefined).length
     : 0;
 
   let statusDetail = "Upcoming";
@@ -1667,7 +1861,7 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     statusDetail = "Final";
   } else if (state === "in") {
     // Check if any player is mid-round (has holes played in current round but round not complete)
-    const anyMidRound = competitors.some((c: any) => {
+    const anyMidRound = competitors.some((c: GolfCompetitor) => {
       const rounds = c.linescores ?? [];
       const nextRound = rounds[currentRound]; // 0-indexed: currentRound is the in-progress one
       if (!nextRound) return false;
@@ -1683,20 +1877,20 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     }
   }
 
-  const players: GolfPlayer[] = competitors.map((c: any) => {
-    const athlete = c.athlete ?? {};
-    const linescores: any[] = c.linescores ?? [];
+  const players: GolfPlayer[] = competitors.map((c: GolfCompetitor) => {
+    const athlete: GolfAthlete = c.athlete ?? {};
+    const linescores: GolfRoundScore[] = c.linescores ?? [];
 
     // Completed rounds
     const rounds = linescores
-      .filter((r: any) => r.value !== null && r.value !== undefined)
-      .map((r: any) => String(Math.round(r.value)));
+      .filter((r): r is GolfRoundScore & { value: number } => r.value !== null && r.value !== undefined)
+      .map((r) => String(Math.round(r.value)));
 
     // Thru: check if currently mid-round
     let thru = "";
     const inProgressRound = linescores[rounds.length]; // next round after completed ones
     if (inProgressRound) {
-      const holes = (inProgressRound.linescores ?? []).filter((h: any) => h.value !== null && h.value !== undefined);
+      const holes = (inProgressRound.linescores ?? []).filter((h: GolfHoleScore) => h.value !== null && h.value !== undefined);
       if (holes.length > 0 && holes.length < 18) {
         thru = String(holes.length);
       } else if (holes.length === 18) {
@@ -1797,8 +1991,16 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
 
   // Look up the tournament's start date (MM-DD) from the league config so the
   // client can do date-aware round labeling (yesterday=R1, today=R2, etc).
+  // Match punctuation-insensitively: ESPN names the US Open golf major
+  // "U.S. Open", which the bare label used as a regex (/US Open/i) never
+  // matched — the periods break the "US Open" substring — so startDate came
+  // back undefined and golf.ts silently dropped that major's round subtitle,
+  // recap highlights, and rating for the whole week. Folding out non-
+  // alphanumerics maps both "U.S. Open" and "US Open" to "usopen"; the four
+  // golf labels stay mutually distinct under this key, so no false matches.
+  const golfKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const tournamentLabel = ALL_LEAGUES.find(
-    (l) => l.sport === "golf" && new RegExp(l.label, "i").test(event.name ?? "")
+    (l) => l.sport === "golf" && golfKey(event.name ?? "").includes(golfKey(l.label))
   );
 
   // Drop tournament if the viewed date falls outside its 4-day window.
@@ -1878,9 +2080,9 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
 // Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
 // the single-day fetch and the soccer range-lookahead so both apply the same
 // postponed/preseason/0-competitor filtering + per-event failure isolation.
-function eventsToGames(events: any[], sport: Sport): Game[] {
+function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
   return events
-    .filter((e: any) => {
+    .filter((e) => {
       // Filter out postponed/canceled/suspended games
       const statusName = e.status?.type?.name ?? "";
       if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
@@ -1893,7 +2095,7 @@ function eventsToGames(events: any[], sport: Sport): Game[] {
       return true;
     })
     // A single malformed event must not take down the whole league.
-    .map((e: any) => {
+    .map((e) => {
       try {
         return parseGame(e, sport);
       } catch {
@@ -1925,7 +2127,7 @@ async function fetchNextGameDayRange(
   const end = new Date(base); end.setDate(end.getDate() + windowDays);
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
-  let events: any[];
+  let events: ScoreboardEvent[];
   try {
     const res = await fetchWithRetry(url.toString());
     if (!res.ok) return null;
@@ -2010,7 +2212,7 @@ async function fetchPreviousGameDayRange(
   const start = new Date(base); start.setDate(start.getDate() - windowDays);
   const url = new URL(BASE_URL + SPORT_PATHS[sport]);
   url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
-  let events: any[];
+  let events: ScoreboardEvent[];
   try {
     const res = await fetchWithRetry(url.toString());
     if (!res.ok) return null;
@@ -2092,10 +2294,10 @@ export async function fetchGames(
   // athlete-based competitors — flattened by a dedicated parser, not the
   // team-based path below (which would drop the 0-competitor tournament wrapper).
   if (sport === "tennis") {
-    return { games: buildTennisGames(events, date), failed: false };
+    return { games: buildTennisGames(events as TennisScoreboardEvent[], date), failed: false };
   }
 
-  let games: Game[] = eventsToGames(events, sport);
+  let games: Game[] = eventsToGames(events as ScoreboardEvent[], sport);
   // Drop the adjacent-day fixtures the 2-day soccer window pulled in, keeping
   // only the ones whose slate day is the viewed date.
   if (reconcileSoccerDay && date) {
@@ -2292,7 +2494,7 @@ export async function fetchScheduleRatings(
       const res = await fetchWithRetry(url.toString());
       if (!res.ok) return [];
       const data: { events?: unknown[] } | null = await res.json();
-      return eventsToGames(data?.events ?? [], sport);
+      return eventsToGames((data?.events ?? []) as ScoreboardEvent[], sport);
     } catch {
       return [];
     }

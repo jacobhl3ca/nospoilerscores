@@ -134,6 +134,28 @@ export default function RootLayout({
             dns-prefetch is the fallback for browsers that ignore preconnect. */}
         <link rel="preconnect" href="https://a.espncdn.com" />
         <link rel="dns-prefetch" href="https://a.espncdn.com" />
+        {/* The first paint is data-driven: on load the app immediately fetches
+            the ESPN scoreboard from site.api.espn.com to fill every league
+            column (BASE_URL in lib/espn.ts). Warm that host's DNS + TCP + TLS
+            during HTML parse so the handshake is already done when React fires
+            its first fetch, shaving it off the time-to-content path. Unlike the
+            image preconnect above, this one carries crossOrigin — the data
+            fetch is an anonymous CORS request (default mode, no credentials),
+            and a CORS-mode preconnect only gets reused by a matching CORS
+            connection; without it the browser would open a second one.
+            dns-prefetch is the fallback for browsers that ignore preconnect. */}
+        <link rel="preconnect" href="https://site.api.espn.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://site.api.espn.com" />
+        {/* A SECOND ESPN API host is hit on that same first-paint load: the
+            standings feed at site.web.api.espn.com (fetchStandingsRanks /
+            fetchStandingsRecords in lib/espn.ts), kicked off inside fetchLeague
+            for every RANK_LEAGUES column (NBA/MLB/NFL/NHL/…) to stamp the "#N"
+            rank + W-L record onto team names. It's a different subdomain than
+            site.api.espn.com above, so it needs its own connection — warm it
+            here too. Same anonymous CORS request (plain fetch, no credentials),
+            so it carries crossOrigin to match, with dns-prefetch as fallback. */}
+        <link rel="preconnect" href="https://site.web.api.espn.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://site.web.api.espn.com" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

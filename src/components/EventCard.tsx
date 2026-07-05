@@ -26,7 +26,14 @@ function whenLabel(iso?: string): string {
   const ymd = (date: Date) =>
     new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
   const sameDay = ymd(d) === ymd(new Date());
-  const midnight = d.getHours() === 0 && d.getMinutes() === 0;
+  // Detect the midnight (TBD) placeholder in the SAME zone the time is shown in
+  // (tz), not the device's own zone. Reading d.getHours()/getMinutes() uses the
+  // device zone, so a Settings "Time zone" override desyncs it from the
+  // displayed time — a real kickoff could be mistaken for a placeholder (or
+  // vice-versa). "24:00" guards the value some ICU builds emit for midnight
+  // (same guard as weather.ts / etDay.ts / DateNav.ts).
+  const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+  const midnight = hm === "00:00" || hm === "24:00";
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
   const wd = d.toLocaleDateString("en-US", { weekday: "short", timeZone: tz });
   if (sameDay) return midnight ? "" : time;
@@ -58,12 +65,20 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
       className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer disabled:opacity-50"
       style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
       title={`${label} highlights`}
+      // Pin the accessible name to the button's purpose so a screen reader
+      // hears "UFC highlights" / "Search highlights" — otherwise the name fell
+      // back to the bare visible text ("Search" alone is ambiguous) while
+      // loading swapped it to "Loading…", losing what the button does. aria-busy
+      // conveys the in-flight fetch that the visible "Loading…" shows sighted
+      // users. Matches the title+aria-label pairing every other button here uses.
+      aria-label={`${label} highlights`}
+      aria-busy={loading}
     >
       {loading ? (
         <span className="text-[10px]">Loading…</span>
       ) : (
         <>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+          <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
           <span className="text-[10px] font-medium">{label}</span>
         </>
       )}
@@ -75,8 +90,12 @@ function FighterRow({ f }: { f: FightBout["red"] }) {
   return (
     <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
       {f.flag ? (
+        // onError hides a 404'd/blocked remote flag so it degrades to the empty
+        // slot instead of the browser's broken-image glyph — matches the onError
+        // guards on every other remote flag/logo in the app (GameCard,
+        // GolfLeaderboard, WorldCupGroupsModal/Bracket, NewsColumn, …).
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={f.flag} alt={f.country ?? ""} title={f.country} width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain shrink-0" />
+        <img src={f.flag} alt={f.country ?? ""} title={f.country} loading="lazy" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
       ) : (
         <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
       )}

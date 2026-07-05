@@ -109,8 +109,20 @@ export function decodeFavorites(params: URLSearchParams): {
   const s = params.get("s");
   if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
-  if (t) result.thirdLeague = t === "0" ? "empty" : SHORT_TO_SPORT[t];
-  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : tok === "0" ? "empty" : SHORT_TO_SPORT[tok]));
+  // Guard the unknown-code case: SHORT_TO_SPORT is typed Record<string, Sport>,
+  // so an unrecognized `t` (malformed/hand-edited share URL) silently yields
+  // `undefined` that the type claims can't happen, landing an out-of-type
+  // `thirdLeague: undefined` on the result. Only assign a real Sport (or the
+  // "empty" sentinel), matching how every sibling decode below guards its code.
+  if (t === "0") result.thirdLeague = "empty";
+  else if (t && SHORT_TO_SPORT[t]) result.thirdLeague = SHORT_TO_SPORT[t];
+  // Same unknown-code guard as thirdLeague above: an unrecognized slot token in a
+  // malformed/hand-edited share URL makes SHORT_TO_SPORT[tok] undefined, which the
+  // Sport-typed index signature hides — smuggling an out-of-type value into the
+  // Sport branch. Coalesce it to the same `undefined` the "_" unset-slot sentinel
+  // uses, so a bad code degrades to an auto slot instead. Runtime-identical (an
+  // unknown code already yielded undefined); this just makes the intent explicit.
+  if (s) result.slotLeagues = s.split(".").map((tok) => (tok === "_" ? undefined : tok === "0" ? "empty" : SHORT_TO_SPORT[tok] ?? undefined));
   const th = params.get("th");
   const dd = params.get("dd");
   const dv = params.get("dv");
@@ -194,12 +206,10 @@ export interface Preferences {
   // Source labels the user has hidden via the per-source visibility checkbox.
   // Applied alongside the type pill (independent filters).
   newsHiddenSources?: string[];
-  // Spoiler masks on the highlight-video player. maskVideoTitle covers
-  // YouTube's title strip (top); maskVideoBottom covers the bottom strip.
-  // Both default ON (undefined ⇒ true ⇒ covered) so the player stays
-  // spoiler-safe out of the box; users opt out per-bar in Settings.
+  // Spoiler mask on the highlight-video player: maskVideoTitle covers
+  // YouTube's title strip (top). Defaults ON (undefined ⇒ true ⇒ covered) so
+  // the player stays spoiler-safe out of the box; the user opts out in Settings.
   maskVideoTitle?: boolean;
-  maskVideoBottom?: boolean;
   // Opt-in (default OFF / undefined ⇒ false): show YouTube's NATIVE control bar
   // (controls:1) on highlight clips instead of the stripped spoiler-safe player.
   // Gives back YT's own progress/seek bar + time — a spoiler the user accepts,
@@ -300,6 +310,16 @@ export function setRemoteSync(fn: RemoteSync | null): void {
 export function savePreferences(prefs: Preferences): void {
   if (typeof window === "undefined") return;
   setServiceTimeZone(prefs.timezone);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  // localStorage.setItem can throw — quota exceeded, or storage blocked in a
+  // sandboxed/private context — and savePreferences runs straight out of click
+  // handlers (e.g. toggling a setting). Mirror loadPreferences' guard so a
+  // failed write never bubbles up and trips the route error boundary. The
+  // remote sync below is the durable store for signed-in users, so it must
+  // still fire even when the local write can't land.
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    /* storage full/unavailable — in-memory prefs still apply this session */
+  }
   if (remoteSync) remoteSync(prefs);
 }

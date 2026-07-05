@@ -172,6 +172,11 @@ export default function GameHighlights({
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
               aria-label={`${officialChannel} highlights`}
+              // aria-busy conveys the in-flight fetch that the visible "Loading..."
+              // swap shows sighted users; the aria-label above stays pinned to the
+              // button's purpose so the name never collapses to "Loading...".
+              // Matches the aria-busy pairing on EventCard's highlight buttons.
+              aria-busy={fetchingOnClick === "official"}
               title={`${officialChannel} highlights`}
             >
               {fetchingOnClick === "official" ? (
@@ -209,6 +214,10 @@ export default function GameHighlights({
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
               aria-label={isMlb ? "MLB full game highlights" : "Top search result highlights"}
+              // aria-busy conveys the in-flight fetch that the visible "Loading..."
+              // swap shows sighted users; the aria-label above stays pinned so the
+              // name never collapses to "Loading...". Matches EventCard's buttons.
+              aria-busy={fetchingOnClick === "search"}
               title={isMlb ? "MLB full game highlights" : "Top search result highlights"}
             >
               {fetchingOnClick === "search" ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { getEtServiceDate, getTimeZone } from "@/lib/etDay";
 
 interface DateNavProps {
@@ -64,12 +64,16 @@ export function getETHour(): number {
     hour: "2-digit", minute: "2-digit", hour12: false,
   }).formatToParts(new Date());
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
-  return parseInt(get("hour"), 10);
+  // % 24 guards the "24" some ICU builds emit for midnight (same guard as
+  // getEtServiceDate/etSlateYmd in lib/etDay.ts). Without it the consumers that
+  // compare the hour against a low cutoff — getSmartDefaultOffset's `< 1`
+  // midnight check and the ratings-auto `< 12` morning check in HomeContent —
+  // would see 24 instead of 0 and skip the branch for the whole 12–1 AM window.
+  return parseInt(get("hour"), 10) % 24;
 }
 
 // Custom calendar dropdown — starts Monday, blue weekends
 function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps & { onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
   const [viewDate, setViewDate] = useState(() => parseYMD(selectedDate));
 
   useEffect(() => {
@@ -118,8 +122,16 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 
   return (
     <div
-      ref={ref}
       data-cal-pop
+      // The calendar toggle button declares aria-haspopup + aria-expanded, so
+      // give the popover it opens a matching role + accessible name — otherwise
+      // it surfaces to assistive tech as an anonymous, role-less region. Matches
+      // the role="dialog" + aria-label pattern every other overlay in the app
+      // uses (GameDetailModal, WorldCupGroupsModal, the HomeContent explainers).
+      // The month caption (aria-live) and day cells (aria-current) already carry
+      // their own state; this just names the container they live in.
+      role="dialog"
+      aria-label="Choose a date"
       className="absolute top-full mt-2 right-0 z-50 rounded-xl shadow-lg p-3 w-64"
       style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
     >
@@ -127,7 +139,11 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
         <button onClick={prevMonth} aria-label="Previous month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
           {"<"}
         </button>
-        <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{monthLabel}</span>
+        {/* Live region: the ‹/› buttons swap the grid in place, so without
+            this a screen reader announces nothing when the month changes.
+            aria-live="polite" + atomic re-reads the full "July 2026" caption
+            on each navigation so SR users know which month they're viewing. */}
+        <span className="text-sm font-semibold" style={{ color: "var(--text)" }} aria-live="polite" aria-atomic="true">{monthLabel}</span>
         <button onClick={nextMonth} aria-label="Next month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
           {">"}
         </button>

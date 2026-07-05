@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
+import { handleExternalClick } from "@/lib/openExternal";
 import { NewsSource, PlayHandler } from "./NewsColumn";
 
 interface Props {
@@ -120,7 +121,18 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
           >
             <SourceHeader label={source.label} logoUrl={source.logoUrl} />
             {items === null
-              ? Array.from({ length: maxItems }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)
+              ? (
+                  // Announce the loading state; the pulsing SkeletonRows are
+                  // purely decorative (aria-hidden below), so only this sr-only
+                  // status is voiced (WCAG 4.1.3, matching the role=status
+                  // skeletons in NewsColumn + HomeContent's games column). The
+                  // span is sr-only (position:absolute), so it stays out of the
+                  // subgrid row flow and can't shift the skeleton layout.
+                  <>
+                    <span role="status" aria-live="polite" className="sr-only">Loading videos…</span>
+                    {Array.from({ length: maxItems }).map((_, i) => <SkeletonRow key={`s-${i}`} isFirst={i === 0} />)}
+                  </>
+                )
               : items.slice(0, itemCount).map((item, rowIdx) => (
                   <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} />
                 ))}
@@ -168,7 +180,21 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
       >
         {logoUrl && (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={logoUrl} alt="" width={24} height={24} className="w-6 h-6 object-contain shrink-0" draggable={false} />
+          <img
+            src={logoUrl}
+            alt=""
+            loading="lazy"
+            width={24}
+            height={24}
+            className="w-6 h-6 object-contain shrink-0"
+            draggable={false}
+            // Remote source mark (ESPN CDN + Wikimedia hotlinks) — a 404 or
+            // blocked hotlink would otherwise leave the browser's broken-image
+            // glyph in the sticky header. Hide it so the header degrades to its
+            // always-present label text, matching the identical guard on its
+            // twin NewsColumn.SourceHeader (this one was missed when that landed).
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
         )}
         {mobileLabel !== label ? (
           <>
@@ -200,7 +226,9 @@ function stripLeaguePrefixForMobile(label: string): string {
 
 function SkeletonRow({ isFirst }: { isFirst: boolean }) {
   return (
-    <div className="animate-pulse" style={{ borderTop: isFirst ? "none" : "1px solid var(--border)" }}>
+    // Decorative pulse placeholder — the sibling sr-only role=status span voices
+    // the loading state, so hide these empty styled divs from assistive tech.
+    <div aria-hidden="true" className="animate-pulse" style={{ borderTop: isFirst ? "none" : "1px solid var(--border)" }}>
       <div className="w-full aspect-video" style={{ background: "var(--bg-card-hover)" }} />
       <div className="px-3 py-2">
         <div className="h-3 w-4/5 rounded" style={{ background: "var(--bg-card-hover)" }} />
@@ -221,13 +249,19 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
             loading="lazy"
             className="w-full h-full object-cover"
             draggable={false}
+            // A 404'd thumbnail would otherwise show the browser's broken-image
+            // glyph; hide it so the row degrades to the bg-card-hover placeholder
+            // + play overlay (a sibling), matching NewsColumn's onError guard.
+            // Rows are keyed by item.id, so this node is never reused for another
+            // item — display:none can't leak onto a later valid thumbnail.
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
             style={{ background: "linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.4))" }}
           >
             <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)", color: "white" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
@@ -277,7 +311,7 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
     );
   }
   return (
-    <a key={item.id} href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" className={commonCls} style={commonStyle}>
+    <a key={item.id} href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
       {body}
     </a>
   );
@@ -299,7 +333,7 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
       style={{ background: "var(--bg-card-hover)" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={proxyImage(item.imageUrl)} alt="" loading="lazy" className="w-full h-full object-cover" draggable={false} />
+      <img src={proxyImage(item.imageUrl)} alt="" loading="lazy" className="w-full h-full object-cover" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
     </div>
   ) : item.leagueLogo ? (
     /* eslint-disable-next-line @next/next/no-img-element */
@@ -311,6 +345,10 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
       height={18}
       className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
       draggable={false}
+      // Remote league mark (ESPN CDN); a 404/blocked hotlink would otherwise
+      // leave the browser's broken-image glyph in the strip. Hide it so the
+      // row degrades cleanly, matching the thumbnail onError guard above.
+      onError={(e) => { e.currentTarget.style.display = "none"; }}
     />
   ) : null;
   // flex-1 + items-center spreads the rows vertically when we have fewer
@@ -350,7 +388,7 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
     );
   }
   return (
-    <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" className={rowCls} style={rowStyle}>
+    <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
     </a>

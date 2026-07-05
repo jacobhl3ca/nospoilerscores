@@ -18,7 +18,11 @@ export const metadata: Metadata = {
     "world cup hidden scores",
   ],
   alternates: { canonical: "/watch-world-cup-without-spoilers" },
-  robots: { index: true, follow: true },
+  // No `robots` override: metadata is shallowly merged, so a child `robots`
+  // object fully replaces the root layout's — which would drop its googleBot
+  // directives (max-image-preview:large, max-snippet:-1). index/follow is
+  // already inherited from the layout, so this page stays indexable AND keeps
+  // the richer snippet/image-preview hints (matches /faq and /privacy).
   openGraph: {
     title: TITLE,
     description: DESC,
@@ -211,6 +215,13 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 // image is a recommended Article field for Google rich results;
                 // reuse the page's OG card (a real, valid 1200×630 image).
                 image: "https://hidescore.com/og-worldcup.png",
+                // datePublished/dateModified are recommended Article fields —
+                // they tell Google when the guide first went up and when it was
+                // last revised, a freshness signal for the rich result. Dates
+                // are the page file's real git create/last-edit days; bump
+                // dateModified whenever the copy here meaningfully changes.
+                datePublished: "2026-06-23",
+                dateModified: "2026-06-29",
                 author: { "@type": "Organization", name: "HideScore" },
                 publisher: {
                   "@type": "Organization",
@@ -218,6 +229,18 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                   logo: { "@type": "ImageObject", url: "https://hidescore.com/icon-512.png" },
                 },
                 mainEntityOfPage: "https://hidescore.com/watch-world-cup-without-spoilers",
+              },
+              {
+                // BreadcrumbList lets Google render a Home › World Cup › this-guide
+                // trail in the search result instead of the bare URL. The hierarchy
+                // mirrors the page's own links (it points readers to /worldcup), so
+                // the trail matches how the site is actually navigated.
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+                  { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
+                  { "@type": "ListItem", position: 3, name: "Watch Without Spoilers", item: "https://hidescore.com/watch-world-cup-without-spoilers" },
+                ],
               },
               {
                 "@type": "FAQPage",

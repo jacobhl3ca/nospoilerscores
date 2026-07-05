@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getTimeZone } from "@/lib/etDay";
 import {
   fetchBracket,
   type Bracket,
@@ -36,19 +37,23 @@ function Side({ side, bracket }: { side: BracketSide; bracket: Bracket }) {
       <div className="flex items-center gap-1.5 min-w-0">
         {side.team.flag ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={side.team.flag} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} />
+          <img src={side.team.flag} alt="" loading="lazy" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
         ) : (
           <span className="w-4 h-4 shrink-0" />
         )}
-        <span className="text-xs truncate" style={{ color: "var(--text)" }}>{side.team.name}</span>
+        {/* title surfaces the full name when the 150px bracket column truncates
+            it ("Bosnia and Herzegovina", "Saudi Arabia") — matches GameCard and
+            EventCard, which already title their own truncated team/fighter names. */}
+        <span className="text-xs truncate" style={{ color: "var(--text)" }} title={side.team.name}>{side.team.name}</span>
       </div>
     );
   }
+  const label = side.feeder ? feederLabel(bracket, side.feeder) : "—";
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       <span className="w-4 h-4 shrink-0" />
-      <span className="text-[11px] italic truncate" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
-        {side.feeder ? feederLabel(bracket, side.feeder) : "—"}
+      <span className="text-[11px] italic truncate" style={{ color: "var(--text-muted)", opacity: 0.8 }} title={label}>
+        {label}
       </span>
     </div>
   );
@@ -56,7 +61,7 @@ function Side({ side, bracket }: { side: BracketSide; bracket: Bracket }) {
 
 function MatchCard({ match, bracket }: { match: Bracket["rounds"][number]["matches"][number]; bracket: Bracket }) {
   const dateLabel = match.date
-    ? new Date(match.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    ? new Date(match.date).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() })
     : null;
   return (
     <div className={`relative rounded-lg p-1.5 w-full ${dateLabel ? "pr-8" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
@@ -103,7 +108,11 @@ export default function WorldCupBracket() {
 
   return (
     <div>
-      <div className="overflow-x-auto pb-1">
+      {/* The tree is wider than a phone column, so it scrolls horizontally.
+          A scrollable region must be keyboard-operable (WCAG 2.1.1): tabIndex
+          makes it focusable so arrow keys can scroll it, and role+label give
+          assistive tech a named container to announce. */}
+      <div className="overflow-x-auto pb-1" tabIndex={0} role="group" aria-label="World Cup knockout bracket">
         <div className="flex gap-2 sm:gap-3" style={{ minWidth: "min-content" }}>
           {treeRounds.map((round) => (
             <div key={round.key} className="flex flex-col shrink-0" style={{ width: 150 }}>

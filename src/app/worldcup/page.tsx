@@ -36,5 +36,28 @@ export const metadata: Metadata = {
 export default function WorldCupPage() {
   // initialOffset 0 → land on today's / upcoming slate (not the morning
   // "yesterday" smart-default), so the hub always frames "what's on to watch."
-  return <HomeContent initialOffset={0} worldCupHub />;
+  return (
+    <>
+      <HomeContent initialOffset={0} worldCupHub />
+      {/* BreadcrumbList lets Google render a Home › World Cup trail in the
+          search result instead of the bare /worldcup URL. The /watch-world-cup-
+          without-spoilers guide already declares this same hierarchy (with
+          /worldcup as position 2), so the hub now closes the loop by claiming
+          its own place in the trail. Server-rendered: page.tsx has no
+          "use client", so the script ships in the static HTML for crawlers. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+              { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
+            ],
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
+    </>
+  );
 }
