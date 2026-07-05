@@ -330,9 +330,14 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
-        <div className="flex flex-col">
+        // Screen readers get an announced loading status; the pulsing row
+        // placeholders are purely decorative (empty styled divs), so they're
+        // aria-hidden and only the sr-only text is voiced (WCAG 4.1.3, matching
+        // the role=status skeleton in HomeContent's games column).
+        <div role="status" aria-live="polite" className="flex flex-col">
+          <span className="sr-only">Loading headlines…</span>
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="px-3 py-2 animate-pulse" style={{ borderTop: i === 1 ? "none" : "1px solid var(--border)" }}>
+            <div key={i} aria-hidden="true" className="px-3 py-2 animate-pulse" style={{ borderTop: i === 1 ? "none" : "1px solid var(--border)" }}>
               <div className="h-3 w-full rounded" style={{ background: "var(--bg-card-hover)" }} />
             </div>
           ))}
@@ -514,9 +519,12 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
     >
       <SourceHeader label={label} logoUrl={logoUrl} />
       {loading ? (
-        <div className="flex flex-col gap-px" style={{ background: "var(--border)" }}>
+        // See TextSourceCard: sr-only status is announced, decorative pulse
+        // placeholders are aria-hidden (WCAG 4.1.3, matching HomeContent).
+        <div role="status" aria-live="polite" className="flex flex-col gap-px" style={{ background: "var(--border)" }}>
+          <span className="sr-only">Loading videos…</span>
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse" style={{ background: "var(--bg-card)" }}>
+            <div key={i} aria-hidden="true" className="animate-pulse" style={{ background: "var(--bg-card)" }}>
               <div className="w-full aspect-video" style={{ background: "var(--bg-card-hover)" }} />
               <div className="px-3 py-2">
                 <div className="h-3 w-4/5 rounded" style={{ background: "var(--bg-card-hover)" }} />
