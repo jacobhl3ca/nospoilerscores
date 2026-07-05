@@ -258,7 +258,11 @@ export default function GameDetailModal({
         {/* Status + time */}
         <div className="text-sm mb-1" style={{ color: "var(--text)" }}>
           <span className="font-medium">{statusLabel}</span>
-          {timeLabel ? <span style={{ color: "var(--text-muted)" }}> · {timeLabel}</span> : null}
+          {/* Wrap the start time in a semantic <time> so the machine-readable
+              ISO (game.date) is exposed to assistive tech / crawlers while the
+              visible, zone-formatted text stays unchanged. Mirrors VideoModal's
+              <time dateTime> treatment of the article timestamp. */}
+          {timeLabel ? <span style={{ color: "var(--text-muted)" }}> · <time dateTime={game.date}>{timeLabel}</time></span> : null}
         </div>
 
         {/* Series/playoff label (US sports) or cup stage (soccer) — both
