@@ -127,10 +127,17 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       {expanded && (
         <div className="px-3 pt-2.5 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
           <ul className="flex flex-col gap-2">
-            {stakes.matches.map((m, i) => {
+            {stakes.matches.map((m) => {
               const meta = TIER_META[m.tier];
               return (
-                <li key={i} className="flex gap-2">
+                // Key by the matchup's stable identity (round/group + the two
+                // sides), not the array index: stakes.matches is sorted by tier
+                // and each entry's state flips pre→in→post on a live refresh, so
+                // the list can reorder while this card stays mounted+expanded.
+                // An index key would then reconcile the wrong rows in place —
+                // the same fix already applied to GameCard/GolfLeaderboard chips.
+                // Two teams meet once per day, so group+away+home is unique here.
+                <li key={`${m.group}|${m.away}|${m.home}`} className="flex gap-2">
                   <span
                     aria-hidden="true"
                     className="mt-1 shrink-0 rounded-full"
