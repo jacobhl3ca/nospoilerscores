@@ -1123,14 +1123,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
-  // Reddit prev/next paging — a labelled ‹ Prev / Next › bar PINNED to the
-  // bottom-centre of the modal (Jacob 7/3: off the video, and in a consistent
-  // spot instead of jumping as the media height changes between posts). Fixed
-  // to the viewport bottom (above the home indicator) so it's always the same
-  // thumb target. Both buttons always render; the unavailable direction
-  // (first/last post) is disabled. stopPropagation so a tap pages, not closes.
+  // Reddit prev/next paging — a labelled ‹ Prev / Next › bar rendered in-flow as
+  // the LAST element under the byline / links (Jacob 7/3–7/5: off the video, and
+  // never overlapping the links — a fixed bar collided with them when the video
+  // was tall). Both buttons always render; the unavailable direction (first/last
+  // post) is disabled. stopPropagation so a tap pages, not closes.
   const pager = (onPrev || onNext) ? (
-    <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
+    <div className="mt-3 mb-1 flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
       <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
@@ -1695,10 +1694,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             )}
           </div>
         )}
-        {/* Prev/next paging row — below the media for every mode (Reddit news
-            columns only; onPrev/onNext are unset elsewhere so this is null). */}
-        {pager}
-
         {/* Headline + byline below media — for image / video modes, gives
             context without filling the modal. textMode renders these inside
             the card itself, so skip them here. */}
@@ -1741,6 +1736,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           )}
         </div>
         )}
+
+        {/* Prev/next paging — the LAST element in the flow, so it always sits
+            below the byline / links and can never overlap them (Reddit news
+            columns only; null elsewhere). */}
+        {pager}
       </div>
       </div>
     </div>
