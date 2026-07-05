@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Game } from "@/lib/types";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
@@ -72,6 +72,22 @@ export default function GameDetailModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Focus management (WCAG 2.4.3): move focus into the dialog on open so
+  // keyboard / screen-reader users land inside the overlay instead of being
+  // stranded on the page behind it, and restore focus to the element that
+  // opened it on close. Focusing the dialog CONTAINER (tabIndex=-1) rather than
+  // a control keeps mouse users from seeing a focus ring while still handing the
+  // dialog + its aria-label to assistive tech; the first Tab then reaches the
+  // close button. The modal mounts fresh per open (parent renders it behind a
+  // `detailGame &&` guard), so this fires on every open/close — same lifecycle
+  // as the Escape + scroll-lock effects. Empty deps: capture the opener once.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => opener?.focus?.();
+  }, []);
 
   // Lock body scroll while the modal is open (same technique as VideoModal /
   // SettingsPanel). Plain overflow:hidden doesn't reliably stop iOS WebKit from
@@ -233,8 +249,13 @@ export default function GameDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
       <div
+        ref={dialogRef}
+        // tabIndex=-1 makes the container programmatically focusable (see the
+        // focus-management effect) without adding it to the tab order; outline
+        // none suppresses the ring since it's focused only to seat assistive tech.
+        tabIndex={-1}
         className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-        style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+        style={{ background: "var(--bg)", border: "1px solid var(--border)", outline: "none" }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
