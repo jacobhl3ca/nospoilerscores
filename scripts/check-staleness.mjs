@@ -47,6 +47,10 @@ const NEWS_HOURLY = [
 // bake rewrites fetchedAt every run, so 24h only fires on a genuinely stuck feed.
 const RATE_LIMIT_PRONE_REDDIT = new Set([
   "reddit-fifa", "reddit-ucl", "reddit-uel", "reddit-ncaaf", "reddit-ncaaw",
+  // reddit-wnba is a lower-volume sub whose prebake occasionally slips a couple
+  // of hourly runs on a Reddit 429/403 blip and self-heals; a 12h crit paged on
+  // a 13.4h transient (issue #18, 2026-07-06). Treat like the other flaky subs.
+  "reddit-wnba",
 ]);
 
 const FEEDS = [
