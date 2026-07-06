@@ -79,7 +79,7 @@ function EspnLink({ href, title }: { href: string; title?: string }) {
       className="opacity-40 hover:opacity-70 transition-opacity flex-shrink-0"
       title={title || "View on ESPN"}>
       <img src="https://a.espncdn.com/combiner/i?img=/i/espn/misc_logos/500/espn.png&w=40&h=40"
-        alt="ESPN" loading="lazy" width={20} height={20} className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
+        alt="ESPN" loading="lazy" decoding="async" width={20} height={20} className="w-5 h-5 sm:w-6 sm:h-6 object-contain" />
     </a>
   );
 }
@@ -320,7 +320,7 @@ export function CompactUpcomingCard({
             title stays for the sighted-hover tooltip. */}
         {home.logo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={home.logo} alt="" title={home.displayName} loading="lazy" width={16} height={16} className="w-4 h-4 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+          <img src={home.logo} alt="" title={home.displayName} loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
         ) : null}
         {/* Full team name when there's room (desktop, like the lead card above);
             abbreviation on the narrow mobile column. Normal weight to match the
@@ -477,7 +477,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       // beside it rather than the browser's broken-image glyph (matches the
       // remote-image guards in NewsColumn/AlignedVideoStrip/VideoModal).
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={team.logo} alt="" title={team.displayName} loading="lazy" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+      <img src={team.logo} alt="" title={team.displayName} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
     );
 
   // Clicking the card body opens a spoiler-safe details popup. Inner
