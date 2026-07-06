@@ -717,12 +717,22 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // if a future fetch is ever added without a timeout, force the error/retry
   // state after 40s (above the ~31s worst-case real load) rather than hang.
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic request id so out-of-order responses can't repaint the board.
+  // fetchData has five concurrent callers (the date effect, the prefs effect,
+  // the 10s live-poll, pull-to-refresh, and the retry button); fetchAllLeagues
+  // latency varies per day/endpoint, so a slower earlier pull could resolve
+  // AFTER a newer one and clobber it — e.g. the live-poll for today lands after
+  // the user has already navigated to yesterday, showing today's games under a
+  // "Yesterday" nav. Each call claims the next id and only applies its result
+  // if it's still the latest.
+  const reqSeqRef = useRef(0);
   const fetchData = useCallback(async (
     date: string,
     thirdLeague?: Sport | "empty",
     slotOverrides?: { first?: Sport | "empty"; second?: Sport | "empty"; third?: Sport | "empty"; fourth?: Sport | "empty"; fifth?: Sport | "empty" },
     silent = false,
   ) => {
+    const myReq = ++reqSeqRef.current;
     // silent=true skips the global skeleton — used when only one slot changed
     // (header dropdown or settings panel). Old data stays visible until the
     // new pull resolves, which prevents the "all 3 columns flash gray" effect.
@@ -740,6 +750,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       // Slot count reads the live viewport so the initial desktop load fetches
       // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
       let data = await fetchAllLeagues(date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3);
+      // A newer fetch started while we awaited — discard this now-stale result
+      // rather than paint the wrong day's board over the current one.
+      if (myReq !== reqSeqRef.current) return;
       if (isDemoModeActive()) data = applyDemoMode(data);
       if (isNoHitAlertDemoActive()) data = applyNoHitAlertDemo(data);
       setLeagues(data);
@@ -747,6 +760,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       // slow-but-successful load still shows the board instead of the retry UI.
       setError(false);
     } catch {
+      // Ignore a superseded request's failure so it can't flip the current,
+      // successfully-loaded board into the retry state.
+      if (myReq !== reqSeqRef.current) return;
       setLeagues([]);
       setError(true);
     } finally {
@@ -1656,6 +1672,13 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 </button>
                 {newsFilterOpen && (
                   <div
+                    // The filter button declares aria-haspopup + aria-expanded, so
+                    // give the panel it opens a matching role + accessible name —
+                    // otherwise it surfaces to assistive tech as an anonymous,
+                    // role-less region. Same role="dialog" + aria-label pattern the
+                    // DateNav calendar popover and every other overlay in the app use.
+                    role="dialog"
+                    aria-label="Filter news by source"
                     className="absolute top-full mt-1 right-0 rounded-lg shadow-lg z-50 p-3 min-w-[210px]"
                     style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                   >

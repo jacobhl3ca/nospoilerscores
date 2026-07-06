@@ -253,7 +253,16 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
         : SAFE.has(other.s)
           ? `${other.name} are already through`
           : `${other.name} need a result too`;
-    return `${w.name} must win to keep their hopes alive — likely via the best-third-place race. ${otherTxt}.`;
+    // A "best8" side can't reach the group's top two at all — its only route
+    // left is the best-third-place race. A "mustwin" side, by contrast, climbs
+    // straight into the top two by winning (see the Status doc: mustwin = only
+    // a win can reach top-2). Naming the best-third-place race for BOTH told a
+    // mustwin team the wrong route to advancement, so split the stakes clause.
+    const stakes =
+      w.s === "best8"
+        ? "must win to keep their hopes alive — likely via the best-third-place race"
+        : "must win to reach the top two";
+    return `${w.name} ${stakes}. ${otherTxt}.`;
   }
 
   if (tier === "decider") {

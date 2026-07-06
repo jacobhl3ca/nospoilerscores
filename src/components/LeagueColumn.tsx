@@ -1180,6 +1180,13 @@ export default function LeagueColumn({
                 </button>
                 {swapOpen && (
                   <div
+                    // The league-switch button declares aria-haspopup + aria-expanded,
+                    // so give the panel it opens a matching role + accessible name —
+                    // otherwise it surfaces to assistive tech as an anonymous,
+                    // role-less region. Same role="dialog" + aria-label pattern the
+                    // DateNav calendar and HomeContent news-filter popovers use.
+                    role="dialog"
+                    aria-label="Switch league"
                     className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-hidden min-w-[100px]"
                     style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                   >

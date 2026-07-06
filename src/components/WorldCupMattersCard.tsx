@@ -90,6 +90,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       <button
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
+        aria-controls="wc-matters-details"
         className="w-full flex items-start gap-2 px-3 py-2 text-left"
         style={{ background: "transparent", color: "var(--text)" }}
       >
@@ -125,7 +126,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       </button>
 
       {expanded && (
-        <div className="px-3 pt-2.5 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
+        <div id="wc-matters-details" className="px-3 pt-2.5 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
           <ul className="flex flex-col gap-2">
             {stakes.matches.map((m) => {
               const meta = TIER_META[m.tier];

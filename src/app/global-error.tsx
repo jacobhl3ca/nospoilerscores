@@ -26,6 +26,16 @@ export default function GlobalError({
   return (
     <html lang="en">
       <body>
+        {/* This boundary REPLACES the root layout, so layout.tsx's `viewport`
+            export (which emits the width=device-width meta on every normal page)
+            doesn't apply here — and metadata/viewport exports aren't supported in
+            a global-error boundary anyway (same reason the tab title is a manual
+            <title> below). Without a viewport meta, phones lay this page out at
+            the ~980px fallback width and zoom out, shrinking the centered error
+            card to unreadable. Declare it explicitly, mirroring the app's own
+            viewport (incl. viewport-fit=cover for the notch) so the crash screen
+            renders full-width on mobile. React hoists this <meta> into <head>. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <title>Something went wrong | HideScore</title>
         <style>{`
           :root { color-scheme: light dark; --ge-bg:#ffffff; --ge-text:#111111; --ge-muted:#999999; --ge-accent:#2563eb; --ge-card:#f5f5f5; --ge-border:rgba(0,0,0,0.1); }
