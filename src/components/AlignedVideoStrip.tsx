@@ -184,6 +184,7 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
             src={logoUrl}
             alt=""
             loading="lazy"
+            decoding="async"
             width={24}
             height={24}
             className="w-6 h-6 object-contain shrink-0"
@@ -247,6 +248,11 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
             src={proxyImage(item.imageUrl)}
             alt=""
             loading="lazy"
+            // Full-width 16:9 thumbnail — the largest image in the strip. Decode
+            // it off the main thread so a heavy frame doesn't block scroll/paint
+            // as rows come into view (loading="lazy" defers the fetch, not the
+            // decode). Purely a rendering hint: no visual or behavior change.
+            decoding="async"
             className="w-full h-full object-cover"
             draggable={false}
             // A 404'd thumbnail would otherwise show the browser's broken-image
@@ -333,7 +339,7 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
       style={{ background: "var(--bg-card-hover)" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={proxyImage(item.imageUrl)} alt="" loading="lazy" className="w-full h-full object-cover" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+      <img src={proxyImage(item.imageUrl)} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
     </div>
   ) : item.leagueLogo ? (
     /* eslint-disable-next-line @next/next/no-img-element */
@@ -341,6 +347,7 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
       src={item.leagueLogo}
       alt=""
       loading="lazy"
+      decoding="async"
       width={18}
       height={18}
       className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
