@@ -150,8 +150,14 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
       </div>
       <div className="grid grid-cols-7 gap-0.5 text-center">
         {dayHeaders.map((dh, i) => (
+          // Decorative visual column guides. A screen reader can't perceive the
+          // grid alignment they orient sighted users to, and each day button
+          // already announces its full weekday in its aria-label — so left
+          // exposed these render as seven meaningless "Mo"/"Tu"… fragments read
+          // out before the grid. Hide them so the dates speak for themselves.
           <div
             key={dh}
+            aria-hidden="true"
             className="text-[10px] font-medium py-1"
             style={{ color: i >= 5 ? "var(--accent)" : "var(--text-muted)" }}
           >

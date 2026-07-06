@@ -187,9 +187,21 @@ export default function RootLayout({
             __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c"),
           }}
         />
+        {/* When the stored preference OVERRIDES the OS scheme (e.g. forces dark
+            on a light-mode device), also correct the browser-chrome tint here so
+            it matches on EVERY page. The two theme-color metas above are media-
+            based (they follow prefers-color-scheme), so on an override they'd
+            paint the toolbar for the OS scheme, not the rendered theme — a dark
+            page under a light bar. HomeContent already fixes this at runtime, but
+            only on the app board; the static pages (/faq, /privacy, the World Cup
+            guide, error, 404) had no such sync. Doing it in this pre-paint script
+            covers them all, pre-paint, with no flash. Only the override branch
+            touches the metas — OS-following users keep the media-based metas
+            untouched so they still track a live OS theme change. The metas exist
+            in <head> before this script runs, so querySelectorAll finds them. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('nss-preferences');if(t){var p=JSON.parse(t);if(p.theme==='dark'||p.theme==='light'){document.documentElement.setAttribute('data-theme',p.theme);return}}if(window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})()`,
+            __html: `(function(){try{var t=localStorage.getItem('nss-preferences');if(t){var p=JSON.parse(t);if(p.theme==='dark'||p.theme==='light'){document.documentElement.setAttribute('data-theme',p.theme);var c=p.theme==='dark'?'#0a0a0a':'#ffffff';var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++){m[i].setAttribute('content',c)}return}}if(window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})()`,
           }}
         />
         {/* Replay the last active view tab (scores/ratings/news) before paint so

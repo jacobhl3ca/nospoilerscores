@@ -4,6 +4,13 @@ import Link from "next/link";
 const TITLE = "How to Watch the 2026 World Cup Without Spoilers | HideScore";
 const DESC =
   "A simple guide to following the 2026 FIFA World Cup spoiler-free: hide scores until you tap, see which matches were classics without learning who won, and avoid spoilers when you watch on delay.";
+// Guide publish / last-revised dates (the file's real git create + last-edit
+// days). Single source of truth: the openGraph article:* tags below AND the
+// Article JSON-LD's datePublished/dateModified both read these, so the two
+// freshness signals can never drift. Bump MODIFIED whenever the copy here
+// meaningfully changes.
+const PUBLISHED = "2026-06-23";
+const MODIFIED = "2026-06-29";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -29,6 +36,15 @@ export const metadata: Metadata = {
     url: "https://hidescore.com/watch-world-cup-without-spoilers",
     siteName: "HideScore",
     type: "article",
+    // Emit article:published_time / article:modified_time / article:author so
+    // this OG "article" carries the same freshness + authorship signals as the
+    // Article JSON-LD below (previously it declared type:"article" but shipped
+    // none of the article:* meta that platforms read). Dates come from the
+    // shared PUBLISHED/MODIFIED constants, so they stay in lockstep with the
+    // JSON-LD.
+    publishedTime: PUBLISHED,
+    modifiedTime: MODIFIED,
+    authors: ["HideScore"],
     images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore — watch the 2026 World Cup without spoilers" }],
   },
   twitter: {
@@ -220,8 +236,10 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 // last revised, a freshness signal for the rich result. Dates
                 // are the page file's real git create/last-edit days; bump
                 // dateModified whenever the copy here meaningfully changes.
-                datePublished: "2026-06-23",
-                dateModified: "2026-06-29",
+                // Shared with the openGraph article:* tags above (PUBLISHED /
+                // MODIFIED) so the JSON-LD and OG freshness signals never drift.
+                datePublished: PUBLISHED,
+                dateModified: MODIFIED,
                 author: { "@type": "Organization", name: "HideScore" },
                 publisher: {
                   "@type": "Organization",

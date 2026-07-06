@@ -269,6 +269,11 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
             src={logoUrl}
             alt=""
             loading="lazy"
+            // Decode off the main thread so a heavy source mark can't block
+            // scroll/paint as sticky headers come into view (loading="lazy"
+            // defers the fetch, not the decode). Matches the decoding hint
+            // already on this header's twin in AlignedVideoStrip.SourceHeader.
+            decoding="async"
             width={24}
             height={24}
             className="w-6 h-6 object-contain shrink-0"
@@ -402,6 +407,11 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         src={proxyImage(item.imageUrl!)}
         alt=""
         loading="lazy"
+        // decoding="async" moves the image decode off the main thread so a
+        // heavy remote thumbnail can't block scroll/paint as news rows come
+        // into view (loading="lazy" defers the fetch, not the decode).
+        // Matches the AlignedVideoStrip thumbnails.
+        decoding="async"
         className="w-full h-full object-cover"
         draggable={false}
         onError={() => setImgFailed(true)}
@@ -452,6 +462,11 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       src={item.leagueLogo}
       alt=""
       loading="lazy"
+      // Decode off the main thread so this remote league mark can't block
+      // scroll/paint as news cards come into view (loading="lazy" defers the
+      // fetch, not the decode). Matches the decoding hint already on its twin
+      // in AlignedVideoStrip's leagueLogo branch.
+      decoding="async"
       width={18}
       height={18}
       className="w-[18px] h-[18px] object-contain shrink-0 mt-px"
@@ -548,6 +563,11 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     src={proxyImage(item.imageUrl)}
                     alt=""
                     loading="lazy"
+                    // Decode off the main thread so this full-width 16:9 news
+                    // thumbnail doesn't block scroll/paint as cards come into
+                    // view (loading="lazy" defers the fetch, not the decode).
+                    // Matches the AlignedVideoStrip thumbnails.
+                    decoding="async"
                     className="w-full h-full object-cover"
                     draggable={false}
                     // A 404'd thumbnail would otherwise show the browser's

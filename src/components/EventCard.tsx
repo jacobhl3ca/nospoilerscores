@@ -95,7 +95,7 @@ function FighterRow({ f }: { f: FightBout["red"] }) {
         // guards on every other remote flag/logo in the app (GameCard,
         // GolfLeaderboard, WorldCupGroupsModal/Bracket, NewsColumn, …).
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={f.flag} alt={f.country ?? ""} title={f.country} loading="lazy" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+        <img src={f.flag} alt={f.country ?? ""} title={f.country} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
       ) : (
         <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
       )}
