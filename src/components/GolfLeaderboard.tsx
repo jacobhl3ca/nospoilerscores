@@ -90,10 +90,21 @@ export default function GolfLeaderboard({
   const prefetchStarted = useRef(false);
 
   const allPlayers = tournament.players;
-  // When scores hidden, alphabetize to prevent position-order spoilers
-  const sortedPlayers = showRatings
-    ? allPlayers
-    : [...allPlayers].sort((a, b) => a.name.localeCompare(b.name));
+  // When scores hidden, alphabetize to prevent position-order spoilers.
+  // Memoized so the hidden-scores branch doesn't mint a fresh array identity on
+  // every render: `sortedPlayers` is a dep of the name-fit measurement effect
+  // below (which tears down a ResizeObserver and reflows a probe span across up
+  // to 25 names). Without this, any unrelated re-render — each of the highlight
+  // slots resolving, a parent LeagueColumn state change — re-ran that layout
+  // thrash for no benefit. The revealed branch already returned the stable
+  // `allPlayers`, so this only bit the scores-hidden default state.
+  const sortedPlayers = useMemo(
+    () =>
+      showRatings
+        ? allPlayers
+        : [...allPlayers].sort((a, b) => a.name.localeCompare(b.name)),
+    [showRatings, allPlayers]
+  );
 
   const visibleCount =
     expandLevel === "all" ? sortedPlayers.length : expandLevel === "top25" ? TOP25_SHOW : INITIAL_SHOW;
