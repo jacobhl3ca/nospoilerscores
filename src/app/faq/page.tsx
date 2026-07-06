@@ -44,7 +44,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Is HideScore free?",
-    a: "Yes. HideScore is completely free, with no ads, no accounts, and no tracking. Your favorite teams and preferences are stored only on your device.",
+    a: "Yes. HideScore is completely free, with no ads. It works without an account — your favorite teams and preferences are saved on your device — and it uses only privacy-friendly, cookieless analytics. You can optionally sign in with Apple or Google to sync your settings across devices.",
   },
   {
     q: "Is there a HideScore app?",
