@@ -1229,6 +1229,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             <img
               src={proxyImage(imageUrl!)}
               alt=""
+              decoding="async"
               className="max-w-full max-h-[85vh] object-contain"
               draggable={false}
               onError={() => setImgFailed(true)}
