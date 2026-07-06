@@ -487,6 +487,11 @@ export default function GolfLeaderboard({
                   alt={player.flagCountry || ""}
                   title={player.flagCountry || undefined}
                   loading="lazy"
+                  // Decode off the main thread: a full leaderboard renders
+                  // 100+ country flags at once, so async decode keeps the row
+                  // paint from blocking (matches the remote-image decoding
+                  // treatment in GameCard/NewsColumn/WorldCupGroupsModal).
+                  decoding="async"
                   width={20}
                   height={20}
                   className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0"
