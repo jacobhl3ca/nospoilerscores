@@ -402,6 +402,11 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         src={proxyImage(item.imageUrl!)}
         alt=""
         loading="lazy"
+        // decoding="async" moves the image decode off the main thread so a
+        // heavy remote thumbnail can't block scroll/paint as news rows come
+        // into view (loading="lazy" defers the fetch, not the decode).
+        // Matches the AlignedVideoStrip thumbnails.
+        decoding="async"
         className="w-full h-full object-cover"
         draggable={false}
         onError={() => setImgFailed(true)}
@@ -548,6 +553,11 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                     src={proxyImage(item.imageUrl)}
                     alt=""
                     loading="lazy"
+                    // Decode off the main thread so this full-width 16:9 news
+                    // thumbnail doesn't block scroll/paint as cards come into
+                    // view (loading="lazy" defers the fetch, not the decode).
+                    // Matches the AlignedVideoStrip thumbnails.
+                    decoding="async"
                     className="w-full h-full object-cover"
                     draggable={false}
                     // A 404'd thumbnail would otherwise show the browser's
