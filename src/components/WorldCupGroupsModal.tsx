@@ -509,7 +509,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
                 </span>
                 {t.flag ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={t.flag} alt="" loading="lazy" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                  <img src={t.flag} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
                 ) : (
                   <span className="w-4 h-4 shrink-0" />
                 )}
@@ -540,7 +540,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
                     <li key={t.name} className="flex items-center gap-1.5 min-w-0 rounded px-1 py-0.5" style={rowStyle(t.name)}>
                       {t.flag ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={t.flag} alt="" loading="lazy" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                        <img src={t.flag} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 object-contain shrink-0" draggable={false} onError={(e) => { e.currentTarget.style.display = "none"; }} />
                       ) : (
                         <span className="w-4 h-4 shrink-0" />
                       )}
