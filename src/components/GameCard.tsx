@@ -933,7 +933,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 team-schedule view + the Settings team picker. */}
             {showStars ? star(team.id, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
-            {!isTBD && team.record && !effectivePastDate && !isFinished ? (
+            {!isTBD && team.record && !effectivePastDate && !isFinished && !isFuture ? (
               <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>
             ) : null}
           </div>
