@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 const PRIVACY_TITLE = "Privacy Policy | HideScore";
-const PRIVACY_DESC = "HideScore does not collect, store, or share personal data.";
+const PRIVACY_DESC = "HideScore never sells or shares your data and collects no personal information unless you choose to create an optional account.";
 
 export const metadata: Metadata = {
   title: PRIVACY_TITLE,
@@ -32,19 +32,25 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-05-06">2026-05-06</time></p>
+      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-07-06">2026-07-06</time></p>
 
       <section className="space-y-4">
         <p>
-          HideScore is built to hide sports scores until you choose to see them. We do not collect, store, sell, or share any personal information about you.
+          HideScore is built to hide sports scores until you choose to see them. We never sell or share your personal information, and the only personal data we ever store is the email tied to an optional account you can choose to create.
         </p>
 
         <h2 className="text-lg font-semibold mt-6">What we collect</h2>
         <p>
-          Nothing personally identifiable. HideScore has no user accounts, no analytics SDKs, no advertising trackers, and no crash-reporting services. We do not place cookies for tracking purposes.
+          HideScore has no advertising trackers and no crash-reporting services, and we do not place cookies to track you across sites.
         </p>
         <p>
-          Your favorite-team selections and view preferences are stored locally on your device using your browser&apos;s local storage. They never leave your device and are not transmitted to us.
+          For basic usage statistics we use privacy-friendly, cookieless analytics (GoatCounter and a self-hosted Umami instance). These record only aggregate page views &mdash; which pages are visited and rough totals. They do not set cookies, do not build a profile of you, and do not track you across other sites.
+        </p>
+        <p>
+          HideScore works fully without an account. You can optionally sign in with Apple or Google so your favorite teams and settings sync across your devices. If you choose to sign in, we store the email address associated with that sign-in and your saved preferences on our server; that is the only personal data we hold, and you can sign out at any time.
+        </p>
+        <p>
+          If you are not signed in, your favorite-team selections and view preferences are stored only in your browser&apos;s local storage on your device and are never transmitted to us. If you sign in, those same preferences are also synced to our server so they follow you across your devices.
         </p>
 
         <h2 className="text-lg font-semibold mt-6">Network requests</h2>
@@ -54,7 +60,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-semibold mt-6">Children</h2>
         <p>
-          HideScore is not directed at children under 13 and does not knowingly collect any information from anyone of any age.
+          HideScore is not directed at children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child has provided us personal information, contact us and we will delete it.
         </p>
 
         <h2 className="text-lg font-semibold mt-6">Third-party content</h2>
