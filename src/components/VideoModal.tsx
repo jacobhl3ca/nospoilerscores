@@ -1391,7 +1391,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               )}
               {/* Hide/show the control chrome below the video to reclaim space
                   (great in mobile fullscreen). Stays pinned to the video corner
-                  so you can bring the controls back. */}
+                  so you can bring the controls back. Nothing to toggle when
+                  YouTube's native controls replace this chrome entirely. */}
+              {!youtubeNativeControls && (
               <button
                 onClick={(e) => { e.stopPropagation(); setControlsHidden((v) => !v); }}
                 aria-label={controlsHidden ? "Show controls" : "Hide controls"}
@@ -1405,6 +1407,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
                 )}
               </button>
+              )}
               {/* Warn-past-halfway confirm — shown only when the warnHalfway
                   pref is on and a click/jump targeted the second half from the
                   first. Holds the seek until confirmed so you don't drop into
@@ -1440,8 +1443,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             </div>
 
             {/* Control chrome (seek bar + strip) — collapsible via the corner
-                toggle so the video can take the whole frame. */}
-            {!controlsHidden && (<>
+                toggle so the video can take the whole frame. Hidden entirely
+                when YouTube's native controls are on (Settings says "instead
+                of the spoiler-safe one" — showing both stacks two seek UIs). */}
+            {!controlsHidden && !youtubeNativeControls && (<>
             {/* Seek bar — drag/tap to scrub. Sits BELOW the video (never over
                 footage). Default is a BLANK track (no fill) so it never reveals
                 how far through you are; the fill can be turned on (grey/white)
