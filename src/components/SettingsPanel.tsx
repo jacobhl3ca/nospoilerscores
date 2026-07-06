@@ -751,7 +751,7 @@ export default function SettingsPanel({
                             // every other remote team logo (GameCard, GameDetailModal,
                             // WorldCupGroupsModal, …).
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={t.logo} alt="" loading="lazy" width={14} height={14} className="w-3.5 h-3.5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                            <img src={t.logo} alt="" loading="lazy" decoding="async" width={14} height={14} className="w-3.5 h-3.5" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                           )}
                           <span>{t.displayName}</span>
                           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-muted)" }}>
@@ -1197,7 +1197,7 @@ function TeamPicker({
                        to the team name instead of the browser's broken-image glyph
                        — matches the onError guard on every other remote team logo. */
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={t.logo} alt="" loading="lazy" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                    <img src={t.logo} alt="" loading="lazy" decoding="async" width={16} height={16} className="w-4 h-4 shrink-0 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
                   )}
                   <span className="min-w-0 truncate flex-1">{t.shortDisplayName}</span>
                   {/* Sport badge — only in cross-league view so the user can
