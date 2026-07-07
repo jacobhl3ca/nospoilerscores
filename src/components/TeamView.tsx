@@ -32,11 +32,26 @@ function rawEspnTeamId(teamId: string, sport: Sport): string {
   return teamId.startsWith(prefix) ? teamId.slice(prefix.length) : teamId;
 }
 
-// Fallback 2-year window lets soccer (Aug–May seasons) and tail-end MLB
-// postseasons still hit the right season when the current year is empty.
+// Sports whose season spans two calendar years (fall → spring) and that ESPN
+// identifies by the season's ENDING year — the 2025-26 season is season=2026.
+// During the fall half (Oct–Dec) the current season's number is therefore next
+// year's, so a plain [y, y-1] window MISSES it: tapping an NBA/NHL/UCL team
+// between October and New Year fetched only the prior two seasons and showed no
+// current or upcoming games. The original soccer group already got a [y, y+1,
+// y-1] window for exactly this reason; basketball/hockey (Oct–Jun) and the
+// club-soccer cups (Sep–May) belong here too. Adding y+1 is safe under either
+// convention — a not-yet-scheduled or out-of-range season year just returns no
+// events (fetchTeamSchedule dedups + sorts, and no-ops on an empty/failed year).
+const TWO_CALENDAR_YEAR_SPORTS = new Set<Sport>([
+  "epl", "mls", "fifa", "ucl", "uel", "nba", "nhl", "ncaam", "ncaaw",
+]);
+
+// Fallback multi-year window so a season that spans (or hasn't filled) the
+// current calendar year still resolves. Single-calendar-year sports (MLB, WNBA)
+// and the start-year-identified ones (NFL, NCAAF) only need [y, y-1].
 function seasonYearsForSport(sport: Sport): number[] {
   const y = new Date().getFullYear();
-  if (sport === "epl" || sport === "mls" || sport === "fifa") return [y, y + 1, y - 1];
+  if (TWO_CALENDAR_YEAR_SPORTS.has(sport)) return [y, y + 1, y - 1];
   return [y, y - 1];
 }
 
