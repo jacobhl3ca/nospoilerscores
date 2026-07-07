@@ -1583,11 +1583,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             {!showNews && (
               <div className="sm:hidden flex justify-center">
                 <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
-                  <span className="relative inline-flex items-center mr-2">
+                  <span className="relative inline-flex items-center mr-2 shrink-0">
                     <button
                       data-cal-toggle
                       onClick={() => setCalendarOpen(!calendarOpen)}
-                      className="ml-1 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+                      className="ml-0.5 w-7 h-7 shrink-0 flex items-center justify-center rounded-full transition-colors cursor-pointer"
                       style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                       title="Pick a date"
                       aria-label="Pick a date"
