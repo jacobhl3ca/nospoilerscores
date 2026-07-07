@@ -266,7 +266,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
       {trailing && <span aria-hidden className="hidden sm:block sm:w-8 sm:h-8 sm:mr-1 shrink-0" />}
       <button
         onClick={goEarlier}
-        className="date-nav-arrow w-8 h-8 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
+        className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
         aria-label="Go back one day"
         title="Go back one day"
@@ -296,7 +296,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
             // the accessibility tree. Pin the full word as the accessible name so
             // screen-reader users hear "Yesterday"/"Tomorrow" on every viewport.
             aria-label={btn.label}
-            className={`date-nav-btn ${btn.wide ? "min-w-[2.75rem] w-auto px-1.5 sm:px-0" : "w-[2.75rem]"} sm:w-[5.5rem] py-2 sm:py-1.5 rounded text-[12px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden`}
+            className={`date-nav-btn shrink-0 ${btn.wide ? "min-w-[2.65rem] w-auto px-1.5 sm:px-0" : "w-[2.65rem]"} sm:w-[5.5rem] py-2 sm:py-1.5 rounded text-[12px] sm:text-sm whitespace-nowrap transition-colors text-center overflow-hidden`}
             style={
               isSelected
                 ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
@@ -310,7 +310,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
       })}
       <button
         onClick={goLater}
-        className="date-nav-arrow w-8 h-8 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
+        className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
         aria-label="Go forward one day"
         title="Go forward one day"

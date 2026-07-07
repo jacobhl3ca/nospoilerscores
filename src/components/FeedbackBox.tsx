@@ -67,7 +67,7 @@ export default function FeedbackBox() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             className="w-36 text-xs px-2 py-0 leading-none rounded outline-none"
-            style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+            style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />
           {/* Symmetric to the caption on the left — absolutely positioned so
               the input bubble stays dead-centered regardless of state. */}
