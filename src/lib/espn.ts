@@ -996,12 +996,21 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   for (const note of competition?.notes ?? []) {
     const headline = note?.headline ?? "";
     const headlineLower = headline.toLowerCase();
-    const match = headlineLower.match(/Game \d+/i);
+    // Match the original-case headline, not the lowercased copy, so seriesNote
+    // keeps ESPN's "Game 3" casing (the /i flag was the giveaway — it's a no-op
+    // against already-lowercased text). It only feeds the YouTube highlight
+    // query today, but that's case-preserving now if it ever surfaces in the UI.
+    const match = headline.match(/Game \d+/i);
     if (match) {
       seriesNote = match[0];
     }
-    // Detect playoff/postseason/tournament games from notes
-    if (/playoff|postseason|wild.?card|divisional|conference|championship|finals?|round|semi.?finals?|quarter.?finals?|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
+    // Detect playoff/postseason/tournament games from notes. `round` and
+    // `finals?` carry word boundaries so they match the round names as whole
+    // words and DON'T fire on unrelated substrings — an unbounded `final` hit
+    // "Season Finale" (a regular-season note) and mislabeled the game as a
+    // playoff, and `round` hit "ground"/"around". playoffLabel is user-visible
+    // (game-detail modal + league header), so a false match shows wrong text.
+    if (/playoff|postseason|wild.?card|divisional|conference|championship|\bfinals?\b|\brounds?\b|semi.?finals?|quarter.?finals?|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
       isPlayoff = true;
       if (!playoffLabel) playoffLabel = headline;
     }
