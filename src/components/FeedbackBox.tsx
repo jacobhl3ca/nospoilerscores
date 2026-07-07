@@ -64,6 +64,12 @@ export default function FeedbackBox() {
           <input
             id="hs-feedback-input"
             type="text"
+            // The field submits on Enter (form onSubmit), so hint the soft
+            // keyboard's action key as "Send" to match the adjacent submit
+            // button — and turn off autofill, since a freeform feedback note
+            // has nothing sensible to autocomplete (no name/email suggestions).
+            enterKeyHint="send"
+            autoComplete="off"
             value={text}
             onChange={(e) => setText(e.target.value)}
             className="w-36 text-xs px-2 py-0 leading-none rounded outline-none"
