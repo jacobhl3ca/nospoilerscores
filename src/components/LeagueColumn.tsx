@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -746,8 +746,15 @@ export default function LeagueColumn({
     };
   }, [swapOpen]);
 
-  // Measure whether full names would fit in the available column width
-  const checkIfFullNamesFit = () => {
+  // Measure whether full names would fit in the available column width.
+  // Memoized so the two effects below can depend on it directly (fixing the
+  // exhaustive-deps warning) instead of a hand-maintained `[league.games]` dep.
+  // That old dep list also missed a case: the measurement reads the lookahead
+  // (nextGameDay) and lookback (previousGameDay) slates too, so if only one of
+  // those changed — e.g. a past tab that's empty today gains a lookback game —
+  // abbreviations wouldn't recompute. Keying on all four fields the body reads
+  // closes that gap.
+  const checkIfFullNamesFit = useCallback(() => {
     const el = columnRef.current;
     if (!el) return;
     requestAnimationFrame(() => {
@@ -810,12 +817,12 @@ export default function LeagueColumn({
 
       setUseAbbreviations(longestWidth > availableWidth);
     });
-  };
+  }, [league.games, league.nextGameDay, league.previousGameDay, league.sport]);
 
-  // Re-check when games change
+  // Re-check when the rendered games change
   useEffect(() => {
     checkIfFullNamesFit();
-  }, [league.games]);
+  }, [checkIfFullNamesFit]);
 
   // Re-check on resize
   useEffect(() => {
@@ -824,7 +831,7 @@ export default function LeagueColumn({
     const ro = new ResizeObserver(() => checkIfFullNamesFit());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [league.games]);
+  }, [checkIfFullNamesFit]);
 
   const topMatchups = sortByMatchups ?? false;
 
