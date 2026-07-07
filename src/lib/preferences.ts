@@ -171,6 +171,16 @@ export interface Preferences {
   // Source labels the user has hidden via the per-source visibility checkbox.
   // Applied alongside the type pill (independent filters).
   newsHiddenSources?: string[];
+  // News headlines are spoilers (a highlight's title gives away the result), so
+  // every headline in the news view + modal is blurred by default. The "Titles"
+  // eye toggle in the news header flips this on to reveal them all at once.
+  // Undefined/false = blurred (default); true = revealed.
+  revealNewsTitles?: boolean;
+  // Highlights player: when true, use a standard YouTube embed (native controls,
+  // title, related clips) instead of the spoiler-safe custom player. Opt-in and
+  // default off — the native scrubber/progress readout + title it restores are
+  // spoiler vectors (they reveal how far through a highlight reel you are).
+  useNormalYouTubeEmbed?: boolean;
 }
 
 const defaults: Preferences = {
@@ -187,6 +197,7 @@ const defaults: Preferences = {
   newsColCount: 3,
   smartCutoffHour: 13,
   newsTypeFilter: "all",
+  useNormalYouTubeEmbed: false,
 };
 
 export function loadPreferences(): Preferences {

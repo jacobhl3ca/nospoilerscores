@@ -1,0 +1,406 @@
+// "What matters today" — auto-derives the qualification stakes of each World
+// Cup match on a given date from live ESPN standings + the day's fixtures.
+//
+// Spoiler note: the OUTPUT reveals who is already through / out, so the card
+// that renders this is tap-to-reveal (collapsed by default). Nothing here is
+// shown until the user opts in.
+//
+// Approach: ESPN's standings feed already runs the full cross-group
+// "best-8 third place" model and tags each team with a note
+// ("Advance to Round of 32" / "Best 8 advance" / "Eliminated"). We trust that
+// note for elimination/third-place calls, and compute the within-group top-2
+// picture ourselves (enumerating the matchday's two results) so the copy can
+// say precisely whether a team is through, safe-with-a-draw, or must-win.
+
+const STANDINGS_URL =
+  "https://site.web.api.espn.com/apis/v2/sports/soccer/fifa.world/standings";
+const SCOREBOARD_URL = (date: string) =>
+  `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${date}`;
+
+// Group-stage tiers (qualification stakes) + knockout tiers (marquee/balance).
+export type WcTier =
+  | "mustwin"
+  | "decider"
+  | "seeding"
+  | "marquee"
+  | "competitive"
+  | "lopsided";
+
+export interface WcStakeMatch {
+  group: string; // "Group L" (or "Round of 32" etc. in knockouts)
+  tier: WcTier;
+  away: string; // display name
+  home: string;
+  copy: string; // the generated stakes sentence
+  state: "pre" | "in" | "post";
+}
+
+export interface WcStakes {
+  date: string;
+  matches: WcStakeMatch[]; // sorted most-critical first
+}
+
+interface Row {
+  abbr: string;
+  name: string;
+  pts: number;
+  gd: number;
+  played: number;
+  rank: number; // finishing position within the group (1 = group winner)
+  note: string;
+  group: string;
+}
+
+type Status =
+  | "through" // top-2 locked no matter what
+  | "drawsafe" // a draw secures top-2 (a loss might still risk it)
+  | "mustwin" // only a win can reach top-2
+  | "bubble" // result + the other game decide
+  | "best8" // can't reach top-2 but alive for a best-third-place spot
+  | "eliminated";
+
+const num = (s: unknown): number =>
+  parseInt(String(s ?? "").replace("+", ""), 10) || 0;
+
+async function fetchJson(url: string, timeoutMs = 7000): Promise<unknown | null> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function parseStandings(data: unknown): { groups: Map<string, Row[]>; byAbbr: Map<string, Row> } {
+  const groups = new Map<string, Row[]>();
+  const byAbbr = new Map<string, Row>();
+  const d = data as { children?: Array<Record<string, unknown>> } | null;
+  for (const child of d?.children ?? []) {
+    const gname = String(child.name ?? child.abbreviation ?? "");
+    const standings = child.standings as { entries?: Array<Record<string, unknown>> } | undefined;
+    const rows: Row[] = [];
+    for (const e of standings?.entries ?? []) {
+      const team = e.team as { abbreviation?: string; displayName?: string } | undefined;
+      const stats = (e.stats as Array<{ name?: string; displayValue?: string }> | undefined) ?? [];
+      const st: Record<string, string> = {};
+      for (const s of stats) if (s.name) st[s.name] = s.displayValue ?? "";
+      const note = (e.note as { description?: string } | undefined)?.description ?? "";
+      const row: Row = {
+        abbr: String(team?.abbreviation ?? ""),
+        name: String(team?.displayName ?? team?.abbreviation ?? ""),
+        pts: num(st.points),
+        gd: num(st.pointDifferential),
+        played: num(st.gamesPlayed),
+        rank: num(st.rank),
+        note,
+        group: gname,
+      };
+      if (!row.abbr) continue;
+      rows.push(row);
+      byAbbr.set(row.abbr, row);
+    }
+    groups.set(gname, rows);
+  }
+  return { groups, byAbbr };
+}
+
+interface Fixture {
+  home: string; // abbr
+  away: string;
+  homeName: string;
+  awayName: string;
+  state: "pre" | "in" | "post";
+  knockoutLabel: string | null;
+}
+
+function parseFixtures(data: unknown): Fixture[] {
+  const d = data as { events?: Array<Record<string, unknown>> } | null;
+  const out: Fixture[] = [];
+  for (const e of d?.events ?? []) {
+    const comps = (e.competitions as Array<Record<string, unknown>> | undefined) ?? [];
+    const c = comps[0];
+    if (!c) continue;
+    const competitors = (c.competitors as Array<Record<string, unknown>> | undefined) ?? [];
+    const h = competitors.find((x) => x.homeAway === "home");
+    const a = competitors.find((x) => x.homeAway === "away");
+    if (!h || !a) continue;
+    const ht = h.team as { abbreviation?: string; displayName?: string };
+    const at = a.team as { abbreviation?: string; displayName?: string };
+    const status = e.status as { type?: { state?: string } } | undefined;
+    const notes = (c.notes as Array<{ headline?: string }> | undefined) ?? [];
+    const headline = notes[0]?.headline ?? "";
+    out.push({
+      home: String(ht?.abbreviation ?? ""),
+      away: String(at?.abbreviation ?? ""),
+      homeName: String(ht?.displayName ?? ""),
+      awayName: String(at?.displayName ?? ""),
+      state: (status?.type?.state as Fixture["state"]) ?? "pre",
+      knockoutLabel: /round of|final|quarter|semi|knockout|playoff/i.test(headline)
+        ? headline
+        : null,
+    });
+  }
+  return out;
+}
+
+// Enumerate the matchday's two group results (9 point-outcomes) and derive each
+// team's qualification status. `pairs` is [[home,away],[home,away]] (abbrevs).
+function analyzeGroup(rows: Row[], pairs: [string, string][]): Map<string, Status> {
+  const base: Record<string, number> = {};
+  const gd: Record<string, number> = {};
+  for (const r of rows) {
+    base[r.abbr] = r.pts;
+    gd[r.abbr] = r.gd;
+  }
+  const abbrs = rows.map((r) => r.abbr);
+  const outcomes: [number, number][] = [
+    [3, 0],
+    [1, 1],
+    [0, 3],
+  ]; // [homePts, awayPts]
+  const combos: Array<{ pts: Record<string, number>; kind: Record<string, string> }> = [];
+  for (const o1 of outcomes)
+    for (const o2 of outcomes) {
+      const pts = { ...base };
+      const kind: Record<string, string> = {};
+      const apply = (m: [string, string], o: [number, number]) => {
+        pts[m[0]] += o[0];
+        pts[m[1]] += o[1];
+        kind[m[0]] = o[0] === 3 ? "W" : o[0] === 1 ? "D" : "L";
+        kind[m[1]] = o[1] === 3 ? "W" : o[1] === 1 ? "D" : "L";
+      };
+      apply(pairs[0], o1);
+      apply(pairs[1], o2);
+      combos.push({ pts, kind });
+    }
+  // favor=true: team wins point-ties (best case); false: loses them (worst case)
+  const inTop2 = (pts: Record<string, number>, team: string, favor: boolean): boolean => {
+    const sorted = [...abbrs].sort((x, y) => {
+      if (pts[y] !== pts[x]) return pts[y] - pts[x];
+      if (x === team) return favor ? -1 : 1;
+      if (y === team) return favor ? 1 : -1;
+      return gd[y] - gd[x];
+    });
+    return sorted.indexOf(team) < 2;
+  };
+  const status = new Map<string, Status>();
+  for (const r of rows) {
+    const t = r.abbr;
+    if (r.note === "Eliminated") {
+      status.set(t, "eliminated");
+      continue;
+    }
+    const clinched = combos.every((c) => inTop2(c.pts, t, false));
+    const canReach = combos.some((c) => inTop2(c.pts, t, true));
+    const drawSub = combos.filter((c) => c.kind[t] === "D");
+    const drawClinches = drawSub.length > 0 && drawSub.every((c) => inTop2(c.pts, t, false));
+    const noWin = combos.filter((c) => c.kind[t] !== "W");
+    const winNeeded = noWin.every((c) => !inTop2(c.pts, t, true));
+    let s: Status;
+    if (clinched) s = "through";
+    else if (drawClinches) s = "drawsafe";
+    else if (winNeeded) s = "mustwin";
+    else if (canReach) s = "bubble";
+    else if (r.note === "Best 8 advance") s = "best8";
+    else s = "eliminated";
+    status.set(t, s);
+  }
+  return status;
+}
+
+const SAFE = new Set<Status>(["through", "drawsafe"]);
+const LIVE = new Set<Status>(["bubble", "mustwin", "best8"]);
+
+function tierFor(sa: Status, sb: Status): WcTier {
+  const live = [sa, sb].filter((s) => LIVE.has(s));
+  if (live.length === 0) return "seeding";
+  if (live.some((s) => s === "mustwin" || s === "best8")) return "mustwin";
+  return "decider";
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+interface Side {
+  name: string;
+  s: Status;
+}
+
+function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
+  const sides = [away, home];
+  const live = sides.filter((t) => LIVE.has(t.s));
+  const safe = sides.filter((t) => SAFE.has(t.s));
+  const out = sides.filter((t) => t.s === "eliminated");
+
+  if (tier === "mustwin") {
+    const w = live.find((t) => t.s === "mustwin" || t.s === "best8") ?? live[0];
+    const other = w === away ? home : away;
+    const otherTxt =
+      other.s === "eliminated"
+        ? `${other.name} are out`
+        : SAFE.has(other.s)
+          ? `${other.name} are already through`
+          : `${other.name} need a result too`;
+    return `${w.name} must win to keep their hopes alive — likely via the best-third-place race. ${otherTxt}.`;
+  }
+
+  if (tier === "decider") {
+    if (safe.length === 1 && live.length === 1) {
+      return `${cap(safe[0].name)} go through with a draw; ${live[0].name} need a win to stay in the top two. The loser drops into the best-third-place scramble.`;
+    }
+    return `Both are fighting for it — the winner books a Round-of-32 spot and the loser drops into the best-third-place scramble.`;
+  }
+
+  // seeding — both settled
+  if (safe.length === 2) {
+    return `Both are through — this decides who wins ${group} (1st vs 2nd) and the kinder Round-of-32 draw.`;
+  }
+  if (safe.length === 1 && out.length === 1) {
+    const s = safe[0];
+    const through =
+      s.s === "through"
+        ? `${s.name} are already through`
+        : `${s.name} are all but through (a draw seals it)`;
+    return `${through} and ${out[0].name} are out — the result only affects ${s.name}'s seeding, so top ${group} for an easier path.`;
+  }
+  return `${group}: nothing left to settle but seeding and goal difference.`;
+}
+
+// Group-stage and knockout tiers never appear on the same day, so they share
+// the 0/1/2 ordering slots (most-worth-watching first within each phase).
+const TIER_RANK: Record<WcTier, number> = {
+  mustwin: 0,
+  decider: 1,
+  seeding: 2,
+  marquee: 0,
+  competitive: 1,
+  lopsided: 2,
+};
+
+// ── Knockout "what matters": rank ties by marquee value (two strong sides) and
+// balance (a real toss-up), using each team's group-stage form as a strength
+// proxy. Group-stage tables stay available all tournament, so this keeps
+// working through the later rounds (form just gets progressively staler).
+function strengthOf(r: Row): number {
+  // Points carry most weight; goal difference refines; group finish matters
+  // (winning a group beats scraping through third, even at equal points).
+  const rankBonus = r.rank === 1 ? 1.5 : r.rank >= 3 ? -1.5 : 0;
+  return r.pts + r.gd * 0.5 + rankBonus;
+}
+
+interface KnockoutCall {
+  tier: WcTier;
+  copy: string;
+}
+
+function classifyKnockout(
+  away: Row | undefined,
+  home: Row | undefined,
+  awayName: string,
+  homeName: string,
+): KnockoutCall {
+  if (!away || !home) return { tier: "competitive", copy: "Knockout tie — win or go home." };
+
+  const gap = Math.abs(strengthOf(away) - strengthOf(home));
+  const bothStrong = away.pts >= 6 && home.pts >= 6;
+  const awayFav = strengthOf(away) >= strengthOf(home);
+  const favName = awayFav ? awayName : homeName;
+  const dogName = awayFav ? homeName : awayName;
+
+  if (bothStrong && gap <= 4) {
+    const bothWon = away.rank === 1 && home.rank === 1;
+    return {
+      tier: "marquee",
+      copy: `Heavyweight tie — two of the group stage's strongest sides, and a real toss-up.${
+        bothWon ? " Two group winners collide." : ""
+      } The pick of the round.`,
+    };
+  }
+  if (gap >= 7) {
+    return {
+      tier: "lopsided",
+      copy: `${favName} were the standout side in the groups — ${dogName} will need an upset.`,
+    };
+  }
+  return {
+    tier: "competitive",
+    copy: `Evenly matched on group-stage form — this one could go either way.`,
+  };
+}
+
+export async function getWorldCupStakes(date: string): Promise<WcStakes | null> {
+  const [standingsData, scoreData] = await Promise.all([
+    fetchJson(STANDINGS_URL),
+    fetchJson(SCOREBOARD_URL(date)),
+  ]);
+  if (!standingsData || !scoreData) return null;
+  const { groups, byAbbr } = parseStandings(standingsData);
+  const fixtures = parseFixtures(scoreData);
+  if (fixtures.length === 0) return null;
+
+  // Bucket the day's fixtures by group so the within-group enumeration sees
+  // both of a group's matchday games together.
+  const byGroup = new Map<string, Fixture[]>();
+  const knockouts: Fixture[] = [];
+  for (const f of fixtures) {
+    const hg = byAbbr.get(f.home)?.group;
+    const ag = byAbbr.get(f.away)?.group;
+    // Two teams from different groups can only meet in the knockout rounds —
+    // a robust knockout signal even before ESPN fills in the round headline
+    // ("Round of 32" etc.). Also treat an unknown/missing group as knockout.
+    if (f.knockoutLabel || !hg || !ag || hg !== ag) {
+      knockouts.push(f);
+      continue;
+    }
+    if (!byGroup.has(hg)) byGroup.set(hg, []);
+    byGroup.get(hg)!.push(f);
+  }
+
+  const matches: WcStakeMatch[] = [];
+
+  for (const [g, fs] of byGroup) {
+    const rows = groups.get(g) ?? [];
+    const finalMatchday = rows.length === 4 && rows.every((r) => r.played === 2);
+    let status = new Map<string, Status>();
+    if (finalMatchday && fs.length === 2) {
+      const pairs = fs.map((f) => [f.home, f.away] as [string, string]);
+      status = analyzeGroup(rows, pairs);
+    }
+    for (const f of fs) {
+      const sa = status.get(f.home);
+      const sb = status.get(f.away);
+      // Pre-final-matchday (or unexpected data): no confident call → skip the
+      // match rather than show a guess. The card just won't list it.
+      if (!sa || !sb) continue;
+      const tier = tierFor(sa, sb);
+      matches.push({
+        group: g,
+        tier,
+        away: f.awayName,
+        home: f.homeName,
+        state: f.state,
+        copy: copyFor(tier, { name: f.awayName, s: sb }, { name: f.homeName, s: sa }, g),
+      });
+    }
+  }
+
+  for (const f of knockouts) {
+    const call = classifyKnockout(byAbbr.get(f.away), byAbbr.get(f.home), f.awayName, f.homeName);
+    matches.push({
+      group: f.knockoutLabel ?? "Knockout",
+      tier: call.tier,
+      away: f.awayName,
+      home: f.homeName,
+      state: f.state,
+      copy: call.copy,
+    });
+  }
+
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => TIER_RANK[a.tier] - TIER_RANK[b.tier]);
+  return { date, matches };
+}

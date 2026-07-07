@@ -146,12 +146,13 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[]): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
     const excludeIds = (exclude ?? []).filter((id): id is string => !!id);
     if (excludeIds.length) url += `&exclude=${encodeURIComponent(excludeIds.join(","))}`;
+    if (preferExtended) url += `&prefer=extended`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -176,17 +177,18 @@ export async function resolveHighlightVideo(
   dateStr: string,
   seriesNote: string | null | undefined,
   channel?: string,
-  exclude?: (string | null | undefined)[]
+  exclude?: (string | null | undefined)[],
+  preferExtended?: boolean
 ): Promise<string | null> {
   const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote);
   if (channel) {
-    const hit = await fetchFirstVideoId(datedQuery, channel, exclude);
+    const hit = await fetchFirstVideoId(datedQuery, channel, exclude, preferExtended);
     if (hit) return hit;
   }
-  const unscoped = await fetchFirstVideoId(datedQuery, undefined, exclude);
+  const unscoped = await fetchFirstVideoId(datedQuery, undefined, exclude, preferExtended);
   if (unscoped) return unscoped;
   const undated = buildUndatedQuery(awayTeam, homeTeam, seriesNote);
-  return fetchFirstVideoId(undated, undefined, exclude);
+  return fetchFirstVideoId(undated, undefined, exclude, preferExtended);
 }
 
 export function getYouTubeEmbedUrl(videoId: string): string {

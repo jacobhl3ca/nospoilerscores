@@ -6,6 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getYouTubeSearchUrl, getOfficialChannelName, resolveHighlightVideo } from "@/lib/youtube";
+import { getBakedHighlight } from "@/lib/highlights";
 
 // Shared highlight buttons for a finished game — the official-channel + top-
 // search YouTube clips and (NHL only) the NHL.com recap / condensed videos.
@@ -78,26 +79,51 @@ export default function GameHighlights({
     const away = game.awayTeam.shortDisplayName;
     const home = game.homeTeam.shortDisplayName;
     const series = game.seriesNote;
-    if (officialChannel) {
-      (async () => {
-        const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel);
+    (async () => {
+      // Prefer server-prebaked IDs (baked into /news/highlights.json by the
+      // news cron, keyed on sport + ESPN event id). When present the buttons
+      // resolve with NO live /api/youtube lookup — instant, no per-card scrape,
+      // no stagger. Fall back to a live resolve only for whichever id the bake
+      // doesn't have yet (game finished but its recap wasn't baked last run).
+      const baked = await getBakedHighlight(game.sport, game.id);
+      if (officialChannel) {
+        let officialId = baked?.official ?? null;
+        if (officialId) {
+          setOfficialStatus("found");
+        } else {
+          officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel);
+          setOfficialStatus(officialId ? "found" : "missing");
+        }
         prefetchedOfficialId.current = officialId;
-        setOfficialStatus(officialId ? "found" : "missing");
-        const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId]);
+        // 2nd button = the "extended highlights" cut when one exists (prefer=extended),
+        // deduped against the official video the 1st button plays. This makes the 2nd
+        // link reliably a DISTINCT longer version rather than a near-dup that the worker
+        // often can't find (Jacob 7/7 — "normal + extended"). Falls back to standard.
+        let id = baked?.extended ?? null;
+        if (id) {
+          setSearchStatus("found");
+        } else {
+          id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId], true);
+          setSearchStatus(id ? "found" : "missing");
+        }
+        prefetchedVideoId.current = id;
+      } else {
+        // No official channel for this league — only the search button is rendered.
+        setOfficialStatus("missing");
+        let id = baked?.extended ?? baked?.official ?? null;
+        if (!id) id = await resolveHighlightVideo(away, home, dateStr, series);
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
-      })();
-    } else {
-      // No official channel for this league — only the search button is rendered.
-      setOfficialStatus("missing");
-      resolveHighlightVideo(away, home, dateStr, series).then((id) => {
-        prefetchedVideoId.current = id;
-        setSearchStatus(id ? "found" : "missing");
-      });
-    }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel]);
+      }
+    })();
+  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel]);
 
-  const showYouTube = !!(isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing"));
+  // Only surface the highlight row once at least one button has RESOLVED to a real
+  // video. Rendering during "loading" and then hiding a button that resolves to null
+  // is what made the 2nd link "appear then disappear" (Jacob 7/7); waiting for "found"
+  // trades a ~0.5s later appearance for no flicker. Nothing is lost — a button that was
+  // going to be hidden anyway just never flashes.
+  const showYouTube = !!(isFinished && highlightUrl && (officialStatus === "found" || searchStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   if (!showYouTube && !showNhl) return null;
 
@@ -108,7 +134,7 @@ export default function GameHighlights({
           rather than falling back to a YouTube search page. */}
       {showYouTube && (
         <div className={`${wrapMargin} flex gap-1`}>
-          {officialChannel && officialStatus !== "missing" && (
+          {officialChannel && officialStatus === "found" && (
             <button
               onClick={async (e) => {
                 e.stopPropagation();
@@ -143,7 +169,7 @@ export default function GameHighlights({
               )}
             </button>
           )}
-          {searchStatus !== "missing" && (
+          {searchStatus === "found" && (
             <button
               onClick={async (e) => {
                 e.stopPropagation();
@@ -154,7 +180,7 @@ export default function GameHighlights({
                 }
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current]);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current], true);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;

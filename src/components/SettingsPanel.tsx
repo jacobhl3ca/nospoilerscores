@@ -268,6 +268,7 @@ export default function SettingsPanel({
       defaultDateMode: "smart",
       defaultLandingView: "remember",
       defaultRatings: "auto",
+      useNormalYouTubeEmbed: false,
     });
   };
 
@@ -519,6 +520,16 @@ export default function SettingsPanel({
               hint="The 'FULL OF SPOILERS' confirm before opening news"
               checked={!prefs.skipNewsExplainer}
               onChange={(v) => updatePrefs({ skipNewsExplainer: !v })}
+            />
+          </Section>
+
+          {/* Highlights player */}
+          <Section title="Highlights player">
+            <ToggleRow
+              label="Use standard YouTube player"
+              hint="Shows native controls, title & related clips. The progress bar can reveal how far through a highlight you are — off by default."
+              checked={prefs.useNormalYouTubeEmbed ?? false}
+              onChange={(v) => updatePrefs({ useNormalYouTubeEmbed: v })}
             />
           </Section>
 

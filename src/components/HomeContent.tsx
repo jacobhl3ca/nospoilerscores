@@ -15,6 +15,7 @@ import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, M
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
+import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
   if (theme === "system") {
@@ -569,6 +570,9 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     else if (landing === "scores") setShowNews(false);
     else if (loaded.showNews && !newDayPassed) setShowNews(true);
     document.documentElement.setAttribute("data-theme", getResolvedTheme(loaded.theme));
+    // Apply the headline reveal state here too (not just in the effect below) so
+    // reveal-on users don't see a one-frame blur flash before the effect runs.
+    document.documentElement.classList.toggle("reveal-news-titles", !!loaded.revealNewsTitles);
   }, []);
 
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when
@@ -589,6 +593,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, [prefs.theme]);
+
+  // Reveal/blur news headlines globally. .news-title is blurred by default in
+  // CSS (spoiler-safe); adding .reveal-news-titles to <html> un-blurs every
+  // headline at once across columns, the video strip, and the modal — driven
+  // by the eye toggle in the news header. On <html> (like data-theme) so it
+  // reaches the modal regardless of where it mounts in the tree.
+  useEffect(() => {
+    document.documentElement.classList.toggle("reveal-news-titles", !!prefs.revealNewsTitles);
+  }, [prefs.revealNewsTitles]);
 
   // Track narrow viewports so the news view can force a single stacked column
   // on phones (Jacob 5/30 — mobile news = 1 col, order News → the two score
@@ -903,6 +916,15 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   };
 
   const isToday = selectedDate === getDateString(0);
+
+  // Whether the World Cup is in season for the viewed date — gates the
+  // "What matters today" card so it doesn't fetch standings year-round.
+  const worldCupActive = useMemo(() => {
+    if (!selectedDate) return false;
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    const fifa = ALL_LEAGUES.find((l) => l.sport === "fifa");
+    return fifa ? isLeagueActive(fifa, viewDate) : false;
+  }, [selectedDate]);
 
   // Compute which leagues are available for the 3rd slot dropdown
   const thirdLeagueOptions = useMemo(() => {
@@ -1436,6 +1458,36 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               </button>
             )}
 
+            {/* Titles reveal/hide toggle. Headlines are spoilers, so they're
+                blurred by default; this eye toggles them all on/off globally
+                (drives .reveal-news-titles on <html>). News view only. */}
+            {showNews && (
+              <button
+                onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
+                className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                style={{
+                  background: prefs.revealNewsTitles ? "var(--accent)" : "var(--bg-card)",
+                  border: `1px solid ${prefs.revealNewsTitles ? "var(--accent)" : "var(--border)"}`,
+                  color: prefs.revealNewsTitles ? "white" : "var(--text-muted)",
+                }}
+                title={prefs.revealNewsTitles ? "Hide headlines (spoiler-safe)" : "Show headlines"}
+                aria-label={prefs.revealNewsTitles ? "Hide news headlines" : "Show news headlines"}
+                aria-pressed={!!prefs.revealNewsTitles}
+              >
+                {prefs.revealNewsTitles ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                )}
+              </button>
+            )}
+
             {/* News source filter popover. Sits to the LEFT of the theme
                 toggle (Jacob 5/31). Source-type filters live in a funnel
                 popover instead of always-on header pill rows — keeps the news
@@ -1590,6 +1642,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
             </p>
           </section>
         )}
+        {/* "What matters today" — spoiler-safe, tap-to-reveal qualification
+            stakes for the day's World Cup matches. Sits atop the board on both
+            the main page and the /worldcup hub; self-hides when the viewed date
+            has no WC matches. */}
+        {worldCupActive && <WorldCupMattersCard date={selectedDate} />}
         {showNews ? (() => {
           const cascadeToSources = (cascade: ColumnSource[]): NewsSource[] =>
             cascade.map((c) => ({
@@ -2314,6 +2371,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
+          normalEmbed={prefs.useNormalYouTubeEmbed}
           onClose={closeVideoModal}
         />
       )}

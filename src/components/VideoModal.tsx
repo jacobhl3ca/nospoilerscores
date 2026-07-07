@@ -42,6 +42,13 @@ interface VideoModalProps {
   // uploads a preview card and shares a hidescore.com link that unfurls with
   // the two teams + date instead of the raw YouTube/source URL. Null for news.
   shareCard?: ShareCardMeta | null;
+  // Opt-in (Settings → Highlights player): render the YouTube clip with the
+  // standard player chrome — native controls, title, related clips — instead of
+  // the spoiler-safe custom player. Only affects the YouTube branch; HLS/embed/
+  // image/text modes are unchanged. The IFrame-API player (fallback retry +
+  // quality forcing + watchdog) stays in place either way; this just flips the
+  // spoiler-hiding playerVars and drops the title mask + custom unmute toggle.
+  normalEmbed?: boolean;
 }
 
 // Pulls the original `search_query=...` out of a YouTube search URL so we can
@@ -155,7 +162,7 @@ function sourceLabelFromUrl(url: string): string {
   }
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, normalEmbed }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -190,10 +197,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // isn't actively playing, or the user is hovering it.
   const [hovered, setHovered] = useState(false);
   const [playing, setPlaying] = useState(false);
+  // Double-tap-to-seek flash indicator: which side lit up + a nonce that
+  // retriggers the fade animation on rapid repeat taps. null when idle.
+  const [seekFlash, setSeekFlash] = useState<{ side: "l" | "r"; n: number } | null>(null);
   const hlsMode = !!playbackUrl;
   const embedMode = !!embedUrl && !playbackUrl;
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
+  // The YouTube clip is rendering in opt-in "standard player" mode. Only true on
+  // the YouTube branch — it drops our custom spoiler chrome (title mask, unmute
+  // toggle, tap-to-seek overlay) so YouTube's own native controls take over.
+  const ytNormalMode = !!normalEmbed && !hlsMode && !embedMode && !imageMode && !textMode;
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
   // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
   // text card) — used both for the footer link and the hidescore deep-link.
@@ -248,6 +262,81 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
   };
 
+  // ── Tap-to-seek (mobile) ──────────────────────────────────────────────
+  // Double-tap the left/right half of the player to jump ∓5s — the gesture
+  // every mobile video app trains for. Works on both engines: the native
+  // <video> (HLS/MP4) via currentTime, and the YouTube IFrame player via
+  // seekTo(). A single tap toggles play/pause; the 300ms gate is what tells
+  // the two apart. Since controls:0 hides YouTube's scrubber (it spoils how
+  // far through a highlight you are), this is the ONLY way to scrub the YT
+  // clips — and it surfaces no timeline, so it stays spoiler-safe.
+  const tapRef = useRef<{ t: number; side: "l" | "r" | null; timer: number | null }>({ t: 0, side: null, timer: null });
+  const flashTimerRef = useRef<number | null>(null);
+  const flashNonceRef = useRef(0);
+
+  const seekBy = (delta: number) => {
+    if (hlsMode) {
+      const v = videoRef.current;
+      if (!v) return;
+      const dur = Number.isFinite(v.duration) ? v.duration : Infinity;
+      v.currentTime = Math.max(0, Math.min(dur, v.currentTime + delta));
+    } else {
+      const p = playerRef.current;
+      if (!p?.seekTo || !p?.getCurrentTime) return;
+      const cur = p.getCurrentTime() || 0;
+      const dur = p.getDuration?.() || Infinity;
+      p.seekTo(Math.max(0, Math.min(dur, cur + delta)), true);
+    }
+  };
+
+  const togglePlay = () => {
+    if (hlsMode) {
+      const v = videoRef.current;
+      if (!v) return;
+      if (v.paused) v.play().catch(() => {}); else v.pause();
+    } else {
+      const p = playerRef.current;
+      if (!p?.getPlayerState) return;
+      const s = p.getPlayerState();
+      if (s === 1 || s === 3) p.pauseVideo?.(); else p.playVideo?.();
+    }
+  };
+
+  const flashSeek = (side: "l" | "r") => {
+    flashNonceRef.current += 1;
+    setSeekFlash({ side, n: flashNonceRef.current });
+    if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => setSeekFlash(null), 600);
+  };
+
+  // Distinguish a single tap (play/pause) from a double tap (seek) by timing
+  // consecutive taps on the same half. A second same-side tap within 300ms is
+  // a seek; chained same-side taps keep seeking (tap-tap-tap = ∓15s).
+  const handleZoneTap = (side: "l" | "r", e: React.MouseEvent) => {
+    e.stopPropagation();
+    const now = Date.now();
+    const prev = tapRef.current;
+    if (prev.timer) window.clearTimeout(prev.timer);
+    const isSeek = now - prev.t < 300 && prev.side === side;
+    if (isSeek) {
+      seekBy(side === "l" ? -5 : 5);
+      flashSeek(side);
+      tapRef.current = { t: now, side, timer: null };
+    } else {
+      const timer = window.setTimeout(() => {
+        togglePlay();
+        tapRef.current = { ...tapRef.current, timer: null };
+      }, 300);
+      tapRef.current = { t: now, side, timer };
+    }
+  };
+
+  // Clear any pending tap/flash timers on unmount.
+  useEffect(() => () => {
+    if (tapRef.current.timer) window.clearTimeout(tapRef.current.timer);
+    if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+  }, []);
+
   // Reset caption state any time the modal swaps to a different stream
   useEffect(() => {
     setShowCC(false);
@@ -301,6 +390,18 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
         e.preventDefault();
         toggleFullscreen();
+      }
+      // ←/→ seek ∓5s — desktop counterpart to the mobile double-tap zones.
+      // Skipped for Brightcove embeds / image / text modes (no seek API) and
+      // for normalEmbed YouTube (native controls own the keyboard there).
+      if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (embedMode || imageMode || textMode || ytNormalMode) return;
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        e.preventDefault();
+        const back = e.key === "ArrowLeft";
+        seekBy(back ? -5 : 5);
+        flashSeek(back ? "l" : "r");
       }
     };
     document.addEventListener("keydown", handler);
@@ -474,23 +575,35 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const initPlayer = () => {
       playerRef.current = new (window as any).YT.Player("yt-player", {
         videoId: currentId,
-        playerVars: {
-          autoplay: 1,
-          mute: 1,
-          rel: 0,
-          modestbranding: 1,
-          playsinline: 1,
-          // controls:0 strips YouTube's bottom control bar — the red seek line
-          // AND the elapsed/duration readout (e.g. 16:13 / 18:30), both of which
-          // spoil how far through a highlight reel you are. It also disables
-          // scrubbing (itself a spoiler vector). Mute/CC/fullscreen go with it:
-          // we render a custom unmute toggle below, and "f" still fullscreens.
-          controls: 0,
-          // Hide in-video annotations/cards — they can carry spoilers.
-          iv_load_policy: 3,
-          // vq is deprecated but still hinted by some clients.
-          vq: "hd1080",
-        },
+        // normalEmbed (opt-in) → standard player chrome: native controls, title,
+        // related clips. The default is the spoiler-safe set below. autoplay+mute
+        // stay on in BOTH modes — browsers block unmuted autoplay, so muted is
+        // mandatory; in normal mode the user unmutes via the native controls.
+        playerVars: normalEmbed
+          ? {
+              autoplay: 1,
+              mute: 1,
+              playsinline: 1,
+              // vq is deprecated but still hinted by some clients.
+              vq: "hd1080",
+            }
+          : {
+              autoplay: 1,
+              mute: 1,
+              rel: 0,
+              modestbranding: 1,
+              playsinline: 1,
+              // controls:0 strips YouTube's bottom control bar — the red seek line
+              // AND the elapsed/duration readout (e.g. 16:13 / 18:30), both of which
+              // spoil how far through a highlight reel you are. It also disables
+              // scrubbing (itself a spoiler vector). Mute/CC/fullscreen go with it:
+              // we render a custom unmute toggle below, and "f" still fullscreens.
+              controls: 0,
+              // Hide in-video annotations/cards — they can carry spoilers.
+              iv_load_policy: 3,
+              // vq is deprecated but still hinted by some clients.
+              vq: "hd1080",
+            },
         events: {
           onReady: (event: any) => {
             event.target.playVideo();
@@ -551,7 +664,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       }
       if (playerRef.current?.destroy) playerRef.current.destroy();
     };
-  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode]);
+  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, normalEmbed]);
 
   return (
     <div
@@ -559,14 +672,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       style={{ zIndex: 9999 }}
       onClick={onClose}
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0" style={{ background: "rgba(0, 0, 0, 0.92)" }} />
+      {/* Backdrop — explicit close target so a tap anywhere on the black
+          dismisses, not just the slim margins around the media. */}
+      <div className="absolute inset-0" style={{ background: "rgba(0, 0, 0, 0.92)" }} onClick={onClose} />
 
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
           button stop propagation themselves so playback controls keep working. */}
       <div
-        className="relative w-full max-w-6xl"
+        className="relative w-full max-w-5xl mx-auto"
         style={{ zIndex: 1 }}
       >
         {/* Close button */}
@@ -623,7 +737,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
             )}
             {headline && (
-              <h2 className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</h2>
+              <h2 className="news-title text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</h2>
             )}
             {(byline || published) && (
               <p className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
@@ -640,7 +754,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             )}
           </div>
         ) : (
-          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingBottom: "56.25%" }} onClick={(e) => e.stopPropagation()} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+          <div ref={containerRef} className="relative mx-auto rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "16 / 9", maxHeight: "82vh", width: "min(100%, calc(82vh * 16 / 9))" }} onClick={(e) => e.stopPropagation()} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
             {hlsMode ? (
               <video
                 ref={videoRef}
@@ -662,58 +776,104 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             ) : (
               <>
                 <div id="yt-player" className="absolute inset-0 w-full h-full" />
-                {/* Spoiler mask over YouTube's title bar. No embed param hides
-                    the title (showinfo was removed in 2018) and YT re-shows it
-                    on hover/pause, so we cover the top strip. pointer-events
-                    stay off so click-to-play/pause keeps working; the mask only
-                    fades in when chrome would appear, so it never crops footage
-                    during steady playback. */}
-                <div
-                  aria-hidden
-                  className="absolute top-0 inset-x-0 z-10 pointer-events-none transition-opacity duration-150"
-                  style={{
-                    height: "24%",
-                    background: "linear-gradient(to bottom, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.98) 70%, rgba(0,0,0,0) 100%)",
-                    opacity: hovered || !playing ? 1 : 0,
-                  }}
-                />
-                {/* Tap-to-unmute — controls:0 also removes YouTube's native
-                    mute button, and the clip autoplays muted. */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const p = playerRef.current;
-                    if (!p) return;
-                    if (muted) { p.unMute?.(); p.setVolume?.(100); setMuted(false); }
-                    else { p.mute?.(); setMuted(true); }
-                  }}
-                  aria-label={muted ? "Unmute" : "Mute"}
-                  className="absolute bottom-3 left-3 z-20 h-9 flex items-center gap-1.5 rounded-full text-xs font-bold text-white cursor-pointer transition-colors"
-                  style={{
-                    paddingLeft: muted ? "0.625rem" : "0.5rem",
-                    paddingRight: muted ? "0.75rem" : "0.5rem",
-                    background: muted ? "var(--accent)" : "rgba(0,0,0,0.55)",
-                    border: "1px solid rgba(255,255,255,0.25)",
-                  }}
-                >
-                  {muted ? (
-                    <>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 5 6 9H2v6h4l5 4z" />
-                        <line x1="23" y1="9" x2="17" y2="15" />
-                        <line x1="17" y1="9" x2="23" y2="15" />
-                      </svg>
-                      Tap for sound
-                    </>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 5 6 9H2v6h4l5 4z" />
-                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                    </svg>
-                  )}
-                </button>
+                {/* Standard-player mode skips all custom spoiler chrome below —
+                    native YouTube controls (incl. its own mute button) take over. */}
+                {!ytNormalMode && (
+                  <>
+                    {/* Spoiler mask over YouTube's title bar. No embed param hides
+                        the title (showinfo was removed in 2018) and YT re-shows it
+                        on hover/pause, so we cover the top strip. pointer-events
+                        stay off so click-to-play/pause keeps working; the mask only
+                        fades in when chrome would appear, so it never crops footage
+                        during steady playback. */}
+                    <div
+                      aria-hidden
+                      className="absolute top-0 inset-x-0 z-10 pointer-events-none transition-opacity duration-150"
+                      style={{
+                        height: "24%",
+                        background: "linear-gradient(to bottom, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.98) 70%, rgba(0,0,0,0) 100%)",
+                        opacity: hovered || !playing ? 1 : 0,
+                      }}
+                    />
+                    {/* Tap-to-unmute — controls:0 also removes YouTube's native
+                        mute button, and the clip autoplays muted. */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const p = playerRef.current;
+                        if (!p) return;
+                        if (muted) { p.unMute?.(); p.setVolume?.(100); setMuted(false); }
+                        else { p.mute?.(); setMuted(true); }
+                      }}
+                      aria-label={muted ? "Unmute" : "Mute"}
+                      className="absolute bottom-3 left-3 z-20 h-9 flex items-center gap-1.5 rounded-full text-xs font-bold text-white cursor-pointer transition-colors"
+                      style={{
+                        paddingLeft: muted ? "0.625rem" : "0.5rem",
+                        paddingRight: muted ? "0.75rem" : "0.5rem",
+                        background: muted ? "var(--accent)" : "rgba(0,0,0,0.55)",
+                        border: "1px solid rgba(255,255,255,0.25)",
+                      }}
+                    >
+                      {muted ? (
+                        <>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 5 6 9H2v6h4l5 4z" />
+                            <line x1="23" y1="9" x2="17" y2="15" />
+                            <line x1="17" y1="9" x2="23" y2="15" />
+                          </svg>
+                          Tap for sound
+                        </>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 5 6 9H2v6h4l5 4z" />
+                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                        </svg>
+                      )}
+                    </button>
+                  </>
+                )}
               </>
+            )}
+
+            {/* Tap-to-seek zones — double-tap left/right to jump ∓5s, single
+                tap toggles play/pause. Skipped for Brightcove embeds, which
+                expose no JS seek API. zIndex 5 keeps it above the player but
+                below the unmute button (z-20) and title mask (z-10); for HLS
+                we leave a 48px bottom strip uncovered so the native scrubber /
+                fullscreen controls stay reachable. Skipped entirely in standard-
+                player mode — YouTube's own controls own seek + play/pause there,
+                and this overlay would otherwise sit on top of its control bar. */}
+            {!embedMode && !ytNormalMode && (
+              <div
+                className="absolute inset-0 flex touch-manipulation select-none"
+                style={{ zIndex: 5, bottom: hlsMode ? 48 : 0 }}
+              >
+                <div className="flex-1 h-full" aria-hidden onClick={(e) => handleZoneTap("l", e)} />
+                <div className="flex-1 h-full" aria-hidden onClick={(e) => handleZoneTap("r", e)} />
+                {seekFlash && (
+                  <div
+                    key={seekFlash.n}
+                    className={`pointer-events-none absolute top-1/2 flex flex-col items-center gap-1 text-white ${seekFlash.side === "l" ? "left-[14%]" : "right-[14%]"}`}
+                    style={{ animation: "hsSeekFlash 600ms ease-out forwards" }}
+                  >
+                    <span className="flex items-center justify-center w-14 h-14 rounded-full" style={{ background: "rgba(0,0,0,0.55)" }}>
+                      {seekFlash.side === "l" ? (
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="11 17 6 12 11 7" />
+                          <polyline points="18 17 13 12 18 7" />
+                        </svg>
+                      ) : (
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="13 17 18 12 13 7" />
+                          <polyline points="6 17 11 12 6 7" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="text-xs font-bold" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>5s</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -723,7 +883,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             the card itself, so skip them here. */}
         {!textMode && headline && (
           <div className="mt-3 text-center px-2">
-            <p className="text-sm sm:text-base text-white/90 leading-snug">{headline}</p>
+            <p className="news-title text-sm sm:text-base text-white/90 leading-snug">{headline}</p>
             {(byline || published) && (
               <p className="text-xs text-white/40 mt-1">
                 {[byline, published ? formatPublished(published) : null].filter(Boolean).join(" · ")}
