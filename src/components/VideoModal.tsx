@@ -1132,6 +1132,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
+  // Cap the media (image / HLS / YouTube alike) so the media + the headline /
+  // byline / Open-on / Copy-link row + the pinned Prev/Next pager ALL fit the
+  // viewport with no page scroll and nothing overlapping the pager (Jacob 7/7).
+  // dvh tracks the real viewport under mobile browser chrome; the reserve grows
+  // when the pager is present. This replaces the old per-mode 78vh/85vh/168px
+  // caps that left too little room on short windows and clipped the footer.
+  const mediaMaxH = (onPrev || onNext) ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)";
+
   // Reddit prev/next paging — a labelled ‹ Prev / Next › bar rendered in-flow as
   // the LAST element under the byline / links (Jacob 7/3–7/5: off the video, and
   // never overlapping the links — a fixed bar collided with them when the video
@@ -1156,7 +1164,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   return (
     <div
-      className="fixed inset-0 overflow-y-auto"
+      // Media modes (image / video) are capped to fit the viewport, so they
+      // never scroll — only a long Reddit text post scrolls (its card scrolls
+      // internally, and the wrapper below can grow past the viewport for it).
+      className={textMode ? "fixed inset-0 overflow-y-auto" : "fixed inset-0 overflow-hidden"}
       style={{ zIndex: 9999 }}
       onClick={onClose}
     >
@@ -1194,10 +1205,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         {/* Reddit prev/next post paging now renders as a labelled row BELOW the
             media (see `pager`, inserted after the player) instead of overlaid on
             the video — keeps mobile footage/dismiss/seek zones clear. */}
-        {/* Close button */}
+        {/* Close button — pinned to the viewport's top-right (not the content's,
+            which sat at -top-10 and clipped off-screen the moment the media
+            filled the height). Subtle dark disc keeps it visible over any frame
+            of video. */}
         <button
           onClick={onClose}
-          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center rounded-full text-white/60 hover:text-white transition-colors cursor-pointer"
+          className="fixed z-[70] w-9 h-9 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
+          style={{ top: "calc(env(safe-area-inset-top) + 0.6rem)", right: "0.75rem" }}
           aria-label="Close"
           title="Close (Esc)"
         >
@@ -1217,11 +1232,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
             aria-pressed={showCC}
             aria-label={showCC ? "Hide captions" : "Show captions"}
-            className="absolute -top-10 right-10 h-8 px-2 flex items-center justify-center rounded-md text-xs font-bold transition-colors cursor-pointer"
+            className="fixed z-[70] h-9 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
             style={{
-              color: showCC ? "white" : "rgba(255,255,255,0.6)",
-              background: showCC ? "var(--accent)" : "transparent",
-              border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.3)",
+              top: "calc(env(safe-area-inset-top) + 0.6rem)",
+              right: "3.5rem",
+              color: showCC ? "white" : "rgba(255,255,255,0.7)",
+              background: showCC ? "var(--accent)" : "rgba(0,0,0,0.45)",
+              border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.15)",
             }}
             title={showCC ? "Hide captions" : "Show captions"}
           >
@@ -1233,13 +1250,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         {/* Player area — image lightbox (no aspect lock), YouTube (custom
             chrome), or 16:9 video for HLS/embed */}
         {imageMode ? (
-          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black flex items-center justify-center" style={{ maxHeight: "85vh" }}>
+          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black flex items-center justify-center" style={{ maxHeight: mediaMaxH }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={proxyImage(imageUrl!)}
               alt=""
               decoding="async"
-              className="max-w-full max-h-[85vh] object-contain"
+              className="max-w-full object-contain"
+              style={{ maxHeight: mediaMaxH }}
               draggable={false}
               onError={() => setImgFailed(true)}
             />
@@ -1249,7 +1267,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // whose image failed to load) get a clean card layout instead of
           // an empty lightbox. Everything stays on hidescore until the user
           // hits the "Open on …" button at the bottom.
-          <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8 max-h-[85vh] overflow-y-auto" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8 overflow-y-auto" style={{ maxHeight: mediaMaxH, background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             {sourceLabel && (
               <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
             )}
@@ -1287,7 +1305,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               className="group relative mx-auto w-full overflow-hidden bg-black"
               style={fsActive
                 ? { width: fsMediaWidth, aspectRatio: "16 / 9", borderRadius: 0 }
-                : { width: "min(100%, calc((100vh - 168px) * 16 / 9))", aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
+                : { width: `min(100%, calc(${mediaMaxH} * 16 / 9))`, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
               {/* Click-catcher over the whole player. A click anywhere on the
@@ -1685,7 +1703,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             </>)}
           </div>
         ) : (
-          <div ref={containerRef} className="group relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: "min(100%, calc(78vh * 16 / 9))", aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
+          <div ref={containerRef} className="group relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: `min(100%, calc(${mediaMaxH} * 16 / 9))`, aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
             {hlsMode ? (
               <video
                 ref={videoRef}
