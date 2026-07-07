@@ -105,20 +105,32 @@ export default function GameHighlights({
     const series = game.seriesNote;
     if (officialChannel) {
       (async () => {
-        const officialId = await resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
-        prefetchedOfficialId.current = officialId;
-        setOfficialStatus(officialId ? "found" : "missing");
-        // World Cup: 2nd button = the EXTENDED cut (prefer=extended), deduped
-        // against the official standard highlight. FOX/FIFA post both a standard
-        // and a longer "Extended Highlights" per match; prefer=extended reliably
-        // lands the distinct longer one instead of re-surfacing the same clip that
-        // made a plain search look like a duplicate. So the pair reads "normal +
-        // extended" (Jacob 7/7). Hidden if no extended exists. (fifa-only;
+        // Resolve BOTH buttons CONCURRENTLY. Each resolveHighlightVideo is a live
+        // YouTube scrape; running them in series made the 2nd link pop in seconds
+        // after the 1st (Jacob 7/7 — "started with 1, then added the 2nd"). The 2nd
+        // can't exclude the 1st's id until that resolves, so it runs WITHOUT exclude
+        // in parallel and only re-resolves (excluding the official) in the rare case
+        // both land the same video — so the fast path stays one round-trip.
+        //
+        // World Cup 2nd button = the EXTENDED cut (prefer=extended): FOX/FIFA post
+        // both a standard and a longer "Extended Highlights" per match, so the pair
+        // reads "normal + extended". Hidden if no extended exists. (fifa-only;
         // competition is null for every other league.)
         const preferExtended = !!competition;
-        const id = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended);
-        prefetchedVideoId.current = id;
-        setSearchStatus(id ? "found" : "missing");
+        const officialP = resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
+        const secondP = resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+        const officialId = await officialP;
+        prefetchedOfficialId.current = officialId;
+        setOfficialStatus(officialId ? "found" : "missing");
+        let secondId = await secondP;
+        if (secondId && officialId && secondId === officialId) {
+          // Collision — the parallel (unexcluded) 2nd landed the same clip as the
+          // official. Re-resolve once, this time excluding it, so the two buttons
+          // never play the same video.
+          secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended);
+        }
+        prefetchedVideoId.current = secondId;
+        setSearchStatus(secondId ? "found" : "missing");
       })();
     } else {
       // No official channel for this league — only the search button is rendered.
