@@ -498,15 +498,28 @@ type SoccerCompetition = { details?: SoccerPlay[] };
 function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined): number {
   const details: SoccerPlay[] = competition?.details ?? [];
   if (!details.length) return 0;
-  const parseMin = (dv: string | undefined): number | null => {
+  // Parse a soccer clock ("67'", "45'+2'", "90'+5'") into two numbers. `min`
+  // folds stoppage into the base minute for the lateness thresholds below
+  // ("90'+5'" → 95). `sortKey` keeps stoppage as a fractional component
+  // ("45'+2'" → 45.02) so goals sort in TRUE chronological order: folding both
+  // into one value reordered goals across the half boundary — a first-half
+  // stoppage goal ("45'+2'" → 47) sorted AFTER an early second-half goal
+  // ("46'"), so the leader walk below saw them out of sequence.
+  const parseMin = (dv: string | undefined): { min: number; sortKey: number } | null => {
     const m = dv?.match(/(\d+)'?(?:\s*\+\s*(\d+))?/);
-    return m ? parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0) : null;
+    if (!m) return null;
+    const base = parseInt(m[1], 10);
+    const stop = m[2] ? parseInt(m[2], 10) : 0;
+    return { min: base + stop, sortKey: base + stop / 100 };
   };
   const goals = details
     .filter((d) => d.scoringPlay)
-    .map((d) => ({ min: parseMin(d.clock?.displayValue), team: String(d.team?.id ?? "") }))
-    .filter((g) => g.min !== null && g.team)
-    .sort((a, b) => (a.min as number) - (b.min as number));
+    .map((d) => {
+      const t = parseMin(d.clock?.displayValue);
+      return t ? { min: t.min, sortKey: t.sortKey, team: String(d.team?.id ?? "") } : null;
+    })
+    .filter((g): g is { min: number; sortKey: number; team: string } => g !== null && !!g.team)
+    .sort((a, b) => a.sortKey - b.sortKey);
   if (!goals.length) return 0;
   // Walk goals chronologically, tracking the leader; capture the minute of the
   // latest goal that CHANGED who's ahead (tie→lead, lead→tie, or a lead flip).
@@ -522,7 +535,7 @@ function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined)
   for (const g of goals) {
     tally[g.team] = (tally[g.team] ?? 0) + 1;
     const leader = leaderOf();
-    if (leader !== prevLeader) latestSwingMin = g.min as number;
+    if (leader !== prevLeader) latestSwingMin = g.min;
     prevLeader = leader;
   }
   if (latestSwingMin >= 90) return 25;
