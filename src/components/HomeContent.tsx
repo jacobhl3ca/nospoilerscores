@@ -35,10 +35,16 @@ function getSmartDefaultOffset(cutoffHour = 13): number {
   // land two days back (Jacob 6/13), so in that window show the service day
   // as-is (offset 0). Gated on the ET hour to match getNowET's shift basis.
   if (getETHour() < 1) return 0;
-  // User-local hour. The cutoff represents "when today's slate has likely
-  // started" from the user's wall-clock POV — Pacific user wants their own
-  // 1 PM, not 1 PM ET (which is 10 AM for them).
-  const hour = new Date().getHours();
+  // User-local hour in the app's EFFECTIVE zone (getETHour honors the Settings
+  // time-zone override, matching the `< 1` rollover guard above and the
+  // ratings-auto `< 12` morning check below). The cutoff represents "when
+  // today's slate has likely started" from the user's wall-clock POV — a
+  // Pacific user wants their own 1 PM, not 1 PM ET (which is 10 AM for them).
+  // Reading the raw device zone (new Date().getHours()) instead disagreed with
+  // getNowET's override-aware base date, landing override users on the wrong
+  // day; with no override, getTimeZone() is the device zone, so this is
+  // unchanged for everyone else.
+  const hour = getETHour();
   return hour < cutoffHour ? -1 : 0;
 }
 
