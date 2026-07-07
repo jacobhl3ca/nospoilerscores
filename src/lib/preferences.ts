@@ -182,7 +182,7 @@ export interface Preferences {
   lastOpenDay?: string;
   // Ratings on launch: auto (smart morning reset), always off, always on.
   defaultRatings?: DefaultRatings;
-  // News-view column count (1, 2, or 3). Default 1.
+  // News-view column count (1, 2, or 3). Default 3 (see `defaults` below).
   newsColCount?: 1 | 2 | 3;
   // Hour-of-day (user-local) at which "smart" landing flips from yesterday
   // to today. 0-23. Default 13 (1 PM local) — covers when most morning
