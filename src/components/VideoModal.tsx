@@ -5,6 +5,7 @@ import { getApiBase } from "@/lib/youtube";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
+import { getTimeZone } from "@/lib/etDay";
 
 interface VideoModalProps {
   videoId: string;
@@ -305,8 +306,16 @@ function ArticleMeta({ byline, published, className, style }: {
 }) {
   const rel = published ? formatPublished(published) : "";
   if (!byline && !rel) return null;
+  // Show the exact-time tooltip in the app's EFFECTIVE zone (the Settings
+  // "Time zone" override, or the device zone by default) — the same zone every
+  // game card, event tile, and slate label already use via getTimeZone(). This
+  // was the one clock-time display left reading the raw device zone, so an
+  // override user hovering a news item saw a timestamp in a different zone than
+  // the times shown everywhere else. Without an override getTimeZone() resolves
+  // to the device zone, so the rendered tooltip is byte-identical for everyone
+  // who hasn't set one.
   const exact = published && rel
-    ? new Date(published).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    ? new Date(published).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: getTimeZone() })
     : undefined;
   return (
     <p className={className} style={style}>
