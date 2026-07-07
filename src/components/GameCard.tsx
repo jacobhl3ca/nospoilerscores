@@ -136,8 +136,16 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
     return { full: q, short: q };
   }
   if (sport === "nhl") {
-    const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : `${period - 3}OT`;
-    if (clock && clock !== "0.0") return { full: `${p} - ${clock}`, short: p };
+    // Regulation is P1–P3, then a single overtime (period 4). In the REGULAR
+    // season a still-tied game goes to a SHOOTOUT (period 5) — not a 2nd OT.
+    // Multiple overtimes only exist in the playoffs (periods 5, 6, … = 2OT,
+    // 3OT, …), which in turn never have a shootout. So period 5 is ambiguous by
+    // number alone; disambiguate with isPlayoff. Without this a regular-season
+    // shootout rendered "2OT", a period that can't occur outside the playoffs.
+    const shootout = period >= 5 && !game.isPlayoff;
+    const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : shootout ? "SO" : `${period - 3}OT`;
+    // A shootout has no running clock, so skip the "- 0:00" tail and just show "SO".
+    if (!shootout && clock && clock !== "0.0") return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
   if (sport === "nfl") {
