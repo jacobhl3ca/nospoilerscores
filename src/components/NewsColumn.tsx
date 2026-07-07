@@ -151,7 +151,7 @@ export function NewsColumnTitle({
               className="cursor-pointer transition-colors hover:opacity-80"
               style={{ color: "var(--text)" }}
               title="Switch news league"
-              aria-haspopup="true"
+              aria-haspopup="dialog"
               aria-expanded={swapOpen}
             >
               <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>

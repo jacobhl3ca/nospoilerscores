@@ -1591,7 +1591,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                       style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                       title="Pick a date"
                       aria-label="Pick a date"
-                      aria-haspopup="true"
+                      aria-haspopup="dialog"
                       aria-expanded={calendarOpen}
                     >
                       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1663,7 +1663,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                   }}
                   title="Filter news"
                   aria-label="Filter news"
-                  aria-haspopup="true"
+                  aria-haspopup="dialog"
                   aria-expanded={newsFilterOpen}
                 >
                   <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1768,7 +1768,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
                 style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                 title="Pick a date"
                 aria-label="Pick a date"
-                aria-haspopup="true"
+                aria-haspopup="dialog"
                 aria-expanded={calendarOpen}
               >
                 <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
