@@ -1138,7 +1138,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // was tall). Both buttons always render; the unavailable direction (first/last
   // post) is disabled. stopPropagation so a tap pages, not closes.
   const pager = (onPrev || onNext) ? (
-    <div className="mt-3 mb-1 flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
       <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>

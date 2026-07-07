@@ -9,7 +9,7 @@
 // the prior cache). Symptom of forgetting: a shipped UI/logic change is live
 // for fresh visitors but invisible to everyone who already has the SW
 // (e.g. the 2026-06-28 MLB two-button highlights fix). v2 → v3.
-const CACHE_VERSION = "hidescore-v8";
+const CACHE_VERSION = "hidescore-v9";
 const PRECACHE_URLS = [
   "/",
   "/today",
