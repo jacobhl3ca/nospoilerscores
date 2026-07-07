@@ -1338,7 +1338,14 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   // ESPN family deep-links via gameId. ABC is ESPN-owned but its own broadcast
   // network has a dedicated live page, so route it there instead of the ESPN
   // player — the user picked ABC, send them to ABC.
-  if (b.includes("espn")) return `https://www.espn.com/watch/player/_/id/${gameId}`;
+  // Guard an empty gameId: golf tournaments have no per-game id (GolfLeaderboard
+  // passes ""), so an ESPN golf broadcast produced the malformed player URL
+  // ".../id/" with a trailing empty id. That string is truthy, so the caller's
+  // `?? sportStreamFallback` never fired and the user landed on a broken deep
+  // link. Fall back to ESPN's generic watch page — the right home for an ESPN
+  // broadcast with no airing id, and byte-identical for every caller that does
+  // pass a real game.id (GameCard, GameDetailModal, the scoreboard streamUrl).
+  if (b.includes("espn")) return gameId ? `https://www.espn.com/watch/player/_/id/${gameId}` : "https://www.espn.com/watch/";
   if (b === "abc") return "https://abc.com/watch-live";
   // FIFA World Cup (2026): FOX/FS1 hold US English rights to all 104 matches —
   // route the FOX family to the World Cup hub rather than the generic live page.
