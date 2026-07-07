@@ -225,14 +225,20 @@ export async function resolveHighlightVideo(
   preferExtended?: boolean
 ): Promise<string | null> {
   const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
-  if (channel) {
-    const hit = await fetchFirstVideoId(datedQuery, channel, exclude, preferExtended);
-    if (hit) return hit;
-  }
-  const unscoped = await fetchFirstVideoId(datedQuery, undefined, exclude, preferExtended);
-  if (unscoped) return unscoped;
   const undated = buildUndatedQuery(awayTeam, homeTeam, seriesNote, competition);
-  return fetchFirstVideoId(undated, undefined, exclude, preferExtended);
+  // Fire every fallback tier CONCURRENTLY instead of awaiting them in series.
+  // Each /api/youtube call is a live YouTube scrape (~1-2s); walking
+  // channel → dated → undated sequentially meant a button that fell through to
+  // the undated tier (common for World Cup, whose FIFA-channel recap often lags)
+  // took 2-3× as long to appear (Jacob 7/7). Running them at once resolves in a
+  // single scrape-time, and we still return by the SAME priority — channel hit,
+  // then dated unscoped, then undated — so results are identical, just faster.
+  const [chanHit, datedUnscoped, undatedHit] = await Promise.all([
+    channel ? fetchFirstVideoId(datedQuery, channel, exclude, preferExtended) : Promise.resolve(null),
+    fetchFirstVideoId(datedQuery, undefined, exclude, preferExtended),
+    fetchFirstVideoId(undated, undefined, exclude, preferExtended),
+  ]);
+  return chanHit || datedUnscoped || undatedHit;
 }
 
 export function getYouTubeEmbedUrl(videoId: string): string {
