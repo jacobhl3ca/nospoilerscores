@@ -309,7 +309,7 @@ export default function GameDetailModal({
             nothing to caveat; only open-air games surface weather. */}
         {game.venue || weather ? (
           <div className="flex items-start justify-between gap-3 mb-1 text-xs" style={{ color: "var(--text-muted)" }}>
-            <span className="min-w-0">
+            <span className="min-w-0" style={{ color: "var(--text-secondary)" }}>
               {game.venue}
               {game.venueLocation ? ` · ${game.venueLocation}` : ""}
             </span>
