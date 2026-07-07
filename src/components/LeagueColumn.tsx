@@ -850,7 +850,19 @@ export default function LeagueColumn({
     const match = record.match(/^(\d+)/);
     return match ? parseInt(match[1], 10) : 0;
   };
+  // ESPN formats soccer records as W-D-L (wins-draws-losses), e.g. "12-5-8", so
+  // the losses are the THIRD segment. Every other sport is W-L, or W-L-T like
+  // the NFL where the second segment is still losses — there the first "-N" is
+  // right. Grabbing the second segment for soccer would read DRAWS as losses
+  // and mis-flag a winning side (e.g. 8W-9D-4L → 8 vs 9 → "not winning"),
+  // demoting a genuinely strong upcoming matchup in the top-matchups sort.
+  const SOCCER_SPORTS = new Set<Sport>(["fifa", "epl", "mls", "ucl", "uel"]);
   const getLosses = (record: string): number => {
+    const parts = record.split("-");
+    if (SOCCER_SPORTS.has(league.sport) && parts.length === 3) {
+      const n = parseInt(parts[2], 10);
+      return Number.isFinite(n) ? n : 0;
+    }
     const match = record.match(/-(\d+)/);
     return match ? parseInt(match[1], 10) : 0;
   };
