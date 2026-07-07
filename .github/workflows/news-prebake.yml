@@ -2,9 +2,13 @@ name: Prebake news feeds
 
 on:
   schedule:
-    # Every 2h — news doesn't need hourly freshness; trimmed to stay under the
-    # Actions free cap.
-    - cron: "0 */2 * * *"
+    # Daily backup only. 2026-07-07: the residential-IP Mac mini cron
+    # (com.hidescore.reddit-prebake, every 30 min) was switched from a scoped
+    # reddit+espn run to a FULL prebake, so it now bakes these league/CBS/
+    # theScore feeds too — every 30 min instead of the 2h this workflow used to
+    # provide. This run is kept only as a safety net for when the mini is down,
+    # and dropped to once a day to free Actions minutes (was 12 runs/day).
+    - cron: "0 12 * * *"
   workflow_dispatch:
 
 jobs:

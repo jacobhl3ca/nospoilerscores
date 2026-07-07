@@ -1,5 +1,6 @@
 "use client"; // Error boundaries must be Client Components
 
+import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 import Link from "next/link";
 
@@ -18,8 +19,9 @@ export default function Error({
 }) {
   useEffect(() => {
     // Surface the failure in the console for debugging (digest links it to any
-    // server-side log). No external error service is wired up.
+    // server-side log), and report it to Sentry for crash visibility.
     console.error(error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (
