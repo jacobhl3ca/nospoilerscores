@@ -147,10 +147,11 @@ function extractSearchQuery(fallbackUrl: string): string | null {
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
 // fences) is rare in posts and not worth pulling marked/markdown-it for.
-// Escapes HTML first so a post with literal "<script>" is safe.
+// Every text segment is pushed as a React child (never dangerouslySetInnerHTML),
+// so React escapes it on render — a post with literal "<script>" or "&" is
+// already safe and shows verbatim. A manual HTML-escape here would double-encode,
+// painting "AT&T" as the literal "AT&amp;T".
 function renderRedditBody(raw: string): React.ReactNode {
-  const escape = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // Split on blank-line gaps into paragraphs. Inside a paragraph, single
   // newlines become <br/>.
   const paragraphs = raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
@@ -163,7 +164,7 @@ function renderRedditBody(raw: string): React.ReactNode {
     let match: RegExpExecArray | null;
     while ((match = urlRe.exec(para)) !== null) {
       const before = para.slice(lastIdx, match.index);
-      if (before) parts.push(escape(before));
+      if (before) parts.push(before);
       const url = match[0];
       parts.push(
         <a
@@ -180,7 +181,7 @@ function renderRedditBody(raw: string): React.ReactNode {
       lastIdx = match.index + url.length;
     }
     const tail = para.slice(lastIdx);
-    if (tail) parts.push(escape(tail));
+    if (tail) parts.push(tail);
     // Handle intra-paragraph single newlines → <br/>. Walk parts and split
     // each string segment on \n, interleaving <br/> elements.
     const withBreaks: React.ReactNode[] = [];
