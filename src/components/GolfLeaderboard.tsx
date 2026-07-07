@@ -143,10 +143,17 @@ export default function GolfLeaderboard({
   // for live/upcoming viewing.
   const hasBroadcast =
     dateState?.relativeDay !== "past" && tournament.broadcasts.length > 0;
-  // Mirror GameCard: when the tournament is wrapped and no rating takes
-  // the center slot, fill the status text with "FINAL" on R4 Sunday so
-  // the card reads like any other post-state card.
-  const showFinalLabel = tournament.state === "post" && !showRating;
+  // Mirror GameCard's `!isPastDate` FINAL rule (GameCard.tsx: `isFinished
+  // && !isPastDate`): when the tournament is wrapped and no rating takes
+  // the center slot, show "FINAL" only on the day it finished — NOT when
+  // navigating back to an earlier round-day. `tournament.state === "post"`
+  // is a property of the whole tournament, so without the past-date guard
+  // it stayed true on the R1/R2/R3 views too, printing "FINAL" while the
+  // league-header subtitle read e.g. "Round 1 of 4" — a self-contradiction.
+  // Matches the `relativeDay !== "past"` guard already on the rating +
+  // broadcast slots above.
+  const showFinalLabel =
+    tournament.state === "post" && !showRating && dateState?.relativeDay !== "past";
 
   const live = isGolfLive(tournament);
   const showLiveIndicator = live && dateState?.relativeDay === "today";
