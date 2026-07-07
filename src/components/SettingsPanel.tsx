@@ -209,6 +209,22 @@ export default function SettingsPanel({
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  // Focus management (WCAG 2.4.3) — mirror GameDetailModal / WorldCupGroupsModal,
+  // the app's other role="dialog" overlays. On open, move focus into the drawer
+  // so keyboard / screen-reader users land inside the panel instead of being
+  // stranded on the settings trigger behind the aria-modal barrier; on close,
+  // restore focus to the element that opened it. Focusing the drawer CONTAINER
+  // (tabIndex=-1, outline suppressed below) keeps mouse users from seeing a ring
+  // while still handing the dialog + its "Settings" aria-label to assistive
+  // tech; the first Tab then reaches the close button. Keyed on [open], so it
+  // captures the opener and refocuses it only on real open/close transitions.
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement as HTMLElement | null;
+    drawerRef.current?.focus();
+    return () => opener?.focus?.();
+  }, [open]);
+
   // Lock body scroll while open
   useEffect(() => {
     if (!open) return;
@@ -411,12 +427,17 @@ export default function SettingsPanel({
       {/* Drawer: right-side on md+, full-height sheet on small screens */}
       <div
         ref={drawerRef}
+        // tabIndex=-1 makes the drawer programmatically focusable (see the
+        // focus-management effect) without adding it to the tab order; outline
+        // none suppresses the ring since it's focused only to seat assistive tech.
+        tabIndex={-1}
         className="absolute right-0 top-0 bottom-0 w-full sm:max-w-md flex flex-col shadow-2xl"
         style={{
           background: "var(--bg)",
           borderLeft: "1px solid var(--border)",
           paddingTop: "env(safe-area-inset-top)",
           paddingBottom: "env(safe-area-inset-bottom)",
+          outline: "none",
         }}
       >
         {/* Header */}
