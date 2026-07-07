@@ -419,6 +419,19 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Highlight a country…"
                   aria-label="Highlight a country"
+                  // This is a live filter — norm(query) re-runs on every
+                  // keystroke — not a text field for prose. On mobile, iOS
+                  // autocapitalize/autocorrect would rewrite a partial country
+                  // name as you type (e.g. "arg" toward Argentina gets
+                  // capitalized/"corrected"), silently changing what the filter
+                  // matches. Turn all of that off, and disable autofill so name/
+                  // address suggestions don't overlay the field. Matches the
+                  // "not prose" input hygiene already on the ZIP + feedback
+                  // inputs; purely behavioral hints, no visual change.
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   className="basis-full sm:basis-0 sm:flex-1 min-w-0 text-xs rounded-lg px-2.5 py-1.5 outline-none"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)", fontFamily: "inherit" }}
                 />
