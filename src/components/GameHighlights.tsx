@@ -149,10 +149,17 @@ export default function GameHighlights({
   const effectiveOfficialStatus = officialChannel ? officialStatus : "missing";
   // Gate on "found", not "!== missing": rendering a button while it's still
   // "loading" and then hiding it when it resolves to null is what made the 2nd
-  // link "appear then disappear" (Jacob 7/7). Waiting for "found" trades a ~0.5s
-  // later appearance for no flicker — a button that was going to be hidden anyway
-  // just never flashes.
-  const showYouTube = !!(isFinished && highlightUrl && (effectiveOfficialStatus === "found" || searchStatus === "found"));
+  // link "appear then disappear" (Jacob 7/7).
+  // AND wait until BOTH slots have settled (resolved to found/missing) before
+  // showing the row at all — otherwise a card that ends up with two buttons
+  // flashes the 1st as a single full-width button (they're flex-1, so one-alone
+  // stretches) and then "splits" when the 2nd lands (Jacob 7/7 — "should never
+  // load that big 1 button"). Both resolve in parallel now, so the wait is just
+  // the slower of the two, not the sum. When there's no official channel the
+  // official slot is synchronously "missing" (never loading), so single-button
+  // leagues still show as soon as their one button resolves.
+  const bothSettled = effectiveOfficialStatus !== "loading" && searchStatus !== "loading";
+  const showYouTube = !!(isFinished && highlightUrl && bothSettled && (effectiveOfficialStatus === "found" || searchStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   if (!showYouTube && !showNhl) return null;
 
