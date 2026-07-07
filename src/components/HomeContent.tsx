@@ -824,11 +824,11 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
 
-  const updatePrefs = (update: Partial<Preferences>) => {
+  const updatePrefs = useCallback((update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
     setPrefs(next);
     savePreferences(next);
-  };
+  }, [prefs]);
 
   // Three-state view toggle: scores-plain (🙈) | scores-rated (🙉) | news.
   // Single segmented control in the header replaces the old separate
@@ -1051,10 +1051,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
     setShowLeaguePicker(false);
   };
 
-  const skipLeaguePicker = () => {
+  const skipLeaguePicker = useCallback(() => {
     updatePrefs({ leaguesOnboarded: true });
     setShowLeaguePicker(false);
-  };
+  }, [updatePrefs]);
 
   // Escape closes the first-run league picker too — same as tapping its
   // backdrop (both fall back to default leagues). Brings it in line with the
