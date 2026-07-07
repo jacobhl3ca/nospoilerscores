@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sport } from "@/lib/types";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -313,10 +313,14 @@ function stripLeaguePrefixForMobile(label: string): string {
   return s || label;
 }
 
-function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {
-  // Reddit columns get prev/next paging — precompute every post's payload once
-  // so each row hands the modal its siblings without rebuilding N× per row.
-  const redditSiblings = items[0]?.section?.startsWith("r/") ? items.map(newsItemToPlayOpts) : null;
+function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null }) {
+  // Reddit columns get prev/next paging. The sibling list is assembled at the
+  // NewsColumn level and SPANS every Reddit section in the column, so Next keeps
+  // going past the end of one section (e.g. r/soccer) into the next (r/worldcup)
+  // instead of dead-ending (Jacob 7/7). baseIndex is this card's offset into
+  // that shared list; a row's global index = baseIndex + its row index. When
+  // this isn't a Reddit card the parent passes baseIndex=null and no paging.
+  const redditSiblings = baseIndex != null ? (siblings ?? null) : null;
   // When every row is a text post (e.g. an all-text ESPN/MLB.com headlines
   // card), collapse the whole card while text posts are hidden — otherwise a
   // bare header with no rows would sit there. Mixed cards keep the header and
@@ -352,7 +356,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay }: { label: str
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => (
-            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={redditSiblings} index={idx} />
+            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={redditSiblings} index={redditSiblings ? (baseIndex ?? 0) + idx : idx} />
           ))}
         </div>
       )}
@@ -666,7 +670,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
   );
 }
 
-function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVideo?: PlayHandler }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -685,6 +689,10 @@ function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVide
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.label]);
 
+  // Publish this section's items up to NewsColumn so it can stitch a single
+  // prev/next list spanning every Reddit section in the column.
+  useEffect(() => { onItemsLoaded?.(source.label, items); }, [items, source.label, onItemsLoaded]);
+
   if (source.variant === "video") {
     return (
       <VideoSourceCard
@@ -696,7 +704,7 @@ function SourceSection({ source, onPlayVideo }: { source: NewsSource; onPlayVide
       />
     );
   }
-  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} onPlay={onPlayVideo} />;
+  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} onPlay={onPlayVideo} siblings={siblings} baseIndex={baseIndex} />;
 }
 
 export default function NewsColumn({
@@ -713,6 +721,31 @@ export default function NewsColumn({
   onPlayVideo,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
+
+  // Collect each section's loaded items so we can stitch ONE prev/next list that
+  // spans every Reddit section in this column — that's what lets Next carry on
+  // from the last post of r/soccer into r/worldcup instead of stopping (Jacob
+  // 7/7). Keyed by source.label (stable, unique within a column).
+  const [itemsBySource, setItemsBySource] = useState<Record<string, NewsItem[]>>({});
+  const handleItemsLoaded = useCallback((label: string, items: NewsItem[]) => {
+    setItemsBySource((prev) => (prev[label] === items ? prev : { ...prev, [label]: items }));
+  }, []);
+
+  // Walk the sections in render order; for every Reddit section, append its
+  // posts to the shared list and record where that section starts (baseIndex).
+  const { siblings, baseIndexBySource } = useMemo(() => {
+    const sib: PlayOpts[] = [];
+    const base: Record<string, number> = {};
+    for (const source of sources) {
+      const its = itemsBySource[source.label];
+      if (its && its.length && its[0]?.section?.startsWith("r/")) {
+        base[source.label] = sib.length;
+        for (const it of its) sib.push(newsItemToPlayOpts(it));
+      }
+    }
+    return { siblings: sib, baseIndexBySource: base };
+  }, [sources, itemsBySource]);
+
   return (
     <div className={`${widthCls} min-h-[60vh]`}>
       {!hideTitle && (
@@ -728,7 +761,14 @@ export default function NewsColumn({
       )}
       <div className="flex flex-col gap-1.5 sm:gap-2">
         {sources.map((source) => (
-          <SourceSection key={source.label} source={source} onPlayVideo={onPlayVideo} />
+          <SourceSection
+            key={source.label}
+            source={source}
+            onPlayVideo={onPlayVideo}
+            onItemsLoaded={handleItemsLoaded}
+            siblings={siblings}
+            baseIndex={baseIndexBySource[source.label] ?? null}
+          />
         ))}
       </div>
     </div>
