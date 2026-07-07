@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   // Static export — the site is served by Cloudflare Pages, not a Next server.
@@ -10,4 +11,12 @@ const nextConfig: NextConfig = {
   // (getApiBase() returns "" on web, the prod origin under Capacitor).
 };
 
-export default nextConfig;
+// Sentry: wraps the build to (optionally) upload source maps. SENTRY_AUTH_TOKEN
+// is not set in CI, so the upload step just skips — client error capture still
+// works via instrumentation-client.ts regardless.
+export default withSentryConfig(nextConfig, {
+  org: "olarpo",
+  project: "hidescore",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+});
