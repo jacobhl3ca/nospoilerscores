@@ -216,10 +216,16 @@ export default function RootLayout({
       <body className="antialiased">
         {children}
         {/* GoatCounter analytics — create hidescore site at goatcounter.com and update the URL */}
+        {/* Explicit https (not protocol-relative //) so the loader still resolves
+            inside the Capacitor native WebView, where the page origin is
+            capacitor://localhost — a // URL would resolve to capacitor://gc.zgo.at
+            and fail to load. On the https website this is byte-identical (a //
+            URL already inherits the page's https there). Matches the Umami tag
+            below, which is likewise explicit-https. */}
         <script
           data-goatcounter="https://hidescore.goatcounter.com/count"
           async
-          src="//gc.zgo.at/count.js"
+          src="https://gc.zgo.at/count.js"
         />
         {/* Umami analytics — self-hosted on the Mac mini, privacy-first */}
         <script
