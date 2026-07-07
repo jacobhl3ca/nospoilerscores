@@ -190,7 +190,19 @@ export default function EventCard({
   const fullWhen = (() => {
     const d = new Date(event.date);
     if (isNaN(d.getTime())) return "";
-    return d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
+    const tz = getTimeZone();
+    // Drop the time for a midnight (TBD) placeholder date, matching whenLabel
+    // above and the game cards: an upcoming race whose session time ESPN hasn't
+    // set yet arrives as 00:00, and rendering it as "12:00 AM" reads as a real
+    // (wrong) start time. Detect it in the SAME zone the time is shown in (tz);
+    // "24:00" guards the value some ICU builds emit for midnight (same guard as
+    // whenLabel / weather.ts / etDay.ts / DateNav.ts). Real times still show.
+    const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+    const midnight = hm === "00:00" || hm === "24:00";
+    const opts: Intl.DateTimeFormatOptions = midnight
+      ? { weekday: "short", month: "short", day: "numeric", timeZone: tz }
+      : { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: tz };
+    return d.toLocaleString("en-US", opts);
   })();
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
 
