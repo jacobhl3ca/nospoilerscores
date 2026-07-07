@@ -2592,6 +2592,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               rel="noopener noreferrer"
               aria-label="Download HideScore on the App Store"
               className="inline-block transition-opacity hover:opacity-80"
+              data-umami-event="install-appstore"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/app-store-badge.svg" alt="Download on the App Store" loading="lazy" width={120} height={40} className="block h-10 w-auto" />

@@ -180,6 +180,7 @@ export default function WatchWorldCupWithoutSpoilersPage() {
           href="/worldcup"
           className="inline-block rounded-lg px-5 py-2.5 font-semibold"
           style={{ background: "var(--accent)", color: "#fff" }}
+          data-umami-event="wc-open-hub"
         >
           Open the spoiler-free World Cup hub →
         </Link>
@@ -191,6 +192,7 @@ export default function WatchWorldCupWithoutSpoilersPage() {
             rel="noopener noreferrer"
             className="underline underline-offset-2"
             style={{ color: "var(--text-muted)" }}
+            data-umami-event="install-appstore"
           >
             also on the App Store
           </a>
