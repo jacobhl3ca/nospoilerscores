@@ -182,6 +182,12 @@ export default {
       }
       const query = url.searchParams.get("q");
       const preferChannel = url.searchParams.get("channel"); // e.g. "NBA", "MLB"
+      // prefer=extended flips the standard-vs-extended tiebreak so the LONGER
+      // "Extended Highlights" cut wins when one exists. Used by the World Cup 2nd
+      // highlight button to serve a reliably-distinct video from the standard cut
+      // the 1st button plays — "normal + extended" (Jacob 7/7). Falls back to the
+      // standard ordering when no extended video matched, so it's never worse.
+      const preferExtended = url.searchParams.get("prefer") === "extended";
       const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
       const excludeSet = new Set(
         (excludeParam || "").split(",").map((s) => s.trim()).filter(Boolean)
@@ -814,7 +820,27 @@ export default {
           // General (non-channel) search: standard everywhere first,
           // then extended, then weakest fallbacks. firstHighlightId
           // is the fallback for non-golf only.
-          videoId =
+          // When prefer=extended, the SAME tiers run but the extended cut of each
+          // tier is checked before its standard sibling — so the longer "Extended
+          // Highlights" wins if it exists, else it falls straight back to the
+          // standard ordering (never returns fewer results than the default).
+          videoId = preferExtended ? (
+            bestMatchExtendedId ||
+            teamsGameExtendedId ||
+            teamsExtendedId ||
+            yearMatchedExtendedId ||
+            bestMatchId ||
+            teamsGameMatchedId ||
+            golfRecapYearId ||
+            golfRecapId ||
+            golfRoundYearId ||
+            golfRoundId ||
+            teamsMatchedId ||
+            yearMatchedId ||
+            playerReelId ||
+            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId) ||
+            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightId)
+          ) : (
             // Standard
             bestMatchId ||
             teamsGameMatchedId ||
@@ -832,7 +858,8 @@ export default {
             // Weakest
             playerReelId ||
             (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightId) ||
-            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId);
+            (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId)
+          );
         }
         if (!videoId && !isGolfQuery && !queryHasSpecificTeams) {
           // Raw-regex fallback — only for non-golf. For golf we'd

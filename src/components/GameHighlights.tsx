@@ -108,17 +108,15 @@ export default function GameHighlights({
         const officialId = await resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
-        // World Cup: show ONE official button. resolveHighlightVideo already
-        // falls through from the FOX-channel lookup to the unscoped search,
-        // which the worker restricts to official channels for WC — so the
-        // separate "search" button only ever re-surfaces the same official
-        // pool (or FIFA's alt-cast), i.e. a duplicate clip of the same game.
-        // Drop it. (fifa-only; competition is null for every other league.)
-        if (competition) {
-          setSearchStatus("missing");
-          return;
-        }
-        const id = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition);
+        // World Cup: 2nd button = the EXTENDED cut (prefer=extended), deduped
+        // against the official standard highlight. FOX/FIFA post both a standard
+        // and a longer "Extended Highlights" per match; prefer=extended reliably
+        // lands the distinct longer one instead of re-surfacing the same clip that
+        // made a plain search look like a duplicate. So the pair reads "normal +
+        // extended" (Jacob 7/7). Hidden if no extended exists. (fifa-only;
+        // competition is null for every other league.)
+        const preferExtended = !!competition;
+        const id = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended);
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
       })();
@@ -137,7 +135,12 @@ export default function GameHighlights({
   // When there is no official channel the official button never renders, so
   // treat officialStatus as "missing" without storing it in state.
   const effectiveOfficialStatus = officialChannel ? officialStatus : "missing";
-  const showYouTube = !!(isFinished && highlightUrl && (effectiveOfficialStatus !== "missing" || searchStatus !== "missing"));
+  // Gate on "found", not "!== missing": rendering a button while it's still
+  // "loading" and then hiding it when it resolves to null is what made the 2nd
+  // link "appear then disappear" (Jacob 7/7). Waiting for "found" trades a ~0.5s
+  // later appearance for no flicker — a button that was going to be hidden anyway
+  // just never flashes.
+  const showYouTube = !!(isFinished && highlightUrl && (effectiveOfficialStatus === "found" || searchStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   if (!showYouTube && !showNhl) return null;
 
@@ -148,7 +151,7 @@ export default function GameHighlights({
           rather than falling back to a YouTube search page. */}
       {showYouTube && (
         <div className={`${wrapMargin} flex gap-1`}>
-          {officialChannel && officialStatus !== "missing" && (
+          {officialChannel && officialStatus === "found" && (
             <button
               onClick={async (e) => {
                 e.stopPropagation();
@@ -189,7 +192,7 @@ export default function GameHighlights({
               )}
             </button>
           )}
-          {searchStatus !== "missing" && (
+          {searchStatus === "found" && (
             <button
               onClick={async (e) => {
                 e.stopPropagation();
@@ -200,7 +203,8 @@ export default function GameHighlights({
                 }
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition);
+                // World Cup prefers the extended cut (see prefetch note above).
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;
