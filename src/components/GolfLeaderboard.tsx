@@ -533,10 +533,15 @@ export default function GolfLeaderboard({
                 />
               )}
 
-              {/* Name — flush left next to flag/rank, fills remaining width. */}
+              {/* Name — flush left next to flag/rank, fills remaining width.
+                  title carries the FULL name so a truncated row (or an
+                  abbreviated name tier — initials/last-name-only) still reveals
+                  who it is on hover, matching the truncated-name title
+                  convention in GameCard/EventCard/WorldCupBracket. */}
               <span
                 className="text-xs sm:text-sm truncate flex-1 min-w-0"
                 style={{ color: "var(--text)" }}
+                title={player.name}
               >
                 {displayName}
               </span>
