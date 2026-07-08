@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, Sport, Team } from "@/lib/types";
 import { fetchTeamSchedule, fetchScheduleRatings } from "@/lib/espn";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard from "./GameCard";
 import { getDateString } from "@/components/DateNav";
 
@@ -222,16 +222,16 @@ export default function TeamView({
     return () => ro.disconnect();
   }, [team.shortDisplayName, team.displayName, team.abbreviation, leagueLabel]);
 
-  // Bucket by Eastern day (getDateString) — matches the scoreboard and the
-  // card's own date label. `g.date.slice(0,10)` is the UTC day, which
-  // mislabels late-evening ET games (past midnight UTC) as the next day.
-  const gameIsToday = (g: Game) => {
-    const etYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(new Date(g.date));
-    // getDateString returns "YYYYMMDD"; etYmd is "YYYY-MM-DD" — drop dashes.
-    return etYmd.replace(/-/g, "") === getDateString(0);
-  };
+  // Bucket the game to its ET slate day the SAME way getDateString(0) derives
+  // "today" (getEtServiceDate's 1 AM rollover), so a game kicking off between
+  // midnight and 1 AM stays on the same day both sides call it — matching how
+  // GameDetailModal computes isToday. A raw ET calendar day here would drift
+  // from the service day in that window and make TeamView disagree with the
+  // card/modal on isToday, which gates the recap-upload buffer in
+  // GameHighlights (today's finals wait for the upload window; past games show
+  // immediately). etSlateYmd also fixes the old UTC-day mislabel of
+  // late-evening ET games since it buckets in the effective time zone.
+  const gameIsToday = (g: Game) => etSlateYmd(g.date) === getDateString(0);
 
   const renderCard = (game: Game) => {
     // Swap in the linescore-aware rating when the backfill resolved one (and it
