@@ -13,9 +13,15 @@
 //     spans so they don't false-positive.
 //   • SPOILER_RX — outcome keywords ("walk-off", "stuns", "wins", "hat-trick",
 //     "red card", …). Tuned to leave "champion"/"champions" alone so
-//     "Premier League"/"Champions League" don't trip it.
+//     "Premier League"/"Champions League" don't trip it. Also catches the
+//     everyday result verbs headlines lean on — "edge(s)"/"rout(s)"/"upset"/
+//     "clinch"/"sweep"/"ousts"/"eliminates"/"advances" — each of which names
+//     a winner or a knockout ("Warriors edge Lakers", "Spurs upset Arsenal")
+//     yet slipped past the earlier beat/defeat/win set. The leading \b keeps
+//     "edge" from matching inside "hedge"/"wedge"/"pledge"; "rout" is spelled
+//     out (rout/routs/routed) so it can't swallow "route"/"routine".
 const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
