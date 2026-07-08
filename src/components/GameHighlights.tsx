@@ -7,6 +7,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo } from "@/lib/youtube";
+import { getBakedHighlight } from "@/lib/highlights";
 
 // Per-league buffer (hrs from game start) before showing the highlight button,
 // and regulation period counts for the OT-extra calc below. Both are constant
@@ -105,6 +106,12 @@ export default function GameHighlights({
     const series = game.seriesNote;
     if (officialChannel) {
       (async () => {
+        // Prefer server-prebaked IDs (news cron → /news/highlights.json, keyed on
+        // sport + ESPN event id). When present the buttons resolve with NO live
+        // /api/youtube lookup — instant, no per-card scrape, no stagger. The baked
+        // 2nd id is already deduped against the 1st at bake time. Whichever id the
+        // bake doesn't have yet falls back to the exact same live resolution below.
+        //
         // Resolve BOTH buttons CONCURRENTLY. Each resolveHighlightVideo is a live
         // YouTube scrape; running them in series made the 2nd link pop in seconds
         // after the 1st (Jacob 7/7 — "started with 1, then added the 2nd"). The 2nd
@@ -117,16 +124,22 @@ export default function GameHighlights({
         // reads "normal + extended". Hidden if no extended exists. (fifa-only;
         // competition is null for every other league.)
         const preferExtended = !!competition;
-        const officialP = resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
-        const secondP = resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+        const baked = await getBakedHighlight(game.sport, game.id);
+        const officialP = baked?.official
+          ? Promise.resolve(baked.official)
+          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
+        const secondP = baked?.extended
+          ? Promise.resolve(baked.extended)
+          : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
         const officialId = await officialP;
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
         let secondId = await secondP;
-        if (secondId && officialId && secondId === officialId) {
+        if (!baked?.extended && secondId && officialId && secondId === officialId) {
           // Collision — the parallel (unexcluded) 2nd landed the same clip as the
           // official. Re-resolve once, this time excluding it, so the two buttons
-          // never play the same video.
+          // never play the same video. (Only for a freshly live-resolved 2nd — a
+          // baked 2nd is already deduped at bake time.)
           secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended);
         }
         prefetchedVideoId.current = secondId;
@@ -137,12 +150,15 @@ export default function GameHighlights({
       // officialStatus is derived to "missing" below (effectiveOfficialStatus)
       // rather than set synchronously here, which would trigger a cascading
       // render (react-hooks/set-state-in-effect).
-      resolveHighlightVideo(away, home, dateStr, series, undefined, undefined, competition).then((id) => {
+      (async () => {
+        const baked = await getBakedHighlight(game.sport, game.id);
+        const id = baked?.extended ?? baked?.official
+          ?? await resolveHighlightVideo(away, home, dateStr, series, undefined, undefined, competition);
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
-      });
+      })();
     }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition]);
+  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition]);
 
   // When there is no official channel the official button never renders, so
   // treat officialStatus as "missing" without storing it in state.
