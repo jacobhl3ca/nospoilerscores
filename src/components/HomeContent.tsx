@@ -355,6 +355,10 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
+  // Dialog containers for the ratings/news explainer warnings — targeted by the
+  // focus-management effect below so keyboard/SR users land inside the overlay.
+  const ratingsExplainerRef = useRef<HTMLDivElement>(null);
+  const newsExplainerRef = useRef<HTMLDivElement>(null);
   // Escape closes the ratings/news explainer warnings, matching their existing
   // backdrop-tap dismissal and the rest of the app's modals (GameDetailModal,
   // VideoModal, WorldCupGroupsModal all close on Escape).
@@ -366,7 +370,19 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
       setShowNewsExplainer(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Focus management (WCAG 2.4.3): move focus into the open dialog so keyboard
+    // and screen-reader users land inside the overlay instead of being stranded
+    // on the tab/toggle behind it, and restore focus to the opener on close.
+    // These dialogs already declare role="dialog" + aria-modal + aria-labelledby
+    // but never seated focus — the gap GameDetailModal / SettingsPanel already
+    // close. Focus the CONTAINER (tabIndex=-1) so no ring shows for mouse users;
+    // the first Tab then reaches the Cancel button.
+    const opener = document.activeElement as HTMLElement | null;
+    (showRatingsExplainer ? ratingsExplainerRef : newsExplainerRef).current?.focus();
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      opener?.focus?.();
+    };
   }, [showRatingsExplainer, showNewsExplainer]);
   // First-run league picker (shown once, only on a brand-new install — see the
   // mount effect). pickerSel is the ordered set of chosen leagues (max 3, mapped
@@ -2694,11 +2710,16 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowRatingsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            ref={ratingsExplainerRef}
+            // tabIndex=-1 makes the container programmatically focusable (see the
+            // focus-management effect) without joining the tab order; outline
+            // none suppresses the ring since it's focused only to seat SR focus.
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="ratings-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
@@ -2769,11 +2790,16 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowNewsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            ref={newsExplainerRef}
+            // tabIndex=-1 makes the container programmatically focusable (see the
+            // focus-management effect) without joining the tab order; outline
+            // none suppresses the ring since it's focused only to seat SR focus.
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="news-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
