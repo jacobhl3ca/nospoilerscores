@@ -1994,6 +1994,176 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
   }));
 }
 
+// ── Game highlight IDs (prebaked so the score cards never live-scrape) ──
+//
+// The per-game "watch highlights" buttons (src/components/GameHighlights.tsx)
+// resolve their YouTube video IDs live, at view time, one card at a time — a
+// ~1-2s /api/youtube lookup per card that makes cards stagger in ("MLB loads,
+// then World Cup"). This bakes those IDs server-side, exactly the way news
+// video IDs are handled, so the client reads them from a static file and the
+// buttons appear instantly, all at once. The client still falls back to a live
+// resolve for any finished game not yet baked (recap not uploaded when the cron
+// last ran), so nothing regresses when a bake is missing.
+//
+// The lookup MUST mirror src/lib/youtube.ts + GameHighlights.tsx exactly so a
+// baked ID is what a live client would resolve:
+//   • fifa uses the "FOX Sports" channel + a "World Cup" competition token in
+//     the query, and the 2nd button prefers the extended cut (prefer=extended);
+//   • MLB swaps channels — 1st button resolves UNSCOPED, 2nd = the MLB channel;
+//   • every other league: 1st = official channel, 2nd = unscoped.
+// The key MUST be `${sport}:${event.id}` — GameHighlights keys off game.sport +
+// game.id, and game.id === event.id for every team-sport card (espn.ts parseGame).
+const HL_OUT_PATH = `${OUT_DIR}/highlights.json`;
+const HL_ENTRY_TTL_MS = 10 * 24 * 60 * 60 * 1000; // prune baked games older than 10d
+
+// Leagues that render per-game highlight cards, with their official YouTube
+// channel — mirrors OFFICIAL_CHANNELS + the scoreboard paths in src/lib. Golf/
+// tennis/F1/UFC omitted (leaderboard/event cards, not per-game highlight buttons).
+const HL_LEAGUES = [
+  { sport: "mlb",   path: "/baseball/mlb/scoreboard",                         channel: "MLB" },
+  { sport: "nba",   path: "/basketball/nba/scoreboard",                       channel: "NBA" },
+  { sport: "wnba",  path: "/basketball/wnba/scoreboard",                      channel: "WNBA" },
+  { sport: "nhl",   path: "/hockey/nhl/scoreboard",                           channel: "NHL" },
+  { sport: "nfl",   path: "/football/nfl/scoreboard",                         channel: "NFL" },
+  { sport: "ncaam", path: "/basketball/mens-college-basketball/scoreboard",   channel: "March Madness" },
+  { sport: "ncaaw", path: "/basketball/womens-college-basketball/scoreboard", channel: "March Madness" },
+  { sport: "ncaaf", path: "/football/college-football/scoreboard",            channel: "ESPN College Football" },
+  { sport: "fifa",  path: "/soccer/fifa.world/scoreboard",                    channel: "FOX Sports" },
+  { sport: "epl",   path: "/soccer/eng.1/scoreboard",                         channel: "NBC Sports" },
+  { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
+  { sport: "ucl",   path: "/soccer/uefa.champions/scoreboard",                channel: "CBS Sports Golazo" },
+  { sport: "uel",   path: "/soccer/uefa.europa/scoreboard",                   channel: "CBS Sports Golazo" },
+];
+// Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
+const HL_COMPETITION = { fifa: "World Cup" };
+// Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
+const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
+const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
+function hlQuery(away, home, dateStr, series, competition, dated) {
+  const head = `${hlAlias(away)} vs ${hlAlias(home)} highlights`;
+  let q = competition
+    ? (dated ? `${head} ${competition} ${dateStr}` : `${head} ${competition}`)
+    : (dated ? `${head} ${dateStr}` : head);
+  if (series) q += ` ${series}`;
+  return q;
+}
+
+// One /api/youtube call mirroring youtube.ts fetchFirstVideoId (q, channel,
+// exclude, prefer=extended). Returns a raw video id or null.
+async function hlFetchId(query, { channel, exclude, preferExtended } = {}) {
+  try {
+    let url = `https://hidescore.com/api/youtube?q=${encodeURIComponent(query)}`;
+    if (channel) url += `&channel=${encodeURIComponent(channel)}`;
+    const ex = (exclude ?? []).filter(Boolean);
+    if (ex.length) url += `&exclude=${encodeURIComponent(ex.join(","))}`;
+    if (preferExtended) url += `&prefer=extended`;
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d?.videoId ?? null;
+  } catch { return null; }
+}
+
+// The resolveHighlightVideo chain from youtube.ts: channel-scoped dated,
+// unscoped dated, and unscoped undated all raced concurrently; first by
+// priority wins.
+async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended) {
+  const dated = hlQuery(away, home, dateStr, series, competition, true);
+  const undated = hlQuery(away, home, dateStr, series, competition, false);
+  const [chanHit, datedUnscoped, undatedHit] = await Promise.all([
+    channel ? hlFetchId(dated, { channel, exclude, preferExtended }) : Promise.resolve(null),
+    hlFetchId(dated, { exclude, preferExtended }),
+    hlFetchId(undated, { exclude, preferExtended }),
+  ]);
+  return chanHit || datedUnscoped || undatedHit;
+}
+
+// ET calendar date as YYYYMMDD (ESPN scoreboard `dates=` param), offset in days.
+function hlEtYmd(offsetDays) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" })
+    .format(d).replace(/-/g, "");
+}
+
+// Same ET date string the client builds for the query ("Jul 7, 2026").
+function hlDateStr(iso) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+}
+
+async function bakeGameHighlights() {
+  const now = Date.now();
+  // Carry forward prior baked entries so found IDs persist across runs and older
+  // games (aged out of the today/yesterday scoreboard window) keep their buttons.
+  const games = {};
+  try {
+    const prior = JSON.parse(await readFile(HL_OUT_PATH, "utf8"));
+    for (const [k, v] of Object.entries(prior?.games ?? {})) {
+      if (v && (now - (v.t ?? 0)) < HL_ENTRY_TTL_MS) games[k] = v;
+    }
+  } catch { /* first run / no file */ }
+
+  const dates = [hlEtYmd(0), hlEtYmd(-1)];
+  let resolved = 0;
+  for (const lg of HL_LEAGUES) {
+    for (const ymd of dates) {
+      let data;
+      try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports${lg.path}?dates=${ymd}`, { headers: { "User-Agent": UA } });
+        if (!res.ok) continue;
+        data = await res.json();
+      } catch { continue; }
+      for (const event of data?.events ?? []) {
+        if (event?.status?.type?.state !== "post") continue;
+        const key = `${lg.sport}:${event.id}`;
+        const prev = games[key] ?? {};
+        if (prev.official && prev.extended) continue; // both baked already
+        const comp = event.competitions?.[0];
+        const comps = comp?.competitors ?? [];
+        const away = comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName;
+        const home = comps.find((c) => c.homeAway === "home")?.team?.shortDisplayName;
+        if (!away || !home) continue;
+        let series = null;
+        for (const note of comp?.notes ?? []) {
+          const m = (note?.headline ?? "").match(/Game \d+/i);
+          if (m) { series = m[0]; break; }
+        }
+        const dateStr = hlDateStr(event.date);
+        const competition = HL_COMPETITION[lg.sport] ?? null;
+        const preferExtended = !!competition;
+        // MLB swaps channels; every other league uses official-first (see note above).
+        const isMlb = lg.sport === "mlb";
+        const primaryChannel = isMlb ? undefined : lg.channel;
+        const secondaryChannel = isMlb ? lg.channel : undefined;
+
+        // 1st button (official/primary) and 2nd button (extended/secondary),
+        // deduped so the two buttons never play the same clip — mirrors the
+        // concurrent resolve + collision re-resolve in GameHighlights.tsx.
+        let official = prev.official ?? null;
+        if (!official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition);
+        let extended = prev.extended ?? null;
+        if (!extended) {
+          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+          if (extended && official && extended === official) {
+            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended);
+          }
+        }
+
+        const entry = { t: now };
+        if (official) entry.official = official;
+        if (extended) entry.extended = extended;
+        if (entry.official || entry.extended) {
+          games[key] = entry;
+          if (!prev.official && !prev.extended) resolved++;
+        }
+      }
+    }
+  }
+
+  await mkdir(dirname(HL_OUT_PATH), { recursive: true });
+  await writeFile(HL_OUT_PATH, JSON.stringify({ fetchedAt: new Date().toISOString(), games }));
+  console.log(`wrote ${HL_OUT_PATH} (${Object.keys(games).length} games, ${resolved} newly resolved)`);
+}
+
 // ── Write ─────────────────────────────────────────────────────────
 
 async function writeFeed(name, items) {
@@ -2183,6 +2353,21 @@ const results = await Promise.allSettled(
 );
 
 if (!ONLY_REDDIT) await saveYTCache(ytCache);
+
+// Bake per-game highlight video IDs (score-card buttons read these instead of
+// live-scraping). Runs on the same cadence as the video feeds; skipped in
+// reddit-only runs and honors --only / --skip via the "highlights" token.
+// Wrapped so a lookup/ESPN hiccup never fails the whole cron.
+const runHighlights = !ONLY_REDDIT
+  && (ONLY_LIST.length === 0 || ONLY_LIST.includes("highlights"))
+  && !SKIP_LIST.some((s) => (s.endsWith("*") ? "highlights".startsWith(s.slice(0, -1)) : s === "highlights"));
+if (runHighlights) {
+  try {
+    await bakeGameHighlights();
+  } catch (e) {
+    console.error("highlights bake FAILED:", e?.message || e);
+  }
+}
 
 let failed = 0;
 results.forEach((r, i) => {
