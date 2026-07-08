@@ -631,8 +631,14 @@ export default {
           //     match event), "(grab|gets|gains) all three points" / "all
           //     three points" — soccer-cliché for a 3-point win that
           //     bypassed every prior keyword.
+          //   • Everyday result verbs (mirrors lib/spoilers.ts): "edge(s)"/
+          //     "rout(s)"/"upset"/"clinch"/"sweep"/"ousts"/"eliminates"/
+          //     "advances" — each names a winner or a knockout ("Warriors
+          //     edge Lakers") yet slipped past the beat/defeat/win set. The
+          //     leading \b keeps "edge" out of "hedge"/"wedge"; "rout" is
+          //     spelled out so it can't swallow "route"/"routine".
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
           if (SCORE_RX.test(title) || SPOILER_RX.test(title)) continue;
 
           // Simulation/videogame hard-skip — NBA 2K, MLB The Show, FIFA,
