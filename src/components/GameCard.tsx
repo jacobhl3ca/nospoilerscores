@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
@@ -391,18 +391,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const teamViewDateLabel = teamView ? (() => {
     const d = new Date(game.date);
     if (isNaN(d.getTime())) return "";
-    // Bucket the game by the app's effective-zone calendar day — the same basis
-    // the scoreboard + date nav use (getDateString). Device-local bucketing broke
-    // under UTC render contexts: a 9pm-ET game is past midnight UTC, so it
-    // rolled into the next day and mislabeled (two "Yesterday" cards for games
-    // played on different days).
-    const etYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(d);
-    // getDateString returns "YYYYMMDD" (no separators); etYmd is "YYYY-MM-DD".
-    // Strip non-digits so both parse regardless of format.
+    // Bucket the game to its ET slate day the SAME way getDateString(0) derives
+    // "today" — via etSlateYmd's 1 AM rollover (getEtServiceDate) — so both sides
+    // of the diff use one day boundary. A raw ET calendar day (the old code) has
+    // no rollover, so a game kicking off between midnight and 1 AM ET (a ~9pm-PT
+    // West-Coast game) landed on the LATER day here while the board + date nav
+    // filed it under yesterday's slate — mislabeling it "Today" (Jacob 7/8).
+    // etSlateYmd also keeps the effective-zone bucketing that fixed the old
+    // UTC-day mislabel. Matches TeamView.gameIsToday's identical bucketing.
     const toNum = (ymd: string) => { const s = ymd.replace(/\D/g, ""); return Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)) / 86400000; };
-    const diffDays = toNum(etYmd) - toNum(getDateString(0));
+    const diffDays = toNum(etSlateYmd(game.date)) - toNum(getDateString(0));
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Tomorrow";
     if (diffDays === -1) return "Yesterday";
