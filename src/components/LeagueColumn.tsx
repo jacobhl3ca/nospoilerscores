@@ -1013,6 +1013,11 @@ export default function LeagueColumn({
           <button
             type="button"
             onClick={() => setCondenseExpanded((v) => !v)}
+            // Disclosure control: it expands/collapses the extra game cards, so
+            // expose that state to assistive tech. Without aria-expanded a
+            // screen reader can't tell the row is collapsible — matches the
+            // aria-expanded already on this file's league-switcher toggle.
+            aria-expanded={condenseExpanded}
             className="mt-0.5 mx-auto text-xs px-3 py-1.5 rounded-full cursor-pointer transition-colors"
             style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}
           >
