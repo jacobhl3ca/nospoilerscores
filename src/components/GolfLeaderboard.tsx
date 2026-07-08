@@ -87,7 +87,15 @@ export default function GolfLeaderboard({
     null,
     null,
   ]);
-  const prefetchStarted = useRef(false);
+  // The highlight query the slots were last resolved for. Keyed on the query
+  // STRING (not a bare "started" boolean) because this component stays mounted
+  // across date navigation — stepping to another round-day recomputes
+  // highlightQuery (a different round → different recap), and the prefetch must
+  // re-run for the new round. A boolean latched true on the first prefetch and
+  // never reset, so the effect bailed on every later date and the slots kept the
+  // PREVIOUS round's video IDs — tapping a "Round 2 highlights" button played
+  // the Round 1 recap.
+  const prefetchedQuery = useRef<string | null>(null);
 
   const allPlayers = tournament.players;
   // When scores hidden, alphabetize to prevent position-order spoilers.
@@ -282,8 +290,13 @@ export default function GolfLeaderboard({
   const secondaryChannelsKey = secondaryChannels.join("|");
 
   useEffect(() => {
-    if (!highlightQuery || prefetchStarted.current) return;
-    prefetchStarted.current = true;
+    if (!highlightQuery || prefetchedQuery.current === highlightQuery) return;
+    prefetchedQuery.current = highlightQuery;
+    // Clear the previous round's resolved IDs before re-resolving for the new
+    // round. The slot setters below only ever WRITE into a null slot (slot 0
+    // bails when prev[0] is set; tryFill fills the first open slot), so without
+    // this reset a date change couldn't overwrite the stale IDs at all.
+    setHighlightSlots([null, null, null, null]);
     (async () => {
       // Drive the slot list from the curated secondary chain (ESPN
       // first — the reliable full-day recap source Jacob flagged).
