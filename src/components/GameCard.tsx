@@ -787,9 +787,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       // The "+N" is hidden on mobile (sm:inline), so the visible
                       // label is just the lead network — announce the popup and
                       // its open/closed state to screen readers, matching the
-                      // aria-haspopup/aria-expanded pattern on LeagueColumn's
-                      // league-switch button.
-                      aria-haspopup="true"
+                      // aria-haspopup="dialog"/aria-expanded pattern every other
+                      // popover toggle in the app uses (LeagueColumn's league-
+                      // switch, NewsColumn's swap, HomeContent's filter). "dialog"
+                      // (not the bare "true", which announces a menu that isn't
+                      // there) matches the role="dialog" overlay it opens below.
+                      aria-haspopup="dialog"
                       aria-expanded={broadcastExpanded}
                       onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
                     >
@@ -813,6 +816,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       {broadcastExpanded && game.broadcasts.length > 1 && (
         <div
           ref={broadcastOverlayRef}
+          // The toggle above declares aria-haspopup="dialog" + aria-expanded, so
+          // give the popover it opens a matching role + accessible name —
+          // otherwise it surfaces to assistive tech as an anonymous, role-less
+          // region. Same role="dialog" + aria-label pattern the rest of the app's
+          // popovers use (LeagueColumn/NewsColumn league swap, the calendar).
+          role="dialog"
+          aria-label="Where to watch"
           className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 rounded-md px-1.5 py-1 max-w-[65%] shadow-md"
           style={{ background: "var(--bg)", border: "1px solid var(--border-hover)" }}
           onClick={(e) => e.stopPropagation()}
