@@ -1024,6 +1024,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const initPlayer = () => {
       const YT = window.YT;
       if (!YT) return;
+      // The iframe_api script can finish downloading AFTER the modal has closed
+      // (fast Esc on a cold load). By then this effect's cleanup has run and the
+      // #yt-player mount is gone, so `new YT.Player("yt-player", …)` would build
+      // against a missing element and throw. Bail if the mount is no longer there.
+      if (!document.getElementById("yt-player")) return;
       playerRef.current = new YT.Player("yt-player", {
         width: "100%",
         height: "100%",
@@ -1121,7 +1126,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         window.clearTimeout(watchdogRef.current);
         watchdogRef.current = null;
       }
+      // Clear the pending API-ready callback if it's still ours, so a late
+      // iframe_api load can't fire initPlayer (a stale closure over this now-
+      // unmounted effect's currentId) against the removed #yt-player element.
+      if (window.onYouTubeIframeAPIReady === initPlayer) {
+        window.onYouTubeIframeAPIReady = undefined;
+      }
       if (playerRef.current?.destroy) playerRef.current.destroy();
+      // Drop the reference to the just-destroyed instance so the position poll
+      // (which re-subscribes on ytMode, not currentId) can't call methods on it
+      // during a fallback swap before the replacement player is built.
+      playerRef.current = null;
     };
   }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls]);
 
