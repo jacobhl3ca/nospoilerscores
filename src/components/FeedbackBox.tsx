@@ -72,7 +72,12 @@ export default function FeedbackBox() {
             autoComplete="off"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-36 text-xs px-2 py-0 leading-none rounded outline-none"
+            // outline-none drops the default ring so a mouse click stays clean;
+            // focus-visible re-adds the same 2px accent ring the date-nav pills /
+            // view tabs use, so keyboard focus is visible (WCAG 2.4.7). The
+            // border alone doesn't change on focus, so without this a Tab landing
+            // on the field gave no indication it was focused.
+            className="w-36 text-xs px-2 py-0 leading-none rounded outline-none focus-visible:[outline:2px_solid_var(--accent)] focus-visible:[outline-offset:2px]"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />
           {/* Symmetric to the caption on the left — absolutely positioned so
