@@ -1164,6 +1164,18 @@ function TeamPicker({
         onChange={(e) => setQuery(e.target.value)}
         placeholder={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
         aria-label={activeSport ? `Search ${activeSport.toUpperCase()} teams` : "Search all teams"}
+        // Live filter over team names — filtered re-runs on every keystroke — not
+        // a text field for prose. On mobile, iOS autocapitalize/autocorrect would
+        // rewrite a partial team name as you type (e.g. "gia" toward "Giants" gets
+        // capitalized/"corrected"), silently changing what the search matches.
+        // Turn all of that off, and disable autofill so name/address suggestions
+        // don't overlay the field. Matches the input hygiene already on the World
+        // Cup country filter + the ZIP/feedback inputs; purely behavioral hints,
+        // no visual change.
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
         className="w-full px-3 py-1.5 rounded-md text-sm"
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
       />
