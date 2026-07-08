@@ -169,6 +169,16 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   // for the venue. Coerce it to the device zone so the intended graceful
   // fallback actually works; a real IANA tz is used unchanged.
   const tz = geo.tz && geo.tz !== "auto" ? geo.tz : undefined;
+  // The hourly request must return times in the SAME zone `localDate` and
+  // `localHour` (below) are computed in, or the `hr === localHour` gametime
+  // match reads the wrong hour. `timezone=auto` resolves times in the venue's
+  // lat/lon zone, which matches `tz` when the geocoder gave one — but in the
+  // no-tz fallback `tz` is the device zone while `auto` would still be the
+  // venue's, so the two disagreed: the gametime row landed on the wrong hour
+  // (wrong temp/rain/condition), or the day shifted near midnight. Pin the API
+  // to the same effective zone so both sides always agree; a real IANA tz keeps
+  // the request byte-identical to before (geo.tz already equals the auto zone).
+  const apiTz = tz ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York");
   const localDate = start.toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
   // % 24 guards the "24" some ICU builds emit for midnight (same guard as
   // etDay/DateNav). Open-meteo's hourly times run 0–23, so an unguarded "24"
@@ -184,7 +194,7 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
       `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}` +
       `&hourly=temperature_2m,precipitation_probability,weather_code` +
       `&current=temperature_2m,precipitation,weather_code` +
-      `&temperature_unit=fahrenheit&timezone=auto&start_date=${localDate}&end_date=${localDate}`;
+      `&temperature_unit=fahrenheit&timezone=${encodeURIComponent(apiTz)}&start_date=${localDate}&end_date=${localDate}`;
     const r = await fetch(url);
     if (!r.ok) return null;
     data = await r.json();
