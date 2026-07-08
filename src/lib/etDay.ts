@@ -55,13 +55,6 @@ export function toYmd(d: Date): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// The "slate day" a fixture belongs to: its kickoff bucketed to a YYYYMMDD in
-// the effective time zone, using the SAME 1 AM rollover as getEtServiceDate.
-// A game kicking off before 1 AM local counts as the PREVIOUS day's slate — so
-// a western-US World Cup night match starting 9 PM PT (= 12 AM ET) shows under
-// last night, not today, matching where "today/yesterday" put the boundary.
-// ESPN buckets such a game under its raw calendar day, so the data layer has to
-// re-bucket with this to agree with the date nav (see fetchGames' soccer path).
 // YYYYMMDD → the next calendar day's YYYYMMDD. UTC math so it never trips on a
 // DST transition in the local zone.
 export function nextYmd(ymd: string): string {
@@ -70,6 +63,13 @@ export function nextYmd(ymd: string): string {
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
+// The "slate day" a fixture belongs to: its kickoff bucketed to a YYYYMMDD in
+// the effective time zone, using the SAME 1 AM rollover as getEtServiceDate.
+// A game kicking off before 1 AM local counts as the PREVIOUS day's slate — so
+// a western-US World Cup night match starting 9 PM PT (= 12 AM ET) shows under
+// last night, not today, matching where "today/yesterday" put the boundary.
+// ESPN buckets such a game under its raw calendar day, so the data layer has to
+// re-bucket with this to agree with the date nav (see fetchGames' soccer path).
 export function etSlateYmd(iso: string): string {
   const dt = new Date(iso);
   if (isNaN(dt.getTime())) return "";
