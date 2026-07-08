@@ -61,6 +61,14 @@ const RANKS: Record<string, number> = {
   "curacao": 82,
   "haiti": 83,
   "new zealand": 85,
+  // Same fix as the Bosnia block above, for two more nations the snapshot keyed
+  // under a form ESPN's fifa.world/standings is unlikely to send: ESPN commonly
+  // renders these as "DR Congo" and "Ivory Coast"/"Côte d'Ivoire", which
+  // normalize away from the "congo dr" / "ivory coast" primary keys. Alias each
+  // to the same rank so the badge resolves whichever string ESPN sends; the
+  // primary keys stay put, so no currently-working lookup can regress.
+  "dr congo": 46, // vs. "congo dr"
+  "cote d'ivoire": 33, // vs. "ivory coast" (FIFA's official French name)
 };
 
 // Normalize a team display name (lowercase, strip diacritics) for lookup.
