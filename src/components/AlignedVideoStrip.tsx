@@ -377,7 +377,7 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
             poster: item.imageUrl || null,
             sourceLabel: item.section || null,
             headline: item.headline,
-            byline: item.byline || null,
+            byline: item.section?.startsWith("r/") ? null : (item.byline || null),
             published: item.published || null,
           });
         }}
