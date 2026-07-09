@@ -371,7 +371,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // anyone who keeps the bar on still look when they want). Both LOCAL to this
   // modal (reset on every open) so the no-spoiler default always returns —
   // separate from the persistent Settings toggles (maskVideoTitle/Bottom).
-  const [revealTitle, setRevealTitle] = useState(false);
   // Collapse the control chrome (seek bar + control strip + watch links) to give
   // the video the whole frame — especially useful in mobile fullscreen. Toggled
   // by the eye in the video's bottom-right corner.
@@ -1166,11 +1165,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const mediaMaxH = imageMode
     ? (hasPager ? "min(84vh, 100dvh - 11rem)" : "min(90vh, 100dvh - 7rem)")
     : (hasPager ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)");
+  const ytFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
 
-  // Reddit prev/next paging: one bottom row on every viewport so arrows never
-  // sit over video/image content.
-  const pager = hasPager ? (
-    <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
+  // Reddit prev/next paging: phones keep labelled bottom buttons for thumb
+  // reach; desktop gets subtle side chevrons so the footer links never overlap.
+  const mobilePager = hasPager ? (
+    <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex sm:hidden items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
       <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
@@ -1184,6 +1184,30 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
       </button>
     </div>
+  ) : null;
+  const desktopPager = hasPager ? (
+    <>
+      <button
+        onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
+        disabled={!onPrev}
+        aria-label="Previous post"
+        title="Previous post"
+        className="hidden sm:flex fixed left-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
+        style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
+      >
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onNext?.(); }}
+        disabled={!onNext}
+        aria-label="Next post"
+        title="Next post"
+        className="hidden sm:flex fixed right-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
+        style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
+      >
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+      </button>
+    </>
   ) : null;
 
   return (
@@ -1325,45 +1349,48 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
             } : undefined}
           >
+            {/* YouTube modal controls sit above the player, right-aligned, so they
+                don't cover the iframe or collide with YouTube's own overlay. */}
+            <div
+              className="mb-2 flex items-center justify-end gap-1.5"
+              style={{ width: ytFrameWidth }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
+                aria-pressed={showCC}
+                aria-label={showCC ? "Hide captions" : "Show captions"}
+                className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
+                style={{
+                  color: showCC ? "white" : "rgba(255,255,255,0.75)",
+                  background: showCC ? "var(--accent)" : "rgba(0,0,0,0.5)",
+                  border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.16)",
+                }}
+                title={showCC ? "Hide captions" : "Show captions"}
+              >
+                CC
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
+                aria-label="Close"
+                title="Close (Esc)"
+              >
+                <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
             {/* Video region — 16:9 in-flow, or capped to leave bar room in FS */}
             <div
               onMouseMove={bumpCursor}
               className="group relative mx-auto w-full overflow-hidden bg-black"
               style={fsActive
-                ? { width: fsMediaWidth, aspectRatio: "16 / 9", borderRadius: 0 }
-                : { width: `min(100%, calc(${mediaMaxH} * 16 / 9))`, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
+                ? { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: 0 }
+                : { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
-              {/* In-video close + captions controls for YouTube highlights. Keep
-                  these attached to the player frame; viewport-fixed placement
-                  drifts to the page corner on shorter videos/cards. */}
-              <div className="absolute top-1.5 right-1.5 z-30 flex items-center gap-1.5">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
-                  aria-pressed={showCC}
-                  aria-label={showCC ? "Hide captions" : "Show captions"}
-                  className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
-                  style={{
-                    color: showCC ? "white" : "rgba(255,255,255,0.75)",
-                    background: showCC ? "var(--accent)" : "rgba(0,0,0,0.5)",
-                    border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.16)",
-                  }}
-                  title={showCC ? "Hide captions" : "Show captions"}
-                >
-                  CC
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onClose(); }}
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
-                  aria-label="Close"
-                  title="Close (Esc)"
-                >
-                  <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
                   through to the cross-origin iframe. This is what makes the
@@ -1427,7 +1454,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   NO BOTTOM BAR: controls:0 already strips YouTube's ENTIRE bottom
                   bar (no timeline/seek line exists), so nothing there needs
                   covering during playback. */}
-              {maskVideoTitle && !titleSafe && !revealTitle && (
+              {maskVideoTitle && !titleSafe && (
                 <div
                   aria-hidden
                   className="absolute top-0 inset-x-0 z-10 pointer-events-none"
@@ -1450,29 +1477,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   style={{ height: "6px", background: "#000" }}
                 />
               )}
-              {/* In-player peek toggle — a small eye in the corner of the bar
-                  that's covering, on the black bar when covered / over the
-                  footage corner when revealed. Right-aligned so they clear the
-                  common top-LEFT scoreboard. Tap to uncover/re-cover for THIS
-                  clip only. The bottom eye lets you check the footage the bottom
-                  bar crops (you might be missing a play, or just prefer to keep
-                  the bar on and glance). z-20 (above the masks) + stopPropagation
-                  (don't pause/close). */}
-              {maskVideoTitle && !titleSafe && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setRevealTitle((v) => !v); }}
-                  aria-label={revealTitle ? "Cover the top bar" : "Peek under the top bar"}
-                  title={revealTitle ? "Cover top" : "Peek under top bar"}
-                  className="absolute top-1.5 right-1.5 z-20 w-7 h-7 flex items-center justify-center rounded-full text-white/70 hover:text-white transition-colors cursor-pointer"
-                  style={{ background: "rgba(0,0,0,0.45)" }}
-                >
-                  {revealTitle ? (
-                    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
-                  ) : (
-                    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
-                  )}
-                </button>
-              )}
+              {/* No top-bar peek button here: it overlapped the YouTube CC/close
+                  controls and read as a stray eye under the X. */}
               {/* Hide/show the control chrome below the video to reclaim space
                   (great in mobile fullscreen). Stays pinned to the video corner
                   so you can bring the controls back. Nothing to toggle when
@@ -1823,7 +1829,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         </div>
         )}
 
-        {pager}
+        {mobilePager}
+        {desktopPager}
       </div>
       </div>
     </div>

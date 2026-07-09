@@ -15,6 +15,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   ];
   const evergreen = [
     "/spoiler-free-sports",
+    "/how-to-watch-sports-highlights-without-spoilers",
     "/watch-sports-highlights-without-spoilers",
     "/no-spoiler-scores",
     "/nba-scores-without-spoilers",
@@ -28,6 +29,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   ];
   const highIntent = new Set([
     "/spoiler-free-sports",
+    "/how-to-watch-sports-highlights-without-spoilers",
     "/watch-sports-highlights-without-spoilers",
     "/no-spoiler-scores",
     "/watch-world-cup-without-spoilers",
