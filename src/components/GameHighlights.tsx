@@ -123,8 +123,10 @@ export default function GameHighlights({
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   // MLB's official YouTube "Full Game Highlights" videos are the same cuts as
   // MLB.com Condensed Game. For MLB, render one same-row pair from MLB.com:
-  // short recap first, condensed game second.
-  const showMlbCondensed = game.sport === "mlb" && !!game.mlbCondensedPlaybackUrl;
+  // short recap first, condensed game second. Prefer YouTube for Condensed
+  // when it resolves because it is the same cut with better native controls.
+  const showMlbYouTubeCondensed = game.sport === "mlb" && officialStatus !== "missing";
+  const showMlbCondensed = game.sport === "mlb" && (showMlbYouTubeCondensed || !!game.mlbCondensedPlaybackUrl);
   const showMlb = !!(isFinished && game.sport === "mlb" && (game.mlbRecapPlaybackUrl || showMlbCondensed));
   if (!showYouTube && !showNhl && !showMlb) return null;
 
@@ -233,11 +235,29 @@ export default function GameHighlights({
           )}
           {showMlbCondensed && (
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl!;
-                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
-                else openExternal(page);
+                if (showMlbYouTubeCondensed && onPlayHighlight) {
+                  if (prefetchedOfficialId.current) {
+                    onPlayHighlight(prefetchedOfficialId.current, highlightUrl!, shareCard);
+                    return;
+                  }
+                  setFetchingOnClick("official");
+                  const id = await resolveOfficialHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel || "MLB", undefined, competition);
+                  setFetchingOnClick(null);
+                  if (id) {
+                    prefetchedOfficialId.current = id;
+                    setOfficialStatus("found");
+                    onPlayHighlight(id, highlightUrl!, shareCard);
+                    return;
+                  }
+                  setOfficialStatus("missing");
+                }
+                if (game.mlbCondensedPlaybackUrl) {
+                  const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl;
+                  if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
+                  else openExternal(page);
+                }
               }}
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
