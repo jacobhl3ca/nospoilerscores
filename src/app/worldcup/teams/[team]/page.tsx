@@ -157,13 +157,13 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
       </section>
 
       <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-        <Link href="/worldcup/teams" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+        <Link href="/worldcup/teams" data-umami-event="wc-team-footer-all-teams" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           All teams
         </Link>
-        <Link href="/worldcup" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+        <Link href="/worldcup" data-umami-event="wc-team-footer-hub" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           World Cup hub
         </Link>
-        <Link href="/soccer-highlights-without-spoilers" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+        <Link href="/soccer-highlights-without-spoilers" data-umami-event="wc-team-footer-soccer-highlights" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           Soccer highlights
         </Link>
       </div>

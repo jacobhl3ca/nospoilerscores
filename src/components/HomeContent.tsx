@@ -2495,6 +2495,7 @@ export default function HomeContent({
                 {firstEmptySlot !== undefined ? (
                   <button
                     onClick={() => setSlotLeague(firstEmptySlot, "fifa")}
+                    data-umami-event="wc-banner-add-empty-slot"
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
                     style={{ background: "var(--accent)", color: "white" }}
                   >
@@ -2503,6 +2504,7 @@ export default function HomeContent({
                 ) : !wcReplaceOpen ? (
                   <button
                     onClick={() => setWcReplaceOpen(true)}
+                    data-umami-event="wc-banner-open-replace-picker"
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
                     style={{ background: "var(--accent)", color: "white" }}
                   >
@@ -2515,6 +2517,7 @@ export default function HomeContent({
                       <button
                         key={entry.slotIdx}
                         onClick={() => { setSlotLeague(entry.slotIdx, "fifa"); setWcReplaceOpen(false); }}
+                        data-umami-event={`wc-banner-replace-${entry.league.sport}`}
                         className="text-sm font-medium px-2.5 py-1 rounded-md cursor-pointer transition-colors"
                         style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
@@ -2526,6 +2529,7 @@ export default function HomeContent({
                     ))}
                     <button
                       onClick={() => setWcReplaceOpen(false)}
+                      data-umami-event="wc-banner-cancel-replace"
                       className="text-sm px-1.5 py-1 cursor-pointer"
                       style={{ color: "var(--text-muted)" }}
                       title="Cancel"
@@ -2536,6 +2540,7 @@ export default function HomeContent({
                 )}
                 <button
                   onClick={() => updatePrefs({ wcBannerDismissed: true })}
+                  data-umami-event="wc-banner-dismiss"
                   aria-label="Dismiss World Cup banner"
                   title="Dismiss"
                   className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
