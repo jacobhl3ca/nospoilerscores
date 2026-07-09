@@ -128,8 +128,15 @@ export default function GameHighlights({
         const officialP = baked?.official
           ? Promise.resolve(baked.official)
           : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
+        // If the server prebake already found the primary clip but no secondary,
+        // trust that miss for this page load instead of making every browser do
+        // another slow live YouTube scrape. The 30-min prebake will fill
+        // `extended` later if FOX/FIFA posts a distinct companion cut.
+        const skipLiveSecondary = !!baked?.official && !baked?.extended;
         const secondP = baked?.extended
           ? Promise.resolve(baked.extended)
+          : skipLiveSecondary
+            ? Promise.resolve(null)
           : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
         const officialId = await officialP;
         prefetchedOfficialId.current = officialId;
