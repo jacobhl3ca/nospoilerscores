@@ -7,7 +7,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo } from "@/lib/youtube";
-import { getBakedHighlight } from "@/lib/highlights";
+import { getBakedHighlight, getCachedBakedHighlight } from "@/lib/highlights";
 
 // Per-league buffer (hrs from game start) before showing the highlight button,
 // and regulation period counts for the OT-extra calc below. Both are constant
@@ -41,10 +41,24 @@ export default function GameHighlights({
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   wrapMargin?: string;
 }) {
-  const prefetchedVideoId = useRef<string | null>(null);
-  const prefetchedOfficialId = useRef<string | null>(null);
-  const prefetchedTelemundoShortId = useRef<string | null>(null);
-  const prefetchedTelemundoLongId = useRef<string | null>(null);
+  const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
+  // MLB: keep the official MLB channel in the first slot so unscoped/team or
+  // unofficial uploads never occupy the primary button. The secondary slot can
+  // still surface a shorter team recap when one is available.
+  const isMlb = game.sport === "mlb";
+  const isFifa = game.sport === "fifa";
+  // FIFA's short clips are embeddable, but need the YouTube iframe origin fix in
+  // VideoModal. Keep the "2m" slot visible.
+  const fifaShortEnabled = true;
+  const hasOfficialButton = !!officialChannel && !(isFifa && !fifaShortEnabled);
+  const initialBaked = getCachedBakedHighlight(game.sport, game.id);
+  const initialOldMlbBake = isMlb && initialBaked?.mlbOrder !== "official-first";
+  const initialOfficialId = isFifa ? initialBaked?.official : initialOldMlbBake ? initialBaked?.extended : initialBaked?.official;
+  const initialSecondaryId = isFifa ? (initialBaked?.extended ?? initialBaked?.official) : initialOldMlbBake ? initialBaked?.official : initialBaked?.extended;
+  const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
+  const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
+  const prefetchedTelemundoShortId = useRef<string | null>(initialBaked?.telemundo ?? null);
+  const prefetchedTelemundoLongId = useRef<string | null>(initialBaked?.telemundoExtended ?? null);
   const prefetchStarted = useRef(false);
   const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | "telemundoLong" | null>(null);
   // "loading" while prefetch (or click-time chain) is running. "found" once
@@ -52,10 +66,10 @@ export default function GameHighlights({
   // has been exhausted — the button is hidden in that state so the user
   // never gets dropped onto a YouTube search page.
   type HighlightStatus = "loading" | "found" | "missing";
-  const [officialStatus, setOfficialStatus] = useState<HighlightStatus>("loading");
-  const [searchStatus, setSearchStatus] = useState<HighlightStatus>("loading");
-  const [telemundoShortStatus, setTelemundoShortStatus] = useState<HighlightStatus>("loading");
-  const [telemundoLongStatus, setTelemundoLongStatus] = useState<HighlightStatus>("loading");
+  const [officialStatus, setOfficialStatus] = useState<HighlightStatus>(initialOfficialId ? "found" : "loading");
+  const [searchStatus, setSearchStatus] = useState<HighlightStatus>(initialSecondaryId ? "found" : "loading");
+  const [telemundoShortStatus, setTelemundoShortStatus] = useState<HighlightStatus>(initialBaked?.telemundo ? "found" : "loading");
+  const [telemundoLongStatus, setTelemundoLongStatus] = useState<HighlightStatus>(initialBaked?.telemundoExtended ? "found" : "loading");
   // Capture "now" once at mount so the highlights-ready gate below stays a pure
   // render — reading Date.now() during render is flagged by react-hooks/purity.
   // The buffer is multi-hour and the component remounts on every score refresh,
@@ -92,16 +106,6 @@ export default function GameHighlights({
   // hidescore.com link that unfurls cleanly in iMessage. See lib/shareCard.
   const shareCard = useMemo(() => buildShareCard(game, leagueLabel), [game, leagueLabel]);
 
-  const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
-  // MLB: keep the official MLB channel in the first slot so unscoped/team or
-  // unofficial uploads never occupy the primary button. The secondary slot can
-  // still surface a shorter team recap when one is available.
-  const isMlb = game.sport === "mlb";
-  const isFifa = game.sport === "fifa";
-  // FIFA's short clips are embeddable, but need the YouTube iframe origin fix in
-  // VideoModal. Keep the "2m" slot visible.
-  const fifaShortEnabled = true;
-  const hasOfficialButton = !!officialChannel && !(isFifa && !fifaShortEnabled);
   const strictPrimaryChannel = isFifa || isMlb;
   const strictWorldCupChannel = isFifa;
   const primaryChannel = isMlb ? (officialChannel ?? undefined) : (isFifa ? "FIFA" : (officialChannel ?? undefined));
