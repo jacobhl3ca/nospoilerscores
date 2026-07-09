@@ -101,6 +101,7 @@ export default function GameHighlights({
   // Every other league keeps channel-first for the primary button.
   const isMlb = game.sport === "mlb";
   const isFifa = game.sport === "fifa";
+  const strictWorldCupChannel = isFifa;
   const primaryChannel = isMlb ? undefined : (isFifa ? "FIFA" : (officialChannel ?? undefined));
   const secondaryChannel = isMlb ? (officialChannel ?? undefined) : (isFifa ? "FOX Sports" : undefined);
   useEffect(() => {
@@ -137,7 +138,7 @@ export default function GameHighlights({
         const bakedSecondary = isFifa && baked?.official && !baked?.extended ? baked.official : baked?.extended;
         const officialP = bakedOfficial
           ? Promise.resolve(bakedOfficial)
-          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
+          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictWorldCupChannel);
         // If the server prebake already found the primary clip but no secondary,
         // trust that miss for this page load instead of making every browser do
         // another slow live YouTube scrape. The 30-min prebake will fill
@@ -147,12 +148,12 @@ export default function GameHighlights({
           ? Promise.resolve(bakedSecondary)
           : skipLiveSecondary
             ? Promise.resolve(null)
-          : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+          : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictWorldCupChannel);
         const telemundoShortP = isFifa
-          ? resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, false)
+          ? resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, false, true)
           : Promise.resolve(null);
         const telemundoLongP = isFifa
-          ? resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, true)
+          ? resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, true, true)
           : Promise.resolve(null);
         const officialId = await officialP;
         prefetchedOfficialId.current = officialId;
@@ -163,14 +164,14 @@ export default function GameHighlights({
           // official. Re-resolve once, this time excluding it, so the two buttons
           // never play the same video. (Only for a freshly live-resolved 2nd — a
           // baked 2nd is already deduped at bake time.)
-          secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended);
+          secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended, strictWorldCupChannel);
         }
         prefetchedVideoId.current = secondId;
         setSearchStatus(secondId ? "found" : "missing");
         let telemundoShortId = await telemundoShortP;
         let telemundoLongId = await telemundoLongP;
         if (telemundoLongId && telemundoShortId && telemundoLongId === telemundoShortId) {
-          telemundoLongId = await resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", [telemundoShortId], competition, true);
+          telemundoLongId = await resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", [telemundoShortId], competition, true, true);
         }
         prefetchedTelemundoShortId.current = telemundoShortId;
         prefetchedTelemundoLongId.current = telemundoLongId;
@@ -190,7 +191,7 @@ export default function GameHighlights({
         setSearchStatus(id ? "found" : "missing");
       })();
     }
-  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition]);
+  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, strictWorldCupChannel]);
 
   // When there is no official channel the official button never renders, so
   // treat officialStatus as "missing" without storing it in state.
@@ -229,7 +230,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictWorldCupChannel);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -272,7 +273,7 @@ export default function GameHighlights({
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
                 // World Cup prefers the extended cut (see prefetch note above).
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition, strictWorldCupChannel);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;
@@ -317,7 +318,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("telemundoShort");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, "Telemundo Deportes", undefined, competition, false);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, "Telemundo Deportes", undefined, competition, false, true);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedTelemundoShortId.current = id;
@@ -351,7 +352,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("telemundoLong");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, "Telemundo Deportes", [prefetchedTelemundoShortId.current], competition, true);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, "Telemundo Deportes", [prefetchedTelemundoShortId.current], competition, true, true);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedTelemundoLongId.current = id;

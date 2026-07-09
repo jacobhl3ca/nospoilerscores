@@ -2007,8 +2007,9 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
 //
 // The lookup MUST mirror src/lib/youtube.ts + GameHighlights.tsx exactly so a
 // baked ID is what a live client would resolve:
-//   • fifa uses the "FOX Sports" channel + a "World Cup" competition token in
-//     the query, and the 2nd button prefers the extended cut (prefer=extended);
+//   • fifa uses strict channel slots: FIFA short, FOX full, and a "World Cup"
+//     competition token in the query. Channel misses stay missing rather than
+//     falling back to the same unscoped FOX clip in multiple buttons;
 //   • MLB swaps channels — 1st button resolves UNSCOPED, 2nd = the MLB channel;
 //   • every other league: 1st = official channel, 2nd = unscoped.
 // The key MUST be `${sport}:${event.id}` — GameHighlights keys off game.sport +
@@ -2028,7 +2029,7 @@ const HL_LEAGUES = [
   { sport: "ncaam", path: "/basketball/mens-college-basketball/scoreboard",   channel: "March Madness" },
   { sport: "ncaaw", path: "/basketball/womens-college-basketball/scoreboard", channel: "March Madness" },
   { sport: "ncaaf", path: "/football/college-football/scoreboard",            channel: "ESPN College Football" },
-  { sport: "fifa",  path: "/soccer/fifa.world/scoreboard",                    channel: "FOX Sports" },
+  { sport: "fifa",  path: "/soccer/fifa.world/scoreboard",                    channel: "FIFA" },
   { sport: "epl",   path: "/soccer/eng.1/scoreboard",                         channel: "NBC Sports" },
   { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
   { sport: "ucl",   path: "/soccer/uefa.champions/scoreboard",                channel: "CBS Sports Golazo" },
@@ -2067,9 +2068,12 @@ async function hlFetchId(query, { channel, exclude, preferExtended } = {}) {
 // The resolveHighlightVideo chain from youtube.ts: channel-scoped dated,
 // unscoped dated, and unscoped undated all raced concurrently; first by
 // priority wins.
-async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended) {
+async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended, strictChannel) {
   const dated = hlQuery(away, home, dateStr, series, competition, true);
   const undated = hlQuery(away, home, dateStr, series, competition, false);
+  if (strictChannel && channel) {
+    return hlFetchId(dated, { channel, exclude, preferExtended });
+  }
   const [chanHit, datedUnscoped, undatedHit] = await Promise.all([
     channel ? hlFetchId(dated, { channel, exclude, preferExtended }) : Promise.resolve(null),
     hlFetchId(dated, { exclude, preferExtended }),
@@ -2132,19 +2136,26 @@ async function bakeGameHighlights() {
         const preferExtended = !!competition;
         // MLB swaps channels; every other league uses official-first (see note above).
         const isMlb = lg.sport === "mlb";
+        const isFifa = lg.sport === "fifa";
         const primaryChannel = isMlb ? undefined : lg.channel;
-        const secondaryChannel = isMlb ? lg.channel : undefined;
+        const secondaryChannel = isMlb ? lg.channel : (isFifa ? "FOX Sports" : undefined);
+        const strictWorldCupChannel = isFifa;
 
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
         // concurrent resolve + collision re-resolve in GameHighlights.tsx.
-        let official = prev.official ?? null;
-        if (!official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition);
-        let extended = prev.extended ?? null;
+        // Older FIFA prebakes stored the FOX full recap in `official` before the
+        // card split into FIFA short + FOX full. Carry it as `extended` instead
+        // so future bakes do not preserve the stale primary slot forever.
+        const prevOfficial = isFifa && prev.official && !prev.extended ? null : prev.official;
+        const prevExtended = isFifa && prev.official && !prev.extended ? prev.official : prev.extended;
+        let official = prevOfficial ?? null;
+        if (!official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictWorldCupChannel);
+        let extended = prevExtended ?? null;
         if (!extended) {
-          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictWorldCupChannel);
           if (extended && official && extended === official) {
-            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended);
+            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, strictWorldCupChannel);
           }
         }
 

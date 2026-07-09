@@ -362,6 +362,16 @@ export default {
           "cape verde": ["cape verde", "cabo verde"],
           "saudi arabia": ["saudi arabia", "saudi", "ksa"],
           "egypt": ["egypt", "egipto"],
+          "germany": ["germany", "alemania"],
+          "morocco": ["morocco", "marruecos"],
+          "netherlands": ["netherlands", "holland", "paises bajos", "países bajos"],
+          "senegal": ["senegal", "senegal"],
+          "belgium": ["belgium", "belgica", "bélgica"],
+          "switzerland": ["switzerland", "swiss", "suiza"],
+          "australia": ["australia", "australia"],
+          "paraguay": ["paraguay", "paraguay"],
+          "colombia": ["colombia", "colombia"],
+          "argentina": ["argentina", "argentina"],
         };
 
         // Extract team names from query: "Away vs Home highlights ..."
