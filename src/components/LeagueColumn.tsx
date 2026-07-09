@@ -1080,9 +1080,8 @@ export default function LeagueColumn({
   };
 
   // Not-started league on a past tab (empty slate, no recent games, but an
-  // upcoming one exists — e.g. the World Cup before kickoff). Surfaced as the
-  // italic header subtitle ("Starts Tomorrow"), same slot as the playoff
-  // subtitle, instead of body text — so the empty column reads intentionally.
+  // upcoming one exists — e.g. the World Cup before kickoff). The header gets a
+  // compact "Starts Tomorrow" cue while the body can still show upcoming cards.
   const notStartedDate = isPastDate && league.games.length === 0
     && !(league.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
     ? formatDateCompact(league.nextGameDay.date)
@@ -1321,10 +1320,12 @@ export default function LeagueColumn({
           ) : isPastDate ? (
             league.previousGameDay && league.previousGameDay.games.length > 0 ? (
               renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
-            ) : notStartedDate ? (
-              // Not-started league → the "Starts {date}" hint lives in the italic
-              // header subtitle (above); the body stays empty, not "No games".
-              null
+            ) : notStartedDate && league.nextGameDay ? (
+              // Not-started league: keep the subtitle cue, but still show the
+              // known upcoming cards so the date/time lives on the schedule rows.
+              <div className="flex flex-col gap-1.5 sm:gap-2">
+                {renderUpcomingSlate(league.nextGameDay.games, true)}
+              </div>
             ) : (
               <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
             )
@@ -1437,4 +1438,3 @@ export default function LeagueColumn({
     </div>
   );
 }
-
