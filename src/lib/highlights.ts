@@ -10,7 +10,7 @@ import { getApiBase } from "@/lib/youtube";
 // Keyed `${sport}:${game.id}` — game.id === the ESPN event id the prebake keys
 // on. `official` = 1st button (channel recap), `extended` = 2nd button (already
 // deduped against `official` at bake time).
-export type BakedHighlight = { official?: string; extended?: string };
+export type BakedHighlight = { official?: string; extended?: string; telemundo?: string; telemundoExtended?: string };
 
 // Fetched once per session and shared across every card (one small static
 // request vs. N live scrapes). On any miss the promise is cleared so the next

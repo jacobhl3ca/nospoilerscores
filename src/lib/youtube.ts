@@ -222,10 +222,14 @@ export async function resolveHighlightVideo(
   channel?: string,
   exclude?: (string | null | undefined)[],
   competition?: string | null,
-  preferExtended?: boolean
+  preferExtended?: boolean,
+  strictChannel?: boolean
 ): Promise<string | null> {
   const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   const undated = buildUndatedQuery(awayTeam, homeTeam, seriesNote, competition);
+  if (strictChannel && channel) {
+    return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended);
+  }
   // Fire every fallback tier CONCURRENTLY instead of awaiting them in series.
   // Each /api/youtube call is a live YouTube scrape (~1-2s); walking
   // channel → dated → undated sequentially meant a button that fell through to

@@ -59,7 +59,7 @@ export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
     poster: item.imageUrl || null,
     sourceLabel: item.section || null,
     headline: item.headline,
-    byline: item.byline || null,
+    byline: isReddit ? null : (item.byline || null),
     published: item.published || null,
     body: item.body || null,
   };
