@@ -913,7 +913,7 @@ export default {
               "fox sports": "@FOXSports",
               "fox soccer": "@FOXSports",
               "fifa": "@fifa",
-              "telemundo deportes": "@TelemundoDeportes",
+              "telemundo deportes": "channel/UCjZ7QPKb89R-4SxzBoceyOg",
             };
             const rescueChannelPath = preferChannelLower
               ? wcChannelSearchPaths[preferChannelLower]
@@ -922,7 +922,10 @@ export default {
               ? [preferChannelLower]
               : WC_OFFICIAL_CHANNELS;
             if (!rescueChannelPath) throw new Error("Unsupported World Cup rescue channel");
-            const chQuery = `${teamsMatch[1]} ${teamsMatch[2]} highlights`.trim();
+            const rescueTeams = preferChannelLower === "telemundo deportes" && queryTeams.length === 2
+              ? queryTeams.map((team) => (TEAM_ALIASES[team] || [team]).find((alias) => alias !== team) || team)
+              : [teamsMatch[1], teamsMatch[2]];
+            const chQuery = `${rescueTeams[0]} ${rescueTeams[1]} ${preferChannelLower === "telemundo deportes" ? "resumen" : "highlights"}`.trim();
             const chUrl = `https://www.youtube.com/${rescueChannelPath}/search?query=${encodeURIComponent(chQuery)}`;
             const chRes = await fetch(chUrl, {
               headers: {
