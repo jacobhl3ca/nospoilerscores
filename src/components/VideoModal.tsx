@@ -975,6 +975,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const tryFallback = async () => {
       if (retryingRef.current) return;
       retryingRef.current = true;
+      try {
+        if (new URL(fallbackUrl).searchParams.get("nss_no_fallback") === "1") {
+          retryingRef.current = false;
+          return;
+        }
+      } catch { /* non-URL fallback strings proceed through the normal path */ }
       const q = extractSearchQuery(fallbackUrl);
       if (!q) {
         retryingRef.current = false;

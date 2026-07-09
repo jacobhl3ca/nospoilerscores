@@ -2007,9 +2007,9 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
 //
 // The lookup MUST mirror src/lib/youtube.ts + GameHighlights.tsx exactly so a
 // baked ID is what a live client would resolve:
-//   • fifa uses strict channel slots: FIFA short, FOX full, and a "World Cup"
-//     competition token in the query. Channel misses stay missing rather than
-//     falling back to the same unscoped FOX clip in multiple buttons;
+//   • fifa uses strict channel slots: FOX full + Telemundo variants, and a
+//     "World Cup" competition token in the query. FIFA's own short clips are
+//     currently blocked in embeds, so we do not bake/show them;
 //   • MLB swaps channels — 1st button resolves UNSCOPED, 2nd = the MLB channel;
 //   • every other league: 1st = official channel, 2nd = unscoped.
 // The key MUST be `${sport}:${event.id}` — GameHighlights keys off game.sport +
@@ -2094,17 +2094,26 @@ function hlDateStr(iso) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 }
 
+async function loadPriorHighlights() {
+  try {
+    return JSON.parse(await readFile(HL_OUT_PATH, "utf8"));
+  } catch { /* fresh checkout / ignored generated file */ }
+  try {
+    const res = await fetch(`https://hidescore.com/news/highlights.json?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
+    if (res.ok) return await res.json();
+  } catch { /* live prior unavailable */ }
+  return {};
+}
+
 async function bakeGameHighlights() {
   const now = Date.now();
   // Carry forward prior baked entries so found IDs persist across runs and older
   // games (aged out of the today/yesterday scoreboard window) keep their buttons.
   const games = {};
-  try {
-    const prior = JSON.parse(await readFile(HL_OUT_PATH, "utf8"));
-    for (const [k, v] of Object.entries(prior?.games ?? {})) {
-      if (v && (now - (v.t ?? 0)) < HL_ENTRY_TTL_MS) games[k] = v;
-    }
-  } catch { /* first run / no file */ }
+  const prior = await loadPriorHighlights();
+  for (const [k, v] of Object.entries(prior?.games ?? {})) {
+    if (v && (k.startsWith("fifa:") || (now - (v.t ?? 0)) < HL_ENTRY_TTL_MS)) games[k] = v;
+  }
 
   const dates = [hlEtYmd(0), hlEtYmd(-1)];
   let resolved = 0;
@@ -2120,7 +2129,6 @@ async function bakeGameHighlights() {
         if (event?.status?.type?.state !== "post") continue;
         const key = `${lg.sport}:${event.id}`;
         const prev = games[key] ?? {};
-        if (prev.official && prev.extended) continue; // both baked already
         const comp = event.competitions?.[0];
         const comps = comp?.competitors ?? [];
         const away = comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName;
@@ -2140,6 +2148,7 @@ async function bakeGameHighlights() {
         const primaryChannel = isMlb ? undefined : lg.channel;
         const secondaryChannel = isMlb ? lg.channel : (isFifa ? "FOX Sports" : undefined);
         const strictWorldCupChannel = isFifa;
+        if (!isFifa && prev.official && prev.extended) continue; // both baked already
 
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
@@ -2149,8 +2158,8 @@ async function bakeGameHighlights() {
         // so future bakes do not preserve the stale primary slot forever.
         const prevOfficial = isFifa && prev.official && !prev.extended ? null : prev.official;
         const prevExtended = isFifa && prev.official && !prev.extended ? prev.official : prev.extended;
-        let official = prevOfficial ?? null;
-        if (!official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictWorldCupChannel);
+        let official = isFifa ? null : (prevOfficial ?? null);
+        if (!isFifa && !official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictWorldCupChannel);
         let extended = prevExtended ?? null;
         if (!extended) {
           extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictWorldCupChannel);
@@ -2158,13 +2167,24 @@ async function bakeGameHighlights() {
             extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, strictWorldCupChannel);
           }
         }
+        let telemundo = isFifa ? (prev.telemundo ?? null) : null;
+        if (isFifa && !telemundo) {
+          telemundo = await hlResolve(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, false, true);
+        }
+        let telemundoExtended = isFifa ? (prev.telemundoExtended ?? null) : null;
+        if (isFifa && !telemundoExtended) {
+          telemundoExtended = await hlResolve(away, home, dateStr, series, "Telemundo Deportes", [telemundo], competition, true, true);
+          if (telemundoExtended && telemundoExtended === telemundo) telemundoExtended = null;
+        }
 
         const entry = { t: now };
         if (official) entry.official = official;
         if (extended) entry.extended = extended;
-        if (entry.official || entry.extended) {
+        if (telemundo) entry.telemundo = telemundo;
+        if (telemundoExtended) entry.telemundoExtended = telemundoExtended;
+        if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended) {
           games[key] = entry;
-          if (!prev.official && !prev.extended) resolved++;
+          if (!prev.official && !prev.extended && !prev.telemundo && !prev.telemundoExtended) resolved++;
         }
       }
     }
