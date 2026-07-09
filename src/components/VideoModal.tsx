@@ -935,9 +935,39 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           or any whitespace around them dismisses. The video player and CC
           button stop propagation themselves so playback controls keep working. */}
       <div
-        className="group relative w-full max-w-7xl" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
+        className="group relative flex w-full max-w-7xl flex-col" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
         style={{ zIndex: 1 }}
       >
+        <div className="mb-2 flex h-8 items-center justify-end gap-2">
+          {/* Captions toggle. For YouTube, always show it; for direct HLS streams,
+              show it once a captions/subtitles track is detected. */}
+          {((ytMode && !!currentId) || (hlsMode && hasCaptionTrack)) && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
+              aria-pressed={showCC}
+              className="h-8 px-2 flex items-center justify-center rounded-md text-xs font-bold transition-colors cursor-pointer"
+              style={{
+                color: showCC ? "white" : "rgba(255,255,255,0.6)",
+                background: showCC ? "var(--accent)" : "transparent",
+                border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.3)",
+              }}
+              title={showCC ? "Hide captions" : "Show captions"}
+            >
+              CC
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full text-white/60 hover:text-white transition-colors cursor-pointer"
+            title="Close (Esc)"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
         {/* Reddit prev/next post paging — hover-revealed ‹ › on the player edges
             (desktop only; touch has no hover). stopPropagation so the click pages
             instead of bubbling to the backdrop and closing the modal. */}
@@ -963,37 +993,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
           </button>
         )}
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute -top-10 right-0 w-8 h-8 flex items-center justify-center rounded-full text-white/60 hover:text-white transition-colors cursor-pointer"
-          title="Close (Esc)"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-
-        {/* Captions toggle. For YouTube, always show it; for direct HLS streams,
-            show it once a captions/subtitles track is detected. */}
-        {((ytMode && !!currentId) || (hlsMode && hasCaptionTrack)) && (
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
-            aria-pressed={showCC}
-            className="absolute -top-10 right-10 h-8 px-2 flex items-center justify-center rounded-md text-xs font-bold transition-colors cursor-pointer"
-            style={{
-              color: showCC ? "white" : "rgba(255,255,255,0.6)",
-              background: showCC ? "var(--accent)" : "transparent",
-              border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.3)",
-            }}
-            title={showCC ? "Hide captions" : "Show captions"}
-          >
-            CC
-          </button>
-        )}
-
-
         {/* Player area — image lightbox (no aspect lock), YouTube (custom
             chrome), or 16:9 video for HLS/embed */}
         {imageMode ? (
