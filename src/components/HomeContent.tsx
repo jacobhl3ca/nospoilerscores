@@ -319,7 +319,17 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
   );
 }
 
-export default function HomeContent({ initialOffset, worldCupHub }: { initialOffset?: number; worldCupHub?: boolean }) {
+type WorldCupHubMode = "today" | "tomorrow" | "highlights";
+
+export default function HomeContent({
+  initialOffset,
+  worldCupHub,
+  worldCupHubMode = "today",
+}: {
+  initialOffset?: number;
+  worldCupHub?: boolean;
+  worldCupHubMode?: WorldCupHubMode;
+}) {
   const [leagues, setLeagues] = useState<LeagueData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -988,6 +998,30 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   };
 
   const isToday = selectedDate === getDateString(0);
+  const worldCupHubCopy = useMemo(() => {
+    if (worldCupHubMode === "tomorrow") {
+      return {
+        title: "Tomorrow's World Cup, spoiler-free",
+        body:
+          "Plan the next World Cup match day without seeing scores or headlines. Match times, teams and watch links stay safe, and ratings appear only after games finish.",
+        note: "Free · no tracking cookies · works in any browser or the iOS app.",
+      };
+    }
+    if (worldCupHubMode === "highlights") {
+      return {
+        title: "World Cup highlights, spoiler-free",
+        body:
+          "Catch up on completed World Cup matches without result thumbnails, scorelines or winner headlines. HideScore surfaces official highlights after games finish and keeps the result hidden until you choose to reveal it.",
+        note: "Start with yesterday's slate, then jump to today or tomorrow.",
+      };
+    }
+    return {
+      title: "2026 World Cup, spoiler-free",
+      body:
+        "104 matches, June 11 - July 19, across the US, Canada and Mexico - most kicking off at 1, 4 and 7 PM ET on weekdays. Watch every match on your own schedule: scores stay hidden until you tap, and the competitiveness rating tells you which games were instant classics without revealing who won.",
+      note: "Free · no tracking cookies · also on the App Store.",
+    };
+  }, [worldCupHubMode]);
 
   // Whether the World Cup is in season for the viewed date — gates the
   // "What matters today" card so it doesn't fetch standings year-round.
@@ -1862,22 +1896,61 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           >
             <h1 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2" style={{ color: "var(--text)" }}>
               <span aria-hidden="true">⚽</span>
-              <span>2026 World Cup, spoiler-free</span>
+              <span>{worldCupHubCopy.title}</span>
             </h1>
             <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-              104 matches, June 11 – July 19, across the US, Canada &amp; Mexico — most kicking off at 1, 4 and 7 PM ET on weekdays.
-              Watch every match on your own schedule: scores stay hidden until you tap, and the{" "}
-              <span style={{ color: "var(--text)" }}>competitiveness rating</span> tells you which games were instant classics
-              <span style={{ color: "var(--text)" }}> without revealing who won</span>. The World Cup column is below.
+              {worldCupHubCopy.body} The World Cup column is below.
             </p>
-            <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
-              Free · no tracking cookies · also on the App Store ·{" "}
+            <div className="mt-3 grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+              <a
+                href="/worldcup"
+                className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
+                style={{
+                  background: worldCupHubMode === "today" ? "var(--accent)" : "var(--bg-card-hover)",
+                  border: `1px solid ${worldCupHubMode === "today" ? "var(--accent)" : "var(--border)"}`,
+                  color: worldCupHubMode === "today" ? "white" : "var(--text)",
+                }}
+              >
+                Today&apos;s matches
+              </a>
+              <a
+                href="/worldcup/tomorrow"
+                className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
+                style={{
+                  background: worldCupHubMode === "tomorrow" ? "var(--accent)" : "var(--bg-card-hover)",
+                  border: `1px solid ${worldCupHubMode === "tomorrow" ? "var(--accent)" : "var(--border)"}`,
+                  color: worldCupHubMode === "tomorrow" ? "white" : "var(--text)",
+                }}
+              >
+                Tomorrow
+              </a>
+              <a
+                href="/worldcup/highlights"
+                className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
+                style={{
+                  background: worldCupHubMode === "highlights" ? "var(--accent)" : "var(--bg-card-hover)",
+                  border: `1px solid ${worldCupHubMode === "highlights" ? "var(--accent)" : "var(--border)"}`,
+                  color: worldCupHubMode === "highlights" ? "white" : "var(--text)",
+                }}
+              >
+                Spoiler-free highlights
+              </a>
               <a
                 href="/watch-world-cup-without-spoilers"
-                className="underline underline-offset-2"
-                style={{ color: "var(--accent)" }}
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-center transition-colors"
+                style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--accent)" }}
               >
-                How to watch without spoilers →
+                Watch guide
+              </a>
+            </div>
+            <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+              {worldCupHubCopy.note}{" "}
+              <a href="/worldcup/tomorrow" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+                Tomorrow&apos;s World Cup schedule
+              </a>{" "}
+              -{" "}
+              <a href="/worldcup/highlights" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+                Spoiler-free highlights
               </a>
             </p>
           </section>
@@ -2577,7 +2650,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
               <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
               <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
               <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
-              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a> — all spoiler-free. Or read our{" "}
+              <a href="/spoiler-free-sports" style={{ textDecoration: "underline" }}>spoiler-free sports guide</a> or{" "}
+              <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
           </div>
