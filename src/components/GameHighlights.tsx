@@ -119,12 +119,12 @@ export default function GameHighlights({
     }
   }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, secondaryChannels, competition]);
 
-  const showYouTube = !!(isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing"));
+  const showYouTube = !!(isFinished && game.sport !== "mlb" && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   // MLB's official YouTube "Full Game Highlights" videos are the same cuts as
-  // MLB.com Condensed Game. Avoid showing both duplicates; only surface
-  // Condensed when the YouTube lookup misses.
-  const showMlbCondensed = game.sport === "mlb" && officialStatus === "missing" && !!game.mlbCondensedPlaybackUrl;
+  // MLB.com Condensed Game. For MLB, render one same-row pair from MLB.com:
+  // short recap first, condensed game second.
+  const showMlbCondensed = game.sport === "mlb" && !!game.mlbCondensedPlaybackUrl;
   const showMlb = !!(isFinished && game.sport === "mlb" && (game.mlbRecapPlaybackUrl || showMlbCondensed));
   if (!showYouTube && !showNhl && !showMlb) return null;
 
@@ -211,11 +211,10 @@ export default function GameHighlights({
         </div>
       )}
 
-      {/* MLB.com official game videos. Recap is the short editorial cut; Condensed
-          is only shown if the official YouTube lookup misses, because MLB's
-          YouTube "Full Game Highlights" matches MLB.com Condensed. */}
+      {/* MLB.com official game videos: short recap + condensed game in one row.
+          We hide MLB's YouTube button here because it duplicates Condensed. */}
       {showMlb && (
-        <div className={`${showYouTube ? "mt-1" : wrapMargin} flex gap-1`}>
+        <div className={`${wrapMargin} flex gap-1`}>
           {game.mlbRecapPlaybackUrl && (
             <button
               onClick={(e) => {
@@ -229,7 +228,7 @@ export default function GameHighlights({
               title="MLB.com game recap"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">Recap</span>
+              <span className="text-[10px] font-medium">3m Recap</span>
             </button>
           )}
           {showMlbCondensed && (
