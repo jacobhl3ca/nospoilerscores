@@ -1,0 +1,95 @@
+import type { Metadata } from "next";
+import SeoLandingPage from "@/components/SeoLandingPage";
+
+const TITLE = "Watch Sports Highlights Without Spoilers | HideScore";
+const DESC =
+  "Watch NBA, NFL, NHL, MLB, soccer, golf, and World Cup highlights without seeing scores, winners, thumbnails, or spoiler headlines first.";
+const CANONICAL = "/watch-sports-highlights-without-spoilers";
+
+const FAQ = [
+  {
+    q: "How can I watch sports highlights without spoilers?",
+    a: "Open HideScore before searching YouTube or a sports homepage. Game cards keep scores hidden, link to highlights, and let you reveal the result only when you are ready.",
+  },
+  {
+    q: "Does HideScore hide highlight thumbnails?",
+    a: "HideScore keeps the result and score away from the game card before you press play. It is designed so you do not have to scan a normal results page or spoiler-heavy video list first.",
+  },
+  {
+    q: "Can I tell if a highlight is worth watching?",
+    a: "Yes. Finished games can show a competitiveness rating, so you can pick close games and instant classics without seeing who won.",
+  },
+  {
+    q: "Which sports have spoiler-free highlights?",
+    a: "HideScore supports major US sports, soccer, golf, and the 2026 World Cup. Availability depends on each league's official highlight feeds and video metadata.",
+  },
+];
+
+export const metadata: Metadata = {
+  title: TITLE,
+  description: DESC,
+  keywords: [
+    "watch sports highlights without spoilers",
+    "sports highlights without spoilers",
+    "spoiler free sports highlights",
+    "watch highlights without spoilers",
+    "no spoiler highlights",
+  ],
+  alternates: { canonical: CANONICAL },
+  openGraph: {
+    title: TITLE,
+    description: DESC,
+    url: `https://hidescore.com${CANONICAL}`,
+    siteName: "HideScore",
+    type: "website",
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: TITLE }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESC,
+    images: [{ url: "https://hidescore.com/og-image.png", alt: TITLE }],
+  },
+};
+
+export default function WatchSportsHighlightsWithoutSpoilersPage() {
+  return (
+    <SeoLandingPage
+      h1="Watch sports highlights without spoilers"
+      intro={[
+        "Most highlight pages spoil the game before you press play: the final score is in the title, the winning team is in the thumbnail, and the recap headline tells you what happened.",
+        "HideScore is built for the opposite workflow. Check the game card first, keep the score hidden, use ratings to find what is worth watching, and reveal the result only after the highlight or replay.",
+      ]}
+      sections={[
+        {
+          h: "Start from the game, not the spoiler feed",
+          p: "Instead of searching across video pages that expose titles and thumbnails, start from a HideScore schedule. You can jump to yesterday, today, or tomorrow and keep each matchup hidden until you decide what to watch.",
+        },
+        {
+          h: "Use ratings before you reveal the score",
+          p: "A highlight can be technically available but not worth your time. HideScore's competitiveness rating helps you find close games, comebacks, overtime, and instant classics without telling you who won.",
+        },
+      ]}
+      bullets={[
+        "Watch NBA, NFL, NHL, MLB, soccer, golf, and World Cup highlights without scanning a normal scoreboard.",
+        "Keep final scores and winners hidden until you tap to reveal them.",
+        "Use spoiler-free ratings to choose the best game first.",
+        "Move from a safe schedule to highlights, recaps, and news after you are ready.",
+      ]}
+      ctaLabel="Find spoiler-free highlights"
+      ctaHref="/yesterday"
+      links={[
+        { href: "/no-spoiler-scores", label: "No-spoiler scores" },
+        { href: "/mlb-highlights-without-spoilers", label: "MLB" },
+        { href: "/nfl-highlights-without-spoilers", label: "NFL" },
+        { href: "/soccer-highlights-without-spoilers", label: "Soccer" },
+        { href: "/worldcup/highlights", label: "World Cup" },
+      ]}
+      faq={FAQ}
+      schemaName={TITLE}
+      schemaDescription={DESC}
+      canonical={CANONICAL}
+      about={["sports highlights without spoilers", "spoiler-free sports highlights", "hidden scores"]}
+    />
+  );
+}

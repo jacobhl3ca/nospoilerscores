@@ -2007,8 +2007,9 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
 //
 // The lookup MUST mirror src/lib/youtube.ts + GameHighlights.tsx exactly so a
 // baked ID is what a live client would resolve:
-//   • fifa uses the "FOX Sports" channel + a "World Cup" competition token in
-//     the query, and the 2nd button prefers the extended cut (prefer=extended);
+//   • fifa uses strict channel slots: FOX full + Telemundo variants, and a
+//     "World Cup" competition token in the query. FIFA's own short clips are
+//     currently blocked in embeds, so we do not bake/show them;
 //   • MLB swaps channels — 1st button resolves UNSCOPED, 2nd = the MLB channel;
 //   • every other league: 1st = official channel, 2nd = unscoped.
 // The key MUST be `${sport}:${event.id}` — GameHighlights keys off game.sport +
@@ -2028,7 +2029,7 @@ const HL_LEAGUES = [
   { sport: "ncaam", path: "/basketball/mens-college-basketball/scoreboard",   channel: "March Madness" },
   { sport: "ncaaw", path: "/basketball/womens-college-basketball/scoreboard", channel: "March Madness" },
   { sport: "ncaaf", path: "/football/college-football/scoreboard",            channel: "ESPN College Football" },
-  { sport: "fifa",  path: "/soccer/fifa.world/scoreboard",                    channel: "FOX Sports" },
+  { sport: "fifa",  path: "/soccer/fifa.world/scoreboard",                    channel: "FIFA" },
   { sport: "epl",   path: "/soccer/eng.1/scoreboard",                         channel: "NBC Sports" },
   { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
   { sport: "ucl",   path: "/soccer/uefa.champions/scoreboard",                channel: "CBS Sports Golazo" },
@@ -2036,6 +2037,18 @@ const HL_LEAGUES = [
 ];
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
+// Verified completed World Cup highlight slots. These seed the ignored/R2-backed
+// highlights cache on fresh CI checkouts, so all-time World Cup cards do not
+// regress to slow live scraping or stale one-link entries.
+const HL_WORLD_CUP_SEEDS = {
+  "fifa:760489": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "-gtI96YhJek", telemundo: "zGZGTRKNxvs" },
+  "fifa:760488": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "DkZtwwbN1YI", telemundo: "IMYhuFBuN-0" },
+  "fifa:760493": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "OJ84ZgReAsE", telemundo: "PLOT1Sa2A2o" },
+  "fifa:760499": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "ACWOG7t8Plk", telemundo: "b_9eFJBe4ek" },
+  "fifa:760500": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "EC2jOKluGRI", telemundo: "hWlz2o8KPL0" },
+  "fifa:760508": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "_uEzppRKcd0", telemundo: "D9HlmSHUIvo" },
+  "fifa:760509": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "XO3x8vm0Ijc", telemundo: "QO8-LAmwS1E", telemundoExtended: "6tveHOrsXwY" },
+};
 // Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
 const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
@@ -2067,9 +2080,12 @@ async function hlFetchId(query, { channel, exclude, preferExtended } = {}) {
 // The resolveHighlightVideo chain from youtube.ts: channel-scoped dated,
 // unscoped dated, and unscoped undated all raced concurrently; first by
 // priority wins.
-async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended) {
+async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended, strictChannel) {
   const dated = hlQuery(away, home, dateStr, series, competition, true);
   const undated = hlQuery(away, home, dateStr, series, competition, false);
+  if (strictChannel && channel) {
+    return hlFetchId(dated, { channel, exclude, preferExtended });
+  }
   const [chanHit, datedUnscoped, undatedHit] = await Promise.all([
     channel ? hlFetchId(dated, { channel, exclude, preferExtended }) : Promise.resolve(null),
     hlFetchId(dated, { exclude, preferExtended }),
@@ -2090,17 +2106,31 @@ function hlDateStr(iso) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 }
 
+async function loadPriorHighlights() {
+  try {
+    return JSON.parse(await readFile(HL_OUT_PATH, "utf8"));
+  } catch { /* fresh checkout / ignored generated file */ }
+  try {
+    const res = await fetch(`https://hidescore.com/news/highlights.json?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
+    if (res.ok) return await res.json();
+  } catch { /* live prior unavailable */ }
+  return {};
+}
+
 async function bakeGameHighlights() {
   const now = Date.now();
   // Carry forward prior baked entries so found IDs persist across runs and older
   // games (aged out of the today/yesterday scoreboard window) keep their buttons.
   const games = {};
-  try {
-    const prior = JSON.parse(await readFile(HL_OUT_PATH, "utf8"));
-    for (const [k, v] of Object.entries(prior?.games ?? {})) {
-      if (v && (now - (v.t ?? 0)) < HL_ENTRY_TTL_MS) games[k] = v;
-    }
-  } catch { /* first run / no file */ }
+  const prior = await loadPriorHighlights();
+  for (const [k, v] of Object.entries(prior?.games ?? {})) {
+    if (v && (k.startsWith("fifa:") || (now - (v.t ?? 0)) < HL_ENTRY_TTL_MS)) games[k] = v;
+  }
+  for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
+    const existing = games[k] ?? {};
+    delete existing.official;
+    games[k] = { ...existing, ...seed, t: existing.t ?? seed.t };
+  }
 
   const dates = [hlEtYmd(0), hlEtYmd(-1)];
   let resolved = 0;
@@ -2116,7 +2146,6 @@ async function bakeGameHighlights() {
         if (event?.status?.type?.state !== "post") continue;
         const key = `${lg.sport}:${event.id}`;
         const prev = games[key] ?? {};
-        if (prev.official && prev.extended) continue; // both baked already
         const comp = event.competitions?.[0];
         const comps = comp?.competitors ?? [];
         const away = comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName;
@@ -2132,28 +2161,47 @@ async function bakeGameHighlights() {
         const preferExtended = !!competition;
         // MLB swaps channels; every other league uses official-first (see note above).
         const isMlb = lg.sport === "mlb";
+        const isFifa = lg.sport === "fifa";
         const primaryChannel = isMlb ? undefined : lg.channel;
-        const secondaryChannel = isMlb ? lg.channel : undefined;
+        const secondaryChannel = isMlb ? lg.channel : (isFifa ? "FOX Sports" : undefined);
+        const strictWorldCupChannel = isFifa;
+        if (!isFifa && prev.official && prev.extended) continue; // both baked already
 
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
         // concurrent resolve + collision re-resolve in GameHighlights.tsx.
-        let official = prev.official ?? null;
-        if (!official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition);
-        let extended = prev.extended ?? null;
+        // Older FIFA prebakes stored the FOX full recap in `official` before the
+        // card split into FIFA short + FOX full. Carry it as `extended` instead
+        // so future bakes do not preserve the stale primary slot forever.
+        const prevOfficial = isFifa && prev.official && !prev.extended ? null : prev.official;
+        const prevExtended = isFifa && prev.official && !prev.extended ? prev.official : prev.extended;
+        let official = isFifa ? null : (prevOfficial ?? null);
+        if (!isFifa && !official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictWorldCupChannel);
+        let extended = prevExtended ?? null;
         if (!extended) {
-          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictWorldCupChannel);
           if (extended && official && extended === official) {
-            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended);
+            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, strictWorldCupChannel);
           }
+        }
+        let telemundo = isFifa ? (prev.telemundo ?? null) : null;
+        if (isFifa && !telemundo) {
+          telemundo = await hlResolve(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, false, true);
+        }
+        let telemundoExtended = isFifa ? (prev.telemundoExtended ?? null) : null;
+        if (isFifa && !telemundoExtended) {
+          telemundoExtended = await hlResolve(away, home, dateStr, series, "Telemundo Deportes", [telemundo], competition, true, true);
+          if (telemundoExtended && telemundoExtended === telemundo) telemundoExtended = null;
         }
 
         const entry = { t: now };
         if (official) entry.official = official;
         if (extended) entry.extended = extended;
-        if (entry.official || entry.extended) {
+        if (telemundo) entry.telemundo = telemundo;
+        if (telemundoExtended) entry.telemundoExtended = telemundoExtended;
+        if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended) {
           games[key] = entry;
-          if (!prev.official && !prev.extended) resolved++;
+          if (!prev.official && !prev.extended && !prev.telemundo && !prev.telemundoExtended) resolved++;
         }
       }
     }
