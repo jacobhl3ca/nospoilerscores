@@ -1324,10 +1324,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
             } : undefined}
           >
-            {/* YouTube modal controls sit above the player, left-aligned, so they
+            {/* YouTube modal controls sit above the player, right-aligned, so they
                 don't cover the iframe or collide with YouTube's own overlay. */}
             <div
-              className="mb-2 flex items-center gap-1.5"
+              className="mb-2 flex items-center justify-end gap-1.5"
               style={{ width: ytFrameWidth }}
               onClick={(e) => e.stopPropagation()}
             >

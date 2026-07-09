@@ -47,10 +47,11 @@ export default function GameHighlights({
   // still surface a shorter team recap when one is available.
   const isMlb = game.sport === "mlb";
   const isFifa = game.sport === "fifa";
-  // FIFA's short 2m clips frequently hit YouTube embed restrictions; keep only
-  // the FOX full-cut button on World Cup cards.
+  // FIFA's short 2m clips frequently hit YouTube embed restrictions. Keep the
+  // primary row to the FOX full cut, but keep the Spanish Telemundo pair on
+  // the second row when those prebaked/search-resolved clips exist.
   const fifaShortEnabled = false;
-  const fifaTelemundoEnabled = false;
+  const fifaTelemundoEnabled = true;
   const hasOfficialButton = !!officialChannel && !(isFifa && !fifaShortEnabled);
   const initialBaked = getCachedBakedHighlight(game.sport, game.id);
   const initialOldMlbBake = isMlb && initialBaked?.mlbOrder !== "official-first";
