@@ -1904,6 +1904,7 @@ export default function HomeContent({
             <div className="mt-3 grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
               <a
                 href="/worldcup"
+                data-umami-event="wc-hub-today"
                 className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
                 style={{
                   background: worldCupHubMode === "today" ? "var(--accent)" : "var(--bg-card-hover)",
@@ -1915,6 +1916,7 @@ export default function HomeContent({
               </a>
               <a
                 href="/worldcup/tomorrow"
+                data-umami-event="wc-hub-tomorrow"
                 className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
                 style={{
                   background: worldCupHubMode === "tomorrow" ? "var(--accent)" : "var(--bg-card-hover)",
@@ -1926,6 +1928,7 @@ export default function HomeContent({
               </a>
               <a
                 href="/worldcup/highlights"
+                data-umami-event="wc-hub-highlights"
                 className="rounded-lg px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-85"
                 style={{
                   background: worldCupHubMode === "highlights" ? "var(--accent)" : "var(--bg-card-hover)",
@@ -1937,6 +1940,7 @@ export default function HomeContent({
               </a>
               <a
                 href="/watch-world-cup-without-spoilers"
+                data-umami-event="wc-hub-watch-guide"
                 className="rounded-lg px-3 py-2 text-sm font-semibold text-center transition-colors"
                 style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--accent)" }}
               >
@@ -1945,11 +1949,11 @@ export default function HomeContent({
             </div>
             <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
               {worldCupHubCopy.note}{" "}
-              <a href="/worldcup/tomorrow" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+              <a href="/worldcup/tomorrow" data-umami-event="wc-hub-footer-tomorrow" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
                 Tomorrow&apos;s World Cup schedule
               </a>{" "}
               -{" "}
-              <a href="/worldcup/highlights" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+              <a href="/worldcup/highlights" data-umami-event="wc-hub-footer-highlights" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
                 Spoiler-free highlights
               </a>
             </p>
