@@ -71,7 +71,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
       a: `Yes. The World Cup hub shows today's and upcoming World Cup matches with kickoff information while keeping scores and winners hidden.`,
     },
     {
-      q: `Can ratings tell me if a ${team.name} match was worth watching?`,
+      q: `Can ratings tell me if a match involving ${team.name} was worth watching?`,
       a: `Yes. After a match finishes, HideScore can show a spoiler-free competitiveness rating so you can choose what to watch without learning who won.`,
     },
   ];

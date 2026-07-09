@@ -322,6 +322,15 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
 
 type WorldCupHubMode = "today" | "tomorrow" | "highlights";
 
+const POPULAR_WORLD_CUP_TEAMS = [
+  { name: "United States", slug: "united-states", flag: "🇺🇸" },
+  { name: "Argentina", slug: "argentina", flag: "🇦🇷" },
+  { name: "Brazil", slug: "brazil", flag: "🇧🇷" },
+  { name: "England", slug: "england", flag: "ENG" },
+  { name: "Mexico", slug: "mexico", flag: "🇲🇽" },
+  { name: "Canada", slug: "canada", flag: "🇨🇦" },
+];
+
 export default function HomeContent({
   initialOffset,
   worldCupHub,
@@ -1950,6 +1959,25 @@ export default function HomeContent({
               >
                 Watch guide
               </a>
+            </div>
+            <div className="mt-3">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                Popular teams
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_WORLD_CUP_TEAMS.map((team) => (
+                  <Link
+                    key={team.slug}
+                    href={`/worldcup/teams/${team.slug}`}
+                    data-umami-event={`wc-hub-popular-${team.slug}`}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                    style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
+                  >
+                    <span aria-hidden="true">{team.flag}</span>
+                    <span>{team.name}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
             <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
               {worldCupHubCopy.note}{" "}
