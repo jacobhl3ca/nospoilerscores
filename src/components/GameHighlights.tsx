@@ -211,7 +211,7 @@ export default function GameHighlights({
         setSearchStatus(id ? "found" : "missing");
       })();
     }
-  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, strictPrimaryChannel, strictWorldCupChannel]);
+  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, strictPrimaryChannel, strictWorldCupChannel]);
 
   // When there is no official channel the official button never renders, so
   // treat officialStatus as "missing" without storing it in state.
