@@ -492,6 +492,7 @@ export default {
             // upload win a 2026 NYCFC query.
             const shortTok = title.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/);
             const longTok = title.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),\s+(\d{4})\b/i);
+            const longNoYearTok = title.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})\b/i);
             if (shortTok) {
               titleHasExplicitDate = true;
               const tM = parseInt(shortTok[1], 10);
@@ -505,6 +506,11 @@ export default {
               const tD = parseInt(longTok[2], 10);
               const tY = longTok[3];
               titleDateMatches = tM === queryMonth && tD === queryDay && tY === queryYear;
+            } else if (longNoYearTok) {
+              titleHasExplicitDate = true;
+              const tM = QUERY_MONTHS[longNoYearTok[1].slice(0,3).toLowerCase()];
+              const tD = parseInt(longNoYearTok[2], 10);
+              titleDateMatches = tM === queryMonth && tD === queryDay;
             } else {
               // Bare M/D tokens (no year) — official NHL channel uses
               // "Team @ Team M/D | NHL Highlights" for regular-season
