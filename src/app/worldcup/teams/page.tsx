@@ -46,7 +46,7 @@ export default function WorldCupTeamsPage() {
             className="rounded-lg px-3 py-2 text-sm font-semibold transition-colors flex items-center gap-2"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
           >
-            <span className="inline-flex h-6 w-8 items-center justify-center rounded-md text-sm" style={{ background: "var(--bg-card-hover)" }}>
+            <span aria-hidden="true" className="inline-flex h-6 w-8 items-center justify-center rounded-md text-sm" style={{ background: "var(--bg-card-hover)" }}>
               {team.flag}
             </span>
             <span className="min-w-0 flex-1">

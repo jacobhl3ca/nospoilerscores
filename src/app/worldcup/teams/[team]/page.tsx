@@ -82,7 +82,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
         HideScore
       </p>
       <div className="mb-4 flex items-center gap-3">
-        <span className="inline-flex h-12 w-16 items-center justify-center rounded-xl text-2xl font-bold" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+        <span aria-hidden="true" className="inline-flex h-12 w-16 items-center justify-center rounded-xl text-2xl font-bold" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           {team.flag}
         </span>
         <h1 className="text-2xl font-bold">{title}</h1>
