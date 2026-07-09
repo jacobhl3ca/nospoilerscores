@@ -25,7 +25,7 @@ interface GameCardProps {
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   // Plays a non-YouTube embed (NHL recaps via Brightcove) in the same modal.
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   leagueLabel?: string;
   useAbbreviations?: boolean;
   // When true, render the game's own date on the top-left regardless of state,
@@ -487,23 +487,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           >
             <span aria-hidden>💎</span>
             Cycle Watch
-          </span>
-        </div>
-      )}
-
-      {/* Soccer Penalty Shootout — knockout level after extra time, decided on
-          spot kicks. Shown live AND on the just-finished match (shootouts are
-          brief); gated behind the ratings/spoiler toggle. Reveals only that it
-          went to pens, never the winner. */}
-      {showRatings && game.penaltyShootout && (
-        <div className="mb-1 flex justify-center">
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-500"
-            style={{ background: "rgba(16, 185, 129, 0.12)" }}
-            title="Level after extra time — decided by a penalty shootout"
-          >
-            <span aria-hidden>🥅</span>
-            Penalty Shootout
           </span>
         </div>
       )}

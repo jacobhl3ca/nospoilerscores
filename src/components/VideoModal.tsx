@@ -47,10 +47,8 @@ interface VideoModalProps {
   // user toggles each in Settings. Only affect the YouTube highlight path.
   maskVideoTitle?: boolean;
   maskVideoBottom?: boolean;
-  // Opt-in (default OFF): show YouTube's NATIVE control bar (controls:1) instead
-  // of our spoiler-safe stripped player. When on, YT's own progress/seek bar +
-  // time are visible (a spoiler trade the user accepts — useful in fullscreen),
-  // the bottom spoiler mask + click-catcher step aside so YT's controls work.
+  // Default ON: show YouTube's NATIVE control bar (controls:1). The custom
+  // spoiler-safe controls still exist for users who turn native controls off.
   youtubeNativeControls?: boolean;
   // Which seek control the YouTube player shows: progress bar + jumps ("both",
   // default), bar only, or jumps only.
@@ -188,7 +186,7 @@ const JUMP_PCTS = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 // Seconds skipped per ←/→ arrow press, matching YouTube's own arrow keys.
 const SEEK_STEP = 5;
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = true, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -211,6 +209,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // hasCaptionTrack hides the button on streams with no CC track at all
   // (e.g., v.redd.it MP4s).
   const [showCC, setShowCC] = useState(false);
+  const showCCRef = useRef(false);
   const [hasCaptionTrack, setHasCaptionTrack] = useState(false);
   // Brief "Copied ✓" confirmation after the copy-link button is tapped.
   const [copied, setCopied] = useState(false);
@@ -615,11 +614,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
   }, []);
 
-  // Reset caption state any time the modal swaps to a different stream
+  // Reset caption state any time the modal swaps to a different stream.
   useEffect(() => {
     setShowCC(false);
     setHasCaptionTrack(false);
-  }, [playbackUrl]);
+  }, [playbackUrl, currentId]);
+
+  useEffect(() => {
+    showCCRef.current = showCC;
+  }, [showCC]);
 
   // Reset when the modal is opened with a different primary id
   useEffect(() => {
@@ -823,6 +826,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // A freshly-built player always autoplays muted — keep the custom
             // toggle in sync (covers fallback swaps after an unmute, too).
             setMuted(true);
+            if (showCCRef.current) {
+              try { event.target.loadModule?.("captions"); } catch {}
+            }
             // Uncover the title bar only if the real YouTube title is spoiler-
             // free (getVideoData is undocumented but reliable; may be empty this
             // early, so we re-check on PLAYING below). Default stays covered.
@@ -890,6 +896,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
   }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls]);
 
+  // YouTube captions are controlled through the iframe API module. Keep the
+  // button visible even before we know whether the clip has a caption track;
+  // videos without tracks simply ignore the command.
+  useEffect(() => {
+    if (!ytMode) return;
+    const player = playerRef.current;
+    if (!player) return;
+    try {
+      if (showCC) {
+        player.loadModule?.("captions");
+      } else {
+        player.unloadModule?.("captions");
+      }
+    } catch {
+      // The YouTube API does not expose caption availability reliably.
+    }
+  }, [ytMode, currentId, showCC]);
+
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
   // Space reserved below the fullscreen video for the control bar — drops to a
@@ -951,10 +975,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           </svg>
         </button>
 
-        {/* Captions toggle — only when the source carries a CC track. Sits
-            beside the close button so it's always reachable instead of buried
-            in Safari's overflow menu. */}
-        {hlsMode && hasCaptionTrack && (
+        {/* Captions toggle. For YouTube, always show it; for direct HLS streams,
+            show it once a captions/subtitles track is detected. */}
+        {((ytMode && !!currentId) || (hlsMode && hasCaptionTrack)) && (
           <button
             onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
             aria-pressed={showCC}

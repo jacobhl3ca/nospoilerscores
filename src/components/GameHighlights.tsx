@@ -6,10 +6,11 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, getSecondaryChannels, resolveOfficialHighlightVideo, resolveHighlightVideo } from "@/lib/youtube";
 
-// Shared highlight buttons for a finished game — the official-channel + top-
-// search YouTube clips and (NHL only) the NHL.com recap / condensed videos.
+// Shared highlight buttons for a finished game — the official-channel YouTube
+// clip, trusted alternate YouTube clips, and official league-site recap /
+// condensed videos where available.
 // Extracted from GameCard so the score card AND the details popup render the
 // exact same buttons playing the exact same resolved videos (Jacob 6/1 — the
 // popup must "just match" the card). All resolution/prefetch lives here.
@@ -25,7 +26,7 @@ export default function GameHighlights({
   leagueLabel?: string;
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   wrapMargin?: string;
 }) {
   const prefetchedVideoId = useRef<string | null>(null);
@@ -77,6 +78,10 @@ export default function GameHighlights({
   const shareCard = useMemo(() => buildShareCard(game, leagueLabel), [game, leagueLabel]);
 
   const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
+  const secondaryChannels = useMemo(
+    () => getSecondaryChannels(game.sport, leagueLabel),
+    [game.sport, leagueLabel]
+  );
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
@@ -85,20 +90,22 @@ export default function GameHighlights({
     const series = game.seriesNote;
     if (officialChannel) {
       (async () => {
-        const officialId = await resolveHighlightVideo(away, home, dateStr, series, officialChannel, undefined, competition);
+        const officialId = await resolveOfficialHighlightVideo(away, home, dateStr, series, officialChannel, undefined, competition);
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
-        // World Cup: show ONE official button. resolveHighlightVideo already
-        // falls through from the FOX-channel lookup to the unscoped search,
-        // which the worker restricts to official channels for WC — so the
-        // separate "search" button only ever re-surfaces the same official
-        // pool (or FIFA's alt-cast), i.e. a duplicate clip of the same game.
-        // Drop it. (fifa-only; competition is null for every other league.)
-        if (competition) {
+        if (!officialId) {
           setSearchStatus("missing");
           return;
         }
-        const id = await resolveHighlightVideo(away, home, dateStr, series, undefined, [officialId], competition);
+        if (game.sport === "mlb") {
+          setSearchStatus("missing");
+          return;
+        }
+        let id: string | null = null;
+        for (const channel of secondaryChannels) {
+          id = await resolveOfficialHighlightVideo(away, home, dateStr, series, channel, [officialId], competition);
+          if (id) break;
+        }
         prefetchedVideoId.current = id;
         setSearchStatus(id ? "found" : "missing");
       })();
@@ -110,11 +117,16 @@ export default function GameHighlights({
         setSearchStatus(id ? "found" : "missing");
       });
     }
-  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, competition]);
+  }, [highlightUrl, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, secondaryChannels, competition]);
 
   const showYouTube = !!(isFinished && highlightUrl && (officialStatus !== "missing" || searchStatus !== "missing"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
-  if (!showYouTube && !showNhl) return null;
+  // MLB's official YouTube "Full Game Highlights" videos are the same cuts as
+  // MLB.com Condensed Game. Avoid showing both duplicates; only surface
+  // Condensed when the YouTube lookup misses.
+  const showMlbCondensed = game.sport === "mlb" && officialStatus === "missing" && !!game.mlbCondensedPlaybackUrl;
+  const showMlb = !!(isFinished && game.sport === "mlb" && (game.mlbRecapPlaybackUrl || showMlbCondensed));
+  if (!showYouTube && !showNhl && !showMlb) return null;
 
   return (
     <>
@@ -133,7 +145,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, undefined, competition);
+                const id = await resolveOfficialHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, undefined, competition);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -168,8 +180,13 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("search");
-                // Dedup against primary so the two buttons never play the same video.
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, undefined, [prefetchedOfficialId.current], competition);
+                let id: string | null = null;
+                if (game.sport !== "mlb") {
+                  for (const channel of secondaryChannels) {
+                    id = await resolveOfficialHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, channel, [prefetchedOfficialId.current], competition);
+                    if (id) break;
+                  }
+                }
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;
@@ -182,13 +199,53 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-              title="Top search result highlights"
+              title="Trusted highlight option"
             >
               {fetchingOnClick === "search" ? (
                 <span className="text-[10px]">Loading...</span>
               ) : (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* MLB.com official game videos. Recap is the short editorial cut; Condensed
+          is only shown if the official YouTube lookup misses, because MLB's
+          YouTube "Full Game Highlights" matches MLB.com Condensed. */}
+      {showMlb && (
+        <div className={`${showYouTube ? "mt-1" : wrapMargin} flex gap-1`}>
+          {game.mlbRecapPlaybackUrl && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const page = game.mlbRecapUrl || game.mlbRecapPlaybackUrl!;
+                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbRecapPlaybackUrl, game.mlbRecapPoster);
+                else openExternal(page);
+              }}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              title="MLB.com game recap"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium">Recap</span>
+            </button>
+          )}
+          {showMlbCondensed && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl!;
+                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
+                else openExternal(page);
+              }}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              title="MLB.com condensed game"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium">Condensed</span>
             </button>
           )}
         </div>

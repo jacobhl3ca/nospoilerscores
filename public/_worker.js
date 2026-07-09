@@ -877,6 +877,104 @@ export default {
       }
     }
 
+    // MLB.com recap + condensed-game links. StatsAPI exposes official per-game
+    // videos with HLS/MP4 playback URLs, but browsers still benefit from a small
+    // same-origin proxy and a normalized response shape.
+    if (url.pathname === "/api/mlb-videos") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const corsJson = (body, status = 200, maxAge = 600) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      const raw = url.searchParams.get("date") || "";
+      const iso = /^\d{8}$/.test(raw)
+        ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+        : raw;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+        return corsJson({ error: "Bad date" }, 400, 0);
+      }
+      const bestPlayback = (item) => {
+        const playbacks = item && item.playbacks;
+        if (!Array.isArray(playbacks)) return null;
+        return (
+          playbacks.find((p) => p && p.name === "hlsCloud" && p.url)?.url ||
+          playbacks.find((p) => p && /\.m3u8(\?|$)/i.test(p.url || ""))?.url ||
+          playbacks.find((p) => p && p.name === "mp4Avc" && p.url)?.url ||
+          playbacks.find((p) => p && p.url)?.url ||
+          null
+        );
+      };
+      const poster = (item) => {
+        const cuts = item && item.image && item.image.cuts;
+        if (!Array.isArray(cuts)) return null;
+        return (
+          cuts.find((c) => c && c.width >= 640 && c.src)?.src ||
+          cuts.find((c) => c && c.src)?.src ||
+          null
+        );
+      };
+      const pageUrl = (item) => item && item.slug ? `https://www.mlb.com/video/${item.slug}` : null;
+      const hasKeyword = (item, re) => {
+        const keys = [
+          ...((item && item.keywordsAll) || []),
+          ...((item && item.keywordsDisplay) || []),
+        ];
+        return keys.some((k) => re.test(`${k.value || ""} ${k.displayName || ""}`));
+      };
+      const normalize = (item) => ({
+        url: pageUrl(item),
+        playback: bestPlayback(item),
+        poster: poster(item),
+      });
+      try {
+        const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule?date=${iso}&sportId=1&hydrate=game(content(highlights(highlights)))`, {
+          headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+        });
+        if (!res.ok) return corsJson({ games: [] }, 200, 60);
+        const data = await res.json();
+        const games = [];
+        for (const dt of data.dates || []) {
+          for (const g of dt.games || []) {
+            const items = (((g.content || {}).highlights || {}).highlights || {}).items || [];
+            const recap = items.find((item) =>
+              bestPlayback(item) &&
+              (hasKeyword(item, /mlb_recap|game[-_ ]recap|MLBCOM_GAME_RECAP/i) ||
+                /recap/i.test(`${item.title || ""} ${item.headline || ""}`))
+            );
+            const condensed = items.find((item) =>
+              bestPlayback(item) &&
+              (hasKeyword(item, /condensed[-_ ]game|condensed_game|MLBCOM_CONDENSED_GAME/i) ||
+                /condensed game/i.test(`${item.title || ""} ${item.headline || ""}`))
+            );
+            if (!recap && !condensed) continue;
+            games.push({
+              date: g.gameDate || null,
+              away: g.teams && g.teams.away && g.teams.away.team ? g.teams.away.team.name : "",
+              home: g.teams && g.teams.home && g.teams.home.team ? g.teams.home.team.name : "",
+              recap: recap ? normalize(recap) : null,
+              condensed: condensed ? normalize(condensed) : null,
+            });
+          }
+        }
+        return corsJson({ games });
+      } catch {
+        return corsJson({ games: [] }, 200, 60);
+      }
+    }
+
     // R2-backed data feeds (news prebake + 3 root JSONs). Decouples cron data
     // refresh from the deploy pipeline. If the bucket binding is missing or
     // the object isn't there yet, fall through to the static asset on main —

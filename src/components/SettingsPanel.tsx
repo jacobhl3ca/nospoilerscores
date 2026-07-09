@@ -800,8 +800,8 @@ export default function SettingsPanel({
             />
             <ToggleRow
               label="Show YouTube's controls"
-              hint="Use YouTube's own bar (progress + time) instead of the spoiler-safe one — reveals how far you are, but handy in fullscreen"
-              checked={prefs.youtubeNativeControls ?? false}
+              hint="Use YouTube's own bar (progress + time). Turn off to use HideScore's spoiler-safe controls."
+              checked={prefs.youtubeNativeControls ?? true}
               onChange={(v) => updatePrefs({ youtubeNativeControls: v })}
             />
             <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">

@@ -880,10 +880,9 @@ function parseGame(event: any, sport: Sport): Game {
   const stage = deriveStage(competition?.altGameNote, event.season?.slug);
 
   // Penalty shootout: a soccer knockout decided (or being decided) by spot
-  // kicks — level after extra time, the pure tune-in moment. ESPN tags it via a
-  // STATUS_*_PEN status name and a per-competitor `shootoutScore` that populates
-  // live as kicks are taken. Reveals only that it went to penalties (a draw
-  // through ET), never the winner; the card gates it behind the ratings toggle.
+  // kicks. ESPN tags it via a STATUS_*_PEN status name and a per-competitor
+  // `shootoutScore` that populates live as kicks are taken. Keep this internal:
+  // surfacing it on spoiler-safe cards gives away too much about regulation/ET.
   const shootoutStatus = event.status?.type?.name ?? "";
   const penaltyShootout =
     SOCCER_SPORTS.has(sport) &&
@@ -2376,6 +2375,54 @@ async function enrichNhlVideos(games: Game[], date: string): Promise<void> {
   }
 }
 
+// Attach MLB.com Recap + Condensed Game videos to finished MLB games. The
+// worker normalizes StatsAPI's per-game highlight payload into page URL,
+// playback URL, and poster so GameHighlights can render official second/third
+// buttons without relying on noisy YouTube search results.
+async function enrichMlbVideos(games: Game[], date: string): Promise<void> {
+  if (!date || !games.some((g) => g.state === "post")) return;
+  try {
+    const res = await fetch(`${getApiBase()}/api/mlb-videos?date=${date}`);
+    if (!res.ok) return;
+    type MlbClip = { url: string | null; playback: string | null; poster: string | null };
+    const data = (await res.json()) as {
+      games?: { date: string | null; away: string; home: string; recap: MlbClip | null; condensed: MlbClip | null }[];
+    };
+    const entries = data.games ?? [];
+    if (!entries.length) return;
+    const norm = (s: string) =>
+      s.toLowerCase()
+        .replace(/\bthe\b/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+    for (const game of games) {
+      if (game.state !== "post") continue;
+      const home = norm(game.homeTeam.displayName);
+      const away = norm(game.awayTeam.displayName);
+      const candidates = entries.filter((e) => {
+        const eh = norm(e.home || "");
+        const ea = norm(e.away || "");
+        return !!eh && !!ea && home.endsWith(eh) && away.endsWith(ea);
+      });
+      const gameTime = new Date(game.date).getTime();
+      const match = candidates.sort((a, b) => {
+        const at = a.date ? Math.abs(new Date(a.date).getTime() - gameTime) : Number.MAX_SAFE_INTEGER;
+        const bt = b.date ? Math.abs(new Date(b.date).getTime() - gameTime) : Number.MAX_SAFE_INTEGER;
+        return at - bt;
+      })[0];
+      if (!match) continue;
+      game.mlbRecapUrl = match.recap?.url ?? null;
+      game.mlbRecapPlaybackUrl = match.recap?.playback ?? null;
+      game.mlbRecapPoster = match.recap?.poster ?? null;
+      game.mlbCondensedUrl = match.condensed?.url ?? null;
+      game.mlbCondensedPlaybackUrl = match.condensed?.playback ?? null;
+      game.mlbCondensedPoster = match.condensed?.poster ?? null;
+    }
+  } catch {
+    // Best-effort enrichment — leave games unchanged on any failure.
+  }
+}
+
 export async function fetchAllLeagues(
   date?: string,
   thirdLeagueSport?: Sport | "empty",
@@ -2492,6 +2539,7 @@ export async function fetchAllLeagues(
     // all the game lists are assembled, just before returning.
     const ranksPromise = RANK_LEAGUES.has(cfg.sport) ? fetchStandingsRanks(cfg.sport) : null;
     if (cfg.sport === "nhl" && date) await enrichNhlVideos(games, date);
+    if (cfg.sport === "mlb" && date) await enrichMlbVideos(games, date);
     let nextGameDay: { date: string; games: Game[] } | null = null;
     // Only surface the "next game day" fallback when ESPN genuinely returned
     // an empty schedule. On a fetch failure games is also [] — falling back

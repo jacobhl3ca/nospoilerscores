@@ -65,10 +65,26 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // Golf Channel third for analysis/extended recaps. Sky Sports Golf
 // only used for The Open since R&A licenses there.
 const SECONDARY_CHANNELS: Record<string, string[]> = {
+  nba: ["NBA", "NBA on ESPN", "ESPN"],
+  wnba: ["WNBA", "ESPN"],
+  mlb: ["MLB", "ESPN", "FOX Sports"],
+  nhl: ["NHL", "NHL on ESPN", "Sportsnet"],
+  nfl: ["NFL", "NBC Sports", "FOX Sports", "ESPN"],
+  ncaam: ["March Madness", "CBS Sports", "ESPN"],
+  ncaaw: ["March Madness", "ESPN"],
+  ncaaf: ["ESPN College Football", "FOX Sports"],
+  fifa: ["FOX Sports", "FOX Soccer", "FIFA"],
+  epl: ["NBC Sports", "Sky Sports Premier League"],
+  mls: ["Major League Soccer", "Apple TV"],
+  ucl: ["CBS Sports Golazo", "UEFA"],
+  uel: ["CBS Sports Golazo", "UEFA"],
   golf_masters: ["ESPN", "PGA TOUR", "Golf Channel"],
   golf_pgachamp: ["ESPN", "PGA TOUR", "Golf Channel"],
   golf_usopen: ["ESPN", "PGA TOUR", "Golf Channel"],
   golf_theopen: ["ESPN", "Sky Sports Golf", "Golf Channel"],
+  tennis_frenchopen: ["Roland-Garros"],
+  tennis_wimbledon: ["Wimbledon"],
+  tennis_usopen: ["US Open Tennis Championships"],
   f1: ["FORMULA 1", "ESPN", "Sky Sports F1"],
   ufc: ["UFC", "ESPN"],
 };
@@ -194,9 +210,24 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
   }
 }
 
-// Walks the lookup chain so a highlight button never has to fall back to
-// opening a YouTube search page externally. Tries in order:
-//   1. channel-filtered query (the strict "official" lookup)
+// Strict channel lookup for the labeled "official" button.
+// Returns null if the configured channel doesn't produce a hit.
+export async function resolveOfficialHighlightVideo(
+  awayTeam: string,
+  homeTeam: string,
+  dateStr: string,
+  seriesNote: string | null | undefined,
+  channel: string,
+  exclude?: (string | null | undefined)[],
+  competition?: string | null
+): Promise<string | null> {
+  return fetchFirstVideoId(buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition), channel, exclude);
+}
+
+// Walks the lookup chain for the non-official search button so a highlight
+// button never has to fall back to opening a YouTube search page externally.
+// Tries in order:
+//   1. channel-filtered query (when supplied)
 //   2. unfiltered query (any video matching the dated title)
 //   3. unfiltered query without the date suffix (catches channels whose
 //      recap titles omit the date entirely)

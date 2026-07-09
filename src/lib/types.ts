@@ -37,6 +37,15 @@ export interface Game {
   nhlRecapEmbed?: string | null;
   nhlCondensedUrl?: string | null;
   nhlCondensedEmbed?: string | null;
+  // MLB.com official per-game videos (finished MLB games only), sourced from
+  // StatsAPI via the /api/mlb-videos worker proxy. These play directly through
+  // the app's HLS video modal.
+  mlbRecapUrl?: string | null;
+  mlbRecapPlaybackUrl?: string | null;
+  mlbRecapPoster?: string | null;
+  mlbCondensedUrl?: string | null;
+  mlbCondensedPlaybackUrl?: string | null;
+  mlbCondensedPoster?: string | null;
   // Direct stream URL for live games (e.g., MLB.tv deep link)
   streamUrl: string | null;
   // Per-game Prime Video deep link (amazon.com/gp/video/detail/{ASIN}) when
@@ -66,9 +75,9 @@ export interface Game {
   cycleWatch?: { team: string; player: string; needs: string } | null;
   // Soccer penalty shootout: a knockout match level after extra time, decided
   // (or being decided) by spot kicks. Set for live shootouts and just-finished
-  // ones (STATUS_*_PEN / a per-competitor shootoutScore). Surfaced as a spoiler-
-  // safe "Penalty shootout" badge — gated behind the ratings/spoiler toggle; it
-  // reveals only that it went to penalties, never the winner.
+  // ones (STATUS_*_PEN / a per-competitor shootoutScore). Do not surface this
+  // on the spoiler-safe card; knowing a match reached penalties gives away too
+  // much about regulation/extra time.
   penaltyShootout?: boolean;
   // Tennis deciding set: a live Grand Slam singles match level on sets and into
   // the final set (1-1 in set 3 for best-of-3 women's draws; 2-2 in set 5 for

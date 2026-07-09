@@ -678,8 +678,8 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
   // Game-card click → play a non-YouTube embed (NHL recaps via Brightcove)
   // inside the same modal. No ?v= param: the embed URL isn't a shareable
   // YouTube id, so we just push a history entry so Back / Esc dismiss it.
-  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => {
-    setVideoModal({ videoId: "", fallbackUrl, embedUrl, sourceLabel, shareCard });
+  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => {
+    setVideoModal({ videoId: "", fallbackUrl, embedUrl: embedUrl || null, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", window.location.href);
   }, []);
 
@@ -2656,7 +2656,7 @@ export default function HomeContent({ initialOffset, worldCupHub }: { initialOff
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? true}
           maskVideoBottom={prefs.maskVideoBottom ?? true}
-          youtubeNativeControls={prefs.youtubeNativeControls ?? false}
+          youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
           allowEnd={prefs.videoAllowEnd ?? false}
