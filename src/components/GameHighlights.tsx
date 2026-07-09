@@ -21,7 +21,8 @@ const highlightBufferHours: Record<string, number> = {
 const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 2, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
 
 // Shared highlight buttons for a finished game — the official-channel + top-
-// search YouTube clips and (NHL only) the NHL.com recap / condensed videos.
+// search YouTube clips, plus official league-site recap / condensed videos
+// where available.
 // Extracted from GameCard so the score card AND the details popup render the
 // exact same buttons playing the exact same resolved videos (Jacob 6/1 — the
 // popup must "just match" the card). All resolution/prefetch lives here.
@@ -37,7 +38,7 @@ export default function GameHighlights({
   leagueLabel?: string;
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   wrapMargin?: string;
 }) {
   const prefetchedVideoId = useRef<string | null>(null);
@@ -221,10 +222,16 @@ export default function GameHighlights({
   // official slot is synchronously "missing" (never loading), so single-button
   // leagues still show as soon as their one button resolves.
   const bothSettled = effectiveOfficialStatus !== "loading" && searchStatus !== "loading";
-  const showYouTube = !!(isFinished && highlightUrl && bothSettled && (effectiveOfficialStatus === "found" || searchStatus === "found"));
+  const showYouTube = !!(!isMlb && isFinished && highlightUrl && bothSettled && (effectiveOfficialStatus === "found" || searchStatus === "found"));
   const showTelemundo = !!(isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
-  if (!showYouTube && !showTelemundo && !showNhl) return null;
+  // MLB uses the official MLB.com row we previously settled on: short recap
+  // first, condensed game second. Prefer YouTube for Condensed when it resolves
+  // because it is the same cut with better controls; fall back to MLB.com HLS.
+  const showMlbYouTubeCondensed = isMlb && effectiveOfficialStatus !== "missing";
+  const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!game.mlbCondensedPlaybackUrl);
+  const showMlb = !!(isFinished && isMlb && (game.mlbRecapPlaybackUrl || showMlbCondensed));
+  if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
 
   return (
     <>
@@ -299,20 +306,91 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-              aria-label={isFifa ? "FOX full highlights" : isMlb ? "Short recap highlights" : "Top search result highlights"}
+              aria-label={isFifa ? "FOX full highlights" : "Top search result highlights"}
               // aria-busy conveys the in-flight fetch that the visible "Loading..."
               // swap shows sighted users; the aria-label above stays pinned so the
               // name never collapses to "Loading...". Matches EventCard's buttons.
               aria-busy={fetchingOnClick === "search"}
-              title={isFifa ? "FOX full highlights" : isMlb ? "Short recap highlights" : "Top search result highlights"}
+              title={isFifa ? "FOX full highlights" : "Top search result highlights"}
             >
               {fetchingOnClick === "search" ? (
                 <span className="text-[10px]">Loading...</span>
               ) : (
                   <>
                     <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                    {(isFifa || isMlb) && <span className="text-[10px] font-medium">{isFifa ? "18m" : "Recap"}</span>}
+                    {isFifa && (
+                      <span className="text-[10px] font-medium">
+                        <span className="sm:hidden">15+</span>
+                        <span className="hidden sm:inline">~15+ min</span>
+                      </span>
+                    )}
                   </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* MLB.com official game videos: short recap + condensed game in one row. */}
+      {showMlb && (
+        <div className={`${wrapMargin} flex gap-1`}>
+          {game.mlbRecapPlaybackUrl && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const page = game.mlbRecapUrl || game.mlbRecapPlaybackUrl!;
+                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbRecapPlaybackUrl, game.mlbRecapPoster);
+                else openExternal(page);
+              }}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label="MLB.com game recap"
+              title="MLB.com game recap"
+            >
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium">3m Recap</span>
+            </button>
+          )}
+          {showMlbCondensed && (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (showMlbYouTubeCondensed && onPlayHighlight) {
+                  if (prefetchedOfficialId.current) {
+                    onPlayHighlight(prefetchedOfficialId.current, modalFallbackUrl || game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl || "#", shareCard);
+                    return;
+                  }
+                  setFetchingOnClick("official");
+                  const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictPrimaryChannel);
+                  setFetchingOnClick(null);
+                  if (id) {
+                    prefetchedOfficialId.current = id;
+                    setOfficialStatus("found");
+                    onPlayHighlight(id, modalFallbackUrl || game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl || "#", shareCard);
+                    return;
+                  }
+                  setOfficialStatus("missing");
+                }
+                if (game.mlbCondensedPlaybackUrl) {
+                  const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl;
+                  if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
+                  else openExternal(page);
+                }
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              aria-label="MLB condensed game"
+              aria-busy={fetchingOnClick === "official"}
+              title="MLB condensed game"
+            >
+              {fetchingOnClick === "official" ? (
+                <span className="text-[10px]">Loading...</span>
+              ) : (
+                <>
+                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[10px] font-medium">Condensed</span>
+                </>
               )}
             </button>
           )}

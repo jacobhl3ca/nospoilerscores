@@ -63,7 +63,7 @@ export default function GameDetailModal({
   onClose: () => void;
   leagueLabel?: string;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   // World Cup group games: open the all-groups overlay with this group spotlit.
   onShowGroup?: (groupName: string) => void;
 }) {

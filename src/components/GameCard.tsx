@@ -25,7 +25,7 @@ interface GameCardProps {
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   // Plays a non-YouTube embed (NHL recaps via Brightcove) in the same modal.
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   leagueLabel?: string;
   useAbbreviations?: boolean;
   // When true, render the game's own date on the top-left regardless of state,

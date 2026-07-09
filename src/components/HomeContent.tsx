@@ -649,9 +649,9 @@ export default function HomeContent({
   // Game-card click → play a non-YouTube embed (NHL recaps via Brightcove)
   // inside the same modal. Pushes the shareable deep-link (?he=…&c=…) so Back /
   // Esc dismiss it AND copying the URL bar matches Copy link (the matchup card).
-  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => {
-    setVideoModal({ videoId: "", fallbackUrl, embedUrl, sourceLabel, shareCard });
-    const href = modalShareHref({ embedUrl, fallbackUrl, sourceLabel, shareCard });
+  const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => {
+    setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard });
+    const href = modalShareHref({ embedUrl, fallbackUrl, playbackUrl: playbackUrl || null, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
   }, [modalShareHref]);
 
