@@ -909,8 +909,21 @@ export default {
         // FIFA/World-Cup queries with two named teams only; inert elsewhere.
         if (!videoId && isWorldCupQuery && queryHasSpecificTeams && teamsMatch) {
           try {
+            const wcChannelSearchPaths = {
+              "fox sports": "@FOXSports",
+              "fox soccer": "@FOXSports",
+              "fifa": "@fifa",
+              "telemundo deportes": "@TelemundoDeportes",
+            };
+            const rescueChannelPath = preferChannelLower
+              ? wcChannelSearchPaths[preferChannelLower]
+              : wcChannelSearchPaths["fox sports"];
+            const rescueAllowedChannels = preferChannelLower
+              ? [preferChannelLower]
+              : WC_OFFICIAL_CHANNELS;
+            if (!rescueChannelPath) throw new Error("Unsupported World Cup rescue channel");
             const chQuery = `${teamsMatch[1]} ${teamsMatch[2]} highlights`.trim();
-            const chUrl = `https://www.youtube.com/@FOXSports/search?query=${encodeURIComponent(chQuery)}`;
+            const chUrl = `https://www.youtube.com/${rescueChannelPath}/search?query=${encodeURIComponent(chQuery)}`;
             const chRes = await fetch(chUrl, {
               headers: {
                 "User-Agent":
@@ -931,7 +944,7 @@ export default {
               const channelLower = (channelMatch ? channelMatch[1] : "").toLowerCase();
               // Same gates as the main loop: official WC channel, "World Cup"
               // in the title, a highlight/recap keyword, and BOTH named teams.
-              if (!WC_OFFICIAL_CHANNELS.includes(channelLower)) continue;
+              if (!rescueAllowedChannels.includes(channelLower)) continue;
               if (!/\b(world cup|copa mundial|fifa)\b/.test(titleLower)) continue;
               if (!titleLower.includes("highlight") && !titleLower.includes("recap") && !titleLower.includes("resumen")) continue;
               if (!titleHasTeam(titleLower, queryTeams[0]) || !titleHasTeam(titleLower, queryTeams[1])) continue;
@@ -939,7 +952,7 @@ export default {
                 if (!chExtendedId) chExtendedId = idMatch[1];
               } else {
                 chStandardId = idMatch[1];
-                break; // standard recap wins outright
+                if (!preferExtended) break; // standard recap wins outright
               }
             }
             videoId = preferExtended
