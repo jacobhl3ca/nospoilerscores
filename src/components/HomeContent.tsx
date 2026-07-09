@@ -2692,6 +2692,7 @@ export default function HomeContent({
               <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
               <a href="/spoiler-free-sports" style={{ textDecoration: "underline" }}>spoiler-free sports guide</a>,{" "}
               <a href="/no-spoiler-scores" style={{ textDecoration: "underline" }}>no-spoiler scores</a>,{" "}
+              <a href="/how-to-watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>how to watch sports highlights without spoilers</a>,{" "}
               <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
               <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
               <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>, or{" "}

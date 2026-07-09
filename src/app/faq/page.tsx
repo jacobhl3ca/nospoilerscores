@@ -39,6 +39,10 @@ const FAQ: { q: string; a: string }[] = [
     a: "Game ratings tell you how exciting a finished game was without revealing the score. Turn on ratings to sort by the best games and decide what is worth watching before you press play.",
   },
   {
+    q: "How can I watch sports highlights without spoilers?",
+    a: "Open HideScore before checking search, YouTube, league apps, or social feeds. Scores and winners stay hidden, ratings help you pick the best finished games, and each game card links to recap or condensed highlights when available.",
+  },
+  {
     q: "Which sports and leagues does HideScore cover?",
     a: "HideScore covers the NBA, MLB, NHL, NFL, and golf, plus soccer and college basketball, with spoiler-free scores, schedules, highlights, and news.",
   },
@@ -65,6 +69,13 @@ export default function FaqPage() {
           </div>
         ))}
       </section>
+
+      <p className="mt-8">
+        Need the short version? Read the{" "}
+        <Link href="/how-to-watch-sports-highlights-without-spoilers" className="underline underline-offset-2">
+          guide to watching sports highlights without spoilers
+        </Link>.
+      </p>
 
       <div className="mt-10">
         <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>← Back to HideScore</Link>
