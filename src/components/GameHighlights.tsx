@@ -186,7 +186,7 @@ export default function GameHighlights({
         }
         prefetchedVideoId.current = secondId;
         setSearchStatus(secondId ? "found" : "missing");
-        let telemundoShortId = await telemundoShortP;
+        const telemundoShortId = await telemundoShortP;
         let telemundoLongId = await telemundoLongP;
         if (telemundoLongId && telemundoShortId && telemundoLongId === telemundoShortId) {
           telemundoLongId = await resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", [telemundoShortId], competition, true, true);
@@ -230,10 +230,11 @@ export default function GameHighlights({
   const showTelemundo = !!(isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   // MLB uses the official MLB.com row we previously settled on: short recap
-  // first, condensed game second. Prefer YouTube for Condensed when it resolves
-  // because it is the same cut with better controls; fall back to MLB.com HLS.
-  const showMlbYouTubeCondensed = isMlb && effectiveOfficialStatus !== "missing";
-  const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!game.mlbCondensedPlaybackUrl);
+  // first, condensed game second. Do not substitute baked YouTube here: the
+  // MLB YouTube "Full Game Highlights" and MLB.com Condensed were the same cut,
+  // and showing the YouTube fallback by itself regresses the row into a lone
+  // "Condensed" button when the MLB.com proxy is unavailable.
+  const showMlbCondensed = isMlb && !!game.mlbCondensedPlaybackUrl;
   const showMlb = !!(isFinished && isMlb && (game.mlbRecapPlaybackUrl || showMlbCondensed));
   if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
 
@@ -357,45 +358,19 @@ export default function GameHighlights({
           )}
           {showMlbCondensed && (
             <button
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation();
-                if (showMlbYouTubeCondensed && onPlayHighlight) {
-                  if (prefetchedOfficialId.current) {
-                    onPlayHighlight(prefetchedOfficialId.current, modalFallbackUrl || game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl || "#", shareCard);
-                    return;
-                  }
-                  setFetchingOnClick("official");
-                  const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictPrimaryChannel);
-                  setFetchingOnClick(null);
-                  if (id) {
-                    prefetchedOfficialId.current = id;
-                    setOfficialStatus("found");
-                    onPlayHighlight(id, modalFallbackUrl || game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl || "#", shareCard);
-                    return;
-                  }
-                  setOfficialStatus("missing");
-                }
-                if (game.mlbCondensedPlaybackUrl) {
-                  const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl;
-                  if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
-                  else openExternal(page);
-                }
+                const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl!;
+                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
+                else openExternal(page);
               }}
-              disabled={fetchingOnClick !== null}
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="MLB condensed game"
-              aria-busy={fetchingOnClick === "official"}
               title="MLB condensed game"
             >
-              {fetchingOnClick === "official" ? (
-                <span className="text-[10px]">Loading...</span>
-              ) : (
-                <>
-                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">Condensed</span>
-                </>
-              )}
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium">Condensed</span>
             </button>
           )}
         </div>
