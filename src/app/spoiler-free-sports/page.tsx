@@ -116,6 +116,27 @@ export default function SpoilerFreeSportsPage() {
           See spoiler-free scores
         </Link>
         <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          <Link href="/watch-sports-highlights-without-spoilers" className="underline underline-offset-2">
+            Highlights
+          </Link>
+          <Link href="/no-spoiler-scores" className="underline underline-offset-2">
+            No-spoiler scores
+          </Link>
+          <Link href="/mlb-highlights-without-spoilers" className="underline underline-offset-2">
+            MLB
+          </Link>
+          <Link href="/nfl-highlights-without-spoilers" className="underline underline-offset-2">
+            NFL
+          </Link>
+          <Link href="/soccer-highlights-without-spoilers" className="underline underline-offset-2">
+            Soccer
+          </Link>
+          <Link href="/nba-scores-without-spoilers" className="underline underline-offset-2">
+            NBA
+          </Link>
+          <Link href="/nhl-scores-without-spoilers" className="underline underline-offset-2">
+            NHL
+          </Link>
           <Link href="/today" className="underline underline-offset-2">
             Today
           </Link>

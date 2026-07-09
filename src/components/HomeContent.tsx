@@ -2654,7 +2654,12 @@ export default function HomeContent({
               <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
               <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
               <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
-              <a href="/spoiler-free-sports" style={{ textDecoration: "underline" }}>spoiler-free sports guide</a> or{" "}
+              <a href="/spoiler-free-sports" style={{ textDecoration: "underline" }}>spoiler-free sports guide</a>,{" "}
+              <a href="/no-spoiler-scores" style={{ textDecoration: "underline" }}>no-spoiler scores</a>,{" "}
+              <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
+              <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
+              <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>, or{" "}
+              <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a>. Also see the{" "}
               <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
