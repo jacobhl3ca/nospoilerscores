@@ -186,7 +186,7 @@ export default function GameHighlights({
         }
         prefetchedVideoId.current = secondId;
         setSearchStatus(secondId ? "found" : "missing");
-        let telemundoShortId = await telemundoShortP;
+        const telemundoShortId = await telemundoShortP;
         let telemundoLongId = await telemundoLongP;
         if (telemundoLongId && telemundoShortId && telemundoLongId === telemundoShortId) {
           telemundoLongId = await resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", [telemundoShortId], competition, true, true);
