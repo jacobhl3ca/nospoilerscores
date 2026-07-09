@@ -1005,6 +1005,107 @@ export default {
       }
     }
 
+    // MLB.com recap + condensed-game video links. StatsAPI sends the per-game
+    // highlight payload, but browsers/Capacitor should not call it directly from
+    // every card. Normalize it here into the shape espn.ts expects.
+    if (url.pathname === "/api/mlb-videos") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const corsJson = (body, status = 200, maxAge = 600) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      const raw = url.searchParams.get("date") || "";
+      const iso = /^\d{8}$/.test(raw)
+        ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+        : raw;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+        return corsJson({ error: "Bad date" }, 400, 0);
+      }
+      try {
+        const res = await fetch(`https://statsapi.mlb.com/api/v1/schedule?date=${encodeURIComponent(iso)}&sportId=1&hydrate=game(content(highlights(highlights)))`, {
+          headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+        });
+        if (!res.ok) return corsJson({ games: [] }, 200, 60);
+        const data = await res.json();
+        const teamName = (t) => t?.team?.name || "";
+        const textOf = (h) => [
+          h?.title,
+          h?.headline,
+          h?.seoTitle,
+          h?.slug,
+          h?.blurb,
+          ...(h?.keywordsAll || []).flatMap((k) => [k?.value, k?.displayName, k?.type]),
+          ...(h?.keywordsDisplay || []).flatMap((k) => [k?.value, k?.displayName, k?.type]),
+        ].filter(Boolean).join(" ").toLowerCase();
+        const playbackOf = (h) => {
+          const playbacks = h?.playbacks || [];
+          return (
+            playbacks.find((p) => p?.name === "hlsCloud") ||
+            playbacks.find((p) => /\.m3u8(?:$|\?)/i.test(p?.url || "")) ||
+            playbacks[0] ||
+            null
+          )?.url || null;
+        };
+        const posterOf = (h) => {
+          const cuts = h?.image?.cuts || [];
+          return (
+            cuts.find((c) => c?.aspectRatio === "16:9" && c?.width >= 1280) ||
+            cuts.find((c) => c?.aspectRatio === "16:9") ||
+            cuts[0] ||
+            null
+          )?.src || null;
+        };
+        const clipOf = (h) => h ? ({
+          url: h.slug ? `https://www.mlb.com/video/${h.slug}` : null,
+          playback: playbackOf(h),
+          poster: posterOf(h),
+        }) : null;
+        const games = [];
+        for (const dt of data?.dates || []) {
+          for (const g of dt?.games || []) {
+            const items = g?.content?.highlights?.highlights?.items || [];
+            const recap = items.find((h) => {
+              const t = textOf(h);
+              return !/condensed/.test(t) && (
+                /\bmlb_recap\b/.test(t) ||
+                /\bmlbcom_game_recap\b/.test(t) ||
+                /\bgame-recap\b/.test(t) ||
+                /\bgame recap\b/.test(t)
+              );
+            });
+            const condensed = items.find((h) => {
+              const t = textOf(h);
+              return /\bcondensed-game\b/.test(t) || /\bcondensed game\b/.test(t) || /\bcondensed\b/.test(t);
+            });
+            const out = {
+              date: g?.gameDate || null,
+              away: teamName(g?.teams?.away),
+              home: teamName(g?.teams?.home),
+              recap: clipOf(recap),
+              condensed: clipOf(condensed),
+            };
+            if (out.away && out.home && (out.recap || out.condensed)) games.push(out);
+          }
+        }
+        return corsJson({ games });
+      } catch {
+        return corsJson({ games: [] }, 200, 60);
+      }
+    }
+
     // NHL condensed-game + recap video links. The NHL API (api-web.nhle.com)
     // sends no CORS headers, so a browser/Capacitor WebView can't hit it
     // directly — proxy it here. Returns each finished game's "Recap" (~3-4min)
