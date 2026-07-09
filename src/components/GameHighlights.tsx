@@ -267,7 +267,7 @@ export default function GameHighlights({
                 }
               }}
               disabled={fetchingOnClick !== null}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
               aria-label={`${officialChannel} highlights`}
               // aria-busy conveys the in-flight fetch that the visible "Loading..."
@@ -354,7 +354,7 @@ export default function GameHighlights({
               title="MLB.com game recap"
             >
               <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">3m</span>
+              <span className="text-[10px] font-medium whitespace-nowrap">3m</span>
             </button>
           )}
           {showMlbCondensed && (
@@ -365,13 +365,16 @@ export default function GameHighlights({
                 if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
                 else openExternal(page);
               }}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="MLB condensed game"
               title="MLB condensed game"
             >
               <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium">Condensed</span>
+              <span className="text-[10px] font-medium whitespace-nowrap">
+                <span className="sm:hidden">Cond.</span>
+                <span className="hidden sm:inline">Condensed</span>
+              </span>
             </button>
           )}
         </div>
