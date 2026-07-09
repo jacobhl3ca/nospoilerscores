@@ -62,7 +62,7 @@ interface VideoModalProps {
   // Confirm a click/jump that would land past the halfway point.
   warnHalfway?: boolean;
   // Reddit news only: page to the previous / next post in the same column
-  // without closing the modal. Rendered as hover ‹ › overlays; absent → no arrows.
+  // without closing the modal. Absent means no pager controls.
   onPrev?: () => void;
   onNext?: () => void;
 }
@@ -1123,21 +1123,20 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
+  const hasPager = !!(onPrev || onNext);
   // Cap the media (image / HLS / YouTube alike) so the media + the headline /
   // byline / Open-on / Copy-link row + the pinned Prev/Next pager ALL fit the
   // viewport with no page scroll and nothing overlapping the pager (Jacob 7/7).
   // dvh tracks the real viewport under mobile browser chrome; the reserve grows
   // when the pager is present. This replaces the old per-mode 78vh/85vh/168px
   // caps that left too little room on short windows and clipped the footer.
-  const mediaMaxH = (onPrev || onNext) ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)";
+  const mediaMaxH = hasPager ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)";
 
-  // Reddit prev/next paging — a labelled ‹ Prev / Next › bar rendered in-flow as
-  // the LAST element under the byline / links (Jacob 7/3–7/5: off the video, and
-  // never overlapping the links — a fixed bar collided with them when the video
-  // was tall). Both buttons always render; the unavailable direction (first/last
-  // post) is disabled. stopPropagation so a tap pages, not closes.
-  const pager = (onPrev || onNext) ? (
-    <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
+  // Reddit prev/next paging: phones keep labelled bottom buttons for thumb reach;
+  // desktop gets subtle Instagram-style side chevrons so media browsing feels
+  // quick without adding more chrome under the modal.
+  const mobilePager = hasPager ? (
+    <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex sm:hidden items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
       <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
@@ -1151,6 +1150,30 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
       </button>
     </div>
+  ) : null;
+  const desktopPager = hasPager ? (
+    <>
+      <button
+        onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
+        disabled={!onPrev}
+        aria-label="Previous post"
+        title="Previous post"
+        className="hidden sm:flex fixed left-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
+        style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
+      >
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onNext?.(); }}
+        disabled={!onNext}
+        aria-label="Next post"
+        title="Next post"
+        className="hidden sm:flex fixed right-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
+        style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
+      >
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+      </button>
+    </>
   ) : null;
 
   return (
@@ -1174,8 +1197,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           pager. The bottom reserve keeps that footer clear of the pager band
           (Jacob 7/4). No reservation when there's no pager (e.g. highlights). */}
       <div
-        className="relative flex min-h-full items-center justify-center p-4 sm:p-8"
-        style={(onPrev || onNext) ? { paddingBottom: "calc(env(safe-area-inset-bottom) + 4.5rem)" } : undefined}
+        className={`relative flex min-h-full items-center justify-center p-4 sm:p-8${hasPager ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)] sm:pb-8" : ""}`}
       >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
@@ -1742,10 +1764,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className={textMode
-              ? "inline-block px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              : "text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"}
-            style={textMode ? { background: "var(--accent)", color: "white" } : undefined}
+            className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
           >
             {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
           </a>
@@ -1761,10 +1780,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         </div>
         )}
 
-        {/* Prev/next paging — the LAST element in the flow, so it always sits
-            below the byline / links and can never overlap them (Reddit news
-            columns only; null elsewhere). */}
-        {pager}
+        {mobilePager}
+        {desktopPager}
       </div>
       </div>
     </div>
