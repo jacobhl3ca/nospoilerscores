@@ -14,6 +14,7 @@ import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
+import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
@@ -759,7 +760,10 @@ export default function HomeContent({
     try {
       // Slot count reads the live viewport so the initial desktop load fetches
       // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
-      let data = await fetchAllLeagues(date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3);
+      let [data] = await Promise.all([
+        fetchAllLeagues(date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3),
+        loadBakedHighlights(),
+      ]);
       // A newer fetch started while we awaited — discard this now-stale result
       // rather than paint the wrong day's board over the current one.
       if (myReq !== reqSeqRef.current) return;
@@ -1955,7 +1959,11 @@ export default function HomeContent({
               -{" "}
               <a href="/worldcup/highlights" data-umami-event="wc-hub-footer-highlights" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
                 Spoiler-free highlights
-              </a>
+              </a>{" "}
+              -{" "}
+              <Link href="/worldcup/teams" data-umami-event="wc-hub-footer-teams" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+                All teams
+              </Link>
             </p>
           </section>
         )}
