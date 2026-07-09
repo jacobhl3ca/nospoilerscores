@@ -2037,6 +2037,18 @@ const HL_LEAGUES = [
 ];
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
+// Verified completed World Cup highlight slots. These seed the ignored/R2-backed
+// highlights cache on fresh CI checkouts, so all-time World Cup cards do not
+// regress to slow live scraping or stale one-link entries.
+const HL_WORLD_CUP_SEEDS = {
+  "fifa:760489": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "-gtI96YhJek", telemundo: "zGZGTRKNxvs" },
+  "fifa:760488": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "DkZtwwbN1YI", telemundo: "IMYhuFBuN-0" },
+  "fifa:760493": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "OJ84ZgReAsE", telemundo: "PLOT1Sa2A2o" },
+  "fifa:760499": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "ACWOG7t8Plk", telemundo: "b_9eFJBe4ek" },
+  "fifa:760500": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "EC2jOKluGRI", telemundo: "hWlz2o8KPL0" },
+  "fifa:760508": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "_uEzppRKcd0", telemundo: "D9HlmSHUIvo" },
+  "fifa:760509": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "XO3x8vm0Ijc", telemundo: "QO8-LAmwS1E", telemundoExtended: "6tveHOrsXwY" },
+};
 // Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
 const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
@@ -2113,6 +2125,11 @@ async function bakeGameHighlights() {
   const prior = await loadPriorHighlights();
   for (const [k, v] of Object.entries(prior?.games ?? {})) {
     if (v && (k.startsWith("fifa:") || (now - (v.t ?? 0)) < HL_ENTRY_TTL_MS)) games[k] = v;
+  }
+  for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
+    const existing = games[k] ?? {};
+    delete existing.official;
+    games[k] = { ...existing, ...seed, t: existing.t ?? seed.t };
   }
 
   const dates = [hlEtYmd(0), hlEtYmd(-1)];
