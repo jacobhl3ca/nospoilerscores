@@ -1218,11 +1218,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         {/* Reddit prev/next post paging now renders as a labelled row BELOW the
             media (see `pager`, inserted after the player) instead of overlaid on
             the video — keeps mobile footage/dismiss/seek zones clear. */}
-        {/* Close button — pinned to the viewport's top-right (not the content's,
+        {/* Close button — pinned to the viewport's top-right for non-YouTube
+            media. YouTube renders its X/CC controls inside the video frame below,
+            so they stay attached to the player instead of the page corner.
+            Previously pinned to the viewport's top-right (not the content's,
             which sat at -top-10 and clipped off-screen the moment the media
             filled the height). Subtle dark disc keeps it visible over any frame
             of video. */}
-        <button
+        {!ytMode && <button
           onClick={onClose}
           className="fixed z-[70] w-9 h-9 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
           style={{ top: "calc(env(safe-area-inset-top) + 0.6rem)", right: "0.75rem" }}
@@ -1233,14 +1236,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
-        </button>
+        </button>}
 
         {/* Captions toggle — HLS sources that carry a CC track, plus every
             YouTube clip (homepage highlights): the YT player auto-shows captions
             off the viewer's account pref and there's no native control in our
             spoiler-safe chrome, so this is the only way to turn them off. Sits
             beside the close button so it's always reachable. */}
-        {((hlsMode && hasCaptionTrack) || ytMode) && (
+        {((hlsMode && hasCaptionTrack) && !ytMode) && (
           <button
             onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
             aria-pressed={showCC}
@@ -1321,6 +1324,36 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 : { width: `min(100%, calc(${mediaMaxH} * 16 / 9))`, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
+              {/* In-video close + captions controls for YouTube highlights. Keep
+                  these attached to the player frame; viewport-fixed placement
+                  drifts to the page corner on shorter videos/cards. */}
+              <div className="absolute top-1.5 right-1.5 z-30 flex items-center gap-1.5">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
+                  aria-pressed={showCC}
+                  aria-label={showCC ? "Hide captions" : "Show captions"}
+                  className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
+                  style={{
+                    color: showCC ? "white" : "rgba(255,255,255,0.75)",
+                    background: showCC ? "var(--accent)" : "rgba(0,0,0,0.5)",
+                    border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.16)",
+                  }}
+                  title={showCC ? "Hide captions" : "Show captions"}
+                >
+                  CC
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onClose(); }}
+                  className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
+                  aria-label="Close"
+                  title="Close (Esc)"
+                >
+                  <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
                   through to the cross-origin iframe. This is what makes the

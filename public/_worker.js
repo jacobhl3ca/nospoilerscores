@@ -276,14 +276,14 @@ export default {
         // this is inert for them.
         const isWorldCupQuery = /\bworld cup\b/i.test(query);
         // Official WC highlight channels (lowercased ownerText). FOX is the US
-        // English rightsholder and posts a clean per-match recap for every game;
-        // FIFA's own channel adds alt-cast/extras. Reuploaders ("CJ DRIPSET",
+        // English rightsholder and posts a full per-match recap; FIFA posts a
+        // short neutral highlight cut; Telemundo posts Spanish recaps. Reuploaders ("CJ DRIPSET",
         // "Hậu Cao", "Watch Sports Era", …) copy ESPN's short team names so they
         // OUT-MATCH the official video (which titles "United States", not "USA"),
         // and they were winning the unscoped search button. For WC we accept ONLY
         // these channels — combined with the team aliases below, the official clip
         // wins and fan re-uploads are dropped. fifa queries only; inert elsewhere.
-        const WC_OFFICIAL_CHANNELS = ["fox sports", "fox soccer", "fifa"];
+        const WC_OFFICIAL_CHANNELS = ["fox sports", "fox soccer", "fifa", "telemundo deportes"];
 
         // Team name aliases — ESPN shortDisplayName → common YouTube title variants.
         // Reverse-indexed below so a lookup by ANY listed variant returns the
@@ -361,6 +361,7 @@ export default {
           "iran": ["iran", "ir iran"],
           "cape verde": ["cape verde", "cabo verde"],
           "saudi arabia": ["saudi arabia", "saudi", "ksa"],
+          "egypt": ["egypt", "egipto"],
         };
 
         // Extract team names from query: "Away vs Home highlights ..."
@@ -493,6 +494,7 @@ export default {
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
+            (isWorldCupQuery && titleLower.includes("resumen")) ||
             roundOnlyTitleOk;
           if (!isHighlight) continue;
 
@@ -501,7 +503,7 @@ export default {
           // cup / old WC classic between the same two nations can't win. When
           // FIFA's real recap isn't up yet the button 404s and hides, which is
           // the app's preferred "better to 404 than serve the wrong game" path.
-          if (isWorldCupQuery && !titleLower.includes("world cup")) continue;
+          if (isWorldCupQuery && !/\b(world cup|copa mundial|fifa)\b/.test(titleLower)) continue;
           // …and the upload must be from an official channel (see
           // WC_OFFICIAL_CHANNELS) — fan re-uploads copy ESPN's short team names
           // and would otherwise out-match the official clip on the unscoped
@@ -524,6 +526,7 @@ export default {
           //     wins via the extended fallback tier.
           const isExtended =
             /\bextended\b/i.test(titleLower) ||
+            /\bextendido\b/i.test(titleLower) ||
             /\bfull[\s-]?game\b/i.test(titleLower);
 
           // Recap-keyword detection — titles with "recap", "all
@@ -633,7 +636,12 @@ export default {
           //     bypassed every prior keyword.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
           const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeats|beats|leads?|leader|winning|winner|wins|loses|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
-          if (SCORE_RX.test(title) || SPOILER_RX.test(title)) continue;
+          // Official WC highlight titles sometimes include the final score
+          // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
+          // The app never displays YouTube titles in the card, and the modal masks
+          // the title chrome, so allow these only for official WC uploaders.
+          const isOfficialWorldCupUpload = isWorldCupQuery && WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase());
+          if (!isOfficialWorldCupUpload && (SCORE_RX.test(title) || SPOILER_RX.test(title))) continue;
 
           // Simulation/videogame hard-skip — NBA 2K, MLB The Show, FIFA,
           // Madden, NHL 2K sim channels autopost "highlights" of games
@@ -798,8 +806,11 @@ export default {
           // titles. Returning null instead lets the client drop to the
           // external YouTube search URL, which is the right escape
           // hatch for "official channel doesn't have it yet."
-          videoId =
-            // Standard
+          videoId = preferExtended ? (
+            // Extended, then standard fallback within the requested channel.
+            channelBestExtendedId ||
+            channelTeamsYearExtendedId ||
+            channelTeamsExtendedId ||
             channelBestId ||
             channelGolfRecapYearId ||
             channelGolfRecapId ||
@@ -807,7 +818,20 @@ export default {
             channelGolfRoundYearId ||
             channelGolfRoundId ||
             channelTeamsId ||
-            // Extended
+            // Weakest: player reels and any-from-channel
+            channelPlayerReelId ||
+            (isGolfQuery && !channelImpliesGolfTournament ? null : (queryHasSpecificTeams ? null : channelAnyExtendedId)) ||
+            (isGolfQuery && !channelImpliesGolfTournament ? null : (queryHasSpecificTeams ? null : channelAnyId)) ||
+            null
+          ) : (
+            // Standard, then extended fallback within the requested channel.
+            channelBestId ||
+            channelGolfRecapYearId ||
+            channelGolfRecapId ||
+            channelTeamsYearId ||
+            channelGolfRoundYearId ||
+            channelGolfRoundId ||
+            channelTeamsId ||
             channelBestExtendedId ||
             channelTeamsYearExtendedId ||
             channelTeamsExtendedId ||
@@ -815,7 +839,8 @@ export default {
             channelPlayerReelId ||
             (isGolfQuery && !channelImpliesGolfTournament ? null : (queryHasSpecificTeams ? null : channelAnyId)) ||
             (isGolfQuery && !channelImpliesGolfTournament ? null : (queryHasSpecificTeams ? null : channelAnyExtendedId)) ||
-            null;
+            null
+          );
         } else {
           // General (non-channel) search: standard everywhere first,
           // then extended, then weakest fallbacks. firstHighlightId
@@ -907,10 +932,10 @@ export default {
               // Same gates as the main loop: official WC channel, "World Cup"
               // in the title, a highlight/recap keyword, and BOTH named teams.
               if (!WC_OFFICIAL_CHANNELS.includes(channelLower)) continue;
-              if (!titleLower.includes("world cup")) continue;
-              if (!titleLower.includes("highlight") && !titleLower.includes("recap")) continue;
+              if (!/\b(world cup|copa mundial|fifa)\b/.test(titleLower)) continue;
+              if (!titleLower.includes("highlight") && !titleLower.includes("recap") && !titleLower.includes("resumen")) continue;
               if (!titleHasTeam(titleLower, queryTeams[0]) || !titleHasTeam(titleLower, queryTeams[1])) continue;
-              if (/\bextended\b/.test(titleLower)) {
+              if (/\b(extended|extendido)\b/.test(titleLower)) {
                 if (!chExtendedId) chExtendedId = idMatch[1];
               } else {
                 chStandardId = idMatch[1];

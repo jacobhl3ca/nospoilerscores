@@ -42,8 +42,10 @@ export default function GameHighlights({
 }) {
   const prefetchedVideoId = useRef<string | null>(null);
   const prefetchedOfficialId = useRef<string | null>(null);
+  const prefetchedTelemundoShortId = useRef<string | null>(null);
+  const prefetchedTelemundoLongId = useRef<string | null>(null);
   const prefetchStarted = useRef(false);
-  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | null>(null);
+  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | "telemundoLong" | null>(null);
   // "loading" while prefetch (or click-time chain) is running. "found" once
   // resolveHighlightVideo returns an id. "missing" once the full retry chain
   // has been exhausted — the button is hidden in that state so the user
@@ -51,6 +53,8 @@ export default function GameHighlights({
   type HighlightStatus = "loading" | "found" | "missing";
   const [officialStatus, setOfficialStatus] = useState<HighlightStatus>("loading");
   const [searchStatus, setSearchStatus] = useState<HighlightStatus>("loading");
+  const [telemundoShortStatus, setTelemundoShortStatus] = useState<HighlightStatus>("loading");
+  const [telemundoLongStatus, setTelemundoLongStatus] = useState<HighlightStatus>("loading");
   // Capture "now" once at mount so the highlights-ready gate below stays a pure
   // render — reading Date.now() during render is flagged by react-hooks/purity.
   // The buffer is multi-hour and the component remounts on every score refresh,
@@ -96,8 +100,9 @@ export default function GameHighlights({
   // the SECOND button resolves the MLB channel to get the long full-game.
   // Every other league keeps channel-first for the primary button.
   const isMlb = game.sport === "mlb";
-  const primaryChannel = isMlb ? undefined : (officialChannel ?? undefined);
-  const secondaryChannel = isMlb ? (officialChannel ?? undefined) : undefined;
+  const isFifa = game.sport === "fifa";
+  const primaryChannel = isMlb ? undefined : (isFifa ? "FIFA" : (officialChannel ?? undefined));
+  const secondaryChannel = isMlb ? (officialChannel ?? undefined) : (isFifa ? "FOX Sports" : undefined);
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
@@ -125,19 +130,30 @@ export default function GameHighlights({
         // competition is null for every other league.)
         const preferExtended = !!competition;
         const baked = await getBakedHighlight(game.sport, game.id);
-        const officialP = baked?.official
-          ? Promise.resolve(baked.official)
+        // Older World Cup prebakes stored the FOX full recap in `official` before
+        // we split FIFA into short FIFA recap + full FOX recap. Treat that older
+        // lone value as the secondary/full slot until the next prebake refreshes.
+        const bakedOfficial = isFifa && baked?.official && !baked?.extended ? null : baked?.official;
+        const bakedSecondary = isFifa && baked?.official && !baked?.extended ? baked.official : baked?.extended;
+        const officialP = bakedOfficial
+          ? Promise.resolve(bakedOfficial)
           : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition);
         // If the server prebake already found the primary clip but no secondary,
         // trust that miss for this page load instead of making every browser do
         // another slow live YouTube scrape. The 30-min prebake will fill
         // `extended` later if FOX/FIFA posts a distinct companion cut.
-        const skipLiveSecondary = !!baked?.official && !baked?.extended;
-        const secondP = baked?.extended
-          ? Promise.resolve(baked.extended)
+        const skipLiveSecondary = !isFifa && !!baked?.official && !baked?.extended;
+        const secondP = bakedSecondary
+          ? Promise.resolve(bakedSecondary)
           : skipLiveSecondary
             ? Promise.resolve(null)
           : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+        const telemundoShortP = isFifa
+          ? resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, false)
+          : Promise.resolve(null);
+        const telemundoLongP = isFifa
+          ? resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, true)
+          : Promise.resolve(null);
         const officialId = await officialP;
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
@@ -151,6 +167,15 @@ export default function GameHighlights({
         }
         prefetchedVideoId.current = secondId;
         setSearchStatus(secondId ? "found" : "missing");
+        let telemundoShortId = await telemundoShortP;
+        let telemundoLongId = await telemundoLongP;
+        if (telemundoLongId && telemundoShortId && telemundoLongId === telemundoShortId) {
+          telemundoLongId = await resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", [telemundoShortId], competition, true);
+        }
+        prefetchedTelemundoShortId.current = telemundoShortId;
+        prefetchedTelemundoLongId.current = telemundoLongId;
+        setTelemundoShortStatus(telemundoShortId ? "found" : "missing");
+        setTelemundoLongStatus(telemundoLongId ? "found" : "missing");
       })();
     } else {
       // No official channel for this league — only the search button is rendered.
@@ -183,8 +208,9 @@ export default function GameHighlights({
   // leagues still show as soon as their one button resolves.
   const bothSettled = effectiveOfficialStatus !== "loading" && searchStatus !== "loading";
   const showYouTube = !!(isFinished && highlightUrl && bothSettled && (effectiveOfficialStatus === "found" || searchStatus === "found"));
+  const showTelemundo = !!(isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
-  if (!showYouTube && !showNhl) return null;
+  if (!showYouTube && !showTelemundo && !showNhl) return null;
 
   return (
     <>
@@ -229,7 +255,7 @@ export default function GameHighlights({
               ) : (
                 <>
                   <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : game.sport.toUpperCase()}</span>
+                  <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
                 </>
               )}
             </button>
@@ -259,17 +285,93 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-              aria-label={isMlb ? "MLB full game highlights" : "Top search result highlights"}
+              aria-label={isFifa ? "FOX full highlights" : isMlb ? "MLB full game highlights" : "Top search result highlights"}
               // aria-busy conveys the in-flight fetch that the visible "Loading..."
               // swap shows sighted users; the aria-label above stays pinned so the
               // name never collapses to "Loading...". Matches EventCard's buttons.
               aria-busy={fetchingOnClick === "search"}
-              title={isMlb ? "MLB full game highlights" : "Top search result highlights"}
+              title={isFifa ? "FOX full highlights" : isMlb ? "MLB full game highlights" : "Top search result highlights"}
             >
               {fetchingOnClick === "search" ? (
                 <span className="text-[10px]">Loading...</span>
               ) : (
-                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <>
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                    {isFifa && <span className="text-[10px] font-medium">18m</span>}
+                  </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {showTelemundo && (
+        <div className={`${showYouTube ? "mt-1" : wrapMargin} flex gap-1`}>
+          {telemundoShortStatus === "found" && (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (!onPlayHighlight) return;
+                if (prefetchedTelemundoShortId.current) {
+                  onPlayHighlight(prefetchedTelemundoShortId.current, highlightUrl!, shareCard);
+                  return;
+                }
+                setFetchingOnClick("telemundoShort");
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, "Telemundo Deportes", undefined, competition, false);
+                setFetchingOnClick(null);
+                if (id) {
+                  prefetchedTelemundoShortId.current = id;
+                  setTelemundoShortStatus("found");
+                  onPlayHighlight(id, highlightUrl!, shareCard);
+                } else {
+                  setTelemundoShortStatus("missing");
+                }
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "telemundoShort" ? 0.5 : undefined }}
+              aria-label="Telemundo highlights"
+              title="Telemundo highlights"
+            >
+              {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading...</span> : (
+                <>
+                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[10px] font-medium">TEL</span>
+                </>
+              )}
+            </button>
+          )}
+          {telemundoLongStatus === "found" && (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (!onPlayHighlight) return;
+                if (prefetchedTelemundoLongId.current) {
+                  onPlayHighlight(prefetchedTelemundoLongId.current, highlightUrl!, shareCard);
+                  return;
+                }
+                setFetchingOnClick("telemundoLong");
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, "Telemundo Deportes", [prefetchedTelemundoShortId.current], competition, true);
+                setFetchingOnClick(null);
+                if (id) {
+                  prefetchedTelemundoLongId.current = id;
+                  setTelemundoLongStatus("found");
+                  onPlayHighlight(id, highlightUrl!, shareCard);
+                } else {
+                  setTelemundoLongStatus("missing");
+                }
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "telemundoLong" ? 0.5 : undefined }}
+              aria-label="Telemundo extended highlights"
+              title="Telemundo extended highlights"
+            >
+              {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading...</span> : (
+                <>
+                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[10px] font-medium">TEL+</span>
+                </>
               )}
             </button>
           )}
