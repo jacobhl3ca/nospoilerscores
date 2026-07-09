@@ -1,5 +1,9 @@
 # HideScore — Master Backlog
 
+## QA log
+
+- [x] **2026-07-09 World Cup/MLB highlight follow-up QA.** Verified live `hidescore.com` serves the Egypt-Argentina baked IDs (`-LHb5yN-OzI`, `XO3x8vm0Ijc`, `QO8-LAmwS1E`, `6tveHOrsXwY`) and live MLB entries include `mlbOrder:"official-first"`. Found and fixed one UX regression: baked highlight links still visibly cascaded after card paint because `GameHighlights` initialized as loading even after the board-level `/news/highlights.json` preload had settled. Fix adds a synchronous baked-cache read and initializes button refs/statuses from it. Refreshed local ignored `public/news/highlights.json` from live. `npm run build` passes. Browser automation not run because Playwright is not installed in this repo; local dev server restarted at `http://localhost:3001`.
+
 ## 🔝 Top priority
 
 - [ ] **🏎️🥊 F1 & UFC cards — redesign to match, then un-hide (hidden from UI 2026-06-29).** The `EventCard` tiles (F1 single-race tile, UFC one-card-per-bout — `src/components/EventCard.tsx`) don't look like the rest of the score cards, so F1 + UFC were hidden from the league switcher for now. They're flagged `hidden: true` in `ALL_LEAGUES` (`src/lib/espn.ts`) and filtered out of `thirdLeagueOptions` (`HomeContent.tsx`); data + ESPN endpoints are intact. **To re-enable:** rework `EventCard` to match `GameCard`'s card chrome (spacing, header, spoiler treatment), then flip `hidden` off on the two entries. _src: 2026-06-29; mobile cleanup pass_
