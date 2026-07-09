@@ -328,6 +328,15 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
 
 type WorldCupHubMode = "today" | "tomorrow" | "highlights";
 
+const POPULAR_WORLD_CUP_TEAMS = [
+  { name: "United States", slug: "united-states", flag: "🇺🇸" },
+  { name: "Argentina", slug: "argentina", flag: "🇦🇷" },
+  { name: "Brazil", slug: "brazil", flag: "🇧🇷" },
+  { name: "England", slug: "england", flag: "ENG" },
+  { name: "Mexico", slug: "mexico", flag: "🇲🇽" },
+  { name: "Canada", slug: "canada", flag: "🇨🇦" },
+];
+
 export default function HomeContent({
   initialOffset,
   worldCupHub,
@@ -1973,6 +1982,25 @@ export default function HomeContent({
                 Watch guide
               </a>
             </div>
+            <div className="mt-3">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                Popular teams
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_WORLD_CUP_TEAMS.map((team) => (
+                  <Link
+                    key={team.slug}
+                    href={`/worldcup/teams/${team.slug}`}
+                    data-umami-event={`wc-hub-popular-${team.slug}`}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                    style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
+                  >
+                    <span aria-hidden="true">{team.flag}</span>
+                    <span>{team.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
             <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
               {worldCupHubCopy.note}{" "}
               <a href="/worldcup/tomorrow" data-umami-event="wc-hub-footer-tomorrow" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
@@ -2489,6 +2517,7 @@ export default function HomeContent({
                 {firstEmptySlot !== undefined ? (
                   <button
                     onClick={() => setSlotLeague(firstEmptySlot, "fifa")}
+                    data-umami-event="wc-banner-add-empty-slot"
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
                     style={{ background: "var(--accent)", color: "white" }}
                   >
@@ -2497,6 +2526,7 @@ export default function HomeContent({
                 ) : !wcReplaceOpen ? (
                   <button
                     onClick={() => setWcReplaceOpen(true)}
+                    data-umami-event="wc-banner-open-replace-picker"
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
                     style={{ background: "var(--accent)", color: "white" }}
                   >
@@ -2509,6 +2539,7 @@ export default function HomeContent({
                       <button
                         key={entry.slotIdx}
                         onClick={() => { setSlotLeague(entry.slotIdx, "fifa"); setWcReplaceOpen(false); }}
+                        data-umami-event={`wc-banner-replace-${entry.league.sport}`}
                         className="text-sm font-medium px-2.5 py-1 rounded-md cursor-pointer transition-colors"
                         style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
@@ -2520,6 +2551,7 @@ export default function HomeContent({
                     ))}
                     <button
                       onClick={() => setWcReplaceOpen(false)}
+                      data-umami-event="wc-banner-cancel-replace"
                       className="text-sm px-1.5 py-1 cursor-pointer"
                       style={{ color: "var(--text-muted)" }}
                       title="Cancel"
@@ -2530,6 +2562,7 @@ export default function HomeContent({
                 )}
                 <button
                   onClick={() => updatePrefs({ wcBannerDismissed: true })}
+                  data-umami-event="wc-banner-dismiss"
                   aria-label="Dismiss World Cup banner"
                   title="Dismiss"
                   className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
@@ -2686,6 +2719,7 @@ export default function HomeContent({
               <a href="/worldcup" style={{ textDecoration: "underline" }}>2026 World Cup hub</a>, or the{" "}
               <a href="/spoiler-free-sports" style={{ textDecoration: "underline" }}>spoiler-free sports guide</a>,{" "}
               <a href="/no-spoiler-scores" style={{ textDecoration: "underline" }}>no-spoiler scores</a>,{" "}
+              <a href="/how-to-watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>how to watch sports highlights without spoilers</a>,{" "}
               <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
               <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
               <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>, or{" "}
