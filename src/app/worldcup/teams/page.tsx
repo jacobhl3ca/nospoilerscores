@@ -82,6 +82,20 @@ export default function WorldCupTeamsPage() {
                 description: DESC,
                 url: "https://hidescore.com/worldcup/teams",
                 isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
+                // Enumerate the team links this page renders so crawlers can
+                // discover every /worldcup/teams/<slug> detail page from the
+                // structured data, not just the visible <a> grid. Mirrors the
+                // on-page order (FIFA rank) via ListItem.position.
+                mainEntity: {
+                  "@type": "ItemList",
+                  numberOfItems: WORLD_CUP_TEAMS.length,
+                  itemListElement: WORLD_CUP_TEAMS.map((team, index) => ({
+                    "@type": "ListItem",
+                    position: index + 1,
+                    name: team.name,
+                    url: `https://hidescore.com/worldcup/teams/${team.slug}`,
+                  })),
+                },
               },
               {
                 "@type": "BreadcrumbList",
