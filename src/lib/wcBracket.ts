@@ -162,11 +162,15 @@ export async function fetchBracket(signal?: AbortSignal): Promise<Bracket> {
     matches: TOPO[rk].map((slot): BracketMatch => {
       const g = games.find((x) => x.round === rk && x.pos === slot.pos);
       const fb = (i: number): BracketSide => (slot.feeders ? { feeder: slot.feeders[i] } : { tbd: true });
+      // SPOILER-SAFE: only the Round of 32 shows real teams because those
+      // matchups are already visible in the score column. Later rounds keep
+      // feeder labels so an auto-advanced team cannot reveal an unwatched result.
+      const showReal = rk === "r32";
       return {
         pos: slot.pos,
         date: g?.date ?? null,
-        home: g?.home ?? fb(0),
-        away: g?.away ?? fb(1),
+        home: showReal ? (g?.home ?? fb(0)) : fb(0),
+        away: showReal ? (g?.away ?? fb(1)) : fb(1),
       };
     }),
   }));
