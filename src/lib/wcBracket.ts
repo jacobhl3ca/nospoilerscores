@@ -162,18 +162,11 @@ export async function fetchBracket(signal?: AbortSignal): Promise<Bracket> {
     matches: TOPO[rk].map((slot): BracketMatch => {
       const g = games.find((x) => x.round === rk && x.pos === slot.pos);
       const fb = (i: number): BracketSide => (slot.feeders ? { feeder: slot.feeders[i] } : { tbd: true });
-      // SPOILER-SAFE: only the Round of 32 shows real teams — those matchups are
-      // already visible in the score column. For every later round we ALWAYS show
-      // the feeder ("Winner of SA v CAN"), never the team ESPN auto-advanced — a
-      // team appearing in the next round would reveal it won a game you haven't
-      // watched yet. The R32 result dates still show via g?.date. (Reverting this
-      // to g?.home/away re-introduces the spoiler.)
-      const showReal = rk === "r32";
       return {
         pos: slot.pos,
         date: g?.date ?? null,
-        home: showReal ? (g?.home ?? fb(0)) : fb(0),
-        away: showReal ? (g?.away ?? fb(1)) : fb(1),
+        home: g?.home ?? fb(0),
+        away: g?.away ?? fb(1),
       };
     }),
   }));
