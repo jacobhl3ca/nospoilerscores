@@ -22,6 +22,7 @@ export type BakedHighlight = {
 // request vs. N live scrapes). On any miss the promise is cleared so the next
 // card retries rather than caching an empty map for the page's whole lifetime.
 let bakedPromise: Promise<Record<string, BakedHighlight>> | null = null;
+let bakedCache: Record<string, BakedHighlight> | null = null;
 
 export function loadBakedHighlights(): Promise<Record<string, BakedHighlight>> {
   if (!bakedPromise) {
@@ -33,7 +34,8 @@ export function loadBakedHighlights(): Promise<Record<string, BakedHighlight>> {
           return {};
         }
         const data = await res.json();
-        return (data?.games ?? {}) as Record<string, BakedHighlight>;
+        bakedCache = (data?.games ?? {}) as Record<string, BakedHighlight>;
+        return bakedCache;
       } catch {
         bakedPromise = null;
         return {};
@@ -43,7 +45,13 @@ export function loadBakedHighlights(): Promise<Record<string, BakedHighlight>> {
   return bakedPromise;
 }
 
+export function getCachedBakedHighlight(sport: string, id: string): BakedHighlight | null {
+  return bakedCache?.[`${sport}:${id}`] ?? null;
+}
+
 export async function getBakedHighlight(sport: string, id: string): Promise<BakedHighlight | null> {
+  const cached = getCachedBakedHighlight(sport, id);
+  if (cached) return cached;
   const games = await loadBakedHighlights();
   return games[`${sport}:${id}`] ?? null;
 }
