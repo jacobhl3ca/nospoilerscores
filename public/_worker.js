@@ -878,7 +878,9 @@ export default {
         // official-only WC gate then drops everything and we 404 even though
         // the recap exists. As a last resort, search WITHIN FOX Sports' own
         // channel — no other uploader competes there, so the recap always
-        // surfaces. Take the standard cut, falling back to the "Extended" one.
+        // surfaces. Take the standard cut by default, but honor
+        // `prefer=extended` for the World Cup 2nd button so it can serve the
+        // longer companion video instead of colliding with the primary recap.
         // FIFA/World-Cup queries with two named teams only; inert elsewhere.
         if (!videoId && isWorldCupQuery && queryHasSpecificTeams && teamsMatch) {
           try {
@@ -915,7 +917,9 @@ export default {
                 break; // standard recap wins outright
               }
             }
-            videoId = chStandardId || chExtendedId || null;
+            videoId = preferExtended
+              ? (chExtendedId || chStandardId || null)
+              : (chStandardId || chExtendedId || null);
           } catch {
             // Channel lookup failed — fall through to the 404 below (hide the
             // button) rather than surfacing a 500.
