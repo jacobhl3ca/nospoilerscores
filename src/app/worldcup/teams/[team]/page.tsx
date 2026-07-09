@@ -1,0 +1,218 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getWorldCupTeam, WORLD_CUP_TEAMS } from "@/lib/worldCupTeams";
+
+type PageProps = {
+  params: Promise<{ team: string }>;
+};
+
+export const dynamicParams = false;
+
+export function generateStaticParams() {
+  return WORLD_CUP_TEAMS.map((team) => ({ team: team.slug }));
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { team: slug } = await params;
+  const team = getWorldCupTeam(slug);
+  if (!team) return {};
+
+  const title = `${team.name} World Cup Schedule Without Spoilers | HideScore`;
+  const description = `Follow ${team.name} at the 2026 FIFA World Cup without seeing scores first. HideScore keeps match results, ratings, and highlights spoiler-free until you tap.`;
+  const canonical = `/worldcup/teams/${team.slug}`;
+
+  return {
+    title,
+    description,
+    keywords: [
+      `${team.name} World Cup schedule`,
+      `${team.name} World Cup highlights no spoilers`,
+      `${team.name} score without spoilers`,
+      `${team.name} soccer highlights without spoilers`,
+      "World Cup no spoilers",
+    ],
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description,
+      url: `https://hidescore.com${canonical}`,
+      siteName: "HideScore",
+      type: "website",
+      images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: `${team.name} World Cup coverage without spoilers` }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [{ url: "https://hidescore.com/og-worldcup.png", alt: `${team.name} World Cup coverage without spoilers` }],
+    },
+  };
+}
+
+export default async function WorldCupTeamPage({ params }: PageProps) {
+  const { team: slug } = await params;
+  const team = getWorldCupTeam(slug);
+  if (!team) notFound();
+
+  const canonical = `/worldcup/teams/${team.slug}`;
+  const title = `${team.name} World Cup schedule without spoilers`;
+  const faq = [
+    {
+      q: `Can I follow ${team.name} at the World Cup without seeing the score?`,
+      a: `Yes. HideScore shows ${team.name} World Cup match cards with scores hidden until you choose to reveal them.`,
+    },
+    {
+      q: `Where can I find ${team.name} World Cup highlights without spoilers?`,
+      a: `Start from HideScore's spoiler-free World Cup highlights page. It opens from hidden-score match cards so you do not have to scan result headlines first.`,
+    },
+    {
+      q: `Does HideScore show when ${team.name} plays next?`,
+      a: `Yes. The World Cup hub shows today's and upcoming World Cup matches with kickoff information while keeping scores and winners hidden.`,
+    },
+    {
+      q: `Can ratings tell me if a ${team.name} match was worth watching?`,
+      a: `Yes. After a match finishes, HideScore can show a spoiler-free competitiveness rating so you can choose what to watch without learning who won.`,
+    },
+  ];
+
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+      <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
+        HideScore
+      </p>
+      <div className="mb-4 flex items-center gap-3">
+        <span className="inline-flex h-12 w-16 items-center justify-center rounded-xl text-2xl font-bold" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+          {team.flag}
+        </span>
+        <h1 className="text-2xl font-bold">{title}</h1>
+      </div>
+
+      <p className="mb-4" style={{ color: "var(--text-muted)" }}>
+        Follow {team.name} at the 2026 FIFA World Cup without opening a scoreboard that gives away the result.
+        HideScore keeps scores, winners, and highlight context hidden until you decide to reveal them.
+      </p>
+      <p className="mb-4" style={{ color: "var(--text-muted)" }}>
+        Use this as a safe starting page for {team.name} match days, delayed viewing, and post-game highlights.
+        {team.rank ? ` FIFA ranking snapshot: #${team.rank}.` : ""}
+      </p>
+
+      <div
+        className="mt-6 rounded-xl px-5 py-5"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <h2 className="text-lg font-semibold mb-3">Follow {team.name} spoiler-free</h2>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Link
+            href="/worldcup"
+            data-umami-event="wc-team-open-hub"
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-center"
+            style={{ background: "var(--accent)", color: "#fff" }}
+          >
+            Open World Cup hub
+          </Link>
+          <Link
+            href="/worldcup/tomorrow"
+            data-umami-event="wc-team-open-tomorrow"
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-center"
+            style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            Tomorrow&apos;s matches
+          </Link>
+          <Link
+            href="/worldcup/highlights"
+            data-umami-event="wc-team-open-highlights"
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-center"
+            style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
+          >
+            Spoiler-free highlights
+          </Link>
+          <Link
+            href="/watch-world-cup-without-spoilers"
+            data-umami-event="wc-team-open-guide"
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-center"
+            style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--accent)" }}
+          >
+            Watch guide
+          </Link>
+        </div>
+      </div>
+
+      <h2 className="text-lg font-semibold mt-8 mb-3">What stays hidden</h2>
+      <ul className="mb-4 space-y-1.5 list-disc pl-5" style={{ color: "var(--text-muted)" }}>
+        <li>{team.name} scores and winners stay hidden until you tap.</li>
+        <li>Completed match ratings do not reveal who won.</li>
+        <li>Highlight entry points avoid result-first headlines where possible.</li>
+        <li>Today, tomorrow, and recent-match views are linked from one spoiler-safe path.</li>
+      </ul>
+
+      <h2 className="text-lg font-semibold mt-8 mb-3">Frequently asked questions</h2>
+      <section className="space-y-5">
+        {faq.map((item) => (
+          <div key={item.q}>
+            <h3 className="font-semibold mb-1">{item.q}</h3>
+            <p style={{ color: "var(--text-muted)" }}>{item.a}</p>
+          </div>
+        ))}
+      </section>
+
+      <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+        <Link href="/worldcup/teams" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+          All teams
+        </Link>
+        <Link href="/worldcup" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+          World Cup hub
+        </Link>
+        <Link href="/soccer-highlights-without-spoilers" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+          Soccer highlights
+        </Link>
+      </div>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "WebPage",
+                name: title,
+                description: `Spoiler-free ${team.name} World Cup schedule, ratings, and highlights on HideScore.`,
+                url: `https://hidescore.com${canonical}`,
+                isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
+                about: [
+                  { "@type": "SportsTeam", name: team.name, sport: "Soccer" },
+                  { "@type": "SportsEvent", name: "2026 FIFA World Cup" },
+                  { "@type": "Thing", name: "spoiler-free sports scores" },
+                ],
+              },
+              {
+                "@type": "SportsTeam",
+                name: team.name,
+                sport: "Soccer",
+                memberOf: { "@type": "SportsOrganization", name: "FIFA World Cup" },
+              },
+              {
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+                  { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
+                  { "@type": "ListItem", position: 3, name: "Teams", item: "https://hidescore.com/worldcup/teams" },
+                  { "@type": "ListItem", position: 4, name: team.name, item: `https://hidescore.com${canonical}` },
+                ],
+              },
+              {
+                "@type": "FAQPage",
+                mainEntity: faq.map((item) => ({
+                  "@type": "Question",
+                  name: item.q,
+                  acceptedAnswer: { "@type": "Answer", text: item.a },
+                })),
+              },
+            ],
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
+    </main>
+  );
+}

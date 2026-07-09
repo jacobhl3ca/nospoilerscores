@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { WORLD_CUP_TEAMS } from "@/lib/worldCupTeams";
 
 // Static sitemap for hidescore.com. Works with `output: "export"` — Next emits
 // a static /sitemap.xml at build time. Keep the route list in sync with src/app.
@@ -8,6 +9,10 @@ const BASE = "https://hidescore.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const daily = ["", "/worldcup", "/worldcup/tomorrow", "/worldcup/highlights", "/today", "/tomorrow", "/yesterday"];
+  const worldCupTeams = [
+    "/worldcup/teams",
+    ...WORLD_CUP_TEAMS.map((team) => `/worldcup/teams/${team.slug}`),
+  ];
   const evergreen = [
     "/spoiler-free-sports",
     "/watch-sports-highlights-without-spoilers",
@@ -46,6 +51,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified,
       changeFrequency: "daily" as const,
       priority: path === "" ? 1 : path === "/worldcup" ? 0.9 : path.startsWith("/worldcup/") ? 0.8 : 0.7,
+    })),
+    ...worldCupTeams.map((path) => ({
+      url: `${BASE}${path}`,
+      lastModified,
+      changeFrequency: "daily" as const,
+      priority: path === "/worldcup/teams" ? 0.75 : 0.65,
     })),
     ...evergreen.map((path) => ({
       url: `${BASE}${path}`,

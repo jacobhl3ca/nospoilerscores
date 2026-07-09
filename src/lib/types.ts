@@ -37,6 +37,15 @@ export interface Game {
   nhlRecapEmbed?: string | null;
   nhlCondensedUrl?: string | null;
   nhlCondensedEmbed?: string | null;
+  // MLB.com official per-game videos (finished MLB games only), sourced from
+  // StatsAPI via the /api/mlb-videos worker proxy. These play directly through
+  // the app's HLS video modal.
+  mlbRecapUrl?: string | null;
+  mlbRecapPlaybackUrl?: string | null;
+  mlbRecapPoster?: string | null;
+  mlbCondensedUrl?: string | null;
+  mlbCondensedPlaybackUrl?: string | null;
+  mlbCondensedPoster?: string | null;
   // Direct stream URL for live games (e.g., MLB.tv deep link)
   streamUrl: string | null;
   // Per-game Prime Video deep link (amazon.com/gp/video/detail/{ASIN}) when

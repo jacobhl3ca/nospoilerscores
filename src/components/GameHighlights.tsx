@@ -7,7 +7,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo } from "@/lib/youtube";
-import { getBakedHighlight } from "@/lib/highlights";
+import { getBakedHighlight, getCachedBakedHighlight } from "@/lib/highlights";
 
 // Per-league buffer (hrs from game start) before showing the highlight button,
 // and regulation period counts for the OT-extra calc below. Both are constant
@@ -21,7 +21,8 @@ const highlightBufferHours: Record<string, number> = {
 const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 2, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
 
 // Shared highlight buttons for a finished game — the official-channel + top-
-// search YouTube clips and (NHL only) the NHL.com recap / condensed videos.
+// search YouTube clips, plus official league-site recap / condensed videos
+// where available.
 // Extracted from GameCard so the score card AND the details popup render the
 // exact same buttons playing the exact same resolved videos (Jacob 6/1 — the
 // popup must "just match" the card). All resolution/prefetch lives here.
@@ -37,13 +38,27 @@ export default function GameHighlights({
   leagueLabel?: string;
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
-  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   wrapMargin?: string;
 }) {
-  const prefetchedVideoId = useRef<string | null>(null);
-  const prefetchedOfficialId = useRef<string | null>(null);
-  const prefetchedTelemundoShortId = useRef<string | null>(null);
-  const prefetchedTelemundoLongId = useRef<string | null>(null);
+  const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
+  // MLB: keep the official MLB channel in the first slot so unscoped/team or
+  // unofficial uploads never occupy the primary button. The secondary slot can
+  // still surface a shorter team recap when one is available.
+  const isMlb = game.sport === "mlb";
+  const isFifa = game.sport === "fifa";
+  // FIFA's short clips are embeddable, but need the YouTube iframe origin fix in
+  // VideoModal. Keep the "2m" slot visible.
+  const fifaShortEnabled = true;
+  const hasOfficialButton = !!officialChannel && !(isFifa && !fifaShortEnabled);
+  const initialBaked = getCachedBakedHighlight(game.sport, game.id);
+  const initialOldMlbBake = isMlb && initialBaked?.mlbOrder !== "official-first";
+  const initialOfficialId = isFifa ? initialBaked?.official : initialOldMlbBake ? initialBaked?.extended : initialBaked?.official;
+  const initialSecondaryId = isFifa ? (initialBaked?.extended ?? initialBaked?.official) : initialOldMlbBake ? initialBaked?.official : initialBaked?.extended;
+  const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
+  const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
+  const prefetchedTelemundoShortId = useRef<string | null>(initialBaked?.telemundo ?? null);
+  const prefetchedTelemundoLongId = useRef<string | null>(initialBaked?.telemundoExtended ?? null);
   const prefetchStarted = useRef(false);
   const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | "telemundoLong" | null>(null);
   // "loading" while prefetch (or click-time chain) is running. "found" once
@@ -51,10 +66,10 @@ export default function GameHighlights({
   // has been exhausted — the button is hidden in that state so the user
   // never gets dropped onto a YouTube search page.
   type HighlightStatus = "loading" | "found" | "missing";
-  const [officialStatus, setOfficialStatus] = useState<HighlightStatus>("loading");
-  const [searchStatus, setSearchStatus] = useState<HighlightStatus>("loading");
-  const [telemundoShortStatus, setTelemundoShortStatus] = useState<HighlightStatus>("loading");
-  const [telemundoLongStatus, setTelemundoLongStatus] = useState<HighlightStatus>("loading");
+  const [officialStatus, setOfficialStatus] = useState<HighlightStatus>(initialOfficialId ? "found" : "loading");
+  const [searchStatus, setSearchStatus] = useState<HighlightStatus>(initialSecondaryId ? "found" : "loading");
+  const [telemundoShortStatus, setTelemundoShortStatus] = useState<HighlightStatus>(initialBaked?.telemundo ? "found" : "loading");
+  const [telemundoLongStatus, setTelemundoLongStatus] = useState<HighlightStatus>(initialBaked?.telemundoExtended ? "found" : "loading");
   // Capture "now" once at mount so the highlights-ready gate below stays a pure
   // render — reading Date.now() during render is flagged by react-hooks/purity.
   // The buffer is multi-hour and the component remounts on every score refresh,
@@ -91,24 +106,10 @@ export default function GameHighlights({
   // hidescore.com link that unfurls cleanly in iMessage. See lib/shareCard.
   const shareCard = useMemo(() => buildShareCard(game, leagueLabel), [game, leagueLabel]);
 
-  const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
-  // MLB swap: the official "MLB" channel no longer posts the short game
-  // recap — it now posts a long "Full Game Highlights" plus single-play
-  // clips, while the normal-length "Game Highlights (M/D/YY)" recap lives on
-  // the team channels (surfaced by the unscoped search). So for MLB the FIRST
-  // (official-labeled) button resolves UNSCOPED to get the short recap, and
-  // the SECOND button resolves the MLB channel to get the long full-game.
-  // Every other league keeps channel-first for the primary button.
-  const isMlb = game.sport === "mlb";
-  const isFifa = game.sport === "fifa";
-  // FIFA's own short highlight uploads are currently blocked in the embedded
-  // YouTube player. Hide that slot instead of showing a "2m" button that opens
-  // a blocked iframe and then falls through to FOX.
-  const fifaShortEnabled = false;
-  const hasOfficialButton = !!officialChannel && !(isFifa && !fifaShortEnabled);
+  const strictPrimaryChannel = isFifa || isMlb;
   const strictWorldCupChannel = isFifa;
-  const primaryChannel = isMlb ? undefined : (isFifa ? "FIFA" : (officialChannel ?? undefined));
-  const secondaryChannel = isMlb ? (officialChannel ?? undefined) : (isFifa ? "FOX Sports" : undefined);
+  const primaryChannel = isMlb ? (officialChannel ?? undefined) : (isFifa ? "FIFA" : (officialChannel ?? undefined));
+  const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : undefined);
   const modalFallbackUrl = isFifa && highlightUrl
     ? `${highlightUrl}${highlightUrl.includes("?") ? "&" : "?"}nss_no_fallback=1`
     : highlightUrl;
@@ -142,18 +143,19 @@ export default function GameHighlights({
         // Older World Cup prebakes stored the FOX full recap in `official` before
         // we split FIFA into short FIFA recap + full FOX recap. Treat that older
         // lone value as the secondary/full slot until the next prebake refreshes.
-        const bakedOfficial = isFifa ? null : baked?.official;
-        const bakedSecondary = isFifa ? (baked?.extended ?? baked?.official) : baked?.extended;
+        const oldMlbBake = isMlb && baked?.mlbOrder !== "official-first";
+        const bakedOfficial = isFifa ? baked?.official : oldMlbBake ? baked?.extended : baked?.official;
+        const bakedSecondary = isFifa ? (baked?.extended ?? baked?.official) : oldMlbBake ? baked?.official : baked?.extended;
         const officialP = !hasOfficialButton
           ? Promise.resolve(null)
           : bakedOfficial
           ? Promise.resolve(bakedOfficial)
-          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictWorldCupChannel);
+          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictPrimaryChannel);
         // If the server prebake already found the primary clip but no secondary,
         // trust that miss for this page load instead of making every browser do
         // another slow live YouTube scrape. The 30-min prebake will fill
         // `extended` later if FOX/FIFA posts a distinct companion cut.
-        const skipLiveSecondary = !isFifa && !!baked?.official && !baked?.extended;
+        const skipLiveSecondary = !isFifa && !!bakedOfficial && !bakedSecondary;
         const secondP = bakedSecondary
           ? Promise.resolve(bakedSecondary)
           : skipLiveSecondary
@@ -169,9 +171,7 @@ export default function GameHighlights({
         const telemundoLongP = isFifa
           ? bakedTelemundoLong
             ? Promise.resolve(bakedTelemundoLong)
-            : bakedTelemundoShort
-              ? Promise.resolve(null)
-              : resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, true, true)
+            : resolveHighlightVideo(away, home, dateStr, series, "Telemundo Deportes", bakedTelemundoShort ? [bakedTelemundoShort] : undefined, competition, true, true)
           : Promise.resolve(null);
         const officialId = await officialP;
         prefetchedOfficialId.current = officialId;
@@ -209,7 +209,7 @@ export default function GameHighlights({
         setSearchStatus(id ? "found" : "missing");
       })();
     }
-  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, strictWorldCupChannel]);
+  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, strictPrimaryChannel, strictWorldCupChannel]);
 
   // When there is no official channel the official button never renders, so
   // treat officialStatus as "missing" without storing it in state.
@@ -226,10 +226,16 @@ export default function GameHighlights({
   // official slot is synchronously "missing" (never loading), so single-button
   // leagues still show as soon as their one button resolves.
   const bothSettled = effectiveOfficialStatus !== "loading" && searchStatus !== "loading";
-  const showYouTube = !!(isFinished && highlightUrl && bothSettled && (effectiveOfficialStatus === "found" || searchStatus === "found"));
+  const showYouTube = !!(!isMlb && isFinished && highlightUrl && bothSettled && (effectiveOfficialStatus === "found" || searchStatus === "found"));
   const showTelemundo = !!(isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
-  if (!showYouTube && !showTelemundo && !showNhl) return null;
+  // MLB uses the official MLB.com row we previously settled on: short recap
+  // first, condensed game second. Prefer YouTube for Condensed when it resolves
+  // because it is the same cut with better controls; fall back to MLB.com HLS.
+  const showMlbYouTubeCondensed = isMlb && effectiveOfficialStatus !== "missing";
+  const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!game.mlbCondensedPlaybackUrl);
+  const showMlb = !!(isFinished && isMlb && (game.mlbRecapPlaybackUrl || showMlbCondensed));
+  if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
 
   return (
     <>
@@ -248,7 +254,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictWorldCupChannel);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictPrimaryChannel);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -304,20 +310,91 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
-              aria-label={isFifa ? "FOX full highlights" : isMlb ? "MLB full game highlights" : "Top search result highlights"}
+              aria-label={isFifa ? "FOX full highlights" : "Top search result highlights"}
               // aria-busy conveys the in-flight fetch that the visible "Loading..."
               // swap shows sighted users; the aria-label above stays pinned so the
               // name never collapses to "Loading...". Matches EventCard's buttons.
               aria-busy={fetchingOnClick === "search"}
-              title={isFifa ? "FOX full highlights" : isMlb ? "MLB full game highlights" : "Top search result highlights"}
+              title={isFifa ? "FOX full highlights" : "Top search result highlights"}
             >
               {fetchingOnClick === "search" ? (
                 <span className="text-[10px]">Loading...</span>
               ) : (
                   <>
                     <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                    {isFifa && <span className="text-[10px] font-medium">18m</span>}
+                    {isFifa && (
+                      <span className="text-[10px] font-medium">
+                        <span className="sm:hidden">15+</span>
+                        <span className="hidden sm:inline">~15+ min</span>
+                      </span>
+                    )}
                   </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* MLB.com official game videos: short recap + condensed game in one row. */}
+      {showMlb && (
+        <div className={`${wrapMargin} flex gap-1`}>
+          {game.mlbRecapPlaybackUrl && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const page = game.mlbRecapUrl || game.mlbRecapPlaybackUrl!;
+                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbRecapPlaybackUrl, game.mlbRecapPoster);
+                else openExternal(page);
+              }}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label="MLB.com game recap"
+              title="MLB.com game recap"
+            >
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium">3m Recap</span>
+            </button>
+          )}
+          {showMlbCondensed && (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (showMlbYouTubeCondensed && onPlayHighlight) {
+                  if (prefetchedOfficialId.current) {
+                    onPlayHighlight(prefetchedOfficialId.current, modalFallbackUrl || game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl || "#", shareCard);
+                    return;
+                  }
+                  setFetchingOnClick("official");
+                  const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictPrimaryChannel);
+                  setFetchingOnClick(null);
+                  if (id) {
+                    prefetchedOfficialId.current = id;
+                    setOfficialStatus("found");
+                    onPlayHighlight(id, modalFallbackUrl || game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl || "#", shareCard);
+                    return;
+                  }
+                  setOfficialStatus("missing");
+                }
+                if (game.mlbCondensedPlaybackUrl) {
+                  const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl;
+                  if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
+                  else openExternal(page);
+                }
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              aria-label="MLB condensed game"
+              aria-busy={fetchingOnClick === "official"}
+              title="MLB condensed game"
+            >
+              {fetchingOnClick === "official" ? (
+                <span className="text-[10px]">Loading...</span>
+              ) : (
+                <>
+                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[10px] font-medium">Condensed</span>
+                </>
               )}
             </button>
           )}

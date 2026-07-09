@@ -2007,10 +2007,9 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
 //
 // The lookup MUST mirror src/lib/youtube.ts + GameHighlights.tsx exactly so a
 // baked ID is what a live client would resolve:
-//   • fifa uses strict channel slots: FOX full + Telemundo variants, and a
-//     "World Cup" competition token in the query. FIFA's own short clips are
-//     currently blocked in embeds, so we do not bake/show them;
-//   • MLB swaps channels — 1st button resolves UNSCOPED, 2nd = the MLB channel;
+//   • fifa uses strict channel slots: FIFA short, FOX full, Telemundo variants,
+//     and a "World Cup" competition token in the query;
+//   • MLB uses official MLB channel first, then unscoped short/team recap;
 //   • every other league: 1st = official channel, 2nd = unscoped.
 // The key MUST be `${sport}:${event.id}` — GameHighlights keys off game.sport +
 // game.id, and game.id === event.id for every team-sport card (espn.ts parseGame).
@@ -2041,13 +2040,13 @@ const HL_COMPETITION = { fifa: "World Cup" };
 // highlights cache on fresh CI checkouts, so all-time World Cup cards do not
 // regress to slow live scraping or stale one-link entries.
 const HL_WORLD_CUP_SEEDS = {
-  "fifa:760489": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "-gtI96YhJek", telemundo: "zGZGTRKNxvs" },
-  "fifa:760488": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "DkZtwwbN1YI", telemundo: "IMYhuFBuN-0" },
-  "fifa:760493": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "OJ84ZgReAsE", telemundo: "PLOT1Sa2A2o" },
-  "fifa:760499": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "ACWOG7t8Plk", telemundo: "b_9eFJBe4ek" },
-  "fifa:760500": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "EC2jOKluGRI", telemundo: "hWlz2o8KPL0" },
-  "fifa:760508": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "_uEzppRKcd0", telemundo: "D9HlmSHUIvo" },
-  "fifa:760509": { t: Date.parse("2026-07-09T14:56:01.325Z"), extended: "XO3x8vm0Ijc", telemundo: "QO8-LAmwS1E", telemundoExtended: "6tveHOrsXwY" },
+  "fifa:760489": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "Gw6vNwAvkTs", extended: "-gtI96YhJek", telemundo: "zGZGTRKNxvs" },
+  "fifa:760488": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "vdnhUnGHwco", extended: "DkZtwwbN1YI", telemundo: "IMYhuFBuN-0" },
+  "fifa:760493": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "PsPQkfngzV8", extended: "OJ84ZgReAsE", telemundo: "PLOT1Sa2A2o" },
+  "fifa:760499": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "olBx2GK7kZI", extended: "ACWOG7t8Plk", telemundo: "b_9eFJBe4ek" },
+  "fifa:760500": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "hzvEZ2Vxb94", extended: "EC2jOKluGRI", telemundo: "hWlz2o8KPL0" },
+  "fifa:760508": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "g9bxtV3oZDI", extended: "_uEzppRKcd0", telemundo: "D9HlmSHUIvo" },
+  "fifa:760509": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "-LHb5yN-OzI", extended: "XO3x8vm0Ijc", telemundo: "QO8-LAmwS1E", telemundoExtended: "6tveHOrsXwY" },
 };
 // Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
 const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
@@ -2128,7 +2127,6 @@ async function bakeGameHighlights() {
   }
   for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
     const existing = games[k] ?? {};
-    delete existing.official;
     games[k] = { ...existing, ...seed, t: existing.t ?? seed.t };
   }
 
@@ -2159,13 +2157,15 @@ async function bakeGameHighlights() {
         const dateStr = hlDateStr(event.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
         const preferExtended = !!competition;
-        // MLB swaps channels; every other league uses official-first (see note above).
+        // MLB now keeps the official MLB channel first; the unscoped short/team
+        // recap is secondary so unofficial uploads never occupy the primary slot.
         const isMlb = lg.sport === "mlb";
         const isFifa = lg.sport === "fifa";
-        const primaryChannel = isMlb ? undefined : lg.channel;
-        const secondaryChannel = isMlb ? lg.channel : (isFifa ? "FOX Sports" : undefined);
+        const primaryChannel = lg.channel;
+        const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : undefined);
+        const strictPrimaryChannel = isFifa || isMlb;
         const strictWorldCupChannel = isFifa;
-        if (!isFifa && prev.official && prev.extended) continue; // both baked already
+        if (!isFifa && !isMlb && prev.official && prev.extended) continue; // both baked already
 
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
@@ -2173,10 +2173,11 @@ async function bakeGameHighlights() {
         // Older FIFA prebakes stored the FOX full recap in `official` before the
         // card split into FIFA short + FOX full. Carry it as `extended` instead
         // so future bakes do not preserve the stale primary slot forever.
-        const prevOfficial = isFifa && prev.official && !prev.extended ? null : prev.official;
-        const prevExtended = isFifa && prev.official && !prev.extended ? prev.official : prev.extended;
-        let official = isFifa ? null : (prevOfficial ?? null);
-        if (!isFifa && !official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictWorldCupChannel);
+        const oldMlbBake = isMlb && prev.mlbOrder !== "official-first";
+        const prevOfficial = isFifa && prev.official && !prev.extended ? null : oldMlbBake ? prev.extended : prev.official;
+        const prevExtended = isFifa && prev.official && !prev.extended ? prev.official : oldMlbBake ? prev.official : prev.extended;
+        let official = prevOfficial ?? null;
+        if (!official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictPrimaryChannel);
         let extended = prevExtended ?? null;
         if (!extended) {
           extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictWorldCupChannel);
@@ -2197,6 +2198,7 @@ async function bakeGameHighlights() {
         const entry = { t: now };
         if (official) entry.official = official;
         if (extended) entry.extended = extended;
+        if (isMlb) entry.mlbOrder = "official-first";
         if (telemundo) entry.telemundo = telemundo;
         if (telemundoExtended) entry.telemundoExtended = telemundoExtended;
         if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended) {
