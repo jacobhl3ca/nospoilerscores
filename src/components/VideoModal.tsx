@@ -361,7 +361,6 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // anyone who keeps the bar on still look when they want). Both LOCAL to this
   // modal (reset on every open) so the no-spoiler default always returns —
   // separate from the persistent Settings toggles (maskVideoTitle/Bottom).
-  const [revealTitle] = useState(false);
   // Collapse the control chrome (seek bar + control strip + watch links) to give
   // the video the whole frame — especially useful in mobile fullscreen. Toggled
   // by the eye in the video's bottom-right corner.
@@ -1141,6 +1140,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const mediaMaxH = imageMode
     ? (hasPager ? "min(84vh, 100dvh - 11rem)" : "min(90vh, 100dvh - 7rem)")
     : (hasPager ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)");
+  const ytFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
 
   // Reddit prev/next paging: phones keep labelled bottom buttons for thumb
   // reach; desktop gets subtle side chevrons so the footer links never overlap.
@@ -1324,45 +1324,48 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
             } : undefined}
           >
+            {/* YouTube modal controls sit above the player, left-aligned, so they
+                don't cover the iframe or collide with YouTube's own overlay. */}
+            <div
+              className="mb-2 flex items-center gap-1.5"
+              style={{ width: ytFrameWidth }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
+                aria-pressed={showCC}
+                aria-label={showCC ? "Hide captions" : "Show captions"}
+                className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
+                style={{
+                  color: showCC ? "white" : "rgba(255,255,255,0.75)",
+                  background: showCC ? "var(--accent)" : "rgba(0,0,0,0.5)",
+                  border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.16)",
+                }}
+                title={showCC ? "Hide captions" : "Show captions"}
+              >
+                CC
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
+                aria-label="Close"
+                title="Close (Esc)"
+              >
+                <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
             {/* Video region — 16:9 in-flow, or capped to leave bar room in FS */}
             <div
               onMouseMove={bumpCursor}
               className="group relative mx-auto w-full overflow-hidden bg-black"
               style={fsActive
-                ? { width: fsMediaWidth, aspectRatio: "16 / 9", borderRadius: 0 }
-                : { width: `min(100%, calc(${mediaMaxH} * 16 / 9))`, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
+                ? { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: 0 }
+                : { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
-              {/* In-video close + captions controls for YouTube highlights. Keep
-                  these attached to the player frame; viewport-fixed placement
-                  drifts to the page corner on shorter videos/cards. */}
-              <div className="absolute top-1.5 right-1.5 z-30 flex items-center gap-1.5">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
-                  aria-pressed={showCC}
-                  aria-label={showCC ? "Hide captions" : "Show captions"}
-                  className="h-8 px-2.5 flex items-center justify-center rounded-full text-xs font-bold transition-colors cursor-pointer"
-                  style={{
-                    color: showCC ? "white" : "rgba(255,255,255,0.75)",
-                    background: showCC ? "var(--accent)" : "rgba(0,0,0,0.5)",
-                    border: showCC ? "1px solid var(--accent)" : "1px solid rgba(255,255,255,0.16)",
-                  }}
-                  title={showCC ? "Hide captions" : "Show captions"}
-                >
-                  CC
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onClose(); }}
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
-                  aria-label="Close"
-                  title="Close (Esc)"
-                >
-                  <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </div>
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
                   through to the cross-origin iframe. This is what makes the
@@ -1426,7 +1429,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   NO BOTTOM BAR: controls:0 already strips YouTube's ENTIRE bottom
                   bar (no timeline/seek line exists), so nothing there needs
                   covering during playback. */}
-              {maskVideoTitle && !titleSafe && !revealTitle && (
+              {maskVideoTitle && !titleSafe && (
                 <div
                   aria-hidden
                   className="absolute top-0 inset-x-0 z-10 pointer-events-none"
