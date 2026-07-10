@@ -362,6 +362,7 @@ export default {
           "cape verde": ["cape verde", "cabo verde"],
           "saudi arabia": ["saudi arabia", "saudi", "ksa"],
           "egypt": ["egypt", "egipto"],
+          "france": ["france", "francia"],
           "germany": ["germany", "alemania"],
           "morocco": ["morocco", "marruecos"],
           "netherlands": ["netherlands", "holland", "paises bajos", "países bajos"],
