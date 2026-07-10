@@ -314,12 +314,12 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
       aria-pressed={active}
     >
       {active ? (
-        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="6" y="3" width="12" height="18" rx="1.5" />
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="translate-y-px">
+          <rect x="6" y="4" width="12" height="16" rx="1.5" />
         </svg>
       ) : (
-        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="7" height="18" rx="1.5" /><rect x="14" y="3" width="7" height="18" rx="1.5" />
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="translate-y-px">
+          <rect x="4" y="4" width="6" height="16" rx="1.5" /><rect x="14" y="4" width="6" height="16" rx="1.5" />
         </svg>
       )}
     </button>
@@ -2678,27 +2678,51 @@ export default function HomeContent({
         )}
       </main>
 
-      <footer className="px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-5 text-center text-sm flex flex-col items-center gap-2" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
-        {/* Normally the page's only <h1>. On /worldcup the banner above already
-            provides that route's <h1>, so demote this one to <h2> there — keeping
-            exactly one <h1> per page instead of two. Styled to match the footer
-            text (Tailwind's preflight makes headings inherit size/weight, so it
-            renders identically to the old <span> regardless of level) — it just
-            carries the keyword copy SEO needs without changing the look. */}
+      <footer className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-4 text-center text-xs flex flex-col items-center gap-2" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+        {/* Keep the homepage keyword H1 without making the app footer read like a
+            landing page. /worldcup already has a visible H1, so this demotes
+            there to avoid duplicate top-level headings. */}
         {(() => {
           const Heading = worldCupHub ? "h2" : "h1";
-          return <Heading className="text-sm font-normal m-0">Catch up on games without spoilers.<br />Spoiler-free sports scores &amp; highlights.</Heading>;
+          return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
-        <span className="inline-flex items-center gap-1">Select {/* eslint-disable-line @next/next/no-img-element */}<img src="/monkey-see-no-evil.svg" alt="see-no-evil monkey" width={14} height={14} className="inline-block align-text-bottom" draggable={false} /> to show ratings and sort by top records.</span>
-        <FeedbackBox />
+
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          <FeedbackBox />
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="inline-flex items-center gap-1 underline underline-offset-2 cursor-pointer hover:opacity-80"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15 1.65 1.65 0 0 0 3.09 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span>Settings</span>
+          </button>
+          <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          {!isNativeApp && (
+            <a
+              href="https://apps.apple.com/app/hidescore/id6766885311"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+              data-umami-event="install-appstore"
+            >
+              App Store
+            </a>
+          )}
+        </div>
 
         {/* SEO content + internal links, "rolled up" under the feedback box so it
             adds crawlable copy and a link graph without changing the visual layout.
             Google renders and indexes content inside collapsed <details>, and plain
             <a href> (not next/link) is what the crawler needs to follow the routes. */}
         <details className="max-w-2xl text-left text-xs leading-relaxed">
-          <summary className="cursor-pointer select-none text-center" style={{ color: "var(--text-muted)" }}>
-            About HideScore
+          <summary className="cursor-pointer select-none text-center underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
+            About
           </summary>
           <div className="mt-2 space-y-2" style={{ color: "var(--text-muted)" }}>
             <p>
@@ -2730,21 +2754,7 @@ export default function HomeContent({
           </div>
         </details>
 
-        {!isNativeApp && (
-          <div className="flex items-center gap-2">
-            {/* Official Apple "Download on the App Store" badge. */}
-            <a
-              href="https://apps.apple.com/app/hidescore/id6766885311"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Download HideScore on the App Store"
-              className="inline-block transition-opacity hover:opacity-80"
-              data-umami-event="install-appstore"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/app-store-badge.svg" alt="Download on the App Store" loading="lazy" width={120} height={40} className="block h-10 w-auto" />
-            </a>
-            {/* Compact custom Apple-logo pill — replaced by the official badge
+        {/* Compact custom Apple-logo pill — replaced by the footer text link
                 above. Kept commented in case we want the smaller text version back.
             <a
               href="https://apps.apple.com/app/hidescore/id6766885311"
@@ -2766,7 +2776,7 @@ export default function HomeContent({
               <span>App Store</span>
             </a>
             */}
-            {/* Android download — HIDDEN until the Play Store closed test is
+        {/* Android download — HIDDEN until the Play Store closed test is
                 public. When it ships, this becomes the OFFICIAL Google Play
                 badge linking the Play listing (not the /HideScore.apk sideload).
                 Un-comment + swap href to the Play URL once it's live.
@@ -2780,8 +2790,6 @@ export default function HomeContent({
               <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
             </a>
             */}
-          </div>
-        )}
 
         {/* Tip jar — temporarily hidden 2026-06-24; restore by un-commenting:
         <a

@@ -75,7 +75,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       >
         <span aria-hidden="true" className="text-sm leading-none">⚽</span>
         <span className="text-[12.5px] font-semibold tracking-tight" style={{ color: "var(--text)" }}>
-          Single elimination through the end of the tournament
+          Single elimination
         </span>
       </div>
     );
