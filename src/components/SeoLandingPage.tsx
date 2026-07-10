@@ -140,6 +140,11 @@ export default function SeoLandingPage({
               },
               {
                 "@type": "FAQPage",
+                // Declare the Q&A content language, matching the WebPage node
+                // above and the inLanguage signal the site adds to its other
+                // CreativeWork schema nodes (WebApplication/WebSite in layout).
+                // FAQPage is a WebPage subtype, so this is a valid locale hint.
+                inLanguage: "en",
                 mainEntity: faq.map((item) => ({
                   "@type": "Question",
                   name: item.q,
