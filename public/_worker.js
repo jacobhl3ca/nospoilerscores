@@ -947,42 +947,51 @@ export default {
             const rescueTeams = preferChannelLower === "telemundo deportes" && queryTeams.length === 2
               ? queryTeams.map((team) => (TEAM_ALIASES[team] || [team]).find((alias) => alias !== team) || team)
               : [teamsMatch[1], teamsMatch[2]];
-            const chQuery = `${rescueTeams[0]} ${rescueTeams[1]} ${preferChannelLower === "telemundo deportes" ? "resumen" : "highlights"}`.trim();
-            const chUrl = `https://www.youtube.com/${rescueChannelPath}/search?query=${encodeURIComponent(chQuery)}`;
-            const chRes = await fetch(chUrl, {
-              headers: {
-                "User-Agent":
-                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-              },
-            });
-            const chHtml = await chRes.text();
-            const chBlocks = chHtml.split('"videoRenderer":{').slice(1);
-            let chStandardId = null;
-            let chExtendedId = null;
-            for (const block of chBlocks) {
-              const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
-              if (!idMatch || excludeSet.has(idMatch[1])) continue;
-              const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
-              const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
-              const titleLower = (titleMatch ? titleMatch[1] : "").toLowerCase();
-              const channelLower = (channelMatch ? channelMatch[1] : "").toLowerCase();
-              // Same gates as the main loop: official WC channel, "World Cup"
-              // in the title, a highlight/recap keyword, and BOTH named teams.
-              if (!rescueAllowedChannels.includes(channelLower)) continue;
-              if (!/\b(world cup|copa mundial|fifa)\b/.test(titleLower)) continue;
-              if (!titleLower.includes("highlight") && !titleLower.includes("recap") && !titleLower.includes("resumen")) continue;
-              if (!titleHasTeam(titleLower, queryTeams[0]) || !titleHasTeam(titleLower, queryTeams[1])) continue;
-              if (/\b(extended|extendido)\b/.test(titleLower)) {
-                if (!chExtendedId) chExtendedId = idMatch[1];
-              } else {
-                chStandardId = idMatch[1];
-                if (!preferExtended) break; // standard recap wins outright
+            const rescueKind = preferChannelLower === "telemundo deportes"
+              ? (preferExtended ? "resumen extendido" : "resumen")
+              : "highlights";
+            const rescueTeamOrders = preferChannelLower === "telemundo deportes"
+              ? [rescueTeams, [...rescueTeams].reverse()]
+              : [rescueTeams];
+            for (const teamOrder of rescueTeamOrders) {
+              const chQuery = `${teamOrder[0]} ${teamOrder[1]} ${rescueKind}`.trim();
+              const chUrl = `https://www.youtube.com/${rescueChannelPath}/search?query=${encodeURIComponent(chQuery)}`;
+              const chRes = await fetch(chUrl, {
+                headers: {
+                  "User-Agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                  "Accept-Language": "en-US,en;q=0.9",
+                },
+              });
+              const chHtml = await chRes.text();
+              const chBlocks = chHtml.split('"videoRenderer":{').slice(1);
+              let chStandardId = null;
+              let chExtendedId = null;
+              for (const block of chBlocks) {
+                const idMatch = block.match(/^"videoId":"([a-zA-Z0-9_-]{11})"/);
+                if (!idMatch || excludeSet.has(idMatch[1])) continue;
+                const titleMatch = block.match(/"title":\{"runs":\[\{"text":"(.*?)"\}/);
+                const channelMatch = block.match(/"ownerText":\{"runs":\[\{"text":"(.*?)"/);
+                const titleLower = (titleMatch ? titleMatch[1] : "").toLowerCase();
+                const channelLower = (channelMatch ? channelMatch[1] : "").toLowerCase();
+                // Same gates as the main loop: official WC channel, "World Cup"
+                // in the title, a highlight/recap keyword, and BOTH named teams.
+                if (!rescueAllowedChannels.includes(channelLower)) continue;
+                if (!/\b(world cup|copa mundial|fifa)\b/.test(titleLower)) continue;
+                if (!titleLower.includes("highlight") && !titleLower.includes("recap") && !titleLower.includes("resumen")) continue;
+                if (!titleHasTeam(titleLower, queryTeams[0]) || !titleHasTeam(titleLower, queryTeams[1])) continue;
+                if (/\b(extended|extendido)\b/.test(titleLower)) {
+                  if (!chExtendedId) chExtendedId = idMatch[1];
+                } else {
+                  chStandardId = idMatch[1];
+                  if (!preferExtended) break; // standard recap wins outright
+                }
               }
+              videoId = preferExtended
+                ? (chExtendedId || chStandardId || null)
+                : (chStandardId || chExtendedId || null);
+              if (videoId) break;
             }
-            videoId = preferExtended
-              ? (chExtendedId || chStandardId || null)
-              : (chStandardId || chExtendedId || null);
           } catch {
             // Channel lookup failed — fall through to the 404 below (hide the
             // button) rather than surfacing a 500.
