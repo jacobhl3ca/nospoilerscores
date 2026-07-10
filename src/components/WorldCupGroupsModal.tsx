@@ -29,6 +29,7 @@ const HL_TOP_KEY = "wc-groups-hl-top";       // legacy toggle — migrated into 
 const HL_BOTTOM_KEY = "wc-groups-hl-bottom"; // legacy toggle — migrated into BAND_KEY
 const BAND_KEY = "wc-groups-band";           // "all" | "top" | "bottom"
 const DAY_KEY_PREFIX = "wc-groups-day-";
+const BRACKET_WARN_KEY = "wc-bracket-spoiler-warning-seen";
 
 // The "Playing:" day pills highlight teams with a fixture on that day. SPOILER-
 // SAFE: we read ONLY team names off the scoreboard (never scores/status), and a
@@ -125,8 +126,9 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
   const [failed, setFailed] = useState(false);
   // A specific group to spotlight (tapped from a game card) forces the grouped
   // view so the group is visible, regardless of the saved view pref.
-  const [view, setView] = useState<View>(() => (highlightGroup ? "groups" : knockoutActive ? "bracket" : loadView()));
+  const [view, setView] = useState<View>(() => (highlightGroup ? "groups" : knockoutActive && loadFlag(BRACKET_WARN_KEY) ? "bracket" : loadView()));
   const [band, setBand] = useState<Band>(() => loadBand());
+  const [showBracketExplainer, setShowBracketExplainer] = useState(false);
   // The spotlit group's card — scrolled into view once the grid renders.
   const hlCardRef = useRef<HTMLDivElement | null>(null);
   // The dialog container — focused on open for keyboard/SR users (see below).
@@ -146,8 +148,18 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
   const fetchedDays = useRef<Set<DayKey>>(new Set());
 
   const changeView = (v: View) => {
+    if (v === "bracket" && !loadFlag(BRACKET_WARN_KEY)) {
+      setShowBracketExplainer(true);
+      return;
+    }
     setView(v);
     try { window.localStorage.setItem(VIEW_KEY, v); } catch {}
+  };
+  const confirmBracket = () => {
+    setShowBracketExplainer(false);
+    try { window.localStorage.setItem(BRACKET_WARN_KEY, "1"); } catch {}
+    setView("bracket");
+    try { window.localStorage.setItem(VIEW_KEY, "bracket"); } catch {}
   };
   const changeBand = (b: Band) => {
     setBand(b);
@@ -583,6 +595,55 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
           </p>
         ) : null}
       </div>
+      {showBracketExplainer && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setShowBracketExplainer(false); }}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bracket-explainer-title"
+            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center mb-2">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="warning">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+            <h3 id="bracket-explainer-title" className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>
+              Warning
+              <br />
+              SPOILER: BRACKET SHOWS WINNERS
+            </h3>
+            <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
+              The bracket can show who advanced, who was eliminated, and match winners.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowBracketExplainer(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBracket}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                style={{ background: "var(--accent)", color: "white" }}
+                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
+              >
+                Show Bracket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

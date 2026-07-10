@@ -2018,7 +2018,7 @@ const HL_ENTRY_TTL_MS = 10 * 24 * 60 * 60 * 1000; // prune baked games older tha
 
 // Leagues that render per-game highlight cards, with their official YouTube
 // channel — mirrors OFFICIAL_CHANNELS + the scoreboard paths in src/lib. Golf/
-// tennis/F1/UFC omitted (leaderboard/event cards, not per-game highlight buttons).
+// F1/UFC omitted (leaderboard/event cards, not per-game highlight buttons).
 const HL_LEAGUES = [
   { sport: "mlb",   path: "/baseball/mlb/scoreboard",                         channel: "MLB" },
   { sport: "nba",   path: "/basketball/nba/scoreboard",                       channel: "NBA" },
@@ -2033,6 +2033,7 @@ const HL_LEAGUES = [
   { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
   { sport: "ucl",   path: "/soccer/uefa.champions/scoreboard",                channel: "CBS Sports Golazo" },
   { sport: "uel",   path: "/soccer/uefa.europa/scoreboard",                   channel: "CBS Sports Golazo" },
+  { sport: "tennis", path: "/tennis/atp/scoreboard",                          channel: null },
 ];
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
@@ -2047,11 +2048,17 @@ const HL_WORLD_CUP_SEEDS = {
   "fifa:760500": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "hzvEZ2Vxb94", extended: "EC2jOKluGRI", telemundo: "hWlz2o8KPL0" },
   "fifa:760508": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "g9bxtV3oZDI", extended: "_uEzppRKcd0", telemundo: "D9HlmSHUIvo" },
   "fifa:760509": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "-LHb5yN-OzI", extended: "XO3x8vm0Ijc", telemundo: "QO8-LAmwS1E", telemundoExtended: "6tveHOrsXwY" },
-  "fifa:760510": { t: Date.parse("2026-07-10T10:45:00.000Z"), telemundo: "J_1iFnRsHG0", telemundoExtended: "7mx7L_IgBfY" },
+  "fifa:760510": { t: Date.parse("2026-07-10T10:45:00.000Z"), official: "2zz8FDiKeX4", extended: "J_1iFnRsHG0", telemundo: "7mx7L_IgBfY", telemundoExtended: "x3zlfmji_CU" },
 };
 // Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
 const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
+const HL_TENNIS_CHANNELS = [
+  [/wimbledon/i, "Wimbledon"],
+  [/roland|french open/i, "Roland-Garros"],
+  [/us open/i, "US Open Tennis Championships"],
+  [/australian open|aus open/i, "Australian Open TV"],
+];
 function hlQuery(away, home, dateStr, series, competition, dated) {
   const head = `${hlAlias(away)} vs ${hlAlias(home)} highlights`;
   let q = competition
@@ -2106,6 +2113,47 @@ function hlDateStr(iso) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 }
 
+function hlDateYmd(iso) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" })
+      .format(new Date(iso)).replace(/-/g, "");
+  } catch {
+    return "";
+  }
+}
+
+function hlTennisChannel(eventName) {
+  return HL_TENNIS_CHANNELS.find(([rx]) => rx.test(eventName ?? ""))?.[1] ?? null;
+}
+
+function hlTennisMatches(events, ymd) {
+  const matches = [];
+  for (const event of events ?? []) {
+    if (!event?.major) continue;
+    const channel = hlTennisChannel(event.name);
+    if (!channel) continue;
+    for (const grouping of event.groupings ?? []) {
+      const slug = (grouping?.grouping?.slug ?? "").toLowerCase();
+      if (!slug.includes("singles") || slug.includes("doubles")) continue;
+      for (const match of grouping.competitions ?? []) {
+        if (match?.status?.type?.state !== "post") continue;
+        const date = match.date ?? event.date;
+        if (hlDateYmd(date) !== ymd) continue;
+        const comps = match.competitors ?? [];
+        const home = comps.find((c) => c.homeAway === "home") ?? comps[0];
+        const away = comps.find((c) => c.homeAway === "away") ?? comps[1];
+        const homeName = home?.athlete?.displayName ?? home?.athlete?.shortName;
+        const awayName = away?.athlete?.displayName ?? away?.athlete?.shortName;
+        if (!match.id || !awayName || !homeName) continue;
+        const year = String(date ?? "").slice(0, 4);
+        const series = [event.name, year].filter(Boolean).join(" ") || null;
+        matches.push({ id: match.id, away: awayName, home: homeName, date, series, channel });
+      }
+    }
+  }
+  return matches;
+}
+
 async function loadPriorHighlights() {
   try {
     return JSON.parse(await readFile(HL_OUT_PATH, "utf8"));
@@ -2141,28 +2189,34 @@ async function bakeGameHighlights() {
         if (!res.ok) continue;
         data = await res.json();
       } catch { continue; }
-      for (const event of data?.events ?? []) {
-        if (event?.status?.type?.state !== "post") continue;
-        const key = `${lg.sport}:${event.id}`;
+      const items = lg.sport === "tennis"
+        ? hlTennisMatches(data?.events, ymd)
+        : (data?.events ?? []).flatMap((event) => {
+            if (event?.status?.type?.state !== "post") return [];
+            const comp = event.competitions?.[0];
+            const comps = comp?.competitors ?? [];
+            const away = comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName;
+            const home = comps.find((c) => c.homeAway === "home")?.team?.shortDisplayName;
+            if (!event.id || !away || !home) return [];
+            let series = null;
+            for (const note of comp?.notes ?? []) {
+              const m = (note?.headline ?? "").match(/Game \d+/i);
+              if (m) { series = m[0]; break; }
+            }
+            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel }];
+          });
+      for (const item of items) {
+        const key = `${lg.sport}:${item.id}`;
         const prev = games[key] ?? {};
-        const comp = event.competitions?.[0];
-        const comps = comp?.competitors ?? [];
-        const away = comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName;
-        const home = comps.find((c) => c.homeAway === "home")?.team?.shortDisplayName;
-        if (!away || !home) continue;
-        let series = null;
-        for (const note of comp?.notes ?? []) {
-          const m = (note?.headline ?? "").match(/Game \d+/i);
-          if (m) { series = m[0]; break; }
-        }
-        const dateStr = hlDateStr(event.date);
+        const { away, home, series } = item;
+        const dateStr = hlDateStr(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
         const preferExtended = !!competition;
         // MLB now keeps the official MLB channel first; the unscoped short/team
         // recap is secondary so unofficial uploads never occupy the primary slot.
         const isMlb = lg.sport === "mlb";
         const isFifa = lg.sport === "fifa";
-        const primaryChannel = lg.channel;
+        const primaryChannel = item.channel;
         const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : undefined);
         const strictPrimaryChannel = isFifa || isMlb;
         const strictWorldCupChannel = isFifa;
