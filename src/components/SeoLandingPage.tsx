@@ -127,6 +127,7 @@ export default function SeoLandingPage({
                 name: schemaName,
                 description: schemaDescription,
                 url: `https://hidescore.com${canonical}`,
+                inLanguage: "en",
                 isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
                 about: about.map((name) => ({ "@type": "Thing", name })),
               },
