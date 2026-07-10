@@ -3,7 +3,7 @@ import HomeContent from "@/components/HomeContent";
 
 const TITLE = "2026 World Cup — No Spoilers | HideScore";
 const DESC =
-  "Follow the 2026 FIFA World Cup without spoilers. 104 matches, June 11 – July 19. Watch every game on your own schedule — scores stay hidden, and competitiveness ratings tell you which matches were classics without revealing who won.";
+  "Follow the 2026 FIFA World Cup without spoilers. Scores stay hidden, and ratings help you find the best matches without seeing who won.";
 
 export const metadata: Metadata = {
   title: TITLE,
