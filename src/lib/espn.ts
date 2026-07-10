@@ -2043,7 +2043,18 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     const [startMo, startDay] = tournamentLabel.startDate.split("-").map((s) => parseInt(s, 10));
     if (Number.isFinite(startMo) && Number.isFinite(startDay)) {
       const selDateObj = new Date(selYear, selMonth - 1, selDay);
-      const startDateObj = new Date(selYear, startMo - 1, startDay);
+      // startDate is a year-less "MM-DD", so reconstruct its year from the
+      // viewed date. A 4-day window can straddle New Year (starts "12-30",
+      // viewed date lands in January): reusing selYear then puts the start in
+      // the wrong calendar year and dayIndex falls outside [0,3], dropping the
+      // event before golf.ts's labeling runs. Mirror the identical year-wrap
+      // shift getGolfDateState already applies (see golf.ts) so this window
+      // drop and the round labeling agree — a true wrap is the only case the
+      // months sit more than 6 apart. Every mid-year major is unchanged.
+      let startYear = selYear;
+      if (startMo - selMonth > 6) startYear = selYear - 1;
+      else if (selMonth - startMo > 6) startYear = selYear + 1;
+      const startDateObj = new Date(startYear, startMo - 1, startDay);
       const dayIndex = Math.round(
         (selDateObj.getTime() - startDateObj.getTime()) / (24 * 3600 * 1000)
       );
