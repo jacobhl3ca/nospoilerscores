@@ -656,8 +656,12 @@ export default {
           //     ("Warriors beat Lakers", "Spurs won", "Lakers lost") is
           //     caught, not just the present tense — matching lib/spoilers.ts
           //     so the client's title-reveal check and this filter agree.
+          //     "shut[- ]?outs?" adds the shutout framing ("Bruins shut out
+          //     Canadiens", "Hellebuyck shutout") — a winner-and-nil reveal that
+          //     read past the earlier set; "[- ]?" covers shutout/shut out/
+          //     shut-out and "s?" the plural. Kept byte-identical to spoilers.ts.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|grand slam|red card|all three points)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks

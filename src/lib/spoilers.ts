@@ -20,8 +20,12 @@
 //     yet slipped past the earlier beat/defeat/win set. The leading \b keeps
 //     "edge" from matching inside "hedge"/"wedge"/"pledge"; "rout" is spelled
 //     out (rout/routs/routed) so it can't swallow "route"/"routine".
+//     "shut[- ]?outs?" catches the hockey/baseball/soccer shutout framing
+//     ("Bruins shut out Canadiens", "Hellebuyck shutout") — a title that reveals
+//     both a winner and a nil, yet slipped past the earlier set. The optional
+//     "[- ]?" covers "shutout" / "shut out" / "shut-out" and the "s?" the plural.
 const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
