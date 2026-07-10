@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getTimeZone } from "@/lib/etDay";
 import {
   fetchBracket,
@@ -74,9 +74,20 @@ function MatchCard({ match, bracket }: { match: Bracket["rounds"][number]["match
   );
 }
 
-export default function WorldCupBracket() {
+function ymd(iso: string | null): string {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" })
+      .format(new Date(iso)).replace(/-/g, "");
+  } catch {
+    return "";
+  }
+}
+
+export default function WorldCupBracket({ selectedDate }: { selectedDate?: string }) {
   const [bracket, setBracket] = useState<Bracket | null>(null);
   const [failed, setFailed] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -91,10 +102,21 @@ export default function WorldCupBracket() {
     return () => ctrl.abort();
   }, []);
 
-  // The bracket resolves from a live client-side fetch, so these three states
-  // swap in after mount. role=status + aria-live=polite voices each transition
-  // (loading → loaded/failed) to screen readers, matching how TeamView and every
-  // other async column in the app announce their own Loading/Failed/Empty text.
+  // Main tree columns (R32 → Final); third-place is a small standalone card.
+  const treeRounds = useMemo(() => bracket?.rounds.filter((r) => r.key !== "third") ?? [], [bracket]);
+  const third = useMemo(() => bracket?.rounds.find((r) => r.key === "third") ?? null, [bracket]);
+  const focusRoundKey = useMemo(() => {
+    const target = selectedDate || ymd(new Date().toISOString());
+    return treeRounds.find((round) => round.matches.some((m) => ymd(m.date) === target))?.key ?? null;
+  }, [selectedDate, treeRounds]);
+
+  useEffect(() => {
+    if (!focusRoundKey || !scrollRef.current) return;
+    const el = scrollRef.current.querySelector<HTMLElement>(`[data-round-key="${focusRoundKey}"]`);
+    if (!el) return;
+    requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", inline: "center" }));
+  }, [focusRoundKey]);
+
   if (failed) {
     return <p role="status" aria-live="polite" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Couldn&rsquo;t load the bracket right now.</p>;
   }
@@ -105,20 +127,16 @@ export default function WorldCupBracket() {
     return <p role="status" aria-live="polite" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>The knockout bracket begins after the group stage.</p>;
   }
 
-  // Main tree columns (R32 → Final); third-place is a small standalone card.
-  const treeRounds = bracket.rounds.filter((r) => r.key !== "third");
-  const third = bracket.rounds.find((r) => r.key === "third");
-
   return (
     <div>
       {/* The tree is wider than a phone column, so it scrolls horizontally.
           A scrollable region must be keyboard-operable (WCAG 2.1.1): tabIndex
           makes it focusable so arrow keys can scroll it, and role+label give
           assistive tech a named container to announce. */}
-      <div className="overflow-x-auto pb-1" tabIndex={0} role="group" aria-label="World Cup knockout bracket">
+      <div ref={scrollRef} className="overflow-x-auto pb-1" tabIndex={0} role="group" aria-label="World Cup knockout bracket">
         <div className="flex gap-2 sm:gap-3" style={{ minWidth: "min-content" }}>
           {treeRounds.map((round) => (
-            <div key={round.key} className="flex flex-col shrink-0" style={{ width: 150 }}>
+            <div key={round.key} data-round-key={round.key} className="flex flex-col shrink-0" style={{ width: 150 }}>
               <div className="text-[10px] font-bold uppercase tracking-wide mb-1.5 text-center" style={{ color: "var(--text-muted)" }}>
                 {round.name}
               </div>
