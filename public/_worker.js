@@ -649,9 +649,14 @@ export default {
           //     "advances" — each names a winner or a knockout ("Warriors
           //     edge Lakers") yet slipped past the beat/defeat/win set. The
           //     leading \b keeps "edge" out of "hedge"/"wedge"; "rout" is
-          //     spelled out so it can't swallow "route"/"routine".
+          //     spelled out so it can't swallow "route"/"routine". The
+          //     beat/defeat/win verbs are widened to their inflections too
+          //     (beat\w*/defeat\w*/won/lost) so a past-tense recap title
+          //     ("Warriors beat Lakers", "Spurs won", "Lakers lost") is
+          //     caught, not just the present tense — matching lib/spoilers.ts
+          //     so the client's title-reveal check and this filter agree.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeats|beats|leads?|leader|winning|winner|wins|loses|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks
