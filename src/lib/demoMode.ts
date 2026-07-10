@@ -119,6 +119,13 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         ? { date: league.previousGameDay.date, games: league.previousGameDay.games.map(transformGame) }
         : null,
       golfTournament: null,
+      // Like golfTournament, the F1/UFC event card carries real identities the
+      // anonymizer can't rewrite in place — the GP/fight-card title, venue
+      // subtitle, broadcaster, and (UFC) every fighter's name. transformGame
+      // only touches games[], so without this the eventCard leaked real data
+      // straight through `...league` under ?demo=1. Null it so those columns
+      // fall back to the empty state, exactly as golf already does.
+      eventCard: null,
     };
   });
 }
