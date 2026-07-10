@@ -231,12 +231,11 @@ export default function GameHighlights({
   const showYouTube = !!(!isMlb && isFinished && highlightUrl && bothSettled && (effectiveOfficialStatus === "found" || searchStatus === "found"));
   const showTelemundo = !!(fifaTelemundoEnabled && isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
-  // MLB uses the official MLB.com row we previously settled on: short recap
-  // first, condensed game second. Do not substitute baked YouTube here: the
-  // MLB YouTube "Full Game Highlights" and MLB.com Condensed were the same cut,
-  // and showing the YouTube fallback by itself regresses the row into a lone
-  // "Condensed" button when the MLB.com proxy is unavailable.
-  const showMlbCondensed = isMlb && !!game.mlbCondensedPlaybackUrl;
+  // MLB row: short MLB.com recap first, then the longer condensed/full-game cut.
+  // Prefer MLB's official YouTube clip for the 10m slot when it resolves because
+  // it is the same cut with better native playback; fall back to MLB.com HLS.
+  const showMlbYouTubeCondensed = isMlb && officialStatus !== "missing";
+  const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!game.mlbCondensedPlaybackUrl);
   const showMlb = !!(isFinished && isMlb && (game.mlbRecapPlaybackUrl || showMlbCondensed));
   if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
 
@@ -327,8 +326,7 @@ export default function GameHighlights({
                     <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                     {isFifa && (
                       <span className="text-[10px] font-medium">
-                        <span className="sm:hidden">15+</span>
-                        <span className="hidden sm:inline">~15+ min</span>
+                        <span>FOX 15m</span>
                       </span>
                     )}
                   </>
@@ -349,7 +347,7 @@ export default function GameHighlights({
                 if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbRecapPlaybackUrl, game.mlbRecapPoster);
                 else openExternal(page);
               }}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              className="highlight-btn flex min-w-0 items-center justify-center gap-0.5 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="MLB.com game recap"
               title="MLB.com game recap"
@@ -360,22 +358,42 @@ export default function GameHighlights({
           )}
           {showMlbCondensed && (
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl!;
-                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
-                else openExternal(page);
+                if (showMlbYouTubeCondensed && onPlayHighlight) {
+                  if (prefetchedOfficialId.current) {
+                    onPlayHighlight(prefetchedOfficialId.current, highlightUrl!, shareCard);
+                    return;
+                  }
+                  setFetchingOnClick("official");
+                  const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictPrimaryChannel);
+                  setFetchingOnClick(null);
+                  if (id) {
+                    prefetchedOfficialId.current = id;
+                    setOfficialStatus("found");
+                    onPlayHighlight(id, highlightUrl!, shareCard);
+                    return;
+                  }
+                  setOfficialStatus("missing");
+                }
+                if (game.mlbCondensedPlaybackUrl) {
+                  const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl;
+                  if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
+                  else openExternal(page);
+                }
               }}
+              disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-              aria-label="MLB condensed game"
-              title="MLB condensed game"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              aria-label="MLB 10 minute condensed game"
+              title="MLB 10 minute condensed game"
             >
-              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium whitespace-nowrap">
-                <span className="sm:hidden">Cond.</span>
-                <span className="hidden sm:inline">Condensed</span>
-              </span>
+              {fetchingOnClick === "official" ? <span className="text-[10px]">Loading...</span> : (
+                <>
+                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
+                </>
+              )}
             </button>
           )}
         </div>
@@ -411,8 +429,8 @@ export default function GameHighlights({
             >
               {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading...</span> : (
                 <>
-                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">TEL</span>
+                  <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 10m</span>
                 </>
               )}
             </button>
@@ -438,15 +456,15 @@ export default function GameHighlights({
                 }
               }}
               disabled={fetchingOnClick !== null}
-              className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              className="highlight-btn flex min-w-0 items-center justify-center gap-0.5 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "telemundoLong" ? 0.5 : undefined }}
               aria-label="Telemundo extended highlights"
               title="Telemundo extended highlights"
             >
               {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading...</span> : (
                 <>
-                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">TEL+</span>
+                  <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
                 </>
               )}
             </button>
