@@ -87,6 +87,11 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "FAQPage",
+            // Declare the Q&A content language, matching the inLanguage signal
+            // the site adds to its other CreativeWork schema nodes (the
+            // WebApplication/WebSite in layout, the WebPage in SeoLandingPage).
+            // FAQPage is a WebPage subtype, so this is a valid locale hint.
+            inLanguage: "en",
             mainEntity: FAQ.map((item) => ({
               "@type": "Question",
               name: item.q,
