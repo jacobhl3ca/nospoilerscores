@@ -2047,7 +2047,7 @@ const HL_WORLD_CUP_SEEDS = {
   "fifa:760500": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "hzvEZ2Vxb94", extended: "EC2jOKluGRI", telemundo: "hWlz2o8KPL0" },
   "fifa:760508": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "g9bxtV3oZDI", extended: "_uEzppRKcd0", telemundo: "D9HlmSHUIvo" },
   "fifa:760509": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "-LHb5yN-OzI", extended: "XO3x8vm0Ijc", telemundo: "QO8-LAmwS1E", telemundoExtended: "6tveHOrsXwY" },
-  "fifa:760510": { t: Date.parse("2026-07-10T10:45:00.000Z"), telemundo: "J_1iFnRsHG0", telemundoExtended: "7mx7L_IgBfY" },
+  "fifa:760510": { t: Date.parse("2026-07-10T10:45:00.000Z"), official: "2zz8FDiKeX4", extended: "J_1iFnRsHG0", telemundo: "7mx7L_IgBfY", telemundoExtended: "x3zlfmji_CU" },
 };
 // Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
 const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
