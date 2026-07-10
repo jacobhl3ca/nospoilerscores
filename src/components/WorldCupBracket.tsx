@@ -91,14 +91,18 @@ export default function WorldCupBracket() {
     return () => ctrl.abort();
   }, []);
 
+  // The bracket resolves from a live client-side fetch, so these three states
+  // swap in after mount. role=status + aria-live=polite voices each transition
+  // (loading → loaded/failed) to screen readers, matching how TeamView and every
+  // other async column in the app announce their own Loading/Failed/Empty text.
   if (failed) {
-    return <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Couldn&rsquo;t load the bracket right now.</p>;
+    return <p role="status" aria-live="polite" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Couldn&rsquo;t load the bracket right now.</p>;
   }
   if (!bracket) {
-    return <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Loading bracket&hellip;</p>;
+    return <p role="status" aria-live="polite" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Loading bracket&hellip;</p>;
   }
   if (!bracket.knockoutStarted) {
-    return <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>The knockout bracket begins after the group stage.</p>;
+    return <p role="status" aria-live="polite" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>The knockout bracket begins after the group stage.</p>;
   }
 
   // Main tree columns (R32 → Final); third-place is a small standalone card.
