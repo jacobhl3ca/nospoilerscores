@@ -1801,7 +1801,12 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     if (!iso) return "Fight Night";
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "Fight Night";
-    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    // Show the bout time in the app's effective zone (Settings → Time zone;
+    // defaults to the device zone). Every other absolute-instant time label
+    // — the golf tee time, the game-detail modal, the F1 event card — already
+    // passes getTimeZone(); this UFC bout label was the lone omission, so a
+    // user with a zone override saw fight times in their device zone instead.
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
   };
   const fights: FightBout[] = comps.slice().reverse().map((c: LeagueEventCompetition) => {
     const cs = c.competitors ?? [];
