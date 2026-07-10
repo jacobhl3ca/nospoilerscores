@@ -3049,6 +3049,7 @@ export default function HomeContent({
       {groupsOpen && (
         <WorldCupGroupsModal
           highlightGroup={groupsHighlight}
+          selectedDate={selectedDate}
           onClose={() => { setGroupsOpen(false); setGroupsHighlight(null); }}
         />
       )}
