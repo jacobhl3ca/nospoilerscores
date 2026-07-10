@@ -1,5 +1,6 @@
 import { Sport } from "./types";
 import { getApiBase } from "./youtube";
+import { getTimeZone } from "./etDay";
 
 // League-specific news (articles) — CORS-open, same origin as scoreboard API.
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
@@ -365,5 +366,12 @@ export function formatPublished(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // Format this absolute instant in the app's effective time zone (the Settings
+  // "Time zone" override, or the device zone by default) so the fallback date
+  // agrees with every other absolute-instant label in the app — WorldCupBracket,
+  // EventCard, GameHighlights, TeamView all pass timeZone: getTimeZone() here.
+  // Without it, an article published near local midnight and older than 7 days
+  // could render the wrong calendar day for a user on a non-device zone. No-op
+  // for the default (no-override) case, where getTimeZone() is the device zone.
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() });
 }
