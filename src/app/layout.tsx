@@ -113,6 +113,10 @@ const JSON_LD = {
       applicationCategory: "SportsApplication",
       url: "https://apps.apple.com/app/hidescore/id6766885311",
       installUrl: "https://apps.apple.com/app/hidescore/id6766885311",
+      // Same locale signal the sibling WebApplication/WebSite nodes carry —
+      // MobileApplication is a SoftwareApplication → CreativeWork subtype too,
+      // so inLanguage is valid here and keeps all product nodes consistent.
+      inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
@@ -125,6 +129,7 @@ const JSON_LD = {
       applicationCategory: "SportsApplication",
       url: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
       installUrl: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
+      inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
