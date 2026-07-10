@@ -87,6 +87,12 @@ const JSON_LD = {
       description: SITE_DESC,
       applicationCategory: "SportsApplication",
       operatingSystem: "Web",
+      // Declare the content language on the site-level nodes, matching the
+      // `<html lang="en">` above and the `inLanguage: "en"` already on the
+      // per-page WebPage nodes (SeoLandingPage). Both WebApplication and
+      // WebSite are CreativeWork subtypes, so this is a valid signal that helps
+      // crawlers and voice assistants target the right locale.
+      inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
@@ -98,6 +104,7 @@ const JSON_LD = {
       "@type": "WebSite",
       name: "HideScore",
       url: "https://hidescore.com",
+      inLanguage: "en",
     },
     {
       "@type": "MobileApplication",
