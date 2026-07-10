@@ -936,7 +936,10 @@ export default {
             const rescueTeams = preferChannelLower === "telemundo deportes" && queryTeams.length === 2
               ? queryTeams.map((team) => (TEAM_ALIASES[team] || [team]).find((alias) => alias !== team) || team)
               : [teamsMatch[1], teamsMatch[2]];
-            const chQuery = `${rescueTeams[0]} ${rescueTeams[1]} ${preferChannelLower === "telemundo deportes" ? "resumen" : "highlights"}`.trim();
+            const rescueKind = preferChannelLower === "telemundo deportes"
+              ? (preferExtended ? "resumen extendido" : "resumen")
+              : "highlights";
+            const chQuery = `${rescueTeams[0]} ${rescueTeams[1]} ${rescueKind}`.trim();
             const chUrl = `https://www.youtube.com/${rescueChannelPath}/search?query=${encodeURIComponent(chQuery)}`;
             const chRes = await fetch(chUrl, {
               headers: {
