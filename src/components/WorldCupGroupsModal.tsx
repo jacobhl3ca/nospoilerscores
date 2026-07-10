@@ -60,7 +60,8 @@ function etDate(offsetDays: number): string {
 function loadView(): View {
   if (typeof window === "undefined") return "groups";
   try {
-    return window.localStorage.getItem(VIEW_KEY) === "ranked" ? "ranked" : "groups";
+    const v = window.localStorage.getItem(VIEW_KEY);
+    return v === "bracket" || v === "ranked" ? v : "groups";
   } catch {
     return "groups";
   }
@@ -116,7 +117,7 @@ const PAIR_PALETTE: Array<{ bg: string; bar: string }> = [
 // teams into one raw list by that ranking. Sourced from ESPN's fifa.world
 // standings endpoint, from which we take only the team name + flag and drop
 // every standings field.
-export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClose: () => void; highlightGroup?: string | null }) {
+export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedDate }: { onClose: () => void; highlightGroup?: string | null; selectedDate?: string }) {
   // Once the knockout stage is under way, the bracket is the headline view — so
   // offer the Bracket tab and default to it (unless we were opened to spotlight
   // a specific group, which forces the grouped view). Date-gated so we don't add
@@ -126,9 +127,9 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
   const [failed, setFailed] = useState(false);
   // A specific group to spotlight (tapped from a game card) forces the grouped
   // view so the group is visible, regardless of the saved view pref.
-  const [view, setView] = useState<View>(() => (highlightGroup ? "groups" : knockoutActive && loadFlag(BRACKET_WARN_KEY) ? "bracket" : loadView()));
+  const [view, setView] = useState<View>(() => (highlightGroup ? "groups" : knockoutActive ? "bracket" : loadView()));
   const [band, setBand] = useState<Band>(() => loadBand());
-  const [showBracketExplainer, setShowBracketExplainer] = useState(false);
+  const [showBracketExplainer, setShowBracketExplainer] = useState(() => !highlightGroup && knockoutActive && !loadFlag(BRACKET_WARN_KEY));
   // The spotlit group's card — scrolled into view once the grid renders.
   const hlCardRef = useRef<HTMLDivElement | null>(null);
   // The dialog container — focused on open for keyboard/SR users (see below).
@@ -160,6 +161,13 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
     try { window.localStorage.setItem(BRACKET_WARN_KEY, "1"); } catch {}
     setView("bracket");
     try { window.localStorage.setItem(VIEW_KEY, "bracket"); } catch {}
+  };
+  const cancelBracket = () => {
+    setShowBracketExplainer(false);
+    if (view === "bracket" && !loadFlag(BRACKET_WARN_KEY)) {
+      setView("groups");
+      try { window.localStorage.setItem(VIEW_KEY, "groups"); } catch {}
+    }
   };
   const changeBand = (b: Band) => {
     setBand(b);
@@ -403,8 +411,8 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
             <div className="inline-flex rounded-lg overflow-hidden shrink-0" style={{ border: "1px solid var(--border)" }}>
               {([
                 ...(knockoutActive ? [{ v: "bracket" as View, label: "Bracket" }] : []),
-                { v: "groups" as View, label: "Groups" },
                 { v: "ranked" as View, label: "Ranked" },
+                { v: "groups" as View, label: "Groups" },
               ]).map((o) => {
                 const active = view === o.v;
                 return (
@@ -494,7 +502,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
         {view === "bracket" ? (
           // Bracket loads its own data live from ESPN (independent of the groups
           // standings fetch), so it renders regardless of the groups state.
-          <WorldCupBracket />
+          <WorldCupBracket selectedDate={selectedDate} />
         ) : failed ? (
           <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>
             Couldn&rsquo;t load groups right now.
@@ -583,7 +591,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
         ) : null}
       </div>
       {showBracketExplainer && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setShowBracketExplainer(false); }}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); cancelBracket(); }}>
           <div className="absolute inset-0 bg-black/50" />
           <div
             role="dialog"
@@ -610,7 +618,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup }: { onClo
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => setShowBracketExplainer(false)}
+                onClick={cancelBracket}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-card-hover)"; }}
