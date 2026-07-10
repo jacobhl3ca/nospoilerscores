@@ -408,6 +408,27 @@ export default function SettingsPanel({
       wcBannerDismissed: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
+      // The spoiler-protection + layout controls the panel also exposes were
+      // omitted here, so "Reset all settings to defaults" left them at whatever
+      // the user had set — a reset could keep the video title strip revealed,
+      // the seek cap lifted, or news headlines un-blurred, which defeats the
+      // no-spoiler defaults a reset is supposed to restore. Clearing each to
+      // undefined mirrors a fresh install: JSON.stringify drops undefined keys,
+      // and every read falls back to its documented default (`?? true`/`?? false`
+      // /`?? "both"` /`!!`). smartCutoffHour is the lone one with an explicit
+      // non-undefined default in `defaults`, so reset it to that value (13).
+      maskVideoTitle: undefined,
+      youtubeNativeControls: undefined,
+      videoSeekControl: undefined,
+      videoSeekFill: undefined,
+      videoAllowEnd: undefined,
+      videoWarnHalfway: undefined,
+      revealNewsTitles: undefined,
+      showTextPosts: undefined,
+      singleColumn: undefined,
+      newsSingleColumn: undefined,
+      timezone: undefined,
+      smartCutoffHour: 13,
     });
   };
 
