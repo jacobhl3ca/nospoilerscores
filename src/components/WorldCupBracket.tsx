@@ -10,11 +10,10 @@ import {
   type RoundKey,
 } from "@/lib/wcBracket";
 
-// Spoiler-safe knockout bracket view for the World Cup overlay. Renders the full
-// R32 → Final tree (plus the third-place match). Real teams are shown for any
-// matchup ESPN has scheduled (teams only — never a score or who advanced); slots
-// not yet decided read "Winner of …" their feeder match, so nothing about a
-// result is revealed. Built live from ESPN (see lib/wcBracket).
+// Knockout bracket view for the World Cup overlay. Renders the full R32 → Final
+// tree (plus the third-place match). Real teams are shown for any matchup ESPN
+// has scheduled (teams only, never a score); slots not yet decided read "Winner
+// of …" their feeder match. Built live from ESPN (see lib/wcBracket).
 
 const ROUND_SHORT: Record<RoundKey, string> = { r32: "R32", r16: "R16", qf: "QF", sf: "SF", final: "F", third: "3rd" };
 
@@ -141,7 +140,7 @@ export default function WorldCupBracket() {
       ) : null}
 
       <p className="text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-        Spoiler-safe: matchups only, no scores. Each round fills in as the previous one finishes.
+        Matchups only, no scores. Each round fills in as the previous one finishes.
       </p>
     </div>
   );
