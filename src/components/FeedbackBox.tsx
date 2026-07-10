@@ -10,12 +10,14 @@ const FORMSPREE_ENDPOINT = "https://formspree.io/f/mkgqkgyr";
 export default function FeedbackBox() {
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const message = text.trim();
     if (!message) return;
     setSent(true); // optimistic — the box is throwaway, no error UI needed
+    setOpen(false);
     setText("");
     try {
       await fetch(FORMSPREE_ENDPOINT, {
@@ -28,22 +30,30 @@ export default function FeedbackBox() {
     }
   };
 
-  // The outer box has a fixed width (w-full) AND a fixed height, and the
-  // states render in an absolutely-positioned layer on top — so the box's
-  // footprint is completely independent of which state is showing. The
-  // footer can't reflow on submit; nothing above or below moves.
+  if (!open && !sent) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="underline underline-offset-2 cursor-pointer hover:opacity-80"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Feedback
+      </button>
+    );
+  }
+
   return (
-    <div className="relative w-full" style={{ height: 18 }}>
-      <div className="absolute inset-0 flex items-center justify-center">
+    <div className="inline-flex items-center justify-center">
       {sent ? (
         // role=status/aria-live so screen readers hear the optimistic
         // confirmation — the submit gives no other feedback (matches the
         // SettingsPanel ZIP-status pattern).
         <div role="status" aria-live="polite" className="inline-flex items-center gap-1.5">
-          <span>thanks for the feedback 🙏</span>
+          <span>Thanks</span>
           <button
             type="button"
-            onClick={() => setSent(false)}
+            onClick={() => { setSent(false); setOpen(true); }}
             aria-label="Add more feedback"
             title="Add more feedback"
             className="w-4 h-4 flex items-center justify-center rounded-full text-xs leading-none cursor-pointer transition-opacity hover:opacity-70"
@@ -53,30 +63,24 @@ export default function FeedbackBox() {
           </button>
         </div>
       ) : (
-        <form onSubmit={submit} className="relative inline-flex items-center">
-          {/* Caption sits absolutely to the left of the input (right-full) so
-              it doesn't shift the bubble — the input stays dead-centered. A real
-              <label htmlFor> (not a bare span) ties this visible text to the
-              input programmatically, so clicking it focuses the field and the
-              accessible name comes from the label itself — no separate
-              aria-label to keep in sync (WCAG 1.3.1). */}
-          <label htmlFor="hs-feedback-input" className="absolute right-full mr-1.5 whitespace-nowrap cursor-text">Feedback</label>
+        <form onSubmit={submit} className="inline-flex items-center gap-1.5">
+          <label htmlFor="hs-feedback-input" className="sr-only">Feedback</label>
           <input
             id="hs-feedback-input"
             type="text"
+            autoFocus
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-36 text-xs px-2 py-0 leading-none rounded outline-none"
+            placeholder="Feedback"
+            className="w-36 text-xs px-2 py-1 leading-none rounded outline-none"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />
-          {/* Symmetric to the caption on the left — absolutely positioned so
-              the input bubble stays dead-centered regardless of state. */}
           <button
             type="submit"
             disabled={!text.trim()}
             aria-label="Send feedback"
             title="Send feedback"
-            className="absolute left-full ml-1.5 flex items-center justify-center rounded-full transition-opacity enabled:hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center justify-center rounded-full transition-opacity enabled:hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ width: 18, height: 18, background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -86,7 +90,6 @@ export default function FeedbackBox() {
           </button>
         </form>
       )}
-      </div>
     </div>
   );
 }

@@ -90,13 +90,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "ncaaf", label: "NCAAF", startDate: "08-22", endDate: "01-12", championshipDate: "01-12" },
   // ── NCAAW (Women's College Basketball, Nov–early Apr) ──
   // Swap-only (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot
-  // rotation — selectable from the slot-3 dropdown when in season. Mirrors WNBA.
+  // rotation — selectable from the slot-3 dropdown when in season.
   { sport: "ncaaw", label: "NCAAW", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", excludeFromAuto: true },
-  // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Swap-only
-  // (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot rotation —
-  // selectable from the slot-3 dropdown when in season. Listed last so it
-  // sorts to the bottom of the league-header swap dropdown.
-  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", excludeFromAuto: true },
+  // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
+  // in season, but low priority so it only fills open summer/fall slots after
+  // the core leagues and major tournament windows.
+  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19" },
   // ── F1 + UFC (single-event tiles) ──
   // BACKLOG (hidden 2026-06-29): the EventCard tiles don't yet match the look of
   // the rest of the cards, so they're hidden from the switcher for now. Kept here
@@ -120,6 +119,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 // regular leagues fill remaining slots by LEAGUE_PRIORITY; backfillOnly
 // (NFL Preseason) only joins when fewer than 3 picks otherwise. excludeFromAuto
 // (PGA Champ, French Open) never auto-picked but remain in the slot-3 swap menu.
+// WNBA is auto-eligible during its season, but low priority and unpinned.
 // ═══════════════════════════════════════════════════════════════
 // Jan 1 – Jan 11:   NBA/NFL/NCAAM/MLS/EPL          → [NBA, NFL, NCAAM]
 // Jan 12 – Jan 26:  + Aus Open                     → [NBA, NFL, Aus Open]
