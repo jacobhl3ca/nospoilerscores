@@ -182,6 +182,11 @@ export default function SpoilerFreeSportsPage() {
                 name: TITLE,
                 description: DESC,
                 url: "https://hidescore.com/spoiler-free-sports",
+                // Declare the page's content language, matching the inLanguage
+                // signal every other WebPage node on the site carries (the
+                // WebApplication/WebSite in layout, and the shared
+                // SeoLandingPage component the league landing pages render).
+                inLanguage: "en",
                 isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
                 about: [
                   { "@type": "Thing", name: "spoiler-free sports" },
@@ -198,6 +203,11 @@ export default function SpoilerFreeSportsPage() {
               },
               {
                 "@type": "FAQPage",
+                // Same locale signal as the WebPage node above, matching the
+                // inLanguage the FAQPage nodes already carry on /faq and the
+                // shared SeoLandingPage component. FAQPage is a WebPage subtype,
+                // so this is a valid locale hint.
+                inLanguage: "en",
                 mainEntity: FAQ.map((item) => ({
                   "@type": "Question",
                   name: item.q,
