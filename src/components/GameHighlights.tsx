@@ -216,19 +216,16 @@ export default function GameHighlights({
   // When there is no official channel the official button never renders, so
   // treat officialStatus as "missing" without storing it in state.
   const effectiveOfficialStatus = hasOfficialButton ? officialStatus : "missing";
-  // Gate on "found", not "!== missing": rendering a button while it's still
-  // "loading" and then hiding it when it resolves to null is what made the 2nd
-  // link "appear then disappear" (Jacob 7/7).
-  // AND wait until BOTH slots have settled (resolved to found/missing) before
-  // showing the row at all — otherwise a card that ends up with two buttons
-  // flashes the 1st as a single full-width button (they're flex-1, so one-alone
-  // stretches) and then "splits" when the 2nd lands (Jacob 7/7 — "should never
-  // load that big 1 button"). Both resolve in parallel now, so the wait is just
-  // the slower of the two, not the sum. When there's no official channel the
-  // official slot is synchronously "missing" (never loading), so single-button
-  // leagues still show as soon as their one button resolves.
-  const bothSettled = effectiveOfficialStatus !== "loading" && searchStatus !== "loading";
-  const showYouTube = !!(!isMlb && isFinished && highlightUrl && bothSettled && (effectiveOfficialStatus === "found" || searchStatus === "found"));
+  // Gate on "found", not "!== missing": each button (below) only renders once
+  // its OWN id resolves, so a slot that ends up null is never shown then hidden
+  // ("appear then disappear", Jacob 7/7).
+  // Show the row as soon as EITHER slot is found — do NOT wait for both to
+  // settle. The official button is prebaked for today/yesterday, so it resolves
+  // synchronously and now appears in lockstep with the MLB row instead of being
+  // held back by the slower (often live-scraped) 2nd slot — that wait was what
+  // made the whole highlight row "pop in later than MLB" on refresh and on past
+  // days (Jacob 7/11). A distinct 2nd clip, when found, simply joins the row.
+  const showYouTube = !!(!isMlb && isFinished && highlightUrl && (effectiveOfficialStatus === "found" || searchStatus === "found"));
   const showTelemundo = !!(fifaTelemundoEnabled && isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   // MLB row: short MLB.com recap first, then the longer condensed/full-game cut.
