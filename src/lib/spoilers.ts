@@ -39,8 +39,15 @@
 //     headlines ("Spain thrash Georgia", "City thrash United") — a decisive-win
 //     reveal that, like the three above, means nothing but a lopsided defeat in
 //     ordinary English, so it adds coverage with negligible false-positive risk.
+//     "triumph\w*"/"romp\w*" catch the winner-side framing headlines lean on just
+//     as often ("Argentina triumph on penalties", "City romp to victory",
+//     "Australia romp home") — each names the victor, and neither word means
+//     anything but winning in ordinary English, so the false-positive risk is the
+//     same negligible level as the blowout verbs above. Both keep their full
+//     stem across every inflection (triumphs/triumphed/triumphing, romps/romped/
+//     romping), so a trailing \w* covers all of them.
 const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|outlast\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|outlast\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
