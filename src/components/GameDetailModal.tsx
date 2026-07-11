@@ -163,6 +163,14 @@ export default function GameDetailModal({
 
   const isLive = game.state === "in";
   const isFinal = game.state === "post";
+  // Mirror the score card, which suppresses the rating badge while a live game
+  // is in a weather/heat delay (game.rating stays non-null through the delay —
+  // the card hides it by choice, see GameCard's isDelayed guard). Without the
+  // same gate the modal would show a GREAT/GOOD/MEH/SKIP badge for a delayed
+  // game the card is deliberately hiding it on, so the SAME game read two
+  // different ways card↔modal — the mismatch the rating block already warns to
+  // "keep in sync". The rating returns once play resumes.
+  const isDelayed = isLive && /delay/i.test(game.statusDetail);
   const liveUrl = game.streamUrl;
   // Whether this game is on today's (ET) slate — drives the highlight-ready
   // buffer in GameHighlights (today's finals wait for the recap upload window;
@@ -404,7 +412,7 @@ export default function GameDetailModal({
         ) : null}
 
         {/* Competitiveness rating — ONLY when the user already revealed ratings. */}
-        {showRatings && game.rating !== null && (isFinal || isLive) ? (
+        {showRatings && game.rating !== null && (isFinal || isLive) && !isDelayed ? (
           <div className="flex items-center gap-2 mt-3">
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${ratingTier(game.rating).bg}`}>
               {ratingTier(game.rating).label}
