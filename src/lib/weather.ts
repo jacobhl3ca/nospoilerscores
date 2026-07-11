@@ -47,7 +47,10 @@ function wmo(code: number): { icon: string; label: string } {
   // the code<=2 branch mislabeled a mostly-clear sky as "Partly cloudy".
   if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
   if (code <= 2) return { icon: "🌤️", label: "Partly cloudy" };
-  if (code === 3) return { icon: "☁️", label: "Cloudy" };
+  // WMO 3 = "Overcast" (fully clouded over) per Open-Meteo's docs — the one
+  // label in this map that diverged from the cited source ("Cloudy" reads as
+  // milder than a solid overcast). Aligns with the code-1/2 wording split above.
+  if (code === 3) return { icon: "☁️", label: "Overcast" };
   if (code <= 48) return { icon: "🌫️", label: "Fog" };
   // WMO 51-55 = drizzle, but 56-57 = FREEZING drizzle and 66-67 = FREEZING rain
   // — a materially different call for an outdoor game (an ice glaze, not just
