@@ -203,6 +203,21 @@ export default function RootLayout({
             thumbnail requests it. DNS resolution is the cheap, always-useful
             part with no idle-socket cost. */}
         <link rel="dns-prefetch" href="https://images.weserv.nl" />
+        {/* Both analytics tags (GoatCounter + Umami, at the end of <body>) fetch
+            their loader script and then beacon a pageview on EVERY load — so
+            these three hosts are always hit: gc.zgo.at (the GoatCounter loader),
+            hidescore.goatcounter.com (its count beacon), and stats.hidescore.com
+            (Umami's script + beacon). Resolve their DNS during HTML parse so the
+            lookup isn't still pending when the deferred/on-load scripts fire.
+            dns-prefetch only, NOT preconnect: the tags are async/deferred and
+            non-blocking, so a warmed TCP+TLS socket could idle and get closed
+            before they run — DNS resolution is the cheap, always-useful part
+            with no idle-socket cost (same reasoning as the weserv proxy above).
+            Unlike the lazy thumbnails there, these requests are guaranteed to
+            fire, so the warmup is never wasted. */}
+        <link rel="dns-prefetch" href="https://gc.zgo.at" />
+        <link rel="dns-prefetch" href="https://hidescore.goatcounter.com" />
+        <link rel="dns-prefetch" href="https://stats.hidescore.com" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
