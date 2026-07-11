@@ -192,6 +192,17 @@ export default function RootLayout({
             so it carries crossOrigin to match, with dns-prefetch as fallback. */}
         <link rel="preconnect" href="https://site.web.api.espn.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://site.web.api.espn.com" />
+        {/* Every news-column and video-strip thumbnail is routed through the
+            images.weserv.nl proxy (proxyImage in lib/news.ts) — the heaviest
+            images on the board. Resolve its DNS during HTML parse so the first
+            thumbnail's connection setup starts a round-trip sooner. Only a
+            dns-prefetch here, NOT a full preconnect like the espncdn logos
+            above: those logos are eager and above the fold, whereas these
+            thumbnails are loading="lazy" and usually below it, so a warmed TCP+
+            TLS socket would likely idle unused (and get closed) before any
+            thumbnail requests it. DNS resolution is the cheap, always-useful
+            part with no idle-socket cost. */}
+        <link rel="dns-prefetch" href="https://images.weserv.nl" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
