@@ -380,8 +380,12 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // scaled down so scoring bonus normalizes the same way.
   wnba:   { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 28,  regulationPeriods: 4 },
   ncaam:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 2 },
-  // NCAAW: similar quarter/half structure as NCAAM, lower scoring (~70 vs ~75).
-  ncaaw:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 25,  regulationPeriods: 2 },
+  // NCAAW: four 10-min quarters (like WNBA, not NCAAM's two 20-min halves —
+  // women's college hoops moved to quarters in 2015-16), lower scoring (~70).
+  // regulationPeriods MUST be 4: a finished regulation game reports period 4,
+  // so a value of 2 made `periods > regulationPeriods` true for EVERY game and
+  // handed out the +15 OT bonus (a full tier) to non-OT games.
+  ncaaw:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 25,  regulationPeriods: 4 },
   // NCAAF: scoring similar to NFL, mirrors its calibration.
   ncaaf:  { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
   nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
@@ -405,9 +409,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
 // progress *within* a period (smooth) instead of assuming a flat midpoint.
 const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
   nba: 720, wnba: 600,        // 12-min / 10-min quarters
+  ncaaw: 600,                 // 10-min quarters (four of them, like WNBA)
   nfl: 900, ncaaf: 900,       // 15-min quarters
   nhl: 1200,                  // 20-min periods
-  ncaam: 1200, ncaaw: 1200,   // 20-min halves
+  ncaam: 1200,                // 20-min halves
 };
 // Soccer is different: status.clock counts UP and equals total elapsed match
 // seconds (5400 = 90'), so progress is just clock / full match.
