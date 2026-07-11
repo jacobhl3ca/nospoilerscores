@@ -459,15 +459,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     isPlaceholderName(game.homeTeam.abbreviation);
   const gameProgress = isLive ? formatGameProgress(game) : null;
 
-  const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
+  // Both team rows render this identical ★, so a bare "Add to favorites" name
+  // gave a screen reader two indistinguishable buttons per card — no way to tell
+  // which team each one favorites. Fold the team name into the accessible name
+  // (and the hover title) so each star reads "Add Boston Celtics to favorites",
+  // matching the team-specific naming the schedule button beside it already uses.
+  const star = (teamId: string, teamName: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onToggleFavoriteTeam(teamId); }}
         className={`text-xs sm:text-sm leading-none transition-colors cursor-pointer ${isFav ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
         style={isFav ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-        title={isFav ? "Remove from favorites" : "Add to favorites"}
-        aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
+        title={isFav ? `Remove ${teamName} from favorites` : `Add ${teamName} to favorites`}
+        aria-label={isFav ? `Remove ${teamName} from favorites` : `Add ${teamName} to favorites`}
         aria-pressed={isFav}
       >★</button>
     ) : null;
@@ -947,7 +952,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             {/* Favorite-star: removed 2026-05-31, restored behind the Settings
                 toggle 2026-06-11 (Jacob) — favoriting also lives in the
                 team-schedule view + the Settings team picker. */}
-            {showStars ? star(team.id, favoriteTeams.includes(team.id), isTBD) : null}
+            {showStars ? star(team.id, team.displayName, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
             {!isTBD && team.record && !effectivePastDate && !isFinished && !isFuture ? (
               <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>
