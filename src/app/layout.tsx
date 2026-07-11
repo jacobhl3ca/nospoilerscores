@@ -63,6 +63,15 @@ export const metadata: Metadata = {
     follow: true,
     googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
   },
+  // Stop iOS Safari (and the Capacitor WebView) from auto-linking the app's
+  // pervasive time/date/number text. Every card, header subtitle, and date pill
+  // is full of strings the OS eagerly turns into tappable blue links — game
+  // times ("10:30 AM"), date labels ("Tue 5/2", "Round 3 of 4"), venue lines,
+  // and bare numbers — which restyles the content out of the design and pops an
+  // unwanted "Create Event"/dialer sheet on tap. Emits
+  // <meta name="format-detection" content="telephone=no,date=no,address=no">;
+  // no visual change on desktop, purely suppresses the mobile mis-detection.
+  formatDetection: { telephone: false, date: false, address: false },
 };
 
 export const viewport: Viewport = {
