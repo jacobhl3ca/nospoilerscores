@@ -373,5 +373,14 @@ export function formatPublished(iso: string): string {
   // Without it, an article published near local midnight and older than 7 days
   // could render the wrong calendar day for a user on a non-device zone. No-op
   // for the default (no-override) case, where getTimeZone() is the device zone.
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() });
+  const tz = getTimeZone();
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", timeZone: tz };
+  // Add the year when the article isn't from the current year (in the same
+  // effective zone), so a cross-year fallback isn't ambiguous — near January an
+  // item older than 7 days could otherwise show a bare "Dec 28" that reads as
+  // either last year or this. Same-year items (the overwhelmingly common case)
+  // stay byte-identical to before.
+  const yearIn = (dt: Date) => dt.toLocaleDateString("en-US", { year: "numeric", timeZone: tz });
+  if (yearIn(d) !== yearIn(new Date())) opts.year = "numeric";
+  return d.toLocaleDateString("en-US", opts);
 }
