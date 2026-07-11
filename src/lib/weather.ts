@@ -49,8 +49,13 @@ function wmo(code: number): { icon: string; label: string } {
   if (code <= 2) return { icon: "🌤️", label: "Partly cloudy" };
   if (code === 3) return { icon: "☁️", label: "Cloudy" };
   if (code <= 48) return { icon: "🌫️", label: "Fog" };
-  if (code <= 57) return { icon: "🌦️", label: "Drizzle" };
-  if (code <= 67) return { icon: "🌧️", label: "Rain" };
+  // WMO 51-55 = drizzle, but 56-57 = FREEZING drizzle and 66-67 = FREEZING rain
+  // — a materially different call for an outdoor game (an ice glaze, not just
+  // wet), so split them out instead of lumping into plain "Drizzle"/"Rain".
+  if (code <= 55) return { icon: "🌦️", label: "Drizzle" };
+  if (code <= 57) return { icon: "🌧️", label: "Freezing drizzle" };
+  if (code <= 65) return { icon: "🌧️", label: "Rain" };
+  if (code <= 67) return { icon: "🌧️", label: "Freezing rain" };
   if (code <= 77) return { icon: "🌨️", label: "Snow" };
   if (code <= 82) return { icon: "🌧️", label: "Showers" };
   if (code <= 86) return { icon: "🌨️", label: "Snow showers" };
