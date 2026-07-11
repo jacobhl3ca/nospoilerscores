@@ -81,6 +81,12 @@ export default function WorldCupTeamsPage() {
                 name: TITLE,
                 description: DESC,
                 url: "https://hidescore.com/worldcup/teams",
+                // Declare the page's content language, matching the inLanguage
+                // signal every other WebPage node on the site carries (the
+                // WebApplication/WebSite in layout, the shared SeoLandingPage
+                // component, and the sibling /worldcup/teams/<slug> CollectionPage).
+                // CollectionPage is a WebPage subtype, so this is a valid locale hint.
+                inLanguage: "en",
                 isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
                 // Enumerate the team links this page renders so crawlers can
                 // discover every /worldcup/teams/<slug> detail page from the
