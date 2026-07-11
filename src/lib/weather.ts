@@ -43,6 +43,9 @@ const geoCache = new Map<string, Geo | null>();
 // WMO weather codes → a compact emoji + label. Ranges per Open-Meteo's docs.
 function wmo(code: number): { icon: string; label: string } {
   if (code === 0) return { icon: "☀️", label: "Clear" };
+  // WMO 1 = "Mainly clear" — distinct from 2 = "Partly cloudy". Lumping 1 into
+  // the code<=2 branch mislabeled a mostly-clear sky as "Partly cloudy".
+  if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
   if (code <= 2) return { icon: "🌤️", label: "Partly cloudy" };
   if (code === 3) return { icon: "☁️", label: "Cloudy" };
   if (code <= 48) return { icon: "🌫️", label: "Fog" };
