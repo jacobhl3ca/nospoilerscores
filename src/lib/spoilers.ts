@@ -46,6 +46,15 @@
 //     same negligible level as the blowout verbs above. Both keep their full
 //     stem across every inflection (triumphs/triumphed/triumphing, romps/romped/
 //     romping), so a trailing \w* covers all of them.
+//     "cruise\w*" catches the easy-win framing ("Real Madrid cruise past Getafe",
+//     "City cruise to victory", "United cruised past Spurs") — a decisive-win reveal
+//     the existing verbs miss ("edge" is the narrow win; nothing covered the
+//     comfortable one). In a sports highlight title "cruise" means nothing but
+//     winning comfortably, so it adds coverage with the same negligible
+//     false-positive risk as the blowout verbs above. The stem keeps its trailing
+//     "e" (cruise, not cruis) — cruis\w* would collide with "cruiserweight" — so it
+//     covers cruise/cruises/cruised, the forms recap titles actually use, and simply
+//     leaves the rarer -ing form ("cruising") alone rather than risk that collision.
 //     "crush\w*" replaces the earlier bare "crushes": that lone inflection missed
 //     the plural-present "Bayern crush Barca" and the past-tense "City crushed
 //     United" — both decisive-win reveals — while every sibling defeat verb
@@ -53,7 +62,7 @@
 //     highlight title "crush" means nothing but a lopsided defeat, so widening it
 //     carries the same negligible false-positive risk as the verbs above.
 const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
