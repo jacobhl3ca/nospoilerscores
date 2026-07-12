@@ -4,7 +4,7 @@ import HomeContent from "@/components/HomeContent";
 export const metadata: Metadata = {
   title: "Tomorrow's Sports Schedule — No Spoilers | HideScore",
   description:
-    "Tomorrow's NBA, MLB, NHL, and NFL schedule without spoilers. Plan which games to watch — spoiler-free previews and ratings.",
+    "Tomorrow's NBA, MLB, NHL, NFL, and soccer schedule without spoilers. Plan which games to watch — spoiler-free previews and ratings.",
   alternates: { canonical: "/tomorrow" },
   openGraph: {
     title: "Tomorrow's Sports Schedule — No Spoilers | HideScore",
