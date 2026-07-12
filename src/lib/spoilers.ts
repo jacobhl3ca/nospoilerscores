@@ -76,6 +76,12 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     begins with "outclass"), so it adds coverage with the same negligible
 //     false-positive risk. The trailing \w* covers outclass/outclasses/
 //     outclassed/outclassing.
+//     "outplay\w*" catches the on-the-day superiority framing ("Brazil outplay
+//     Croatia", "Germany outplayed Spain") — the same outXXX family as
+//     outlast/outclass/overpower/outgun above, naming the side that dominated
+//     play, and no non-result English word begins with "outplay", so it adds
+//     coverage with the same negligible false-positive risk. The trailing \w*
+//     covers outplay/outplays/outplayed/outplaying.
 //     "overpower\w*"/"outgun\w*" catch two more decisive-win verbs headlines
 //     lean on ("Spain overpower Italy", "Bills outgun Chiefs", "Warriors outgun
 //     Suns") — each names the winner of a lopsided or high-scoring contest, and
@@ -83,7 +89,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     with the same negligible false-positive risk as the blowout verbs above.
 //     The trailing \w* covers every inflection (overpowers/overpowered/
 //     overpowering, outguns/outgunned/outgunning).
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|outclass\w*|overpower\w*|outgun\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
