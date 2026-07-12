@@ -4,7 +4,7 @@ import HomeContent from "@/components/HomeContent";
 export const metadata: Metadata = {
   title: "Yesterday's Sports Scores — No Spoilers | HideScore",
   description:
-    "Yesterday's NBA, MLB, NHL, and NFL games without spoilers. Catch up on completed games — scores hidden, highlights one tap away.",
+    "Yesterday's NBA, MLB, NHL, NFL, and soccer games without spoilers. Catch up on completed games — scores hidden, highlights one tap away.",
   alternates: { canonical: "/yesterday" },
   openGraph: {
     title: "Yesterday's Sports Scores — No Spoilers | HideScore",
