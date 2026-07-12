@@ -2077,7 +2077,14 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
   // would defeat the no-spoiler experience by exposing live scores.
   let streamUrl: string | undefined;
   for (const broadcast of broadcasts) {
-    const url = networkStreamUrl(broadcast, event.id ?? "");
+    // Pass "" as the gameId: a golf tournament has no per-airing ESPN watch id,
+    // so an ESPN/ESPN+ broadcast must route to ESPN's generic watch page, not a
+    // "/watch/player/_/id/{eventId}" deep link keyed by the tournament event id
+    // (which is not a valid airing id and lands on a broken player). networkStreamUrl
+    // only consumes gameId in its ESPN branch, so this matches GolfLeaderboard's own
+    // per-network chip (which already passes "") and leaves every other golf network
+    // byte-identical.
+    const url = networkStreamUrl(broadcast, "");
     if (url) { streamUrl = url; break; }
   }
   if (!streamUrl) streamUrl = sportStreamFallback("golf");
