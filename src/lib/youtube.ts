@@ -47,7 +47,11 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   golf_pgachamp: "PGA Championship",
   golf_usopen: "USGA",
   golf_theopen: "The Open",
-  // Tennis Grand Slams
+  // Tennis Grand Slams — keyed on the ESPN league label (see getOfficialChannelName):
+  // "Aus Open" → tennis_ausopen, "French Open" → tennis_frenchopen, etc. Australian
+  // Open was the lone Slam missing its channel, so its matches fell through to a
+  // generic search while the other three got a scoped official-highlights button.
+  tennis_ausopen: "Australian Open TV",
   tennis_frenchopen: "Roland-Garros",
   tennis_wimbledon: "Wimbledon",
   tennis_usopen: "US Open Tennis Championships",
