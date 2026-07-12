@@ -90,6 +90,9 @@ interface NewsColumnProps {
   // has either a direct HLS stream (MLB) or a prebake-validated YouTube ID.
   // Receives the full playback payload so the modal can pick the right player.
   onPlayVideo?: PlayHandler;
+  // Forwarded to this column's own title (non-strip layout only) so HomeContent
+  // can measure --news-titlebar-h from it — see NewsColumnTitle.measureRef.
+  titleMeasureRef?: (el: HTMLDivElement | null) => void;
 }
 
 // Sticky league title (with optional swap dropdown for the 3rd column).
@@ -103,6 +106,7 @@ export function NewsColumnTitle({
   onSwapLeague,
   onPickEspn,
   espnActive,
+  measureRef,
 }: {
   title: string;
   swappableOptions?: { sport: Sport; label: string }[];
@@ -114,6 +118,13 @@ export function NewsColumnTitle({
   // was emptied (it reappears as the last column).
   onPickEspn?: () => void;
   espnActive?: boolean;
+  // Callback ref on the title's root so the parent can measure its height into
+  // --news-titlebar-h. In the strip layout HomeContent measures a shared title
+  // row; here the same ref rides one per-column title so the measurement also
+  // happens in the NON-strip layout (columns render their own titles). Without
+  // it --news-titlebar-h stays 0 in non-strip mode and every source header pins
+  // at header-h — flush behind the black league title, clipping the first card.
+  measureRef?: (el: HTMLDivElement | null) => void;
 }) {
   const [swapOpen, setSwapOpen] = useState(false);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -139,6 +150,7 @@ export function NewsColumnTitle({
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
   return (
     <div
+      ref={measureRef}
       className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30"
       style={{ background: "var(--bg)", paddingTop: "1.75rem" }}
     >
@@ -719,6 +731,7 @@ export default function NewsColumn({
   hideTitle,
   widthClassName,
   onPlayVideo,
+  titleMeasureRef,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -757,6 +770,7 @@ export default function NewsColumn({
           onSwapLeague={onSwapLeague}
           onPickEspn={onPickEspn}
           espnActive={espnActive}
+          measureRef={titleMeasureRef}
         />
       )}
       <div className="flex flex-col gap-1.5 sm:gap-2">
