@@ -567,7 +567,13 @@ export default function GolfLeaderboard({
         })}
       </div>
 
-      {/* Expand controls — two callouts (Top 25 / All N) when collapsed; toggle out otherwise */}
+      {/* Expand controls — two callouts (Top 25 / All N) when collapsed; toggle out otherwise.
+          Each button is a disclosure control for the leaderboard row list, so it carries
+          aria-expanded reflecting whether the list is currently showing beyond the collapsed
+          set (false in the collapsed branch, true once Top 25 / All is showing). Without it a
+          screen reader can't tell the rows are expandable — matches the aria-expanded already
+          on LeagueColumn's "Show N more" toggle. (The value is a literal per branch because
+          expandLevel is already narrowed inside each `=== ...` guard.) */}
       {allPlayers.length > INITIAL_SHOW && (
         <div className="flex gap-1 mt-1.5">
           {expandLevel === "collapsed" && (
@@ -575,6 +581,7 @@ export default function GolfLeaderboard({
               {allPlayers.length > INITIAL_SHOW && (
                 <button
                   onClick={() => setExpandLevel("top25")}
+                  aria-expanded={false}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
                   style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
                 >
@@ -584,6 +591,7 @@ export default function GolfLeaderboard({
               {allPlayers.length > TOP25_SHOW && (
                 <button
                   onClick={() => setExpandLevel("all")}
+                  aria-expanded={false}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
                   style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
                 >
@@ -596,6 +604,7 @@ export default function GolfLeaderboard({
             <>
               <button
                 onClick={() => setExpandLevel("collapsed")}
+                aria-expanded={true}
                 className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
                 style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
               >
@@ -604,6 +613,7 @@ export default function GolfLeaderboard({
               {allPlayers.length > TOP25_SHOW && (
                 <button
                   onClick={() => setExpandLevel("all")}
+                  aria-expanded={true}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
                   style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
                 >
@@ -615,6 +625,7 @@ export default function GolfLeaderboard({
           {expandLevel === "all" && (
             <button
               onClick={() => setExpandLevel("collapsed")}
+              aria-expanded={true}
               className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
               style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
             >
