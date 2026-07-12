@@ -9,7 +9,7 @@ const geistSans = Geist({
 
 const SITE_TITLE = "HideScore — Spoiler-Free Sports Scores & Highlights | NBA, NFL, NHL, MLB";
 const SITE_DESC =
-  "Spoiler-free sports scores and highlights. Check NBA, MLB, NHL, NFL, and golf without seeing the score. Game ratings tell you if it's worth watching before you hit play.";
+  "Spoiler-free sports scores and highlights. Check NBA, MLB, NHL, NFL, soccer, and golf without seeing the score. Game ratings tell you if it's worth watching before you hit play.";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
