@@ -1237,6 +1237,10 @@ export default function LeagueColumn({
                         <button
                           key={opt.sport}
                           onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
+                          // The active league is otherwise signalled only by color +
+                          // weight; aria-current voices it to screen readers (matches
+                          // the NewsColumn swap dropdown + DateNav day-pill pattern).
+                          aria-current={isCurrent ? "true" : undefined}
                           className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                           style={{
                             color: isCurrent ? "var(--accent)" : isElsewhere ? "var(--text-muted)" : "var(--text)",
