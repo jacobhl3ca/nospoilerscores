@@ -2312,6 +2312,13 @@ export default function HomeContent({
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}
+                      // Non-strip layout: the columns render their own titles
+                      // (no shared strip row), so ride the same measuring ref on
+                      // the first column's title to keep --news-titlebar-h live.
+                      // Otherwise it stays 0 and every source header pins behind
+                      // the black league title, clipping the first card (the
+                      // strip path measures its own row, so skip it there).
+                      titleMeasureRef={!stripActive && idx === 0 ? newsTitleRowRef : undefined}
                     />
                   );
                 })}
