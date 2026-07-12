@@ -69,7 +69,14 @@
 //     winner/loser yet means nothing else, so the false-positive risk is the
 //     same negligible level as the blowout verbs above.
 const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
+//     "outclass\w*" catches the superiority framing headlines lean on ("Brazil
+//     outclass Chile", "Spain outclassed Georgia") — a decisive-win reveal the
+//     blowout verbs above miss, and one that means nothing but winning
+//     comfortably in ordinary English (no word other than these inflections
+//     begins with "outclass"), so it adds coverage with the same negligible
+//     false-positive risk. The trailing \w* covers outclass/outclasses/
+//     outclassed/outclassing.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|outclass\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
