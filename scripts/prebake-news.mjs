@@ -1623,8 +1623,18 @@ async function fetchRedditViaRedlib(subreddit, sectionLabel) {
 // writeFeed so a 0-video bake can't clobber a still-fresh with-video file — the
 // guard is what actually stops the user-visible flapping; the batch size just
 // makes good bakes more frequent (2/batch ≈ 8 cooldowns ≈ +12 min).
-const REDDIT_BATCH_SIZE = 2;
-const REDDIT_BATCH_COOLDOWN_MS = 90000;
+// 2026-07-11: batch=2 was still starving the SECOND feed of each pair — a bake
+// 429'd exactly the even-positioned feeds (reddit-mlb/wnba/nfl/golf at gate
+// positions 2/4/6/8), because within a batch the 2nd request fires just 900ms
+// after the 1st, before the cooldown resets the window, so it hits a saturated
+// limiter and the same tail leagues stayed hours-stale bake after bake. Take
+// the documented next step: batch=1 so EVERY feed gets its own cooldown (no
+// sacrificial 2nd-in-batch request). Drop the cooldown 90s→45s since a single
+// request per window needs far less recovery than a 2-hit burst did — ~17 feeds
+// × 45s ≈ 13 min of cooldowns, still well under the 30-min cron (mutex covers
+// any overlap). If the tail 429s again, raise the cooldown before touching size.
+const REDDIT_BATCH_SIZE = 1;
+const REDDIT_BATCH_COOLDOWN_MS = 45000;
 let _redditGate = Promise.resolve();
 let _redditHits = 0;
 function gateReddit(fn) {
