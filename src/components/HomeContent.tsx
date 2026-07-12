@@ -3015,6 +3015,14 @@ export default function HomeContent({
                     type="button"
                     disabled={full}
                     onClick={() => togglePick(o.sport)}
+                    // Multi-select toggle: expose the picked state to assistive
+                    // tech, since it's otherwise conveyed only by the accent
+                    // background (and a "1. " number prefix). Matches the
+                    // aria-pressed pattern every other toggle pill in the app
+                    // already uses (view tabs, the news reveal/text-post pills,
+                    // the World Cup groups band/day pills) — this picker was the
+                    // lone group missing it.
+                    aria-pressed={on}
                     className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     style={on
                       ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
