@@ -2247,9 +2247,17 @@ async function bakeGameHighlights() {
   }
 
   const dates = [hlEtYmd(0), hlEtYmd(-1)];
+  // World Cup gets a much wider window than the daily leagues. WC has only a
+  // handful of games/day but a recap can post late (or a bake can fail while the
+  // recap wasn't up yet), and outside the 2-day window that game NEVER gets
+  // re-attempted — it stays unbaked and falls back to flaky live-resolve forever
+  // (why so many past WC games showed no link). Already-baked games short-circuit
+  // the resolve below, so this only re-scrapes the few still-missing ones.
+  const fifaDates = Array.from({ length: 16 }, (_, i) => hlEtYmd(-i));
   let resolved = 0;
   for (const lg of HL_LEAGUES) {
-    for (const ymd of dates) {
+    const lgDates = lg.sport === "fifa" ? fifaDates : dates;
+    for (const ymd of lgDates) {
       let data;
       try {
         const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports${lg.path}?dates=${ymd}`, { headers: { "User-Agent": UA } });
