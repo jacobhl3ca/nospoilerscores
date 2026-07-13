@@ -11,6 +11,12 @@ export const metadata: Metadata = {
     description: "Tomorrow's games, spoiler-free.",
     url: "https://hidescore.com/tomorrow",
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx. A page's
+    // openGraph replaces the parent's wholesale (Next merges metadata per top-
+    // level field, not deep), so without this the homepage was the only route
+    // emitting og:locale — social unfurlers (Facebook/LinkedIn/Slack/iMessage)
+    // got none for the core date routes, the ones most often shared.
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — tomorrow's sports schedule, spoiler-free" }],
   },
