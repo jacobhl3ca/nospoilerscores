@@ -1610,6 +1610,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   aria-valuemin={0}
                   aria-valuemax={Math.round(seekCap * 100)}
                   aria-valuenow={Math.round(Math.min(progress, seekCap) * 100)}
+                  // When the fill is hidden to avoid spoilers, the numeric
+                  // position must not leak through aria-valuenow either — a
+                  // screen reader would announce the exact percentage the
+                  // sighted track deliberately withholds. aria-valuetext takes
+                  // precedence over aria-valuenow, so it's spoken instead while
+                  // valuenow stays present for spec-valid relative nudging.
+                  aria-valuetext={seekFill === "off" ? "Position hidden to avoid spoilers" : undefined}
                   tabIndex={0}
                   title="Tap or drag to seek"
                   onKeyDown={(e) => {
