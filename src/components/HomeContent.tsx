@@ -381,7 +381,9 @@ export default function HomeContent({
   const newsExplainerRef = useRef<HTMLDivElement>(null);
   // Escape closes the ratings/news explainer warnings, matching their existing
   // backdrop-tap dismissal and the rest of the app's modals (GameDetailModal,
-  // VideoModal, WorldCupGroupsModal all close on Escape).
+  // VideoModal, WorldCupGroupsModal all close on Escape). This effect also seats
+  // focus into the open dialog and locks body scroll while it's up — the same
+  // treatment those other modals already get.
   useEffect(() => {
     if (!showRatingsExplainer && !showNewsExplainer) return;
     const onKey = (e: KeyboardEvent) => {
@@ -390,6 +392,27 @@ export default function HomeContent({
       setShowNewsExplainer(false);
     };
     window.addEventListener("keydown", onKey);
+    // Lock body scroll while the explainer is open, matching every other modal
+    // in the app (GameDetailModal / VideoModal / SettingsPanel / WorldCupGroupsModal).
+    // These two confirm dialogs fire mid-session — the feed is usually already
+    // scrolled when you toggle ratings or open news — so the background scrolling
+    // behind the dialog was the most visible gap. Plain overflow:hidden doesn't
+    // reliably stop iOS WebKit scrolling the feed behind the overlay; pinning the
+    // body with position:fixed + a negative top does, and restoring it returns
+    // you exactly where you were (the dialog root is position:fixed, so pinning
+    // the body underneath doesn't move it).
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prevBody = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
     // Focus management (WCAG 2.4.3): move focus into the open dialog so keyboard
     // and screen-reader users land inside the overlay instead of being stranded
     // on the tab/toggle behind it, and restore focus to the opener on close.
@@ -401,6 +424,11 @@ export default function HomeContent({
     (showRatingsExplainer ? ratingsExplainerRef : newsExplainerRef).current?.focus();
     return () => {
       window.removeEventListener("keydown", onKey);
+      body.style.overflow = prevBody.overflow;
+      body.style.position = prevBody.position;
+      body.style.top = prevBody.top;
+      body.style.width = prevBody.width;
+      window.scrollTo(0, scrollY);
       opener?.focus?.();
     };
   }, [showRatingsExplainer, showNewsExplainer]);
