@@ -132,6 +132,19 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     (\bstun\b/\bstunned\b/\bstunning\b are all whole-word). Bare "stun" is
 //     boundary-safe against "stung"/"stunt". A stun is only ever an upset reveal
 //     in a recap title, so this stays on the same over-hide-is-safe side.
+//     "shock|shocks|shocked|shocking" join that same upset-reveal family for the
+//     same reason: "shock" is the everyday synonym of "stun"/"upset" headlines
+//     lean on just as hard in this WC-heavy app ("Saudi Arabia shock Argentina",
+//     "Morocco shocked Portugal", "Japan shock Germany", "shock win"/"shocking
+//     upset") — an upset reveal that, despite "stun*"/"upset\w*" already being
+//     covered, has a different surface form, so none of its inflections fired and
+//     the outcome leaked. Spelled out (not "shock\w*") on purpose: the stem form
+//     would swallow "shockwave"/"shocker", which these four whole-word forms
+//     can't, and it's boundary-safe against "aftershock" (no \b before "shock"
+//     there). No in-scope club or nation is named "Shock" (the WNBA's Tulsa Shock
+//     is defunct and out of scope), so in the titles this filter actually sees
+//     "shock" means nothing but an upset result, keeping it on the same
+//     over-hide-is-safe side as the verbs above.
 //     "seals?|sealed" joins its semantic sibling "clinch\w*": "seal" is the other
 //     verb headlines lean on for locking up a result this WC-heavy app sees
 //     constantly ("Spain seal qualification", "Argentina sealed top spot", "Messi
@@ -146,7 +159,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     1970s NHL club, outside current content), so in the titles this filter
 //     actually sees "seal" means nothing but sealing a result, keeping it on the
 //     same over-hide-is-safe side as the verbs above.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
