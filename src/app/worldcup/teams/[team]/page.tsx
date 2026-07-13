@@ -38,6 +38,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       url: `https://hidescore.com${canonical}`,
       siteName: "HideScore",
+      // og:locale — matches layout.tsx + the /worldcup hub (Next replaces the
+      // parent openGraph wholesale, so each World Cup route must declare its
+      // own). Covers all 48 generated team pages.
+      locale: "en_US",
       type: "website",
       images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: `${team.name} World Cup coverage without spoilers` }],
     },

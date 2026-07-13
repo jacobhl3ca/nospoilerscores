@@ -22,6 +22,12 @@ export const metadata: Metadata = {
     description: "The 2026 World Cup, spoiler-free. Watch on your own schedule — scores hidden until you tap.",
     url: "https://hidescore.com/worldcup",
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx and the
+    // today/tomorrow/yesterday routes. A page's openGraph replaces the parent's
+    // wholesale (Next merges metadata per top-level field, not deep), so without
+    // this the marquee World Cup routes — the ones most often shared right now —
+    // emitted no og:locale for social unfurlers (Facebook/LinkedIn/Slack/iMessage).
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore — the 2026 FIFA World Cup, spoiler-free" }],
   },

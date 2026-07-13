@@ -21,6 +21,9 @@ export const metadata: Metadata = {
     description: "Tomorrow's World Cup matches, spoiler-free.",
     url: "https://hidescore.com/worldcup/tomorrow",
     siteName: "HideScore",
+    // og:locale — matches layout.tsx + the /worldcup hub (Next replaces the
+    // parent openGraph wholesale, so each World Cup route must declare its own).
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore - tomorrow's 2026 FIFA World Cup schedule, spoiler-free" }],
   },
