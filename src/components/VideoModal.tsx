@@ -1181,12 +1181,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // dvh tracks the real viewport under mobile browser chrome; the reserve grows
   // when the pager is present. This replaces the old per-mode 78vh/85vh/168px
   // caps that left too little room on short windows and clipped the footer.
-  // imageMode no longer has a Close row above the media (Close overlays the
-  // image), but its headline can wrap to 2+ lines and sits above the byline +
-  // Copy-link row + the pager — so reserve enough below that the footer never
-  // clips off the bottom edge (Jacob 7/11). A touch more when a pager is present.
+  // imageMode reserves room for the Close row ABOVE the image plus the headline
+  // (can wrap to 2+ lines) + byline + Copy-link row BELOW it, so nothing clips
+  // the bottom edge (Jacob 7/11–13). imageMode has no bottom pager band anymore
+  // (desktop uses side chevrons, mobile uses swipe), so the reserve is the same
+  // whether or not paging is available.
   const mediaMaxH = imageMode
-    ? (hasPager ? "min(80vh, 100dvh - 13rem)" : "min(88vh, 100dvh - 8rem)")
+    ? "min(82vh, 100dvh - 12rem)"
     : (hasPager ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)");
   const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
@@ -1257,9 +1258,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       <div
         // Wider side padding on desktop when a pager is present so the fixed
         // left/right chevrons sit in a gutter beside the media instead of on top
-        // of it (Jacob 7/11). Mobile keeps its bottom Prev/Next buttons, so no
-        // side gutter needed there.
-        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "sm:px-20 sm:py-8" : "sm:p-8"}${hasPager ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)]" : ""}`}
+        // of it (Jacob 7/11–13). The bottom Prev/Next buttons (video/text only —
+        // image posts navigate by swipe) need a bottom reserve so the footer
+        // clears them; image posts don't.
+        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "sm:px-24 sm:py-8" : "sm:p-8"}${(hasPager && !imageMode) ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)]" : ""}`}
       >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
@@ -1280,20 +1282,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         {/* Reddit prev/next post paging now renders as a labelled row BELOW the
             media (see `pager`, inserted after the player) instead of overlaid on
             the video — keeps mobile footage/dismiss/seek zones clear. */}
-        {/* Text posts can be taller than the viewport, so keep their close affordance
-            pinned. Media modes render their controls in-flow above the frame below. */}
-        {textMode && <button
-          onClick={onClose}
-          className="fixed z-[70] w-9 h-9 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
-          style={{ top: "calc(env(safe-area-inset-top) + 0.6rem)", right: "0.75rem" }}
-          aria-label="Close"
-          title="Close (Esc)"
-        >
-          <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>}
+        {/* Close affordances now live in-flow just above each content block
+            (image / text card / video frame), aligned to that block's real
+            right edge — see the per-mode Close rows below. */}
 
         {/* Player area — image lightbox (no aspect lock), YouTube (custom
             chrome), or 16:9 video for HLS/embed */}
@@ -1335,18 +1326,34 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           </div>
         )}
         {imageMode ? (
-          // Container hugs the rendered image (w-fit) so the Close button and the
-          // rounded frame sit on the ACTUAL content edges for any aspect ratio —
-          // no black margin between the chrome and a portrait/landscape photo.
+          // The column hugs the RENDERED image (w-fit), so the Close row spans
+          // the image's real width and lands just ABOVE its top-right corner —
+          // never over the photo, for any aspect ratio (Jacob 7/13). Desktop adds
+          // side chevrons in the gutter; mobile drops all buttons — swipe
+          // left/right navigates and the image gets the full width.
           <div
-            ref={containerRef}
-            className="relative mx-auto w-fit max-w-full rounded-lg overflow-hidden bg-black"
-            style={{ maxHeight: mediaMaxH }}
+            className="mx-auto w-fit max-w-full"
             onClick={(e) => e.stopPropagation()}
             onTouchStart={onSwipeStart}
             onTouchEnd={onSwipeEnd}
           >
+            {/* Close sits OUTSIDE the image — a right-aligned row the image's own
+                width, so it hugs the top-right corner without covering content. */}
+            <div className="mb-2 flex justify-end">
+              <button
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
+                aria-label="Close"
+                title="Close (Esc)"
+              >
+                <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
+            <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black leading-[0]">
             <img
               src={proxyImage(imageUrl!)}
               alt=""
@@ -1356,40 +1363,54 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               draggable={false}
               onError={() => setImgFailed(true)}
             />
-            {/* Close pinned to the image's own top-right corner. */}
-            <button
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
-              className="absolute top-2 right-2 z-10 w-8 h-8 flex items-center justify-center rounded-full text-white/80 hover:text-white bg-black/50 hover:bg-black/70 border border-white/20 transition-colors cursor-pointer"
-              aria-label="Close"
-              title="Close (Esc)"
-            >
-              <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
+            </div>
           </div>
         ) : textMode ? (
           // Text-post preview card — Reddit headline-only posts (or any item
           // whose image failed to load) get a clean card layout instead of
           // an empty lightbox. Everything stays on hidescore until the user
           // hits the "Open on …" button at the bottom.
-          <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8 overflow-y-auto" style={{ maxHeight: mediaMaxH, background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-            {sourceLabel && (
-              <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
-            )}
-            {headline && (
-              <PeekBlur tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
-            )}
-            <ArticleMeta byline={byline} published={published} className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }} />
-            {body && (
-              <PeekBlur
-                className="text-sm sm:text-base leading-relaxed mt-4 pt-4"
-                style={{ color: "var(--text)", borderTop: "1px solid var(--border)" }}
+          // A tidy reading column (max-w-2xl) with the Close row just ABOVE the
+          // card's top-right corner — same treatment as the image lightbox, so
+          // the affordance is consistent for every post type (Jacob 7/13). The
+          // card scrolls internally (maxHeight), so Close stays put; horizontal
+          // swipe navigates between posts.
+          <div
+            className="mx-auto w-full max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={onSwipeStart}
+            onTouchEnd={onSwipeEnd}
+          >
+            <div className="mb-2 flex justify-end">
+              <button
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
+                aria-label="Close"
+                title="Close (Esc)"
               >
-                {renderRedditBody(body)}
-              </PeekBlur>
-            )}
+                <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8 overflow-y-auto" style={{ maxHeight: mediaMaxH, background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              {sourceLabel && (
+                <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
+              )}
+              {headline && (
+                <PeekBlur tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
+              )}
+              <ArticleMeta byline={byline} published={published} className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }} />
+              {body && (
+                <PeekBlur
+                  className="text-sm sm:text-base leading-relaxed mt-4 pt-4"
+                  style={{ color: "var(--text)", borderTop: "1px solid var(--border)" }}
+                >
+                  {renderRedditBody(body)}
+                </PeekBlur>
+              )}
+            </div>
           </div>
         ) : ytMode ? (
           // YouTube clip. The wrapper is what we fullscreen (so the mask + the
@@ -1853,47 +1874,57 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             )}
           </div>
         )}
-        {/* Headline + byline below media — for image / video modes, gives
-            context without filling the modal. textMode renders these inside
-            the card itself, so skip them here. */}
-        {!textMode && headline && (
-          <div className="mt-3 text-center px-2">
-            {/* Only the text itself swallows the click (so selecting the headline
-                doesn't close); the surrounding whitespace strip stays a dismiss
-                target, so a tap just below the video exits instead of dead-zoning. */}
-            <PeekBlur tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
-            <ArticleMeta byline={byline} published={published} className="text-xs text-white/40 mt-1" />
-          </div>
-        )}
-
-        {/* Direct link + copy — branded per source so users know where the
-            link goes; the copy button gives iOS the same grab-the-URL that
-            the browser's right-click menu does on the web. Hidden with the rest
-            of the chrome when the YT controls are collapsed. */}
+        {/* Footer — headline + meta + actions. For image / video modes the
+            headline sits here (textMode renders it inside the card). The actions
+            are proper pill buttons instead of bare underlined links so the strip
+            reads as intentional chrome, not an afterthought (Jacob 7/13). */}
         {!(ytMode && controlsHidden) && (
-        <div className={`${textMode ? "mt-4" : "mt-3"} flex items-center justify-center gap-3`}>
-          <a
-            href={sourceShareUrl || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
-          >
-            {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
-          </a>
-          {shareUrl && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); copyLink(); }}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
-            >
-              {copied ? "Copied ✓" : "Copy link"}
-            </button>
+        <div className={`${textMode ? "mt-4" : "mt-3"} flex flex-col items-center gap-2.5 px-2`}>
+          {!textMode && headline && (
+            // Only the text itself swallows the click (so selecting the headline
+            // doesn't close); the surrounding strip stays a dismiss target.
+            <PeekBlur tag="p" className="text-sm sm:text-base font-medium text-white/90 leading-snug text-center max-w-2xl">{headline}</PeekBlur>
           )}
+          {!textMode && (byline || published) && (
+            <ArticleMeta byline={byline} published={published} className="text-xs text-white/40" />
+          )}
+          <div className="flex items-center gap-2">
+            <a
+              href={sourceShareUrl || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/25 transition-colors"
+            >
+              {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
+            </a>
+            {shareUrl && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); copyLink(); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/25 transition-colors cursor-pointer"
+              >
+                {copied ? (
+                  <>
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                    Copy link
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
         )}
 
-        {mobilePager}
+        {/* Image posts navigate by swipe on mobile (no bottom buttons) so the
+            photo gets the full screen; video/text keep the labelled buttons. */}
+        {!imageMode && mobilePager}
         {desktopPager}
       </div>
       </div>
