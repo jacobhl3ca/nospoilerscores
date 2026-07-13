@@ -74,10 +74,9 @@ export default function GolfLeaderboard({
   // Four highlight slots, in Jacob's preferred order:
   //   0: official channel video (the "main recap" — labeled "ESPN"
   //      since that's the brand he trusts for the full recap)
-  //   1: walked-fallback-chain result (PGA TOUR → Golf Channel → ESPN
-  //      → generic search), stopping at the first video distinct from
-  //      slot 0. This matches the pre-session-N 2-button behavior that
-  //      Jacob explicitly said returned better videos.
+  //   1: walked curated-channel result (PGA TOUR → Golf Channel → ESPN),
+  //      stopping at the first video distinct from slot 0. This matches the
+  //      pre-session-N 2-button behavior without accepting generic reuploads.
   //   2–3: two more "top videos" pulled from the remaining channels in
   //      the fallback chain + a generic search, deduped against the
   //      earlier slots. Only populate if a distinct video exists.
@@ -313,7 +312,9 @@ export default function GolfLeaderboard({
       // right videoId once it resolves.
       const mainChannel = channelsInOrder[0];
       if (mainChannel) {
-        fetchFirstVideoId(highlightQuery, mainChannel).then((id) => {
+        // strict=1: oembed-verify the uploader is this curated channel, so a
+        // reuploader's "Round N highlights" title can't win a golf slot.
+        fetchFirstVideoId(highlightQuery, mainChannel, undefined, undefined, true).then((id) => {
           if (!id) return;
           seen.add(id);
           setHighlightSlots((prev) => {
@@ -333,10 +334,12 @@ export default function GolfLeaderboard({
 
       // Remaining channels feed slots 1-3 progressively.
       for (let i = 1; i < channelsInOrder.length; i++) {
-        fetchFirstVideoId(highlightQuery, channelsInOrder[i]).then(tryFill);
+        fetchFirstVideoId(highlightQuery, channelsInOrder[i], undefined, undefined, true).then(tryFill);
       }
 
-      // Backfill queries also race in parallel for any open slot.
+      // Backfill queries also race in parallel for any open slot, but still
+      // stay inside the curated channel chain. Unscoped YouTube results can
+      // pick up random reuploaders during majors.
       if (leagueLabel) {
         const backfillQueries = [
           highlightQuery,
@@ -345,7 +348,9 @@ export default function GolfLeaderboard({
           `${leagueLabel} ${highlightYear} R${completedRounds} highlights`,
         ];
         for (const q of backfillQueries) {
-          fetchFirstVideoId(q).then(tryFill);
+          for (const channel of channelsInOrder) {
+            fetchFirstVideoId(q, channel, undefined, undefined, true).then(tryFill);
+          }
         }
       }
     })();

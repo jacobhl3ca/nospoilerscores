@@ -2019,8 +2019,8 @@ async function fetchTheScore(leagueSlug, sectionLabel) {
 // baked ID is what a live client would resolve:
 //   • fifa uses strict channel slots: FIFA short, FOX full, Telemundo variants,
 //     and a "World Cup" competition token in the query;
-//   • MLB uses official MLB channel first, then unscoped short/team recap;
-//   • every other league: 1st = official channel, 2nd = unscoped.
+//   • MLB uses official MLB channel first, then MLB.com on the client;
+//   • every other league: official-channel/broadcaster slots only.
 // The key MUST be `${sport}:${event.id}` — GameHighlights keys off game.sport +
 // game.id, and game.id === event.id for every team-sport card (espn.ts parseGame).
 const HL_OUT_PATH = `${OUT_DIR}/highlights.json`;
@@ -2063,6 +2063,25 @@ const HL_WORLD_CUP_SEEDS = {
 // Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
 const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
+const HL_TELEMUNDO_WORLD_CUP_ALIASES = {
+  Argentina: "Argentina",
+  Australia: "Australia",
+  Belgium: "Bélgica",
+  Brazil: "Brasil",
+  Colombia: "Colombia",
+  Egypt: "Egipto",
+  England: "Inglaterra",
+  France: "Francia",
+  Germany: "Alemania",
+  Morocco: "Marruecos",
+  Netherlands: "Países Bajos",
+  Norway: "Noruega",
+  Paraguay: "Paraguay",
+  Spain: "España",
+  Switzerland: "Suiza",
+  USA: "Estados Unidos",
+};
+const hlTelemundoTeam = (n) => HL_TELEMUNDO_WORLD_CUP_ALIASES[n] ?? hlAlias(n);
 const HL_TENNIS_CHANNELS = [
   [/wimbledon/i, "Wimbledon"],
   [/roland|french open/i, "Roland-Garros"],
@@ -2074,6 +2093,12 @@ function hlQuery(away, home, dateStr, series, competition, dated) {
   let q = competition
     ? (dated ? `${head} ${competition} ${dateStr}` : `${head} ${competition}`)
     : (dated ? `${head} ${dateStr}` : head);
+  if (series) q += ` ${series}`;
+  return q;
+}
+
+function hlTelemundoWorldCupQuery(away, home, dateStr, series) {
+  let q = `${hlTelemundoTeam(away)} vs ${hlTelemundoTeam(home)} resumen Copa Mundial ${dateStr}`;
   if (series) q += ` ${series}`;
   return q;
 }
@@ -2094,6 +2119,26 @@ async function hlFetchId(query, { channel, exclude, preferExtended } = {}) {
   } catch { return null; }
 }
 
+const HL_OEMBED_AUTHOR_CACHE = new Map();
+async function hlIsTelemundoVideo(id) {
+  if (!id) return false;
+  if (HL_OEMBED_AUTHOR_CACHE.has(id)) return HL_OEMBED_AUTHOR_CACHE.get(id);
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(id)}&format=json`, { headers: { "User-Agent": UA } });
+    if (!res.ok) {
+      HL_OEMBED_AUTHOR_CACHE.set(id, false);
+      return false;
+    }
+    const data = await res.json();
+    const ok = String(data?.author_name ?? "").toLowerCase() === "telemundo deportes";
+    HL_OEMBED_AUTHOR_CACHE.set(id, ok);
+    return ok;
+  } catch {
+    HL_OEMBED_AUTHOR_CACHE.set(id, false);
+    return false;
+  }
+}
+
 // The resolveHighlightVideo chain from youtube.ts: channel-scoped dated,
 // unscoped dated, and unscoped undated all raced concurrently; first by
 // priority wins.
@@ -2109,6 +2154,14 @@ async function hlResolve(away, home, dateStr, series, channel, exclude, competit
     hlFetchId(undated, { exclude, preferExtended }),
   ]);
   return chanHit || datedUnscoped || undatedHit;
+}
+
+async function hlResolveTelemundoWorldCup(away, home, dateStr, series, exclude, preferExtended) {
+  return hlFetchId(hlTelemundoWorldCupQuery(away, home, dateStr, series), {
+    channel: "Telemundo Deportes",
+    exclude,
+    preferExtended,
+  });
 }
 
 // ET calendar date as YYYYMMDD (ESPN scoreboard `dates=` param), offset in days.
@@ -2182,11 +2235,15 @@ async function bakeGameHighlights() {
   const games = {};
   const prior = await loadPriorHighlights();
   for (const [k, v] of Object.entries(prior?.games ?? {})) {
-    if (v && (k.startsWith("fifa:") || (now - (v.t ?? 0)) < HL_ENTRY_TTL_MS)) games[k] = v;
+    if (!v) continue;
+    const sportKey = k.split(":")[0];
+    const isTrustedPolicy = v.sourcePolicy === "official-channel" || (sportKey === "mlb" && v.mlbOrder === "official-first");
+    if (!isTrustedPolicy && sportKey !== "mlb") continue;
+    if (k.startsWith("fifa:") || (now - (v.t ?? 0)) < HL_ENTRY_TTL_MS) games[k] = v;
   }
   for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
     const existing = games[k] ?? {};
-    games[k] = { ...existing, ...seed, t: existing.t ?? seed.t };
+    games[k] = { ...existing, ...seed, sourcePolicy: "official-channel", t: existing.t ?? seed.t };
   }
 
   const dates = [hlEtYmd(0), hlEtYmd(-1)];
@@ -2227,9 +2284,9 @@ async function bakeGameHighlights() {
         const isMlb = lg.sport === "mlb";
         const isFifa = lg.sport === "fifa";
         const primaryChannel = item.channel;
-        const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : undefined);
-        const strictPrimaryChannel = isFifa || isMlb;
-        const strictWorldCupChannel = isFifa;
+        const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : primaryChannel);
+        const strictPrimaryChannel = !!primaryChannel;
+        const strictSecondaryChannel = !!secondaryChannel;
         if (!isFifa && !isMlb && prev.official && prev.extended) continue; // both baked already
 
         // 1st button (official/primary) and 2nd button (extended/secondary),
@@ -2245,25 +2302,30 @@ async function bakeGameHighlights() {
         if (!official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictPrimaryChannel);
         let extended = prevExtended ?? null;
         if (!extended) {
-          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictWorldCupChannel);
+          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictSecondaryChannel);
           if (extended && official && extended === official) {
-            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, strictWorldCupChannel);
+            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, strictSecondaryChannel);
           }
         }
         let telemundo = isFifa ? (prev.telemundo ?? null) : null;
+        if (telemundo && (telemundo === official || telemundo === extended)) telemundo = null;
+        if (telemundo && !(await hlIsTelemundoVideo(telemundo))) telemundo = null;
         if (isFifa && !telemundo) {
-          telemundo = await hlResolve(away, home, dateStr, series, "Telemundo Deportes", undefined, competition, false, true);
+          telemundo = await hlResolveTelemundoWorldCup(away, home, dateStr, series);
+          if (telemundo && (telemundo === official || telemundo === extended)) telemundo = null;
+          if (telemundo && !(await hlIsTelemundoVideo(telemundo))) telemundo = null;
         }
         let telemundoExtended = isFifa ? (prev.telemundoExtended ?? null) : null;
-        if (isFifa && !telemundoExtended) {
-          telemundoExtended = await hlResolve(away, home, dateStr, series, "Telemundo Deportes", [telemundo], competition, true, true);
-          if (telemundoExtended && telemundoExtended === telemundo) telemundoExtended = null;
+        if (telemundoExtended && (telemundoExtended === telemundo || telemundoExtended === official || telemundoExtended === extended)) {
+          telemundoExtended = null;
         }
+        if (telemundoExtended && !(await hlIsTelemundoVideo(telemundoExtended))) telemundoExtended = null;
 
         const entry = { t: now };
         if (official) entry.official = official;
         if (extended) entry.extended = extended;
         if (isMlb) entry.mlbOrder = "official-first";
+        if (primaryChannel || secondaryChannel || telemundo || telemundoExtended) entry.sourcePolicy = "official-channel";
         if (telemundo) entry.telemundo = telemundo;
         if (telemundoExtended) entry.telemundoExtended = telemundoExtended;
         if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended) {
