@@ -103,7 +103,14 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     "household"/"threshold"/"stronghold"/"on hold", and in a highlight title the
 //     phrase means nothing but the leading side surviving to win, so it adds
 //     coverage with the same negligible false-positive risk as the verbs above.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
+//     Bare "win" joins the existing winning/winner/wins/won so the British-style
+//     plural-present result framing this WC-heavy app sees constantly ("Spain win
+//     Group L", "England win on penalties", "Argentina win") is caught — a team is
+//     grammatically plural in that usage, so "wins" (the singular) never fired and
+//     the outcome leaked. \bwin\b is boundary-safe: it can't match inside "winter"/
+//     "window"/"twin"/"winger"/"Wings"/"Winnipeg", so the false-positive risk stays
+//     the same negligible level as the verbs above.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
