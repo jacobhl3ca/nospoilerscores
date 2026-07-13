@@ -122,7 +122,17 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     named "Victory", so within the content this filter actually sees it stays on
 //     the same over-hide-is-safe side as the verbs above (a masked title just costs
 //     a tap to reveal; a leaked one breaks the whole promise).
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
+//     "stun|stunned|stunning" join the existing "stuns"/"stunner" for the same
+//     reason bare "win" was added: "stuns" (singular) never fires on the
+//     plural-present upset framing this WC-heavy app sees constantly ("Saudi
+//     Arabia stun Argentina", "England stun France") — a team is grammatically
+//     plural there — and "stunned"/"stunning" ("stunning upset", "stunned by
+//     defeat") slipped past too. Spelled out (not "stun\w*") on purpose: the stem
+//     form would swallow "stunt"/"stunts"/"stuntman", which these forms can't
+//     (\bstun\b/\bstunned\b/\bstunning\b are all whole-word). Bare "stun" is
+//     boundary-safe against "stung"/"stunt". A stun is only ever an upset reveal
+//     in a recap title, so this stays on the same over-hide-is-safe side.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
