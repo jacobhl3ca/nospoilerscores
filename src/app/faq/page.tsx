@@ -18,6 +18,12 @@ export const metadata: Metadata = {
     description: FAQ_DESC,
     url: "https://hidescore.com/faq",
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx and the
+    // World Cup/date/SEO-landing routes. A page's openGraph replaces the parent's
+    // wholesale (Next merges metadata per top-level field, not deep), so without
+    // this the FAQ page emitted no og:locale for social unfurlers (Facebook/
+    // LinkedIn/Slack/iMessage). en_US is the OG-spec format (underscore, not "en").
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — spoiler-free sports scores, frequently asked questions" }],
   },
