@@ -462,6 +462,13 @@ export default function GolfLeaderboard({
                         style={{ color: "var(--text-muted)" }}
                         title={tournament.broadcasts.slice(1).join(", ")}
                         aria-label={`Show ${tournament.broadcasts.length - 1} more network${tournament.broadcasts.length - 1 === 1 ? "" : "s"}`}
+                        // Disclosure control: reveals the hidden network names
+                        // inline. Only ever renders in the collapsed state (the
+                        // expanded branch drops it), so a literal false is
+                        // correct — mirrors the Show Top/All buttons' collapsed
+                        // aria-expanded below so screen readers announce it as
+                        // an expandable toggle, not a bare button.
+                        aria-expanded={false}
                         onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(true); }}
                       >
                         +{tournament.broadcasts.length - 1}
