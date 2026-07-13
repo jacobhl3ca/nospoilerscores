@@ -281,7 +281,7 @@ export default function RootLayout({
         {process.env.NODE_ENV === "production" && (
           <script
             dangerouslySetInnerHTML={{
-              __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}`,
+              __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw-v10.js').catch(function(){})})}`,
             }}
           />
         )}

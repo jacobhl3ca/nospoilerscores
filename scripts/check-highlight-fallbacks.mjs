@@ -4,12 +4,12 @@
 // For every finished game from the past ~36h across the in-season leagues,
 // simulate the exact lookup chain the UI runs (resolveHighlightVideo in
 // src/lib/youtube.ts):
-//   1. channel-filtered query  (the labeled "official" highlight button)
-//   2. unfiltered query
-//   3. unfiltered query without the date suffix
-// If both the official AND the search chains end empty for any game, the UI
-// would hide one or both highlight buttons — that's the inconsistency Jacob
-// wants to know about while the card is still live on the site.
+//   1. channel-filtered query (the labeled "official" highlight button)
+//   2. channel-filtered alternate slot for leagues with official channels
+//      (unscoped only when there is no official channel)
+// If both chains end empty for any game, the UI would hide one or both
+// highlight buttons — that's the inconsistency Jacob wants to know about while
+// the card is still live on the site.
 //
 // Exit 1 (so GitHub Actions emails the repo owner) when any chain misses;
 // the per-game report prints to stdout so the email body shows what to fix.
@@ -147,13 +147,14 @@ async function youtubeLookup(query, channel) {
 
 // Mirrors resolveHighlightVideo() in src/lib/youtube.ts. `gap` spaces out the
 // chained fallback lookups so a single game's cascade can't burst the endpoint.
-async function resolve(away, home, dateStr, channel, gap = 0) {
+async function resolve(away, home, dateStr, channel, gap = 0, strictChannel = !!channel) {
   const a = aliasTeam(away);
   const h = aliasTeam(home);
   const dated = `${a} vs ${h} highlights ${dateStr}`;
   if (channel) {
     const hit = await youtubeLookup(dated, channel);
     if (hit) return { videoId: hit, via: "channel+date" };
+    if (strictChannel) return { videoId: null, via: "channel-exhausted" };
     if (gap) await sleep(gap);
   }
   const unscoped = await youtubeLookup(dated);
@@ -194,7 +195,7 @@ for (const sport of Object.keys(ESPN_PATHS)) {
         ? await resolve(teams.away, teams.home, dateStr, channel, FIRST_PASS_GAP_MS)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(FIRST_PASS_GAP_MS);
-      const search = await resolve(teams.away, teams.home, dateStr, undefined, FIRST_PASS_GAP_MS);
+      const search = await resolve(teams.away, teams.home, dateStr, channel, FIRST_PASS_GAP_MS, !!channel);
       await sleep(FIRST_PASS_GAP_MS);
 
       const row = {
@@ -216,12 +217,6 @@ for (const sport of Object.keys(ESPN_PATHS)) {
       const searchExhausted = !search.videoId;
       if (officialExhausted || searchExhausted) {
         exhausted.push(row);
-      } else if (channel && official.via !== "channel+date") {
-        // Channel-scoped lookup missed; the broader retry caught it.
-        // The button still plays a video so users see no fallback,
-        // but the labeled "official" button isn't returning an official-
-        // channel video — likely a TEAM_NAME_ALIASES gap.
-        aliasNeeded.push(row);
       }
     }
   }
@@ -252,7 +247,7 @@ if (exhausted.length) {
         ? await resolve(row.away, row.home, row.dateStr, row.channelKey, CONFIRM_GAP_MS)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(CONFIRM_GAP_MS);
-      search = await resolve(row.away, row.home, row.dateStr, undefined, CONFIRM_GAP_MS);
+      search = await resolve(row.away, row.home, row.dateStr, row.channelKey, CONFIRM_GAP_MS, !!row.channelKey);
       const officialOk = row.channelKey ? !!official.videoId : true;
       if (officialOk && search.videoId) break; // recovered — stop retrying this game
     }

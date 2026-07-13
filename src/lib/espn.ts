@@ -1302,6 +1302,10 @@ async function fetchWithRetry(url: string, retries = 2, timeoutMs = 10000): Prom
   throw new Error("Fetch failed");
 }
 
+function scoreboardFetchArgs(sport: Sport): [retries: number, timeoutMs: number] {
+  return sport === "tennis" ? [0, 5000] : [2, 10000];
+}
+
 // ESPN gamecast / match URL for a game. Prefers the API-provided recapUrl,
 // falls back to the sport-specific /game/_/gameId/ or /match/_/gameId/ path.
 export function espnGameUrl(game: Game): string {
@@ -2186,7 +2190,9 @@ async function fetchNextGameDayRange(
   url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
   let events: ScoreboardEvent[];
   try {
-    const res = await fetchWithRetry(url.toString());
+    // ESPN's tennis scoreboard payload is large during Slams. Do not let a
+    // ranged tennis lookahead retry for ~30s before admitting there is no slate.
+    const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
     if (!res.ok) return null;
     const data = await res.json();
     events = data?.events ?? [];
@@ -2271,7 +2277,9 @@ async function fetchPreviousGameDayRange(
   url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
   let events: ScoreboardEvent[];
   try {
-    const res = await fetchWithRetry(url.toString());
+    // ESPN's tennis scoreboard payload is large during Slams. Do not let a
+    // ranged tennis lookback retry for ~30s before admitting there is no slate.
+    const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
     if (!res.ok) return null;
     const data = await res.json();
     events = data?.events ?? [];
@@ -2338,7 +2346,10 @@ export async function fetchGames(
   };
   let data: { events?: unknown[] } | null;
   try {
-    const res = await fetchWithRetry(url.toString());
+    // ESPN's tennis scoreboard payload is large during Slams and has been the
+    // slowest selected column. Keep it from holding the whole board skeleton;
+    // a miss still falls back to the last good per-date cache below.
+    const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
     if (!res.ok) return failWithCacheFallback();
     data = await res.json();
   } catch {
