@@ -21,6 +21,9 @@ export const metadata: Metadata = {
     description: "Catch up on World Cup highlights without seeing who won first.",
     url: "https://hidescore.com/worldcup/highlights",
     siteName: "HideScore",
+    // og:locale — matches layout.tsx + the /worldcup hub (Next replaces the
+    // parent openGraph wholesale, so each World Cup route must declare its own).
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore - World Cup highlights without spoilers" }],
   },
