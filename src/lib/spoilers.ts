@@ -159,7 +159,19 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     1970s NHL club, outside current content), so in the titles this filter
 //     actually sees "seal" means nothing but sealing a result, keeping it on the
 //     same over-hide-is-safe side as the verbs above.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
+//     "losing|lose" join the existing "loses"/"lost"/"loss" for the exact same
+//     reason bare "win"/"stun"/"shock" were added on the winning side: the loser
+//     was only covered in the past-tense/singular forms, so the British-style
+//     plural-present/infinitive framing this WC-heavy app sees constantly
+//     ("Argentina lose on penalties", "Spain lose Group L", "England lose to
+//     France") slipped past — a team is grammatically plural there, so "loses"
+//     (the singular) never fired and the outcome leaked. This mirrors the
+//     "winning|...|win" set exactly ("losing" pairs with "winning", "lose" with
+//     "win"). \blose\b/\blosing\b are boundary-safe: they can't match inside
+//     "close"/"closest"/"closer"/"loser"/"enclose", and in a highlight title
+//     "lose" means nothing but a result reveal, so this stays on the same
+//     over-hide-is-safe side as the verbs above.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
