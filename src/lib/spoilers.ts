@@ -110,7 +110,19 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     the outcome leaked. \bwin\b is boundary-safe: it can't match inside "winter"/
 //     "window"/"twin"/"winger"/"Wings"/"Winnipeg", so the false-positive risk stays
 //     the same negligible level as the verbs above.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
+//     "victory|victories|victorious" join the winning/winner/wins/won/win set:
+//     "victory" is one of the most common outcome words in recap/highlight titles
+//     ("Argentina's World Cup victory", "Warriors seal victory", "Spain victorious")
+//     yet — despite the synonym "triumph\w*" already being covered — none of its
+//     forms fired, so the result leaked. Spelled out (not "victor\w*") on purpose:
+//     the stem form would also swallow "Victoria" (the state / a first name), which
+//     these three can't. The one benign collision left is a club literally named
+//     "Victory" — A-League's Melbourne Victory — but that league is outside this
+//     app's soccer scope (MLS + UEFA + World Cup) and no in-scope club or nation is
+//     named "Victory", so within the content this filter actually sees it stays on
+//     the same over-hide-is-safe side as the verbs above (a masked title just costs
+//     a tap to reveal; a leaked one breaks the whole promise).
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
