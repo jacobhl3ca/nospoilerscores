@@ -188,6 +188,16 @@ export default {
       // the 1st button plays — "normal + extended" (Jacob 7/7). Falls back to the
       // standard ordering when no extended video matched, so it's never worse.
       const preferExtended = url.searchParams.get("prefer") === "extended";
+      // strict=1 → hard-gate to the requested channel: the returned video's
+      // actual uploader (author_name, verified via oembed) MUST equal `channel`,
+      // else return null. Used for sports where the matcher would otherwise fall
+      // through to "any title with both names + highlights" and serve a fan
+      // reupload (e.g. tennis Slams / golf majors, whose official channel skips
+      // some matches — a real "Zverev vs Fery … Wimbledon" was served from junk
+      // channel "Sadak Chaps"). Title text lies; channel identity doesn't. Inert
+      // unless the caller sets it, so leagues whose official channel reliably
+      // ranks #1 (MLB/NBA/…) are unaffected and pay no extra oembed round-trip.
+      const strictChannelParam = url.searchParams.get("strict") === "1";
       const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
       const excludeSet = new Set(
         (excludeParam || "").split(",").map((s) => s.trim()).filter(Boolean)
@@ -274,7 +284,17 @@ export default {
         // require the same token in the video title below — the soccer analogue
         // of hasGolfTournament. Every other league's query lacks the token, so
         // this is inert for them.
-        const isWorldCupQuery = /\bworld cup\b/i.test(query);
+        // Match BOTH the English ("world cup", from the FOX/FIFA query) and the
+        // Spanish ("copa mundial", from the Telemundo query) forms. The Spanish
+        // side was previously unmatched, which quietly disabled every WC gate for
+        // Telemundo queries — including the "resumen" highlight-keyword accept
+        // (below) and the channel-scoped rescue (further down). That rescue is
+        // what surfaces the recap when reupload spam / short clips bury the
+        // official upload below page 1; without it a buried Telemundo recap 404s
+        // even though it exists (the exact FOX failure mode Fix 5 solved for the
+        // English side). "copa mundial" appears in no other league's query, so
+        // this is inert for every non-WC sport.
+        const isWorldCupQuery = /\b(world cup|copa mundial)\b/i.test(query);
         // Official WC highlight channels (lowercased ownerText). FOX is the US
         // English rightsholder and posts a full per-match recap; FIFA posts a
         // short neutral highlight cut; Telemundo posts Spanish recaps. Reuploaders ("CJ DRIPSET",
@@ -373,6 +393,7 @@ export default {
           "paraguay": ["paraguay", "paraguay"],
           "colombia": ["colombia", "colombia"],
           "argentina": ["argentina", "argentina"],
+          "spain": ["spain", "españa", "espana"],
         };
 
         // Extract team names from query: "Away vs Home highlights ..."
@@ -956,6 +977,34 @@ export default {
           const allMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
           const firstAllowed = allMatches.find((m) => !excludeSet.has(m[1]));
           videoId = firstAllowed ? firstAllowed[1] : null;
+        }
+        // Channel-identity gate. Telemundo has always been verified this way;
+        // `strict=1` extends the same check to any requested channel (tennis
+        // Slams, golf majors) so a reupload whose title looks official can't
+        // slip through the soft-match fallback tiers. Ground truth = oembed
+        // author_name. On any failure/mismatch, drop to a clean 404.
+        //
+        // Fast path: if the video was picked from a tier that already parsed its
+        // ownerText as the requested channel, we know it's official — skip the
+        // oembed round-trip. Only pay it when the id came from a non-channel
+        // fallback tier (or the raw/rescue paths, where it's not in `videos`) —
+        // i.e. exactly the junk-risk case. Telemundo keeps its always-verify
+        // behavior since its search ownerText parse proved unreliable.
+        if (videoId && preferChannelLower && (strictChannelParam || preferChannelLower === "telemundo deportes")) {
+          const parsed = videos.find((v) => v.videoId === videoId);
+          const parsedChannelMatches = !!parsed && parsed.channel.toLowerCase() === preferChannelLower;
+          const needsOembedVerify = preferChannelLower === "telemundo deportes" || !parsedChannelMatches;
+          if (needsOembedVerify) {
+            try {
+              const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&format=json`);
+              const oembed = oembedRes.ok ? await oembedRes.json() : null;
+              if (String(oembed?.author_name ?? "").toLowerCase() !== preferChannelLower) {
+                videoId = null;
+              }
+            } catch {
+              videoId = null;
+            }
+          }
         }
 
         // World Cup channel-scoped rescue. The unscoped search above ranks by
