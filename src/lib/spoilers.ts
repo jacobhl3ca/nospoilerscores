@@ -39,6 +39,13 @@
 //     headlines ("Spain thrash Georgia", "City thrash United") — a decisive-win
 //     reveal that, like the three above, means nothing but a lopsided defeat in
 //     ordinary English, so it adds coverage with negligible false-positive risk.
+//     "thump\w*" is the same-family blowout verb international soccer recaps lean
+//     on constantly ("Germany thump Scotland 5-1", "England thumped 4-0", "City
+//     thumping United") — a decisive-defeat reveal that slipped past the
+//     thrash/trounce/demolish/topple set despite being just as common. Like them
+//     it means nothing but a lopsided defeat in a sports-title context (no
+//     non-result English word begins with "thump"), so the trailing \w* covers
+//     thump/thumps/thumped/thumping at the same negligible false-positive risk.
 //     "triumph\w*"/"romp\w*" catch the winner-side framing headlines lean on just
 //     as often ("Argentina triumph on penalties", "City romp to victory",
 //     "Australia romp home") — each names the victor, and neither word means
@@ -180,7 +187,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     essentially zero false-positive risk: neither word has any meaning outside a
 //     no-score result, and \b keeps them clear of "goalscorer"/"scoreline"/"scores"
 //     (each of which begins the same but continues past the "less" boundary).
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
