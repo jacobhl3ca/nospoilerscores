@@ -16,6 +16,7 @@ export type BakedHighlight = {
   telemundo?: string;
   telemundoExtended?: string;
   mlbOrder?: "official-first";
+  sourcePolicy?: "official-channel";
 };
 
 // Fetched once per session and shared across every card (one small static

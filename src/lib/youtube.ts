@@ -43,14 +43,22 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // is "PGA Champ" — keys to golf_pgachamp, NOT golf_pga (which never matched,
   // dropping its official channel from the highlight chain). Mirrors the
   // golf_pgachamp key in SECONDARY_CHANNELS below.
+  // Channel names below are the exact YouTube ownerText/author_name (the
+  // worker matches on channel identity, not title text — verified 2026-07-11
+  // via youtube.com/oembed + RSS). A wrong string silently 404s the official
+  // slot and lets a reupload win, so these must match precisely.
   golf_masters: "The Masters",
-  golf_pgachamp: "PGA Championship",
-  golf_usopen: "USGA",
-  golf_theopen: "The Open",
-  // Tennis Grand Slams
+  golf_pgachamp: "PGA Championships",       // plural — channel is "PGA Championships"
+  golf_usopen: "United States Golf Association (USGA)", // NOT "USGA" (that never matched)
+  golf_theopen: "The R&A",                  // The Open is run by The R&A; "The Open" never matched
+  // Tennis Grand Slams — the tournament's own channel is the ONLY reliable
+  // per-match source (ATP Tour / WTA / Tennis TV do NOT carry Slam highlights,
+  // since Slams aren't tour-owned). Verified author_name strings.
   tennis_frenchopen: "Roland-Garros",
   tennis_wimbledon: "Wimbledon",
   tennis_usopen: "US Open Tennis Championships",
+  tennis_ausopen: "Australian Open",        // NOT "Australian Open TV" (silently broke every AO match)
+  tennis_australianopen: "Australian Open",
   // F1 + UFC official channels
   f1: "FORMULA 1",
   ufc: "UFC",
@@ -62,18 +70,20 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // 3 Contest, player-specific clips, and practice rounds during
 // tournament week, which was burying the actual day-end recap.
 //
-// Order matters — slot 0 (the "main recap" button) pulls from the
-// first channel, slot 1 from the second, etc. ESPN first because it
-// reliably posts a full-day recap titled "Round X Highlights" during
-// majors they broadcast; PGA TOUR second because it's the best source
-// for player-specific reels ("Rory McIlroy Round 3 highlights").
-// Golf Channel third for analysis/extended recaps. Sky Sports Golf
-// only used for The Open since R&A licenses there.
+// Order matters — slot 0 (the "main recap" button) pulls from the first
+// channel, slot 1 from the second, etc. Golf Channel is the reliable per-round
+// recap fallback across all four majors ("... Round N | Golf Channel"). ESPN
+// only kept where it actually holds broadcast rights + posts round recaps —
+// the Masters and PGA Championship (Thu/Fri windows). ESPN has NO rights to the
+// US Open (golf) or The Open (those are NBC/Golf Channel/Peacock in the US), so
+// it's dropped there — it was dead-weight fallback. "PGA TOUR" removed from
+// every chain: that channel explicitly excludes major highlights, so it never
+// hit. Sky Sports Golf kept for The Open (UK R&A licensee). (Verified 2026-07-11.)
 const SECONDARY_CHANNELS: Record<string, string[]> = {
-  golf_masters: ["ESPN", "PGA TOUR", "Golf Channel"],
-  golf_pgachamp: ["ESPN", "PGA TOUR", "Golf Channel"],
-  golf_usopen: ["ESPN", "PGA TOUR", "Golf Channel"],
-  golf_theopen: ["ESPN", "Sky Sports Golf", "Golf Channel"],
+  golf_masters: ["Golf Channel", "ESPN"],
+  golf_pgachamp: ["Golf Channel", "ESPN"],
+  golf_usopen: ["Golf Channel"],
+  golf_theopen: ["Golf Channel", "Sky Sports Golf"],
   f1: ["FORMULA 1", "ESPN", "Sky Sports F1"],
   ufc: ["UFC", "ESPN"],
 };
@@ -189,13 +199,17 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
     const excludeIds = (exclude ?? []).filter((id): id is string => !!id);
     if (excludeIds.length) url += `&exclude=${encodeURIComponent(excludeIds.join(","))}`;
     if (preferExtended) url += `&prefer=extended`;
+    // strict=1 tells the worker to oembed-verify the result's uploader equals
+    // `channel` (drops title-only reupload matches). Only meaningful with a
+    // channel; harmless otherwise.
+    if (strict && channel) url += `&strict=1`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -203,6 +217,52 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
   } catch {
     return null;
   }
+}
+
+const TELEMUNDO_WORLD_CUP_TEAM_ALIASES: Record<string, string> = {
+  Argentina: "Argentina",
+  Australia: "Australia",
+  Belgium: "Bélgica",
+  Brazil: "Brasil",
+  Colombia: "Colombia",
+  Egypt: "Egipto",
+  England: "Inglaterra",
+  France: "Francia",
+  Germany: "Alemania",
+  Morocco: "Marruecos",
+  Netherlands: "Países Bajos",
+  Norway: "Noruega",
+  Paraguay: "Paraguay",
+  Spain: "España",
+  Switzerland: "Suiza",
+  USA: "Estados Unidos",
+};
+
+function telemundoWorldCupTeam(name: string): string {
+  return TELEMUNDO_WORLD_CUP_TEAM_ALIASES[name] ?? aliasTeam(name);
+}
+
+function buildTelemundoWorldCupQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
+  const head = `${telemundoWorldCupTeam(awayTeam)} vs ${telemundoWorldCupTeam(homeTeam)} resumen Copa Mundial`;
+  const parts = [`${head} ${dateStr}`];
+  if (seriesNote) parts.push(seriesNote);
+  return parts.join(" ");
+}
+
+export async function resolveTelemundoWorldCupVideo(
+  awayTeam: string,
+  homeTeam: string,
+  dateStr: string,
+  seriesNote: string | null | undefined,
+  exclude?: (string | null | undefined)[],
+  preferExtended?: boolean,
+): Promise<string | null> {
+  return fetchFirstVideoId(
+    buildTelemundoWorldCupQuery(awayTeam, homeTeam, dateStr, seriesNote),
+    "Telemundo Deportes",
+    exclude,
+    preferExtended,
+  );
 }
 
 // Walks the lookup chain so a highlight button never has to fall back to
@@ -228,7 +288,10 @@ export async function resolveHighlightVideo(
   const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   const undated = buildUndatedQuery(awayTeam, homeTeam, seriesNote, competition);
   if (strictChannel && channel) {
-    return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended);
+    // Hard channel gate (strict=1): the official channel is authoritative — if
+    // it hasn't posted this match, 404 rather than let a reupload win. This is
+    // what stops junk like "Sadak Chaps" from taking a tennis/golf slot.
+    return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true);
   }
   // Fire every fallback tier CONCURRENTLY instead of awaiting them in series.
   // Each /api/youtube call is a live YouTube scrape (~1-2s); walking

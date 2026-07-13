@@ -203,14 +203,11 @@ function formatTime(t: string | null | undefined): string {
   return (t ?? "").replace(/(\d)\s+([AP]M)\b/i, "$1$2");
 }
 
-// Expand the short weekday ("Thu") to the full name ("Thursday") for desktop,
-// where there's room (Jacob 6/9). Non-weekday labels ("Tomorrow") pass through.
-const DOW_FULL: Record<string, string> = {
-  Sun: "Sunday", Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday",
-  Thu: "Thursday", Fri: "Friday", Sat: "Saturday",
-};
-function expandDow(s: string): string {
-  return DOW_FULL[s] ?? s;
+// Keep upcoming-card weekday labels compact at every breakpoint. The row also
+// carries date/time plus a pinned-right network, and full names like "Thursday"
+// can force the network onto a second line in single-column cards.
+function displayDow(s: string): string {
+  return s;
 }
 
 // once, on the full lead card, instead of repeating down every row.
@@ -306,7 +303,7 @@ export function CompactUpcomingCard({
           before the dash. Network pinned right (Jacob 6/9). */}
       <div className="hidden sm:flex items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
         <span className="whitespace-nowrap">
-          {expandDow((nextGameDate || "").split(" ")[0])}
+          {displayDow((nextGameDate || "").split(" ")[0])}
           {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${formatTime(localTime)}` : ""}
         </span>
         {networkNode ? <span className="ml-auto whitespace-nowrap">{networkNode}</span> : null}
@@ -676,7 +673,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // Desktop: "Thu 6/11 - 7:00 PM"; mobile drops the M/D and
                   // shortens the time ("Thu 7 PM") (Jacob 6/9).
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? <><span className="sm:hidden">Tomo</span><span className="hidden sm:inline">Tomorrow</span></> : <><span className="sm:hidden">{(nextGameDate || "").split(" ")[0]}</span><span className="hidden sm:inline">{expandDow((nextGameDate || "").split(" ")[0])}</span></>}</span>
+                    <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? <><span className="sm:hidden">Tomo</span><span className="hidden sm:inline">Tomorrow</span></> : <><span className="sm:hidden">{(nextGameDate || "").split(" ")[0]}</span><span className="hidden sm:inline">{displayDow((nextGameDate || "").split(" ")[0])}</span></>}</span>
                     <span className="hidden sm:inline">{(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${formatTime(localTime)}` : ""}</span>
                     <span className="sm:hidden">{localTime ? ` ${formatTime(localTime)}` : ""}</span>
                   </span>

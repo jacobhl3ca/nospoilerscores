@@ -322,6 +322,25 @@ function ArticleMeta({ byline, published, className, style }: {
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Horizontal swipe on the image lightbox → prev/next post (mobile parity with
+  // the bottom Prev/Next buttons and the desktop ← → keys).
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
+  const onSwipeStart = (e: React.TouchEvent) => {
+    swipeRef.current = e.touches.length === 1
+      ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+      : null;
+  };
+  const onSwipeEnd = (e: React.TouchEvent) => {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    // Decisive horizontal flick only — ignore taps and vertical scrolls.
+    if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0) onNext?.(); else onPrev?.();
+  };
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [currentId, setCurrentId] = useState(videoId);
@@ -1137,8 +1156,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // dvh tracks the real viewport under mobile browser chrome; the reserve grows
   // when the pager is present. This replaces the old per-mode 78vh/85vh/168px
   // caps that left too little room on short windows and clipped the footer.
+  // imageMode no longer has a Close row above the media (Close overlays the
+  // image), but its headline can wrap to 2+ lines and sits above the byline +
+  // Copy-link row + the pager — so reserve enough below that the footer never
+  // clips off the bottom edge (Jacob 7/11). A touch more when a pager is present.
   const mediaMaxH = imageMode
-    ? (hasPager ? "min(84vh, 100dvh - 11rem)" : "min(90vh, 100dvh - 7rem)")
+    ? (hasPager ? "min(80vh, 100dvh - 13rem)" : "min(88vh, 100dvh - 8rem)")
     : (hasPager ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)");
   const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
@@ -1207,7 +1230,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           pager. The bottom reserve keeps that footer clear of the pager band
           (Jacob 7/4). No reservation when there's no pager (e.g. highlights). */}
       <div
-        className={`relative flex min-h-full items-center justify-center p-4 sm:p-8${hasPager ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)]" : ""}`}
+        // Wider side padding on desktop when a pager is present so the fixed
+        // left/right chevrons sit in a gutter beside the media instead of on top
+        // of it (Jacob 7/11). Mobile keeps its bottom Prev/Next buttons, so no
+        // side gutter needed there.
+        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "sm:px-20 sm:py-8" : "sm:p-8"}${hasPager ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)]" : ""}`}
       >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
@@ -1245,10 +1272,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
         {/* Player area — image lightbox (no aspect lock), YouTube (custom
             chrome), or 16:9 video for HLS/embed */}
-        {!ytMode && !textMode && (
+        {/* imageMode's Close sits ON the image's top-right corner instead of in
+            this row (see below), so it hugs the actual content for any aspect. */}
+        {!ytMode && !textMode && !imageMode && (
           <div
             className="mx-auto mb-2 flex items-center justify-end gap-1.5"
-            style={{ width: imageMode ? "100%" : mediaFrameWidth }}
+            style={{ width: mediaFrameWidth }}
             onClick={(e) => e.stopPropagation()}
           >
             {hlsMode && hasCaptionTrack && (
@@ -1281,17 +1310,39 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           </div>
         )}
         {imageMode ? (
-          <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black flex items-center justify-center" style={{ height: mediaMaxH, maxHeight: mediaMaxH }}>
+          // Container hugs the rendered image (w-fit) so the Close button and the
+          // rounded frame sit on the ACTUAL content edges for any aspect ratio —
+          // no black margin between the chrome and a portrait/landscape photo.
+          <div
+            ref={containerRef}
+            className="relative mx-auto w-fit max-w-full rounded-lg overflow-hidden bg-black"
+            style={{ maxHeight: mediaMaxH }}
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={onSwipeStart}
+            onTouchEnd={onSwipeEnd}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={proxyImage(imageUrl!)}
               alt=""
               decoding="async"
-              className="w-full h-full object-contain"
+              className="block max-w-full object-contain"
               style={{ maxHeight: mediaMaxH }}
               draggable={false}
               onError={() => setImgFailed(true)}
             />
+            {/* Close pinned to the image's own top-right corner. */}
+            <button
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              className="absolute top-2 right-2 z-10 w-8 h-8 flex items-center justify-center rounded-full text-white/80 hover:text-white bg-black/50 hover:bg-black/70 border border-white/20 transition-colors cursor-pointer"
+              aria-label="Close"
+              title="Close (Esc)"
+            >
+              <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           </div>
         ) : textMode ? (
           // Text-post preview card — Reddit headline-only posts (or any item
