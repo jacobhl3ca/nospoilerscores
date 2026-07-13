@@ -379,6 +379,8 @@ export default function HomeContent({
   // focus-management effect below so keyboard/SR users land inside the overlay.
   const ratingsExplainerRef = useRef<HTMLDivElement>(null);
   const newsExplainerRef = useRef<HTMLDivElement>(null);
+  // Same, for the first-run league picker — see its Escape/scroll-lock/focus effect.
+  const leaguePickerRef = useRef<HTMLDivElement>(null);
   // Escape closes the ratings/news explainer warnings, matching their existing
   // backdrop-tap dismissal and the rest of the app's modals (GameDetailModal,
   // VideoModal, WorldCupGroupsModal all close on Escape). This effect also seats
@@ -1156,12 +1158,44 @@ export default function HomeContent({
   // Escape closes the first-run league picker too — same as tapping its
   // backdrop (both fall back to default leagues). Brings it in line with the
   // ratings/news explainers and every other modal in the app, which all
-  // dismiss on Escape.
+  // dismiss on Escape. This effect also locks body scroll and seats focus into
+  // the dialog while it's open — the same treatment the ratings/news explainers
+  // (and every other modal) already get, which this first-run picker was the
+  // last overlay still missing (it had role="dialog"/aria-modal + Escape but
+  // never pinned the feed behind it or moved focus off the trigger).
   useEffect(() => {
     if (!showLeaguePicker) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") skipLeaguePicker(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Lock body scroll (position:fixed + negative top pins iOS WebKit too, where
+    // plain overflow:hidden leaks the feed behind the overlay); restore returns
+    // you exactly where you were.
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prevBody = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    // Focus management (WCAG 2.4.3): move focus into the dialog (the tabIndex=-1
+    // container, so no ring shows for mouse users) and restore it to the opener
+    // on close.
+    const opener = document.activeElement as HTMLElement | null;
+    leaguePickerRef.current?.focus();
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      body.style.overflow = prevBody.overflow;
+      body.style.position = prevBody.position;
+      body.style.top = prevBody.top;
+      body.style.width = prevBody.width;
+      window.scrollTo(0, scrollY);
+      opener?.focus?.();
+    };
   }, [showLeaguePicker, skipLeaguePicker]);
 
   // Homepage switcher options = the active leagues minus the ones the user
@@ -3015,11 +3049,16 @@ export default function HomeContent({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={skipLeaguePicker}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            ref={leaguePickerRef}
+            // tabIndex=-1 makes the container programmatically focusable (see the
+            // focus-management effect) without joining the tab order; outline
+            // none suppresses the ring since it's focused only to seat SR focus.
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="league-picker-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
