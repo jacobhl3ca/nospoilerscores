@@ -37,6 +37,12 @@ export const metadata: Metadata = {
     description: SITE_DESC,
     url: "https://hidescore.com",
     siteName: "HideScore",
+    // The one locale signal the Open Graph block was missing — the site already
+    // declares its language everywhere else (<html lang="en">, and inLanguage on
+    // every JSON-LD node). og:locale lets social unfurlers (Facebook, LinkedIn,
+    // Slack, iMessage) render a locale-appropriate preview for the homepage, the
+    // canonical share target. en_US is the OG-spec format (underscore, not "en").
+    locale: "en_US",
     type: "website",
     images: [
       {
