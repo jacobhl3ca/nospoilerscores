@@ -190,8 +190,15 @@ export default function GameHighlights({
           (async () => {
             const telemundoShortId = await telemundoShortP;
             let telemundoLongId = await telemundoLongP;
-            if (telemundoLongId && telemundoShortId && telemundoLongId === telemundoShortId) {
-              telemundoLongId = await resolveTelemundoWorldCupVideo(away, home, dateStr, series, [telemundoShortId], true);
+            // If the extended resolve returned the SAME clip as the short, there
+            // is no distinct "Resumen Extendido" for this game yet — hide the 2nd
+            // Telemundo button. Do NOT re-search with the short excluded: that
+            // could surface a DIFFERENT game's recap (observed: Switzerland-
+            // Argentina's exclude-retry returned England-Norway's clip). The
+            // prefer=extended query already returns the true extended cut when one
+            // exists, so a collision means there simply isn't one.
+            if (telemundoLongId && telemundoLongId === telemundoShortId) {
+              telemundoLongId = null;
             }
             prefetchedTelemundoShortId.current = telemundoShortId;
             prefetchedTelemundoLongId.current = telemundoLongId;
