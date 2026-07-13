@@ -72,6 +72,13 @@ export default function FeedbackBox() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Feedback"
+            // The form submits on Enter, so label the mobile keyboard's return
+            // key "Send" to match. autoComplete off keeps the browser's name/
+            // email autofill dropdown from covering this tiny footer field
+            // (autocorrect/autocapitalize stay on — feedback is free prose, not
+            // a team-name filter). No behavior change on desktop.
+            enterKeyHint="send"
+            autoComplete="off"
             className="w-36 text-xs px-2 py-1 leading-none rounded outline-none"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />
