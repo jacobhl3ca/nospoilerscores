@@ -434,6 +434,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
             {groups && view !== "bracket" ? (
               <>
                 <input
+                  id="wc-country-filter"
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
