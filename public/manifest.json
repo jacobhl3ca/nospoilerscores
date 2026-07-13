@@ -40,6 +40,13 @@
   ],
   "shortcuts": [
     {
+      "name": "Yesterday",
+      "short_name": "Yesterday",
+      "description": "Yesterday's completed games",
+      "url": "/yesterday",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
       "name": "Today",
       "short_name": "Today",
       "description": "Today's games",
