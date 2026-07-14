@@ -344,7 +344,18 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     "time" never matches. The two-letter "OT" abbreviation is deliberately NOT added — it
 //     collides too easily — but titles that spell out "overtime" are caught, the
 //     over-hide-is-safe side the verbs above already err to. Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+//     "sinks?"/"sank" catch the "late goal sinks X" defeat-reveal that soccer/NBA/NHL/MLB recap
+//     titles lean on across every sport ("Rodri sinks Arsenal", "Late Kane goal sinks Poland",
+//     "Buzzer-beater sinks Lakers", "Walk-off sank the Yankees") — a distinct winner/loser reveal
+//     the existing verbs miss (nothing covered "sink"), and one that in a per-match highlight title
+//     means nothing but the named side losing. Spelled out (sink/sinks/sank, not "sink\w*") on
+//     purpose: the stem form would swallow the baseball pitch "sinker" ("nasty sinker from deGrom"
+//     reveals no result) and "sinking feeling", which these whole-word forms can't. \bsinks?\b/\bsank\b
+//     are boundary-safe — they can't match inside a longer word — and no in-scope club or nation is
+//     named "Sink"/"Sank", so the only benign collision left (the idiom "throw the kitchen sink at")
+//     is rare in the per-match highlight titles this filter actually sees and errs to the same
+//     over-hide-is-safe side as the verbs above. Byte-identical to the worker's copy.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
