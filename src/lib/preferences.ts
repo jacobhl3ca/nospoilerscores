@@ -271,6 +271,11 @@ export interface Preferences {
   // inline images + blurred top comments). Toggled by the Cards/Feed pill in the
   // news header.
   newsFeedView?: boolean;
+  // News "Videos" quick filter: true = show only video posts/highlights. In Cards
+  // it narrows to the video sources; in Feed it filters to posts that carry a
+  // video. Toggled by the 🎥 Videos pill in the news header. Overrides the funnel
+  // type filter while on.
+  newsVideosOnly?: boolean;
 }
 
 const defaults: Preferences = {
