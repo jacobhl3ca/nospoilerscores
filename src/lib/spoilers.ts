@@ -103,6 +103,16 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     outscored Italy"). No non-result English word begins with "outscor", so it
 //     adds coverage with the same negligible false-positive risk as its siblings.
 //     The trailing \w* covers outscore/outscores/outscored/outscoring.
+//     "surviv\w*" catches the endure-to-advance framing this WC-heavy app sees
+//     constantly ("Argentina survive on penalties", "Real Madrid survive a scare",
+//     "Spain surviving late pressure to reach the final") — a distinct result reveal
+//     its semantic sibling "outlast\w*"/"prevail\w*" miss, and one that in a per-match
+//     highlight title means nothing but the named side getting through (won / advanced /
+//     stayed up). No in-scope club or nation is named anything beginning with "surviv",
+//     and even the non-verb forms are result-adjacent in sports ("relegation survival"
+//     reveals a team stayed up, a "survivor" is the side still standing), so the trailing
+//     \w* covers survive/survives/survived/surviving/survival/survivor at the same
+//     negligible false-positive risk as the outXXX verbs above.
 //     "overpower\w*"/"outgun\w*" catch two more decisive-win verbs headlines
 //     lean on ("Spain overpower Italy", "Bills outgun Chiefs", "Warriors outgun
 //     Suns") — each names the winner of a lopsided or high-scoring contest, and
@@ -229,7 +239,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     closing \b keeps it clear of "own goalkeeper" (the "l" of "goal" runs into "keeper",
 //     so no boundary follows) — the metaphorical "political own goal" never appears in the
 //     per-match highlight titles this filter actually sees.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {

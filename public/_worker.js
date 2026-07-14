@@ -706,6 +706,11 @@ export default {
           //     adds the most literal winner-reveal of the family — whoever
           //     outscores the other side won ("Warriors outscore Lakers", "Spain
           //     outscored Italy") — and no non-result word begins with "outscor".
+          //     "surviv\w*" adds the endure-to-advance framing ("Argentina survive on
+          //     penalties", "Real Madrid survive a scare") — a result reveal its siblings
+          //     outlast/prevail miss, meaning nothing but the named side getting through in
+          //     a per-match highlight title; no in-scope club/nation begins with "surviv"
+          //     and even survival/survivor are result-adjacent in sports.
           //     Kept byte-identical to spoilers.ts.
           //     "holds?[- ]?off"/"held[- ]?off" catch the protect-the-lead win
           //     framing ("Warriors hold off Lakers", "Bills held off Chiefs") —
@@ -730,7 +735,7 @@ export default {
           //     of crown/brown/known/thrown, and the closing \b clear of "own goalkeeper".
           //     Byte-identical to spoilers.ts.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks
