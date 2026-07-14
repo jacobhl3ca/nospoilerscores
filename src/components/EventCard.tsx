@@ -4,6 +4,7 @@ import { useState } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
 import { getTimeZone } from "@/lib/etDay";
+import { openExternal } from "@/lib/openExternal";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
 // bout). Never shows results (finishing order / fight outcome). Highlights
@@ -44,12 +45,19 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const play = async (id: string, query: string, channel?: string) => {
     const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    if (!onPlayHighlight) { window.open(fallback, "_blank", "noopener,noreferrer"); return; }
+    // Route the YouTube-search fallback through openExternal (not raw
+    // window.open) so it behaves like every other external YouTube open in the
+    // app: on the website it's byte-identical (openExternal does the same
+    // window.open there), but inside the Capacitor native wrapper it hands the
+    // /results URL off to the YouTube app via the youtube:// scheme (falling
+    // back to the in-app browser) instead of shelling out to mobile Safari and
+    // missing the handoff — matching GameHighlights' openExternal fallbacks.
+    if (!onPlayHighlight) { openExternal(fallback); return; }
     setLoadingId(id);
     const videoId = await fetchFirstVideoId(query, channel);
     setLoadingId(null);
     if (videoId) onPlayHighlight(videoId, fallback);
-    else window.open(fallback, "_blank", "noopener,noreferrer");
+    else openExternal(fallback);
   };
   return { loadingId, play };
 }
@@ -190,7 +198,19 @@ export default function EventCard({
   const fullWhen = (() => {
     const d = new Date(event.date);
     if (isNaN(d.getTime())) return "";
-    return d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
+    const tz = getTimeZone();
+    // Drop the time for a midnight (TBD) placeholder date, matching whenLabel
+    // above and the game cards: an upcoming race whose session time ESPN hasn't
+    // set yet arrives as 00:00, and rendering it as "12:00 AM" reads as a real
+    // (wrong) start time. Detect it in the SAME zone the time is shown in (tz);
+    // "24:00" guards the value some ICU builds emit for midnight (same guard as
+    // whenLabel / weather.ts / etDay.ts / DateNav.ts). Real times still show.
+    const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+    const midnight = hm === "00:00" || hm === "24:00";
+    const opts: Intl.DateTimeFormatOptions = midnight
+      ? { weekday: "short", month: "short", day: "numeric", timeZone: tz }
+      : { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: tz };
+    return d.toLocaleString("en-US", opts);
   })();
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
 

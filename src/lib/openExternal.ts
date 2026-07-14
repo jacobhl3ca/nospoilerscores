@@ -51,7 +51,7 @@ const isCapacitorNative = (): boolean => {
 // Map a youtube.com / youtu.be web URL to its `youtube://` app-scheme
 // equivalent so @capacitor/app-launcher can hand off to the native app.
 // Covers video links (youtube.com/watch?v=ID, youtu.be/ID, /shorts/ID,
-// m.youtube.com/*) and search-results pages (youtube.com/results?
+// /live/ID, m.youtube.com/*) and search-results pages (youtube.com/results?
 // search_query=Q). Returns null for any non-YouTube or unrecognized URL.
 function youTubeAppUrl(url: string): string | null {
   try {
@@ -68,6 +68,12 @@ function youTubeAppUrl(url: string): string | null {
     }
     const shortsMatch = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{11})/);
     if (shortsMatch) return `youtube://watch?v=${shortsMatch[1]}`;
+    // /live/ID is YouTube's URL for livestreams & premieres; the ID is a
+    // regular video id the app opens via its watch endpoint. A Reddit/ESPN
+    // item linking to a YouTube live URL otherwise missed the app handoff and
+    // landed in the in-app browser. Mirrors the /shorts/ case above.
+    const liveMatch = u.pathname.match(/^\/live\/([a-zA-Z0-9_-]{11})/);
+    if (liveMatch) return `youtube://watch?v=${liveMatch[1]}`;
     if (u.pathname === "/results") {
       const q = u.searchParams.get("search_query") || "";
       return q ? `youtube://results?search_query=${encodeURIComponent(q)}` : null;

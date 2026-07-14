@@ -91,7 +91,15 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
       }}
     >
       {sources.map((source, colIdx) => {
-        const items = colItems[colIdx];
+        // `colItems` is sized once from the initial `sources.length` (useState
+        // initializer above) and the refetch effect only assigns `next[idx]` —
+        // it never grows the array. So when a video column is added while this
+        // strip stays mounted (its key only changes on a news refresh), the new
+        // colIdx reads `undefined` until its fetch resolves. Normalize that to
+        // `null` so the `=== null` "still loading" guards below (skeleton, pad
+        // count) catch it too — otherwise `items.slice(...)` runs on `undefined`
+        // and throws, crashing the news view for that render.
+        const items = colItems[colIdx] ?? null;
         const isTailCol = tailHasItems && colIdx === tailColIdx;
         const capped = isTailCol
           ? Math.min(items?.length || 0, Math.max(0, maxItems - TAIL_RESERVE_ROWS))

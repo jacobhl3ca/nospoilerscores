@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather, fetchGameWeather, type GameWeather } from "@/lib/weather";
@@ -136,8 +136,16 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
     return { full: q, short: q };
   }
   if (sport === "nhl") {
-    const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : `${period - 3}OT`;
-    if (clock && clock !== "0.0") return { full: `${p} - ${clock}`, short: p };
+    // Regulation is P1–P3, then a single overtime (period 4). In the REGULAR
+    // season a still-tied game goes to a SHOOTOUT (period 5) — not a 2nd OT.
+    // Multiple overtimes only exist in the playoffs (periods 5, 6, … = 2OT,
+    // 3OT, …), which in turn never have a shootout. So period 5 is ambiguous by
+    // number alone; disambiguate with isPlayoff. Without this a regular-season
+    // shootout rendered "2OT", a period that can't occur outside the playoffs.
+    const shootout = period >= 5 && !game.isPlayoff;
+    const p = period <= 3 ? `P${period}` : period === 4 ? "OT" : shootout ? "SO" : `${period - 3}OT`;
+    // A shootout has no running clock, so skip the "- 0:00" tail and just show "SO".
+    if (!shootout && clock && clock !== "0.0") return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
   if (sport === "nfl") {
@@ -380,18 +388,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const teamViewDateLabel = teamView ? (() => {
     const d = new Date(game.date);
     if (isNaN(d.getTime())) return "";
-    // Bucket the game by the app's effective-zone calendar day — the same basis
-    // the scoreboard + date nav use (getDateString). Device-local bucketing broke
-    // under UTC render contexts: a 9pm-ET game is past midnight UTC, so it
-    // rolled into the next day and mislabeled (two "Yesterday" cards for games
-    // played on different days).
-    const etYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(d);
-    // getDateString returns "YYYYMMDD" (no separators); etYmd is "YYYY-MM-DD".
-    // Strip non-digits so both parse regardless of format.
+    // Bucket the game to its ET slate day the SAME way getDateString(0) derives
+    // "today" — via etSlateYmd's 1 AM rollover (getEtServiceDate) — so both sides
+    // of the diff use one day boundary. A raw ET calendar day (the old code) has
+    // no rollover, so a game kicking off between midnight and 1 AM ET (a ~9pm-PT
+    // West-Coast game) landed on the LATER day here while the board + date nav
+    // filed it under yesterday's slate — mislabeling it "Today" (Jacob 7/8).
+    // etSlateYmd also keeps the effective-zone bucketing that fixed the old
+    // UTC-day mislabel. Matches TeamView.gameIsToday's identical bucketing.
     const toNum = (ymd: string) => { const s = ymd.replace(/\D/g, ""); return Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)) / 86400000; };
-    const diffDays = toNum(etYmd) - toNum(getDateString(0));
+    const diffDays = toNum(etSlateYmd(game.date)) - toNum(getDateString(0));
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Tomorrow";
     if (diffDays === -1) return "Yesterday";
@@ -450,15 +456,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
     isPlaceholderName(game.homeTeam.abbreviation);
   const gameProgress = isLive ? formatGameProgress(game) : null;
 
-  const star = (teamId: string, isFav: boolean, isTBD: boolean) =>
+  // Both team rows render this identical ★, so a bare "Add to favorites" name
+  // gave a screen reader two indistinguishable buttons per card — no way to tell
+  // which team each one favorites. Fold the team name into the accessible name
+  // (and the hover title) so each star reads "Add Boston Celtics to favorites",
+  // matching the team-specific naming the schedule button beside it already uses.
+  const star = (teamId: string, teamName: string, isFav: boolean, isTBD: boolean) =>
     !isTBD ? (
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onToggleFavoriteTeam(teamId); }}
         className={`text-xs sm:text-sm leading-none transition-colors cursor-pointer ${isFav ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
         style={isFav ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}
-        title={isFav ? "Remove from favorites" : "Add to favorites"}
-        aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
+        title={isFav ? `Remove ${teamName} from favorites` : `Add ${teamName} to favorites`}
+        aria-label={isFav ? `Remove ${teamName} from favorites` : `Add ${teamName} to favorites`}
         aria-pressed={isFav}
       >★</button>
     ) : null;
@@ -776,9 +787,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                       // The "+N" is hidden on mobile (sm:inline), so the visible
                       // label is just the lead network — announce the popup and
                       // its open/closed state to screen readers, matching the
-                      // aria-haspopup/aria-expanded pattern on LeagueColumn's
-                      // league-switch button.
-                      aria-haspopup="true"
+                      // aria-haspopup="dialog"/aria-expanded pattern every other
+                      // popover toggle in the app uses (LeagueColumn's league-
+                      // switch, NewsColumn's swap, HomeContent's filter). "dialog"
+                      // (not the bare "true", which announces a menu that isn't
+                      // there) matches the role="dialog" overlay it opens below.
+                      aria-haspopup="dialog"
                       aria-expanded={broadcastExpanded}
                       onClick={(e) => { e.stopPropagation(); setBroadcastExpanded((v) => !v); }}
                     >
@@ -802,6 +816,13 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       {broadcastExpanded && game.broadcasts.length > 1 && (
         <div
           ref={broadcastOverlayRef}
+          // The toggle above declares aria-haspopup="dialog" + aria-expanded, so
+          // give the popover it opens a matching role + accessible name —
+          // otherwise it surfaces to assistive tech as an anonymous, role-less
+          // region. Same role="dialog" + aria-label pattern the rest of the app's
+          // popovers use (LeagueColumn/NewsColumn league swap, the calendar).
+          role="dialog"
+          aria-label="Where to watch"
           className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 rounded-md px-1.5 py-1 max-w-[65%] shadow-md"
           style={{ background: "var(--bg)", border: "1px solid var(--border-hover)" }}
           onClick={(e) => e.stopPropagation()}
@@ -928,7 +949,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             {/* Favorite-star: removed 2026-05-31, restored behind the Settings
                 toggle 2026-06-11 (Jacob) — favoriting also lives in the
                 team-schedule view + the Settings team picker. */}
-            {showStars ? star(team.id, favoriteTeams.includes(team.id), isTBD) : null}
+            {showStars ? star(team.id, team.displayName, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
             {!isTBD && team.record && !effectivePastDate && !isFinished && !isFuture ? (
               <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -746,8 +746,15 @@ export default function LeagueColumn({
     };
   }, [swapOpen]);
 
-  // Measure whether full names would fit in the available column width
-  const checkIfFullNamesFit = () => {
+  // Measure whether full names would fit in the available column width.
+  // Memoized so the two effects below can depend on it directly (fixing the
+  // exhaustive-deps warning) instead of a hand-maintained `[league.games]` dep.
+  // That old dep list also missed a case: the measurement reads the lookahead
+  // (nextGameDay) and lookback (previousGameDay) slates too, so if only one of
+  // those changed — e.g. a past tab that's empty today gains a lookback game —
+  // abbreviations wouldn't recompute. Keying on all four fields the body reads
+  // closes that gap.
+  const checkIfFullNamesFit = useCallback(() => {
     const el = columnRef.current;
     if (!el) return;
     requestAnimationFrame(() => {
@@ -810,12 +817,12 @@ export default function LeagueColumn({
 
       setUseAbbreviations(longestWidth > availableWidth);
     });
-  };
+  }, [league.games, league.nextGameDay, league.previousGameDay, league.sport]);
 
-  // Re-check when games change
+  // Re-check when the rendered games change
   useEffect(() => {
     checkIfFullNamesFit();
-  }, [league.games]);
+  }, [checkIfFullNamesFit]);
 
   // Re-check on resize
   useEffect(() => {
@@ -824,7 +831,7 @@ export default function LeagueColumn({
     const ro = new ResizeObserver(() => checkIfFullNamesFit());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [league.games]);
+  }, [checkIfFullNamesFit]);
 
   const topMatchups = sortByMatchups ?? false;
 
@@ -843,7 +850,19 @@ export default function LeagueColumn({
     const match = record.match(/^(\d+)/);
     return match ? parseInt(match[1], 10) : 0;
   };
+  // ESPN formats soccer records as W-D-L (wins-draws-losses), e.g. "12-5-8", so
+  // the losses are the THIRD segment. Every other sport is W-L, or W-L-T like
+  // the NFL where the second segment is still losses — there the first "-N" is
+  // right. Grabbing the second segment for soccer would read DRAWS as losses
+  // and mis-flag a winning side (e.g. 8W-9D-4L → 8 vs 9 → "not winning"),
+  // demoting a genuinely strong upcoming matchup in the top-matchups sort.
+  const SOCCER_SPORTS = new Set<Sport>(["fifa", "epl", "mls", "ucl", "uel"]);
   const getLosses = (record: string): number => {
+    const parts = record.split("-");
+    if (SOCCER_SPORTS.has(league.sport) && parts.length === 3) {
+      const n = parseInt(parts[2], 10);
+      return Number.isFinite(n) ? n : 0;
+    }
     const match = record.match(/-(\d+)/);
     return match ? parseInt(match[1], 10) : 0;
   };
@@ -994,6 +1013,11 @@ export default function LeagueColumn({
           <button
             type="button"
             onClick={() => setCondenseExpanded((v) => !v)}
+            // Disclosure control: it expands/collapses the extra game cards, so
+            // expose that state to assistive tech. Without aria-expanded a
+            // screen reader can't tell the row is collapsible — matches the
+            // aria-expanded already on this file's league-switcher toggle.
+            aria-expanded={condenseExpanded}
             className="mt-0.5 mx-auto text-xs px-3 py-1.5 rounded-full cursor-pointer transition-colors"
             style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}
           >
@@ -1152,7 +1176,7 @@ export default function LeagueColumn({
                   className="cursor-pointer transition-colors hover:opacity-80"
                   style={{ color: "var(--text)" }}
                   title="Switch league"
-                  aria-haspopup="true"
+                  aria-haspopup="dialog"
                   aria-expanded={swapOpen}
                 >
                   <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
@@ -1213,6 +1237,10 @@ export default function LeagueColumn({
                         <button
                           key={opt.sport}
                           onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
+                          // The active league is otherwise signalled only by color +
+                          // weight; aria-current voices it to screen readers (matches
+                          // the NewsColumn swap dropdown + DateNav day-pill pattern).
+                          aria-current={isCurrent ? "true" : undefined}
                           className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                           style={{
                             color: isCurrent ? "var(--accent)" : isElsewhere ? "var(--text-muted)" : "var(--text)",

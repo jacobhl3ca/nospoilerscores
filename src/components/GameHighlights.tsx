@@ -405,6 +405,10 @@ export default function GameHighlights({
               className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
               aria-label="MLB 10 minute condensed game"
+              // aria-busy conveys the in-flight fetch that the visible "Loading..."
+              // swap shows sighted users; the aria-label stays pinned so the name
+              // never collapses to "Loading...". Matches the YouTube buttons above.
+              aria-busy={fetchingOnClick === "official"}
               title="MLB 10 minute condensed game"
             >
               {fetchingOnClick === "official" ? <span className="text-[10px]">Loading...</span> : (
@@ -444,6 +448,7 @@ export default function GameHighlights({
               className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "telemundoShort" ? 0.5 : undefined }}
               aria-label="Telemundo highlights"
+              aria-busy={fetchingOnClick === "telemundoShort"}
               title="Telemundo highlights"
             >
               {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading...</span> : (
@@ -471,6 +476,7 @@ export default function GameHighlights({
               className="highlight-btn flex min-w-0 items-center justify-center gap-0.5 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "telemundoLong" ? 0.5 : undefined }}
               aria-label="Telemundo extended highlights"
+              aria-busy={fetchingOnClick === "telemundoLong"}
               title="Telemundo extended highlights"
             >
               {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading...</span> : (

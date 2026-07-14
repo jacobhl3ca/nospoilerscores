@@ -380,8 +380,12 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // scaled down so scoring bonus normalizes the same way.
   wnba:   { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 28,  regulationPeriods: 4 },
   ncaam:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 2 },
-  // NCAAW: similar quarter/half structure as NCAAM, lower scoring (~70 vs ~75).
-  ncaaw:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 25,  regulationPeriods: 2 },
+  // NCAAW: four 10-min quarters (like WNBA, not NCAAM's two 20-min halves —
+  // women's college hoops moved to quarters in 2015-16), lower scoring (~70).
+  // regulationPeriods MUST be 4: a finished regulation game reports period 4,
+  // so a value of 2 made `periods > regulationPeriods` true for EVERY game and
+  // handed out the +15 OT bonus (a full tier) to non-OT games.
+  ncaaw:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 25,  regulationPeriods: 4 },
   // NCAAF: scoring similar to NFL, mirrors its calibration.
   ncaaf:  { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
   nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
@@ -405,9 +409,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
 // progress *within* a period (smooth) instead of assuming a flat midpoint.
 const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
   nba: 720, wnba: 600,        // 12-min / 10-min quarters
+  ncaaw: 600,                 // 10-min quarters (four of them, like WNBA)
   nfl: 900, ncaaf: 900,       // 15-min quarters
   nhl: 1200,                  // 20-min periods
-  ncaam: 1200, ncaaw: 1200,   // 20-min halves
+  ncaam: 1200,                // 20-min halves
 };
 // Soccer is different: status.clock counts UP and equals total elapsed match
 // seconds (5400 = 90'), so progress is just clock / full match.
@@ -498,15 +503,28 @@ type SoccerCompetition = { details?: SoccerPlay[] };
 function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined): number {
   const details: SoccerPlay[] = competition?.details ?? [];
   if (!details.length) return 0;
-  const parseMin = (dv: string | undefined): number | null => {
+  // Parse a soccer clock ("67'", "45'+2'", "90'+5'") into two numbers. `min`
+  // folds stoppage into the base minute for the lateness thresholds below
+  // ("90'+5'" → 95). `sortKey` keeps stoppage as a fractional component
+  // ("45'+2'" → 45.02) so goals sort in TRUE chronological order: folding both
+  // into one value reordered goals across the half boundary — a first-half
+  // stoppage goal ("45'+2'" → 47) sorted AFTER an early second-half goal
+  // ("46'"), so the leader walk below saw them out of sequence.
+  const parseMin = (dv: string | undefined): { min: number; sortKey: number } | null => {
     const m = dv?.match(/(\d+)'?(?:\s*\+\s*(\d+))?/);
-    return m ? parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0) : null;
+    if (!m) return null;
+    const base = parseInt(m[1], 10);
+    const stop = m[2] ? parseInt(m[2], 10) : 0;
+    return { min: base + stop, sortKey: base + stop / 100 };
   };
   const goals = details
     .filter((d) => d.scoringPlay)
-    .map((d) => ({ min: parseMin(d.clock?.displayValue), team: String(d.team?.id ?? "") }))
-    .filter((g) => g.min !== null && g.team)
-    .sort((a, b) => (a.min as number) - (b.min as number));
+    .map((d) => {
+      const t = parseMin(d.clock?.displayValue);
+      return t ? { min: t.min, sortKey: t.sortKey, team: String(d.team?.id ?? "") } : null;
+    })
+    .filter((g): g is { min: number; sortKey: number; team: string } => g !== null && !!g.team)
+    .sort((a, b) => a.sortKey - b.sortKey);
   if (!goals.length) return 0;
   // Walk goals chronologically, tracking the leader; capture the minute of the
   // latest goal that CHANGED who's ahead (tie→lead, lead→tie, or a lead flip).
@@ -522,7 +540,7 @@ function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined)
   for (const g of goals) {
     tally[g.team] = (tally[g.team] ?? 0) + 1;
     const leader = leaderOf();
-    if (leader !== prevLeader) latestSwingMin = g.min as number;
+    if (leader !== prevLeader) latestSwingMin = g.min;
     prevLeader = leader;
   }
   if (latestSwingMin >= 90) return 25;
@@ -996,12 +1014,21 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   for (const note of competition?.notes ?? []) {
     const headline = note?.headline ?? "";
     const headlineLower = headline.toLowerCase();
-    const match = headlineLower.match(/Game \d+/i);
+    // Match the original-case headline, not the lowercased copy, so seriesNote
+    // keeps ESPN's "Game 3" casing (the /i flag was the giveaway — it's a no-op
+    // against already-lowercased text). It only feeds the YouTube highlight
+    // query today, but that's case-preserving now if it ever surfaces in the UI.
+    const match = headline.match(/Game \d+/i);
     if (match) {
       seriesNote = match[0];
     }
-    // Detect playoff/postseason/tournament games from notes
-    if (/playoff|postseason|wild.?card|divisional|conference|championship|finals?|round|semi.?finals?|quarter.?finals?|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
+    // Detect playoff/postseason/tournament games from notes. `round` and
+    // `finals?` carry word boundaries so they match the round names as whole
+    // words and DON'T fire on unrelated substrings — an unbounded `final` hit
+    // "Season Finale" (a regular-season note) and mislabeled the game as a
+    // playoff, and `round` hit "ground"/"around". playoffLabel is user-visible
+    // (game-detail modal + league header), so a false match shows wrong text.
+    if (/playoff|postseason|wild.?card|divisional|conference|championship|\bfinals?\b|\brounds?\b|semi.?finals?|quarter.?finals?|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
       isPlayoff = true;
       if (!playoffLabel) playoffLabel = headline;
     }
@@ -1342,7 +1369,14 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   // ESPN family deep-links via gameId. ABC is ESPN-owned but its own broadcast
   // network has a dedicated live page, so route it there instead of the ESPN
   // player — the user picked ABC, send them to ABC.
-  if (b.includes("espn")) return `https://www.espn.com/watch/player/_/id/${gameId}`;
+  // Guard an empty gameId: golf tournaments have no per-game id (GolfLeaderboard
+  // passes ""), so an ESPN golf broadcast produced the malformed player URL
+  // ".../id/" with a trailing empty id. That string is truthy, so the caller's
+  // `?? sportStreamFallback` never fired and the user landed on a broken deep
+  // link. Fall back to ESPN's generic watch page — the right home for an ESPN
+  // broadcast with no airing id, and byte-identical for every caller that does
+  // pass a real game.id (GameCard, GameDetailModal, the scoreboard streamUrl).
+  if (b.includes("espn")) return gameId ? `https://www.espn.com/watch/player/_/id/${gameId}` : "https://www.espn.com/watch/";
   if (b === "abc") return "https://abc.com/watch-live";
   // FIFA World Cup (2026): FOX/FS1 hold US English rights to all 104 matches —
   // route the FOX family to the World Cup hub rather than the generic live page.
@@ -1776,7 +1810,12 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
     if (!iso) return "Fight Night";
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "Fight Night";
-    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    // Show the bout time in the app's effective zone (Settings → Time zone;
+    // defaults to the device zone). Every other absolute-instant time label
+    // — the golf tee time, the game-detail modal, the F1 event card — already
+    // passes getTimeZone(); this UFC bout label was the lone omission, so a
+    // user with a zone override saw fight times in their device zone instead.
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: getTimeZone() });
   };
   const fights: FightBout[] = comps.slice().reverse().map((c: LeagueEventCompetition) => {
     const cs = c.competitors ?? [];
@@ -2018,7 +2057,18 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     const [startMo, startDay] = tournamentLabel.startDate.split("-").map((s) => parseInt(s, 10));
     if (Number.isFinite(startMo) && Number.isFinite(startDay)) {
       const selDateObj = new Date(selYear, selMonth - 1, selDay);
-      const startDateObj = new Date(selYear, startMo - 1, startDay);
+      // startDate is a year-less "MM-DD", so reconstruct its year from the
+      // viewed date. A 4-day window can straddle New Year (starts "12-30",
+      // viewed date lands in January): reusing selYear then puts the start in
+      // the wrong calendar year and dayIndex falls outside [0,3], dropping the
+      // event before golf.ts's labeling runs. Mirror the identical year-wrap
+      // shift getGolfDateState already applies (see golf.ts) so this window
+      // drop and the round labeling agree — a true wrap is the only case the
+      // months sit more than 6 apart. Every mid-year major is unchanged.
+      let startYear = selYear;
+      if (startMo - selMonth > 6) startYear = selYear - 1;
+      else if (selMonth - startMo > 6) startYear = selYear + 1;
+      const startDateObj = new Date(startYear, startMo - 1, startDay);
       const dayIndex = Math.round(
         (selDateObj.getTime() - startDateObj.getTime()) / (24 * 3600 * 1000)
       );
@@ -2031,7 +2081,14 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
   // would defeat the no-spoiler experience by exposing live scores.
   let streamUrl: string | undefined;
   for (const broadcast of broadcasts) {
-    const url = networkStreamUrl(broadcast, event.id ?? "");
+    // Pass "" as the gameId: a golf tournament has no per-airing ESPN watch id,
+    // so an ESPN/ESPN+ broadcast must route to ESPN's generic watch page, not a
+    // "/watch/player/_/id/{eventId}" deep link keyed by the tournament event id
+    // (which is not a valid airing id and lands on a broken player). networkStreamUrl
+    // only consumes gameId in its ESPN branch, so this matches GolfLeaderboard's own
+    // per-network chip (which already passes "") and leaves every other golf network
+    // byte-identical.
+    const url = networkStreamUrl(broadcast, "");
     if (url) { streamUrl = url; break; }
   }
   if (!streamUrl) streamUrl = sportStreamFallback("golf");

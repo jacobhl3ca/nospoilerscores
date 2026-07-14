@@ -1,7 +1,7 @@
 {
   "name": "HideScore — Spoiler-Free Sports",
   "short_name": "HideScore",
-  "description": "Catch up on NBA, MLB, NHL, NFL and golf without seeing the score. Game ratings tell you if it's worth watching.",
+  "description": "Catch up on NBA, MLB, NHL, NFL, soccer, and golf without seeing the score. Game ratings tell you if it's worth watching.",
   "start_url": "/",
   "scope": "/",
   "id": "/",
@@ -39,6 +39,13 @@
     }
   ],
   "shortcuts": [
+    {
+      "name": "Yesterday",
+      "short_name": "Yesterday",
+      "description": "Yesterday's completed games",
+      "url": "/yesterday",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
     {
       "name": "Today",
       "short_name": "Today",

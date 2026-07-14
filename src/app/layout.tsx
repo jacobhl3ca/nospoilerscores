@@ -9,7 +9,7 @@ const geistSans = Geist({
 
 const SITE_TITLE = "HideScore — Spoiler-Free Sports Scores & Highlights | NBA, NFL, NHL, MLB";
 const SITE_DESC =
-  "Spoiler-free sports scores and highlights. Check NBA, MLB, NHL, NFL, and golf without seeing the score. Game ratings tell you if it's worth watching before you hit play.";
+  "Spoiler-free sports scores and highlights. Check NBA, MLB, NHL, NFL, soccer, and golf without seeing the score. Game ratings tell you if it's worth watching before you hit play.";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
@@ -37,6 +37,12 @@ export const metadata: Metadata = {
     description: SITE_DESC,
     url: "https://hidescore.com",
     siteName: "HideScore",
+    // The one locale signal the Open Graph block was missing — the site already
+    // declares its language everywhere else (<html lang="en">, and inLanguage on
+    // every JSON-LD node). og:locale lets social unfurlers (Facebook, LinkedIn,
+    // Slack, iMessage) render a locale-appropriate preview for the homepage, the
+    // canonical share target. en_US is the OG-spec format (underscore, not "en").
+    locale: "en_US",
     type: "website",
     images: [
       {
@@ -63,6 +69,15 @@ export const metadata: Metadata = {
     follow: true,
     googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
   },
+  // Stop iOS Safari (and the Capacitor WebView) from auto-linking the app's
+  // pervasive time/date/number text. Every card, header subtitle, and date pill
+  // is full of strings the OS eagerly turns into tappable blue links — game
+  // times ("10:30 AM"), date labels ("Tue 5/2", "Round 3 of 4"), venue lines,
+  // and bare numbers — which restyles the content out of the design and pops an
+  // unwanted "Create Event"/dialer sheet on tap. Emits
+  // <meta name="format-detection" content="telephone=no,date=no,address=no">;
+  // no visual change on desktop, purely suppresses the mobile mis-detection.
+  formatDetection: { telephone: false, date: false, address: false },
 };
 
 export const viewport: Viewport = {
@@ -87,6 +102,12 @@ const JSON_LD = {
       description: SITE_DESC,
       applicationCategory: "SportsApplication",
       operatingSystem: "Web",
+      // Declare the content language on the site-level nodes, matching the
+      // `<html lang="en">` above and the `inLanguage: "en"` already on the
+      // per-page WebPage nodes (SeoLandingPage). Both WebApplication and
+      // WebSite are CreativeWork subtypes, so this is a valid signal that helps
+      // crawlers and voice assistants target the right locale.
+      inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
@@ -98,6 +119,7 @@ const JSON_LD = {
       "@type": "WebSite",
       name: "HideScore",
       url: "https://hidescore.com",
+      inLanguage: "en",
     },
     {
       "@type": "MobileApplication",
@@ -106,28 +128,24 @@ const JSON_LD = {
       applicationCategory: "SportsApplication",
       url: "https://apps.apple.com/app/hidescore/id6766885311",
       installUrl: "https://apps.apple.com/app/hidescore/id6766885311",
+      // Same locale signal the sibling WebApplication/WebSite nodes carry —
+      // MobileApplication is a SoftwareApplication → CreativeWork subtype too,
+      // so inLanguage is valid here and keeps all product nodes consistent.
+      inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
     {
-      // The Android build ships on Google Play too (the footer links this exact
-      // listing). Declare it alongside the iOS node so search engines see both
-      // native apps, not just iOS — same shape as the node above.
-      "@type": "MobileApplication",
-      name: "HideScore",
-      operatingSystem: "Android",
-      applicationCategory: "SportsApplication",
-      url: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
-      installUrl: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
-      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-    },
-    {
+      // No Android MobileApplication node: the Google Play listing is still a
+      // non-public closed test (the footer's Play badge stays commented out in
+      // HomeContent, and the "iOS only" copy is the shipped truth). Declaring it
+      // here would advertise a native app crawlers/users following the URL can't
+      // install. Restore this node alongside the iOS one when Play goes public.
       "@type": "Organization",
       name: "HideScore",
       url: "https://hidescore.com",
       logo: "https://hidescore.com/icon-512.png",
       sameAs: [
         "https://apps.apple.com/app/hidescore/id6766885311",
-        "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
       ],
     },
   ],
@@ -171,6 +189,32 @@ export default function RootLayout({
             so it carries crossOrigin to match, with dns-prefetch as fallback. */}
         <link rel="preconnect" href="https://site.web.api.espn.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://site.web.api.espn.com" />
+        {/* Every news-column and video-strip thumbnail is routed through the
+            images.weserv.nl proxy (proxyImage in lib/news.ts) — the heaviest
+            images on the board. Resolve its DNS during HTML parse so the first
+            thumbnail's connection setup starts a round-trip sooner. Only a
+            dns-prefetch here, NOT a full preconnect like the espncdn logos
+            above: those logos are eager and above the fold, whereas these
+            thumbnails are loading="lazy" and usually below it, so a warmed TCP+
+            TLS socket would likely idle unused (and get closed) before any
+            thumbnail requests it. DNS resolution is the cheap, always-useful
+            part with no idle-socket cost. */}
+        <link rel="dns-prefetch" href="https://images.weserv.nl" />
+        {/* Both analytics tags (GoatCounter + Umami, at the end of <body>) fetch
+            their loader script and then beacon a pageview on EVERY load — so
+            these three hosts are always hit: gc.zgo.at (the GoatCounter loader),
+            hidescore.goatcounter.com (its count beacon), and stats.hidescore.com
+            (Umami's script + beacon). Resolve their DNS during HTML parse so the
+            lookup isn't still pending when the deferred/on-load scripts fire.
+            dns-prefetch only, NOT preconnect: the tags are async/deferred and
+            non-blocking, so a warmed TCP+TLS socket could idle and get closed
+            before they run — DNS resolution is the cheap, always-useful part
+            with no idle-socket cost (same reasoning as the weserv proxy above).
+            Unlike the lazy thumbnails there, these requests are guaranteed to
+            fire, so the warmup is never wasted. */}
+        <link rel="dns-prefetch" href="https://gc.zgo.at" />
+        <link rel="dns-prefetch" href="https://hidescore.goatcounter.com" />
+        <link rel="dns-prefetch" href="https://stats.hidescore.com" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -216,10 +260,16 @@ export default function RootLayout({
       <body className="antialiased">
         {children}
         {/* GoatCounter analytics — create hidescore site at goatcounter.com and update the URL */}
+        {/* Explicit https (not protocol-relative //) so the loader still resolves
+            inside the Capacitor native WebView, where the page origin is
+            capacitor://localhost — a // URL would resolve to capacitor://gc.zgo.at
+            and fail to load. On the https website this is byte-identical (a //
+            URL already inherits the page's https there). Matches the Umami tag
+            below, which is likewise explicit-https. */}
         <script
           data-goatcounter="https://hidescore.goatcounter.com/count"
           async
-          src="//gc.zgo.at/count.js"
+          src="https://gc.zgo.at/count.js"
         />
         {/* Umami analytics — self-hosted on the Mac mini, privacy-first */}
         <script

@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, Sport, Team } from "@/lib/types";
 import { fetchTeamSchedule, fetchScheduleRatings } from "@/lib/espn";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard from "./GameCard";
 import { getDateString } from "@/components/DateNav";
 
@@ -32,11 +32,26 @@ function rawEspnTeamId(teamId: string, sport: Sport): string {
   return teamId.startsWith(prefix) ? teamId.slice(prefix.length) : teamId;
 }
 
-// Fallback 2-year window lets soccer (Aug–May seasons) and tail-end MLB
-// postseasons still hit the right season when the current year is empty.
+// Sports whose season spans two calendar years (fall → spring) and that ESPN
+// identifies by the season's ENDING year — the 2025-26 season is season=2026.
+// During the fall half (Oct–Dec) the current season's number is therefore next
+// year's, so a plain [y, y-1] window MISSES it: tapping an NBA/NHL/UCL team
+// between October and New Year fetched only the prior two seasons and showed no
+// current or upcoming games. The original soccer group already got a [y, y+1,
+// y-1] window for exactly this reason; basketball/hockey (Oct–Jun) and the
+// club-soccer cups (Sep–May) belong here too. Adding y+1 is safe under either
+// convention — a not-yet-scheduled or out-of-range season year just returns no
+// events (fetchTeamSchedule dedups + sorts, and no-ops on an empty/failed year).
+const TWO_CALENDAR_YEAR_SPORTS = new Set<Sport>([
+  "epl", "mls", "fifa", "ucl", "uel", "nba", "nhl", "ncaam", "ncaaw",
+]);
+
+// Fallback multi-year window so a season that spans (or hasn't filled) the
+// current calendar year still resolves. Single-calendar-year sports (MLB, WNBA)
+// and the start-year-identified ones (NFL, NCAAF) only need [y, y-1].
 function seasonYearsForSport(sport: Sport): number[] {
   const y = new Date().getFullYear();
-  if (sport === "epl" || sport === "mls" || sport === "fifa") return [y, y + 1, y - 1];
+  if (TWO_CALENDAR_YEAR_SPORTS.has(sport)) return [y, y + 1, y - 1];
   return [y, y - 1];
 }
 
@@ -207,16 +222,16 @@ export default function TeamView({
     return () => ro.disconnect();
   }, [team.shortDisplayName, team.displayName, team.abbreviation, leagueLabel]);
 
-  // Bucket by Eastern day (getDateString) — matches the scoreboard and the
-  // card's own date label. `g.date.slice(0,10)` is the UTC day, which
-  // mislabels late-evening ET games (past midnight UTC) as the next day.
-  const gameIsToday = (g: Game) => {
-    const etYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(new Date(g.date));
-    // getDateString returns "YYYYMMDD"; etYmd is "YYYY-MM-DD" — drop dashes.
-    return etYmd.replace(/-/g, "") === getDateString(0);
-  };
+  // Bucket the game to its ET slate day the SAME way getDateString(0) derives
+  // "today" (getEtServiceDate's 1 AM rollover), so a game kicking off between
+  // midnight and 1 AM stays on the same day both sides call it — matching how
+  // GameDetailModal computes isToday. A raw ET calendar day here would drift
+  // from the service day in that window and make TeamView disagree with the
+  // card/modal on isToday, which gates the recap-upload buffer in
+  // GameHighlights (today's finals wait for the upload window; past games show
+  // immediately). etSlateYmd also fixes the old UTC-day mislabel of
+  // late-evening ET games since it buckets in the effective time zone.
+  const gameIsToday = (g: Game) => etSlateYmd(g.date) === getDateString(0);
 
   const renderCard = (game: Game) => {
     // Swap in the linescore-aware rating when the backfill resolved one (and it
@@ -270,7 +285,7 @@ export default function TeamView({
             <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
             {team.logo && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={team.logo} alt="" width={20} height={20} decoding="async" className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+              <img src={team.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" onError={(e) => { e.currentTarget.style.display = "none"; }} />
             )}
             <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }} title={team.displayName}>
               {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}

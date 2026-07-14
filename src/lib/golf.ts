@@ -26,7 +26,18 @@ export function getGolfDateState(
   if (!Number.isFinite(startMo) || !Number.isFinite(startDay)) return null;
 
   const selDateObj = new Date(selYear, selMonth - 1, selDay);
-  const startDateObj = new Date(selYear, startMo - 1, startDay);
+  // tournament.startDate is "MM-DD" with no year, so we reconstruct it from the
+  // selected date's year. A 4-day window can straddle New Year (e.g. starts
+  // "12-30", viewed date lands in January): reusing selYear then puts the start
+  // in the wrong calendar year and dayIndex falls outside [0,3], silently
+  // dropping the round subtitle/recap for those dates. A true year-wrap is the
+  // only case the start and selected months sit more than 6 apart (a 4-day
+  // window never spans >1 month otherwise), so shift the start year only then —
+  // every mid-year event (all tracked majors) is byte-for-byte unchanged.
+  let startYear = selYear;
+  if (startMo - selMonth > 6) startYear = selYear - 1;
+  else if (selMonth - startMo > 6) startYear = selYear + 1;
+  const startDateObj = new Date(startYear, startMo - 1, startDay);
   const dayIndex = Math.round(
     (selDateObj.getTime() - startDateObj.getTime()) / (24 * 3600 * 1000)
   );

@@ -86,7 +86,15 @@ export default function GolfLeaderboard({
     null,
     null,
   ]);
-  const prefetchStarted = useRef(false);
+  // The highlight query the slots were last resolved for. Keyed on the query
+  // STRING (not a bare "started" boolean) because this component stays mounted
+  // across date navigation — stepping to another round-day recomputes
+  // highlightQuery (a different round → different recap), and the prefetch must
+  // re-run for the new round. A boolean latched true on the first prefetch and
+  // never reset, so the effect bailed on every later date and the slots kept the
+  // PREVIOUS round's video IDs — tapping a "Round 2 highlights" button played
+  // the Round 1 recap.
+  const prefetchedQuery = useRef<string | null>(null);
 
   const allPlayers = tournament.players;
   // When scores hidden, alphabetize to prevent position-order spoilers.
@@ -142,10 +150,17 @@ export default function GolfLeaderboard({
   // for live/upcoming viewing.
   const hasBroadcast =
     dateState?.relativeDay !== "past" && tournament.broadcasts.length > 0;
-  // Mirror GameCard: when the tournament is wrapped and no rating takes
-  // the center slot, fill the status text with "FINAL" on R4 Sunday so
-  // the card reads like any other post-state card.
-  const showFinalLabel = tournament.state === "post" && !showRating;
+  // Mirror GameCard's `!isPastDate` FINAL rule (GameCard.tsx: `isFinished
+  // && !isPastDate`): when the tournament is wrapped and no rating takes
+  // the center slot, show "FINAL" only on the day it finished — NOT when
+  // navigating back to an earlier round-day. `tournament.state === "post"`
+  // is a property of the whole tournament, so without the past-date guard
+  // it stayed true on the R1/R2/R3 views too, printing "FINAL" while the
+  // league-header subtitle read e.g. "Round 1 of 4" — a self-contradiction.
+  // Matches the `relativeDay !== "past"` guard already on the rating +
+  // broadcast slots above.
+  const showFinalLabel =
+    tournament.state === "post" && !showRating && dateState?.relativeDay !== "past";
 
   const live = isGolfLive(tournament);
   const showLiveIndicator = live && dateState?.relativeDay === "today";
@@ -274,8 +289,13 @@ export default function GolfLeaderboard({
   const secondaryChannelsKey = secondaryChannels.join("|");
 
   useEffect(() => {
-    if (!highlightQuery || prefetchStarted.current) return;
-    prefetchStarted.current = true;
+    if (!highlightQuery || prefetchedQuery.current === highlightQuery) return;
+    prefetchedQuery.current = highlightQuery;
+    // Clear the previous round's resolved IDs before re-resolving for the new
+    // round. The slot setters below only ever WRITE into a null slot (slot 0
+    // bails when prev[0] is set; tryFill fills the first open slot), so without
+    // this reset a date change couldn't overwrite the stale IDs at all.
+    setHighlightSlots([null, null, null, null]);
     (async () => {
       // Drive the slot list from the curated secondary chain (ESPN
       // first — the reliable full-day recap source Jacob flagged).
@@ -447,6 +467,13 @@ export default function GolfLeaderboard({
                         style={{ color: "var(--text-muted)" }}
                         title={tournament.broadcasts.slice(1).join(", ")}
                         aria-label={`Show ${tournament.broadcasts.length - 1} more network${tournament.broadcasts.length - 1 === 1 ? "" : "s"}`}
+                        // Disclosure control: reveals the hidden network names
+                        // inline. Only ever renders in the collapsed state (the
+                        // expanded branch drops it), so a literal false is
+                        // correct — mirrors the Show Top/All buttons' collapsed
+                        // aria-expanded below so screen readers announce it as
+                        // an expandable toggle, not a bare button.
+                        aria-expanded={false}
                         onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(true); }}
                       >
                         +{tournament.broadcasts.length - 1}
@@ -518,10 +545,15 @@ export default function GolfLeaderboard({
                 />
               )}
 
-              {/* Name — flush left next to flag/rank, fills remaining width. */}
+              {/* Name — flush left next to flag/rank, fills remaining width.
+                  title carries the FULL name so a truncated row (or an
+                  abbreviated name tier — initials/last-name-only) still reveals
+                  who it is on hover, matching the truncated-name title
+                  convention in GameCard/EventCard/WorldCupBracket. */}
               <span
                 className="text-xs sm:text-sm truncate flex-1 min-w-0"
                 style={{ color: "var(--text)" }}
+                title={player.name}
               >
                 {displayName}
               </span>
@@ -547,7 +579,13 @@ export default function GolfLeaderboard({
         })}
       </div>
 
-      {/* Expand controls — two callouts (Top 25 / All N) when collapsed; toggle out otherwise */}
+      {/* Expand controls — two callouts (Top 25 / All N) when collapsed; toggle out otherwise.
+          Each button is a disclosure control for the leaderboard row list, so it carries
+          aria-expanded reflecting whether the list is currently showing beyond the collapsed
+          set (false in the collapsed branch, true once Top 25 / All is showing). Without it a
+          screen reader can't tell the rows are expandable — matches the aria-expanded already
+          on LeagueColumn's "Show N more" toggle. (The value is a literal per branch because
+          expandLevel is already narrowed inside each `=== ...` guard.) */}
       {allPlayers.length > INITIAL_SHOW && (
         <div className="flex gap-1 mt-1.5">
           {expandLevel === "collapsed" && (
@@ -555,6 +593,7 @@ export default function GolfLeaderboard({
               {allPlayers.length > INITIAL_SHOW && (
                 <button
                   onClick={() => setExpandLevel("top25")}
+                  aria-expanded={false}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
                   style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
                 >
@@ -564,6 +603,7 @@ export default function GolfLeaderboard({
               {allPlayers.length > TOP25_SHOW && (
                 <button
                   onClick={() => setExpandLevel("all")}
+                  aria-expanded={false}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
                   style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
                 >
@@ -576,6 +616,7 @@ export default function GolfLeaderboard({
             <>
               <button
                 onClick={() => setExpandLevel("collapsed")}
+                aria-expanded={true}
                 className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
                 style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
               >
@@ -584,6 +625,7 @@ export default function GolfLeaderboard({
               {allPlayers.length > TOP25_SHOW && (
                 <button
                   onClick={() => setExpandLevel("all")}
+                  aria-expanded={true}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
                   style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
                 >
@@ -595,6 +637,7 @@ export default function GolfLeaderboard({
           {expandLevel === "all" && (
             <button
               onClick={() => setExpandLevel("collapsed")}
+              aria-expanded={true}
               className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
               style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}
             >

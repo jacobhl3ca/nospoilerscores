@@ -17,6 +17,12 @@ export const metadata: Metadata = {
     description: PRIVACY_DESC,
     url: "https://hidescore.com/privacy",
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx and the
+    // World Cup/date routes. A page's openGraph replaces the parent's wholesale
+    // (Next merges metadata per top-level field, not deep), so without this these
+    // SEO landing pages emitted no og:locale for social unfurlers (Facebook/
+    // LinkedIn/Slack/iMessage).
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — spoiler-free sports scores, privacy policy" }],
   },
@@ -32,7 +38,7 @@ export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-07-06">2026-07-06</time></p>
+      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime="2026-07-07">2026-07-07</time></p>
 
       <section className="space-y-4">
         <p>
@@ -41,10 +47,13 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-semibold mt-6">What we collect</h2>
         <p>
-          HideScore has no advertising trackers and no crash-reporting services, and we do not place cookies to track you across sites.
+          HideScore has no advertising trackers, and we do not place cookies to track you across sites.
         </p>
         <p>
           For basic usage statistics we use privacy-friendly, cookieless analytics (GoatCounter and a self-hosted Umami instance). These record only aggregate page views &mdash; which pages are visited and rough totals. They do not set cookies, do not build a profile of you, and do not track you across other sites.
+        </p>
+        <p>
+          To find and fix crashes, HideScore uses Sentry, a third-party error-monitoring service. When the app hits an unexpected error, it sends Sentry a technical report &mdash; the error message and stack trace, along with basic browser and device details and a small sample of anonymous performance data. We use this only to diagnose and fix bugs. It is not tied to your identity, is never used for advertising, and is not sold or shared.
         </p>
         <p>
           HideScore works fully without an account. You can optionally sign in with Apple or Google so your favorite teams and settings sync across your devices. If you choose to sign in, we store the email address associated with that sign-in and your saved preferences on our server; that is the only personal data we hold, and you can sign out at any time.

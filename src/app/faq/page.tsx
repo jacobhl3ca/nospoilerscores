@@ -18,6 +18,12 @@ export const metadata: Metadata = {
     description: FAQ_DESC,
     url: "https://hidescore.com/faq",
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx and the
+    // World Cup/date/SEO-landing routes. A page's openGraph replaces the parent's
+    // wholesale (Next merges metadata per top-level field, not deep), so without
+    // this the FAQ page emitted no og:locale for social unfurlers (Facebook/
+    // LinkedIn/Slack/iMessage). en_US is the OG-spec format (underscore, not "en").
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — spoiler-free sports scores, frequently asked questions" }],
   },
@@ -87,6 +93,11 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "FAQPage",
+            // Declare the Q&A content language, matching the inLanguage signal
+            // the site adds to its other CreativeWork schema nodes (the
+            // WebApplication/WebSite in layout, the WebPage in SeoLandingPage).
+            // FAQPage is a WebPage subtype, so this is a valid locale hint.
+            inLanguage: "en",
             mainEntity: FAQ.map((item) => ({
               "@type": "Question",
               name: item.q,
