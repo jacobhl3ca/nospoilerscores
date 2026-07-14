@@ -754,8 +754,17 @@ export default {
           //     phrasings in WC recap titles. No non-result word begins with "deadlock" and the
           //     negotiation/transfer "deadlock" sense never appears in the highlight titles this filter
           //     sees (titles only, never news). Byte-identical to spoilers.ts.
+          //     "stalemate\w*" is deadlock's direct synonym and joins the same level/draw-reveal family:
+          //     in a soccer highlight title it reveals the match was (or ended) level — "goalless
+          //     stalemate", "settle for a stalemate", "tense stalemate at the Bernabeu" — the same
+          //     partial-result leak as deadlock, yet a bare "stalemate" (no digits, no "goalless")
+          //     slipped past SCORE_RX and every existing keyword. It's a staple of soccer/WC recap
+          //     titles. Near-zero false-positive risk: "stalemate" has no meaning outside a drawn/level
+          //     state, no in-scope club or nation is named it, and the chess/negotiation sense never
+          //     appears in the per-match highlight titles this filter sees. \w* covers the plural
+          //     "stalemates". Byte-identical to spoilers.ts.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|deadlock\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks
