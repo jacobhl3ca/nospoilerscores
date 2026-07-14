@@ -2856,44 +2856,20 @@ export default function HomeContent({
           return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
 
-        <div className="flex flex-nowrap items-center justify-center gap-x-2.5">
-          <FeedbackBox />
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="inline-flex items-center gap-1 underline underline-offset-2 cursor-pointer hover:opacity-80"
-            style={{ color: "var(--text-muted)" }}
-          >
-            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15 1.65 1.65 0 0 0 3.09 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            <span>Settings</span>
-          </button>
-          <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
-          {!isNativeApp && (
-            <a
-              href="https://apps.apple.com/app/hidescore/id6766885311"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
-              data-umami-event="install-appstore"
-            >
-              App Store
-            </a>
-          )}
-        </div>
-
-        {/* SEO content + internal links, "rolled up" under the feedback box so it
-            adds crawlable copy and a link graph without changing the visual layout.
-            Google renders and indexes content inside collapsed <details>, and plain
-            <a href> (not next/link) is what the crawler needs to follow the routes. */}
-        <details className="max-w-2xl text-left text-xs leading-relaxed">
-          <summary className="cursor-pointer select-none text-center underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
-            About
-          </summary>
-          <div className="mt-2 space-y-2" style={{ color: "var(--text-muted)" }}>
+        {/* ONE footer row (Jacob 7/14): About is the first inline item, then
+            Feedback / Settings / Privacy / App Store — no second row. `relative`
+            anchors the About panel, which drops BELOW the row (absolute) so
+            opening it never wraps the row. */}
+        <div className="relative flex flex-nowrap items-center justify-center gap-x-2.5">
+          {/* About = the SEO copy + internal-link graph, rolled up behind a
+              disclosure. Google renders and indexes content inside collapsed
+              <details>, and plain <a href> (not next/link) is what the crawler
+              needs to follow the routes. */}
+          <details>
+            <summary className="cursor-pointer select-none underline underline-offset-2 marker:content-none [&::-webkit-details-marker]:hidden" style={{ color: "var(--text-muted)" }}>
+              About
+            </summary>
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(42rem,90vw)] max-h-[60vh] overflow-y-auto text-left text-xs leading-relaxed space-y-2 z-20 rounded-lg p-3 shadow-lg" style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <p>
               HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
               MLB, MLS, the Premier League, the 2026 World Cup and golf without ever seeing who won —
@@ -2924,6 +2900,33 @@ export default function HomeContent({
             </p>
           </div>
         </details>
+          <FeedbackBox />
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="inline-flex items-center gap-1 underline underline-offset-2 cursor-pointer hover:opacity-80"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15 1.65 1.65 0 0 0 3.09 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span>Settings</span>
+          </button>
+          <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          {!isNativeApp && (
+            <a
+              href="https://apps.apple.com/app/hidescore/id6766885311"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+              data-umami-event="install-appstore"
+            >
+              App Store
+            </a>
+          )}
+        </div>
 
         {/* Compact custom Apple-logo pill — replaced by the footer text link
                 above. Kept commented in case we want the smaller text version back.
