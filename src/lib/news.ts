@@ -264,49 +264,30 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
 };
 
-// Editorial substitute feeds (BBC Sport / The Guardian) for columns with no
-// usable league .com feed — soccer, tennis, golf. Baked by prebake-news.mjs
-// (bbc-*, guardian-*); both carry per-item images like the official feeds.
-const SUBSTITUTE_FEEDS: Partial<Record<Sport, { label: string; key: string }[]>> = {
-  epl: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
-  ucl: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
-  uel: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
-  fifa: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
-  mls: [{ label: "BBC Sport", key: "bbc-football" }, { label: "The Guardian", key: "guardian-football" }],
-  tennis: [{ label: "BBC Sport", key: "bbc-tennis" }],
-  golf: [{ label: "BBC Sport", key: "bbc-golf" }],
-};
-
-// Cascade of news cards for a league column: official videos pinned first,
-// then official news → subreddit → ESPN. CBS Sports and theScore were
-// dropped at Jacob's request — their headlines duplicated ESPN coverage and
-// the cards couldn't be hidden. Add them back here if we ever want them.
+// Cascade of news cards for a league column. Order (Jacob 2026-07-14):
+//   Reddit → highlights video → ESPN headlines.
+// The subreddit leads — its "hot" feed is the freshest, most-used source. The
+// official-site feeds (MLB.com Most Popular / NBA.com) and the BBC / Guardian
+// editorial substitutes were dropped here: the .com feeds duplicated ESPN
+// coverage and the substitutes went unused. PREBAKED_FEEDS is still exported /
+// baked in case we want to re-add them. CBS Sports + theScore were dropped
+// earlier for the same duplicate-of-ESPN reason.
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
-  const officialVideos = PREBAKED_VIDEOS[sport];
-  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
-  // Reddit before official-site feed for cols 1/2 — Jacob's preferred order
-  // post-2026-04-30. r/baseball / r/nba / etc. surface story-of-the-hour
-  // discussion that the official feeds (MLB.com Most Popular / NBA.com) are
-  // slower to pick up. (Re-added 2026-05-31 after the temporary 5/30 removal.)
+  // Reddit first.
   const reddit = REDDIT_SUB[sport];
   if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
-  // The World Cup is a marquee tournament with no official-site feed and no
-  // video feed, so the column was thin (just r/worldcup). Build it out (Jacob
-  // 6/4) with the high-volume r/soccer firehose alongside the WC-specific
-  // r/worldcup. reddit-soccer is baked by prebake-news.mjs.
+  // World Cup also gets the high-volume r/soccer firehose alongside r/worldcup
+  // (Jacob 6/4). reddit-soccer is baked by prebake-news.mjs.
   if (sport === "fifa") out.push({ label: "r/soccer", key: "reddit-soccer", kind: "prebaked", logoUrl });
-  const official = PREBAKED_FEEDS[sport];
-  if (official) out.push({ label: official.label, key: official.name, kind: "prebaked", logoUrl });
-  // fifa's ESPN feed is the World Cup league feed (see SPORT_NEWS_PATHS) — label
-  // it "ESPN World Cup" rather than the generic "ESPN FIFA".
+  // Highlights video (spoiler-safe), where the league has a prebaked feed.
+  const officialVideos = PREBAKED_VIDEOS[sport];
+  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
+  // ESPN headlines close out the column — the reliable catch-all. fifa's ESPN
+  // feed is the World Cup league feed (see SPORT_NEWS_PATHS), labeled as such.
   const espnLabel = sport === "fifa" ? "ESPN World Cup" : `ESPN ${sport.toUpperCase()}`;
   out.push({ label: espnLabel, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
-  // Editorial substitutes (BBC Sport / The Guardian) for the soccer/tennis/golf
-  // columns that have no league .com feed — placed after ESPN (Jacob 6/13).
-  const subs = SUBSTITUTE_FEEDS[sport];
-  if (subs) for (const s of subs) out.push({ label: s.label, key: s.key, kind: "prebaked", logoUrl });
   return out;
 }
 
@@ -322,13 +303,13 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "fifa", "epl", "ucl", "uel", "mls", "golf", "tennis", "wnba", "ncaaw",
 ];
 
-// Col 3's default (no league picked) — ESPN videos lead, then ESPN top
-// headlines, then r/sports. CBS / theScore removed at Jacob's request.
-// (r/sports re-added 2026-05-31 after the temporary 5/30 removal.)
+// Col 3's default (no league picked) — Reddit first (Jacob 2026-07-14), then
+// the ESPN video + headline pair. CBS / theScore removed earlier at Jacob's
+// request.
 export const GENERIC_CASCADE: ColumnSource[] = [
+  { label: "r/sports", key: "reddit-general", kind: "prebaked" },
   { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: ESPN_BRAND_LOGO },
   { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: ESPN_BRAND_LOGO },
-  { label: "r/sports", key: "reddit-general", kind: "prebaked" },
 ];
 
 // Classify a news source by its origin for the funnel source filter.
