@@ -1771,8 +1771,7 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
   return out;
 }
 
-async function fetchReddit(subreddit, sectionLabel) {
-  const token = await getRedditToken().catch(() => null);
+async function fetchRedditListing(subreddit, sectionLabel, token) {
   // No creds → anon reddit.com JSON/RSS is rate-limited per IP now (see redlib
   // note above), so read the listing through redlib first; it carries title +
   // thumbnail + video in one page and proxies via its own IP. Gated reddit.com
@@ -1892,6 +1891,78 @@ async function fetchReddit(subreddit, sectionLabel) {
     if (out.length >= 12) break;
   }
   return out;
+}
+
+// ── Top comments (for the Feed view — Jacob 7/14) ─────────────────
+// Comments routinely state the score, so they're spoiler-blurred (tap-to-reveal)
+// client-side; we just carry the top few plain-text bodies per post. Reddit
+// blocks anon datacenter IPs, so this only runs where the listing did (the
+// residential Mac-mini cron), and is entirely best-effort: any failure just
+// leaves the post comment-less (the Feed renders fine without them).
+//
+// With OAuth creds the JSON path is cheap (100 QPM, no cooldown) so we enrich
+// more posts; the anon RSS path shares the same 45s-cooldown gate as the
+// listings, so we enrich only the top couple posts to keep the cron under its
+// interval.
+const COMMENTS_TOP_POSTS = 8;
+const COMMENTS_PER_POST = 4;
+const COMMENT_MIN_LEN = 4;
+const COMMENT_MAX_LEN = 280;
+
+function cleanComment(raw) {
+  const text = decodeEntities(String(raw || "")).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (!text || text.length < COMMENT_MIN_LEN) return null;
+  if (text === "[deleted]" || text === "[removed]") return null;
+  return text.length > COMMENT_MAX_LEN ? text.slice(0, COMMENT_MAX_LEN).trimEnd() + "…" : text;
+}
+
+// OAuth JSON comments — [postListing, commentsListing]; children[].data.body is
+// the raw markdown. sort=top so the first N are the highest-scored.
+async function fetchRedditCommentsOAuth(subreddit, postId, token) {
+  const url = `https://oauth.reddit.com/r/${subreddit}/comments/${postId}?sort=top&limit=8&depth=1&raw_json=1`;
+  const res = await fetch(url, { headers: { "User-Agent": REDDIT_UA, Authorization: `Bearer ${token}` } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const children = data?.[1]?.data?.children || [];
+  const out = [];
+  for (const c of children) {
+    const d = c?.data;
+    if (!d || c.kind !== "t1" || d.stickied) continue;
+    if (/^AutoModerator$/i.test(d.author || "")) continue;
+    const t = cleanComment(d.body);
+    if (t) out.push(t);
+    if (out.length >= COMMENTS_PER_POST) break;
+  }
+  return out;
+}
+
+// Comments are OAuth-only. Anon reddit.com is IP-blocked/rate-limited (the
+// listings themselves fall back to redlib precisely because anon .rss 403s), so
+// an anon comment fetch just burns the 45s Reddit gate for nothing. They start
+// populating once the cron carries Reddit creds — the same creds the whole feed
+// wants (see BACKLOG "Reddit news feeds — fix + re-enable"): drop client id/secret
+// in ~/.config/hidescore/reddit.env on the mini and getRedditToken() lights up.
+async function enrichWithComments(subreddit, items, token) {
+  if (!token) return;
+  for (const it of items.slice(0, COMMENTS_TOP_POSTS)) {
+    const postId = (String(it.articleUrl || "").match(/\/comments\/(\w+)/) || [])[1];
+    if (!postId) continue;
+    try {
+      const comments = await fetchRedditCommentsOAuth(subreddit, postId, token);
+      if (comments && comments.length) it.comments = comments;
+    } catch {
+      /* best-effort — a comment-less post is fine */
+    }
+  }
+}
+
+// Public entry point: fetch the listing, then best-effort enrich the top posts
+// with their top comments for the Feed view.
+async function fetchReddit(subreddit, sectionLabel) {
+  const token = await getRedditToken().catch(() => null);
+  const items = await fetchRedditListing(subreddit, sectionLabel, token);
+  try { await enrichWithComments(subreddit, items, token); } catch { /* best-effort */ }
+  return items;
 }
 
 // ── CBS Sports RSS (general + per-league) ─────────────────────────

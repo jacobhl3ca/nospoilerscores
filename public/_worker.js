@@ -1167,17 +1167,15 @@ export default {
         }
 
         if (!videoId) {
+          // Deliberately NOT cached: a game's recap can post any minute after
+          // full-time, and this app's whole value is surfacing it the instant
+          // it's up. Re-scraping a miss on each request is cheap enough at real
+          // traffic (a normal page load is ~20 lookups, all served) that it's
+          // not worth trading recap freshness for.
           return new Response(JSON.stringify({ error: "No results" }), {
             status: 404,
             headers: {
               "Content-Type": "application/json",
-              // Short negative cache. Without it, every card for a game whose
-              // recap isn't up yet re-scrapes YouTube on every request/refresh —
-              // and each game fires several such lookups — which piles onto
-              // YouTube's rate limiter and turns into "Search failed" cascades on
-              // busy days. 90s is short enough that a freshly-posted recap still
-              // appears within ~1.5 min of going live.
-              "Cache-Control": "public, max-age=90",
               "Access-Control-Allow-Origin": "*",
             },
           });
@@ -1195,11 +1193,6 @@ export default {
           status: 500,
           headers: {
             "Content-Type": "application/json",
-            // Brief negative cache on a scrape failure (usually YouTube rate-
-            // limiting the worker). Without it, a failed lookup is retried on
-            // every render, which deepens the rate-limit hole. 30s lets the
-            // limiter recover before we hammer it again.
-            "Cache-Control": "public, max-age=30",
             "Access-Control-Allow-Origin": "*",
           },
         });
