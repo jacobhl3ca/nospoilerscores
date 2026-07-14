@@ -46,28 +46,36 @@ function useAggregatedFeed(sources: NewsSource[]) {
   useEffect(() => {
     let alive = true;
     setItems(null);
-    (async () => {
-      const results = await Promise.all(
-        sources.map((s) => s.fetch().catch(() => [] as NewsItem[]))
+    if (sources.length === 0) { setItems([]); return; }
+    // Merge INCREMENTALLY as each source resolves — never block the whole feed on
+    // the slowest (or a hanging) source. De-dupe by permalink/id; re-sort on every
+    // commit. Stays null ("Loading…") until either the first items arrive or every
+    // source has settled empty (then [] → "No posts"), so there's no empty flash.
+    const acc = new Map<string, NewsItem>();
+    let settled = 0;
+    const commit = (force: boolean) => {
+      if (!alive || (acc.size === 0 && !force)) return;
+      setItems(
+        [...acc.values()].sort((a, b) => {
+          const ta = a.published ? Date.parse(a.published) : 0;
+          const tb = b.published ? Date.parse(b.published) : 0;
+          return tb - ta;
+        })
       );
-      if (!alive) return;
-      const seen = new Set<string>();
-      const merged: NewsItem[] = [];
-      for (const list of results) {
-        for (const it of list) {
-          const k = it.articleUrl || it.id;
-          if (!k || seen.has(k)) continue;
-          seen.add(k);
-          merged.push(it);
-        }
-      }
-      merged.sort((a, b) => {
-        const ta = a.published ? Date.parse(a.published) : 0;
-        const tb = b.published ? Date.parse(b.published) : 0;
-        return tb - ta;
-      });
-      setItems(merged);
-    })();
+    };
+    sources.forEach((s) => {
+      s.fetch()
+        .catch(() => [] as NewsItem[])
+        .then((list) => {
+          if (!alive) return;
+          for (const it of list) {
+            const k = it.articleUrl || it.id;
+            if (k && !acc.has(k)) acc.set(k, it);
+          }
+          settled += 1;
+          commit(settled === sources.length);
+        });
+    });
     return () => {
       alive = false;
     };

@@ -49,6 +49,14 @@ export function itemIsTextPost(item: NewsItem): boolean {
   return !(item.videoUrl || item.imageFullUrl || item.imageUrl || item.youtubeVideoId || item.embedUrl);
 }
 
+// A post is a "video" when it carries any playable clip — an official YouTube
+// highlight, a direct HLS/MP4, a Brightcove embed, OR a Reddit v.redd.it clip.
+// The 🎥 Videos filter keeps these across ALL sources (so Reddit clips count,
+// not just the Top-Videos highlight feeds).
+export function itemIsVideo(item: NewsItem): boolean {
+  return !!(item.youtubeVideoId || item.videoUrl || item.embedUrl);
+}
+
 export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
   const isReddit = !!item.section?.startsWith("r/");
   return {
@@ -93,6 +101,9 @@ interface NewsColumnProps {
   // Forwarded to this column's own title (non-strip layout only) so HomeContent
   // can measure --news-titlebar-h from it — see NewsColumnTitle.measureRef.
   titleMeasureRef?: (el: HTMLDivElement | null) => void;
+  // 🎥 Videos filter — when true, each source shows only its clip-bearing items
+  // (highlights + Reddit clips) and video-less sources render nothing.
+  videosOnly?: boolean;
 }
 
 // Sticky league title (with optional swap dropdown for the 3rd column).
@@ -694,7 +705,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex, videosOnly }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -717,18 +728,24 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex
   // prev/next list spanning every Reddit section in the column.
   useEffect(() => { onItemsLoaded?.(source.label, items); }, [items, source.label, onItemsLoaded]);
 
+  // 🎥 Videos filter: keep only clip-bearing items (includes Reddit v.redd.it
+  // posts). Once loaded, a source with no videos renders nothing so the board
+  // isn't full of empty cards.
+  const shown = videosOnly ? items.filter(itemIsVideo) : items;
+  if (videosOnly && !loading && shown.length === 0) return null;
+
   if (source.variant === "video") {
     return (
       <VideoSourceCard
         label={source.label}
         logoUrl={source.logoUrl}
-        items={items}
+        items={shown}
         loading={loading}
         onPlay={onPlayVideo}
       />
     );
   }
-  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={items} loading={loading} onPlay={onPlayVideo} siblings={siblings} baseIndex={baseIndex} />;
+  return <TextSourceCard label={source.label} logoUrl={source.logoUrl} items={shown} loading={loading} onPlay={onPlayVideo} siblings={siblings} baseIndex={baseIndex} />;
 }
 
 export default function NewsColumn({
@@ -744,6 +761,7 @@ export default function NewsColumn({
   widthClassName,
   onPlayVideo,
   titleMeasureRef,
+  videosOnly,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -794,6 +812,7 @@ export default function NewsColumn({
             onItemsLoaded={handleItemsLoaded}
             siblings={siblings}
             baseIndex={baseIndexBySource[source.label] ?? null}
+            videosOnly={videosOnly}
           />
         ))}
       </div>
