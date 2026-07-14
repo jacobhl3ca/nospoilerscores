@@ -217,7 +217,19 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     clear of "equality"/"equalitarian" (no s/z after "equali"), and the only benign
 //     collision left — the film/TV "The Equalizer" — is not an in-scope club or nation and
 //     never appears in the highlight titles this filter actually sees.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|grand slam|red card|all three points)\b/i;
+//     "own[- ]?goals?" joins the goal-event reveal family alongside "hat[- ]trick" and
+//     "equali[sz]\w*": an "own goal" names a specific goal that was scored, so a title
+//     carrying it reveals both that the match wasn't goalless and, usually, who it swung
+//     ("Late own goal breaks Brazil hearts", "Comedy own-goal gifts Spain the win") — the
+//     same partial-result leak as an equaliser, yet it has no digits (SCORE_RX misses it)
+//     and no existing keyword caught it. The optional "[- ]?" covers "own goal"/"own-goal"/
+//     "owngoal" and the "s?" the plural. Near-zero false-positive risk: the mandatory
+//     trailing "goal" keeps the leading \b clear of every other word ending in "own"
+//     (crown/brown/known/thrown/grown all fail — none is followed by "goal"), and the
+//     closing \b keeps it clear of "own goalkeeper" (the "l" of "goal" runs into "keeper",
+//     so no boundary follows) — the metaphorical "political own goal" never appears in the
+//     per-match highlight titles this filter actually sees.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
