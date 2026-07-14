@@ -71,6 +71,11 @@ export interface NewsItem {
   // by the modal with minimal formatting (paragraph breaks + autolinking).
   // Null for non-text posts so the modal layout stays a clean lightbox.
   body?: string | null;
+  // Top Reddit comments for the post (prebaked — Reddit blocks client/datacenter
+  // fetches, so the cron scrapes them from a residential IP). Plain text, spoiler-
+  // blurred in the Feed view like headlines. Only set on Reddit items, and only
+  // for the top handful of posts per feed (comment scraping is rate-limited).
+  comments?: string[] | null;
 }
 
 interface RawImage { url?: string; height?: number; width?: number }
