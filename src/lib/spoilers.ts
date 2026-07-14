@@ -263,7 +263,20 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     (mid-word, no boundary), and in a per-match highlight title "shootout" means nothing but a
 //     result decided from the spot (the colloquial "high-scoring shootout" is itself a result
 //     reveal, still the over-hide-is-safe side). Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+//     "deadlock\w*" joins the level/draw-reveal family alongside "goalless"/"scoreless"/
+//     "clean[- ]?sheets?": in a soccer highlight title "deadlock" reveals the result state
+//     either way it's used — a "goalless deadlock" / "sides remain deadlocked" reveals the
+//     match is (or ended) level, and "breaks the deadlock" / "deadlock broken" reveals a goal
+//     was scored and one side went ahead — the same partial-result leak as a clean sheet, yet
+//     it carries no digits (SCORE_RX misses it) and no existing keyword caught it. "Break the
+//     deadlock" is one of the most common phrasings in soccer/World Cup recap titles, so it
+//     fills a real gap in this WC-heavy app. Near-zero false-positive risk: no non-result
+//     English word begins with "deadlock", no in-scope club or nation is named "Deadlock", and
+//     the only other sense (a negotiation/transfer "deadlock") never appears in the per-match
+//     highlight titles this filter actually sees — it is applied ONLY to YouTube highlight
+//     video titles, never to news headlines. The trailing \w* covers deadlock/deadlocked/
+//     deadlocks/deadlocking. Byte-identical to the worker's copy.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|deadlock\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
