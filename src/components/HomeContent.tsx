@@ -36,10 +36,16 @@ function getSmartDefaultOffset(cutoffHour = 13): number {
   // land two days back (Jacob 6/13), so in that window show the service day
   // as-is (offset 0). Gated on the ET hour to match getNowET's shift basis.
   if (getETHour() < 1) return 0;
-  // User-local hour. The cutoff represents "when today's slate has likely
-  // started" from the user's wall-clock POV — Pacific user wants their own
-  // 1 PM, not 1 PM ET (which is 10 AM for them).
-  const hour = new Date().getHours();
+  // User-local hour in the app's EFFECTIVE zone (getETHour honors the Settings
+  // time-zone override, matching the `< 1` rollover guard above and the
+  // ratings-auto `< 12` morning check below). The cutoff represents "when
+  // today's slate has likely started" from the user's wall-clock POV — a
+  // Pacific user wants their own 1 PM, not 1 PM ET (which is 10 AM for them).
+  // Reading the raw device zone (new Date().getHours()) instead disagreed with
+  // getNowET's override-aware base date, landing override users on the wrong
+  // day; with no override, getTimeZone() is the device zone, so this is
+  // unchanged for everyone else.
+  const hour = getETHour();
   return hour < cutoffHour ? -1 : 0;
 }
 
@@ -369,9 +375,17 @@ export default function HomeContent({
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
+  // Dialog containers for the ratings/news explainer warnings — targeted by the
+  // focus-management effect below so keyboard/SR users land inside the overlay.
+  const ratingsExplainerRef = useRef<HTMLDivElement>(null);
+  const newsExplainerRef = useRef<HTMLDivElement>(null);
+  // Same, for the first-run league picker — see its Escape/scroll-lock/focus effect.
+  const leaguePickerRef = useRef<HTMLDivElement>(null);
   // Escape closes the ratings/news explainer warnings, matching their existing
   // backdrop-tap dismissal and the rest of the app's modals (GameDetailModal,
-  // VideoModal, WorldCupGroupsModal all close on Escape).
+  // VideoModal, WorldCupGroupsModal all close on Escape). This effect also seats
+  // focus into the open dialog and locks body scroll while it's up — the same
+  // treatment those other modals already get.
   useEffect(() => {
     if (!showRatingsExplainer && !showNewsExplainer) return;
     const onKey = (e: KeyboardEvent) => {
@@ -380,7 +394,45 @@ export default function HomeContent({
       setShowNewsExplainer(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Lock body scroll while the explainer is open, matching every other modal
+    // in the app (GameDetailModal / VideoModal / SettingsPanel / WorldCupGroupsModal).
+    // These two confirm dialogs fire mid-session — the feed is usually already
+    // scrolled when you toggle ratings or open news — so the background scrolling
+    // behind the dialog was the most visible gap. Plain overflow:hidden doesn't
+    // reliably stop iOS WebKit scrolling the feed behind the overlay; pinning the
+    // body with position:fixed + a negative top does, and restoring it returns
+    // you exactly where you were (the dialog root is position:fixed, so pinning
+    // the body underneath doesn't move it).
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prevBody = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    // Focus management (WCAG 2.4.3): move focus into the open dialog so keyboard
+    // and screen-reader users land inside the overlay instead of being stranded
+    // on the tab/toggle behind it, and restore focus to the opener on close.
+    // These dialogs already declare role="dialog" + aria-modal + aria-labelledby
+    // but never seated focus — the gap GameDetailModal / SettingsPanel already
+    // close. Focus the CONTAINER (tabIndex=-1) so no ring shows for mouse users;
+    // the first Tab then reaches the Cancel button.
+    const opener = document.activeElement as HTMLElement | null;
+    (showRatingsExplainer ? ratingsExplainerRef : newsExplainerRef).current?.focus();
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      body.style.overflow = prevBody.overflow;
+      body.style.position = prevBody.position;
+      body.style.top = prevBody.top;
+      body.style.width = prevBody.width;
+      window.scrollTo(0, scrollY);
+      opener?.focus?.();
+    };
   }, [showRatingsExplainer, showNewsExplainer]);
   // First-run league picker (shown once, only on a brand-new install — see the
   // mount effect). pickerSel is the ordered set of chosen leagues (max 3, mapped
@@ -847,11 +899,11 @@ export default function HomeContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLiveGames, selectedDate, prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague]);
 
-  const updatePrefs = (update: Partial<Preferences>) => {
+  const updatePrefs = useCallback((update: Partial<Preferences>) => {
     const next = { ...prefs, ...update };
     setPrefs(next);
     savePreferences(next);
-  };
+  }, [prefs]);
 
   // Three-state view toggle: scores-plain (🙈) | scores-rated (🙉) | news.
   // Single segmented control in the header replaces the old separate
@@ -1098,20 +1150,52 @@ export default function HomeContent({
     setShowLeaguePicker(false);
   };
 
-  const skipLeaguePicker = () => {
+  const skipLeaguePicker = useCallback(() => {
     updatePrefs({ leaguesOnboarded: true });
     setShowLeaguePicker(false);
-  };
+  }, [updatePrefs]);
 
   // Escape closes the first-run league picker too — same as tapping its
   // backdrop (both fall back to default leagues). Brings it in line with the
   // ratings/news explainers and every other modal in the app, which all
-  // dismiss on Escape.
+  // dismiss on Escape. This effect also locks body scroll and seats focus into
+  // the dialog while it's open — the same treatment the ratings/news explainers
+  // (and every other modal) already get, which this first-run picker was the
+  // last overlay still missing (it had role="dialog"/aria-modal + Escape but
+  // never pinned the feed behind it or moved focus off the trigger).
   useEffect(() => {
     if (!showLeaguePicker) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") skipLeaguePicker(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Lock body scroll (position:fixed + negative top pins iOS WebKit too, where
+    // plain overflow:hidden leaks the feed behind the overlay); restore returns
+    // you exactly where you were.
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prevBody = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    // Focus management (WCAG 2.4.3): move focus into the dialog (the tabIndex=-1
+    // container, so no ring shows for mouse users) and restore it to the opener
+    // on close.
+    const opener = document.activeElement as HTMLElement | null;
+    leaguePickerRef.current?.focus();
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      body.style.overflow = prevBody.overflow;
+      body.style.position = prevBody.position;
+      body.style.top = prevBody.top;
+      body.style.width = prevBody.width;
+      window.scrollTo(0, scrollY);
+      opener?.focus?.();
+    };
   }, [showLeaguePicker, skipLeaguePicker]);
 
   // Homepage switcher options = the active leagues minus the ones the user
@@ -1638,7 +1722,7 @@ export default function HomeContent({
                       style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                       title="Pick a date"
                       aria-label="Pick a date"
-                      aria-haspopup="true"
+                      aria-haspopup="dialog"
                       aria-expanded={calendarOpen}
                     >
                       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1710,7 +1794,7 @@ export default function HomeContent({
                   }}
                   title="Filter news"
                   aria-label="Filter news"
-                  aria-haspopup="true"
+                  aria-haspopup="dialog"
                   aria-expanded={newsFilterOpen}
                 >
                   <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1815,7 +1899,7 @@ export default function HomeContent({
                 style={{ color: calendarOpen ? "var(--accent)" : "var(--text-muted)", background: "transparent" }}
                 title="Pick a date"
                 aria-label="Pick a date"
-                aria-haspopup="true"
+                aria-haspopup="dialog"
                 aria-expanded={calendarOpen}
               >
                 <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2732,7 +2816,9 @@ export default function HomeContent({
               <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
               <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
               <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>, or{" "}
-              <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a>. Also see the{" "}
+              <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a>, plus spoiler-free{" "}
+              <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a> and{" "}
+              <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>. Also see the{" "}
               <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Or read our{" "}
               <a href="/privacy" style={{ textDecoration: "underline" }}>privacy policy</a> to see how little we collect.
             </p>
@@ -2828,11 +2914,16 @@ export default function HomeContent({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowRatingsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            ref={ratingsExplainerRef}
+            // tabIndex=-1 makes the container programmatically focusable (see the
+            // focus-management effect) without joining the tab order; outline
+            // none suppresses the ring since it's focused only to seat SR focus.
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="ratings-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
@@ -2903,11 +2994,16 @@ export default function HomeContent({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowNewsExplainer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            ref={newsExplainerRef}
+            // tabIndex=-1 makes the container programmatically focusable (see the
+            // focus-management effect) without joining the tab order; outline
+            // none suppresses the ring since it's focused only to seat SR focus.
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="news-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
@@ -2953,11 +3049,16 @@ export default function HomeContent({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={skipLeaguePicker}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            ref={leaguePickerRef}
+            // tabIndex=-1 makes the container programmatically focusable (see the
+            // focus-management effect) without joining the tab order; outline
+            // none suppresses the ring since it's focused only to seat SR focus.
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="league-picker-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
@@ -2981,6 +3082,14 @@ export default function HomeContent({
                     type="button"
                     disabled={full}
                     onClick={() => togglePick(o.sport)}
+                    // Multi-select toggle: expose the picked state to assistive
+                    // tech, since it's otherwise conveyed only by the accent
+                    // background (and a "1. " number prefix). Matches the
+                    // aria-pressed pattern every other toggle pill in the app
+                    // already uses (view tabs, the news reveal/text-post pills,
+                    // the World Cup groups band/day pills) — this picker was the
+                    // lone group missing it.
+                    aria-pressed={on}
                     className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     style={on
                       ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }

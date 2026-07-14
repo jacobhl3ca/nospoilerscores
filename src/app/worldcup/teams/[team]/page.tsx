@@ -38,6 +38,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       url: `https://hidescore.com${canonical}`,
       siteName: "HideScore",
+      // og:locale — matches layout.tsx + the /worldcup hub (Next replaces the
+      // parent openGraph wholesale, so each World Cup route must declare its
+      // own). Covers all 48 generated team pages.
+      locale: "en_US",
       type: "website",
       images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: `${team.name} World Cup coverage without spoilers` }],
     },
@@ -82,7 +86,7 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
         HideScore
       </p>
       <div className="mb-4 flex items-center gap-3">
-        <span className="inline-flex h-12 w-16 items-center justify-center rounded-xl text-2xl font-bold" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+        <span aria-hidden="true" className="inline-flex h-12 w-16 items-center justify-center rounded-xl text-2xl font-bold" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
           {team.flag}
         </span>
         <h1 className="text-2xl font-bold">{title}</h1>
@@ -179,6 +183,12 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
                 name: title,
                 description: `Spoiler-free ${team.name} World Cup schedule, ratings, and highlights on HideScore.`,
                 url: `https://hidescore.com${canonical}`,
+                // Declare the page's content language, matching <html lang="en">
+                // and the inLanguage signal already on the WebPage nodes for the
+                // SEO landing pages (SeoLandingPage) and the site-level WebSite /
+                // WebApplication nodes (layout). Keeps every WebPage node's locale
+                // signal consistent across the site.
+                inLanguage: "en",
                 isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
                 about: [
                   { "@type": "SportsTeam", name: team.name, sport: "Soccer" },
@@ -203,6 +213,10 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
               },
               {
                 "@type": "FAQPage",
+                // Same locale signal as the WebPage node above, matching the
+                // inLanguage the FAQPage nodes already carry on SeoLandingPage
+                // and /faq.
+                inLanguage: "en",
                 mainEntity: faq.map((item) => ({
                   "@type": "Question",
                   name: item.q,

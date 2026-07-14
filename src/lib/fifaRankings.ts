@@ -48,12 +48,27 @@ const RANKS: Record<string, number> = {
   "south africa": 60,
   "saudi arabia": 61,
   "jordan": 63,
+  // ESPN's fifa.world/standings displayName is the spelled-out "Bosnia and
+  // Herzegovina" (see WorldCupBracket.tsx), which normalizes to
+  // "bosnia and herzegovina" — not the Wikipedia short form "Bosnia-Herzegovina"
+  // this table was seeded from. Key both spellings so the #64 rank resolves
+  // whichever string ESPN sends; without the "and" form the groups overlay
+  // showed "—" and sank the team to the bottom of its group.
+  "bosnia and herzegovina": 64,
   "bosnia-herzegovina": 64,
   "cape verde": 67,
   "ghana": 73,
   "curacao": 82,
   "haiti": 83,
   "new zealand": 85,
+  // Same fix as the Bosnia block above, for two more nations the snapshot keyed
+  // under a form ESPN's fifa.world/standings is unlikely to send: ESPN commonly
+  // renders these as "DR Congo" and "Ivory Coast"/"Côte d'Ivoire", which
+  // normalize away from the "congo dr" / "ivory coast" primary keys. Alias each
+  // to the same rank so the badge resolves whichever string ESPN sends; the
+  // primary keys stay put, so no currently-working lookup can regress.
+  "dr congo": 46, // vs. "congo dr"
+  "cote d'ivoire": 33, // vs. "ivory coast" (FIFA's official French name)
 };
 
 // Normalize a team display name (lowercase, strip diacritics) for lookup.

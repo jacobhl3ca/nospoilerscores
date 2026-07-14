@@ -163,13 +163,20 @@ export function NewsColumnTitle({
               className="cursor-pointer transition-colors hover:opacity-80"
               style={{ color: "var(--text)" }}
               title="Switch news league"
-              aria-haspopup="true"
+              aria-haspopup="dialog"
               aria-expanded={swapOpen}
             >
               <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
             </button>
             {swapOpen && (
               <div
+                // The toggle above declares aria-haspopup + aria-expanded, so
+                // name the popover it opens and give it a role — otherwise it
+                // surfaces to assistive tech as an anonymous, role-less region.
+                // Matches the role="dialog" + aria-label pattern the rest of the
+                // app's overlays use (see DateNav's calendar popover).
+                role="dialog"
+                aria-label="Switch news league"
                 className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[120px]"
                 style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
               >
@@ -190,6 +197,10 @@ export function NewsColumnTitle({
                     <button
                       key={opt.sport}
                       onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
+                      // The active league is otherwise signalled only by color +
+                      // weight; aria-current voices it to screen readers (matches
+                      // the DateNav day-pill pattern).
+                      aria-current={isCurrent ? "true" : undefined}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{
                         color: isCurrent ? "var(--accent)" : isElsewhere ? "var(--text-muted)" : "var(--text)",
@@ -209,6 +220,7 @@ export function NewsColumnTitle({
                 {onPickEspn && (
                   <button
                     onClick={() => { onPickEspn(); setSwapOpen(false); }}
+                    aria-current={espnActive ? "true" : undefined}
                     className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                     style={{
                       color: espnActive ? "var(--accent)" : "var(--text)",

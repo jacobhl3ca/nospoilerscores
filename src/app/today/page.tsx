@@ -4,13 +4,19 @@ import HomeContent from "@/components/HomeContent";
 export const metadata: Metadata = {
   title: "Today's Sports Scores — No Spoilers | HideScore",
   description:
-    "Today's NBA, MLB, NHL, and NFL games without spoilers. See which games are worth watching before the score is revealed.",
+    "Today's NBA, MLB, NHL, NFL, and soccer games without spoilers. See which games are worth watching before the score is revealed.",
   alternates: { canonical: "/today" },
   openGraph: {
     title: "Today's Sports Scores — No Spoilers | HideScore",
     description: "Today's games, spoiler-free. Ratings tell you what's worth watching.",
     url: "https://hidescore.com/today",
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx. A page's
+    // openGraph replaces the parent's wholesale (Next merges metadata per top-
+    // level field, not deep), so without this the homepage was the only route
+    // emitting og:locale — social unfurlers (Facebook/LinkedIn/Slack/iMessage)
+    // got none for the core date routes, the ones most often shared.
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: "HideScore — today's sports scores, spoiler-free" }],
   },

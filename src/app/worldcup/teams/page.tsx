@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     description: DESC,
     url: "https://hidescore.com/worldcup/teams",
     siteName: "HideScore",
+    // og:locale — matches layout.tsx + the /worldcup hub (Next replaces the
+    // parent openGraph wholesale, so each World Cup route must declare its own).
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore - 2026 World Cup teams without spoilers" }],
   },
@@ -47,7 +50,7 @@ export default function WorldCupTeamsPage() {
             className="rounded-lg px-3 py-2 text-sm font-semibold transition-colors flex items-center gap-2"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
           >
-            <span className="inline-flex h-6 w-8 items-center justify-center rounded-md text-sm" style={{ background: "var(--bg-card-hover)" }}>
+            <span aria-hidden="true" className="inline-flex h-6 w-8 items-center justify-center rounded-md text-sm" style={{ background: "var(--bg-card-hover)" }}>
               {team.flag}
             </span>
             <span className="min-w-0 flex-1">
@@ -81,7 +84,27 @@ export default function WorldCupTeamsPage() {
                 name: TITLE,
                 description: DESC,
                 url: "https://hidescore.com/worldcup/teams",
+                // Declare the page's content language, matching the inLanguage
+                // signal every other WebPage node on the site carries (the
+                // WebApplication/WebSite in layout, the shared SeoLandingPage
+                // component, and the sibling /worldcup/teams/<slug> CollectionPage).
+                // CollectionPage is a WebPage subtype, so this is a valid locale hint.
+                inLanguage: "en",
                 isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
+                // Enumerate the team links this page renders so crawlers can
+                // discover every /worldcup/teams/<slug> detail page from the
+                // structured data, not just the visible <a> grid. Mirrors the
+                // on-page order (FIFA rank) via ListItem.position.
+                mainEntity: {
+                  "@type": "ItemList",
+                  numberOfItems: WORLD_CUP_TEAMS.length,
+                  itemListElement: WORLD_CUP_TEAMS.map((team, index) => ({
+                    "@type": "ListItem",
+                    position: index + 1,
+                    name: team.name,
+                    url: `https://hidescore.com/worldcup/teams/${team.slug}`,
+                  })),
+                },
               },
               {
                 "@type": "BreadcrumbList",

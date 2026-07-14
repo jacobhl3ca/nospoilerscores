@@ -666,8 +666,60 @@ export default {
           //     match event), "(grab|gets|gains) all three points" / "all
           //     three points" — soccer-cliché for a 3-point win that
           //     bypassed every prior keyword.
+          //   • Everyday result verbs (mirrors lib/spoilers.ts): "edge(s)"/
+          //     "rout(s)"/"upset"/"clinch"/"sweep"/"ousts"/"eliminates"/
+          //     "advances" — each names a winner or a knockout ("Warriors
+          //     edge Lakers") yet slipped past the beat/defeat/win set. The
+          //     leading \b keeps "edge" out of "hedge"/"wedge"; "rout" is
+          //     spelled out so it can't swallow "route"/"routine". The
+          //     beat/defeat/win verbs are widened to their inflections too
+          //     (beat\w*/defeat\w*/won/lost) so a past-tense recap title
+          //     ("Warriors beat Lakers", "Spurs won", "Lakers lost") is
+          //     caught, not just the present tense — matching lib/spoilers.ts
+          //     so the client's title-reveal check and this filter agree.
+          //     "shut[- ]?outs?" adds the shutout framing ("Bruins shut out
+          //     Canadiens", "Hellebuyck shutout") — a winner-and-nil reveal that
+          //     read past the earlier set; "[- ]?" covers shutout/shut out/
+          //     shut-out and "s?" the plural. "outlast\w*"/"prevail\w*" add the
+          //     endure-to-win framing ("Warriors outlast Nuggets", "USMNT
+          //     prevail") — each names the winner and neither word means anything
+          //     but winning, so the false-positive risk is negligible.
+          //     "toppl\w*"/"trounc\w*"/"demolish\w*" add the overthrow/blowout
+          //     framing ("topple Celtics", "trounce United", "demolish Barca") —
+          //     each names the winner or a routed favorite and means nothing but a
+          //     defeat; the toppl/trounc stems drop the trailing "e" so the -ing
+          //     forms still match. "thrash\w*" adds the same blowout framing so
+          //     common in soccer/World Cup headlines ("Spain thrash Georgia",
+          //     "City thrash United") — a decisive-win reveal that means nothing
+          //     but a lopsided defeat. "cruise\w*" adds the easy-win framing
+          //     ("Real Madrid cruise past Getafe", "City cruise to victory") — a
+          //     decisive-win reveal the existing verbs miss ("edge" is the narrow
+          //     win, nothing covered the comfortable one), meaning nothing but
+          //     winning comfortably in a highlight title. "outclass\w*" adds the
+          //     superiority framing ("Brazil outclass Chile", "Spain outclassed
+          //     Georgia") — a decisive-win reveal the blowout verbs miss, meaning
+          //     nothing but winning comfortably in ordinary English. "outplay\w*"
+          //     adds the on-the-day superiority framing ("Brazil outplay Croatia",
+          //     "Germany outplayed Spain") — same outXXX family as the four above,
+          //     nothing but the winning side begins with "outplay", so the
+          //     false-positive risk is the same negligible level. "outscor\w*"
+          //     adds the most literal winner-reveal of the family — whoever
+          //     outscores the other side won ("Warriors outscore Lakers", "Spain
+          //     outscored Italy") — and no non-result word begins with "outscor".
+          //     Kept byte-identical to spoilers.ts.
+          //     "holds?[- ]?off"/"held[- ]?off" catch the protect-the-lead win
+          //     framing ("Warriors hold off Lakers", "Bills held off Chiefs") —
+          //     the mandatory trailing "off" keeps it clear of household/threshold,
+          //     and the phrase means nothing but the leading side surviving to win.
+          //     "victory|victories|victorious" join the winning/winner/wins/won/win
+          //     set — "victory" is one of the commonest outcome words in recap
+          //     titles ("World Cup victory", "seal victory", "victorious"), yet none
+          //     of its forms fired. Spelled out (not "victor\w*") so it can't swallow
+          //     "Victoria"; the one benign collision (A-League's Melbourne Victory)
+          //     is outside this app's MLS+UEFA+WC soccer scope. Byte-identical to
+          //     spoilers.ts.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stuns|stunner|crushes|dominat\w*|defeats|beats|leads?|leader|winning|winner|wins|loses|loss|hat[- ]trick|no[- ]hitter|grand slam|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|grand slam|red card|all three points)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks

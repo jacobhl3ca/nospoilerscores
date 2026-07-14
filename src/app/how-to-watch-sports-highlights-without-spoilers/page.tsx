@@ -62,6 +62,12 @@ export const metadata: Metadata = {
     description: DESC,
     url: URL,
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx and the
+    // World Cup/date routes. A page's openGraph replaces the parent's wholesale
+    // (Next merges metadata per top-level field, not deep), so without this these
+    // SEO landing pages emitted no og:locale for social unfurlers (Facebook/
+    // LinkedIn/Slack/iMessage).
+    locale: "en_US",
     type: "article",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: TITLE }],
   },
@@ -159,6 +165,12 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
                 "@type": "HowTo",
                 name: "How to watch sports highlights without spoilers",
                 description: DESC,
+                // Locale signal every other schema node on the site carries
+                // (the WebApplication/WebSite in layout, the shared
+                // SeoLandingPage component, and the sibling WebPage/FAQPage
+                // nodes below). HowTo is a CreativeWork subtype, so inLanguage
+                // is a valid content-language hint here.
+                inLanguage: "en",
                 totalTime: "PT1M",
                 step: STEPS.map((step, index) => ({
                   "@type": "HowToStep",
@@ -173,6 +185,7 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
                 name: TITLE,
                 description: DESC,
                 url: URL,
+                inLanguage: "en",
                 isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
                 about: [
                   { "@type": "Thing", name: "sports highlights without spoilers" },
@@ -189,6 +202,7 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
               },
               {
                 "@type": "FAQPage",
+                inLanguage: "en",
                 mainEntity: FAQ.map((item) => ({
                   "@type": "Question",
                   name: item.q,

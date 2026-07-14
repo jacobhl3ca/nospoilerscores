@@ -106,6 +106,23 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         playoffLabel: game.playoffLabel ? "Playoffs" : null,
         seriesStatus: null,
         venue: "",
+        // The venue city/state ("Minneapolis, Minnesota") is as identifying as
+        // the team names transformTeam scrubs, and it renders on the detail
+        // modal's venue line right after `venue`. Drop it so that line shows
+        // nothing AND the weather effect — which geocodes this exact city — no-ops
+        // (it guards on !venueLocation), instead of leaking the real location.
+        venueLocation: undefined,
+        // Pre-game probable pitchers ("Z. Wheeler (5-1, 2.22)") and the live MLB
+        // no-hit / cycle-watch badges carry real player and team identities the
+        // team-rename can't rewrite in place — transformTeam only touches the two
+        // Team objects, so these rode straight through `...game` and leaked real
+        // names (detail-modal probables line; card badge tooltips) under ?demo=1.
+        // Null them so those rows/badges fall back to their empty state, exactly
+        // as golf and the F1/UFC eventCard already do.
+        homeProbable: null,
+        awayProbable: null,
+        noHitterPitchingTeam: null,
+        cycleWatch: null,
       };
     };
     return {
@@ -119,6 +136,13 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         ? { date: league.previousGameDay.date, games: league.previousGameDay.games.map(transformGame) }
         : null,
       golfTournament: null,
+      // Like golfTournament, the F1/UFC event card carries real identities the
+      // anonymizer can't rewrite in place — the GP/fight-card title, venue
+      // subtitle, broadcaster, and (UFC) every fighter's name. transformGame
+      // only touches games[], so without this the eventCard leaked real data
+      // straight through `...league` under ?demo=1. Null it so those columns
+      // fall back to the empty state, exactly as golf already does.
+      eventCard: null,
     };
   });
 }

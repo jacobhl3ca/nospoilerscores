@@ -321,6 +321,30 @@ html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
   outline-offset: 2px;
 }
 
+/* Visible keyboard focus ring on the footer feedback input (WCAG 2.4.7). The
+   input ships Tailwind's outline-none — in v4 that's outline-style:none, which
+   fully drops the focus indicator — and its border doesn't change on focus, so
+   a keyboard Tab landing on the field gave no visible cue. Re-add the same 2px
+   accent ring the view tabs / date-nav pills / monkey toggle use, keyboard-only
+   (:focus-visible) so mouse clicks stay clean. Keyed on the input's stable id
+   so the rule lives with the app's other focus rings and survives a component
+   rewrite. The id selector outranks the .outline-none utility. */
+#hs-feedback-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Same WCAG 2.4.7 fix for the World Cup groups/ranked "Highlight a country"
+   filter input: it also ships Tailwind's outline-none and its border doesn't
+   change on focus, so a keyboard Tab landing on it gave no visible cue. Re-add
+   the same keyboard-only (:focus-visible) accent ring, keyed on its stable id
+   (the team-search input in Settings keeps the browser default outline, so it
+   isn't affected). Mouse clicks stay clean. */
+#wc-country-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* Single-column board (Settings → Board layout → Single column): bigger cards.
    Scoped to the .ns-cards-lg board wrapper so the multi-column board is
    untouched. Bumps team logos + full team names a notch — the wider column

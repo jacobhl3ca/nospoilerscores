@@ -41,6 +41,12 @@ export const metadata: Metadata = {
     description: DESC,
     url: `https://hidescore.com${CANONICAL}`,
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx and the
+    // World Cup/date routes. A page's openGraph replaces the parent's wholesale
+    // (Next merges metadata per top-level field, not deep), so without this these
+    // SEO landing pages emitted no og:locale for social unfurlers (Facebook/
+    // LinkedIn/Slack/iMessage).
+    locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: TITLE }],
   },

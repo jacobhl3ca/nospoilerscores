@@ -118,13 +118,13 @@ export default function WorldCupBracket({ selectedDate }: { selectedDate?: strin
   }, [focusRoundKey]);
 
   if (failed) {
-    return <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Couldn&rsquo;t load the bracket right now.</p>;
+    return <p role="status" aria-live="polite" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Couldn&rsquo;t load the bracket right now.</p>;
   }
   if (!bracket) {
-    return <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Loading bracket&hellip;</p>;
+    return <p role="status" aria-live="polite" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>Loading bracket&hellip;</p>;
   }
   if (!bracket.knockoutStarted) {
-    return <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>The knockout bracket begins after the group stage.</p>;
+    return <p role="status" aria-live="polite" className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>The knockout bracket begins after the group stage.</p>;
   }
 
   return (

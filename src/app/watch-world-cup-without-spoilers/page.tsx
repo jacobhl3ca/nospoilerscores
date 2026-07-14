@@ -35,6 +35,12 @@ export const metadata: Metadata = {
     description: DESC,
     url: "https://hidescore.com/watch-world-cup-without-spoilers",
     siteName: "HideScore",
+    // og:locale matches the site-level Open Graph block in layout.tsx and the
+    // World Cup/date/SEO-landing routes. A page's openGraph replaces the parent's
+    // wholesale (Next merges metadata per top-level field, not deep), so without
+    // this this page emitted no og:locale for social unfurlers (Facebook/
+    // LinkedIn/Slack/iMessage). en_US is the OG-spec format (underscore, not "en").
+    locale: "en_US",
     type: "article",
     // Emit article:published_time / article:modified_time / article:author so
     // this OG "article" carries the same freshness + authorship signals as the
@@ -230,6 +236,13 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 "@type": "Article",
                 headline: "How to Watch the 2026 World Cup Without Spoilers",
                 description: DESC,
+                // Declare the article's content language, matching the inLanguage
+                // signal the site adds to its other CreativeWork schema nodes (the
+                // WebApplication/WebSite in layout, the WebPage nodes on the SEO
+                // landing + World Cup team pages, and the FAQPage below). Article
+                // is a CreativeWork subtype, so this is a valid locale hint that
+                // keeps every schema node's language signal consistent site-wide.
+                inLanguage: "en",
                 // image is a recommended Article field for Google rich results;
                 // reuse the page's OG card (a real, valid 1200×630 image).
                 image: "https://hidescore.com/og-worldcup.png",
@@ -264,6 +277,11 @@ export default function WatchWorldCupWithoutSpoilersPage() {
               },
               {
                 "@type": "FAQPage",
+                // Same locale signal as the Article node above, matching the
+                // inLanguage the FAQPage nodes already carry on /faq and the SEO
+                // landing / World Cup team pages. FAQPage is a WebPage subtype, so
+                // this is a valid locale hint.
+                inLanguage: "en",
                 mainEntity: FAQ.map((item) => ({
                   "@type": "Question",
                   name: item.q,

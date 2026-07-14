@@ -5,6 +5,7 @@ import { getApiBase } from "@/lib/youtube";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
+import { getTimeZone } from "@/lib/etDay";
 
 interface VideoModalProps {
   videoId: string;
@@ -146,10 +147,11 @@ function extractSearchQuery(fallbackUrl: string): string | null {
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
 // fences) is rare in posts and not worth pulling marked/markdown-it for.
-// Escapes HTML first so a post with literal "<script>" is safe.
+// Every text segment is pushed as a React child (never dangerouslySetInnerHTML),
+// so React escapes it on render — a post with literal "<script>" or "&" is
+// already safe and shows verbatim. A manual HTML-escape here would double-encode,
+// painting "AT&T" as the literal "AT&amp;T".
 function renderRedditBody(raw: string): React.ReactNode {
-  const escape = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // Split on blank-line gaps into paragraphs. Inside a paragraph, single
   // newlines become <br/>.
   const paragraphs = raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
@@ -162,7 +164,7 @@ function renderRedditBody(raw: string): React.ReactNode {
     let match: RegExpExecArray | null;
     while ((match = urlRe.exec(para)) !== null) {
       const before = para.slice(lastIdx, match.index);
-      if (before) parts.push(escape(before));
+      if (before) parts.push(before);
       const url = match[0];
       parts.push(
         <a
@@ -179,7 +181,7 @@ function renderRedditBody(raw: string): React.ReactNode {
       lastIdx = match.index + url.length;
     }
     const tail = para.slice(lastIdx);
-    if (tail) parts.push(escape(tail));
+    if (tail) parts.push(tail);
     // Handle intra-paragraph single newlines → <br/>. Walk parts and split
     // each string segment on \n, interleaving <br/> elements.
     const withBreaks: React.ReactNode[] = [];
@@ -305,8 +307,16 @@ function ArticleMeta({ byline, published, className, style }: {
 }) {
   const rel = published ? formatPublished(published) : "";
   if (!byline && !rel) return null;
+  // Show the exact-time tooltip in the app's EFFECTIVE zone (the Settings
+  // "Time zone" override, or the device zone by default) — the same zone every
+  // game card, event tile, and slate label already use via getTimeZone(). This
+  // was the one clock-time display left reading the raw device zone, so an
+  // override user hovering a news item saw a timestamp in a different zone than
+  // the times shown everywhere else. Without an override getTimeZone() resolves
+  // to the device zone, so the rendered tooltip is byte-identical for everyone
+  // who hasn't set one.
   const exact = published && rel
-    ? new Date(published).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    ? new Date(published).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: getTimeZone() })
     : undefined;
   return (
     <p className={className} style={style}>
@@ -1038,6 +1048,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const initPlayer = () => {
       const YT = window.YT;
       if (!YT) return;
+      // The iframe_api script can finish downloading AFTER the modal has closed
+      // (fast Esc on a cold load). By then this effect's cleanup has run and the
+      // #yt-player mount is gone, so `new YT.Player("yt-player", …)` would build
+      // against a missing element and throw. Bail if the mount is no longer there.
+      if (!document.getElementById("yt-player")) return;
       playerRef.current = new YT.Player("yt-player", {
         width: "100%",
         height: "100%",
@@ -1137,7 +1152,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         window.clearTimeout(watchdogRef.current);
         watchdogRef.current = null;
       }
+      // Clear the pending API-ready callback if it's still ours, so a late
+      // iframe_api load can't fire initPlayer (a stale closure over this now-
+      // unmounted effect's currentId) against the removed #yt-player element.
+      if (window.onYouTubeIframeAPIReady === initPlayer) {
+        window.onYouTubeIframeAPIReady = undefined;
+      }
       if (playerRef.current?.destroy) playerRef.current.destroy();
+      // Drop the reference to the just-destroyed instance so the position poll
+      // (which re-subscribes on ytMode, not currentId) can't call methods on it
+      // during a fallback swap before the replacement player is built.
+      playerRef.current = null;
     };
   }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls]);
 
@@ -1585,6 +1610,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   aria-valuemin={0}
                   aria-valuemax={Math.round(seekCap * 100)}
                   aria-valuenow={Math.round(Math.min(progress, seekCap) * 100)}
+                  // When the fill is hidden to avoid spoilers, the numeric
+                  // position must not leak through aria-valuenow either — a
+                  // screen reader would announce the exact percentage the
+                  // sighted track deliberately withholds. aria-valuetext takes
+                  // precedence over aria-valuenow, so it's spoken instead while
+                  // valuenow stays present for spec-valid relative nudging.
+                  aria-valuetext={seekFill === "off" ? "Position hidden to avoid spoilers" : undefined}
                   tabIndex={0}
                   title="Tap or drag to seek"
                   onKeyDown={(e) => {
