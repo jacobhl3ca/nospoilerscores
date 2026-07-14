@@ -1396,11 +1396,10 @@ export default function HomeContent({
   // fall through to the tail so new sources keep surfacing.
   const newsTypeFilter = prefs.newsTypeFilter ?? "all";
   const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
-  // The 🎥 Videos quick-filter overrides the funnel type filter to the video
-  // sources while it's on (the funnel keeps its own value for the UI). Used for
-  // source selection in both Cards and Feed; the Feed additionally filters items
-  // to those carrying a clip.
-  const effectiveNewsTypeFilter = prefs.newsVideosOnly ? "topvideos" : newsTypeFilter;
+  // The 🎥 Videos quick-filter is ITEM-level (not source-level) so it includes
+  // Reddit video posts (v.redd.it clips), not just the "Top Videos" highlight
+  // sources: Cards filters each source's items to those with a clip (NewsColumn
+  // `videosOnly`), and Feed filters its merged items (NewsFeed `videosOnly`).
   // Source-filter options + the user's drag-reordered order. Unknown labels in
   // the saved order are ignored; new options not yet in the saved order fall
   // through to the tail in default order.
@@ -1500,6 +1499,31 @@ export default function HomeContent({
     const ro = new ResizeObserver(measure);
     ro.observe(row);
     newsTitleRowRoRef.current = ro;
+  }, []);
+
+  // Measure the sticky news toolbar so the Cards league titles + per-source
+  // headers pin right below it (top: header-h + news-toolbar-h + …). Same
+  // callback-ref + ResizeObserver pattern as newsTitleRowRef — the toolbar only
+  // mounts in news view, so a deps-based effect would race the mount.
+  const newsToolbarRoRef = useRef<ResizeObserver | null>(null);
+  const newsToolbarRef = useCallback((el: HTMLDivElement | null) => {
+    const root = rootRef.current;
+    if (newsToolbarRoRef.current) {
+      newsToolbarRoRef.current.disconnect();
+      newsToolbarRoRef.current = null;
+    }
+    if (!root) return;
+    if (!el) {
+      root.style.removeProperty("--news-toolbar-h");
+      return;
+    }
+    const measure = () => {
+      root.style.setProperty("--news-toolbar-h", `${el.getBoundingClientRect().height}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    newsToolbarRoRef.current = ro;
   }, []);
 
   useEffect(() => {
@@ -1963,62 +1987,6 @@ export default function HomeContent({
           </div>
         </div>
 
-        {/* News toolbar — Cards/Feed layout + Headlines / Videos / Text-posts
-            toggles. Lives INSIDE the sticky header so it pins to the top while
-            scrolling, like the leagues (Jacob 7/14). The header's ResizeObserver
-            folds its height into --header-h, so the Cards league titles auto-stack
-            right below it — no extra offset math. */}
-        {showNews && (
-          <div className="max-w-6xl mx-auto pb-2 flex justify-center flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              {([["Cards", false], ["Feed", true]] as const).map(([label, on]) => (
-                <button
-                  key={label}
-                  onClick={() => updatePrefs({ newsFeedView: on })}
-                  className="px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
-                  style={{
-                    background: !!prefs.newsFeedView === on ? "var(--accent)" : "transparent",
-                    color: !!prefs.newsFeedView === on ? "white" : "var(--text-muted)",
-                  }}
-                  aria-pressed={!!prefs.newsFeedView === on}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <NewsToggleChip
-              active={!!prefs.revealNewsTitles}
-              onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
-              title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
-            >
-              {prefs.revealNewsTitles ? (
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
-              ) : (
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
-              )}
-              <span>Headlines</span>
-            </NewsToggleChip>
-            <NewsToggleChip
-              active={!!prefs.newsVideosOnly}
-              onClick={() => updatePrefs({ newsVideosOnly: !prefs.newsVideosOnly })}
-              title="Show only video highlights"
-            >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
-              <span>Videos</span>
-            </NewsToggleChip>
-            {!prefs.revealNewsTitles && (
-              <NewsToggleChip
-                active={!!prefs.showTextPosts}
-                onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
-                title="Text posts have no pic or video, so they're hidden while headlines are blurred. Tap to show them (readable)."
-              >
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
-                <span>Text posts</span>
-              </NewsToggleChip>
-            )}
-          </div>
-        )}
-
       </header>
       {/* sm+ only: date nav sits BELOW the header divider line (desktop has the
           view tabs in the top-row middle, so the date nav drops here). On mobile
@@ -2051,8 +2019,63 @@ export default function HomeContent({
         </div>
       )}
 
-      {/* News toolbar moved INTO the sticky <header> above (so it pins to the top
-          while scrolling, like the league titles — Jacob 7/14). See newsToolbar. */}
+      {/* News toolbar — Cards/Feed layout + Headlines / Videos / Text-posts
+          toggles. Sits one row below the header (its original spot), but STICKY:
+          it pins to the top while scrolling, like the league titles (Jacob 7/14).
+          Its measured height drives --news-toolbar-h so the Cards league titles +
+          per-source headers stack right below it (see globals.css). */}
+      {showNews && (
+        <div ref={newsToolbarRef} className="news-toolbar-sticky sticky z-30" style={{ background: "var(--bg)" }}>
+          <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap items-center gap-2 pt-2 pb-2">
+            <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+              {([["Cards", false], ["Feed", true]] as const).map(([label, on]) => (
+                <button
+                  key={label}
+                  onClick={() => updatePrefs({ newsFeedView: on })}
+                  className="px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                  style={{
+                    background: !!prefs.newsFeedView === on ? "var(--accent)" : "transparent",
+                    color: !!prefs.newsFeedView === on ? "white" : "var(--text-muted)",
+                  }}
+                  aria-pressed={!!prefs.newsFeedView === on}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <NewsToggleChip
+              active={!!prefs.revealNewsTitles}
+              onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
+              title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
+            >
+              {prefs.revealNewsTitles ? (
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
+              ) : (
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+              )}
+              <span>Headlines</span>
+            </NewsToggleChip>
+            <NewsToggleChip
+              active={!!prefs.newsVideosOnly}
+              onClick={() => updatePrefs({ newsVideosOnly: !prefs.newsVideosOnly })}
+              title="Show only video posts (highlights + Reddit clips)"
+            >
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+              <span>Videos</span>
+            </NewsToggleChip>
+            {!prefs.revealNewsTitles && (
+              <NewsToggleChip
+                active={!!prefs.showTextPosts}
+                onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
+                title="Text posts have no pic or video, so they're hidden while headlines are blurred. Tap to show them (readable)."
+              >
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
+                <span>Text posts</span>
+              </NewsToggleChip>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Scores board stretches to max-w-7xl when five columns are actually
           RENDERING — keyed off the fetched data, not the viewport, so crossing
@@ -2239,7 +2262,7 @@ export default function HomeContent({
             : visibleNewsEntries;
           const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
             const filtered = entry.orderedCascade
-              .filter((s) => effectiveNewsTypeFilter === "all" || classifySource(s) === effectiveNewsTypeFilter)
+              .filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter)
               .filter((s) => !newsHiddenSources.includes(s.label));
             // When viewing "All", honor the user's source-type order from the
             // funnel popover (Jacob 6/1) — dragging a source higher makes its
@@ -2475,6 +2498,7 @@ export default function HomeContent({
                     hideTitle
                     onPlayVideo={playNewsVideo}
                     widthClassName={widthClassFor()}
+                    videosOnly={!!prefs.newsVideosOnly}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -2496,6 +2520,7 @@ export default function HomeContent({
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}
+                      videosOnly={!!prefs.newsVideosOnly}
                       // Non-strip layout: the columns render their own titles
                       // (no shared strip row), so ride the same measuring ref on
                       // the first column's title to keep --news-titlebar-h live.

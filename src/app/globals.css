@@ -1,11 +1,23 @@
 @import "tailwindcss";
 
-.league-sticky-top {
+/* The news toolbar (Cards/Feed + toggles) pins directly under the app header. */
+.news-toolbar-sticky {
   top: var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem));
 }
 @media (min-width: 640px) {
-  .league-sticky-top {
+  .news-toolbar-sticky {
     top: var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem));
+  }
+}
+
+/* League titles pin below the header AND the sticky news toolbar (Cards view).
+   --news-toolbar-h defaults to 0, so scores view (no toolbar) is unchanged. */
+.league-sticky-top {
+  top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-h, 0px));
+}
+@media (min-width: 640px) {
+  .league-sticky-top {
+    top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-h, 0px));
   }
 }
 
@@ -18,8 +30,9 @@
   /* Default --news-titlebar-h to 0: in 1-col / 2-col modes the per-league
      title row isn't rendered, so the source header should pin flush against
      the app header instead of leaving a 4.5rem gap where scrolled content
-     bleeds through and visually clips the rounded top corners. */
-  top: calc(var(--header-h, 0px) + var(--news-titlebar-h, 0px));
+     bleeds through and visually clips the rounded top corners.
+     --news-toolbar-h adds the sticky news toolbar (0 outside news view). */
+  top: calc(var(--header-h, 0px) + var(--news-toolbar-h, 0px) + var(--news-titlebar-h, 0px));
 }
 
 /* News headlines (and Reddit selftext bodies) are spoilers — they give away the
