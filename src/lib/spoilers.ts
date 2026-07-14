@@ -129,6 +129,23 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     "household"/"threshold"/"stronghold"/"on hold", and in a highlight title the
 //     phrase means nothing but the leading side surviving to win, so it adds
 //     coverage with the same negligible false-positive risk as the verbs above.
+//     "sees?[- ]?off"/"saw[- ]?off" are the direct semantic sibling of
+//     "holds?[- ]?off"/"held[- ]?off": "see off" is the British-recap verb for
+//     beating back a challenger to win, and it slipped past the whole set
+//     ("Arsenal see off Spurs", "Chelsea sees off Arsenal", "Madrid saw off
+//     Barca", "England saw off Serbia") — a distinct winner reveal with no digits
+//     (SCORE_RX misses it) and no keyword catching bare "see"/"saw"/"off". Like
+//     the hold/held-off pair, ONLY the two-word "see/saw off" phrase matches: the
+//     mandatory trailing "off" keeps the hugely common "see"/"saw"/"sees" from
+//     firing alone ("must-see", "saw the ball", "sees the pass"), and the trailing
+//     \b keeps "sees off" clear of "oversees office" ("off" runs into "ice", so no
+//     boundary follows). The two benign collisions left — the literal tool sense
+//     of "saw off" (carpentry) and "sees off a defender" (a dribble) — never occur
+//     in the sports-highlight titles this filter actually sees, and both err to the
+//     over-hide-safe side, exactly like "hold off the defender" above. Structured
+//     like the hold/held pair (sees? covers see/sees, "[- ]?off" covers "see off"/
+//     "see-off"/"seeoff"); the rarer "-ing" form ("seeing off") is left alone as
+//     cruise/seal are. Byte-identical to the worker's copy.
 //     Bare "win" joins the existing winning/winner/wins/won so the British-style
 //     plural-present result framing this WC-heavy app sees constantly ("Spain win
 //     Group L", "England win on penalties", "Argentina win") is caught — a team is
@@ -287,7 +304,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     per-match highlight video titles this filter actually sees — it is applied ONLY to YouTube
 //     highlight titles, never to news headlines. The trailing \w* covers the plural "stalemates".
 //     Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
