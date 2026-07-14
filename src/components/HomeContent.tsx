@@ -1175,12 +1175,20 @@ export default function HomeContent({
   // secondLeague / thirdLeague), so no new league logic is introduced. An
   // unfilled slot becomes "empty" so only the chosen leagues show; choosing
   // none falls through to the in-season auto-picker, identical to "Use defaults".
+  // Slots 4-5 (the wide-viewport 5-column board) must ALSO be pinned "empty"
+  // once the user has made any pick — otherwise those unset slots fall through
+  // to the auto-picker on wide screens, so "I chose 2 leagues" rendered 4
+  // columns (the 2 chosen + 2 auto-filled). The picker only offers 3, so the
+  // extra columns should stay hidden until the user adds them in Settings.
   const confirmLeaguePicker = () => {
     const picks = pickerSel.slice(0, 3);
+    const chose = picks.length > 0;
     updatePrefs({
       firstLeague: picks[0] ?? undefined,
-      secondLeague: picks[1] ?? (picks.length ? "empty" : undefined),
-      thirdLeague: picks[2] ?? (picks.length ? "empty" : undefined),
+      secondLeague: picks[1] ?? (chose ? "empty" : undefined),
+      thirdLeague: picks[2] ?? (chose ? "empty" : undefined),
+      fourthLeague: chose ? "empty" : undefined,
+      fifthLeague: chose ? "empty" : undefined,
       leaguesOnboarded: true,
     });
     setShowLeaguePicker(false);
@@ -2827,7 +2835,7 @@ export default function HomeContent({
           return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
 
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+        <div className="flex flex-nowrap items-center justify-center gap-x-2.5">
           <FeedbackBox />
           <button
             type="button"
