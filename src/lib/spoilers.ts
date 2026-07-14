@@ -65,6 +65,15 @@
 //     collision — a skill-compilation "Messi destroys 3 defenders" — errs to the same
 //     over-hide-is-safe side as "brace for"/"saw off a defender" above (a masked title costs a
 //     tap to reveal; a leaked one breaks the whole promise). Byte-identical to the worker's copy.
+//     "humiliat\w*" is the same-family blowout word — and one of the most common ones in the
+//     all-caps fan-channel highlight titles this filter actually sees ("Barcelona HUMILIATED",
+//     "Man United humiliated 5-0", "Spain humiliate Georgia") — yet it slipped past the
+//     demolish/destroy/dismantle/thrash/thump/trounce/topple set despite naming the loser of a
+//     lopsided defeat just as plainly. No English word other than these inflections begins with
+//     "humiliat" (it can't reach "humble"/"humid"), and no in-scope club or nation is named
+//     anything beginning with it, so the trailing \w* covers humiliate/humiliates/humiliated/
+//     humiliating/humiliation at the same negligible false-positive risk as the verbs above.
+//     Byte-identical to the worker's copy.
 //     "triumph\w*"/"romp\w*" catch the winner-side framing headlines lean on just
 //     as often ("Argentina triumph on penalties", "City romp to victory",
 //     "Australia romp home") — each names the victor, and neither word means
@@ -323,7 +332,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     "nil" only ever means a zero score in a per-match highlight title (words like "Nile"/"nilpotent"
 //     can't match — "Nile" fails the required trailing digit and "nilpotent" fails the closing \b).
 //     Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
