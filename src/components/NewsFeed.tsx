@@ -26,6 +26,12 @@ interface NewsFeedProps {
   onPlay: PlayHandler;
   revealTitles: boolean;
   showTextPosts: boolean;
+  videosOnly: boolean;
+}
+
+// A post counts as a video when it carries any playable clip.
+function hasVideo(item: NewsItem): boolean {
+  return !!(item.youtubeVideoId || item.videoUrl || item.embedUrl);
 }
 
 // Merge every source's items into one de-duped, time-sorted list. Dedupe by the
@@ -70,17 +76,18 @@ function useAggregatedFeed(sources: NewsSource[]) {
   return items;
 }
 
-export default function NewsFeed({ sources, onPlay, revealTitles, showTextPosts }: NewsFeedProps) {
+export default function NewsFeed({ sources, onPlay, revealTitles, showTextPosts, videosOnly }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
 
-  // Visible posts: hide headline-only text posts unless revealed / opted-in
-  // (matches the .news-textpost / .show-text-posts rule the Cards view uses).
+  // Visible posts: in Videos mode keep only posts with a clip; otherwise hide
+  // headline-only text posts unless revealed / opted-in (matches the
+  // .news-textpost / .show-text-posts rule the Cards view uses).
   const visible = useMemo(
     () =>
-      (items ?? []).filter(
-        (it) => !itemIsTextPost(it) || revealTitles || showTextPosts
+      (items ?? []).filter((it) =>
+        videosOnly ? hasVideo(it) : (!itemIsTextPost(it) || revealTitles || showTextPosts)
       ),
-    [items, revealTitles, showTextPosts]
+    [items, revealTitles, showTextPosts, videosOnly]
   );
 
   // Prebuild the paging payloads once so tapping any post opens the lightbox
