@@ -251,7 +251,19 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     idiom "brace for" in a preview blurb — is rare in per-match titles and errs toward
 //     over-hiding, the same over-hide-is-safe side as the verbs above (a masked title just costs
 //     a tap to reveal; a leaked one breaks the whole promise).
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+//     "shoot[- ]?outs?" catches the penalty-shootout reveal this WC-heavy app sees all through
+//     the knockout rounds ("Argentina edge France in a shootout", "penalty shoot-out drama",
+//     "decided by a shootout") — a distinct partial-result leak the existing verbs miss: a
+//     shootout only happens once a match is level after regulation/extra time, so the word alone
+//     reveals the game went the distance and was settled from the spot, yet it carries no digits
+//     (SCORE_RX misses it) and no existing keyword caught it. Structurally it mirrors the
+//     "shut[- ]?outs?"/"blow[- ]?outs?" entries above — the optional "[- ]?" covers "shootout"/
+//     "shoot-out"/"shoot out" and the "s?" the plural. Near-zero false-positive risk: the
+//     leading \b needs a boundary before "shoot", so it can't match inside "troubleshoot"
+//     (mid-word, no boundary), and in a per-match highlight title "shootout" means nothing but a
+//     result decided from the spot (the colloquial "high-scoring shootout" is itself a result
+//     reveal, still the over-hide-is-safe side). Byte-identical to the worker's copy.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
