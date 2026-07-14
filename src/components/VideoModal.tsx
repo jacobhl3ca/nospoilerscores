@@ -1874,41 +1874,52 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             )}
           </div>
         )}
-        {/* Footer — headline + source/copy actions. Reverted to the pre-7/13
-            look (Jacob 7/14): normal-weight headline + bare underlined links
-            instead of the medium-weight + pill styling. The published-time note
-            ("17h ago") was dropped at his request — byline still shows where a
+        {/* Footer — headline + source/copy actions. Pill buttons + medium-weight
+            headline (Jacob 7/13, re-restored 7/14 — he liked the pills, the 7/14
+            bare-underline revert went the wrong way). The published-time note
+            ("17h ago") stays DROPPED at his request — byline still shows where a
             source provides one (Reddit posts have none, so nothing renders). */}
-        {!textMode && headline && (
-          <div className="mt-3 text-center px-2">
-            {/* Only the text itself swallows the click (so selecting the headline
-                doesn't close); the surrounding strip stays a dismiss target. */}
-            <PeekBlur tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
-            {byline && (
-              <ArticleMeta byline={byline} published={null} className="text-xs text-white/40 mt-1" />
+        {!(ytMode && controlsHidden) && (
+        <div className={`${textMode ? "mt-4" : "mt-3"} flex flex-col items-center gap-2.5 px-2`}>
+          {!textMode && headline && (
+            // Only the text itself swallows the click (so selecting the headline
+            // doesn't close); the surrounding strip stays a dismiss target.
+            <PeekBlur tag="p" className="text-sm sm:text-base font-medium text-white/90 leading-snug text-center max-w-2xl">{headline}</PeekBlur>
+          )}
+          {!textMode && byline && (
+            <ArticleMeta byline={byline} published={null} className="text-xs text-white/40" />
+          )}
+          <div className="flex items-center gap-2">
+            <a
+              href={sourceShareUrl || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/25 transition-colors"
+            >
+              {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
+            </a>
+            {shareUrl && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); copyLink(); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/25 transition-colors cursor-pointer"
+              >
+                {copied ? (
+                  <>
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                    Copy link
+                  </>
+                )}
+              </button>
             )}
           </div>
-        )}
-        {!(ytMode && controlsHidden) && (
-        <div className={`${textMode ? "mt-4" : "mt-3"} flex items-center justify-center gap-3`}>
-          <a
-            href={sourceShareUrl || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
-          >
-            {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
-          </a>
-          {shareUrl && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); copyLink(); }}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
-            >
-              {copied ? "Copied ✓" : "Copy link"}
-            </button>
-          )}
         </div>
         )}
 
