@@ -399,7 +399,25 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     "pummel"/"steamroll", so the trailing \w* covers every inflection (pummel/pummels/pummeled/
 //     pummeling, steamroll/steamrolls/steamrolled/steamrolling) at negligible false-positive risk.
 //     Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+//     "send(?:s|ing)?[- ]?off"/"sent[- ]?off" catch the red-card reveal in its far more
+//     common verb form — the noun "red card" is already blocked, but soccer/World Cup
+//     highlight titles almost always phrase a dismissal as "sent off"/"sending off"
+//     ("Ramos SENT OFF vs Barcelona", "Referee sends off the keeper", "Vinícius sending
+//     off changes the game") — the same match-event partial-result leak as "red card"
+//     (and its goal-event siblings "own goal"/"brace"/"equali[sz]\w*"), yet it carries no
+//     digits (SCORE_RX misses it) and no existing keyword caught the "…off" phrasing. The
+//     inflection sits on "send", not "off", so "(?:s|ing)?" covers send/sends/sending and
+//     the separate "sent[- ]?off" branch covers the past tense, while the required trailing
+//     "off" keeps bare "send"/"sent" from firing ("send in your questions" never matches)
+//     and the leading \b keeps it clear of "present"/"absent"/"consent"/"resent" (the "sent"
+//     in those sits mid-word with no boundary before it). The one benign collision — a
+//     farewell "send-off" — never appears in the per-match highlight titles this filter
+//     actually sees and errs to the same over-hide-is-safe side as the verbs above (a masked
+//     title just costs a tap to reveal; a leaked one breaks the whole promise). It is a
+//     direct sibling of the existing "sees?[- ]?off"/"saw[- ]?off" (a different verb — beat
+//     back a challenger — that shares only the trailing "off"). Byte-identical to the
+//     worker's copy.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
