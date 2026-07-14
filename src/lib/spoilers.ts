@@ -165,6 +165,20 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     like the hold/held pair (sees? covers see/sees, "[- ]?off" covers "see off"/
 //     "see-off"/"seeoff"); the rarer "-ing" form ("seeing off") is left alone as
 //     cruise/seal are. Byte-identical to the worker's copy.
+//     "fends?[- ]?off"/"fended[- ]?off" complete the beat-back-a-challenger family
+//     alongside "holds?/held off" and "sees?/saw off": "fend off" is the verb NBA/NFL
+//     and soccer recaps lean on for protecting a lead against a late push, and it
+//     slipped past the whole set ("Arsenal fend off Spurs", "Bills fend off Chiefs",
+//     "Chelsea fends off Arsenal", "City fended off United") — a distinct winner reveal
+//     with no digits (SCORE_RX misses it) and no keyword catching bare "fend"/"off". Like
+//     the hold/see pairs, ONLY the two-word "fend/fended off" phrase matches: the
+//     mandatory trailing "off" keeps it clear of "defend"/"offend"/"fender" (the leading
+//     \b sits at a non-boundary inside those, so "fend" never fires alone), and in a
+//     highlight title the phrase means nothing but the leading side surviving to win. The
+//     one benign collision — "fend off late pressure/a challenge" — errs to the
+//     over-hide-safe side, exactly like "hold off the defender" above. The rarer "-ing"
+//     form ("fending off") is left alone as the hold/see pairs leave theirs. Byte-identical
+//     to the worker's copy.
 //     Bare "win" joins the existing winning/winner/wins/won so the British-style
 //     plural-present result framing this WC-heavy app sees constantly ("Spain win
 //     Group L", "England win on penalties", "Argentina win") is caught — a team is
@@ -366,7 +380,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     the leading \b keeps "elbow"/"rainbow" out. "knockout" itself is deliberately NOT added —
 //     "knockout stage"/"knockout round" is a neutral schedule term this filter would over-hide.
 //     Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
