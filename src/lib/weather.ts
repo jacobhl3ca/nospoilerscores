@@ -94,25 +94,30 @@ async function geocode(city: string, region: string): Promise<Geo | null> {
     const r = await fetch(
       `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=5&language=en&format=json`,
     );
-    if (r.ok) {
-      const d = await r.json();
-      const list: Array<{ latitude?: number; longitude?: number; admin1?: string; country?: string; timezone?: string }> =
-        d.results ?? [];
-      const reg = region.toLowerCase();
-      // Disambiguate same-named cities by matching the venue's state/country
-      // ("St. Louis, Missouri" → the Missouri hit, not PEI). Fall back to the
-      // top result (Open-Meteo ranks by prominence).
-      const pick =
-        (reg &&
-          list.find(
-            (x) =>
-              (x.admin1 ?? "").toLowerCase().includes(reg) ||
-              (x.country ?? "").toLowerCase().includes(reg),
-          )) ||
-        list[0];
-      if (pick && typeof pick.latitude === "number" && typeof pick.longitude === "number") {
-        result = { lat: pick.latitude, lon: pick.longitude, tz: pick.timezone ?? "auto" };
-      }
+    // A non-2xx (429 rate-limit, 5xx spike) is as transient as a dropped
+    // connection: bail like the network catch below WITHOUT caching, so the
+    // next modal open re-geocodes. Falling through would cache null (result is
+    // still null here) and the top-of-function `cached !== undefined` guard
+    // would then return that null forever — one blip and the venue shows no
+    // weather for the whole session, defeating fetchGameWeather's retry.
+    if (!r.ok) return null;
+    const d = await r.json();
+    const list: Array<{ latitude?: number; longitude?: number; admin1?: string; country?: string; timezone?: string }> =
+      d.results ?? [];
+    const reg = region.toLowerCase();
+    // Disambiguate same-named cities by matching the venue's state/country
+    // ("St. Louis, Missouri" → the Missouri hit, not PEI). Fall back to the
+    // top result (Open-Meteo ranks by prominence).
+    const pick =
+      (reg &&
+        list.find(
+          (x) =>
+            (x.admin1 ?? "").toLowerCase().includes(reg) ||
+            (x.country ?? "").toLowerCase().includes(reg),
+        )) ||
+      list[0];
+    if (pick && typeof pick.latitude === "number" && typeof pick.longitude === "number") {
+      result = { lat: pick.latitude, lon: pick.longitude, tz: pick.timezone ?? "auto" };
     }
   } catch {
     return null; // network — don't cache a transient miss
