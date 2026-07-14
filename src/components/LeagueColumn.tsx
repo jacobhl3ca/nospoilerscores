@@ -1119,7 +1119,7 @@ export default function LeagueColumn({
       style={isDragging ? { opacity: 0.55 } : undefined}
     >
       {showHeader && (
-        <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
+        <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", marginTop: "1.75rem" }}>
           <div
             className="flex items-center justify-center"
             style={canDrag ? { cursor: isDragging ? "grabbing" : "grab", touchAction: "pan-y" } : undefined}
