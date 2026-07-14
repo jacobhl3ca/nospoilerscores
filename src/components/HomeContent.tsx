@@ -1051,10 +1051,15 @@ export default function HomeContent({
   };
 
   const shareFavorites = () => {
+    // .catch swallows a rejected writeText (document not focused, permission
+    // denied, non-secure context) so it can't surface as an unhandled promise
+    // rejection — which the console flags and @sentry/nextjs captures as noise.
+    // Copy is a throwaway affordance (the link stays visible), matching the
+    // swallow-on-failure pattern in VideoModal's copyLink.
     navigator.clipboard.writeText(buildShareUrl()).then(() => {
       setShowShareCopied(true);
       setTimeout(() => setShowShareCopied(false), 2000);
-    });
+    }).catch(() => {});
   };
 
   const hasFavorites = prefs.favoriteTeams.length > 0 || prefs.favoriteLeagues.length > 0;
@@ -1079,12 +1084,14 @@ export default function HomeContent({
   };
 
   const copyFavLink = () => {
+    // See shareFavorites: .catch keeps a failed clipboard write from becoming an
+    // unhandled promise rejection / Sentry error. Copy is best-effort here too.
     navigator.clipboard.writeText(buildShareUrl()).then(() => {
       setFavToastCopied(true);
       setTimeout(() => {
         dismissFavToast();
       }, 1200);
-    });
+    }).catch(() => {});
   };
 
   const toggleFavoriteTeam = (teamId: string) => {
