@@ -601,6 +601,41 @@ export default function HomeContent({
     })();
   }, []);
 
+  // Cross-device sync on RESUME. The mount effect above only reconciles with the
+  // server on a COLD launch, so a change made on another device — e.g. removing
+  // a league column on the web — never reached an already-open app (a backgrounded
+  // phone that's resumed, not relaunched) until a full restart (Jacob 7/14). Re-pull
+  // the server copy whenever the tab/app becomes visible again and apply it live.
+  // Signed-out users never fetch (getAuthState → signedIn:false, bail). We only
+  // touch the UI when the server actually differs, and we deliberately DON'T re-run
+  // the launch-only resets (morning ratings reset, landing-view) so switching back
+  // to the app doesn't bounce the current view — just the synced settings/columns.
+  useEffect(() => {
+    let alive = true;
+    const pull = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const auth = await getAuthState();
+        if (!auth.signedIn || !alive) return;
+        const remote = await fetchRemotePrefs();
+        if (!remote || !alive || Object.keys(remote).length === 0) return;
+        const local = loadPreferences();
+        const merged = { ...local, ...remote };
+        if (JSON.stringify(merged) === JSON.stringify(local)) return; // no change → don't disturb
+        savePreferences(merged);
+        setPrefs(merged);
+        document.documentElement.setAttribute("data-theme", getResolvedTheme(merged.theme));
+        document.documentElement.classList.toggle("reveal-news-titles", !!merged.revealNewsTitles);
+        document.documentElement.classList.toggle("show-text-posts", !!merged.showTextPosts);
+      } catch {
+        /* best-effort; ignore transient failures */
+      }
+    };
+    const onVis = () => { void pull(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+
   // Track the OS color scheme in state so `resolvedTheme` re-derives live when
   // the system flips while theme === "system" (otherwise the data-theme attr
   // recolors the page but the "Currently rendering" readout stays stale).
