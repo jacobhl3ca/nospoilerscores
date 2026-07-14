@@ -1352,8 +1352,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 </svg>
               </button>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black leading-[0]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={proxyImage(imageUrl!)}
               alt=""
