@@ -206,7 +206,18 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     meaning outside a no-goals-conceded result. Structured like "shut[- ]?outs?" —
 //     the optional "[- ]?" covers "clean sheet"/"clean-sheet"/"cleansheet" and the "s?"
 //     the plural — so it stays byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|grand slam|red card|all three points)\b/i;
+//     "equali[sz]\w*" catches the goal-reveal framing soccer recaps lean on constantly
+//     ("Ramos with a late equaliser", "Spain equalize", "stunning equalizer") — a title
+//     carrying it reveals that a goal was scored and the score was level at that moment,
+//     the same partial-result leak as a "clean sheet"/"goalless" nil-reveal, yet it has
+//     no digits (SCORE_RX misses it) and no existing keyword caught it. The "[sz]" covers
+//     both the British "equalise*" and American "equalize*" spellings, and the trailing
+//     \w* covers every inflection (equalise/equalised/equalising/equaliser, equalize/
+//     equalized/equalizing/equalizer). Near-zero false-positive risk: the "[sz]" keeps it
+//     clear of "equality"/"equalitarian" (no s/z after "equali"), and the only benign
+//     collision left — the film/TV "The Equalizer" — is not an in-scope club or nation and
+//     never appears in the highlight titles this filter actually sees.
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
