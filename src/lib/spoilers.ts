@@ -239,7 +239,19 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     closing \b keeps it clear of "own goalkeeper" (the "l" of "goal" runs into "keeper",
 //     so no boundary follows) — the metaphorical "political own goal" never appears in the
 //     per-match highlight titles this filter actually sees.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
+//     "braces?" joins the goal-event reveal family alongside "hat[- ]trick", "equali[sz]\w*",
+//     and "own[- ]?goals?": a "brace" is the soccer term for one player scoring two goals, so
+//     a title carrying it reveals both that the match wasn't goalless and, usually, which side
+//     scored ("Kane brace sinks Poland", "Mbappé with a brace") — the same partial-result leak
+//     as a hat-trick, yet it has no digits (SCORE_RX misses it) and no existing keyword caught
+//     it. It's one of the most common words in soccer/World Cup highlight titles, so it fills a
+//     real gap in this WC-heavy app. Whole-word \bbraces?\b is boundary-safe: it can't match
+//     inside "embrace"/"bracelet"/"bracket" (no \b before/after "brace" there), and the "s?"
+//     covers the plural "braces" without swallowing anything else. The one benign collision — the
+//     idiom "brace for" in a preview blurb — is rare in per-match titles and errs toward
+//     over-hiding, the same over-hide-is-safe side as the verbs above (a masked title just costs
+//     a tap to reveal; a leaked one breaks the whole promise).
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|equali[sz]\w*|own[- ]?goals?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
