@@ -46,6 +46,15 @@
 //     it means nothing but a lopsided defeat in a sports-title context (no
 //     non-result English word begins with "thump"), so the trailing \w* covers
 //     thump/thumps/thumped/thumping at the same negligible false-positive risk.
+//     "dismantl\w*" is the same-family blowout verb soccer/NBA recaps lean on for a
+//     controlled, systematic rout ("Liverpool dismantle United", "City dismantled
+//     Arsenal", "Madrid dismantling Barca") — a decisive-win reveal that slipped past
+//     the thrash/thump/trounce/demolish/topple set despite being just as common. Like
+//     them it means nothing but a lopsided defeat in a sports-title context (the literal
+//     "take-apart" sense never appears in a highlight title, and no in-scope club or
+//     nation is named anything beginning with "dismantl"), so the trailing \w* covers
+//     dismantle/dismantles/dismantled/dismantling at the same negligible false-positive
+//     risk.
 //     "triumph\w*"/"romp\w*" catch the winner-side framing headlines lean on just
 //     as often ("Argentina triumph on penalties", "City romp to victory",
 //     "Australia romp home") — each names the victor, and neither word means
@@ -197,7 +206,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     meaning outside a no-goals-conceded result. Structured like "shut[- ]?outs?" —
 //     the optional "[- ]?" covers "clean sheet"/"clean-sheet"/"cleansheet" and the "s?"
 //     the plural — so it stays byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|grand slam|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|grand slam|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
