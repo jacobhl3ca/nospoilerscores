@@ -7,6 +7,7 @@ import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, en
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, getActiveLeagueCandidates } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
+import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
@@ -1955,7 +1956,25 @@ export default function HomeContent({
           a header icon, and shown on mobile + desktop). Headlines are blurred
           by default; tap to reveal/hide them all. */}
       {showNews && (
-        <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap gap-2 pt-2 pb-1">
+        <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap items-center gap-2 pt-2 pb-1">
+          {/* Cards / Feed layout toggle (Jacob 7/14) — Cards = the multi-column
+              board (default); Feed = a single Reddit-style vertical scroll. */}
+          <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            {([["Cards", false], ["Feed", true]] as const).map(([label, on]) => (
+              <button
+                key={label}
+                onClick={() => updatePrefs({ newsFeedView: on })}
+                className="px-3.5 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                style={{
+                  background: !!prefs.newsFeedView === on ? "var(--accent)" : "transparent",
+                  color: !!prefs.newsFeedView === on ? "white" : "var(--text-muted)",
+                }}
+                aria-pressed={!!prefs.newsFeedView === on}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 hover:scale-105 cursor-pointer"
@@ -2345,6 +2364,23 @@ export default function HomeContent({
             : "flex flex-row justify-center items-stretch gap-2 sm:gap-4";
           const widthClassFor = () =>
             effectiveColCount === 1 ? wideCol : narrowCol;
+
+          // Feed view (Jacob 7/14): one vertical Reddit-style scroll instead of
+          // the multi-column board. Aggregate every visible column's sources into
+          // a single stream; NewsFeed fetches + merges + time-sorts them and
+          // renders inline posts with blurred top comments.
+          if (prefs.newsFeedView) {
+            const feedSources = focusedEntries.flatMap((e) => renderSourcesFor(e));
+            return (
+              <NewsFeed
+                key={`feed-${newsRefreshKey}`}
+                sources={feedSources}
+                onPlay={playNewsVideo}
+                revealTitles={!!prefs.revealNewsTitles}
+                showTextPosts={!!prefs.showTextPosts}
+              />
+            );
+          }
 
           return (
             <>

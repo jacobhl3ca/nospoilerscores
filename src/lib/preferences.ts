@@ -266,6 +266,11 @@ export interface Preferences {
   // pic/video headlines. Undefined/false = hidden (default); true = shown.
   // Moot when revealNewsTitles is on (everything shows then).
   showTextPosts?: boolean;
+  // News layout: false/undefined = the default multi-column "Cards" board (click
+  // a post → lightbox); true = a single vertical "Feed" (Reddit-style scroll with
+  // inline images + blurred top comments). Toggled by the Cards/Feed pill in the
+  // news header.
+  newsFeedView?: boolean;
 }
 
 const defaults: Preferences = {
