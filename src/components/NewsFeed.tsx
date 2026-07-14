@@ -211,6 +211,18 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
               <p
                 key={ci}
                 onClick={() => setShowComments(true)}
+                // Operable by pointer AND keyboard — without role/tabIndex/onKeyDown
+                // this clickable blurred comment would be invisible to keyboard and
+                // screen-reader users (WCAG 2.1.1). Mirrors PeekBlur in VideoModal.
+                role={showComments ? undefined : "button"}
+                tabIndex={showComments ? undefined : 0}
+                aria-label={showComments ? undefined : "Reveal comment (spoilers)"}
+                onKeyDown={(e) => {
+                  if (!showComments && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    setShowComments(true);
+                  }
+                }}
                 className="text-sm leading-snug rounded-md px-3 py-2 transition-[filter] duration-150"
                 style={{
                   color: "var(--text)",
