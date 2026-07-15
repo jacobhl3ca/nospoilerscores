@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
+import { openExternal } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
@@ -366,6 +367,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // instead of an empty modal (Firefox + Reddit external-preview is the
   // current offender).
   const [imgFailed, setImgFailed] = useState(false);
+  // Flips true when the YouTube clip can't play in-app AND no working alternate
+  // was found — the common case is a league (FIFA especially) disabling embedded
+  // playback (YT error 101/150) on every one of its uploads, so re-searching just
+  // loops. Instead of leaving YouTube's own "Video unavailable" screen, we show a
+  // clean overlay with a "Watch on YouTube" button (Jacob 7/14).
+  const [ytFailed, setYtFailed] = useState(false);
   // Captions: default OFF, custom toggle button surfaces them prominently
   // instead of leaving the user to dig through Safari's "more" overflow menu.
   // hasCaptionTrack hides the button on streams with no CC track at all
@@ -993,6 +1000,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
     if (hlsMode || embedMode || imageMode || textMode) return; // HLS / iframe / image / text branches handle rendering instead
+    setYtFailed(false); // fresh attempt (initial load or a fallback swap) — clear any prior failure
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
 
@@ -1006,12 +1014,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       try {
         if (new URL(fallbackUrl).searchParams.get("nss_no_fallback") === "1") {
           retryingRef.current = false;
+          setYtFailed(true); // no alternate allowed → surface the YouTube fallback
           return;
         }
       } catch { /* non-URL fallback strings proceed through the normal path */ }
       const q = extractSearchQuery(fallbackUrl);
       if (!q) {
         retryingRef.current = false;
+        setYtFailed(true); // a direct clip (no search query) can't re-search
         return;
       }
       // Mark current id as failed and ask the worker for an alternate
@@ -1021,14 +1031,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         const res = await fetch(
           `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${encodeURIComponent(failed.join(","))}`
         );
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.videoId && data.videoId !== currentId) {
-            setCurrentId(data.videoId);
-          }
+        const data = res.ok ? await res.json() : null;
+        if (data?.videoId && data.videoId !== currentId) {
+          setCurrentId(data.videoId); // an untried alternate — the effect resets ytFailed
+        } else {
+          setYtFailed(true); // exhausted alternates → show the "Watch on YouTube" card
         }
       } catch {
-        // swallow — leave the broken player; user still has "Watch on YouTube"
+        setYtFailed(true); // network error fetching an alternate → same fallback
       } finally {
         retryingRef.current = false;
       }
@@ -1469,6 +1479,28 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 : { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
               <div id="yt-player" className="absolute inset-0 w-full h-full" />
+              {/* Embed-blocked / unplayable fallback — covers YouTube's own
+                  "Video unavailable" screen with a clean prompt + a Watch-on-
+                  YouTube button (opens the YT app on native via openExternal). */}
+              {ytFailed && (
+                <div
+                  className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 px-6 text-center"
+                  style={{ background: "#000" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <svg aria-hidden="true" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  <p className="text-white/85 text-sm sm:text-base font-medium max-w-xs leading-snug">This highlight can’t play here — the league blocked embedded playback.</p>
+                  <button
+                    type="button"
+                    onClick={() => openExternal(sourceShareUrl || fallbackUrl)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-transform hover:scale-105 cursor-pointer"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    Watch on YouTube
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
+                  </button>
+                </div>
+              )}
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
                   through to the cross-origin iframe. This is what makes the
