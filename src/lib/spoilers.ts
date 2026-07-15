@@ -399,6 +399,16 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     "pummel"/"steamroll", so the trailing \w* covers every inflection (pummel/pummels/pummeled/
 //     pummeling, steamroll/steamrolls/steamrolled/steamrolling) at negligible false-positive risk.
 //     Byte-identical to the worker's copy.
+//     "drub\w*" is the same-family blowout word soccer/cricket recaps lean on for a lopsided beating
+//     ("Spain drub Georgia 5-0", "United drubbed 4-0", "a 6-1 drubbing", "City drubbing Arsenal") —
+//     a decisive-defeat reveal that slipped past the pummel/steamroll/thrash/thump/trounce set despite
+//     being just as common in the World Cup recap titles this filter now sees most. It is SAFER than
+//     the destroy/demolish/smash family it joins: unlike those, "drub" never describes a single skill
+//     moment ("destroys 3 defenders"), only a team-vs-team result, so it can't over-hide a highlight
+//     reel. No English word other than these inflections begins with "drub", and no in-scope club or
+//     nation is named anything beginning with it, so the trailing \w* covers drub/drubs/drubbed/
+//     drubbing at the same negligible false-positive risk as the verbs above. Byte-identical to the
+//     worker's copy.
 //     "send(?:s|ing)?[- ]?off"/"sent[- ]?off" catch the red-card reveal in its far more
 //     common verb form — the noun "red card" is already blocked, but soccer/World Cup
 //     highlight titles almost always phrase a dismissal as "sent off"/"sending off"
@@ -417,7 +427,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     direct sibling of the existing "sees?[- ]?off"/"saw[- ]?off" (a different verb — beat
 //     back a challenger — that shares only the trailing "off"). Byte-identical to the
 //     worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
