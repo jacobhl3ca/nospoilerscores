@@ -260,11 +260,11 @@ export interface Preferences {
   // eye toggle in the news header flips this on to reveal them all at once.
   // Undefined/false = blurred (default); true = revealed.
   revealNewsTitles?: boolean;
-  // Text posts (headline-only news items — no pic/video) are hidden by default
-  // while headlines are blurred, since a blurred text-only headline is a useless
-  // blank. This toggle exposes them (readable) without revealing the blurred
-  // pic/video headlines. Undefined/false = hidden (default); true = shown.
-  // Moot when revealNewsTitles is on (everything shows then).
+  // Text posts (headline-only news items — no pic/video) are SHOWN by default,
+  // blurred like every other headline (their title can itself spoil the result).
+  // The "Text posts" eye toggle in the news header HIDES them for users who
+  // don't want headline-only posts. Undefined/true = shown (default); false =
+  // hidden. Moot when revealNewsTitles is on (everything shows then).
   showTextPosts?: boolean;
   // News layout: false/undefined = the default multi-column "Cards" board (click
   // a post → lightbox); true = a single vertical "Feed" (Reddit-style scroll with
