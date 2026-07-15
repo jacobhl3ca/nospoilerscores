@@ -56,17 +56,16 @@ html.reveal-news-titles .news-title,
   -webkit-user-select: auto;
 }
 
-/* Text posts (headline-only items — no pic/video) are SHOWN by default, blurred
-   like every other headline via .news-title (a text-post title can itself give
-   away the result — tap the row open or hit the global reveal to read one). The
-   "Text posts" eye toggle in the news header HIDES them for users who don't want
-   headline-only posts, adding .hide-textposts to <html>. Gated behind
-   :not(.reveal-news-titles) so that revealing every headline still surfaces the
-   text posts too (matches the Feed filter). .news-textpost marks a single mixed-
-   column row; .news-card-alltext marks a whole all-text source card so it
-   collapses instead of leaving an empty header. */
-html:not(.reveal-news-titles).hide-textposts .news-textpost,
-html:not(.reveal-news-titles).hide-textposts .news-card-alltext {
+/* Text posts (headline-only items — no pic/video) are HIDDEN while headlines
+   are blurred, then exposed by the "Show text posts" toggle (.show-text-posts
+   on <html>). When shown, their headline still carries .news-title so it stays
+   spoiler-blurred like every other headline (a text-post title can itself give
+   away the result) — tap the row open or hit the global reveal to read it. When
+   headlines are revealed globally, text posts show too. .news-textpost marks a
+   single mixed-column row; .news-card-alltext marks a whole all-text source card
+   so it collapses instead of leaving an empty header. */
+html:not(.reveal-news-titles):not(.show-text-posts) .news-textpost,
+html:not(.reveal-news-titles):not(.show-text-posts) .news-card-alltext {
   display: none;
 }
 

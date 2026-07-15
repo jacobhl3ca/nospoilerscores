@@ -42,9 +42,9 @@ export type PlayHandler = (opts: PlayOpts) => void;
 // Build the modal payload for a news item. Single source of truth so TextRow
 // (click) and HomeContent (prev/next paging) produce identical payloads.
 // A "text post" is a headline-only item with no pic/video (no thumbnail,
-// inline clip, YouTube id, or Brightcove embed). Shown by default and blurred
-// like every other headline; the "Text posts" toggle can hide them
-// (see .news-textpost / .hide-textposts in globals.css).
+// inline clip, YouTube id, or Brightcove embed). Blur is for pics/videos, so
+// these are hidden-by-default and gated behind the "Show text posts" toggle
+// (see .news-textpost / .show-text-posts in globals.css).
 export function itemIsTextPost(item: NewsItem): boolean {
   return !(item.videoUrl || item.imageFullUrl || item.imageUrl || item.youtubeVideoId || item.embedUrl);
 }
