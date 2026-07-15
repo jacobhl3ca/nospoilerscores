@@ -847,6 +847,14 @@ export default {
           //     batter struck out") — stays visible; only the verb-of-defeat forms (and the noun "a
           //     battering") match. The one collision, the target-man cliché "battering ram", is rare
           //     and errs to the over-hide-is-safe side. Byte-identical to spoilers.ts.
+          //     "spank\w*" is the same-family blowout verb beside "wallop"/"drub"/"thrash" ("Spain
+          //     spank Georgia 5-0", "United spanked 4-0", "a 4-0 spanking"), with no digits for
+          //     SCORE_RX when the score is omitted. Like wallop/drub it only ever describes a
+          //     team-vs-team beating in a sports title (never a single skill moment), so it can't
+          //     over-hide a highlight reel. No English word other than these inflections begins with
+          //     "spank" (it diverges from "spark"/"span"/"spandex" before the "k") and no in-scope
+          //     club/nation is named it, so \w* covers spank/spanks/spanked/spanking at negligible
+          //     false-positive risk. Byte-identical to spoilers.ts.
           //     "dump(?:s|ed|ing)?[- ]?out" completes the knockout-elimination family (bow…out/
           //     crash…out/knock…out): "dumped out" is one of the commonest British WC/cup phrasings
           //     for going out ("Germany dumped out of the World Cup", "Italy dumped out on penalties"),
@@ -862,7 +870,7 @@ export default {
           //     plural, like the sibling "shut[- ]?outs?"/"own[- ]?goals?". A pure widening anchored to
           //     "hat"+"trick", so no new false-positive surface. Byte-identical to spoilers.ts.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks
