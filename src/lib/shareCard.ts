@@ -52,8 +52,8 @@ export function buildShareCard(game: Game, leagueLabel?: string): ShareCardMeta 
 
   return {
     key,
-    away: { name: away.shortDisplayName || away.displayName, abbr: away.abbreviation, logo: away.logo },
-    home: { name: home.shortDisplayName || home.displayName, abbr: home.abbreviation, logo: home.logo },
+    away: { name: away.shortDisplayName || away.displayName, abbr: away.abbreviation || away.shortDisplayName, logo: away.logo },
+    home: { name: home.shortDisplayName || home.displayName, abbr: home.abbreviation || home.shortDisplayName, logo: home.logo },
     dateLabel,
     league: leagueLabel || game.sport.toUpperCase(),
   };
