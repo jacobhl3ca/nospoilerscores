@@ -420,12 +420,15 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // the floor at sm+ where the 3 columns align. text-sm (not text-xs) on
   // mobile too — the phone is the primary surface, so size headlines for
   // readability rather than to pack the narrow desktop column.
-  // Text posts (no pic/video) are hidden while headlines are blurred and shown
-  // (readable, unblurred) once "Show text posts" is on — so they carry the
-  // .news-textpost marker and their headline skips the .news-title blur.
+  // Text posts (no pic/video) are hidden while headlines are blurred; the "Show
+  // text posts" toggle reveals them. But a text-post headline is itself a
+  // spoiler ("can't believe they blew it"), so when shown it must stay blurred
+  // like every other headline — same as the mobile Feed view (Jacob 7/15).
+  // .news-textpost gates visibility; .news-title keeps the headline blurred
+  // until the global reveal toggle un-blurs it or the row is tapped open.
   const isTextPost = itemIsTextPost(item);
   const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]${isTextPost ? " news-textpost" : ""}`;
-  const titleCls = `${isTextPost ? "" : "news-title "}min-w-0 line-clamp-5`;
+  const titleCls = `news-title min-w-0 line-clamp-5`;
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Reddit posts always pop the modal so the user can read the post (and any
   // attached photo / video) without leaving hidescore. Other sources (ESPN

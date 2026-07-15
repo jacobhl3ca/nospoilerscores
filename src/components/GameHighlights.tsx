@@ -37,7 +37,7 @@ export default function GameHighlights({
   game: Game;
   leagueLabel?: string;
   isToday?: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   wrapMargin?: string;
 }) {
@@ -258,6 +258,26 @@ export default function GameHighlights({
   const showMlb = !!(isFinished && isMlb && (game.mlbRecapPlaybackUrl || showMlbCondensed));
   if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
 
+  // The OTHER resolved highlight versions of this game, minus the one being
+  // played — passed to the modal so its embed-blocked overlay can offer a
+  // one-tap jump to an alternate stream (Telemundo especially, since FIFA blocks
+  // embedding on the FOX/official cut). WC only; other sports get no alternates.
+  const buildAlternates = (excludeId: string): { label: string; videoId: string }[] => {
+    const alts: { label: string; videoId: string }[] = [];
+    const add = (id: string | null, label: string) => {
+      if (id && id !== excludeId && !alts.some((a) => a.videoId === id)) alts.push({ videoId: id, label });
+    };
+    if (isFifa) {
+      add(prefetchedTelemundoShortId.current, "Telemundo");
+      add(prefetchedTelemundoLongId.current, "Telemundo (extended)");
+      add(prefetchedOfficialId.current, "FOX 2m");
+      add(prefetchedVideoId.current, "FOX 15m");
+    }
+    return alts;
+  };
+  const playHl = (videoId: string, fallbackUrl: string, share?: ShareCardMeta | null) =>
+    onPlayHighlight?.(videoId, fallbackUrl, share, buildAlternates(videoId));
+
   return (
     <>
       {/* Highlights — render only buttons whose video resolved (or is still
@@ -271,7 +291,7 @@ export default function GameHighlights({
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedOfficialId.current) {
-                  onPlayHighlight(prefetchedOfficialId.current, modalFallbackUrl!, shareCard);
+                  playHl(prefetchedOfficialId.current, modalFallbackUrl!, shareCard);
                   return;
                 }
                 setFetchingOnClick("official");
@@ -280,7 +300,7 @@ export default function GameHighlights({
                 if (id) {
                   prefetchedOfficialId.current = id;
                   setOfficialStatus("found");
-                  onPlayHighlight(id, modalFallbackUrl!, shareCard);
+                  playHl(id, modalFallbackUrl!, shareCard);
                 } else {
                   setOfficialStatus("missing");
                 }
@@ -312,7 +332,7 @@ export default function GameHighlights({
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedVideoId.current) {
-                  onPlayHighlight(prefetchedVideoId.current, modalFallbackUrl!, shareCard);
+                  playHl(prefetchedVideoId.current, modalFallbackUrl!, shareCard);
                   return;
                 }
                 setFetchingOnClick("search");
@@ -323,7 +343,7 @@ export default function GameHighlights({
                 if (id) {
                   prefetchedVideoId.current = id;
                   setSearchStatus("found");
-                  onPlayHighlight(id, modalFallbackUrl!, shareCard);
+                  playHl(id, modalFallbackUrl!, shareCard);
                 } else {
                   setSearchStatus("missing");
                 }
@@ -381,7 +401,7 @@ export default function GameHighlights({
                 e.stopPropagation();
                 if (showMlbYouTubeCondensed && onPlayHighlight) {
                   if (prefetchedOfficialId.current) {
-                    onPlayHighlight(prefetchedOfficialId.current, highlightUrl!, shareCard);
+                    playHl(prefetchedOfficialId.current, highlightUrl!, shareCard);
                     return;
                   }
                   setFetchingOnClick("official");
@@ -390,7 +410,7 @@ export default function GameHighlights({
                   if (id) {
                     prefetchedOfficialId.current = id;
                     setOfficialStatus("found");
-                    onPlayHighlight(id, highlightUrl!, shareCard);
+                    playHl(id, highlightUrl!, shareCard);
                     return;
                   }
                   setOfficialStatus("missing");
@@ -430,7 +450,7 @@ export default function GameHighlights({
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedTelemundoShortId.current) {
-                  onPlayHighlight(prefetchedTelemundoShortId.current, modalFallbackUrl!, shareCard);
+                  playHl(prefetchedTelemundoShortId.current, modalFallbackUrl!, shareCard);
                   return;
                 }
                 setFetchingOnClick("telemundoShort");
@@ -439,7 +459,7 @@ export default function GameHighlights({
                 if (id) {
                   prefetchedTelemundoShortId.current = id;
                   setTelemundoShortStatus("found");
-                  onPlayHighlight(id, modalFallbackUrl!, shareCard);
+                  playHl(id, modalFallbackUrl!, shareCard);
                 } else {
                   setTelemundoShortStatus("missing");
                 }
@@ -465,7 +485,7 @@ export default function GameHighlights({
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedTelemundoLongId.current) {
-                  onPlayHighlight(prefetchedTelemundoLongId.current, modalFallbackUrl!, shareCard);
+                  playHl(prefetchedTelemundoLongId.current, modalFallbackUrl!, shareCard);
                   return;
                 }
                 setFetchingOnClick("telemundoLong");

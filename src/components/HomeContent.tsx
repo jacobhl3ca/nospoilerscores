@@ -392,7 +392,7 @@ export default function HomeContent({
   // World Cup banner: "Add" expands into a replace-which-column picker when
   // there's no emptied slot to fill (Jacob 6/11).
   const [wcReplaceOpen, setWcReplaceOpen] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
@@ -762,8 +762,8 @@ export default function HomeContent({
     return abs ? abs.replace(/^https?:\/\/[^/]+/, "") : null;
   }, []);
 
-  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => {
-    setVideoModal({ videoId, fallbackUrl, shareCard });
+  const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => {
+    setVideoModal({ videoId, fallbackUrl, shareCard, alternates });
     const href = modalShareHref({ videoId, fallbackUrl, shareCard });
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [modalShareHref]);
@@ -3274,6 +3274,7 @@ export default function HomeContent({
           warnHalfway={prefs.videoWarnHalfway ?? false}
           onPrev={videoModal.siblings && (videoModal.sibIndex ?? 0) > 0 ? () => stepVideo(-1) : undefined}
           onNext={videoModal.siblings && (videoModal.sibIndex ?? 0) < videoModal.siblings.length - 1 ? () => stepVideo(1) : undefined}
+          alternates={videoModal.alternates}
           onClose={closeVideoModal}
         />
       )}
