@@ -23,7 +23,7 @@ interface GameCardProps {
   pastDateLabel?: string;
   isPastDate?: boolean;
   isToday?: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => void;
   // Plays a non-YouTube embed (NHL recaps via Brightcove) in the same modal.
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   leagueLabel?: string;
