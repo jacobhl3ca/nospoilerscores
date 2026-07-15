@@ -25,7 +25,7 @@ interface LeagueColumnProps {
   isPastDate: boolean;
   isToday?: boolean;
   sortByMatchups?: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   // Clicking a game card body opens a spoiler-safe details popup (owned by HomeContent).
   onShowDetails?: (game: Game) => void;

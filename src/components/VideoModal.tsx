@@ -67,6 +67,11 @@ interface VideoModalProps {
   // without closing the modal. Absent means no pager controls.
   onPrev?: () => void;
   onNext?: () => void;
+  // Other playable versions of THIS clip (e.g. the Telemundo Spanish cut of a
+  // World Cup game). Surfaced as one-tap buttons on the embed-blocked fallback
+  // overlay so a FIFA-blocked FOX clip can jump straight to an embeddable stream
+  // instead of only linking out to YouTube (Jacob 7/14).
+  alternates?: { label: string; videoId: string }[];
 }
 
 // Minimal slice of the YouTube IFrame Player API this modal actually drives.
@@ -330,7 +335,7 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Horizontal swipe on the image lightbox → prev/next post (mobile parity with
@@ -469,6 +474,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const imageMode = !!imageUrl && !imgFailed && !playbackUrl && !embedUrl && !videoId;
   const textMode = !hlsMode && !embedMode && !imageMode && !videoId;
   const ytMode = !hlsMode && !embedMode && !imageMode && !textMode;
+  // Other versions of this clip still worth offering on the embed-blocked overlay
+  // (drop the one that just failed).
+  const embedAlternates = (alternates ?? []).filter((a) => a.videoId && a.videoId !== currentId);
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
   // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
   // text card) — used both for the footer link and the hidescore deep-link.
@@ -1490,11 +1498,29 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 >
                   <svg aria-hidden="true" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                   <p className="text-white/85 text-sm sm:text-base font-medium max-w-xs leading-snug">This highlight can’t play here — the league blocked embedded playback.</p>
+                  {/* One-tap jump to another version of the same game (e.g. the
+                      Telemundo cut) — often embeddable when the FOX/FIFA one isn't.
+                      Loading it swaps currentId; the player effect clears ytFailed
+                      and re-attempts, so if it also blocks the overlay returns. */}
+                  {embedAlternates.map((a) => (
+                    <button
+                      key={a.videoId}
+                      type="button"
+                      onClick={() => { failedIdsRef.current = [...failedIdsRef.current, currentId]; setCurrentId(a.videoId); }}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-transform hover:scale-105 cursor-pointer"
+                      style={{ background: "var(--accent)" }}
+                    >
+                      <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                      Try {a.label}
+                    </button>
+                  ))}
                   <button
                     type="button"
                     onClick={() => openExternal(sourceShareUrl || fallbackUrl)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-transform hover:scale-105 cursor-pointer"
-                    style={{ background: "var(--accent)" }}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                    style={embedAlternates.length
+                      ? { color: "rgba(255,255,255,0.7)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }
+                      : { color: "white", background: "var(--accent)" }}
                   >
                     Watch on YouTube
                     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
