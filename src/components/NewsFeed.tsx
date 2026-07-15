@@ -160,8 +160,12 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
       <button
         type="button"
         onClick={() => setPeek((v) => !v)}
+        // This is a toggle (blur ↔ peek). aria-pressed mirrors the reveal state
+        // for assistive tech and the title reflects the next action, matching
+        // the PeekBlur toggle in VideoModal (WCAG 4.1.2 Name, Role, Value).
+        aria-pressed={peek}
         className="block w-full text-left px-4 pt-2 pb-3 cursor-pointer"
-        title="Tap to reveal/hide this headline"
+        title={peek ? "Tap to hide this headline" : "Tap to reveal this headline"}
       >
         <h3 className={`news-title text-base sm:text-lg font-semibold leading-snug ${peek ? "peek" : ""}`} style={{ color: "var(--text)" }}>
           {item.headline}
