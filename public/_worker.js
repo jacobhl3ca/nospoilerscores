@@ -737,13 +737,13 @@ export default {
           //     digits for SCORE_RX to catch. "[sz]" covers both spellings and keeps it
           //     clear of "equality"; \w* covers every inflection. Byte-identical to
           //     spoilers.ts.
-          //     "own[- ]?goals?" joins the goal-event reveal family (hat[- ]trick/
+          //     "own[- ]?goals?" joins the goal-event reveal family (hat[- ]?tricks?/
           //     equali[sz]\w*): an "own goal" names a specific goal that was scored, so a
           //     title carrying it reveals a partial result ("Late own goal breaks Brazil
           //     hearts"), yet has no digits for SCORE_RX. The trailing "goal" keeps \b clear
           //     of crown/brown/known/thrown, and the closing \b clear of "own goalkeeper".
           //     Byte-identical to spoilers.ts.
-          //     "braces?" joins the goal-event reveal family (hat[- ]trick/equali[sz]\w*/
+          //     "braces?" joins the goal-event reveal family (hat[- ]?tricks?/equali[sz]\w*/
           //     own[- ]?goals?): a "brace" is one player scoring two goals, so a title reveals a
           //     partial result ("Kane brace sinks Poland"), yet has no digits for SCORE_RX.
           //     Whole-word \bbraces?\b is clear of embrace/bracelet/bracket; the "brace for"
@@ -848,8 +848,14 @@ export default {
           //     required trailing "out" keeps bare "dump" (the empty-a-container sense, absent from
           //     match highlight titles) from firing. No in-scope club/nation is named "Dump", so any
           //     benign collision errs to the over-hide-is-safe side. Byte-identical to spoilers.ts.
+          //     "hat[- ]?tricks?" widens the earlier "hat[- ]trick" (mandatory separator, singular
+          //     only) to also catch the closed spelling "hattrick" and the plural — both common in
+          //     soccer/WC highlight titles ("Mbappé hattrick", "two hat tricks") that leaked past the
+          //     old form. The optional "[- ]?" covers "hat trick"/"hat-trick"/"hattrick" and "s?" the
+          //     plural, like the sibling "shut[- ]?outs?"/"own[- ]?goals?". A pure widening anchored to
+          //     "hat"+"trick", so no new false-positive surface. Byte-identical to spoilers.ts.
           const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|hammer(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|hammer(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks
