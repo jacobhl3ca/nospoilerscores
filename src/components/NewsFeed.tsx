@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
+import { getTimeZone } from "@/lib/etDay";
 import {
   NewsSource,
   PlayHandler,
@@ -152,8 +153,24 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
       {/* Source + time */}
       <div className="flex items-center gap-2 px-4 pt-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
         <span>{item.section || "News"}</span>
-        {item.published && <span aria-hidden="true">·</span>}
-        {item.published && <span className="font-medium normal-case tracking-normal">{formatPublished(item.published)}</span>}
+        {item.published && formatPublished(item.published) && <span aria-hidden="true">·</span>}
+        {item.published && formatPublished(item.published) && (
+          // Wrap the relative "3h ago" in a semantic <time dateTime> so assistive
+          // tech and any crawler get the machine-readable ISO instant instead of
+          // only the fuzzy relative text, with a title tooltip surfacing the exact
+          // publish time (in the app's effective zone via getTimeZone(), matching
+          // every other absolute-instant label). Mirrors VideoModal's ArticleMeta
+          // and GameDetailModal's <time dateTime> treatment — this Feed timestamp
+          // was the lone relative-time display still rendered in a bare <span>.
+          // Visible text is unchanged.
+          <time
+            dateTime={item.published}
+            title={new Date(item.published).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: getTimeZone() })}
+            className="font-medium normal-case tracking-normal"
+          >
+            {formatPublished(item.published)}
+          </time>
+        )}
       </div>
 
       {/* Headline — blurred (global toggle) unless tapped to peek */}
