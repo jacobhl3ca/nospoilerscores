@@ -498,6 +498,20 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     plural-present "City hammer United" is left uncaught rather than risk over-hiding every
 //     West Ham clip — the same conservative inflection choice the "knock(?:s|ed|ing)[- ]?out" note
 //     above made. Byte-identical to the worker's copy.
+//     "batter(?:ed|ing)" is the same-family blowout verb British/soccer recap titles lean on for a
+//     heavy defeat right beside "hammered"/"walloped" ("Spain battered Georgia", "United battered
+//     again", "took a 5-0 battering", "City battering Chelsea") — a lopsided-defeat reveal that
+//     slipped past the hammer/wallop/drub/smash/thrash/thump/pummel/steamroll set and carries no
+//     digits when the score is omitted (SCORE_RX misses "United battered again"). Note the inflection
+//     is REQUIRED here — it is "(?:ed|ing)", NOT the "\w*" the sibling blowout verbs use — precisely
+//     to dodge the baseball collision: bare "batter"/"batters" is the hitter at the plate ("the
+//     batter struck out" reveals no result), so a "batter\w*" would over-hide ordinary MLB clips.
+//     The past/gerund forms "battered"/"battering" never name the hitter, so requiring the inflection
+//     catches only the verb-of-defeat forms (and the common noun "a battering") while leaving the
+//     baseball "batter" visible — the same conservative inflection choice the sibling
+//     "hammer(?:ed|ing)" made above for West Ham's "Hammers" nickname. The one benign collision — the
+//     target-man cliché "battering ram" — is rare in per-match highlight titles and errs to the same
+//     over-hide-is-safe side as the verbs above. Byte-identical to the worker's copy.
 //     "dump(?:s|ed|ing)?[- ]?out" joins the knockout-elimination family alongside
 //     "bow(?:s|ed|ing)?[- ]?out"/"crash(?:es|ed|ing)?[- ]?out"/"knock(?:s|ed|ing)[- ]?out":
 //     "dumped out" is one of the commonest British WC / cup-tie phrasings for a side being
@@ -512,7 +526,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     coverage at the same negligible false-positive risk as bow/crash out — and, like them, any
 //     benign collision errs to the over-hide-is-safe side (a masked title costs a tap to reveal; a
 //     leaked one breaks the whole promise). Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|hammer(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
