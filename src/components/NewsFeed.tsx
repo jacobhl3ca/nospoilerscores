@@ -87,9 +87,9 @@ function useAggregatedFeed(sources: NewsSource[]) {
 export default function NewsFeed({ sources, onPlay, revealTitles, showTextPosts, videosOnly }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
 
-  // Visible posts: in Videos mode keep only posts with a clip; otherwise hide
-  // headline-only text posts unless revealed / opted-in (matches the
-  // .news-textpost / .show-text-posts rule the Cards view uses).
+  // Visible posts: in Videos mode keep only posts with a clip; otherwise show
+  // text posts by default (blurred), hiding them only when the user opts out via
+  // showTextPosts=false (matches the .hide-textposts rule the Cards view uses).
   const visible = useMemo(
     () =>
       (items ?? []).filter((it) =>
