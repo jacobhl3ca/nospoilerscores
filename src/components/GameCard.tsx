@@ -66,7 +66,16 @@ function RatingBadge({ rating }: { rating: number }) {
   }
 
   return (
-    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}>
+    // Screen readers otherwise announce a bare "MEH"/"SKIP" mid-card with no hint
+    // it's the game's worth-watching rating. role="img" + a spoken aria-label give
+    // the badge a self-describing name; the visible all-caps text is unchanged.
+    // Title case in the label ("Meh"/"Skip") stops some engines spelling the short
+    // all-caps words out letter-by-letter.
+    <span
+      role="img"
+      aria-label={`Worth-watching rating: ${label.charAt(0) + label.slice(1).toLowerCase()}`}
+      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}
+    >
       {label}
     </span>
   );
