@@ -185,6 +185,12 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
               decoding="async"
               className="block w-full max-h-[70vh] object-contain"
               draggable={false}
+              // If the proxied thumbnail 404s (or the image proxy fails), hide the
+              // broken-image glyph so the media button degrades cleanly to its black
+              // tile instead of rendering a busted icon inside the tap target —
+              // matching the onError guard every other remote <img> in the app uses
+              // (NewsColumn's twin thumbnails, AlignedVideoStrip, GameCard, …).
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
           ) : (
             <div className="w-full aspect-video flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
