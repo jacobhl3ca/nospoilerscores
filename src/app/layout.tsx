@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import BootBeacon from "./boot-beacon";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -256,8 +257,28 @@ export default function RootLayout({
             __html: `(function(){try{var v=localStorage.getItem('nss-last-view');if(v==='scores-plain'||v==='scores-rated'||v==='news'){document.documentElement.setAttribute('data-view',v);return}}catch(e){}document.documentElement.setAttribute('data-view','scores-plain')})()`,
           }}
         />
+        {/* Self-heal watchdog. Recovers a wedged install with no user action —
+            no "delete & reinstall the app" step. Two triggers, both engine- and
+            SW-version-independent because this runs inline in every network-first
+            HTML document the app fetches on launch:
+              1. A /_next/ script or stylesheet fails to load (stale HTML still
+                 referencing a chunk hash that a later deploy removed — the exact
+                 blank-screen wedge that has forced the sw-vN bumps).
+              2. The app never signals a successful boot (BootBeacon sets
+                 window.__HS_OK once the React tree hydrates); if it is still
+                 unset 8s after load, the bundle failed to run and the screen is
+                 blank.
+            On either, unregister every service worker + delete every cache +
+            reload once. sessionStorage rate-limits to one heal per 30s so a
+            genuinely offline device can't reload-loop. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var HK='hs-heal-ts';function heal(){try{var last=+(sessionStorage.getItem(HK)||0);if(Date.now()-last<30000)return;sessionStorage.setItem(HK,String(Date.now()));}catch(e){}var rl=function(){try{location.reload()}catch(e){}};var js=[];try{if('serviceWorker'in navigator)js.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister()}))}));}catch(e){}try{if(window.caches)js.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}));}catch(e){}if(js.length){Promise.all(js.map(function(p){return p.catch(function(){})})).then(rl,rl);setTimeout(rl,2500);}else rl();}window.addEventListener('error',function(e){var t=e&&e.target;if(t&&(t.nodeName==='SCRIPT'||t.nodeName==='LINK')){var s=t.src||t.href||'';if(s.indexOf('/_next/')>-1)heal();}},true);window.addEventListener('load',function(){setTimeout(function(){try{if(navigator.onLine===false)return;if(!window.__HS_OK)heal();}catch(e){}},8000);});})()`,
+          }}
+        />
       </head>
       <body className="antialiased">
+        <BootBeacon />
         {children}
         {/* GoatCounter analytics — create hidescore site at goatcounter.com and update the URL */}
         {/* Explicit https (not protocol-relative //) so the loader still resolves
@@ -281,7 +302,7 @@ export default function RootLayout({
         {process.env.NODE_ENV === "production" && (
           <script
             dangerouslySetInnerHTML={{
-              __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw-v10.js').catch(function(){})})}`,
+              __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw-v11.js').catch(function(){})})}`,
             }}
           />
         )}

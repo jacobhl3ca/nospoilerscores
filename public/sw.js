@@ -9,7 +9,7 @@
 // the prior cache). Symptom of forgetting: a shipped UI/logic change is live
 // for fresh visitors but invisible to everyone who already has the SW
 // (e.g. the 2026-06-28 MLB two-button highlights fix). v2 → v3.
-const CACHE_VERSION = "hidescore-v10";
+const CACHE_VERSION = "hidescore-v11";
 const PRECACHE_URLS = [
   "/",
   "/today",
@@ -79,6 +79,28 @@ self.addEventListener("fetch", (event) => {
           return res;
         })
         .catch(() => caches.match(req).then((hit) => hit || new Response("", { status: 504 })))
+    );
+    return;
+  }
+
+  // App bundle (/_next/static) — network-first, cache only as an offline
+  // fallback. Turbopack chunk names are stable across builds, so the old
+  // stale-while-revalidate branch could serve a returning user OLD chunk
+  // *content* under the same filename against fresh HTML — a hydration
+  // mismatch that blanks the screen (the wedge behind the sw-vN bumps). Going
+  // network-first here means the app always boots on the deployed code; the
+  // client-side self-heal watchdog in <head> is the backstop if it still fails.
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === "basic") {
+            const copy = res.clone();
+            caches.open(CACHE_VERSION).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
     );
     return;
   }
