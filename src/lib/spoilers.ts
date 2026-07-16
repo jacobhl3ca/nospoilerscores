@@ -562,6 +562,20 @@ const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–]\s*\d{1,3}\b(?![-/])/;
 //     coverage at the same negligible false-positive risk as bow/crash out — and, like them, any
 //     benign collision errs to the over-hide-is-safe side (a masked title costs a tap to reveal; a
 //     leaked one breaks the whole promise). Byte-identical to the worker's copy.
+//     "sent[- ]?packing" completes the knockout-elimination family beside "bow…out"/"crash…out"/
+//     "dump…out"/"knock…out": "sent packing" is a stock cup-tie headline phrasing for a side being
+//     beaten out of a tournament ("Germany sent packing", "holders sent packing", "Italy sent packing
+//     on penalties") — the same knockout-result reveal as its siblings, yet it carries no digits
+//     (SCORE_RX misses it) and no existing keyword caught the "sent packing" phrasing. Only this
+//     adjacent past-participle form is matched — the active "send X packing" puts the object BETWEEN
+//     the two words ("Spain send Germany packing"), so it isn't caught here (and isn't over-claimed);
+//     the passive/headline "sent packing" is by far the commoner form in the titles this filter sees.
+//     "packing" only ever completes this eliminate-a-rival idiom in a sports title — the literal
+//     luggage sense never appears — so no English word and no in-scope club or nation collides, adding
+//     coverage at the same negligible false-positive risk as the knockout siblings; any benign
+//     collision errs to the over-hide-is-safe side (a masked title costs a tap to reveal; a leaked one
+//     breaks the whole promise). Especially timely as the tournament reaches its win-or-go-home
+//     knockout rounds. Byte-identical to the worker's copy.
 //     "spank\w*" is the same-family blowout verb British/soccer recap titles lean on for a
 //     one-sided beating right beside "wallop"/"drub"/"thrash" ("Spain spank Georgia 5-0", "United
 //     spanked 4-0", "a 4-0 spanking", "City spanking Arsenal") — a decisive-defeat reveal that
@@ -605,7 +619,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–]\s*\d{1,3}\b(?![-/])/;
 //     or match-recap title — and no in-scope club or nation begins with "dispatch", so the trailing
 //     \w* covers dispatch/dispatches/dispatched/dispatching at the same negligible false-positive risk
 //     as the verbs above. Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|obliterat\w*|annihilat\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|obliterat\w*|annihilat\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|sent[- ]?packing|advanc\w*|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
