@@ -1313,26 +1313,8 @@ export default {
       }
     }
 
-    // Fall through to static assets. Turbopack reuses some chunk filenames
-    // across deploys, so those responses must never sit in the browser HTTP
-    // cache for hours. The service worker also requests them with
-    // cache:"reload"; no-store closes the same hole for first load, hard reload,
-    // and browsers without an active worker. (The production zone overrides a
-    // cacheable max-age=0 response to four hours, but preserves no-store.)
-    const assetResponse = await env.ASSETS.fetch(request);
-    if (url.pathname.startsWith("/_next/static/") || url.pathname === "/recover-v13.html") {
-      const headers = new Headers(assetResponse.headers);
-      headers.set("Cache-Control", "no-store");
-      // Clear only the network/script cache. Do not include "storage": that
-      // would erase HideScore preferences and locally cached score data.
-      if (url.pathname === "/recover-v13.html") headers.set("Clear-Site-Data", '"cache"');
-      return new Response(assetResponse.body, {
-        status: assetResponse.status,
-        statusText: assetResponse.statusText,
-        headers,
-      });
-    }
-    return assetResponse;
+    // Fall through to static assets
+    return env.ASSETS.fetch(request);
    } catch {
      // Last-resort guard: a transient R2 / HTMLRewriter / subrequest failure must
      // never surface as a Cloudflare 1101 "Worker threw an exception" page. For a

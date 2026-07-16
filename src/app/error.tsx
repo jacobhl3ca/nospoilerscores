@@ -2,7 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
-import { autoRecoverRuntimeError, recoverRuntimeError } from "@/lib/runtimeRecovery";
+import Link from "next/link";
 
 // Route-level error boundary for the page segment. Without this, an uncaught
 // render error in the (large, client-heavy) page white-screened the whole app
@@ -22,11 +22,6 @@ export default function Error({
     // server-side log), and report it to Sentry for crash visibility.
     console.error(error);
     Sentry.captureException(error);
-    // BootBeacon may already have fired before a stale mixed-version chunk
-    // crashes during render. Heal that case once; a real code bug settles on
-    // this fallback after the guarded retry instead of reload-looping.
-    const timer = window.setTimeout(() => autoRecoverRuntimeError(), 750);
-    return () => window.clearTimeout(timer);
   }, [error]);
 
   return (
@@ -44,14 +39,13 @@ export default function Error({
         >
           Try again
         </button>
-        <button
-          type="button"
-          onClick={() => recoverRuntimeError("/")}
+        <Link
+          href="/"
           className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--accent)" }}
         >
           Back to HideScore
-        </button>
+        </Link>
       </div>
     </main>
   );
