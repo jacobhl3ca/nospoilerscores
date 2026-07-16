@@ -2,7 +2,6 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
-import { autoRecoverRuntimeError, recoverRuntimeError } from "@/lib/runtimeRecovery";
 
 // Root-level error boundary. Unlike error.tsx (which only wraps page.tsx and
 // its children), global-error.tsx catches failures in the root layout itself —
@@ -24,8 +23,6 @@ export default function GlobalError({
     // server-side log), and report it to Sentry for crash visibility.
     console.error(error);
     Sentry.captureException(error);
-    const timer = window.setTimeout(() => autoRecoverRuntimeError(), 750);
-    return () => window.clearTimeout(timer);
   }, [error]);
 
   return (
@@ -63,9 +60,15 @@ export default function GlobalError({
             <button type="button" className="ge-btn ge-btn--primary" onClick={() => unstable_retry()}>
               Try again
             </button>
-            <button type="button" className="ge-btn ge-btn--secondary" onClick={() => recoverRuntimeError("/")}>
+            {/* Plain anchor (full reload) — after a root-layout failure a clean
+                navigation is safer than client-side routing, and next/link's
+                router context isn't guaranteed here since this REPLACES the root
+                layout. The no-html-link-for-pages rule is a false positive in a
+                global-error boundary, so it's disabled for this line. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a className="ge-btn ge-btn--secondary" href="/">
               Back to HideScore
-            </button>
+            </a>
           </div>
         </div>
       </body>
