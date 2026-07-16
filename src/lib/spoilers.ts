@@ -8,9 +8,14 @@
 // title bar when the title is provably spoiler-free. Keep these in sync with the
 // worker; if you add a keyword in one place, add it in the other.
 //
-//   • SCORE_RX — a soccer-style scoreline ("Chelsea 2-1 Spurs"). The
-//     lookbehind/lookahead exclude M-D-Y date hyphens and "2025-26" season
-//     spans so they don't false-positive.
+//   • SCORE_RX — a hyphenated scoreline. Each side is \d{1,3}, so it catches
+//     both the low soccer/hockey/NFL form ("Chelsea 2-1 Spurs", "Chiefs
+//     31-28 Bills") AND the three-digit basketball form ("Celtics 112-108
+//     Knicks") — NBA/WNBA finals are almost always 3 digits a side, so the
+//     old \d{1,2} cap leaked a bare box-score headline with no result verb
+//     for SPOILER_RX to catch. Capped at 3 digits (not 4+) precisely so it
+//     still excludes 4-digit years; the lookbehind/lookahead exclude M-D-Y
+//     date hyphens and "2025-26" season spans so they don't false-positive.
 //   • SPOILER_RX — outcome keywords ("walk-off", "stuns", "wins", "hat-trick",
 //     "red card", …). Tuned to leave "champion"/"champions" alone so
 //     "Premier League"/"Champions League" don't trip it. Also catches the
@@ -147,7 +152,7 @@
 //     false-positive surface ("that trick" can't match — no \b before the "hat"
 //     inside "that" — and "trickster" fails the closing \b). Byte-identical to
 //     the worker's copy.
-const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
+const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–]\s*\d{1,3}\b(?![-/])/;
 //     "outclass\w*" catches the superiority framing headlines lean on ("Brazil
 //     outclass Chile", "Spain outclassed Georgia") — a decisive-win reveal the
 //     blowout verbs above miss, and one that means nothing but winning
