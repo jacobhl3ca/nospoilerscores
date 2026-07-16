@@ -715,7 +715,11 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex
   // posts). Once loaded, a source with no videos renders nothing so the board
   // isn't full of empty cards.
   const shown = useMemo(
-    () => items.filter((item) => videosOnly ? itemIsVideo(item) : (showTextPosts || !itemIsTextPost(item))),
+    // Videos and Text posts are independent toggles: with Videos on you get the
+    // clip-bearing posts, and with Text posts ALSO on you additionally get the
+    // headline-only text posts (they carry no clip, so plain videosOnly hid them
+    // and the Text posts toggle was a no-op — Jacob 7/16).
+    () => items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item))),
     [items, videosOnly, showTextPosts],
   );
   // Publish exactly what is rendered so modal prev/next never pages into a row
