@@ -71,6 +71,17 @@ export default function FeedbackBox() {
             autoFocus
             value={text}
             onChange={(e) => setText(e.target.value)}
+            // Escape dismisses the open input back to the "Feedback" link — the
+            // expected way out of an expandable inline field. Without it a
+            // keyboard user who opened the box (or opened it by mistake) had no
+            // way to collapse it short of submitting or reloading the page.
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setText("");
+                setOpen(false);
+              }
+            }}
             placeholder="Feedback"
             // The form submits on Enter, so label the mobile keyboard's return
             // key "Send" to match. autoComplete off keeps the browser's name/
