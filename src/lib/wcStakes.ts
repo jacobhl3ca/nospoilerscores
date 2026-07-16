@@ -303,6 +303,16 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
         : `${s.name} are all but through (a draw seals it)`;
     return `${through} and ${out[0].name} are out — the result only affects ${s.name}'s seeding, so top ${group} for an easier path.`;
   }
+  // Both sides are already out (out.length === 2) — the only combination left
+  // in this tier once safe===2 and safe===1/out===1 are handled above. Neither
+  // team can advance, so there is nothing at stake: NOT seeding, NOT goal
+  // difference (both matter only to teams still in the tournament). The old
+  // fallback ("nothing left to settle but seeding and goal difference") wrongly
+  // cast this dead rubber as a fight for group position, mirroring the decider
+  // tier's "already out" wording above but for the both-eliminated case.
+  if (out.length === 2) {
+    return `Both are already out — a dead rubber with nothing at stake.`;
+  }
   return `${group}: nothing left to settle but seeding and goal difference.`;
 }
 
