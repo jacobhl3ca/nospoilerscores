@@ -8,6 +8,7 @@ import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight } from "@/lib/highlights";
+import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
 // Per-league buffer (hrs from game start) before showing the highlight button,
 // and regulation period counts for the OT-extra calc below. Both are constant
@@ -85,6 +86,15 @@ export default function GameHighlights({
   // so a single read is indistinguishable in practice (matches the nowMs pattern
   // already used in LeagueColumn's "Last played" slate label).
   const [nowMs] = useState(() => Date.now());
+
+  // MLB Recap/Condensed for surfaces that DON'T run the dated board enrich — the
+  // team timeline (fetchTeamSchedule) and the "Last played"/lookahead fallback
+  // slates hand us a finished MLB game with no mlbRecap* fields, so the 3m Recap
+  // button never showed there (Jacob 7/16, only the 10m). Self-resolve them
+  // (cached per date, shared across cards on the same day) so the 3m shows on
+  // every surface, not just the main board.
+  const [resolvedMlb, setResolvedMlb] = useState<MlbGameVideos | null>(null);
+  const mlbResolvedForId = useRef<string | null>(null);
 
   const isFinished = game.state === "post";
 
@@ -237,6 +247,29 @@ export default function GameHighlights({
     }
   }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, strictPrimaryChannel, strictSecondaryChannel]);
 
+  // See resolvedMlb above. Fires only when the board enrich did NOT already
+  // attach a recap (game.mlbRecapPlaybackUrl absent) and the highlight window
+  // has opened; the ref keeps it to one lookup per game.
+  useEffect(() => {
+    if (!isMlb || !isFinished || !highlightsReady) return;
+    if (game.mlbRecapPlaybackUrl) return;
+    if (mlbResolvedForId.current === game.id) return;
+    mlbResolvedForId.current = game.id;
+    let cancelled = false;
+    resolveMlbGameVideos(game).then((r) => { if (!cancelled && r) setResolvedMlb(r); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMlb, isFinished, highlightsReady, game.id, game.mlbRecapPlaybackUrl]);
+
+  // Effective MLB video fields: the board enrich sets them on the game prop; on
+  // other surfaces they come from resolvedMlb (self-resolved above).
+  const mlbRecapPlayback = game.mlbRecapPlaybackUrl ?? resolvedMlb?.recap?.playback ?? null;
+  const mlbRecapPage = game.mlbRecapUrl ?? resolvedMlb?.recap?.url ?? null;
+  const mlbRecapPoster = game.mlbRecapPoster ?? resolvedMlb?.recap?.poster ?? null;
+  const mlbCondensedPlayback = game.mlbCondensedPlaybackUrl ?? resolvedMlb?.condensed?.playback ?? null;
+  const mlbCondensedPage = game.mlbCondensedUrl ?? resolvedMlb?.condensed?.url ?? null;
+  const mlbCondensedPoster = game.mlbCondensedPoster ?? resolvedMlb?.condensed?.poster ?? null;
+
   // When there is no official channel the official button never renders, so
   // treat officialStatus as "missing" without storing it in state.
   const effectiveOfficialStatus = hasOfficialButton ? officialStatus : "missing";
@@ -259,8 +292,8 @@ export default function GameHighlights({
   // loading. Some games (the 2026 All-Star Game) only have the baked secondary
   // ESPN/MLB clip; that is still a valid playable condensed slot.
   const showMlbYouTubeCondensed = isMlb && (officialStatus === "found" || searchStatus === "found");
-  const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!game.mlbCondensedPlaybackUrl);
-  const showMlb = !!(isFinished && isMlb && (game.mlbRecapPlaybackUrl || showMlbCondensed));
+  const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!mlbCondensedPlayback);
+  const showMlb = !!(isFinished && isMlb && (mlbRecapPlayback || showMlbCondensed));
   if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
 
   // The OTHER resolved highlight versions of this game, minus the one being
@@ -383,12 +416,12 @@ export default function GameHighlights({
       {/* MLB.com official game videos: short recap + condensed game in one row. */}
       {showMlb && (
         <div className={`${wrapMargin} flex gap-1`}>
-          {game.mlbRecapPlaybackUrl && (
+          {mlbRecapPlayback && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                const page = game.mlbRecapUrl || game.mlbRecapPlaybackUrl!;
-                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbRecapPlaybackUrl, game.mlbRecapPoster);
+                const page = mlbRecapPage || mlbRecapPlayback!;
+                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, mlbRecapPlayback, mlbRecapPoster);
                 else openExternal(page);
               }}
               className="highlight-btn flex min-w-0 items-center justify-center gap-0.5 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
@@ -411,9 +444,9 @@ export default function GameHighlights({
                     return;
                   }
                 }
-                if (game.mlbCondensedPlaybackUrl) {
-                  const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl;
-                  if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, game.mlbCondensedPlaybackUrl, game.mlbCondensedPoster);
+                if (mlbCondensedPlayback) {
+                  const page = mlbCondensedPage || mlbCondensedPlayback;
+                  if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, mlbCondensedPlayback, mlbCondensedPoster);
                   else openExternal(page);
                 }
               }}

@@ -2730,7 +2730,7 @@ async function enrichNhlVideos(games: Game[], date: string): Promise<void> {
 // worker normalizes StatsAPI's per-game highlight payload into page URL,
 // playback URL, and poster so GameHighlights can render official MLB buttons
 // without relying on noisy YouTube search results.
-type MlbClip = { url: string | null; playback: string | null; poster: string | null };
+export type MlbClip = { url: string | null; playback: string | null; poster: string | null };
 type MlbVideoEntry = { date: string | null; away: string; home: string; recap: MlbClip | null; condensed: MlbClip | null };
 
 // The MLB Recap (3m) button is populated ONLY by /api/mlb-videos, so one slow or
@@ -2794,7 +2794,7 @@ async function fetchMlbVideos(date: string): Promise<MlbVideoEntry[]> {
       if (!res.ok) continue;
       const data = (await res.json()) as { games?: MlbVideoEntry[] };
       const entries = data?.games ?? [];
-      if (entries.length) {
+        if (entries.length) {
         writeMlbVideosCache(date, entries);
         return entries;
       }
@@ -2808,41 +2808,73 @@ async function fetchMlbVideos(date: string): Promise<MlbVideoEntry[]> {
   return cached ?? [];
 }
 
+// Pick the video entry for one game out of a date's list — team-name match
+// (ESPN displayName ends with StatsAPI team.name, either home/away order) then
+// the closest kickoff time to disambiguate doubleheaders. Shared by the dated
+// board enrich and the on-demand single-game resolver so both match identically.
+function matchMlbVideoEntry(game: Game, entries: MlbVideoEntry[]): MlbVideoEntry | null {
+  const norm = (s: string) =>
+    s.toLowerCase()
+      .replace(/\bthe\b/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const home = norm(game.homeTeam.displayName);
+  const away = norm(game.awayTeam.displayName);
+  const candidates = entries.filter((e) => {
+    const eh = norm(e.home || "");
+    const ea = norm(e.away || "");
+    return !!eh && !!ea && home.endsWith(eh) && away.endsWith(ea);
+  });
+  if (!candidates.length) return null;
+  const gameTime = new Date(game.date).getTime();
+  return candidates.sort((a, b) => {
+    const at = a.date ? Math.abs(new Date(a.date).getTime() - gameTime) : Number.MAX_SAFE_INTEGER;
+    const bt = b.date ? Math.abs(new Date(b.date).getTime() - gameTime) : Number.MAX_SAFE_INTEGER;
+    return at - bt;
+  })[0];
+}
+
+function applyMlbVideos(game: Game, match: MlbVideoEntry): void {
+  game.mlbRecapUrl = match.recap?.url ?? null;
+  game.mlbRecapPlaybackUrl = match.recap?.playback ?? null;
+  game.mlbRecapPoster = match.recap?.poster ?? null;
+  game.mlbCondensedUrl = match.condensed?.url ?? null;
+  game.mlbCondensedPlaybackUrl = match.condensed?.playback ?? null;
+  game.mlbCondensedPoster = match.condensed?.poster ?? null;
+}
+
 async function enrichMlbVideos(games: Game[], date: string): Promise<void> {
   if (!date || !games.some((g) => g.state === "post")) return;
   try {
     const entries = await fetchMlbVideos(date);
     if (!entries.length) return;
-    const norm = (s: string) =>
-      s.toLowerCase()
-        .replace(/\bthe\b/g, "")
-        .replace(/[^a-z0-9]+/g, " ")
-        .trim();
     for (const game of games) {
       if (game.state !== "post") continue;
-      const home = norm(game.homeTeam.displayName);
-      const away = norm(game.awayTeam.displayName);
-      const candidates = entries.filter((e) => {
-        const eh = norm(e.home || "");
-        const ea = norm(e.away || "");
-        return !!eh && !!ea && home.endsWith(eh) && away.endsWith(ea);
-      });
-      const gameTime = new Date(game.date).getTime();
-      const match = candidates.sort((a, b) => {
-        const at = a.date ? Math.abs(new Date(a.date).getTime() - gameTime) : Number.MAX_SAFE_INTEGER;
-        const bt = b.date ? Math.abs(new Date(b.date).getTime() - gameTime) : Number.MAX_SAFE_INTEGER;
-        return at - bt;
-      })[0];
-      if (!match) continue;
-      game.mlbRecapUrl = match.recap?.url ?? null;
-      game.mlbRecapPlaybackUrl = match.recap?.playback ?? null;
-      game.mlbRecapPoster = match.recap?.poster ?? null;
-      game.mlbCondensedUrl = match.condensed?.url ?? null;
-      game.mlbCondensedPlaybackUrl = match.condensed?.playback ?? null;
-      game.mlbCondensedPoster = match.condensed?.poster ?? null;
+      const match = matchMlbVideoEntry(game, entries);
+      if (match) applyMlbVideos(game, match);
     }
   } catch {
     // Best-effort enrichment — leave games unchanged on any failure.
+  }
+}
+
+// On-demand Recap + Condensed for ONE finished MLB game, for surfaces that don't
+// run the dated board enrich: the team timeline (fetchTeamSchedule) and the
+// "Last played" / lookahead fallback slates. Buckets the game to its ET slate
+// day and reuses fetchMlbVideos' per-date cache, so several cards on the same
+// day share ONE request. Null when the game isn't found (e.g. recap not up yet).
+export type MlbGameVideos = { recap: MlbClip | null; condensed: MlbClip | null };
+export async function resolveMlbGameVideos(game: Game): Promise<MlbGameVideos | null> {
+  if (game.sport !== "mlb" || game.state !== "post") return null;
+  const ymd = etSlateYmd(game.date);
+  if (!ymd) return null;
+  try {
+    const entries = await fetchMlbVideos(ymd);
+    if (!entries.length) return null;
+    const match = matchMlbVideoEntry(game, entries);
+    return match ? { recap: match.recap ?? null, condensed: match.condensed ?? null } : null;
+  } catch {
+    return null;
   }
 }
 
