@@ -2730,16 +2730,88 @@ async function enrichNhlVideos(games: Game[], date: string): Promise<void> {
 // worker normalizes StatsAPI's per-game highlight payload into page URL,
 // playback URL, and poster so GameHighlights can render official MLB buttons
 // without relying on noisy YouTube search results.
+type MlbClip = { url: string | null; playback: string | null; poster: string | null };
+type MlbVideoEntry = { date: string | null; away: string; home: string; recap: MlbClip | null; condensed: MlbClip | null };
+
+// The MLB Recap (3m) button is populated ONLY by /api/mlb-videos, so one slow or
+// failed call drops it — while the Condensed (10m) button survives via its
+// baked/live YouTube fallback. That asymmetry is why so many past MLB games
+// showed just the 10m button (Jacob 7/16). Retry + a per-date cache (in-memory,
+// mirrored to localStorage so it also survives reloads) keeps the recap sticky:
+// once a date's videos load, the 3m button stays put across the app's periodic
+// score refreshes and on the next visit, instead of blinking out on any single
+// flaky fetch. StatsAPI URLs are stable CDN links, so a cached entry stays valid.
+const mlbVideosMem = new Map<string, MlbVideoEntry[]>();
+const MLB_VIDS_LS_PREFIX = "hs_mlbvids_";
+const MLB_VIDS_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+function readMlbVideosCache(date: string): MlbVideoEntry[] | null {
+  const mem = mlbVideosMem.get(date);
+  if (mem) return mem;
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const raw = localStorage.getItem(MLB_VIDS_LS_PREFIX + date);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { entries?: MlbVideoEntry[] };
+    const entries = parsed?.entries;
+    if (!Array.isArray(entries) || !entries.length) return null;
+    mlbVideosMem.set(date, entries);
+    return entries;
+  } catch {
+    return null;
+  }
+}
+
+function writeMlbVideosCache(date: string, entries: MlbVideoEntry[]): void {
+  mlbVideosMem.set(date, entries);
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(MLB_VIDS_LS_PREFIX + date, JSON.stringify({ entries, ts: Date.now() }));
+    // Prune stale dates so the mirror can't grow without bound.
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(MLB_VIDS_LS_PREFIX)) continue;
+      try {
+        const ts = (JSON.parse(localStorage.getItem(k) || "{}") as { ts?: number }).ts;
+        if (!ts || Date.now() - ts > MLB_VIDS_TTL_MS) localStorage.removeItem(k);
+      } catch {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch {
+    // Private mode / quota — the in-memory cache still applies for this session.
+  }
+}
+
+async function fetchMlbVideos(date: string): Promise<MlbVideoEntry[]> {
+  const cached = readMlbVideosCache(date);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(`${getApiBase()}/api/mlb-videos?date=${date}`, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const data = (await res.json()) as { games?: MlbVideoEntry[] };
+      const entries = data?.games ?? [];
+      if (entries.length) {
+        writeMlbVideosCache(date, entries);
+        return entries;
+      }
+      // Empty response: a real off-day returns [], but so does the worker's own
+      // error path. Never regress a known-good date to empty — prefer the cache.
+      if (cached?.length) return cached;
+    } catch {
+      // Timeout / network error — retry, then fall back to the cache below.
+    }
+  }
+  return cached ?? [];
+}
+
 async function enrichMlbVideos(games: Game[], date: string): Promise<void> {
   if (!date || !games.some((g) => g.state === "post")) return;
   try {
-    const res = await fetch(`${getApiBase()}/api/mlb-videos?date=${date}`);
-    if (!res.ok) return;
-    type MlbClip = { url: string | null; playback: string | null; poster: string | null };
-    const data = (await res.json()) as {
-      games?: { date: string | null; away: string; home: string; recap: MlbClip | null; condensed: MlbClip | null }[];
-    };
-    const entries = data.games ?? [];
+    const entries = await fetchMlbVideos(date);
     if (!entries.length) return;
     const norm = (s: string) =>
       s.toLowerCase()
