@@ -18,21 +18,20 @@ import {
 // (VideoModal) the Cards view uses, so playback / paging / share are unchanged.
 //
 // Spoiler model matches the rest of the app: HEADLINES are blurred (the global
-// reveal toggle un-blurs them, or tap one to peek); COMMENTS are blurred and
-// tap-to-reveal per post (they routinely state the score). Images follow the
-// app's existing behavior (shown — only titles are treated as the spoiler).
+// reveal toggle un-blurs them); COMMENTS are blurred and tap-to-reveal per post
+// (they routinely state the score). Image/video previews can be blurred with
+// the independent Media toolbar toggle.
 
 interface NewsFeedProps {
   sources: NewsSource[];
   onPlay: PlayHandler;
-  revealTitles: boolean;
   showTextPosts: boolean;
   videosOnly: boolean;
 }
 
 // A post counts as a video when it carries any playable clip.
 function hasVideo(item: NewsItem): boolean {
-  return !!(item.youtubeVideoId || item.videoUrl || item.embedUrl);
+  return !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
 }
 
 // Merge every source's items into one de-duped, time-sorted list. Dedupe by the
@@ -85,18 +84,18 @@ function useAggregatedFeed(sources: NewsSource[]) {
   return items;
 }
 
-export default function NewsFeed({ sources, onPlay, revealTitles, showTextPosts, videosOnly }: NewsFeedProps) {
+export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
 
   // Visible posts: in Videos mode keep only posts with a clip; otherwise hide
-  // headline-only text posts unless revealed / opted-in (matches the
+  // headline-only text posts unless explicitly opted in (matches the
   // .news-textpost / .show-text-posts rule the Cards view uses).
   const visible = useMemo(
     () =>
       (items ?? []).filter((it) =>
-        videosOnly ? hasVideo(it) : (!itemIsTextPost(it) || revealTitles || showTextPosts)
+        videosOnly ? hasVideo(it) : (!itemIsTextPost(it) || showTextPosts)
       ),
-    [items, revealTitles, showTextPosts, videosOnly]
+    [items, showTextPosts, videosOnly]
   );
 
   // Prebuild the paging payloads once so tapping any post opens the lightbox
@@ -141,7 +140,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
   const [showComments, setShowComments] = useState(false);
   const isReddit = !!item.section?.startsWith("r/");
   const img = item.imageFullUrl || item.imageUrl;
-  const isVideo = !!(item.youtubeVideoId || item.videoUrl || item.embedUrl);
+  const isVideo = !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
   const hasMedia = !!img || isVideo;
   const comments = item.comments ?? [];
 
@@ -173,16 +172,14 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         )}
       </div>
 
-      {/* Headline — blurred (global toggle) unless tapped to peek */}
+      {/* Text-only headlines open the same paged modal as every other post.
+          Media posts retain the lightweight one-headline peek because their
+          preview immediately below remains the main modal target. */}
       <button
         type="button"
-        onClick={() => setPeek((v) => !v)}
-        // This is a toggle (blur ↔ peek). aria-pressed mirrors the reveal state
-        // for assistive tech and the title reflects the next action, matching
-        // the PeekBlur toggle in VideoModal (WCAG 4.1.2 Name, Role, Value).
-        aria-pressed={peek}
+        onClick={hasMedia ? (() => setPeek((v) => !v)) : onOpen}
         className="block w-full text-left px-4 pt-2 pb-3 cursor-pointer"
-        title={peek ? "Tap to hide this headline" : "Tap to reveal this headline"}
+        title={hasMedia ? "Tap to reveal/hide this headline" : "Open post"}
       >
         <h3 className={`news-title text-base sm:text-lg font-semibold leading-snug ${peek ? "peek" : ""}`} style={{ color: "var(--text)" }}>
           {item.headline}
@@ -194,7 +191,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         <button
           type="button"
           onClick={onOpen}
-          className="relative block w-full cursor-pointer bg-black"
+          className="news-media-preview relative block w-full cursor-pointer bg-black"
           aria-label="Open post"
         >
           {img ? (
