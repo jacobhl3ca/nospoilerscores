@@ -47,12 +47,12 @@ export default function GameHighlights({
   // still surface a shorter team recap when one is available.
   const isMlb = game.sport === "mlb";
   const isFifa = game.sport === "fifa";
-  // Show the FOX short (~2-3m) cut as the primary FIFA button alongside the FOX
-  // full cut and the Spanish Telemundo pair. Some short clips hit YouTube embed
-  // restrictions; when that happens the modal's embed-blocked overlay offers the
-  // extended/Telemundo alternates. Jacob 7/16: backfill the short cut on all
-  // historical World Cup cards that had been showing only the ~10-15m extended.
-  const fifaShortEnabled = true;
+  // FIFA's short 2m clips frequently hit YouTube embed restrictions AND the live
+  // resolver often lands the wrong clip for them, so keep the primary row to the
+  // FOX full cut; the Spanish Telemundo pair still fills the second row when
+  // those prebaked/search-resolved clips exist. (Jacob 7/16: tried enabling the
+  // short cut, reverted — it surfaced a mismatched clip.)
+  const fifaShortEnabled = false;
   const fifaTelemundoEnabled = true;
   const hasOfficialButton = !!officialChannel && !(isFifa && !fifaShortEnabled);
   const initialBaked = getCachedBakedHighlight(game.sport, game.id);
