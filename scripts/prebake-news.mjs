@@ -2118,18 +2118,35 @@ const HL_LEAGUES = [
 ];
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
+
+function hlNormalizeTeam(name) {
+  return String(name ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// Sorted so an ESPN home/away flip does not invalidate the same matchup, while
+// reusing an event ID for either different team does invalidate every cached ID.
+function hlMatchupFingerprint(away, home) {
+  return [hlNormalizeTeam(away), hlNormalizeTeam(home)].sort().join("|");
+}
+
 // Verified completed World Cup highlight slots. These seed the ignored/R2-backed
 // highlights cache on fresh CI checkouts, so all-time World Cup cards do not
 // regress to slow live scraping or stale one-link entries.
 const HL_WORLD_CUP_SEEDS = {
-  "fifa:760489": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "Gw6vNwAvkTs", extended: "-gtI96YhJek", telemundo: "zGZGTRKNxvs" },
-  "fifa:760488": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "vdnhUnGHwco", extended: "DkZtwwbN1YI", telemundo: "IMYhuFBuN-0" },
-  "fifa:760493": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "PsPQkfngzV8", extended: "OJ84ZgReAsE", telemundo: "PLOT1Sa2A2o" },
-  "fifa:760499": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "olBx2GK7kZI", extended: "ACWOG7t8Plk", telemundo: "b_9eFJBe4ek" },
-  "fifa:760500": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "hzvEZ2Vxb94", extended: "EC2jOKluGRI", telemundo: "hWlz2o8KPL0" },
-  "fifa:760508": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "g9bxtV3oZDI", extended: "_uEzppRKcd0", telemundo: "D9HlmSHUIvo" },
-  "fifa:760509": { t: Date.parse("2026-07-09T14:56:01.325Z"), official: "-LHb5yN-OzI", extended: "XO3x8vm0Ijc", telemundo: "QO8-LAmwS1E", telemundoExtended: "6tveHOrsXwY" },
-  "fifa:760510": { t: Date.parse("2026-07-10T10:45:00.000Z"), official: "2zz8FDiKeX4", extended: "J_1iFnRsHG0", telemundo: "7mx7L_IgBfY", telemundoExtended: "x3zlfmji_CU" },
+  "fifa:760489": { t: Date.parse("2026-07-09T14:56:01.325Z"), matchup: hlMatchupFingerprint("Paraguay", "Germany"), official: "Gw6vNwAvkTs", extended: "-gtI96YhJek", telemundo: "zGZGTRKNxvs" },
+  "fifa:760488": { t: Date.parse("2026-07-09T14:56:01.325Z"), matchup: hlMatchupFingerprint("Morocco", "Netherlands"), official: "vdnhUnGHwco", extended: "DkZtwwbN1YI", telemundo: "IMYhuFBuN-0" },
+  "fifa:760493": { t: Date.parse("2026-07-09T14:56:01.325Z"), matchup: hlMatchupFingerprint("Senegal", "Belgium"), official: "PsPQkfngzV8", extended: "OJ84ZgReAsE", telemundo: "PLOT1Sa2A2o" },
+  "fifa:760499": { t: Date.parse("2026-07-09T14:56:01.325Z"), matchup: hlMatchupFingerprint("Egypt", "Australia"), official: "olBx2GK7kZI", extended: "ACWOG7t8Plk", telemundo: "b_9eFJBe4ek" },
+  "fifa:760500": { t: Date.parse("2026-07-09T14:56:01.325Z"), matchup: hlMatchupFingerprint("Cape Verde", "Argentina"), official: "hzvEZ2Vxb94", extended: "EC2jOKluGRI", telemundo: "hWlz2o8KPL0" },
+  "fifa:760508": { t: Date.parse("2026-07-09T14:56:01.325Z"), matchup: hlMatchupFingerprint("Colombia", "Switzerland"), official: "g9bxtV3oZDI", extended: "_uEzppRKcd0", telemundo: "D9HlmSHUIvo" },
+  "fifa:760509": { t: Date.parse("2026-07-09T14:56:01.325Z"), matchup: hlMatchupFingerprint("Egypt", "Argentina"), official: "-LHb5yN-OzI", extended: "XO3x8vm0Ijc", telemundo: "QO8-LAmwS1E", telemundoExtended: "6tveHOrsXwY" },
+  "fifa:760510": { t: Date.parse("2026-07-10T10:45:00.000Z"), matchup: hlMatchupFingerprint("Morocco", "France"), official: "2zz8FDiKeX4", extended: "J_1iFnRsHG0", telemundo: "7mx7L_IgBfY", telemundoExtended: "x3zlfmji_CU" },
 };
 // Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
 const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
@@ -2190,24 +2207,59 @@ async function hlFetchId(query, { channel, exclude, preferExtended } = {}) {
   } catch { return null; }
 }
 
-const HL_OEMBED_AUTHOR_CACHE = new Map();
-async function hlIsTelemundoVideo(id) {
-  if (!id) return false;
-  if (HL_OEMBED_AUTHOR_CACHE.has(id)) return HL_OEMBED_AUTHOR_CACHE.get(id);
+const HL_TITLE_TEAM_ALIASES = {
+  usa: ["usa", "united states", "usmnt", "estados unidos"],
+  "bosnia herz": ["bosnia herz", "bosnia herzegovina", "bosnia and herzegovina"],
+  "south korea": ["south korea", "korea republic", "korea"],
+  "ivory coast": ["ivory coast", "cote d ivoire"],
+  turkiye: ["turkiye", "turkey"],
+  "congo dr": ["congo dr", "dr congo", "democratic republic of congo"],
+  curacao: ["curacao"],
+  czechia: ["czechia", "czech republic"],
+  "cape verde": ["cape verde", "cabo verde"],
+  netherlands: ["netherlands", "holland", "paises bajos"],
+};
+
+function hlTitleHasTeam(title, team) {
+  const normalizedTitle = hlNormalizeTeam(title);
+  const normalizedTeam = hlNormalizeTeam(team);
+  const variants = new Set([
+    normalizedTeam,
+    hlNormalizeTeam(hlAlias(team)),
+    hlNormalizeTeam(hlTelemundoTeam(team)),
+    ...(HL_TITLE_TEAM_ALIASES[normalizedTeam] ?? []),
+  ]);
+  return [...variants].some((variant) => variant && normalizedTitle.includes(variant));
+}
+
+const HL_OEMBED_META_CACHE = new Map();
+async function hlOembedMeta(id) {
+  if (!id) return null;
+  if (HL_OEMBED_META_CACHE.has(id)) return HL_OEMBED_META_CACHE.get(id);
   try {
     const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(id)}&format=json`, { headers: { "User-Agent": UA } });
     if (!res.ok) {
-      HL_OEMBED_AUTHOR_CACHE.set(id, false);
-      return false;
+      HL_OEMBED_META_CACHE.set(id, null);
+      return null;
     }
     const data = await res.json();
-    const ok = String(data?.author_name ?? "").toLowerCase() === "telemundo deportes";
-    HL_OEMBED_AUTHOR_CACHE.set(id, ok);
-    return ok;
+    const meta = { title: String(data?.title ?? ""), author: String(data?.author_name ?? "") };
+    HL_OEMBED_META_CACHE.set(id, meta);
+    return meta;
   } catch {
-    HL_OEMBED_AUTHOR_CACHE.set(id, false);
-    return false;
+    HL_OEMBED_META_CACHE.set(id, null);
+    return null;
   }
+}
+
+async function hlVideoMatchesTeams(id, away, home) {
+  const meta = await hlOembedMeta(id);
+  return !!meta?.title && hlTitleHasTeam(meta.title, away) && hlTitleHasTeam(meta.title, home);
+}
+
+async function hlIsTelemundoVideo(id) {
+  const meta = await hlOembedMeta(id);
+  return String(meta?.author ?? "").toLowerCase() === "telemundo deportes";
 }
 
 // The resolveHighlightVideo chain from youtube.ts: channel-scoped dated,
@@ -2289,14 +2341,27 @@ function hlTennisMatches(events, ymd) {
 }
 
 async function loadPriorHighlights() {
+  let local = null;
   try {
-    return JSON.parse(await readFile(HL_OUT_PATH, "utf8"));
+    local = JSON.parse(await readFile(HL_OUT_PATH, "utf8"));
   } catch { /* fresh checkout / ignored generated file */ }
+  let live = null;
   try {
     const res = await fetch(`https://hidescore.com/news/highlights.json?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
-    if (res.ok) return await res.json();
+    if (res.ok) live = await res.json();
   } catch { /* live prior unavailable */ }
-  return {};
+  // A long-lived checkout can have an incomplete local ignored file while R2
+  // still contains valid recent games (the 2026 MLB All-Star entry exposed this
+  // during a manual bake). Merge entry-by-entry and keep the newest timestamp so
+  // either source can fill gaps without an older copy overwriting a newer one.
+  const games = {};
+  for (const source of [live, local]) {
+    for (const [key, value] of Object.entries(source?.games ?? {})) {
+      if (!value) continue;
+      if (!games[key] || (value.t ?? 0) >= (games[key].t ?? 0)) games[key] = value;
+    }
+  }
+  return { games };
 }
 
 async function bakeGameHighlights() {
@@ -2353,15 +2418,25 @@ async function bakeGameHighlights() {
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
-        const prev = games[key] ?? {};
         const { away, home, series } = item;
+        const isMlb = lg.sport === "mlb";
+        const isFifa = lg.sport === "fifa";
+        const matchup = isFifa ? hlMatchupFingerprint(away, home) : null;
+        const rawPrev = games[key] ?? {};
+        let prev = rawPrev;
+        // ESPN event IDs are usually stable, but if one is ever repointed to a
+        // different matchup, no cached YouTube ID may survive that identity
+        // change. Delete first so a failed re-resolve cannot leave stale IDs.
+        if (isFifa && prev.matchup && prev.matchup !== matchup) {
+          console.warn(`HIGHLIGHT-MATCHUP-CHANGED ${key}: ${prev.matchup} -> ${matchup}; discarding cached IDs`);
+          delete games[key];
+          prev = {};
+        }
         const dateStr = hlDateStr(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
         const preferExtended = !!competition;
         // MLB now keeps the official MLB channel first; the unscoped short/team
         // recap is secondary so unofficial uploads never occupy the primary slot.
-        const isMlb = lg.sport === "mlb";
-        const isFifa = lg.sport === "fifa";
         const primaryChannel = item.channel;
         const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : primaryChannel);
         const strictPrimaryChannel = !!primaryChannel;
@@ -2375,32 +2450,66 @@ async function bakeGameHighlights() {
         // card split into FIFA short + FOX full. Carry it as `extended` instead
         // so future bakes do not preserve the stale primary slot forever.
         const oldMlbBake = isMlb && prev.mlbOrder !== "official-first";
-        const prevOfficial = isFifa && prev.official && !prev.extended ? null : oldMlbBake ? prev.extended : prev.official;
-        const prevExtended = isFifa && prev.official && !prev.extended ? prev.official : oldMlbBake ? prev.official : prev.extended;
+        let prevOfficial = isFifa && prev.official && !prev.extended ? null : oldMlbBake ? prev.extended : prev.official;
+        let prevExtended = isFifa && prev.official && !prev.extended ? prev.official : oldMlbBake ? prev.official : prev.extended;
+
+        // One-time migration for legacy FIFA entries that predate matchup
+        // fingerprints: oEmbed titles must contain BOTH teams before we stamp
+        // and preserve those IDs forever. New /api/youtube resolves already use
+        // the same two-team gate in the worker; the checks below make that
+        // contract explicit at the prebake boundary too.
+        if (isFifa && !prev.matchup) {
+          if (prevOfficial && !(await hlVideoMatchesTeams(prevOfficial, away, home))) {
+            console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home})`);
+            prevOfficial = null;
+          }
+          if (prevExtended && !(await hlVideoMatchesTeams(prevExtended, away, home))) {
+            console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home})`);
+            prevExtended = null;
+          }
+        }
+
         let official = prevOfficial ?? null;
-        if (!official) official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictPrimaryChannel);
+        if (!official) {
+          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictPrimaryChannel);
+          if (isFifa && official && !(await hlVideoMatchesTeams(official, away, home))) {
+            console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
+            official = null;
+          }
+        }
         let extended = prevExtended ?? null;
         if (!extended) {
           extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictSecondaryChannel);
           if (extended && official && extended === official) {
             extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, strictSecondaryChannel);
           }
+          if (isFifa && extended && !(await hlVideoMatchesTeams(extended, away, home))) {
+            console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
+            extended = null;
+          }
         }
         let telemundo = isFifa ? (prev.telemundo ?? null) : null;
         if (telemundo && (telemundo === official || telemundo === extended)) telemundo = null;
         if (telemundo && !(await hlIsTelemundoVideo(telemundo))) telemundo = null;
+        if (telemundo && !prev.matchup && !(await hlVideoMatchesTeams(telemundo, away, home))) telemundo = null;
         if (isFifa && !telemundo) {
           telemundo = await hlResolveTelemundoWorldCup(away, home, dateStr, series);
           if (telemundo && (telemundo === official || telemundo === extended)) telemundo = null;
           if (telemundo && !(await hlIsTelemundoVideo(telemundo))) telemundo = null;
+          if (telemundo && !(await hlVideoMatchesTeams(telemundo, away, home))) {
+            console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved telemundo=${telemundo} (${away} vs ${home})`);
+            telemundo = null;
+          }
         }
         let telemundoExtended = isFifa ? (prev.telemundoExtended ?? null) : null;
         if (telemundoExtended && (telemundoExtended === telemundo || telemundoExtended === official || telemundoExtended === extended)) {
           telemundoExtended = null;
         }
         if (telemundoExtended && !(await hlIsTelemundoVideo(telemundoExtended))) telemundoExtended = null;
+        if (telemundoExtended && !prev.matchup && !(await hlVideoMatchesTeams(telemundoExtended, away, home))) telemundoExtended = null;
 
         const entry = { t: now };
+        if (matchup) entry.matchup = matchup;
         if (official) entry.official = official;
         if (extended) entry.extended = extended;
         if (isMlb) entry.mlbOrder = "official-first";
@@ -2409,7 +2518,14 @@ async function bakeGameHighlights() {
         if (telemundoExtended) entry.telemundoExtended = telemundoExtended;
         if (entry.official || entry.extended || entry.telemundo || entry.telemundoExtended) {
           games[key] = entry;
-          if (!prev.official && !prev.extended && !prev.telemundo && !prev.telemundoExtended) resolved++;
+          const changedSlots = ["official", "extended", "telemundo", "telemundoExtended"]
+            .filter((slot) => entry[slot] && entry[slot] !== rawPrev[slot]);
+          if (changedSlots.length) {
+            resolved++;
+            console.log(`HIGHLIGHT-RESOLVED ${key} ${away} vs ${home}: ${changedSlots.map((slot) => `${slot}=${entry[slot]}`).join(" ")}`);
+          } else if (isFifa && !rawPrev.matchup) {
+            console.log(`HIGHLIGHT-MATCHUP-STAMPED ${key} ${matchup}`);
+          }
         }
       }
     }

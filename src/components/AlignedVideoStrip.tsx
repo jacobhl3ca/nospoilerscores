@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
-import { NewsSource, PlayHandler } from "./NewsColumn";
+import { NewsSource, PlayHandler, PlayOpts, itemIsTextPost, newsItemToPlayOpts } from "./NewsColumn";
 
 interface Props {
   sources: NewsSource[];
@@ -16,6 +16,7 @@ interface Props {
   // the vertical area normally taken by 2 video rows.
   tailFetch?: () => Promise<NewsItem[]>;
   tailColIdx?: number;
+  showTextPosts?: boolean;
 }
 
 // 3-column video strip — CSS subgrid so video N is the same height in every
@@ -23,7 +24,7 @@ interface Props {
 // gridTemplateRows: subgrid. Per-row height = tallest headline at that row,
 // shorter cells anchor align-self: start so blank space sits at the bottom.
 // Headlines stay un-clamped so long titles wrap fully (Jacob 2026-05-02).
-export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
@@ -60,7 +61,8 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   }, [tailFetch ? "set" : "unset"]);
 
   const allLoaded = colItems.every(Boolean);
-  const tailHasItems = tailColIdx !== undefined && !!tailItems && tailItems.length > 0;
+  const visibleTailItems = (tailItems ?? []).filter((item) => showTextPosts || !itemIsTextPost(item));
+  const tailHasItems = tailColIdx !== undefined && visibleTailItems.length > 0;
   // Reserve 2 pad rows in the tail col so the ESPN-top tail always has somewhere
   // to span — otherwise when the tail col's video count ties the others (e.g.
   // ESPN videos = MLB videos = 10) padCount drops to 0 and the tail disappears.
@@ -106,8 +108,10 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
           : Math.min(items?.length || 0, maxItems);
         const itemCount = items === null ? 0 : capped;
         const padCount = Math.max(0, maxItems - itemCount);
-        const tail = isTailCol && tailItems ? tailItems : [];
+        const tail = isTailCol ? visibleTailItems : [];
         const hasTail = tail.length > 0 && padCount > 0;
+        const modalItems = [...(items?.slice(0, itemCount) ?? []), ...(hasTail ? tail : [])];
+        const siblings: PlayOpts[] = modalItems.map(newsItemToPlayOpts);
         return (
           <div
             key={source.label}
@@ -142,7 +146,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
                   </>
                 )
               : items.slice(0, itemCount).map((item, rowIdx) => (
-                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} />
+                  <VideoRow key={item.id} item={item} isFirst={rowIdx === 0} onPlay={onPlay} siblings={siblings} index={rowIdx} />
                 ))}
             {hasTail ? (
               // One spanning grid item that occupies col 3's empty pad rows.
@@ -153,7 +157,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
                 className="flex flex-col h-full overflow-hidden"
               >
                 {tail.map((item, i) => (
-                  <CompactTailRow key={`tail-${item.id}`} item={item} isFirst={i === 0} onPlay={onPlay} />
+                  <CompactTailRow key={`tail-${item.id}`} item={item} isFirst={i === 0} onPlay={onPlay} siblings={siblings} index={itemCount + i} />
                 ))}
               </div>
             ) : (
@@ -246,11 +250,11 @@ function SkeletonRow({ isFirst }: { isFirst: boolean }) {
   );
 }
 
-function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
+function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number }) {
   const body = (
     <>
       {item.imageUrl && (
-        <div className="relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
+        <div className="news-media-preview relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={proxyImage(item.imageUrl)}
@@ -290,10 +294,9 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
       </div>
     </>
   );
-  const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.videoUrl || !!item.embedUrl || !!item.youtubeVideoId);
   const commonCls = "block w-full text-left transition-opacity hover:opacity-90 cursor-pointer";
   const commonStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", alignSelf: "start" as const };
-  if (canPlayInline) {
+  if (onPlay) {
     return (
       <button
         onClick={(e) => {
@@ -301,16 +304,7 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
             if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
             return;
           }
-          onPlay!({
-            videoId: item.youtubeVideoId || undefined,
-            playbackUrl: item.playbackUrl || item.videoUrl || null,
-            embedUrl: item.embedUrl || null,
-            fallbackUrl: item.articleUrl,
-            poster: item.imageUrl || null,
-            headline: item.headline,
-            byline: item.byline || null,
-            published: item.published || null,
-          });
+          onPlay!({ ...newsItemToPlayOpts(item), siblings, index });
         }}
         onAuxClick={(e) => {
           if (e.button === 1 && item.articleUrl) {
@@ -342,15 +336,14 @@ function VideoRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean;
 // thumb than the older 9px-thumb version so the tail visually fills the col 3
 // pad-row space rather than ending with blank tail at the bottom — when fewer
 // items than reserved rows, taller rows distribute the available height.
-function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler }) {
-  const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
-  const shouldPopModal = !!onPlay && hasMedia;
+function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings: PlayOpts[]; index: number }) {
+  const shouldPopModal = !!onPlay;
   // Real article thumbs win when present; otherwise fall back to the league
   // sport-icon (mirrors TextRow's 18px badge) so cross-league rows always
   // have a visual anchor instead of a wall of plain text.
   const thumb = item.imageUrl ? (
     <div
-      className="relative w-11 h-11 shrink-0 rounded overflow-hidden"
+      className="news-media-preview relative w-11 h-11 shrink-0 rounded overflow-hidden"
       style={{ background: "var(--bg-card-hover)" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -385,16 +378,7 @@ function CompactTailRow({ item, isFirst, onPlay }: { item: NewsItem; isFirst: bo
             if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
             return;
           }
-          onPlay!({
-            playbackUrl: item.videoUrl || null,
-            imageUrl: item.imageFullUrl || null,
-            fallbackUrl: item.articleUrl,
-            poster: item.imageUrl || null,
-            sourceLabel: item.section || null,
-            headline: item.headline,
-            byline: item.section?.startsWith("r/") ? null : (item.byline || null),
-            published: item.published || null,
-          });
+          onPlay!({ ...newsItemToPlayOpts(item), siblings, index });
         }}
         onAuxClick={(e) => {
           if (e.button === 1 && item.articleUrl) {

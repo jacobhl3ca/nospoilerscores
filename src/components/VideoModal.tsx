@@ -63,7 +63,7 @@ interface VideoModalProps {
   allowEnd?: boolean;
   // Confirm a click/jump that would land past the halfway point.
   warnHalfway?: boolean;
-  // Reddit news only: page to the previous / next post in the same column
+  // News items: page to the previous / next post in the same rendered list
   // without closing the modal. Absent means no pager controls.
   onPrev?: () => void;
   onNext?: () => void;
@@ -126,6 +126,7 @@ interface YTNamespace {
         onStateChange?: (event: YTPlayerEvent) => void;
         onPlaybackQualityChange?: (event: YTPlayerEvent) => void;
         onError?: (event: YTPlayerEvent) => void;
+        onAutoplayBlocked?: (event: YTPlayerEvent) => void;
       };
     }
   ) => YTPlayer;
@@ -367,6 +368,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // on certain MLB/restricted content is the offender. We start a timer
   // when onReady fires and force tryFallback() if playback never starts.
   const watchdogRef = useRef<number | null>(null);
+  // Browser autoplay policy is different from an unavailable/broken video.
+  // Keep it out of the fallback search path and show a clear, user-actionable
+  // prompt instead of silently leaving a paused black player.
+  const autoplayBlockedRef = useRef(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   // imgFailed flips when the lightbox image errors out — at that point we
   // collapse to text-card mode so the user sees the headline + open button
   // instead of an empty modal (Firefox + Reddit external-preview is the
@@ -478,6 +484,36 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (drop the one that just failed).
   const embedAlternates = (alternates ?? []).filter((a) => a.videoId && a.videoId !== currentId);
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
+
+  const clearAutoplayBlocked = useCallback(() => {
+    autoplayBlockedRef.current = false;
+    setAutoplayBlocked(false);
+  }, []);
+  const markAutoplayBlocked = useCallback(() => {
+    autoplayBlockedRef.current = true;
+    setAutoplayBlocked(true);
+    if (watchdogRef.current) {
+      window.clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
+  const handleNativePlayError = useCallback((error: unknown) => {
+    if ((error as { name?: string } | null)?.name === "NotAllowedError") {
+      markAutoplayBlocked();
+    }
+  }, [markAutoplayBlocked]);
+  const resumeBlockedPlayback = useCallback(() => {
+    clearAutoplayBlocked();
+    if (hlsMode) {
+      videoRef.current?.play().catch(handleNativePlayError);
+    } else if (ytMode) {
+      playerRef.current?.playVideo?.();
+    }
+  }, [clearAutoplayBlocked, handleNativePlayError, hlsMode, ytMode]);
+
+  useEffect(() => {
+    clearAutoplayBlocked();
+  }, [currentId, playbackUrl, embedUrl, clearAutoplayBlocked]);
   // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
   // text card) — used both for the footer link and the hidescore deep-link.
   const ytId = ytMode ? currentId : null;
@@ -792,7 +828,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         toggleFullscreen();
       }
       // ←/→: step to the previous/next video when sibling navigation is
-      // available (Reddit news columns pass onPrev/onNext — same as the on-screen
+      // available (news lists pass onPrev/onNext — same as the on-screen
       // side arrows). Otherwise they skip ±5s on the YouTube player. Don't steal
       // arrows from text entry or modified chords.
       if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -881,14 +917,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     video.textTracks.addEventListener("addtrack", refreshHasCaptionTrack);
     video.addEventListener("loadedmetadata", refreshHasCaptionTrack);
+    video.addEventListener("playing", clearAutoplayBlocked);
     const isHls = /\.m3u8(\?|$)/i.test(playbackUrl);
     // Plain MP4 / Safari native HLS — set src and play.
     if (!isHls || video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = playbackUrl;
-      video.play().catch(() => {});
+      video.play().catch(handleNativePlayError);
       return () => {
         video.textTracks.removeEventListener("addtrack", refreshHasCaptionTrack);
         video.removeEventListener("loadedmetadata", refreshHasCaptionTrack);
+        video.removeEventListener("playing", clearAutoplayBlocked);
       };
     }
     // hls.js fallback for Chrome/Firefox/etc. on .m3u8 only. (Safari/iOS never
@@ -927,16 +965,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         if (player.levels && player.levels.length > 0) {
           player.currentLevel = player.levels.length - 1;
         }
-        video.play().catch(() => {});
+        video.play().catch(handleNativePlayError);
       });
     });
     return () => {
       cancelled = true;
       video.textTracks.removeEventListener("addtrack", refreshHasCaptionTrack);
       video.removeEventListener("loadedmetadata", refreshHasCaptionTrack);
+      video.removeEventListener("playing", clearAutoplayBlocked);
       if (hls) hls.destroy();
     };
-  }, [hlsMode, playbackUrl]);
+  }, [hlsMode, playbackUrl, clearAutoplayBlocked, handleNativePlayError]);
 
   // Caption mode enforcer — keeps every captions/subtitles track in sync with
   // showCC. Safari's native HLS path will auto-promote a DEFAULT=YES track to
@@ -1121,6 +1160,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // param, so retries terminate when no more candidates exist.
             if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
             watchdogRef.current = window.setTimeout(() => {
+              if (autoplayBlockedRef.current) return;
               const state = playerRef.current?.getPlayerState?.();
               if (state !== 1 && state !== 3) tryFallback();
             }, 10000);
@@ -1130,9 +1170,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // a deprecated suggestion, but it's the only knob we have.
           onStateChange: (event: YTPlayerEvent) => {
             // Playback actually started — kill the watchdog.
-            if ((event.data === 1 || event.data === 3) && watchdogRef.current) {
-              window.clearTimeout(watchdogRef.current);
-              watchdogRef.current = null;
+            if (event.data === 1 || event.data === 3) {
+              clearAutoplayBlocked();
+              if (watchdogRef.current) {
+                window.clearTimeout(watchdogRef.current);
+                watchdogRef.current = null;
+              }
             }
             if (event.data === 1) {
               forceBest(event.target);
@@ -1154,6 +1197,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // 5 (HTML5 issue), 2 (bad param). Any of these → swap to next.
           onError: () => {
             tryFallback();
+          },
+          // Official IFrame API signal that browser policy — not the video —
+          // prevented autoplay. Do not burn through alternate video IDs.
+          onAutoplayBlocked: () => {
+            markAutoplayBlocked();
           },
         },
       });
@@ -1182,7 +1230,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // during a fallback swap before the replacement player is built.
       playerRef.current = null;
     };
-  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls]);
+  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked]);
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
@@ -1210,7 +1258,30 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
 
-  // Reddit prev/next paging: phones keep labelled bottom buttons for thumb
+  const autoplayPrompt = autoplayBlocked ? (
+    <div
+      role="alert"
+      className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 px-6 text-center"
+      style={{ background: "rgba(0,0,0,0.88)" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <svg aria-hidden="true" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="m10 8 6 4-6 4V8z" /></svg>
+      <p className="max-w-sm text-sm sm:text-base font-medium leading-snug text-white/90">
+        Autoplay is blocked. Enable autoplay for HideScore in your browser, or start this clip now.
+      </p>
+      <button
+        type="button"
+        onClick={resumeBlockedPlayback}
+        className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-105 cursor-pointer"
+        style={{ background: "var(--accent)" }}
+      >
+        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+        Play now
+      </button>
+    </div>
+  ) : null;
+
+  // News prev/next paging: phones keep labelled bottom buttons for thumb
   // reach; desktop gets subtle side chevrons so the footer links never overlap.
   const mobilePager = hasPager ? (
     <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex sm:hidden items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
@@ -1297,7 +1368,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // score, and an accessible name would read it aloud unblurred.
         aria-label={imageMode ? "Image viewer" : textMode ? "Post" : "Video player"}
       >
-        {/* Reddit prev/next post paging now renders as a labelled row BELOW the
+        {/* News prev/next post paging now renders as a labelled row BELOW the
             media (see `pager`, inserted after the player) instead of overlaid on
             the video — keeps mobile footage/dismiss/seek zones clear. */}
         {/* Close affordances now live in-flow just above each content block
@@ -1371,16 +1442,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               </button>
             </div>
             <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black leading-[0]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={proxyImage(imageUrl!)}
-              alt=""
-              decoding="async"
-              className="block max-w-full object-contain"
-              style={{ maxHeight: mediaMaxH }}
-              draggable={false}
-              onError={() => setImgFailed(true)}
-            />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={proxyImage(imageUrl!)}
+                alt=""
+                decoding="async"
+                className="block max-w-full object-contain"
+                style={{ maxHeight: mediaMaxH }}
+                draggable={false}
+                onError={() => setImgFailed(true)}
+              />
             </div>
           </div>
         ) : textMode ? (
@@ -1527,6 +1598,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   </button>
                 </div>
               )}
+              {!ytFailed && autoplayPrompt}
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
                   through to the cross-origin iframe. This is what makes the
@@ -1930,6 +2002,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 allowFullScreen
               />
             )}
+            {hlsMode && autoplayPrompt}
           </div>
         )}
         {/* Footer — headline + source/copy actions. The pre-7/13 look Jacob
