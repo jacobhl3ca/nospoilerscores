@@ -234,6 +234,11 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
           <button
             type="button"
             onClick={() => setShowComments((v) => !v)}
+            // Disclosure toggle: expose the open/closed state so assistive tech
+            // announces that this button reveals the hidden comment strip below
+            // (WCAG 4.1.2 Name, Role, Value), matching the aria-pressed peek
+            // toggles elsewhere in this card.
+            aria-expanded={showComments}
             className="inline-flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer"
             style={{ color: "var(--text-muted)" }}
           >
