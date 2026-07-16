@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex">
+    <title>Refreshing HideScore</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0a0a0a; color: #ededed; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      main { padding: 1.5rem; text-align: center; }
+      h1 { margin: 0 0 .5rem; font-size: 1.35rem; }
+      p { margin: 0; color: #9ca3af; font-size: .9rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Refreshing HideScore</h1>
+      <p>Keeping your preferences and loading a clean copy.</p>
+    </main>
+    <script>
+      (async function () {
+        var target = new URLSearchParams(location.search).get("return") || "/";
+        if (target.charAt(0) !== "/" || target.indexOf("//") === 0 || target.indexOf("/recover-") === 0) target = "/";
+        var jobs = [];
+        try {
+          if ("serviceWorker" in navigator) {
+            jobs.push(navigator.serviceWorker.getRegistrations().then(function (registrations) {
+              return Promise.all(registrations.map(function (registration) { return registration.unregister(); }));
+            }));
+          }
+        } catch (_) {}
+        try {
+          if (window.caches) {
+            jobs.push(caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            }));
+          }
+        } catch (_) {}
+        await Promise.allSettled(jobs);
+        location.replace(target);
+      })();
+      setTimeout(function () { location.replace("/"); }, 4000);
+    </script>
+  </body>
+</html>
