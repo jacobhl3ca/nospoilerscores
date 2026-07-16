@@ -183,6 +183,15 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     with the same negligible false-positive risk as the blowout verbs above.
 //     The trailing \w* covers every inflection (overpowers/overpowered/
 //     overpowering, outguns/outgunned/outgunning).
+//     "outduel\w*" is the same outXXX family — and the staple of the QB-vs-QB and
+//     star-vs-star matchup recaps this filter sees in the NFL/NBA ("Mahomes outduels
+//     Allen", "Curry outduels Doncic", "Brady outdueled Rodgers") — a winner reveal
+//     the siblings above miss (it's neither a blowout nor an out-score margin, but a
+//     head-to-head "the named side won the duel" framing). No non-result English word
+//     begins with "outduel", and no in-scope team is named anything beginning with it,
+//     so the trailing \w* covers outduel/outduels/outdueled/outduelled/outdueling/
+//     outduelling at the same negligible false-positive risk as its siblings.
+//     Byte-identical to the worker's copy.
 //     "holds?[- ]?off"/"held[- ]?off" catch the protect-the-lead win framing
 //     headlines lean on constantly in the NBA/NFL/soccer ("Warriors hold off
 //     Lakers", "Bills held off Chiefs", "Chelsea holds off Arsenal") — a distinct
@@ -581,7 +590,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     or match-recap title — and no in-scope club or nation begins with "dispatch", so the trailing
 //     \w* covers dispatch/dispatches/dispatched/dispatching at the same negligible false-positive risk
 //     as the verbs above. Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
