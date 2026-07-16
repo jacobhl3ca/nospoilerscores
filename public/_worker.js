@@ -1314,16 +1314,15 @@ export default {
     }
 
     // Fall through to static assets. Turbopack reuses some chunk filenames
-    // across deploys, so those responses must revalidate instead of sitting in
-    // the browser HTTP cache for hours. The service worker also requests them
-    // with cache:"reload"; this response header closes the same hole for first
-    // load, hard reload, and browsers without an active worker.
+    // across deploys, so those responses must never sit in the browser HTTP
+    // cache for hours. The service worker also requests them with
+    // cache:"reload"; no-store closes the same hole for first load, hard reload,
+    // and browsers without an active worker. (The production zone overrides a
+    // cacheable max-age=0 response to four hours, but preserves no-store.)
     const assetResponse = await env.ASSETS.fetch(request);
     if (url.pathname.startsWith("/_next/static/") || url.pathname === "/recover-v13.html") {
       const headers = new Headers(assetResponse.headers);
-      headers.set("Cache-Control", url.pathname === "/recover-v13.html"
-        ? "no-store"
-        : "public, max-age=0, must-revalidate");
+      headers.set("Cache-Control", "no-store");
       // Clear only the network/script cache. Do not include "storage": that
       // would erase HideScore preferences and locally cached score data.
       if (url.pathname === "/recover-v13.html") headers.set("Clear-Site-Data", '"cache"');
