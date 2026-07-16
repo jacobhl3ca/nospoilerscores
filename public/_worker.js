@@ -397,7 +397,7 @@ export default {
         };
 
         // Extract team names from query: "Away vs Home highlights ..."
-        const teamsMatch = query.match(/^(.+?)\s+vs\s+(.+?)\s+highlights/i);
+        const teamsMatch = query.match(/^(.+?)\s+vs\s+(.+?)\s+(?:highlights|resumen)\b/i);
         const queryTeams = teamsMatch
           ? [teamsMatch[1].toLowerCase(), teamsMatch[2].toLowerCase()]
           : [];
