@@ -92,7 +92,10 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly }:
   const visible = useMemo(
     () =>
       (items ?? []).filter((it) =>
-        videosOnly ? hasVideo(it) : (!itemIsTextPost(it) || showTextPosts)
+        // Videos + Text posts are independent toggles: Videos keeps clip-bearing
+        // posts, and Text posts ALSO on adds the headline-only ones (which carry
+        // no clip, so videosOnly alone hid them — Jacob 7/16).
+        videosOnly ? (hasVideo(it) || (showTextPosts && itemIsTextPost(it))) : (!itemIsTextPost(it) || showTextPosts)
       ),
     [items, showTextPosts, videosOnly]
   );
