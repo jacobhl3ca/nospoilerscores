@@ -253,7 +253,13 @@ export default function GameHighlights({
   // MLB row: short MLB.com recap first, then the longer condensed/full-game cut.
   // Prefer MLB's official YouTube clip for the 10m slot when it resolves because
   // it is the same cut with better native playback; fall back to MLB.com HLS.
-  const showMlbYouTubeCondensed = isMlb && officialStatus !== "missing";
+  // Gate on "found", not "!== missing": the official condensed id starts at
+  // "loading", so the old gate rendered this button immediately, then hid it if
+  // the id resolved to "missing" with no HLS fallback — the "appear then
+  // disappear" antipattern the YouTube buttons above already avoid (Jacob 7/7).
+  // The HLS fallback (game.mlbCondensedPlaybackUrl) is OR'd in separately below,
+  // so a game with the MLB.com condensed cut still shows the button while loading.
+  const showMlbYouTubeCondensed = isMlb && officialStatus === "found";
   const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!game.mlbCondensedPlaybackUrl);
   const showMlb = !!(isFinished && isMlb && (game.mlbRecapPlaybackUrl || showMlbCondensed));
   if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
