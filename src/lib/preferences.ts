@@ -171,6 +171,9 @@ export interface Preferences {
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
+  // The generic "News" column is independent of scores slot 3. It appears by
+  // default; true means the user explicitly removed it from the news board.
+  newsGenericHidden?: boolean;
   // Default date on launch: smart (yesterday before 1 PM ET, today after),
   // always today, or always yesterday.
   defaultDateMode?: DefaultDateMode;
@@ -260,12 +263,13 @@ export interface Preferences {
   // eye toggle in the news header flips this on to reveal them all at once.
   // Undefined/false = blurred (default); true = revealed.
   revealNewsTitles?: boolean;
-  // Text posts (headline-only news items — no pic/video) are hidden by default
-  // while headlines are blurred, since a blurred text-only headline is a useless
-  // blank. This toggle exposes them (readable) without revealing the blurred
-  // pic/video headlines. Undefined/false = hidden (default); true = shown.
-  // Moot when revealNewsTitles is on (everything shows then).
+  // Text posts (headline-only news items — no pic/video) are independently
+  // hidden by default. Undefined/false = hidden; true = shown. Headline reveal
+  // never changes this filter, so both toolbar controls remain predictable.
   showTextPosts?: boolean;
+  // Image/video previews are visible by default. Set false to spoiler-blur the
+  // preview surfaces while leaving source/league icons alone.
+  revealNewsMedia?: boolean;
   // News layout: false/undefined = the default multi-column "Cards" board (click
   // a post → lightbox); true = a single vertical "Feed" (Reddit-style scroll with
   // inline images + blurred top comments). Toggled by the Cards/Feed pill in the

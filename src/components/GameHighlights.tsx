@@ -253,7 +253,10 @@ export default function GameHighlights({
   // MLB row: short MLB.com recap first, then the longer condensed/full-game cut.
   // Prefer MLB's official YouTube clip for the 10m slot when it resolves because
   // it is the same cut with better native playback; fall back to MLB.com HLS.
-  const showMlbYouTubeCondensed = isMlb && officialStatus !== "missing";
+  // Never render a speculative button while the official lookup is merely
+  // loading. Some games (the 2026 All-Star Game) only have the baked secondary
+  // ESPN/MLB clip; that is still a valid playable condensed slot.
+  const showMlbYouTubeCondensed = isMlb && (officialStatus === "found" || searchStatus === "found");
   const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!game.mlbCondensedPlaybackUrl);
   const showMlb = !!(isFinished && isMlb && (game.mlbRecapPlaybackUrl || showMlbCondensed));
   if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
@@ -397,23 +400,14 @@ export default function GameHighlights({
           )}
           {showMlbCondensed && (
             <button
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation();
                 if (showMlbYouTubeCondensed && onPlayHighlight) {
-                  if (prefetchedOfficialId.current) {
-                    playHl(prefetchedOfficialId.current, highlightUrl!, shareCard);
+                  const playableId = prefetchedOfficialId.current ?? prefetchedVideoId.current;
+                  if (playableId) {
+                    playHl(playableId, highlightUrl!, shareCard);
                     return;
                   }
-                  setFetchingOnClick("official");
-                  const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictPrimaryChannel);
-                  setFetchingOnClick(null);
-                  if (id) {
-                    prefetchedOfficialId.current = id;
-                    setOfficialStatus("found");
-                    playHl(id, highlightUrl!, shareCard);
-                    return;
-                  }
-                  setOfficialStatus("missing");
                 }
                 if (game.mlbCondensedPlaybackUrl) {
                   const page = game.mlbCondensedUrl || game.mlbCondensedPlaybackUrl;
