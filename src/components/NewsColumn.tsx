@@ -31,9 +31,8 @@ export interface PlayOpts {
   // Selftext body (Reddit text posts). Only populated when there's no media
   // — rendered in the modal's textMode card below the headline.
   body?: string | null;
-  // For Reddit columns: the column's other posts as ready-to-play payloads, plus
-  // this post's index — lets the modal page ‹ prev / next › without closing.
-  // Unset for non-Reddit sources (so the arrows only show in Reddit columns).
+  // The column/feed's other posts as ready-to-open payloads, plus this post's
+  // index — lets the modal page ‹ prev / next › without closing.
   siblings?: PlayOpts[] | null;
   index?: number;
 }
@@ -46,7 +45,7 @@ export type PlayHandler = (opts: PlayOpts) => void;
 // these are hidden-by-default and gated behind the "Show text posts" toggle
 // (see .news-textpost / .show-text-posts in globals.css).
 export function itemIsTextPost(item: NewsItem): boolean {
-  return !(item.videoUrl || item.imageFullUrl || item.imageUrl || item.youtubeVideoId || item.embedUrl);
+  return !(item.playbackUrl || item.videoUrl || item.imageFullUrl || item.imageUrl || item.youtubeVideoId || item.embedUrl);
 }
 
 // A post is a "video" when it carries any playable clip — an official YouTube
@@ -54,15 +53,17 @@ export function itemIsTextPost(item: NewsItem): boolean {
 // The 🎥 Videos filter keeps these across ALL sources (so Reddit clips count,
 // not just the Top-Videos highlight feeds).
 export function itemIsVideo(item: NewsItem): boolean {
-  return !!(item.youtubeVideoId || item.videoUrl || item.embedUrl);
+  return !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
 }
 
 export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
   const isReddit = !!item.section?.startsWith("r/");
+  const hasPlayableMedia = !!(item.playbackUrl || item.videoUrl || item.youtubeVideoId || item.embedUrl);
   return {
-    playbackUrl: item.videoUrl || null,
+    playbackUrl: item.playbackUrl || item.videoUrl || null,
+    embedUrl: item.embedUrl || null,
     videoId: item.youtubeVideoId || undefined,
-    imageUrl: (item.videoUrl || item.youtubeVideoId) ? null : (item.imageFullUrl || (isReddit && item.imageUrl) || null),
+    imageUrl: hasPlayableMedia ? null : (item.imageFullUrl || item.imageUrl || null),
     fallbackUrl: item.articleUrl,
     poster: item.imageUrl || null,
     sourceLabel: item.section || null,
@@ -94,9 +95,8 @@ interface NewsColumnProps {
   // Override the default narrow column width (e.g. for single-column mode).
   // When omitted, falls back to the standard 225/280px max.
   widthClassName?: string;
-  // Video card click → open inline player modal. Called only when the item
-  // has either a direct HLS stream (MLB) or a prebake-validated YouTube ID.
-  // Receives the full playback payload so the modal can pick the right player.
+  // Any news-card click → open the shared media/text modal. Receives the full
+  // payload so the modal can choose video, image, embed, or text mode.
   onPlayVideo?: PlayHandler;
   // Forwarded to this column's own title (non-strip layout only) so HomeContent
   // can measure --news-titlebar-h from it — see NewsColumnTitle.measureRef.
@@ -104,6 +104,8 @@ interface NewsColumnProps {
   // 🎥 Videos filter — when true, each source shows only its clip-bearing items
   // (highlights + Reddit clips) and video-less sources render nothing.
   videosOnly?: boolean;
+  // Headline-only rows are independently hidden unless this is true.
+  showTextPosts?: boolean;
 }
 
 // Sticky league title (with optional swap dropdown for the 3rd column).
@@ -349,13 +351,9 @@ function stripLeaguePrefixForMobile(label: string): string {
 }
 
 function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null }) {
-  // Reddit columns get prev/next paging. The sibling list is assembled at the
-  // NewsColumn level and SPANS every Reddit section in the column, so Next keeps
-  // going past the end of one section (e.g. r/soccer) into the next (r/worldcup)
-  // instead of dead-ending (Jacob 7/7). baseIndex is this card's offset into
-  // that shared list; a row's global index = baseIndex + its row index. When
-  // this isn't a Reddit card the parent passes baseIndex=null and no paging.
-  const redditSiblings = baseIndex != null ? (siblings ?? null) : null;
+  // The sibling list spans every source in the column. baseIndex is this card's
+  // offset; a row's global index = baseIndex + its row index.
+  const columnSiblings = baseIndex != null ? (siblings ?? null) : null;
   // When every row is a text post (e.g. an all-text ESPN/MLB.com headlines
   // card), collapse the whole card while text posts are hidden — otherwise a
   // bare header with no rows would sit there. Mixed cards keep the header and
@@ -391,7 +389,7 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => (
-            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={redditSiblings} index={redditSiblings ? (baseIndex ?? 0) + idx : idx} />
+            <TextRow key={item.id} item={item} isFirst={idx === 0} onPlay={onPlay} siblings={columnSiblings} index={columnSiblings ? (baseIndex ?? 0) + idx : idx} />
           ))}
         </div>
       )}
@@ -420,8 +418,8 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // the floor at sm+ where the 3 columns align. text-sm (not text-xs) on
   // mobile too — the phone is the primary surface, so size headlines for
   // readability rather than to pack the narrow desktop column.
-  // Text posts (no pic/video) are hidden while headlines are blurred; the "Show
-  // text posts" toggle reveals them. But a text-post headline is itself a
+  // Text-post visibility is independent from headline reveal. But a text-post
+  // headline is itself a
   // spoiler ("can't believe they blew it"), so when shown it must stay blurred
   // like every other headline — same as the mobile Feed view (Jacob 7/15).
   // .news-textpost gates visibility; .news-title keeps the headline blurred
@@ -430,18 +428,14 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]${isTextPost ? " news-textpost" : ""}`;
   const titleCls = `news-title min-w-0 line-clamp-5`;
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
-  // Reddit posts always pop the modal so the user can read the post (and any
-  // attached photo / video) without leaving hidescore. Other sources (ESPN
-  // top headlines, MLB.com etc.) only pop the modal when there's actual
-  // media — text-only article rows still anchor straight to the source.
-  const isReddit = !!item.section?.startsWith("r/");
-  const hasMedia = !!(item.videoUrl || item.imageFullUrl || item.imageUrl);
-  const shouldPopModal = !!onPlay && (isReddit || hasMedia);
-  const hasInlineMedia = !!(item.videoUrl || item.imageFullUrl || item.youtubeVideoId);
+  // Every news item opens the same modal; its source link remains available
+  // inside, and modifier-click still opens that source directly in a new tab.
+  const shouldPopModal = !!onPlay;
+  const hasInlineMedia = !!(item.playbackUrl || item.videoUrl || item.imageFullUrl || item.youtubeVideoId || item.embedUrl);
   const showThumb = !!item.imageUrl && !imgFailed;
   const thumb = showThumb ? (
     <div
-      className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden"
+      className="news-media-preview relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden"
       style={{ background: "var(--bg-card-hover)" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -482,7 +476,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
     // "missing" even though they play on tap (Jacob 6/18). Render a play-badge tile
     // so a posterless video still clearly reads as a video.
     <div
-      className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden flex items-center justify-center"
+      className="news-media-preview relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded overflow-hidden flex items-center justify-center"
       style={{ background: "var(--bg-card-hover)" }}
     >
       <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
@@ -532,7 +526,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
             return;
           }
           // Same payload via the shared helper, plus the column's siblings so the
-          // modal can page prev/next (Reddit columns only — siblings is null else).
+          // modal can page prev/next across the full rendered column.
           onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
         }}
         onAuxClick={(e) => {
@@ -565,7 +559,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   );
 }
 
-function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler }) {
+function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, baseIndex }: { label: string; logoUrl?: string; items: NewsItem[]; loading: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; baseIndex?: number | null }) {
   return (
     // overflow-clip — see TextSourceCard for why (sticky SourceHeader needs
     // window as the scroll container). box-shadow inset for the card outline
@@ -599,7 +593,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
             const body = (
               <>
               {item.imageUrl && (
-                <div className="relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
+                <div className="news-media-preview relative w-full aspect-video" style={{ background: "var(--bg-card-hover)" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={proxyImage(item.imageUrl)}
@@ -644,13 +638,9 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
               </div>
               </>
             );
-            // Fire the in-app modal when we have a direct HLS stream (MLB), a
-            // Brightcove embed (NHL), OR a prebake-validated YouTube ID on the
-            // league's official channel. HLS/embed are preferred since they
-            // play the exact source clip. Otherwise fall through to a plain
-            // anchor to the source URL.
-            const canPlayInline = !!onPlay && (!!item.playbackUrl || !!item.videoUrl || !!item.embedUrl || !!item.youtubeVideoId);
-            if (canPlayInline) {
+            // Every item opens the shared modal, including image/text fallbacks.
+            // The source article remains one tap away inside the modal.
+            if (onPlay) {
               return (
                 <button
                   key={item.id}
@@ -662,18 +652,12 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
                       return;
                     }
                     onPlay!({
-                      videoId: item.youtubeVideoId || undefined,
-                      playbackUrl: item.playbackUrl || item.videoUrl || null,
-                      embedUrl: item.embedUrl || null,
-                      fallbackUrl: item.articleUrl,
-                      poster: item.imageUrl || null,
-                      // No sourceLabel — URL-derived label gives "Open on MLB.com",
-                      // "Open on NBA.com", "Open on ESPN" which is what we want
-                      // here. Passing item.section would show the verbose column
-                      // label ("MLB Most Popular") which Jacob doesn't want.
-                      headline: item.headline,
-                      byline: item.byline || null,
-                      published: item.published || null,
+                      ...newsItemToPlayOpts(item),
+                      // Keep URL-derived labels here ("Open on MLB.com" rather
+                      // than the verbose source-card label).
+                      sourceLabel: null,
+                      siblings: siblings ?? undefined,
+                      index: baseIndex != null ? baseIndex + idx : idx,
                     });
                   }}
                   onAuxClick={(e) => {
@@ -708,7 +692,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay }: { label: st
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex, videosOnly }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex, videosOnly, showTextPosts }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -727,15 +711,17 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.label]);
 
-  // Publish this section's items up to NewsColumn so it can stitch a single
-  // prev/next list spanning every Reddit section in the column.
-  useEffect(() => { onItemsLoaded?.(source.label, items); }, [items, source.label, onItemsLoaded]);
-
   // 🎥 Videos filter: keep only clip-bearing items (includes Reddit v.redd.it
   // posts). Once loaded, a source with no videos renders nothing so the board
   // isn't full of empty cards.
-  const shown = videosOnly ? items.filter(itemIsVideo) : items;
-  if (videosOnly && !loading && shown.length === 0) return null;
+  const shown = useMemo(
+    () => items.filter((item) => videosOnly ? itemIsVideo(item) : (showTextPosts || !itemIsTextPost(item))),
+    [items, videosOnly, showTextPosts],
+  );
+  // Publish exactly what is rendered so modal prev/next never pages into a row
+  // that the active Videos filter hid.
+  useEffect(() => { onItemsLoaded?.(source.label, shown); }, [shown, source.label, onItemsLoaded]);
+  if (!loading && items.length > 0 && shown.length === 0) return null;
 
   if (source.variant === "video") {
     return (
@@ -745,6 +731,8 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex
         items={shown}
         loading={loading}
         onPlay={onPlayVideo}
+        siblings={siblings}
+        baseIndex={baseIndex}
       />
     );
   }
@@ -765,26 +753,25 @@ export default function NewsColumn({
   onPlayVideo,
   titleMeasureRef,
   videosOnly,
+  showTextPosts,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
-  // Collect each section's loaded items so we can stitch ONE prev/next list that
-  // spans every Reddit section in this column — that's what lets Next carry on
-  // from the last post of r/soccer into r/worldcup instead of stopping (Jacob
-  // 7/7). Keyed by source.label (stable, unique within a column).
+  // Collect each section's rendered items so one prev/next list spans the full
+  // column, regardless of source type. Keyed by source.label (stable + unique).
   const [itemsBySource, setItemsBySource] = useState<Record<string, NewsItem[]>>({});
   const handleItemsLoaded = useCallback((label: string, items: NewsItem[]) => {
     setItemsBySource((prev) => (prev[label] === items ? prev : { ...prev, [label]: items }));
   }, []);
 
-  // Walk the sections in render order; for every Reddit section, append its
-  // posts to the shared list and record where that section starts (baseIndex).
+  // Walk sections in render order, append every post, and record where each
+  // source starts in the shared modal list.
   const { siblings, baseIndexBySource } = useMemo(() => {
     const sib: PlayOpts[] = [];
     const base: Record<string, number> = {};
     for (const source of sources) {
       const its = itemsBySource[source.label];
-      if (its && its.length && its[0]?.section?.startsWith("r/")) {
+      if (its && its.length) {
         base[source.label] = sib.length;
         for (const it of its) sib.push(newsItemToPlayOpts(it));
       }
@@ -816,6 +803,7 @@ export default function NewsColumn({
             siblings={siblings}
             baseIndex={baseIndexBySource[source.label] ?? null}
             videosOnly={videosOnly}
+            showTextPosts={showTextPosts}
           />
         ))}
       </div>

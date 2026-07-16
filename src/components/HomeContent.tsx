@@ -586,6 +586,7 @@ export default function HomeContent({
       // so reveal-on users don't see a one-frame blur flash before it runs.
       document.documentElement.classList.toggle("reveal-news-titles", !!p.revealNewsTitles);
       document.documentElement.classList.toggle("show-text-posts", !!p.showTextPosts);
+      document.documentElement.classList.toggle("blur-news-media", p.revealNewsMedia === false);
     };
     const storedShowRatings = loaded.showRatings;
     applyLaunchState(loaded);
@@ -652,6 +653,7 @@ export default function HomeContent({
         document.documentElement.setAttribute("data-theme", getResolvedTheme(merged.theme));
         document.documentElement.classList.toggle("reveal-news-titles", !!merged.revealNewsTitles);
         document.documentElement.classList.toggle("show-text-posts", !!merged.showTextPosts);
+        document.documentElement.classList.toggle("blur-news-media", merged.revealNewsMedia === false);
       } catch {
         /* best-effort; ignore transient failures */
       }
@@ -701,13 +703,18 @@ export default function HomeContent({
     document.documentElement.classList.toggle("reveal-news-titles", !!prefs.revealNewsTitles);
   }, [prefs.revealNewsTitles]);
 
-  // Show/hide text posts (headline-only items). Blurring a text-only headline
-  // leaves a useless blank, so they're hidden while headlines are blurred and
-  // this toggle exposes them (readable). .show-text-posts on <html>, same
-  // pattern as reveal-news-titles so it reaches every column and card.
+  // Show/hide headline-only posts independently from headline blur.
+  // .show-text-posts on <html> reaches every column and card.
   useEffect(() => {
     document.documentElement.classList.toggle("show-text-posts", !!prefs.showTextPosts);
   }, [prefs.showTextPosts]);
+
+  // Media previews are visible by default; users can independently blur them
+  // without changing headline or text-post visibility. The class lives on html
+  // so it also reaches the feed and every news-card layout.
+  useEffect(() => {
+    document.documentElement.classList.toggle("blur-news-media", prefs.revealNewsMedia === false);
+  }, [prefs.revealNewsMedia]);
 
   // Track narrow viewports so the news view can force a single stacked column
   // on phones (Jacob 5/30 — mobile news = 1 col, order News → the two score
@@ -777,11 +784,8 @@ export default function HomeContent({
     window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
   }, [modalShareHref]);
 
-  // News video card click → open the in-app modal. The card passes either a
-  // prebake-matched YouTube videoId OR a direct HLS stream URL (MLB). If the
-  // stream is available we play it directly; otherwise we fall back to the
-  // YouTube iframe path. Cards with no inline option skip this handler and
-  // render as plain anchors to the source URL.
+  // News-card click → open the in-app modal. The shared payload covers YouTube,
+  // HLS, embeds, images, and headline-only text posts.
   // PlayOpts → modal-state shape. Shared by the click handler and prev/next
   // paging so both produce the same modal object (incl. the sibling list).
   const optsToModal = useCallback((opts: PlayOpts) => ({
@@ -809,7 +813,7 @@ export default function HomeContent({
     const href = modalShareHref(m);
     if (href) window.history.pushState({ videoModal: true }, "", href);
   }, [optsToModal, modalShareHref]);
-  // Page to the previous/next post in the same Reddit column without closing the
+  // Page to the previous/next post in the same news list without closing the
   // modal (dir = -1 / +1). No-op past either edge. replaceState (not push) keeps
   // the URL bar pointed at the post you're actually looking at, without spamming
   // history with one entry per arrow press.
@@ -1018,7 +1022,12 @@ export default function HomeContent({
   };
 
   const setNewsThirdLeague = (sport: Sport | undefined) => {
-    updatePrefs({ newsThirdLeague: sport });
+    updatePrefs({
+      newsThirdLeague: sport,
+      newsGenericHidden: false,
+      // Keep a one-column Focus view pointed at the replacement column.
+      newsFocusLeague: prefs.newsFocusLeague ? (sport ?? "espn") : undefined,
+    });
   };
 
   // Update favicon based on ratings toggle
@@ -1381,12 +1390,9 @@ export default function HomeContent({
   // breaking the "Auto on col N = the column's default" guarantee.
   const sortedLeagues = leagues;
 
-  // News source-ordering is applied read-only from prefs.newsSourceOrder (a
-  // per-sport order of source labels). The news cascade reads it via `orderFor`
-  // below to reshuffle each column's default source list, honoring any order a
-  // prior build's ☰ drag-reorder menu had persisted. That reorder UI was
-  // removed, so nothing writes newsSourceOrder anymore; unknown labels still
-  // fall through to the tail so new sources keep surfacing.
+  // Source cards use the current deterministic smart cascade. Ignore stale
+  // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
+  // local preference can silently bury a newly added source forever.
   const newsTypeFilter = prefs.newsTypeFilter ?? "all";
   const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
   // The 🎥 Videos quick-filter is ITEM-level (not source-level) so it includes
@@ -2056,16 +2062,22 @@ export default function HomeContent({
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
               <span className="hidden sm:inline">Videos</span>
             </NewsToggleChip>
-            {!prefs.revealNewsTitles && (
-              <NewsToggleChip
-                active={!!prefs.showTextPosts}
-                onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
-                title="Text posts have no pic or video, so they're hidden while headlines are blurred. Tap to show them (readable)."
-              >
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
-                <span className="hidden sm:inline">Text posts</span>
-              </NewsToggleChip>
-            )}
+            <NewsToggleChip
+              active={prefs.revealNewsMedia !== false}
+              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia === false })}
+              title="Show or spoiler-blur news image and video previews"
+            >
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
+              <span className="hidden sm:inline">Media</span>
+            </NewsToggleChip>
+            <NewsToggleChip
+              active={!!prefs.showTextPosts}
+              onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
+              title="Show or hide headline-only text posts"
+            >
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
+              <span className="hidden sm:inline">Text posts</span>
+            </NewsToggleChip>
           </div>
         </div>
       )}
@@ -2187,23 +2199,21 @@ export default function HomeContent({
                 ? () => fetchLeagueNews(c.sport!, 10)
                 : () => fetchPrebaked(c.key),
             }));
-          // Build visible news entries, mirroring how scores collapses Empty
-          // slots. Each entry carries its sport, label, full cascade (for
-          // dropdown management), and the user-ordered cascade (post-applyOrder).
+          // Build visible news entries. The first two mirror scores columns;
+          // the generic News/optional third-news-league column is independent.
           // Type/hidden filters are applied at render-time so the dropdown
           // can still display + re-enable hidden sources.
-          const orderFor = (sport?: Sport) => sport ? prefs.newsSourceOrder?.[sport] : undefined;
           // Col-3 fallback = hidescore.com's "News" feed. Use GENERIC_CASCADE,
           // which leads with ESPN Videos (a video) — so all 3 columns lead with
           // video and the AlignedVideoStrip activates → clean aligned grid like
           // live. ESPN top headlines fill the tail below (useEspnTopTail).
           // Labeled "News" (swappable to a 3rd league) to match hidescore.com.
           const espnEntry = {
-            slotIdx: -1,
+            slotIdx: 2,
             sport: undefined as Sport | undefined,
             id: "espn" as const,
             label: "News",
-            orderedCascade: applyOrder(GENERIC_CASCADE, prefs.newsSourceOrder?.["espn"]),
+            orderedCascade: GENERIC_CASCADE,
           };
           // fetchAllLeagues collapses empty slots out of the returned array, so
           // walk it as a shifting queue — one pull per non-empty slot — exactly
@@ -2212,38 +2222,36 @@ export default function HomeContent({
           // slot is trailing; an empty slot BEFORE a populated one would shift
           // each later league's index down and drop/mislabel its news column.
           const newsLeagueQueue = [...sortedLeagues];
-          const leagueEntries = [0, 1, 2].map((slotIdx) => {
+          const leagueEntries = [0, 1].map((slotIdx) => {
             if (selectedSlotLeagues[slotIdx] === "empty") return null;
             const queued = newsLeagueQueue.shift();
-            const sport: Sport | undefined = slotIdx === 2 && prefs.newsThirdLeague
-              ? prefs.newsThirdLeague
-              : queued?.sport;
+            const sport: Sport | undefined = queued?.sport;
             if (!sport) return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
-            const cascade = leagueSourceCascade(sport);
-            const orderedCascade = applyOrder(cascade, orderFor(sport));
+            const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
           }).filter((e): e is NonNullable<typeof e> => e !== null);
+          const thirdLeagueEntry = prefs.newsThirdLeague ? (() => {
+            const sport = prefs.newsThirdLeague!;
+            const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
+            return { slotIdx: 2, sport, id: sport as string, label, orderedCascade: leagueSourceCascade(sport) };
+          })() : null;
           // Match hidescore.com's default column order: the two scores leagues
           // fill cols 1-2, and col 3 is the chosen 3rd news league if set, else
           // the ESPN/general feed — NOT a forced ESPN first column. (Reverted the
           // 5/28 ESPN-first default per Jacob 5/29; ESPN stays reachable as the
           // col-3 fallback and the focus/order controls are unchanged.)
           const firstTwoEntries = leagueEntries.filter((e) => e.slotIdx === 0 || e.slotIdx === 1);
-          // Col 3 = the chosen 3rd league, else the News (ESPN) feed — UNLESS
-          // the user emptied slot 3 (then the column is hidden and the + button
-          // refills it). "Empty" on the News column routes through setSlotLeague(2)
-          // so it reuses the scores-view empty/refill mechanism.
-          const thirdColEntry = selectedSlotLeagues[2] === "empty"
+          // Col 3 naturally exists even when scores slot 3 is Empty. It can be
+          // swapped to a league or explicitly removed without touching scores.
+          const thirdColEntry = prefs.newsGenericHidden
             ? null
-            : prefs.newsThirdLeague
-              ? leagueEntries.find((e) => e.slotIdx === 2)
-              : espnEntry;
+            : thirdLeagueEntry ?? espnEntry;
           // Mobile (single stacked column): lead with News, then the two score
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
           const visibleNewsEntries = isMobile
-            ? [espnEntry, ...firstTwoEntries]
+            ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
             : [...firstTwoEntries, ...(thirdColEntry ? [thirdColEntry] : [])];
 
           // Apply Focus league (drops other entries) then per-entry filter
@@ -2276,26 +2284,31 @@ export default function HomeContent({
           const renderSourcesFor = (entry: typeof visibleNewsEntries[number]): NewsSource[] =>
             cascadeToSources(orderedColumnSourcesFor(entry));
 
-          // Swap on a news column: slot 2 with a newsThirdLeague override
-          // touches that pref alone (keeps scores untouched); other columns
-          // share scores' slot prefs so news + scores stay in sync.
+          // News col 3 is independent; the first two league columns continue to
+          // mirror their matching score slots.
           const newsSwapFor = (slotIdx: number) =>
             (s: Sport | "empty" | undefined) => {
-              // Auto (undefined): clear newsThirdLeague override for slot 2,
-              // otherwise clear the scores slot pref too.
-              if (slotIdx === 2 && prefs.newsThirdLeague && s !== "empty") {
-                setNewsThirdLeague(s as Sport | undefined);
+              if (slotIdx === 2) {
+                if (s === "empty") {
+                  updatePrefs({
+                    newsGenericHidden: true,
+                    newsFocusLeague: prefs.newsFocusLeague === (prefs.newsThirdLeague ?? "espn") ? undefined : prefs.newsFocusLeague,
+                  });
+                } else {
+                  setNewsThirdLeague(s as Sport | undefined);
+                }
                 return;
               }
               setSlotLeague(slotIdx, s);
             };
           // Force the ESPN "Top news" feed back as a column: clear any 3rd-league
-          // override and, if the 3rd slot was emptied, re-open it (Auto) so the
-          // espn fallback renders there again. Reachable from every column's swap
-          // menu + the + button, so the feed can't get stranded.
+          // override and explicitly show the independent generic column.
           const pickEspn = () => {
-            setNewsThirdLeague(undefined);
-            if (selectedSlotLeagues[2] === "empty") setSlotLeague(2, undefined);
+            updatePrefs({
+              newsThirdLeague: undefined,
+              newsGenericHidden: false,
+              newsFocusLeague: prefs.newsFocusLeague ? "espn" : undefined,
+            });
           };
 
           // Which entries actually render: 1-col (mobile / Focus league) stacks
@@ -2340,22 +2353,26 @@ export default function HomeContent({
           // order so the feed always reads MLB-before-NBA regardless of how the
           // scores columns are arranged. Per-source granular reordering (via the
           // filter button) is backlogged. Unknown combos fall to the tail in
-          // cascade order. Resulting feed:
-          //   1 ESPN headlines  2 ESPN Videos  3 A Top Videos  4 r/<A>
-          //   5 r/<B>  6 r/sports  7 B Top Videos  8 A.com  9 B.com
-          //   10 ESPN A  11 ESPN B
+          // cascade order. Keep each column together in its natural order:
+          // News, then higher-priority league A, then league B. This replaces
+          // the old interleaving that put B Reddit before B video.
           const MOBILE_SOURCE_RANK: Record<string, number> = {
-            "news:espn": 1,
-            "news:topvideos": 2,
-            "A:topvideos": 3,
-            "A:reddit": 4,
-            "B:reddit": 5,
-            "news:reddit": 6,
-            "B:topvideos": 7,
+            "news:topvideos": 1,
+            "news:espn": 2,
+            "news:reddit": 3,
+            "news:homepage": 4,
+            "A:topvideos": 5,
+            "A:reddit": 6,
+            "A:espn": 7,
             "A:homepage": 8,
-            "B:homepage": 9,
-            "A:espn": 10,
+            "B:topvideos": 9,
+            "B:reddit": 10,
             "B:espn": 11,
+            "B:homepage": 12,
+            "C:topvideos": 13,
+            "C:reddit": 14,
+            "C:espn": 15,
+            "C:homepage": 16,
           };
           const mobileMergedSources = (): NewsSource[] => {
             // Sort the score-league entries by the fixed global priority so role
@@ -2371,9 +2388,10 @@ export default function HomeContent({
               });
             const ordered = [...newsEntry, ...leagueEntries];
             const ranked = ordered.flatMap((entry) => {
+              const leagueIdx = leagueEntries.indexOf(entry);
               const role = entry.id === "espn"
                 ? "news"
-                : leagueEntries.indexOf(entry) === 0 ? "A" : "B";
+                : leagueIdx === 0 ? "A" : leagueIdx === 1 ? "B" : "C";
               return orderedColumnSourcesFor(entry).map((cs, subIdx) => ({
                 cs,
                 rank: MOBILE_SOURCE_RANK[`${role}:${classifySource(cs)}`] ?? 900 + subIdx,
@@ -2386,21 +2404,16 @@ export default function HomeContent({
 
           const wideCol = "flex-1 min-w-0 max-w-[420px] xl:max-w-[520px]";
           const narrowCol = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
-          // News + button: same pattern as scores. When user picks Empty on a
-          // news league column, the underlying scores slot becomes empty too,
-          // so this finds the first empty slot and refills it on click.
-          const newsFirstEmptySlot = [0, 1, 2].find((i) => selectedSlotLeagues[i] === "empty");
-          // Same as scores: only offer the + when there's a league not already
-          // shown, so refilling never duplicates a visible column.
+          // News + button restores the natural News column first when removed;
+          // otherwise it refills one of the two score-linked league columns.
+          const newsFirstEmptySlot = [0, 1].find((i) => selectedSlotLeagues[i] === "empty");
           const newsAddEligibleSport = switcherOptions.find(
-            (o) => !leagueEntries.some((e) => e.sport === o.sport),
+            (o) => !visibleNewsEntries.some((e) => e.sport === o.sport),
           )?.sport;
-          const newsOnAddColumn = newsFirstEmptySlot !== undefined && leagueEntries.length < 3
+          const newsOnAddColumn = visibleNewsEntries.length < 3 && (prefs.newsGenericHidden || newsFirstEmptySlot !== undefined)
             ? () => {
-                // News view: refill the 3rd column with the ESPN "Top news" feed
-                // (its natural default) rather than a random league.
-                if (newsFirstEmptySlot === 2) pickEspn();
-                else if (newsAddEligibleSport) setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport);
+                if (prefs.newsGenericHidden) pickEspn();
+                else if (newsFirstEmptySlot !== undefined && newsAddEligibleSport) setSlotLeague(newsFirstEmptySlot, newsAddEligibleSport);
               }
             : undefined;
           const containerCls = effectiveColCount === 1
@@ -2420,7 +2433,6 @@ export default function HomeContent({
                 key={`feed-${newsRefreshKey}`}
                 sources={feedSources}
                 onPlay={playNewsVideo}
-                revealTitles={!!prefs.revealNewsTitles}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
               />
@@ -2455,7 +2467,7 @@ export default function HomeContent({
                             swappableOptions={switcherOptions}
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
-                            onSwapLeague={isEspn ? ((s) => { if (s === "empty") setSlotLeague(2, "empty"); else if (s) setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                            onSwapLeague={newsSwapFor(entry.slotIdx)}
                             onPickEspn={pickEspn}
                             espnActive={isEspn}
                           />
@@ -2469,6 +2481,7 @@ export default function HomeContent({
                     onPlay={playNewsVideo}
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
+                    showTextPosts={!!prefs.showTextPosts}
                   />
                 </>
               )}
@@ -2492,6 +2505,7 @@ export default function HomeContent({
                     onPlayVideo={playNewsVideo}
                     widthClassName={widthClassFor()}
                     videosOnly={!!prefs.newsVideosOnly}
+                    showTextPosts={!!prefs.showTextPosts}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -2507,13 +2521,14 @@ export default function HomeContent({
                       swappableOptions={switcherOptions}
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
-                      onSwapLeague={isEspn ? ((s) => { if (s === "empty") setSlotLeague(2, "empty"); else if (s) setNewsThirdLeague(s); }) : ((s) => newsSwapFor(entry.slotIdx)(s))}
+                      onSwapLeague={newsSwapFor(entry.slotIdx)}
                       onPickEspn={pickEspn}
                       espnActive={isEspn}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
+                      showTextPosts={!!prefs.showTextPosts}
                       // Non-strip layout: the columns render their own titles
                       // (no shared strip row), so ride the same measuring ref on
                       // the first column's title to keep --news-titlebar-h live.

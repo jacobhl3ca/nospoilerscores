@@ -56,17 +56,25 @@ html.reveal-news-titles .news-title,
   -webkit-user-select: auto;
 }
 
-/* Text posts (headline-only items — no pic/video) are HIDDEN while headlines
-   are blurred, then exposed by the "Show text posts" toggle (.show-text-posts
-   on <html>). When shown, their headline still carries .news-title so it stays
-   spoiler-blurred like every other headline (a text-post title can itself give
-   away the result) — tap the row open or hit the global reveal to read it. When
-   headlines are revealed globally, text posts show too. .news-textpost marks a
-   single mixed-column row; .news-card-alltext marks a whole all-text source card
-   so it collapses instead of leaving an empty header. */
-html:not(.reveal-news-titles):not(.show-text-posts) .news-textpost,
-html:not(.reveal-news-titles):not(.show-text-posts) .news-card-alltext {
+/* Text-post visibility is independent from headline reveal. .news-textpost
+   marks one mixed-source row; .news-card-alltext collapses an all-text source
+   card so hiding its rows never leaves a bare header behind. */
+html:not(.show-text-posts) .news-textpost,
+html:not(.show-text-posts) .news-card-alltext {
   display: none;
+}
+
+/* Optional media spoiler mask. Put this class only on actual post previews —
+   never source/league logos — and clip the small scale-up inside the wrapper. */
+.news-media-preview {
+  overflow: hidden;
+}
+.news-media-preview > * {
+  transition: filter 150ms ease, transform 150ms ease;
+}
+html.blur-news-media .news-media-preview > * {
+  filter: blur(12px);
+  transform: scale(1.08);
 }
 
 :root {

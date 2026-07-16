@@ -11,6 +11,7 @@ import { getApiBase } from "@/lib/youtube";
 // on. `official` = 1st button (channel recap), `extended` = 2nd button (already
 // deduped against `official` at bake time).
 export type BakedHighlight = {
+  matchup?: string;
   official?: string;
   extended?: string;
   telemundo?: string;
