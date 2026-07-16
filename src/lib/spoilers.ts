@@ -94,6 +94,18 @@
 //     beginning with it, so the trailing \w* covers annihilate/annihilates/annihilated/
 //     annihilating/annihilation at the same negligible false-positive risk as the verbs above.
 //     Byte-identical to the worker's copy.
+//     "pulveri[sz]\w*" is the same total-destruction blowout word the all-caps fan-channel highlight
+//     titles lean on right beside DESTROY/OBLITERATE/ANNIHILATE ("Real Madrid PULVERIZE Barcelona",
+//     "Spain pulverised Georgia 5-0", "City pulverizing United") — a lopsided-defeat reveal that
+//     slipped past the demolish/destroy/dismantle/humiliate/obliterate/annihilate/thrash/thump/
+//     trounce/topple set despite naming the routed side just as plainly and carrying no digits for
+//     SCORE_RX to catch. It is one of the CLEANEST members of the family: absolutely no English word
+//     other than these inflections begins with "pulveri" (it can't reach any other stem), and no
+//     in-scope club or nation is named anything beginning with it. The "[sz]" covers both the American
+//     "pulverize*" and British "pulverise*" spellings — mirroring the existing "equali[sz]\w*" entry —
+//     and the trailing \w* covers pulverize/pulverizes/pulverized/pulverizing, pulverise/pulverises/
+//     pulverised/pulverising at the same negligible false-positive risk as the verbs above.
+//     Byte-identical to the worker's copy.
 //     "triumph\w*"/"romp\w*" catch the winner-side framing headlines lean on just
 //     as often ("Argentina triumph on penalties", "City romp to victory",
 //     "Australia romp home") — each names the victor, and neither word means
@@ -559,7 +571,7 @@ const SCORE_RX = /(?<![-/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-/])/;
 //     other pluralizable token here — victories/hat-tricks?/shut-outs?/own-goals? —
 //     already carries the "s?"). The optional "s?" adds no false-positive class the
 //     singular didn't already accept. Byte-identical to the worker's copy.
-const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
+const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|surviv\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|obliterat\w*|annihilat\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|advanc\w*|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|equali[sz]\w*|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|red card|all three points)\b/i;
 
 /** True if the text contains a score or an outcome keyword (i.e. a spoiler). */
 export function isScoreSpoiler(text: string | null | undefined): boolean {
