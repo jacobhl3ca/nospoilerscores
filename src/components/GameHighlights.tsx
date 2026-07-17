@@ -80,12 +80,15 @@ export default function GameHighlights({
   const [telemundoLongStatus, setTelemundoLongStatus] = useState<HighlightStatus>(
     fifaTelemundoEnabled && isFifa ? (initialTrustedBaked?.telemundoExtended ? "found" : "loading") : "missing",
   );
-  // Capture "now" once at mount so the highlights-ready gate below stays a pure
-  // render — reading Date.now() during render is flagged by react-hooks/purity.
-  // The buffer is multi-hour and the component remounts on every score refresh,
-  // so a single read is indistinguishable in practice (matches the nowMs pattern
-  // already used in LeagueColumn's "Last played" slate label).
-  const [nowMs] = useState(() => Date.now());
+  // "now" for the highlights-ready gate below. Read via useState (not Date.now()
+  // during render, which react-hooks/purity flags) and advanced by a slow tick in
+  // the effect further down. GameCard reconciles this component in place on every
+  // score poll — it's keyed by the stable game.id, so it does NOT remount — which
+  // means this initializer runs only at mount. Without the tick, nowMs would
+  // freeze at page-load time and a game that was already final at load but still
+  // inside its multi-hour buffer window would never reveal its highlight buttons
+  // until a reload.
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   // MLB Recap/Condensed for surfaces that DON'T run the dated board enrich — the
   // team timeline (fetchTeamSchedule) and the "Last played"/lookahead fallback
@@ -106,6 +109,15 @@ export default function GameHighlights({
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
     return nowMs > gameStart + bufferMs;
   })();
+
+  // Advance nowMs once a minute, but only while it still gates a today's-final
+  // card (see the nowMs note above for why the mount-time read alone goes stale),
+  // and stop as soon as the buffer opens so we're not holding an idle timer.
+  useEffect(() => {
+    if (!isToday || !isFinished || highlightsReady) return;
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, [isToday, isFinished, highlightsReady]);
 
   // Pin the highlight query date to ET — the worker matches the YouTube
   // title's date strictly, and a UTC-shifted browser would push a late ET
