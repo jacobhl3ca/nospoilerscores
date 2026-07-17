@@ -437,6 +437,18 @@ export default function GameHighlights({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                // Prefer the date-exact MLB.com condensed (official, keyed to
+                // THIS game) over the YouTube cut. The YouTube 10m is resolved by
+                // "TeamA vs TeamB + date" and can land a DIFFERENT game of the
+                // same matchup — in the team timeline a 3-game series resolved
+                // all three 10m buttons to one clip ("days don't align", Jacob
+                // 7/16). YouTube is only the fallback when MLB.com has no
+                // condensed yet (e.g. a game that JUST ended).
+                if (mlbCondensedPlayback && onPlayEmbed) {
+                  const page = mlbCondensedPage || mlbCondensedPlayback;
+                  onPlayEmbed("", page, "MLB.com", shareCard, mlbCondensedPlayback, mlbCondensedPoster);
+                  return;
+                }
                 if (showMlbYouTubeCondensed && onPlayHighlight) {
                   const playableId = prefetchedOfficialId.current ?? prefetchedVideoId.current;
                   if (playableId) {
@@ -446,8 +458,7 @@ export default function GameHighlights({
                 }
                 if (mlbCondensedPlayback) {
                   const page = mlbCondensedPage || mlbCondensedPlayback;
-                  if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, mlbCondensedPlayback, mlbCondensedPoster);
-                  else openExternal(page);
+                  openExternal(page);
                 }
               }}
               disabled={fetchingOnClick !== null}

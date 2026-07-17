@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, Sport, Team } from "@/lib/types";
+import { type ShareCardMeta } from "@/lib/shareCard";
 import { fetchTeamSchedule, fetchScheduleRatings } from "@/lib/espn";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard from "./GameCard";
@@ -16,7 +17,8 @@ interface TeamViewProps {
   favoriteTeams: string[];
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
-  onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => void;
+  onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   onShowDetails?: (game: Game) => void;
   onBack: () => void;
   onSelectTeam: (team: Team) => void;
@@ -63,6 +65,7 @@ export default function TeamView({
   onToggleFavoriteTeam,
   showRatings,
   onPlayHighlight,
+  onPlayEmbed,
   onShowDetails,
   onBack,
   onSelectTeam,
@@ -248,6 +251,7 @@ export default function TeamView({
       onToggleFavoriteTeam={onToggleFavoriteTeam}
       showRatings={showRatings}
       onPlayHighlight={onPlayHighlight}
+      onPlayEmbed={onPlayEmbed}
       onShowDetails={onShowDetails}
       leagueLabel={leagueLabel}
       useAbbreviations={useAbbreviations}
