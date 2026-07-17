@@ -505,16 +505,18 @@ export default function GameHighlights({
           )}
           {telemundoLongStatus === "found" && (
             <button
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
+                // Unlike the TEL 10m button, the extended cut has NO click-time
+                // re-resolve (the collision note in the prefetch effect explains
+                // why an exclude-retry can surface a different game's clip), so it
+                // is only ever populated during prefetch — this button therefore
+                // renders only when the ref is already set. Play it directly; the
+                // old no-op/self-hide fallback below was unreachable dead code.
                 if (prefetchedTelemundoLongId.current) {
                   playHl(prefetchedTelemundoLongId.current, modalFallbackUrl!, shareCard);
-                  return;
                 }
-                setFetchingOnClick("telemundoLong");
-                setFetchingOnClick(null);
-                setTelemundoLongStatus("missing");
               }}
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-0.5 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
