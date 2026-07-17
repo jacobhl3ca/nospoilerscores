@@ -107,7 +107,13 @@ function FighterRow({ f }: { f: FightBout["red"] }) {
       ) : (
         <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
       )}
-      <span className="text-xs sm:text-sm whitespace-nowrap leading-none truncate" style={{ color: "var(--text)" }} title={f.name}>{f.name}</span>
+      {/* Match the game cards' team name exactly (GameCard): text-sm + the
+          .team-name class, so fighter names sit at the same size as every other
+          card's teams AND scale up in single-column large-card mode
+          (.ns-cards-lg .team-name). Before this they rendered a notch smaller
+          (text-xs) and stayed fixed while neighbouring team names grew — the
+          mismatch that kept UFC hidden from the switcher. */}
+      <span className="text-sm leading-none team-name truncate min-w-0" style={{ color: "var(--text)" }} title={f.name}>{f.name}</span>
       <span className="flex-1 min-w-0" />
       {f.record && (
         <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none" style={{ color: "var(--text-muted)" }}>{f.record}</span>
@@ -129,7 +135,9 @@ function FightCard({
   const isPost = fight.state === "post";
   const status = isPost ? "Final" : isLive ? "Live" : whenLabel(fight.date) || fight.statusDetail;
   return (
-    <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+    <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
       {label && (
         <div className="mb-1 flex justify-center">
           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
@@ -215,7 +223,9 @@ export default function EventCard({
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
 
   return (
-    <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+    <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
       {/* Status bar — status left, date right (matches the game cards) */}
       <div className="flex items-center justify-between gap-2 mb-1 sm:mb-2 h-[18px]">
         <span className="text-xs sm:text-sm font-medium flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
