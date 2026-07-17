@@ -16,6 +16,9 @@ Sentry.init({
     /^moz-extension:\/\//,
     /^safari-web-extension:\/\//,
     /extensions\//,
+    // Third-party analytics — errors in these scripts are not HideScore bugs.
+    /gc\.zgo\.at/,        // GoatCounter
+    /stats\.hidescore\.com/, // Umami (self-hosted)
   ],
 });
 
