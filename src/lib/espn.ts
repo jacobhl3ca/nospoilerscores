@@ -1216,6 +1216,14 @@ export function loadBigInningSchedule(): Promise<BigInningSchedule> {
       ]);
       const scheduleDoc = scheduleRes.status === "fulfilled" ? scheduleRes.value : null;
       const railDoc = railRes.status === "fulfilled" ? railRes.value : null;
+      // Clear the cache when the authoritative schedule didn't load, so a later
+      // call retries instead of freezing an empty result for the whole session
+      // (same guard as loadPrimeAsins / loadEspnAirings above). Promise.allSettled
+      // never rejects, so the trailing .catch can't do this — a transient
+      // big-inning-schedule.json miss would otherwise permanently drop the Big
+      // Inning time + MLB.TV deep-link. A rail-only failure is left cached: the
+      // schedule still loaded, and that path deliberately falls through.
+      if (!scheduleDoc) bigInningPromise = null;
       const schedule = (scheduleDoc?.schedule ?? {}) as BigInningSchedule;
       const items: Array<{ slug?: string }> = railDoc?.items ?? [];
       const match = items.find(
