@@ -183,6 +183,15 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         onClick={hasMedia ? (() => setPeek((v) => !v)) : onOpen}
         className="block w-full text-left px-4 pt-2 pb-3 cursor-pointer"
         title={hasMedia ? "Tap to reveal/hide this headline" : "Open post"}
+        // For a media post this button is a spoiler peek/blur toggle on the
+        // headline, but the only cue is a CSS blur (the `.peek` class) that
+        // assistive tech can't perceive — so expose the toggle state (WCAG
+        // 4.1.2), mirroring VideoModal's PeekBlur and the comments-strip
+        // disclosure below (which the comment there already claims this toggle
+        // matches). When !hasMedia the button is an "open post" action, not a
+        // toggle, so neither attribute applies.
+        aria-pressed={hasMedia ? peek : undefined}
+        aria-label={hasMedia ? (peek ? "Hide headline" : "Reveal headline (spoiler)") : undefined}
       >
         <h3 className={`news-title text-base sm:text-lg font-semibold leading-snug ${peek ? "peek" : ""}`} style={{ color: "var(--text)" }}>
           {item.headline}
