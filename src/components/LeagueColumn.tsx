@@ -1301,6 +1301,7 @@ export default function LeagueColumn({
             onToggleFavoriteTeam={onToggleFavoriteTeam}
             showRatings={showRatings}
             onPlayHighlight={onPlayHighlight}
+            onPlayEmbed={onPlayEmbed}
             onShowDetails={onShowDetails}
             onBack={() => setTeamViewTeam(null)}
             onSelectTeam={setTeamViewTeam}
