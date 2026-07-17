@@ -1258,26 +1258,29 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
 
+  // LIGHT, non-blocking autoplay hint (Jacob 7/16): when the browser blocks even
+  // muted autoplay, show a translucent centered play button + a small pill hint —
+  // NOT a full-screen dark cover that swallows the tap. The container is
+  // pointer-events-none so tapping ANYWHERE on the video falls through to the
+  // click-catcher and starts playback; the "playing" event then clears this
+  // (see clearAutoplayBlocked). Only the play button itself catches a click.
   const autoplayPrompt = autoplayBlocked ? (
     <div
       role="alert"
-      className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 px-6 text-center"
-      style={{ background: "rgba(0,0,0,0.88)" }}
-      onClick={(e) => e.stopPropagation()}
+      className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 px-6 text-center"
     >
-      <svg aria-hidden="true" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="m10 8 6 4-6 4V8z" /></svg>
-      <p className="max-w-sm text-sm sm:text-base font-medium leading-snug text-white/90">
-        Autoplay is blocked. Enable autoplay for HideScore in your browser, or start this clip now.
-      </p>
       <button
         type="button"
         onClick={resumeBlockedPlayback}
-        className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-105 cursor-pointer"
-        style={{ background: "var(--accent)" }}
+        aria-label="Play"
+        className="pointer-events-auto inline-flex items-center justify-center rounded-full w-16 h-16 text-white shadow-lg transition-transform hover:scale-105 cursor-pointer"
+        style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.35)" }}
       >
-        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-        Play now
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20" /></svg>
       </button>
+      <span className="rounded-full px-3 py-1 text-[11px] font-medium text-white/90" style={{ background: "rgba(0,0,0,0.5)" }}>
+        Tap to play — enable autoplay for HideScore to skip this
+      </span>
     </div>
   ) : null;
 
