@@ -1514,10 +1514,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // bubbling up from the player/controls still stop here so they keep
             // working. The video surface stops propagation in handleSurfaceTap.
             onClick={(e) => { if (!fsActive && e.target === e.currentTarget) onClose(); else e.stopPropagation(); }}
+            // Non-fullscreen: pin the wrapper to the exact video width and centre
+            // it. Without an explicit width this is a shrink-to-fit flex item, and
+            // Safari resolves its width to the full viewport (not the video's) —
+            // so the × row (min(100%, …)) came out NARROWER than the centred
+            // video and the controls sprayed edge-to-edge ("doesn't fit / x
+            // misaligned", Jacob 7/17). Pinning it makes the ×, video, and control
+            // strip one coherent, height-capped, centred column in every browser.
             style={fsActive ? {
               position: "fixed", inset: 0, zIndex: 10000, background: "#000",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            } : undefined}
+            } : { width: ytFrameWidth, marginLeft: "auto", marginRight: "auto" }}
           >
             {/* YouTube modal controls sit above the player, right-aligned, so they
                 don't cover the iframe or collide with YouTube's own overlay. */}
