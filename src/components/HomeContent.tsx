@@ -2032,9 +2032,12 @@ export default function HomeContent({
                   key={label}
                   onClick={() => updatePrefs({ newsFeedView: on })}
                   className="px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                  // Neutral selected segment, not a solid blue pill (Jacob 7/16):
+                  // a subtle raised fill + regular text reads as selected without
+                  // the loud accent-blue chip on the top row.
                   style={{
-                    background: !!prefs.newsFeedView === on ? "var(--accent)" : "transparent",
-                    color: !!prefs.newsFeedView === on ? "white" : "var(--text-muted)",
+                    background: !!prefs.newsFeedView === on ? "var(--bg-card-hover)" : "transparent",
+                    color: !!prefs.newsFeedView === on ? "var(--text)" : "var(--text-muted)",
                   }}
                   aria-pressed={!!prefs.newsFeedView === on}
                 >
@@ -2470,6 +2473,7 @@ export default function HomeContent({
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
                             onPickEspn={pickEspn}
                             espnActive={isEspn}
+                            removable={renderedEntries.length > 1}
                           />
                         </div>
                       );
@@ -2529,6 +2533,9 @@ export default function HomeContent({
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
+                      // Subtle × to drop this column, only when more than one is
+                      // showing (never remove the last — Jacob 7/16).
+                      removable={renderedEntries.length > 1}
                       // Non-strip layout: the columns render their own titles
                       // (no shared strip row), so ride the same measuring ref on
                       // the first column's title to keep --news-titlebar-h live.

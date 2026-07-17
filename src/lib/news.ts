@@ -276,15 +276,16 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
-  // Spoiler-safe highlight video first, where the league has a prebaked feed.
-  const officialVideos = PREBAKED_VIDEOS[sport];
-  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
-  // Fresh community discussion next.
+  // Reddit FIRST (Jacob 7/16): the freshest community discussion leads every
+  // column, above the official highlight video and the ESPN catch-all.
   const reddit = REDDIT_SUB[sport];
   if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
   // World Cup also gets the high-volume r/soccer firehose alongside r/worldcup
   // (Jacob 6/4). reddit-soccer is baked by prebake-news.mjs.
   if (sport === "fifa") out.push({ label: "r/soccer", key: "reddit-soccer", kind: "prebaked", logoUrl });
+  // Spoiler-safe highlight video next, where the league has a prebaked feed.
+  const officialVideos = PREBAKED_VIDEOS[sport];
+  if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
   // ESPN headlines close out the column — the reliable catch-all. fifa's ESPN
   // feed is the World Cup league feed (see SPORT_NEWS_PATHS), labeled as such.
   const espnLabel = sport === "fifa" ? "ESPN World Cup" : `ESPN ${sport.toUpperCase()}`;
@@ -304,12 +305,12 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "fifa", "epl", "ucl", "uel", "mls", "golf", "tennis", "wnba", "ncaaw",
 ];
 
-// Col 3's default (no league picked): video lead, ESPN headlines, then the
-// broader r/sports discussion feed. CBS / theScore remain intentionally out.
+// Col 3's default (no league picked): Reddit-first (Jacob 7/16) — r/sports leads,
+// then the ESPN video and headlines catch-all. CBS / theScore remain out.
 export const GENERIC_CASCADE: ColumnSource[] = [
+  { label: "r/sports", key: "reddit-general", kind: "prebaked" },
   { label: "ESPN Videos", key: "espn-videos", kind: "prebaked", variant: "video", youtubeChannel: "ESPN", logoUrl: ESPN_BRAND_LOGO },
   { label: "ESPN", key: "espn-top", kind: "prebaked", logoUrl: ESPN_BRAND_LOGO },
-  { label: "r/sports", key: "reddit-general", kind: "prebaked" },
 ];
 
 // Classify a news source by its origin for the funnel source filter.
