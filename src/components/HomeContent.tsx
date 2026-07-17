@@ -586,7 +586,7 @@ export default function HomeContent({
       // so reveal-on users don't see a one-frame blur flash before it runs.
       document.documentElement.classList.toggle("reveal-news-titles", !!p.revealNewsTitles);
       document.documentElement.classList.toggle("show-text-posts", !!p.showTextPosts);
-      document.documentElement.classList.toggle("blur-news-media", p.revealNewsMedia === false);
+      document.documentElement.classList.toggle("blur-news-media", p.revealNewsMedia !== true);
     };
     const storedShowRatings = loaded.showRatings;
     applyLaunchState(loaded);
@@ -653,7 +653,7 @@ export default function HomeContent({
         document.documentElement.setAttribute("data-theme", getResolvedTheme(merged.theme));
         document.documentElement.classList.toggle("reveal-news-titles", !!merged.revealNewsTitles);
         document.documentElement.classList.toggle("show-text-posts", !!merged.showTextPosts);
-        document.documentElement.classList.toggle("blur-news-media", merged.revealNewsMedia === false);
+        document.documentElement.classList.toggle("blur-news-media", merged.revealNewsMedia !== true);
       } catch {
         /* best-effort; ignore transient failures */
       }
@@ -713,7 +713,7 @@ export default function HomeContent({
   // without changing headline or text-post visibility. The class lives on html
   // so it also reaches the feed and every news-card layout.
   useEffect(() => {
-    document.documentElement.classList.toggle("blur-news-media", prefs.revealNewsMedia === false);
+    document.documentElement.classList.toggle("blur-news-media", prefs.revealNewsMedia !== true);
   }, [prefs.revealNewsMedia]);
 
   // Track narrow viewports so the news view can force a single stacked column
@@ -2039,9 +2039,12 @@ export default function HomeContent({
                   key={label}
                   onClick={() => updatePrefs({ newsFeedView: on })}
                   className="px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
+                  // Neutral selected segment, not a solid blue pill (Jacob 7/16):
+                  // a subtle raised fill + regular text reads as selected without
+                  // the loud accent-blue chip on the top row.
                   style={{
-                    background: !!prefs.newsFeedView === on ? "var(--accent)" : "transparent",
-                    color: !!prefs.newsFeedView === on ? "white" : "var(--text-muted)",
+                    background: !!prefs.newsFeedView === on ? "var(--bg-card-hover)" : "transparent",
+                    color: !!prefs.newsFeedView === on ? "var(--text)" : "var(--text-muted)",
                   }}
                   aria-pressed={!!prefs.newsFeedView === on}
                 >
@@ -2070,8 +2073,8 @@ export default function HomeContent({
               <span className="hidden sm:inline">Videos</span>
             </NewsToggleChip>
             <NewsToggleChip
-              active={prefs.revealNewsMedia !== false}
-              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia === false })}
+              active={prefs.revealNewsMedia === true}
+              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
               title="Show or spoiler-blur news image and video previews"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
@@ -2477,6 +2480,7 @@ export default function HomeContent({
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
                             onPickEspn={pickEspn}
                             espnActive={isEspn}
+                            removable={renderedEntries.length > 1}
                           />
                         </div>
                       );
@@ -2536,6 +2540,9 @@ export default function HomeContent({
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
+                      // Subtle × to drop this column, only when more than one is
+                      // showing (never remove the last — Jacob 7/16).
+                      removable={renderedEntries.length > 1}
                       // Non-strip layout: the columns render their own titles
                       // (no shared strip row), so ride the same measuring ref on
                       // the first column's title to keep --news-titlebar-h live.

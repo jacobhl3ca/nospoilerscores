@@ -249,6 +249,16 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('nss-preferences');if(t){var p=JSON.parse(t);if(p.theme==='dark'||p.theme==='light'){document.documentElement.setAttribute('data-theme',p.theme);var c=p.theme==='dark'?'#0a0a0a':'#ffffff';var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++){m[i].setAttribute('content',c)}return}}if(window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})()`,
           }}
         />
+        {/* Spoiler-blur news media by DEFAULT, pre-paint — only reveal when the
+            user has explicitly turned Media on (revealNewsMedia===true). Without
+            this early class the effect in HomeContent applies blur only after
+            hydration, flashing an unblurred (spoiler) preview for one frame on
+            cold loads (Jacob 7/16 — blur on by default). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('nss-preferences');var reveal=false;if(t){var p=JSON.parse(t);reveal=p.revealNewsMedia===true}if(!reveal){document.documentElement.classList.add('blur-news-media')}}catch(e){document.documentElement.classList.add('blur-news-media')}})()`,
+          }}
+        />
         {/* Replay the last active view tab (scores/ratings/news) before paint so
             the right tab is highlighted on refresh — without this the static HTML
             paints with Scores active and flashes to Ratings once prefs load. */}
