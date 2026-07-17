@@ -106,6 +106,9 @@ interface NewsColumnProps {
   videosOnly?: boolean;
   // Headline-only rows are independently hidden unless this is true.
   showTextPosts?: boolean;
+  // Show the subtle × remove-column control on this column's title (see
+  // NewsColumnTitle.removable) — set only when more than one column is visible.
+  removable?: boolean;
 }
 
 // Sticky league title (with optional swap dropdown for the 3rd column).
@@ -120,12 +123,17 @@ export function NewsColumnTitle({
   onPickEspn,
   espnActive,
   measureRef,
+  removable,
 }: {
   title: string;
   swappableOptions?: { sport: Sport; label: string }[];
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
+  // When true (more than one column showing), render a subtle × on the title
+  // row that drops this column — a one-tap "stick to 1-2 columns" for a clean
+  // view, without digging into the swap dropdown's "Remove col" (Jacob 7/16).
+  removable?: boolean;
   // Switch this column to the ESPN "Top news" headlines feed. Provided for
   // every news column so the feed is always one tap away, even after slot 3
   // was emptied (it reappears as the last column).
@@ -268,6 +276,20 @@ export function NewsColumnTitle({
           <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
             {title}
           </h2>
+        )}
+        {removable && onSwapLeague && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSwapLeague("empty"); }}
+            aria-label={`Remove ${title} column`}
+            title="Remove this column"
+            className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full cursor-pointer transition-opacity opacity-40 hover:opacity-100"
+            style={{ color: "var(--text-muted)" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
+          >
+            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
         )}
       </div>
       <span
@@ -758,6 +780,7 @@ export default function NewsColumn({
   titleMeasureRef,
   videosOnly,
   showTextPosts,
+  removable,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -795,6 +818,7 @@ export default function NewsColumn({
           onPickEspn={onPickEspn}
           espnActive={espnActive}
           measureRef={titleMeasureRef}
+          removable={removable}
         />
       )}
       <div className="flex flex-col gap-1.5 sm:gap-2">
