@@ -285,14 +285,14 @@ export default function GameHighlights({
   const showYouTube = !!(!isMlb && isFinished && highlightUrl && (effectiveOfficialStatus === "found" || searchStatus === "found"));
   const showTelemundo = !!(fifaTelemundoEnabled && isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
-  // MLB row: short MLB.com recap first, then the longer condensed/full-game cut.
-  // Prefer MLB's official YouTube clip for the 10m slot when it resolves because
-  // it is the same cut with better native playback; fall back to MLB.com HLS.
-  // Never render a speculative button while the official lookup is merely
-  // loading. Some games (the 2026 All-Star Game) only have the baked secondary
-  // ESPN/MLB clip; that is still a valid playable condensed slot.
-  const showMlbYouTubeCondensed = isMlb && (officialStatus === "found" || searchStatus === "found");
-  const showMlbCondensed = isMlb && (showMlbYouTubeCondensed || !!mlbCondensedPlayback);
+  // MLB row: short MLB.com recap (3m) first, then the condensed game (10m).
+  // STRICT: the 10m is ALWAYS the date-exact MLB.com condensed — its slug and HLS
+  // path both carry the game's date (…condensed-game-nym-phi-7-16-26 /
+  // …/2026-07/16/…), so it can never be another game's clip. The old YouTube
+  // "TeamA vs TeamB + date" fallback is gone: in a multi-game series it resolved a
+  // DIFFERENT day's video (wrong highlight — Jacob 7/16). If MLB.com hasn't posted
+  // the condensed yet, show NO 10m button rather than a possibly-wrong one.
+  const showMlbCondensed = isMlb && !!mlbCondensedPlayback;
   const showMlb = !!(isFinished && isMlb && (mlbRecapPlayback || showMlbCondensed));
   if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
 
@@ -437,29 +437,13 @@ export default function GameHighlights({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                // Prefer the date-exact MLB.com condensed (official, keyed to
-                // THIS game) over the YouTube cut. The YouTube 10m is resolved by
-                // "TeamA vs TeamB + date" and can land a DIFFERENT game of the
-                // same matchup — in the team timeline a 3-game series resolved
-                // all three 10m buttons to one clip ("days don't align", Jacob
-                // 7/16). YouTube is only the fallback when MLB.com has no
-                // condensed yet (e.g. a game that JUST ended).
-                if (mlbCondensedPlayback && onPlayEmbed) {
-                  const page = mlbCondensedPage || mlbCondensedPlayback;
-                  onPlayEmbed("", page, "MLB.com", shareCard, mlbCondensedPlayback, mlbCondensedPoster);
-                  return;
-                }
-                if (showMlbYouTubeCondensed && onPlayHighlight) {
-                  const playableId = prefetchedOfficialId.current ?? prefetchedVideoId.current;
-                  if (playableId) {
-                    playHl(playableId, highlightUrl!, shareCard);
-                    return;
-                  }
-                }
-                if (mlbCondensedPlayback) {
-                  const page = mlbCondensedPage || mlbCondensedPlayback;
-                  openExternal(page);
-                }
+                // STRICT MLB.com only (see showMlbCondensed): always the date-exact
+                // condensed for THIS game, opened in the in-app modal. No YouTube
+                // fallback — that was what surfaced a different day's clip.
+                if (!mlbCondensedPlayback) return;
+                const page = mlbCondensedPage || mlbCondensedPlayback;
+                if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, mlbCondensedPlayback, mlbCondensedPoster);
+                else openExternal(page);
               }}
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
