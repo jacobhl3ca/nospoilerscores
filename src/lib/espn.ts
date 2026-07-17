@@ -97,12 +97,13 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // the core leagues and major tournament windows.
   { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19" },
   // ── F1 + UFC (single-event tiles) ──
-  // BACKLOG (hidden 2026-06-29): the EventCard tiles don't yet match the look of
-  // the rest of the cards, so they're hidden from the switcher for now. Kept here
-  // (data + endpoints intact) so re-enabling is a one-line flag flip once the
-  // card design is reworked. F1 = Mar–early Dec season; UFC = year-round.
+  // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
+  // (fighter names use the standard text-sm .team-name treatment + shared
+  // border-hover), so it's back in the switcher — opt-in only (excludeFromAuto),
+  // year-round. F1 stays hidden: FOM blocks highlight embedding and the single
+  // race tile is a different design still being reworked. F1 = Mar–early Dec.
   { sport: "f1",  label: "F1",  startDate: "03-01", endDate: "12-14", excludeFromAuto: true, hidden: true },
-  { sport: "ufc", label: "UFC", excludeFromAuto: true, hidden: true },
+  { sport: "ufc", label: "UFC", excludeFromAuto: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
