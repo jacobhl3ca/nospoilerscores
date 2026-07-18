@@ -28,7 +28,7 @@ const NEWS_HOURLY = [
   "reddit-epl", "reddit-fifa", "reddit-general", "reddit-golf", "reddit-mlb",
   "reddit-mls", "reddit-nba", "reddit-ncaaf", "reddit-ncaam", "reddit-ncaaw",
   "reddit-nfl", "reddit-nhl", "reddit-soccer", "reddit-tennis", "reddit-ucl",
-  "reddit-uel", "reddit-wnba",
+  "reddit-uel", "reddit-ufc", "reddit-wnba",
   "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",
 ];
