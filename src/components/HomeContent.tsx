@@ -1199,7 +1199,7 @@ export default function HomeContent({
     const seen = new Set<Sport>();
     const options: { sport: Sport; label: string }[] = [];
     for (const league of ALL_LEAGUES) {
-      if (league.hidden) continue; // BACKLOG: F1/UFC fully hidden from the UI for now
+      if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       if (seen.has(league.sport)) continue;
       if (!isLeagueActive(league, viewDate)) continue;
       seen.add(league.sport);

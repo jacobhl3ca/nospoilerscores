@@ -263,6 +263,7 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   ncaaf: { key: "reddit-ncaaf", label: "r/CFB" },
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
+  f1: { key: "reddit-f1", label: "r/formula1" },
 };
 
 // Cascade of news cards for a league column. The stable smart order is:
@@ -304,6 +305,7 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf",
   "fifa", "epl", "ucl", "uel", "mls", "golf", "tennis", "wnba", "ncaaw",
+  "ufc", "f1",
 ];
 
 // Col 3's default (no league picked): Reddit-first (Jacob 7/16) — r/sports leads,
