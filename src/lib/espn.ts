@@ -872,6 +872,12 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     "round-of-16": "Round of 16",
     "quarterfinals": "Quarterfinals",
     "semifinals": "Semifinals",
+    // ESPN's fifa.world scoreboard tags the third-place playoff's season.slug as
+    // "3rd-place-match" — that is the exact key wcBracket.ts's SLUG2ROUND routes
+    // the bracket's third-place slot on, so it's the one ESPN actually sends.
+    // Keep the "third-place" spelling too so the label resolves either way and
+    // this fallback can't silently return null for that one match.
+    "3rd-place-match": "Third Place",
     "third-place": "Third Place",
     "final": "Final",
   };
