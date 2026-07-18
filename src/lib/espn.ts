@@ -100,9 +100,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
   // border-hover), so it's back in the switcher — opt-in only (excludeFromAuto),
-  // year-round. F1 stays hidden: FOM blocks highlight embedding and the single
-  // race tile is a different design still being reworked. F1 = Mar–early Dec.
-  { sport: "f1",  label: "F1",  startDate: "03-01", endDate: "12-14", excludeFromAuto: true, hidden: true },
+  // year-round. F1 re-enabled 2026-07-18: the race tile got the game-card
+  // treatment (bg-card + border-hover + status bar) and the play buttons
+  // already route around FOM's embed block (official-channel + search via
+  // openExternal fallback), so it's back in the switcher — opt-in only,
+  // like UFC. F1 = Mar–early Dec.
+  { sport: "f1",  label: "F1",  startDate: "03-01", endDate: "12-14", excludeFromAuto: true },
   { sport: "ufc", label: "UFC", excludeFromAuto: true },
 ];
 
