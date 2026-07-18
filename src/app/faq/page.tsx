@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 const FAQ: { q: string; a: string }[] = [
   {
     q: "What is HideScore?",
-    a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
+    a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, soccer, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
   },
   {
     q: "How do HideScore's game ratings work?",
