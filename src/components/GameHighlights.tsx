@@ -19,7 +19,12 @@ const highlightBufferHours: Record<string, number> = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, mlb: 5,
   nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
 };
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 2, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
+// ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
+// quarters in 2015-16), so a finished regulation game reports period 4. A value
+// of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
+// 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
+// (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3 };
 
 // Shared highlight buttons for a finished game — the official-channel + top-
 // search YouTube clips, plus official league-site recap / condensed videos
@@ -80,12 +85,15 @@ export default function GameHighlights({
   const [telemundoLongStatus, setTelemundoLongStatus] = useState<HighlightStatus>(
     fifaTelemundoEnabled && isFifa ? (initialTrustedBaked?.telemundoExtended ? "found" : "loading") : "missing",
   );
-  // Capture "now" once at mount so the highlights-ready gate below stays a pure
-  // render — reading Date.now() during render is flagged by react-hooks/purity.
-  // The buffer is multi-hour and the component remounts on every score refresh,
-  // so a single read is indistinguishable in practice (matches the nowMs pattern
-  // already used in LeagueColumn's "Last played" slate label).
-  const [nowMs] = useState(() => Date.now());
+  // "now" for the highlights-ready gate below. Read via useState (not Date.now()
+  // during render, which react-hooks/purity flags) and advanced by a slow tick in
+  // the effect further down. GameCard reconciles this component in place on every
+  // score poll — it's keyed by the stable game.id, so it does NOT remount — which
+  // means this initializer runs only at mount. Without the tick, nowMs would
+  // freeze at page-load time and a game that was already final at load but still
+  // inside its multi-hour buffer window would never reveal its highlight buttons
+  // until a reload.
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   // MLB Recap/Condensed for surfaces that DON'T run the dated board enrich — the
   // team timeline (fetchTeamSchedule) and the "Last played"/lookahead fallback
@@ -106,6 +114,15 @@ export default function GameHighlights({
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
     return nowMs > gameStart + bufferMs;
   })();
+
+  // Advance nowMs once a minute, but only while it still gates a today's-final
+  // card (see the nowMs note above for why the mount-time read alone goes stale),
+  // and stop as soon as the buffer opens so we're not holding an idle timer.
+  useEffect(() => {
+    if (!isToday || !isFinished || highlightsReady) return;
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, [isToday, isFinished, highlightsReady]);
 
   // Pin the highlight query date to ET — the worker matches the YouTube
   // title's date strictly, and a UTC-shifted browser would push a late ET
@@ -505,16 +522,18 @@ export default function GameHighlights({
           )}
           {telemundoLongStatus === "found" && (
             <button
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
+                // Unlike the TEL 10m button, the extended cut has NO click-time
+                // re-resolve (the collision note in the prefetch effect explains
+                // why an exclude-retry can surface a different game's clip), so it
+                // is only ever populated during prefetch — this button therefore
+                // renders only when the ref is already set. Play it directly; the
+                // old no-op/self-hide fallback below was unreachable dead code.
                 if (prefetchedTelemundoLongId.current) {
                   playHl(prefetchedTelemundoLongId.current, modalFallbackUrl!, shareCard);
-                  return;
                 }
-                setFetchingOnClick("telemundoLong");
-                setFetchingOnClick(null);
-                setTelemundoLongStatus("missing");
               }}
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-0.5 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"

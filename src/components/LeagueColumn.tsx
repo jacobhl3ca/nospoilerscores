@@ -620,6 +620,9 @@ export default function LeagueColumn({
     hoverEl: HTMLElement | null; ghost: HTMLDivElement | null;
   } | null>(null);
   const suppressClickRef = useRef(false);
+  // Teardown for the in-flight drag's window listeners, so an unmount mid-drag
+  // (when onUp/onCancel never fire) can still remove them — see the effect below.
+  const dragListenersRef = useRef<(() => void) | null>(null);
 
   const clearDragHover = () => {
     const d = dragRef.current;
@@ -692,24 +695,37 @@ export default function LeagueColumn({
         if (d.hoverEl) d.hoverEl.style.background = "var(--bg-card-hover)";
       }
     };
-    const onUp = (ev: PointerEvent) => {
-      if (ev.pointerId !== dragRef.current?.pointerId) return;
+    const removeListeners = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
+      dragListenersRef.current = null;
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== dragRef.current?.pointerId) return;
+      removeListeners();
       endDrag(ev.clientX, ev.clientY);
     };
     const onCancel = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onCancel);
+      removeListeners();
       clearDragHover();
       endDrag();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
+    // If this column unmounts mid-drag (a live-poll re-render or a slot/league
+    // swap can replace the column while a mouse-drag is active), onUp/onCancel
+    // never fire — so hand the teardown to the unmount effect below, which
+    // removes these window listeners without leaking stale closures (or firing
+    // endDrag's reorder/setState on an unmounted instance).
+    dragListenersRef.current = removeListeners;
   };
+
+  // Remove any in-flight drag's window listeners if the column unmounts
+  // mid-drag (see onHeaderPointerDown). Intentionally does NOT call endDrag —
+  // an unmount must not fire a reorder or setState, only detach the listeners.
+  useEffect(() => () => { dragListenersRef.current?.(); }, []);
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
   // Done in the effect cleanup (fires before the next run on a league change and

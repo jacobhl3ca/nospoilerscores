@@ -706,11 +706,25 @@ export default {
           //     adds the most literal winner-reveal of the family — whoever
           //     outscores the other side won ("Warriors outscore Lakers", "Spain
           //     outscored Italy") — and no non-result word begins with "outscor".
+          //     "surviv\w*" adds the endure-to-advance framing ("Argentina survive on
+          //     penalties", "Real Madrid survive a scare") — a result reveal its siblings
+          //     outlast/prevail miss, meaning nothing but the named side getting through in
+          //     a per-match highlight title; no in-scope club/nation begins with "surviv"
+          //     and even survival/survivor are result-adjacent in sports.
           //     Kept byte-identical to spoilers.ts.
           //     "holds?[- ]?off"/"held[- ]?off" catch the protect-the-lead win
           //     framing ("Warriors hold off Lakers", "Bills held off Chiefs") —
           //     the mandatory trailing "off" keeps it clear of household/threshold,
           //     and the phrase means nothing but the leading side surviving to win.
+          //     "sees?[- ]?off"/"saw[- ]?off" are the direct sibling — "see off" is
+          //     the British-recap verb for beating back a challenger to win, and it
+          //     slipped the whole set ("Arsenal see off Spurs", "Madrid saw off Barca").
+          //     Like hold/held off, ONLY the two-word phrase matches: the mandatory
+          //     trailing "off" keeps "see"/"saw"/"sees" from firing alone (must-see,
+          //     saw the ball), and the trailing \b keeps "sees off" clear of "oversees
+          //     office". The literal-saw/"sees off a defender" senses never occur in the
+          //     highlight titles this filter sees and err over-hide-safe. Byte-identical
+          //     to spoilers.ts.
           //     "victory|victories|victorious" join the winning/winner/wins/won/win
           //     set — "victory" is one of the commonest outcome words in recap
           //     titles ("World Cup victory", "seal victory", "victorious"), yet none
@@ -718,8 +732,321 @@ export default {
           //     "Victoria"; the one benign collision (A-League's Melbourne Victory)
           //     is outside this app's MLS+UEFA+WC soccer scope. Byte-identical to
           //     spoilers.ts.
-          const SCORE_RX = /(?<![-\/])\b\d{1,2}\s*[-–]\s*\d{1,2}\b(?![-\/])/;
-          const SPOILER_RX = /\b(walk[- ]?off|comeback|come[- ]from[- ]behind|extra[- ]?innings?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outscor\w*|prevail\w*|dominat\w*|defeat\w*|beat\w*|edge\w*|holds?[- ]?off|held[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|dismantl\w*|thrash\w*|thump\w*|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|sweep\w*|swept|oust\w*|eliminat\w*|advanc\w*|leads?|leader|winning|winner|wins|won|win|victory|victories|victorious|losing|lose|loses|lost|loss|hat[- ]trick|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|goalless|scoreless|clean[- ]?sheets?|grand slam|red card|all three points)\b/i;
+          //     "equali[sz]\w*" catches the goal-reveal framing ("late equaliser",
+          //     "Spain equalize") — a partial-result leak like a clean sheet, with no
+          //     digits for SCORE_RX to catch. "[sz]" covers both spellings and keeps it
+          //     clear of "equality"; \w* covers every inflection. Byte-identical to
+          //     spoilers.ts.
+          //     "own[- ]?goals?" joins the goal-event reveal family (hat[- ]?tricks?/
+          //     equali[sz]\w*): an "own goal" names a specific goal that was scored, so a
+          //     title carrying it reveals a partial result ("Late own goal breaks Brazil
+          //     hearts"), yet has no digits for SCORE_RX. The trailing "goal" keeps \b clear
+          //     of crown/brown/known/thrown, and the closing \b clear of "own goalkeeper".
+          //     Byte-identical to spoilers.ts.
+          //     "braces?" joins the goal-event reveal family (hat[- ]?tricks?/equali[sz]\w*/
+          //     own[- ]?goals?): a "brace" is one player scoring two goals, so a title reveals a
+          //     partial result ("Kane brace sinks Poland"), yet has no digits for SCORE_RX.
+          //     Whole-word \bbraces?\b is clear of embrace/bracelet/bracket; the "brace for"
+          //     idiom is rare in match titles and errs toward over-hiding. Byte-identical to
+          //     spoilers.ts.
+          //     "shoot[- ]?outs?" catches the penalty-shootout reveal (mirrors shut[- ]?outs?/
+          //     blow[- ]?outs?): a shootout only happens once a match is level after regulation/ET,
+          //     so the word alone reveals the game went the distance and was settled from the spot
+          //     ("edge France in a shootout", "shoot-out drama"), yet has no digits for SCORE_RX.
+          //     The \b needs a boundary before "shoot" so it's clear of "troubleshoot"; over-hiding
+          //     is the safe side. Byte-identical to spoilers.ts.
+          //     "deadlock\w*" joins the level/draw-reveal family (goalless/scoreless/clean[- ]?sheets?):
+          //     in a soccer highlight title it reveals result state either way — "goalless deadlock"/
+          //     "remain deadlocked" reveals the match is level, "breaks the deadlock"/"deadlock broken"
+          //     reveals a goal was scored and one side went ahead — the same partial-result leak as a
+          //     clean sheet, with no digits for SCORE_RX. "Break the deadlock" is one of the commonest
+          //     phrasings in WC recap titles. No non-result word begins with "deadlock" and the
+          //     negotiation/transfer "deadlock" sense never appears in the highlight titles this filter
+          //     sees (titles only, never news). Byte-identical to spoilers.ts.
+          //     "stalemate\w*" is deadlock's direct synonym and joins the same level/draw-reveal family:
+          //     in a soccer highlight title it reveals the match was (or ended) level — "goalless
+          //     stalemate", "settle for a stalemate", "tense stalemate at the Bernabeu" — the same
+          //     partial-result leak as deadlock, yet a bare "stalemate" (no digits, no "goalless")
+          //     slipped past SCORE_RX and every existing keyword. It's a staple of soccer/WC recap
+          //     titles. Near-zero false-positive risk: "stalemate" has no meaning outside a drawn/level
+          //     state, no in-scope club or nation is named it, and the chess/negotiation sense never
+          //     appears in the per-match highlight titles this filter sees. \w* covers the plural
+          //     "stalemates". Byte-identical to spoilers.ts.
+          //     "\d{1,2}[- ]?nil" / "nil[- ]?(?:\d{1,2}|nil|all)" catch the spelled-out "nil" scoreline
+          //     that soccer/WC highlight titles use constantly — "Spain 4 nil", "beat them 3-nil",
+          //     "nil-nil at the break", "nil all draw". The digit-based SCORE_RX only fires on a
+          //     digit-hyphen-digit run ("4-0"), so a scoreline spelling zero as "nil" (spaced, or
+          //     reversed) slipped straight through and revealed the result. Every alternative anchors
+          //     "nil" to an adjacent digit / "nil" / "all", so false-positive risk is negligible: bare
+          //     "nil" never matches, "Nile" fails the required trailing digit, "nilpotent" fails the
+          //     closing \b. Byte-identical to spoilers.ts.
+          //     "destroy\w*" is the same-family blowout verb — and the single most common one in the
+          //     all-caps fan-channel highlight titles this filter actually sees ("Real Madrid DESTROY
+          //     Barcelona", "Spain destroyed Georgia 5-0", "City destroying United") — yet it slipped
+          //     past the demolish/dismantle/thrash/thump/trounce/topple set despite outnumbering all
+          //     of them on YouTube. In a per-match highlight title "destroy" means nothing but a
+          //     lopsided defeat; no in-scope club or nation begins with "destroy", so \w* covers
+          //     destroy/destroys/destroyed/destroying/destroyer. Its one benign collision — a
+          //     skill-comp "Messi destroys 3 defenders" — errs over-hide-safe like "saw off a
+          //     defender" above. Byte-identical to spoilers.ts.
+          //     "sinks?"/"sank" catch the "late goal sinks X" defeat-reveal common across every sport
+          //     ("Rodri sinks Arsenal", "Late Kane goal sinks Poland", "Buzzer-beater sinks Lakers",
+          //     "Walk-off sank the Yankees") — a winner/loser reveal the existing verbs miss. Spelled
+          //     out (sink/sinks/sank, not "sink\w*") so it can't swallow the baseball pitch "sinker" or
+          //     "sinking feeling"; whole-word forms are boundary-safe, no in-scope club/nation is named
+          //     "Sink", and the "kitchen sink" idiom is rare in match titles and errs over-hide-safe.
+          //     Byte-identical to spoilers.ts.
+          //     "send(?:s|ing)?[- ]?off"/"sent[- ]?off" catch the red-card reveal in its far more common
+          //     verb form — the noun "red card" is already blocked, but titles almost always phrase a
+          //     dismissal as "sent off"/"sending off" ("Ramos SENT OFF vs Barcelona", "Referee sends off
+          //     the keeper") — the same match-event leak as "red card", with no digits for SCORE_RX. The
+          //     inflection sits on "send", so "(?:s|ing)?" covers send/sends/sending and the "sent[- ]?off"
+          //     branch the past tense; the required trailing "off" keeps bare "send"/"sent" from firing and
+          //     the leading \b keeps it clear of "present"/"absent"/"consent"/"resent". The one benign
+          //     collision — a farewell "send-off" — never appears in match titles and errs over-hide-safe.
+          //     Sibling of "sees?[- ]?off"/"saw[- ]?off" (a different verb sharing only "off"). Byte-
+          //     identical to spoilers.ts.
+          //     "drub\w*" is the same-family blowout word soccer/cricket recaps lean on for a lopsided
+          //     beating ("Spain drub Georgia 5-0", "United drubbed 4-0", "a 6-1 drubbing") — a decisive-
+          //     defeat reveal that slipped past the pummel/steamroll/thrash/thump/trounce set despite being
+          //     just as common in WC recap titles. Safer than destroy/demolish: "drub" never describes a
+          //     single skill moment, only a team result, so it can't over-hide a highlight reel. No English
+          //     word or in-scope club/nation begins with "drub", so \w* covers drub/drubs/drubbed/drubbing at
+          //     negligible false-positive risk. Byte-identical to spoilers.ts.
+          //     "smash\w*" finally adds the blowout verb the "drub" note above already names as a member of
+          //     the destroy/demolish/smash family — described but never actually listed, an oversight, since
+          //     "smash" is one of the commonest blowout verbs in the all-caps fan-channel highlight titles
+          //     this filter sees ("Real Madrid SMASH Barcelona 5-0", "Spain smashed Georgia") and, like
+          //     DESTROY, carries no digits for SCORE_RX to catch, so those reveals were leaking. It shares the
+          //     single-skill collision the drub note flags ("smashes it home") — but that errs to the same
+          //     over-hide-is-safe side the family already accepts for destroy/demolish, and no in-scope club
+          //     or nation begins with "smash", so \w* covers smash/smashes/smashed/smashing at negligible
+          //     false-positive risk. Byte-identical to spoilers.ts.
+          //     "wallop\w*" is the same-family blowout verb British/soccer recaps lean on for a heavy beating
+          //     ("Spain wallop Georgia 5-0", "United walloped 4-0", "a 6-0 walloping") — a decisive-defeat
+          //     reveal missed by the drub/smash/thrash/thump/pummel/steamroll set despite being just as common
+          //     in WC recap titles. Like "drub" it only ever describes a team result, never a single skill
+          //     moment, so it can't over-hide a highlight reel. No English word or in-scope club/nation begins
+          //     with "wallop" (it can't reach "Walloon"/"Wallonia" — no "p"), so \w* covers wallop/wallops/
+          //     walloped/walloping at negligible false-positive risk. Byte-identical to spoilers.ts.
+          //     "knock(?:s|ed|ing)[- ]?out" completes the knockout-elimination family (bow…out/crash…out/
+          //     oust/eliminat): "knocked out" is the commonest WC/cup phrasing for going out ("Germany knocked
+          //     out of the World Cup", "Argentina knocks out Brazil"), with no digits for SCORE_RX. The
+          //     inflection is REQUIRED (not "?") precisely so bare "knockout"/"knock-out" — the neutral schedule
+          //     term ("knockout stage") — stays visible; only the verb forms (knocked/knocks/knocking out)
+          //     match. Byte-identical to spoilers.ts.
+          //     "hammer(?:ed|ing)" is the same-family blowout verb ("Man United hammered 5-0", "City's
+          //     hammering of Arsenal"), with no digits for SCORE_RX when the score is omitted. The inflection
+          //     is REQUIRED (not "\w*") precisely so bare "hammer"/"hammers" — West Ham United's in-scope
+          //     nickname ("the Hammers") — stays visible; only the verb-of-defeat forms match. Byte-identical
+          //     to spoilers.ts.
+          //     "batter(?:ed|ing)" is the same-family blowout verb for a heavy defeat beside
+          //     "hammered"/"walloped" ("Spain battered Georgia", "United battered again", "a 5-0
+          //     battering"), with no digits for SCORE_RX when the score is omitted. The inflection is
+          //     REQUIRED (not "\w*") precisely so bare "batter"/"batters" — the baseball hitter ("the
+          //     batter struck out") — stays visible; only the verb-of-defeat forms (and the noun "a
+          //     battering") match. The one collision, the target-man cliché "battering ram", is rare
+          //     and errs to the over-hide-is-safe side. Byte-identical to spoilers.ts.
+          //     "spank\w*" is the same-family blowout verb beside "wallop"/"drub"/"thrash" ("Spain
+          //     spank Georgia 5-0", "United spanked 4-0", "a 4-0 spanking"), with no digits for
+          //     SCORE_RX when the score is omitted. Like wallop/drub it only ever describes a
+          //     team-vs-team beating in a sports title (never a single skill moment), so it can't
+          //     over-hide a highlight reel. No English word other than these inflections begins with
+          //     "spank" (it diverges from "spark"/"span"/"spandex" before the "k") and no in-scope
+          //     club/nation is named it, so \w* covers spank/spanks/spanked/spanking at negligible
+          //     false-positive risk. Byte-identical to spoilers.ts.
+          //     "clobber\w*" is the same-family blowout verb NBA/NFL and soccer recaps lean on for a
+          //     one-sided beating beside "wallop"/"maul"/"spank" ("Warriors clobber Suns", "United
+          //     clobbered 5-0", "a 4-0 clobbering") — a decisive-defeat reveal that slipped past the
+          //     wallop/maul/spank/drub/smash set, with no digits for SCORE_RX when the score is omitted.
+          //     Like "wallop"/"maul" it only ever describes a team-vs-team beating (never a single skill
+          //     moment), no English word other than these inflections begins with "clobber", and no
+          //     in-scope club/nation is named it, so \w* covers clobber/clobbers/clobbered/clobbering at
+          //     negligible false-positive risk. Byte-identical to spoilers.ts.
+          //     "dump(?:s|ed|ing)?[- ]?out" completes the knockout-elimination family (bow…out/
+          //     crash…out/knock…out): "dumped out" is one of the commonest British WC/cup phrasings
+          //     for going out ("Germany dumped out of the World Cup", "Italy dumped out on penalties"),
+          //     with no digits for SCORE_RX. Structured like the bow/crash siblings — the inflection
+          //     sits on the verb, so "(?:s|ed|ing)?" covers dump/dumps/dumped/dumping while the
+          //     required trailing "out" keeps bare "dump" (the empty-a-container sense, absent from
+          //     match highlight titles) from firing. No in-scope club/nation is named "Dump", so any
+          //     benign collision errs to the over-hide-is-safe side. Byte-identical to spoilers.ts.
+          //     "hat[- ]?tricks?" widens the earlier "hat[- ]trick" (mandatory separator, singular
+          //     only) to also catch the closed spelling "hattrick" and the plural — both common in
+          //     soccer/WC highlight titles ("Mbappé hattrick", "two hat tricks") that leaked past the
+          //     old form. The optional "[- ]?" covers "hat trick"/"hat-trick"/"hattrick" and "s?" the
+          //     plural, like the sibling "shut[- ]?outs?"/"own[- ]?goals?". A pure widening anchored to
+          //     "hat"+"trick", so no new false-positive surface. Byte-identical to spoilers.ts.
+          //     "dispatch\w*" is the dismiss-an-opponent result verb tennis and soccer recaps lean on for a
+          //     comprehensive win ("Alcaraz dispatches Zverev in straight sets", "City dispatch Brentford
+          //     3-0", "Spain dispatched Georgia") — a winner-naming reveal missed by the beat/defeat/edge/
+          //     oust/eliminate dismissal set despite being just as common in the article-style news titles
+          //     this filter also covers, with no digits for SCORE_RX when the score is omitted. In a
+          //     sports-title context "dispatch" only ever means to beat/see off an opponent — its non-result
+          //     senses (a news dispatch, a dispatch rider) never appear in a match-recap title — and no
+          //     in-scope club/nation begins with "dispatch", so \w* covers dispatch/dispatches/dispatched/
+          //     dispatching at negligible false-positive risk. Byte-identical to spoilers.ts.
+          //     "shellac\w*" is the same-family blowout verb American NBA/NFL recaps lean on for a one-sided
+          //     beating right beside "clobber"/"wallop"/"maul" ("Broncos shellacked 45-10", "Chiefs shellac
+          //     the Raiders", "Lakers took a shellacking") — a decisive-defeat reveal missed by the clobber/
+          //     wallop/maul/spank/drub/smash set, with no digits for SCORE_RX when the score is omitted. In a
+          //     sports title "shellac" only ever means a team-vs-team beating (never a single skill moment,
+          //     so it can't over-hide a reel); its varnish sense never appears in a match-recap title and no
+          //     in-scope club/nation begins with "shellac", so \w* covers shellac/shellacs/shellacked/
+          //     shellacking at negligible false-positive risk. Byte-identical to spoilers.ts.
+          // Each side of the scoreline is \d{1,3} so it catches the three-digit
+          // basketball form ("Celtics 112-108 Knicks") as well as the low
+          // soccer/hockey/NFL form ("2-1", "31-28"); NBA/WNBA scores are almost
+          // always 3 digits a side, so the old \d{1,2} cap leaked a bare box-score
+          // headline with no result verb. Capped at 3 (not 4+) so 4-digit years
+          // still fail; the lookbehind/lookahead keep M-D-Y dates and "2025-26"
+          // season spans out. Byte-identical to spoilers.ts.
+          const SCORE_RX = /(?<![-\/])\b\d{1,3}\s*[-–]\s*\d{1,3}\b(?![-\/])/;
+          //     "book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)" is the canonical
+          //     knockout qualification idiom WC / cup-tie coverage reaches for the instant a side goes
+          //     through ("England book their place in the final", "Brazil booked their passage") — a pure
+          //     advancement reveal carrying no digits (SCORE_RX misses it) that headlines phrase this way
+          //     far more than they say "advance". The trailing place/spot/berth/ticket/passage requirement
+          //     keeps the football sense of a bare "booked" (a yellow card) out. Byte-identical to
+          //     spoilers.ts.
+          //     "reach(?:es|ed|ing)? (?:the )?(?:finals?|semi…|quarter…|last 16/8/4)" is the OTHER canonical
+          //     knockout-advancement idiom, right beside "book their place" / "advanc\w*" ("Spain reach the
+          //     final", "Brazil reached the semis", "France reach the quarters", "Croatia reach the last 8")
+          //     — a pure advancement reveal carrying no digits (SCORE_RX misses it) that headlines phrase
+          //     with "reach" far more than "advance". The required trailing round noun keeps "within reach"/
+          //     "reach for the top corner"/"reach save"/bare "reach the ball" out, and "(?!\s+third)" excludes
+          //     the tactical "reach the final third" (its only benign collision, itself over-hide-safe).
+          //     Byte-identical to spoilers.ts.
+          //     "through to (?:the )?(?:finals?|semi…|quarter…|last 16/8/4)" is the THIRD canonical
+          //     knockout-advancement idiom, right beside "reach …"/"book their place"/"advanc\w*" — the
+          //     British match-report phrasing ("England through to the final", "Spain through to the
+          //     quarterfinals", "USA through to the last 16") that names the winning side yet carries no
+          //     digits (SCORE_RX misses it) and uses neither "reach" nor "book" nor "advance". The
+          //     round-noun list mirrors the "reach" alternative verbatim, so the required trailing round
+          //     keeps "battled through to the whistle"/"broke through the line" out, and the same
+          //     "(?!\s+third)" guard excludes "through to the final third". Byte-identical to spoilers.ts.
+          //     "into (?:the )?(?:finals?|semi…|quarter…|last 16/8/4)" is the knockout-advancement idiom the
+          //     "reach"/"through to"/"progress"/"book their place" siblings all miss: the bare, VERBLESS "X
+          //     into the Y" headline all-caps fan-channel/broadcaster titles lean on the instant a side goes
+          //     through ("Spain into the final", "ARGENTINA INTO THE SEMIS", "England into the quarters", "USA
+          //     into the last 16"). Each sibling requires a head verb, so a title that just says "…into the
+          //     final" slipped past every one, yet it names the winning side just as plainly and carries no
+          //     digits (SCORE_RX misses it). The round-noun list mirrors the alternatives verbatim, so the
+          //     required trailing round keeps the verbless "into the box"/"into the season"/"into the wild"
+          //     out, and the same "(?!\s+third)" guard excludes the tactical "into the final third". Timely as
+          //     the tournament hits its win-or-go-home rounds. Byte-identical to spoilers.ts.
+          //     "crowned (?:world )?champions?" and "(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|
+          //     trophy)" are the two canonical FINAL-result coronation reveals the advancement idioms above
+          //     don't cover ("Argentina crowned world champions", "Messi lifts the trophy", "Spain hoist the
+          //     World Cup") — each names the champion yet carries no digits (SCORE_RX misses it) and states
+          //     none of "win\w*"/"triumph\w*"/"clinch\w*". Object-anchored so they stay off the bare
+          //     "champion(s)" this filter leaves alone: "crowned" must precede "champions" (never "Champions
+          //     League"), and the trophy-raise needs a following "World Cup"/"trophy" (so "World Cup 2026
+          //     highlights"/"trophy tour"/"lift spirits" stay unblurred). Timely as the tournament reaches
+          //     the final. Byte-identical to spoilers.ts.
+          //     "share(?:s|d)? the spoils"/"honou?rs even" catch the two canonical DRAW-result idioms English
+          //     soccer/World Cup recap titles reach for when a match ends level — "Spain and Georgia share the
+          //     spoils", "the two sides shared the spoils", "honours even in a tense affair" — the same
+          //     level/draw reveal as the "goalless"/"scoreless"/"stalemate\w*"/"deadlock\w*" family, yet a
+          //     bare idiom (no digits, no "goalless") slipped past both SCORE_RX and every existing keyword.
+          //     Near-zero false-positive risk: both are fixed multi-word idioms that only ever describe a
+          //     drawn result — "share(?:s|d)? the spoils" is anchored to the literal "the spoils" object (a
+          //     lone "share"/"shares"/"shared" never fires) and "honou?rs even" needs the trailing "even"
+          //     (the "honou?r" covers British "honours"/American "honors"), so neither collides with an
+          //     in-scope club/nation name or an ordinary title word. Byte-identical to spoilers.ts.
+          //     "held to an? (?:[\w-]+ )?draw" catches the "held to a draw" idiom — the most common way an
+          //     English soccer/World Cup recap title frames a favourite dropping points ("Argentina held to
+          //     a draw", "Brazil held to a late draw"). Same level/draw reveal as goalless/scoreless/
+          //     stalemate, but the BARE form carries no digits (SCORE_RX misses it) and slipped past every
+          //     keyword: "held" alone only appears as "held[- ]?off"/"holds?[- ]?off" (a WIN), and "draw"
+          //     is not a keyword. The optional single "[\w-]+" word lets one adjective sit before "draw"
+          //     while the pattern stays anchored to "draw" as the object, so "held off Barcelona", "the
+          //     draw for the quarters", and "held to account" stay out. Byte-identical to spoilers.ts.
+          //     "all[- ]?square" joins the level/draw-reveal family (goalless/scoreless/stalemate\w*/
+          //     deadlock\w*/"held to a ... draw"/"share the spoils"/"honours even"): "all square" is the
+          //     stock British soccer/golf idiom for a level score, so a title carrying it reveals the match
+          //     is (or ended) level ("Spain and Georgia all square at the break", "the sides finish all
+          //     square"), yet a bare idiom carries no digits (SCORE_RX misses it) and slipped past every
+          //     keyword. Near-zero false-positive risk: "all square" only ever means a level result in a
+          //     sports title (golf match-play "all square" is itself a tied-result reveal, still over-hide-
+          //     safe), and the leading \b keeps it clear of any word ending in "all" ("small square",
+          //     "install square" — the "all" sits mid-word with no boundary). "[- ]?" covers "all square"/
+          //     "all-square". Byte-identical to spoilers.ts.
+          //     "(?:runs?|running|ran) riot" is the blowout idiom soccer/WC recaps lean on for a side scoring
+          //     freely in a one-sided win ("Man City run riot", "Spain run riot in a 6-0 rout", "Mbappé runs
+          //     riot", "United ran riot") — a decisive-result reveal that names the dominant side yet carries no
+          //     digits when the score is omitted (SCORE_RX misses "City run riot again") and slipped past the
+          //     whole blowout family (thrash/thump/hammer/wallop/…): none of those verbs is "run", and bare
+          //     "run" is too common to be a keyword alone. That is why it is anchored to the "riot" object —
+          //     only the two-word "run riot" phrase matches, so bare "run"/"running"/"ran" never fires. "riot"
+          //     only ever completes this dominate-the-game idiom in a sports title (the crowd-trouble "fans run
+          //     riot" is a news headline, and this filter runs only on highlight/recap titles), and no in-scope
+          //     club/nation is named "Riot", so any residual over-hide errs to the over-hide-is-safe side.
+          //     Byte-identical to spoilers.ts.
+          //     "sees?[- ]?red"/"saw[- ]?red" catch the red-card reveal in its other stock verb phrasing,
+          //     beside the "red card" noun and the "send(?:s|ing)?[- ]?off"/"sent[- ]?off" form: "see red"/
+          //     "sees red"/"saw red" is how highlight titles narrate a dismissal at least as often ("Ramos
+          //     SEES RED", "Vinícius saw red late on") — the same match-event leak as "red card", with no
+          //     digits for SCORE_RX. Structured like the sibling "sees?[- ]?off"/"saw[- ]?off": "sees?"
+          //     covers see/sees, "saw[- ]?red" the past tense, and the required trailing "red" keeps bare
+          //     "see"/"saw"/"sees" from firing ("must-see", "saw the ball"). The leading \b keeps it clear
+          //     of "oversees red…" and the closing \b anchors whole-word "red". Its one benign collision —
+          //     the anger idiom "see red" — never appears in the per-match highlight titles this filter
+          //     runs on, and errs over-hide-safe. Byte-identical to spoilers.ts.
+          //     "pip(?:s|ped|ping)?" sits beside "edge\w*" in the narrow-win family: "pip"/"pipped" is the
+          //     stock idiom for edging a rival by a hair — a match ("Canada pip USA"), a table finish
+          //     ("Spain pip Germany to top spot"), or a title race ("pipped to the title"/"pipped at the
+          //     post"). Names the side that came out ahead yet carries no digits for SCORE_RX, and "edge\w*"
+          //     was the only synonym present. Enumerated (NOT "pip\w*", which would swallow "pipe"/
+          //     "pipeline"): "pip(?:s|ped|ping)?" + the trailing \b keeps whole words like "pipe"/"Pippa"/
+          //     "pippin" out, and no benign sense survives in per-clip highlight titles. Byte-identical to
+          //     spoilers.ts.
+          //     "share(?:s|d)? the points"/"a point (?:apiece|each)" join "share the spoils" in the draw
+          //     family: splitting the points is the stock idiom for a level result ("share the points",
+          //     "shared the points", "a point apiece", "a point each"), carrying no digits for SCORE_RX.
+          //     Anchored to "the points"; the singular "a point" before apiece/each keeps basketball
+          //     box-score plurals ("30 points apiece", "25 points each") out. Byte-identical to spoilers.ts.
+          //     "fight(?:s|ing)?[- ]?back"/"fought[- ]?back" complete the comeback-reveal family beside
+          //     "comeback"/"come[- ]from[- ]behind"/"(?:storm|roar|claw)…back"/"battl…back" — "fight back"
+          //     is the commonest way a recap title frames a rally, yet was the one member still missing
+          //     ("Spain fight back to level", "United fought back from two down", "Chelsea fighting back",
+          //     "Arsenal's fightback falls short"). Same score-state leak "comeback" hides (a side was
+          //     behind and rallied), no digits for SCORE_RX. Like "battl…back" the inflection sits on the
+          //     verb: "(?:s|ing)?" covers fight/fights/fighting, "fought[- ]?back" the irregular past. The
+          //     mandatory trailing "back" pins it to the comeback sense (bare "title fight"/"fight for the
+          //     ball" never fires) and the leading \b keeps "infighting"/"firefight" out; "[- ]?" covers
+          //     "fight back"/"fight-back"/"fightback". The one benign idiom "fight back tears" errs
+          //     over-hide-safe. Byte-identical to spoilers.ts.
+          //     "salvag\w*" catches the rescue-a-result reveal soccer/hockey recaps lean on constantly
+          //     ("Spurs salvage a late point", "United salvage a draw", "Barca salvage pride with a
+          //     consolation", "City salvaged a draw at the Etihad") — each names the outcome (a rescued
+          //     draw/point, or a consolation in a loss) just as plainly as the "share the spoils"/"held to
+          //     a draw" family beside it, yet the bare word carries no digits (SCORE_RX misses it) and
+          //     slipped past the whole draw set. In a per-match highlight/recap title "salvage" means
+          //     nothing but rescuing a lesser result — no in-scope club or nation is named anything
+          //     beginning with "salvag", and the literal wreck/salvage sense never appears in a match
+          //     title. The stem drops the trailing "e" (salvag, not salvage) so the -ing form matches too,
+          //     exactly like the "toppl\w*"/"trounc\w*" siblings, so the trailing \w* covers salvage/
+          //     salvages/salvaged/salvaging at negligible false-positive risk. Byte-identical to spoilers.ts.
+          //     "blank(?:s|ed|ing)" catches the shutout VERB — the sibling of the nil-reveal family
+          //     (shut[- ]?outs?/goalless/scoreless/clean[- ]?sheets?): to "blank" a side is to keep it
+          //     scoreless ("deGrom blanks Marlins", "Bruins blanked Canadiens", "City blanking United"),
+          //     with no digits for SCORE_RX. The inflection is REQUIRED — "(?:s|ed|ing)", not bare "blank"
+          //     or "blank\w*" — so the bare noun/adjective senses ("point-blank", "draws a blank", "blank
+          //     stare"/"blank check"/"fill in the blank") never fire, while blanks/blanked/blanking only
+          //     ever name the shutout in a per-match highlight title. No in-scope club or nation matches it;
+          //     any residual over-hide errs over-hide-safe. Byte-identical to spoilers.ts.
+          //     "consolation\w*" catches the consolation-goal reveal soccer/hockey recaps lean on constantly
+          //     ("Georgia grab a late consolation", "Barca's consolation strike") — a side only ever scores a
+          //     "consolation" when it is LOSING, so the word reveals a goal AND the result direction (the
+          //     scoring side is behind), with no digits for SCORE_RX. Sits beside "salvag\w*" in the
+          //     lesser-result family (that note even cites "salvage pride with a consolation"). The anchor is
+          //     the full stem "consolation", NOT bare "consol" — so the comfort verb console/consoling and
+          //     "consolidate\w*"/"consolidation" (both diverge after "consol") never fire; only consolation/
+          //     consolations/consolatory match, each naming a losing side's late goal in the titles this filter
+          //     sees. No in-scope club or nation is named it; the rare neutral "consolation final/bracket"
+          //     never appears here and would err over-hide-safe. Byte-identical to spoilers.ts.
+          const SPOILER_RX = /\b(walk[- ]?off|buzzer[- ]?beaters?|comeback|come[- ]from[- ]behind|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|fight(?:s|ing)?[- ]?back|fought[- ]?back|extra[- ]?innings?|overtime|extra[- ]?time|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|obliterat\w*|annihilat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|brush(?:es|ed|ing)?[- ]?aside|(?:runs?|running|ran) riot|to the sword|hammer(?:ed|ing)|batter(?:ed|ing)|cruise\w*|triumph\w*|romp\w*|upset\w*|clinch\w*|seals?|sealed|snatch\w*|sweep\w*|swept|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|sent[- ]?packing|advanc\w*|book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|crowned (?:world )?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|trophy)|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|(?:comes?|came)[- ]?out on top|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]hitter|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|salvag\w*|consolation\w*|share(?:s|d)? the spoils|share(?:s|d)? the points|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|all[- ]?square|equali[sz]\w*|level(?:l)?ers?|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|all three points)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks
