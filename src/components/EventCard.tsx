@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
 import { getTimeZone } from "@/lib/etDay";
@@ -96,7 +96,7 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
   );
 }
 
-function FighterRow({ f }: { f: FightBout["red"] }) {
+function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
   return (
     <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
       {f.flag ? (
@@ -109,13 +109,14 @@ function FighterRow({ f }: { f: FightBout["red"] }) {
       ) : (
         <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
       )}
-      {/* Match the game cards' team name exactly (GameCard): text-sm + the
-          .team-name class, so fighter names sit at the same size as every other
-          card's teams AND scale up in single-column large-card mode
-          (.ns-cards-lg .team-name). Before this they rendered a notch smaller
-          (text-xs) and stayed fixed while neighbouring team names grew — the
-          mismatch that kept UFC hidden from the switcher. */}
-      <span className="text-sm leading-none team-name truncate min-w-0" style={{ color: "var(--text)" }} title={f.name}>{f.name}</span>
+      {/* Track the game cards' team-name size at the CURRENT column width: MLB
+          renders full names at text-sm (14px) but drops to abbreviations at
+          text-xs (12px) once the column is too narrow (useAbbreviations). Fighter
+          names can't abbreviate, so we mirror only the SIZE — text-xs when the
+          column is narrow (compact), text-sm otherwise — so a fighter name is
+          never bigger than the team name in the MLB column beside it. Keeps the
+          .team-name class so single-column large mode still scales it to 1rem. */}
+      <span className={`${compact ? "text-xs" : "text-sm"} leading-none team-name truncate min-w-0`} style={{ color: "var(--text)" }} title={f.name}>{f.name}</span>
       <span className="flex-1 min-w-0" />
       {f.record && (
         <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none" style={{ color: "var(--text-muted)" }}>{f.record}</span>
@@ -125,13 +126,14 @@ function FighterRow({ f }: { f: FightBout["red"] }) {
 }
 
 function FightCard({
-  fight, label, broadcasts, loadingId, onPlay,
+  fight, label, broadcasts, loadingId, onPlay, compact,
 }: {
   fight: FightBout;
   label?: string;
   broadcasts: string[];
   loadingId: string | null;
   onPlay: (id: string, query: string, channel?: string) => void;
+  compact: boolean;
 }) {
   const isLive = fight.state === "in";
   const isPost = fight.state === "post";
@@ -141,20 +143,23 @@ function FightCard({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
       {/* Status bar — mirrors the game cards' meta row exactly so a UFC card is
-          the SAME HEIGHT as an MLB card: status/time left (text-[11px]),
-          broadcast right, and a CENTER slot (like the rated cards' rating badge)
-          for the bout tag. Main/Co-Main lives here instead of its own row;
-          non-headline bouts show their weight class in the same slot — so no
-          bout ever adds an extra row. */}
-      <div className="flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-[11px]">
+          the SAME HEIGHT as an MLB card: status/time left, broadcast right, and a
+          CENTER slot (like the rated cards' rating badge) for the bout tag.
+          Main/Co-Main lives here instead of its own row; non-headline bouts show
+          their weight class in the same slot — so no bout ever adds an extra row.
+          On a narrow column (compact) the row can't hold time + pill + network
+          without them overlapping, so it drops to 10px and keeps just time + the
+          Main/Co-Main tag (the repeated-per-card broadcast + weight class fall
+          away), mirroring how the game board tightens its meta row at 3 columns. */}
+      <div className={`flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] ${compact ? "text-[10px]" : "text-[11px]"}`}>
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {status}
         </span>
-        {(label || fight.weightClass) && (
+        {(label || (!compact && fight.weightClass)) && (
           <span className="flex-1 flex justify-center min-w-0">
             {label ? (
-              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
+              <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
                 style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}>
                 {label}
               </span>
@@ -163,13 +168,13 @@ function FightCard({
             )}
           </span>
         )}
-        {broadcasts.length > 0 && (
+        {!compact && broadcasts.length > 0 && (
           <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
         )}
       </div>
       <div className="flex flex-col gap-y-0.5">
-        <FighterRow f={fight.red} />
-        <FighterRow f={fight.blue} />
+        <FighterRow f={fight.red} compact={compact} />
+        <FighterRow f={fight.blue} compact={compact} />
       </div>
       {isPost && (
         <div className="mt-1 sm:mt-2 flex gap-1">
@@ -190,10 +195,28 @@ export default function EventCard({
 }) {
   const { loadingId, play } = useHighlightPlayer(onPlayHighlight);
 
+  // "compact" tracks the ACTUAL rendered card width (not a fixed CSS breakpoint)
+  // so fighter names + the meta row shrink exactly when the MLB column beside
+  // them flips to abbreviations. The game board abbreviates once a full team name
+  // no longer fits its cell; equal-width columns mean that happens at roughly the
+  // same width for every column. Measured against the live board (MLB shows
+  // "Rays" at a ~161px card, abbreviates to "TB" by ~146px), so the 155px
+  // threshold flips this card's names full↔small in lock-step with MLB — no
+  // reaching across components for MLB's private useAbbreviations state.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setCompact(el.clientWidth < 155));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // ── UFC: one card per bout, main event first ──
   if (event.kind === "ufc" && event.fights?.length) {
     return (
-      <div className="flex flex-col gap-1.5 sm:gap-2">
+      <div ref={rootRef} className="flex flex-col gap-1.5 sm:gap-2">
         {event.fights.map((f, i) => (
           <FightCard
             key={f.id}
@@ -202,6 +225,7 @@ export default function EventCard({
             broadcasts={event.broadcasts}
             loadingId={loadingId}
             onPlay={play}
+            compact={compact}
           />
         ))}
       </div>
