@@ -35,7 +35,9 @@ function whenLabel(iso?: string): string {
   // (same guard as weather.ts / etDay.ts / DateNav.ts).
   const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   const midnight = hm === "00:00" || hm === "24:00";
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
+  // Strip the space before AM/PM so it reads "8:00PM" like the game cards'
+  // formatTime (GameCard's "1:10PM"), not "8:00 PM".
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).replace(/(\d)\s+([AP]M)\b/i, "$1$2");
   const wd = d.toLocaleDateString("en-US", { weekday: "short", timeZone: tz });
   if (sameDay) return midnight ? "" : time;
   return midnight ? wd : `${wd} ${time}`;
@@ -138,31 +140,37 @@ function FightCard({
     <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
-      {label && (
-        <div className="mb-1 flex justify-center">
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-            style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}>
-            {label}
-          </span>
-        </div>
-      )}
-      {/* Status bar — time/day left, broadcast right (matches the game cards) */}
-      <div className="flex items-center justify-between gap-2 mb-1 sm:mb-2 h-[18px]">
-        <span className="text-xs sm:text-sm flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
+      {/* Status bar — mirrors the game cards' meta row exactly so a UFC card is
+          the SAME HEIGHT as an MLB card: status/time left (text-[11px]),
+          broadcast right, and a CENTER slot (like the rated cards' rating badge)
+          for the bout tag. Main/Co-Main lives here instead of its own row;
+          non-headline bouts show their weight class in the same slot — so no
+          bout ever adds an extra row. */}
+      <div className="flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-[11px]">
+        <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {status}
         </span>
+        {(label || fight.weightClass) && (
+          <span className="flex-1 flex justify-center min-w-0">
+            {label ? (
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
+                style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}>
+                {label}
+              </span>
+            ) : (
+              <span className="truncate" style={{ color: "var(--text-muted)" }}>{fight.weightClass}</span>
+            )}
+          </span>
+        )}
         {broadcasts.length > 0 && (
-          <span className="text-[10px] sm:text-xs truncate shrink-0" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
+          <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
         )}
       </div>
       <div className="flex flex-col gap-y-0.5">
         <FighterRow f={fight.red} />
         <FighterRow f={fight.blue} />
       </div>
-      {fight.weightClass && (
-        <div className="text-[10px] sm:text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>{fight.weightClass}</div>
-      )}
       {isPost && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           <PlayBtn label="UFC" loading={loadingId === fight.id} onClick={() => onPlay(fight.id, fight.highlightQuery, "UFC")} />
@@ -190,7 +198,7 @@ export default function EventCard({
           <FightCard
             key={f.id}
             fight={f}
-            label={i === 0 ? "Main Event" : i === 1 ? "Co-Main Event" : undefined}
+            label={i === 0 ? "Main" : i === 1 ? "Co-Main" : undefined}
             broadcasts={event.broadcasts}
             loadingId={loadingId}
             onPlay={play}
