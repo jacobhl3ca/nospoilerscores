@@ -52,3 +52,9 @@ share-cards-out/
 
 # Marketing drafts — live in ~/hidescore-backlog/worldcup-marketing/, never in the public repo
 MARKETING_*.md
+
+# Playwright visual-regression test output (baselines in tests/visual/**-snapshots/ ARE committed)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
