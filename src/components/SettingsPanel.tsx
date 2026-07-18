@@ -221,8 +221,41 @@ export default function SettingsPanel({
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
-    drawerRef.current?.focus();
-    return () => opener?.focus?.();
+    const drawer = drawerRef.current;
+    drawer?.focus();
+    // Trap Tab within the drawer (WCAG 2.4.3) — mirror GameDetailModal, whose
+    // focus-trap comment invited the other overlays to follow. On its own,
+    // aria-modal="true" only tells assistive tech the page behind is inert; it
+    // does NOT stop a sighted keyboard user from Tabbing out of the drawer into
+    // the scores/news content behind it. Wrap focus at the first/last focusable
+    // control so Tab / Shift+Tab cycle inside the panel until Escape or the
+    // backdrop dismisses it, matching the focus-in / restore this effect already
+    // does. Focusables are queried live on each keypress so the async team-picker
+    // / league-dropdown controls that mount as the user drills in are included,
+    // and offsetParent filters out any hidden (display:none) control.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !drawer) return;
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === drawer) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      opener?.focus?.();
+    };
   }, [open]);
 
   // Lock body scroll while open
