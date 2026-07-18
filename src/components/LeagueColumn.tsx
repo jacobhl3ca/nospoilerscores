@@ -71,6 +71,14 @@ interface LeagueColumnProps {
   // Optional content rendered at the very bottom of the column, under the
   // games (e.g. the World Cup "What matters today" stakes pill).
   footer?: ReactNode;
+  // Reports this column's live useAbbreviations state up to HomeContent (null =
+  // this column has no team names to measure). HomeContent folds the reports
+  // into `namesCompact`, which comes back down so event columns (UFC) can size
+  // fighter names in lock-step with the game columns' actual abbreviate/full
+  // flip — that flip depends on the day's longest team name, so no fixed width
+  // threshold over here can reproduce it.
+  onAbbrevReport?: (key: string, abbrev: boolean | null) => void;
+  namesCompact?: boolean;
 }
 
 // DEV preview: force the Big Inning subtitle to render in the LIVE state
@@ -592,6 +600,8 @@ export default function LeagueColumn({
   widthClassName = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]",
   condense,
   footer,
+  onAbbrevReport,
+  namesCompact,
 }: LeagueColumnProps) {
   const columnRef = useRef<HTMLDivElement>(null);
   const swapRef = useRef<HTMLDivElement>(null);
@@ -848,6 +858,21 @@ export default function LeagueColumn({
     ro.observe(el);
     return () => ro.disconnect();
   }, [checkIfFullNamesFit]);
+
+  // Report the abbreviation state up (see onAbbrevReport in the props). Keyed
+  // by slot (the same league can appear in two columns via the swap menu), and
+  // only while this column actually renders team names — a golf/event/empty
+  // column reports null so its untouched initial `true` can't force every
+  // fighter name compact on a board with no game columns at all.
+  const hasTeamNames =
+    !league.golfTournament && !league.eventCard &&
+    (league.games.length > 0 || (league.nextGameDay?.games?.length ?? 0) > 0 || (league.previousGameDay?.games?.length ?? 0) > 0);
+  useEffect(() => {
+    if (!onAbbrevReport) return;
+    const key = `${slotIdx ?? league.sport}`;
+    onAbbrevReport(key, hasTeamNames ? useAbbreviations : null);
+    return () => onAbbrevReport(key, null);
+  }, [onAbbrevReport, slotIdx, league.sport, hasTeamNames, useAbbreviations]);
 
   const topMatchups = sortByMatchups ?? false;
 
@@ -1333,7 +1358,7 @@ export default function LeagueColumn({
           onPlayHighlight={onPlayHighlight}
         />
       ) : league.eventCard && section !== "finished" ? (
-        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} />
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} namesCompact={namesCompact} />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (

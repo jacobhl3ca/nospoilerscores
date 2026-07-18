@@ -400,6 +400,24 @@ export default function HomeContent({
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
   const [showNewsExplainer, setShowNewsExplainer] = useState(false);
+  // Per-column team-name abbreviation reports (keyed by slot; null-report =
+  // column left/has no names). Any abbreviated game column → namesCompact, so
+  // the UFC column's fighter names shrink exactly when the team names beside
+  // them do — the game columns' flip depends on the day's longest team name,
+  // which no width threshold inside the UFC column could know.
+  const [colAbbrev, setColAbbrev] = useState<Record<string, boolean>>({});
+  const onAbbrevReport = useCallback((key: string, abbrev: boolean | null) => {
+    setColAbbrev((prev) => {
+      if (abbrev === null) {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return prev[key] === abbrev ? prev : { ...prev, [key]: abbrev };
+    });
+  }, []);
+  const namesCompact = Object.values(colAbbrev).some(Boolean);
   // Dialog containers for the ratings/news explainer warnings — targeted by the
   // focus-management effect below so keyboard/SR users land inside the overlay.
   const ratingsExplainerRef = useRef<HTMLDivElement>(null);
@@ -1181,7 +1199,7 @@ export default function HomeContent({
     const seen = new Set<Sport>();
     const options: { sport: Sport; label: string }[] = [];
     for (const league of ALL_LEAGUES) {
-      if (league.hidden) continue; // BACKLOG: F1/UFC fully hidden from the UI for now
+      if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       if (seen.has(league.sport)) continue;
       if (!isLeagueActive(league, viewDate)) continue;
       seen.add(league.sport);
@@ -2641,6 +2659,8 @@ export default function HomeContent({
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
+              onAbbrevReport,
+              namesCompact,
             };
             // Per-slot swap dropdowns: every column lists every in-season
             // league. Leagues already shown in another column come through

@@ -109,14 +109,15 @@ function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
       ) : (
         <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
       )}
-      {/* Track the game cards' team-name size at the CURRENT column width: MLB
-          renders full names at text-sm (14px) but drops to abbreviations at
-          text-xs (12px) once the column is too narrow (useAbbreviations). Fighter
-          names can't abbreviate, so we mirror only the SIZE — text-xs when the
-          column is narrow (compact), text-sm otherwise — so a fighter name is
-          never bigger than the team name in the MLB column beside it. Keeps the
-          .team-name class so single-column large mode still scales it to 1rem. */}
-      <span className={`${compact ? "text-xs" : "text-sm"} leading-none team-name truncate min-w-0`} style={{ color: "var(--text)" }} title={f.name}>{f.name}</span>
+      {/* Mirror the game cards' team-name classes exactly: abbreviated team
+          names render text-xs sm:text-sm, full names text-sm (GameCard). Fighter
+          names can't abbreviate, so compact mirrors only the SIZE — including
+          the sm: step, so on a desktop board whose game columns abbreviate at
+          14px the fighter names are 14px too, not a mismatched 12px. The full
+          branch keeps .team-name so single-column large mode scales it to 1rem
+          alongside the team names (abbreviations don't carry it in GameCard
+          either). */}
+      <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={f.name}>{f.name}</span>
       <span className="flex-1 min-w-0" />
       {f.record && (
         <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none" style={{ color: "var(--text-muted)" }}>{f.record}</span>
@@ -126,7 +127,7 @@ function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
 }
 
 function FightCard({
-  fight, label, broadcasts, loadingId, onPlay, compact,
+  fight, label, broadcasts, loadingId, onPlay, compact, metaCompact,
 }: {
   fight: FightBout;
   label?: string;
@@ -134,6 +135,7 @@ function FightCard({
   loadingId: string | null;
   onPlay: (id: string, query: string, channel?: string) => void;
   compact: boolean;
+  metaCompact: boolean;
 }) {
   const isLive = fight.state === "in";
   const isPost = fight.state === "post";
@@ -147,16 +149,18 @@ function FightCard({
           CENTER slot (like the rated cards' rating badge) for the bout tag.
           Main/Co-Main lives here instead of its own row; non-headline bouts show
           their weight class in the same slot — so no bout ever adds an extra row.
-          On a narrow column (compact) the row can't hold time + pill + network
-          without them overlapping, so it drops to 10px and keeps just time + the
-          Main/Co-Main tag (the repeated-per-card broadcast + weight class fall
-          away), mirroring how the game board tightens its meta row at 3 columns. */}
-      <div className={`flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] ${compact ? "text-[10px]" : "text-[11px]"}`}>
+          The game-meta-row class + text-xs give it the game cards' meta font
+          (12px, and the .ns-board-tight rules drop it to 10px on the tight
+          3-column mobile board exactly when MLB's meta row drops). Below ~190px
+          the row can't hold time + Co-Main pill + "Paramount+" at full size
+          without overlapping, so metaCompact keeps just time + the Main/Co-Main
+          tag — the repeated-per-card broadcast and the weight class fall away. */}
+      <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {status}
         </span>
-        {(label || (!compact && fight.weightClass)) && (
+        {(label || (!metaCompact && fight.weightClass)) && (
           <span className="flex-1 flex justify-center min-w-0">
             {label ? (
               <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
@@ -168,7 +172,7 @@ function FightCard({
             )}
           </span>
         )}
-        {!compact && broadcasts.length > 0 && (
+        {!metaCompact && broadcasts.length > 0 && (
           <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
         )}
       </div>
@@ -188,30 +192,44 @@ function FightCard({
 export default function EventCard({
   event,
   onPlayHighlight,
+  namesCompact,
 }: {
   event: LeagueEventCard;
   leagueLabel?: string;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  // The board-level "game columns are showing abbreviated team names" signal
+  // (HomeContent folds it from every game column's live useAbbreviations state).
+  namesCompact?: boolean;
 }) {
   const { loadingId, play } = useHighlightPlayer(onPlayHighlight);
 
-  // "compact" tracks the ACTUAL rendered card width (not a fixed CSS breakpoint)
-  // so fighter names + the meta row shrink exactly when the MLB column beside
-  // them flips to abbreviations. The game board abbreviates once a full team name
-  // no longer fits its cell; equal-width columns mean that happens at roughly the
-  // same width for every column. Measured against the live board (MLB shows
-  // "Rays" at a ~161px card, abbreviates to "TB" by ~146px), so the 155px
-  // threshold flips this card's names full↔small in lock-step with MLB — no
-  // reaching across components for MLB's private useAbbreviations state.
+  // Fighter-name size follows namesCompact — the game columns' REAL
+  // abbreviate/full flip. That flip depends on the day's longest team name (and
+  // the board's gap/rank CSS), so a width threshold here can only ever guess it:
+  // the shipped 155px guess was measured on one day's slate and drifted the
+  // very next day (MLB still abbreviated at 157px columns while fighter names
+  // had already expanded — "UFC bigger"). The width fallback below survives
+  // only for a board with no game columns to report (UFC-only), where there's
+  // nothing to match anyway. metaCompact stays width-driven on purpose: what
+  // the meta row can hold (time + Co-Main pill + "Paramount+" needs ~190px at
+  // full size before they collide) is a property of THIS card's strings, not of
+  // the neighbours' team names.
   const rootRef = useRef<HTMLDivElement>(null);
-  const [compact, setCompact] = useState(false);
+  const [colWidth, setColWidth] = useState(0);
   useEffect(() => {
     const el = rootRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setCompact(el.clientWidth < 155));
+    const ro = new ResizeObserver(() => setColWidth(el.clientWidth));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  const compact = namesCompact ?? (colWidth > 0 && colWidth < 155);
+  // colWidth 0 = not yet measured — start compact so the first paint can't
+  // flash the overlapping full row. 210px is what the widest full row actually
+  // needs at the meta font: "8:00PM" + the Co-Main pill (or "Lightweight") +
+  // "Paramount+" + gaps ≈ 195px — below that the pill overflowed its center
+  // slot into the time and weight classes truncated to fragments ("Ligh…").
+  const metaCompact = colWidth < 210;
 
   // ── UFC: one card per bout, main event first ──
   if (event.kind === "ufc" && event.fights?.length) {
@@ -226,6 +244,7 @@ export default function EventCard({
             loadingId={loadingId}
             onPlay={play}
             compact={compact}
+            metaCompact={metaCompact}
           />
         ))}
       </div>
