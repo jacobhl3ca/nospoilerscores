@@ -45,7 +45,13 @@ function whenLabel(iso?: string): string {
 
 function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: string) => void) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const play = async (id: string, query: string, channel?: string) => {
+  // strict → the worker oembed-verifies the result's uploader equals `channel`
+  // (drops title-only reuploads from random channels). Used by F1, whose
+  // official FORMULA 1 channel is the only acceptable in-app source; when
+  // nothing strict matches, the openExternal fallback below sends the user to
+  // a YouTube search OUTSIDE the app instead of playing an unvetted upload in
+  // the masked player.
+  const play = async (id: string, query: string, channel?: string, strict?: boolean) => {
     const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     // Route the YouTube-search fallback through openExternal (not raw
     // window.open) so it behaves like every other external YouTube open in the
@@ -56,7 +62,7 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     // missing the handoff — matching GameHighlights' openExternal fallbacks.
     if (!onPlayHighlight) { openExternal(fallback); return; }
     setLoadingId(id);
-    const videoId = await fetchFirstVideoId(query, channel);
+    const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, strict);
     setLoadingId(null);
     if (videoId) onPlayHighlight(videoId, fallback);
     else openExternal(fallback);
@@ -254,58 +260,52 @@ export default function EventCard({
   // ── F1: single race tile ──
   const isLive = event.state === "in";
   const isPost = event.state === "post";
-  const fullWhen = (() => {
-    const d = new Date(event.date);
-    if (isNaN(d.getTime())) return "";
-    const tz = getTimeZone();
-    // Drop the time for a midnight (TBD) placeholder date, matching whenLabel
-    // above and the game cards: an upcoming race whose session time ESPN hasn't
-    // set yet arrives as 00:00, and rendering it as "12:00 AM" reads as a real
-    // (wrong) start time. Detect it in the SAME zone the time is shown in (tz);
-    // "24:00" guards the value some ICU builds emit for midnight (same guard as
-    // whenLabel / weather.ts / etDay.ts / DateNav.ts). Real times still show.
-    const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
-    const midnight = hm === "00:00" || hm === "24:00";
-    const opts: Intl.DateTimeFormatOptions = midnight
-      ? { weekday: "short", month: "short", day: "numeric", timeZone: tz }
-      : { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: tz };
-    return d.toLocaleString("en-US", opts);
-  })();
+  // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
+  // whenLabel ("Sat 9:00AM" — day+time, no long date). The old tile showed the
+  // raw statusDetail left and a full "Sat, Jul 18, 9:00 AM" date right, a
+  // format no other card uses; whenLabel also already handles the midnight
+  // (TBD) placeholder, so the bespoke fullWhen block is gone with it.
+  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(event.date) || event.statusDetail;
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
 
   return (
-    <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    <div ref={rootRef} className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
-      {/* Status bar — status left, date right (matches the game cards) */}
-      <div className="flex items-center justify-between gap-2 mb-1 sm:mb-2 h-[18px]">
-        <span className="text-xs sm:text-sm font-medium flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
+      {/* Meta row — game-meta-row like FightCard, so an F1 tile is the SAME
+          height/font as an MLB card: status/time left, broadcast right (dropped
+          when the column is too narrow, same metaCompact rule as UFC). */}
+      <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
+        <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
-          {event.statusDetail}
+          {status}
         </span>
-        {fullWhen && <span className="text-[10px] sm:text-xs shrink-0" style={{ color: "var(--text-muted)" }}>{fullWhen}</span>}
+        {!metaCompact && event.broadcasts.length > 0 && (
+          <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{event.broadcasts[0]}</span>
+        )}
       </div>
       <div className="flex items-start gap-1 sm:gap-1.5">
         <span aria-hidden className="text-base leading-none mt-0.5">🏁</span>
         <div className="min-w-0 flex-1">
-          <div className="text-xs sm:text-sm font-medium leading-snug" style={{ color: "var(--text)" }}>{event.title}</div>
-          <div className="flex items-center justify-between gap-2 mt-0.5">
-            {event.subtitle && (
-              <span className="text-[11px] truncate" style={{ color: "var(--text-muted)" }} title={event.subtitle}>{event.subtitle}</span>
-            )}
-            {event.broadcasts.length > 0 && (
-              <span className="text-[10px] sm:text-xs shrink-0" style={{ color: "var(--text-muted)" }}>{event.broadcasts[0]}</span>
-            )}
-          </div>
+          {/* Race name gets the fighter/team-name treatment: text-sm .team-name
+              at full size, text-xs sm:text-sm when the game columns abbreviate
+              (compact) — not the old always-small font-medium. Race names are
+              long, so it wraps instead of truncating. */}
+          <div className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-snug`} style={{ color: "var(--text)" }}>{event.title}</div>
+          {event.subtitle && (
+            <div className="text-[10px] sm:text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }} title={event.subtitle}>{event.subtitle}</div>
+          )}
         </div>
       </div>
-      {/* F1 highlights are blocked from embedding by Formula One Management, so
-          offer BOTH the official channel and an unscoped search — lets us test
-          which (if either) actually plays in the masked player. */}
+      {/* One official-channel button, like UFC's — the unscoped "Search" test
+          button is gone. strict=true hard-gates the in-app result to the real
+          FORMULA 1 channel (oembed-verified uploader); FOM blocks embedding on
+          most of its uploads, so when nothing strict/playable matches, the
+          fallback opens a YouTube search externally rather than playing some
+          random reupload in the masked player. */}
       {isPost && (
         <div className="mt-1 sm:mt-2 flex gap-1">
-          <PlayBtn label="F1" loading={loadingId === "f1-official"} onClick={() => play("f1-official", f1Query, event.officialChannel)} />
-          <PlayBtn label="Search" loading={loadingId === "f1-search"} onClick={() => play("f1-search", f1Query)} />
+          <PlayBtn label="F1" loading={loadingId === "f1-official"} onClick={() => play("f1-official", f1Query, event.officialChannel, true)} />
         </div>
       )}
     </div>
