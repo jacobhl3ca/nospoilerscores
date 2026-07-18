@@ -85,8 +85,40 @@ export default function GameDetailModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus();
-    return () => opener?.focus?.();
+    const dialog = dialogRef.current;
+    dialog?.focus();
+    // Trap Tab within the dialog (WCAG 2.4.3). aria-modal="true" only tells
+    // assistive tech the page behind is inert — it does NOT stop a sighted
+    // keyboard user from Tabbing straight out of the overlay into the content
+    // behind it. Wrap focus at the first/last focusable control so Tab and
+    // Shift+Tab cycle inside the modal until Escape or Close dismisses it,
+    // matching the focus-in / restore this effect already does. Focusables are
+    // queried live on each keypress so async content (highlights, video embed)
+    // that mounts after open is included, and offsetParent filters out any
+    // hidden control so focus never lands on a display:none element.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      opener?.focus?.();
+    };
   }, []);
 
   // Lock body scroll while the modal is open (same technique as VideoModal /
