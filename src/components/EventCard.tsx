@@ -288,9 +288,11 @@ export default function EventCard({
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
   // Clicking the tile body opens the ESPN race page — the game cards' "click
   // for more details" affordance (there's no F1 GameDetailModal; ESPN's race
-  // hub IS the detail view, results-gated behind its own page so no spoiler
-  // leaks onto ours). PlayBtn stopPropagations so highlights don't also fire this.
-  const clickable = !!event.eventUrl;
+  // hub is the detail view). Pre/live ONLY, mirroring GameCard's rule that a
+  // finished game never links to ESPN (the page shows the finishing order — a
+  // result spoiler). After the race the highlight button is the affordance.
+  // PlayBtn stopPropagations so highlights don't also fire this.
+  const clickable = !!event.eventUrl && !isPost;
   const openDetails = () => { if (event.eventUrl) openExternal(event.eventUrl); };
 
   return (
