@@ -110,6 +110,13 @@ const JSON_LD = {
       // crawlers and voice assistants target the right locale.
       inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      // Tie this product node to the publishing Organization below via its @id,
+      // so the four sibling @graph nodes read as one linked entity instead of
+      // four unrelated ones. `publisher` is a valid CreativeWork property, and
+      // referencing the Organization's @id is schema.org's standard node-linking
+      // pattern — it tells crawlers "HideScore the app is published by HideScore
+      // the Organization," strengthening entity/knowledge-panel understanding.
+      publisher: { "@id": "https://hidescore.com/#organization" },
     },
     {
       // No SearchAction: the site has no URL-driven search endpoint (team
@@ -121,6 +128,9 @@ const JSON_LD = {
       name: "HideScore",
       url: "https://hidescore.com",
       inLanguage: "en",
+      // Same publisher link as the WebApplication node — points the site entity
+      // at the Organization's @id below (schema.org node reference).
+      publisher: { "@id": "https://hidescore.com/#organization" },
     },
     {
       "@type": "MobileApplication",
@@ -142,6 +152,9 @@ const JSON_LD = {
       // here would advertise a native app crawlers/users following the URL can't
       // install. Restore this node alongside the iOS one when Play goes public.
       "@type": "Organization",
+      // Stable @id so the WebApplication/WebSite nodes above can reference this
+      // Organization as their `publisher`, linking the @graph into one entity.
+      "@id": "https://hidescore.com/#organization",
       name: "HideScore",
       url: "https://hidescore.com",
       // Google lists `description` as a recommended Organization property — it
