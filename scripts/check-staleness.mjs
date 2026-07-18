@@ -27,8 +27,8 @@ const NEWS_HOURLY = [
   // exactly the family the hourly bake rate-limits first (see the batching fix).
   "reddit-epl", "reddit-fifa", "reddit-general", "reddit-golf", "reddit-mlb",
   "reddit-mls", "reddit-nba", "reddit-ncaaf", "reddit-ncaam", "reddit-ncaaw",
-  "reddit-nfl", "reddit-nhl", "reddit-soccer", "reddit-tennis", "reddit-ucl",
-  "reddit-uel", "reddit-ufc", "reddit-wnba",
+  "reddit-f1", "reddit-nfl", "reddit-nhl", "reddit-soccer", "reddit-tennis",
+  "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-wnba",
   "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",
 ];
