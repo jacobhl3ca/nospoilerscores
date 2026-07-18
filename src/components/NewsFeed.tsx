@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import { getTimeZone } from "@/lib/etDay";
+import { handleExternalClick } from "@/lib/openExternal";
 import {
   NewsSource,
   PlayHandler,
@@ -291,9 +292,10 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
       {/* Actions */}
       <div className="flex items-center gap-2 px-4 pt-2 pb-3">
         <a
-          href={item.articleUrl || "#"}
+          href={item.articleUrl || undefined}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
           style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}
         >
