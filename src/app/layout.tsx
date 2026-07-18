@@ -144,6 +144,12 @@ const JSON_LD = {
       "@type": "Organization",
       name: "HideScore",
       url: "https://hidescore.com",
+      // Google lists `description` as a recommended Organization property — it
+      // feeds the entity/knowledge-panel understanding of who publishes the
+      // site. Every sibling node here already carries rich metadata; this one
+      // was the lone outlier. Reuse SITE_DESC so the brand summary stays in one
+      // place and matches the <meta name="description"> and OG/Twitter copy.
+      description: SITE_DESC,
       logo: "https://hidescore.com/icon-512.png",
       sameAs: [
         "https://apps.apple.com/app/hidescore/id6766885311",
