@@ -311,6 +311,13 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
             window.open(item.articleUrl, "_blank", "noopener,noreferrer");
           }
         }}
+        // The button wraps the thumbnail (alt="") + headline, so its accessible
+        // name is just the headline — a screen-reader/voice-control user hears the
+        // title but gets no cue this control PLAYS a highlight inline (vs. the
+        // sibling <a> rows that open an article). Name the action explicitly; the
+        // headline is kept inside the label so "Label in Name" (WCAG 2.5.3) still
+        // holds and voice users can say the visible title to activate it.
+        aria-label={`Play highlight: ${item.headline}`}
         className={commonCls}
         style={commonStyle}
       >

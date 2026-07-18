@@ -250,9 +250,11 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
     const otherTxt =
       other.s === "eliminated"
         ? `${other.name} are out`
-        : SAFE.has(other.s)
+        : other.s === "through"
           ? `${other.name} are already through`
-          : `${other.name} need a result too`;
+          : other.s === "drawsafe"
+            ? `${other.name} are all but through (a draw seals it)`
+            : `${other.name} need a result too`;
     // A "best8" side can't reach the group's top two at all — its only route
     // left is the best-third-place race. A "mustwin" side, by contrast, climbs
     // straight into the top two by winning (see the Status doc: mustwin = only
@@ -267,6 +269,15 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
 
   if (tier === "decider") {
     if (safe.length === 1 && live.length === 1) {
+      // Distinguish an already-qualified "through" side (advances on ANY result)
+      // from a "drawsafe" one (a draw secures top-two) — the same split the
+      // seeding branch below already makes. The old shared copy said both "go
+      // through with a draw" AND cast the safe side as a possible "loser"
+      // dropping into the best-third-place scramble, which is false for a through
+      // team: it can't finish outside the top two no matter the result.
+      if (safe[0].s === "through") {
+        return `${cap(safe[0].name)} are already through; ${live[0].name} are fighting for the other top-two spot — win it or risk the best-third-place scramble.`;
+      }
       return `${cap(safe[0].name)} go through with a draw; ${live[0].name} need a win to stay in the top two. The loser drops into the best-third-place scramble.`;
     }
     // One side is already out (ESPN "Eliminated") while the other's top-two
@@ -291,6 +302,16 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
         ? `${s.name} are already through`
         : `${s.name} are all but through (a draw seals it)`;
     return `${through} and ${out[0].name} are out — the result only affects ${s.name}'s seeding, so top ${group} for an easier path.`;
+  }
+  // Both sides are already out (out.length === 2) — the only combination left
+  // in this tier once safe===2 and safe===1/out===1 are handled above. Neither
+  // team can advance, so there is nothing at stake: NOT seeding, NOT goal
+  // difference (both matter only to teams still in the tournament). The old
+  // fallback ("nothing left to settle but seeding and goal difference") wrongly
+  // cast this dead rubber as a fight for group position, mirroring the decider
+  // tier's "already out" wording above but for the both-eliminated case.
+  if (out.length === 2) {
+    return `Both are already out — a dead rubber with nothing at stake.`;
   }
   return `${group}: nothing left to settle but seeding and goal difference.`;
 }

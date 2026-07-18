@@ -307,7 +307,3 @@ export async function resolveHighlightVideo(
   ]);
   return chanHit || datedUnscoped || undatedHit;
 }
-
-export function getYouTubeEmbedUrl(videoId: string): string {
-  return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&rel=0&modestbranding=1`;
-}

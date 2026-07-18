@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
+import { getTimeZone } from "@/lib/etDay";
 import {
   NewsSource,
   PlayHandler,
@@ -154,8 +155,24 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
       {/* Source + time */}
       <div className="flex items-center gap-2 px-4 pt-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
         <span>{item.section || "News"}</span>
-        {item.published && <span aria-hidden="true">·</span>}
-        {item.published && <span className="font-medium normal-case tracking-normal">{formatPublished(item.published)}</span>}
+        {item.published && formatPublished(item.published) && <span aria-hidden="true">·</span>}
+        {item.published && formatPublished(item.published) && (
+          // Wrap the relative "3h ago" in a semantic <time dateTime> so assistive
+          // tech and any crawler get the machine-readable ISO instant instead of
+          // only the fuzzy relative text, with a title tooltip surfacing the exact
+          // publish time (in the app's effective zone via getTimeZone(), matching
+          // every other absolute-instant label). Mirrors VideoModal's ArticleMeta
+          // and GameDetailModal's <time dateTime> treatment — this Feed timestamp
+          // was the lone relative-time display still rendered in a bare <span>.
+          // Visible text is unchanged.
+          <time
+            dateTime={item.published}
+            title={new Date(item.published).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: getTimeZone() })}
+            className="font-medium normal-case tracking-normal"
+          >
+            {formatPublished(item.published)}
+          </time>
+        )}
       </div>
 
       {/* Text-only headlines open the same paged modal as every other post.
@@ -166,6 +183,15 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         onClick={hasMedia ? (() => setPeek((v) => !v)) : onOpen}
         className="block w-full text-left px-4 pt-2 pb-3 cursor-pointer"
         title={hasMedia ? "Tap to reveal/hide this headline" : "Open post"}
+        // For a media post this button is a spoiler peek/blur toggle on the
+        // headline, but the only cue is a CSS blur (the `.peek` class) that
+        // assistive tech can't perceive — so expose the toggle state (WCAG
+        // 4.1.2), mirroring VideoModal's PeekBlur and the comments-strip
+        // disclosure below (which the comment there already claims this toggle
+        // matches). When !hasMedia the button is an "open post" action, not a
+        // toggle, so neither attribute applies.
+        aria-pressed={hasMedia ? peek : undefined}
+        aria-label={hasMedia ? (peek ? "Hide headline" : "Reveal headline (spoiler)") : undefined}
       >
         <h3 className={`news-title text-base sm:text-lg font-semibold leading-snug ${peek ? "peek" : ""}`} style={{ color: "var(--text)" }}>
           {item.headline}
@@ -189,6 +215,12 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
               decoding="async"
               className="block w-full max-h-[70vh] object-contain"
               draggable={false}
+              // If the proxied thumbnail 404s (or the image proxy fails), hide the
+              // broken-image glyph so the media button degrades cleanly to its black
+              // tile instead of rendering a busted icon inside the tap target —
+              // matching the onError guard every other remote <img> in the app uses
+              // (NewsColumn's twin thumbnails, AlignedVideoStrip, GameCard, …).
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
           ) : (
             <div className="w-full aspect-video flex items-center justify-center" style={{ color: "var(--text-muted)" }}>
@@ -211,6 +243,11 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
           <button
             type="button"
             onClick={() => setShowComments((v) => !v)}
+            // Disclosure toggle: expose the open/closed state so assistive tech
+            // announces that this button reveals the hidden comment strip below
+            // (WCAG 4.1.2 Name, Role, Value), matching the aria-pressed peek
+            // toggles elsewhere in this card.
+            aria-expanded={showComments}
             className="inline-flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer"
             style={{ color: "var(--text-muted)" }}
           >
@@ -223,6 +260,18 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
               <p
                 key={ci}
                 onClick={() => setShowComments(true)}
+                // Operable by pointer AND keyboard — without role/tabIndex/onKeyDown
+                // this clickable blurred comment would be invisible to keyboard and
+                // screen-reader users (WCAG 2.1.1). Mirrors PeekBlur in VideoModal.
+                role={showComments ? undefined : "button"}
+                tabIndex={showComments ? undefined : 0}
+                aria-label={showComments ? undefined : "Reveal comment (spoilers)"}
+                onKeyDown={(e) => {
+                  if (!showComments && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    setShowComments(true);
+                  }
+                }}
                 className="text-sm leading-snug rounded-md px-3 py-2 transition-[filter] duration-150"
                 style={{
                   color: "var(--text)",

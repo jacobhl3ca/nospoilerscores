@@ -416,8 +416,11 @@ export default function SettingsPanel({
       // no-spoiler defaults a reset is supposed to restore. Clearing each to
       // undefined mirrors a fresh install: JSON.stringify drops undefined keys,
       // and every read falls back to its documented default (`?? true`/`?? false`
-      // /`?? "both"` /`!!`). smartCutoffHour is the lone one with an explicit
-      // non-undefined default in `defaults`, so reset it to that value (13).
+      // /`?? "both"` /`!!`). The three prefs with an explicit non-undefined
+      // default in `defaults` (smartCutoffHour: 13, newsColCount: 3,
+      // newsTypeFilter: "all") can't rely on that undefined fallback, so reset
+      // each to its documented default value instead — otherwise a user's chosen
+      // news source-type filter (e.g. "Reddit only") survived "Reset to defaults".
       maskVideoTitle: undefined,
       youtubeNativeControls: undefined,
       videoSeekControl: undefined,
@@ -431,6 +434,8 @@ export default function SettingsPanel({
       newsSingleColumn: undefined,
       timezone: undefined,
       smartCutoffHour: 13,
+      newsColCount: 3,
+      newsTypeFilter: "all",
     });
   };
 
