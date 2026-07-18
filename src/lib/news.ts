@@ -262,6 +262,7 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   fifa: { key: "reddit-fifa", label: "r/worldcup" },
   ncaaf: { key: "reddit-ncaaf", label: "r/CFB" },
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
+  ufc: { key: "reddit-ufc", label: "r/ufc" },
 };
 
 // Cascade of news cards for a league column. The stable smart order is:
