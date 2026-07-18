@@ -224,8 +224,15 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://stats.hidescore.com" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {/* sizes="any" marks the SVG as scalable so browsers prefer it over the
+            fixed 16/32px PNGs above — the crisp, DPI-independent tab icon. It's
+            the same monkey glyph the PNGs raster, so there's no visual change,
+            just a sharper icon on hi-DPI displays (and on the static SEO/legal
+            pages, which don't run HomeContent's runtime favicon swap). */}
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+        {/* The asset is 180×180; declaring sizes makes the hint explicit, matching
+            the favicon PNGs above (iOS already uses this icon either way). */}
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
         {/* theme-color is emitted from the `viewport` export above (light/dark) */}
         <meta name="mobile-web-app-capable" content="yes" />
