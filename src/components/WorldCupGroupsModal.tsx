@@ -240,8 +240,13 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
               .filter((t) => t.name)
               // Order by FIFA world ranking (strongest first) — a fixed
               // pre-tournament fact, NOT the live group standing, so it stays
-              // spoiler-safe while reading like a seeding. Unranked teams last.
-              .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
+              // spoiler-safe while reading like a seeding. Unranked teams last,
+              // broken ALPHABETICALLY: ESPN's standings endpoint hands entries
+              // back in LIVE group order, so two teams that both miss a FIFA
+              // rank (a normalizer gap, a late rename) would otherwise keep that
+              // order under the stable sort — leaking who's currently ahead in
+              // the group, the exact spoiler this ordering exists to avoid.
+              .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999) || a.name.localeCompare(b.name));
             return { name: g.name ?? g.abbreviation ?? "", teams };
           })
           .filter((g) => g.teams.length)
