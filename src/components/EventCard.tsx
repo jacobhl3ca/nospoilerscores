@@ -111,7 +111,13 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
 
 function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
   return (
-    <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+    // min-h-6: a game card's team row is 24px tall at EVERY width — its
+    // team-name-container is a full line box (16px/24px root line-height) even
+    // when the mobile logo is only 16px. Fighter rows have no such container,
+    // so without this they collapsed to the 16px flag on phones and every UFC
+    // card ran 16px shorter than the MLB card beside it — the columns visibly
+    // drifted apart as they stacked (Jacob 7/18).
+    <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
       {f.flag ? (
         // onError hides a 404'd/blocked remote flag so it degrades to the empty
         // slot instead of the browser's broken-image glyph — matches the onError
@@ -158,36 +164,38 @@ function FightCard({
     <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
-      {/* Status bar — mirrors the game cards' meta row exactly so a UFC card is
-          the SAME HEIGHT as an MLB card: status/time left, broadcast right, and a
-          CENTER slot (like the rated cards' rating badge) for the bout tag.
-          Main/Co-Main lives here instead of its own row; non-headline bouts show
-          their weight class in the same slot — so no bout ever adds an extra row.
-          The game-meta-row class + text-xs give it the game cards' meta font
-          (12px, and the .ns-board-tight rules drop it to 10px on the tight
-          3-column mobile board exactly when MLB's meta row drops). Below ~190px
-          the row can't hold time + Co-Main pill + "Paramount+" at full size
-          without overlapping, so metaCompact keeps just time + the Main/Co-Main
-          tag — the repeated-per-card broadcast and the weight class fall away. */}
-      <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
+      {/* Status bar — the game cards' meta row verbatim (GameCard ~640):
+          game-meta-row + text-xs fonts (10px on tight boards via CSS), flex-wrap
+          + gap-x-1, shrink-0 time, ml-auto broadcast. The broadcast is ALWAYS
+          rendered — like MLB's network, which never disappears; when a narrow
+          column can't hold "8:00PM  CO-MAIN  Paramount+" on one line, the
+          broadcast WRAPS to its own right-pinned line instead of being dropped
+          or overlapped (the exact "wrap, don't clip" rule the game cards adopted
+          6/9 for wide networks — a metaCompact cutoff that hid it read as
+          "missing channel", Jacob 7/18). The Main/Co-Main pill slot is flex-auto
+          WITHOUT min-w-0 so the nowrap pill wraps as a unit when it can't fit
+          beside the time, never overlapping it; the weight-class slot keeps
+          min-w-0 + truncate (shrinks in place) and drops entirely on columns too
+          narrow to show a useful amount of it. */}
+      <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {status}
         </span>
-        {(label || (!metaCompact && fight.weightClass)) && (
-          <span className="flex-1 flex justify-center min-w-0">
-            {label ? (
-              <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
-                style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}>
-                {label}
-              </span>
-            ) : (
-              <span className="truncate" style={{ color: "var(--text-muted)" }}>{fight.weightClass}</span>
-            )}
+        {label ? (
+          <span className="flex-auto flex justify-center">
+            <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
+              style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}>
+              {label}
+            </span>
           </span>
-        )}
-        {!metaCompact && broadcasts.length > 0 && (
-          <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
+        ) : !metaCompact && fight.weightClass ? (
+          <span className="flex-auto flex justify-center min-w-0">
+            <span className="truncate" style={{ color: "var(--text-muted)" }}>{fight.weightClass}</span>
+          </span>
+        ) : null}
+        {broadcasts.length > 0 && (
+          <span className="shrink-0 ml-auto" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
         )}
       </div>
       <div className="flex flex-col gap-y-0.5">
@@ -229,10 +237,9 @@ export default function EventCard({
   // very next day (MLB still abbreviated at 157px columns while fighter names
   // had already expanded — "UFC bigger"). The width fallback below survives
   // only for a board with no game columns to report (UFC-only), where there's
-  // nothing to match anyway. metaCompact stays width-driven on purpose: what
-  // the meta row can hold (time + Co-Main pill + "Paramount+" needs ~190px at
-  // full size before they collide) is a property of THIS card's strings, not of
-  // the neighbours' team names.
+  // nothing to match anyway. metaCompact stays width-driven on purpose: whether
+  // a weight class is worth showing is a property of THIS card's strings, not
+  // of the neighbours' team names.
   const rootRef = useRef<HTMLDivElement>(null);
   const [colWidth, setColWidth] = useState(0);
   useEffect(() => {
@@ -243,11 +250,11 @@ export default function EventCard({
     return () => ro.disconnect();
   }, []);
   const compact = namesCompact ?? (colWidth > 0 && colWidth < 155);
-  // colWidth 0 = not yet measured — start compact so the first paint can't
-  // flash the overlapping full row. 210px is what the widest full row actually
-  // needs at the meta font: "8:00PM" + the Co-Main pill (or "Lightweight") +
-  // "Paramount+" + gaps ≈ 195px — below that the pill overflowed its center
-  // slot into the time and weight classes truncated to fragments ("Ligh…").
+  // metaCompact now gates ONLY the weight class (time/pill/broadcast handle
+  // narrow columns by wrapping/shrinking, see the meta-row comment): below
+  // ~210px "8:00PM … Lightweight … Paramount+" leaves so little center room
+  // that the weight class truncated to fragments ("Ligh…") — drop it instead.
+  // colWidth 0 = not yet measured — start without it (no flash of fragments).
   const metaCompact = colWidth < 210;
 
   // ── UFC: one card per bout, main event first ──
@@ -316,12 +323,16 @@ export default function EventCard({
           the circuit in the home row, so the tile's height and fonts track an
           MLB card 1:1 at every breakpoint. */}
       <div className="flex flex-col gap-y-0.5">
-        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+        {/* min-h-6 — same fix as FighterRow: a game card's team row is 24px at
+            EVERY width (its team-name-container is a full line box), while
+            these rows' 16px mobile logo slot + leading-none text would collapse
+            shorter, drifting the column heights apart as cards stack. */}
+        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
           <span aria-hidden className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">🏁</span>
           <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={event.title}>{event.title}</span>
         </div>
         {event.subtitle && (
-          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
             <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
             <span className="text-[10px] sm:text-xs leading-none truncate min-w-0" style={{ color: "var(--text-muted)" }} title={event.subtitle}>{event.subtitle}</span>
           </div>
