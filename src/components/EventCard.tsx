@@ -15,7 +15,11 @@ import { openExternal } from "@/lib/openExternal";
 // "Sat 5:00 PM" for a future day, "5:00 PM" if it's today, "Sat" if the time is
 // a midnight placeholder (TBD). Mirrors how the game cards show the day for
 // upcoming/lookahead games instead of a bare time.
-function whenLabel(iso?: string): string {
+// `refYmd` (YYYYMMDD, the board's viewed date) decides what "today" means: the
+// game cards drop the day prefix for games on the VIEWED slate, so an F1/UFC
+// tile must too — navigating to Sunday should show the Sunday race as just
+// "9:00AM", not "Sun 9:00AM". Falls back to the real today when absent.
+function whenLabel(iso?: string, refYmd?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
@@ -25,8 +29,8 @@ function whenLabel(iso?: string): string {
   // the user had picked another, disagreeing with the cards beside it.
   const tz = getTimeZone();
   const ymd = (date: Date) =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-  const sameDay = ymd(d) === ymd(new Date());
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date).replace(/-/g, "");
+  const sameDay = ymd(d) === (refYmd || ymd(new Date()));
   // Detect the midnight (TBD) placeholder in the SAME zone the time is shown in
   // (tz), not the device's own zone. Reading d.getHours()/getMinutes() uses the
   // device zone, so a Settings "Time zone" override desyncs it from the
@@ -76,7 +80,10 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
   return (
     <button
       type="button"
-      onClick={onClick}
+      // stopPropagation: the F1 tile body is clickable (opens the ESPN race
+      // page), so the play button must not ALSO trigger the card's click —
+      // same pattern as every nested button in GameCard.
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
       disabled={loading}
       className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer disabled:opacity-50"
       style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
@@ -104,7 +111,13 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
 
 function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
   return (
-    <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+    // min-h-6: a game card's team row is 24px tall at EVERY width — its
+    // team-name-container is a full line box (16px/24px root line-height) even
+    // when the mobile logo is only 16px. Fighter rows have no such container,
+    // so without this they collapsed to the 16px flag on phones and every UFC
+    // card ran 16px shorter than the MLB card beside it — the columns visibly
+    // drifted apart as they stacked (Jacob 7/18).
+    <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
       {f.flag ? (
         // onError hides a 404'd/blocked remote flag so it degrades to the empty
         // slot instead of the browser's broken-image glyph — matches the onError
@@ -133,7 +146,7 @@ function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
 }
 
 function FightCard({
-  fight, label, broadcasts, loadingId, onPlay, compact, metaCompact,
+  fight, label, broadcasts, loadingId, onPlay, compact, metaCompact, selectedDate,
 }: {
   fight: FightBout;
   label?: string;
@@ -142,44 +155,47 @@ function FightCard({
   onPlay: (id: string, query: string, channel?: string) => void;
   compact: boolean;
   metaCompact: boolean;
+  selectedDate?: string;
 }) {
   const isLive = fight.state === "in";
   const isPost = fight.state === "post";
-  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(fight.date) || fight.statusDetail;
+  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(fight.date, selectedDate) || fight.statusDetail;
   return (
     <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
-      {/* Status bar — mirrors the game cards' meta row exactly so a UFC card is
-          the SAME HEIGHT as an MLB card: status/time left, broadcast right, and a
-          CENTER slot (like the rated cards' rating badge) for the bout tag.
-          Main/Co-Main lives here instead of its own row; non-headline bouts show
-          their weight class in the same slot — so no bout ever adds an extra row.
-          The game-meta-row class + text-xs give it the game cards' meta font
-          (12px, and the .ns-board-tight rules drop it to 10px on the tight
-          3-column mobile board exactly when MLB's meta row drops). Below ~190px
-          the row can't hold time + Co-Main pill + "Paramount+" at full size
-          without overlapping, so metaCompact keeps just time + the Main/Co-Main
-          tag — the repeated-per-card broadcast and the weight class fall away. */}
-      <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
+      {/* Status bar — the game cards' meta row verbatim (GameCard ~640):
+          game-meta-row + text-xs fonts (10px on tight boards via CSS), flex-wrap
+          + gap-x-1, shrink-0 time, ml-auto broadcast. The broadcast is ALWAYS
+          rendered — like MLB's network, which never disappears; when a narrow
+          column can't hold "8:00PM  CO-MAIN  Paramount+" on one line, the
+          broadcast WRAPS to its own right-pinned line instead of being dropped
+          or overlapped (the exact "wrap, don't clip" rule the game cards adopted
+          6/9 for wide networks — a metaCompact cutoff that hid it read as
+          "missing channel", Jacob 7/18). The Main/Co-Main pill slot is flex-auto
+          WITHOUT min-w-0 so the nowrap pill wraps as a unit when it can't fit
+          beside the time, never overlapping it; the weight-class slot keeps
+          min-w-0 + truncate (shrinks in place) and drops entirely on columns too
+          narrow to show a useful amount of it. */}
+      <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {status}
         </span>
-        {(label || (!metaCompact && fight.weightClass)) && (
-          <span className="flex-1 flex justify-center min-w-0">
-            {label ? (
-              <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
-                style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}>
-                {label}
-              </span>
-            ) : (
-              <span className="truncate" style={{ color: "var(--text-muted)" }}>{fight.weightClass}</span>
-            )}
+        {label ? (
+          <span className="flex-auto flex justify-center">
+            <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
+              style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}>
+              {label}
+            </span>
           </span>
-        )}
-        {!metaCompact && broadcasts.length > 0 && (
-          <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
+        ) : !metaCompact && fight.weightClass ? (
+          <span className="flex-auto flex justify-center min-w-0">
+            <span className="truncate" style={{ color: "var(--text-muted)" }}>{fight.weightClass}</span>
+          </span>
+        ) : null}
+        {broadcasts.length > 0 && (
+          <span className="shrink-0 ml-auto" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
         )}
       </div>
       <div className="flex flex-col gap-y-0.5">
@@ -199,6 +215,7 @@ export default function EventCard({
   event,
   onPlayHighlight,
   namesCompact,
+  selectedDate,
 }: {
   event: LeagueEventCard;
   leagueLabel?: string;
@@ -206,6 +223,10 @@ export default function EventCard({
   // The board-level "game columns are showing abbreviated team names" signal
   // (HomeContent folds it from every game column's live useAbbreviations state).
   namesCompact?: boolean;
+  // The board's viewed date (YYYYMMDD) — whenLabel drops the day prefix for an
+  // event ON this date, matching how game cards show a bare time for the
+  // viewed slate.
+  selectedDate?: string;
 }) {
   const { loadingId, play } = useHighlightPlayer(onPlayHighlight);
 
@@ -216,10 +237,9 @@ export default function EventCard({
   // very next day (MLB still abbreviated at 157px columns while fighter names
   // had already expanded — "UFC bigger"). The width fallback below survives
   // only for a board with no game columns to report (UFC-only), where there's
-  // nothing to match anyway. metaCompact stays width-driven on purpose: what
-  // the meta row can hold (time + Co-Main pill + "Paramount+" needs ~190px at
-  // full size before they collide) is a property of THIS card's strings, not of
-  // the neighbours' team names.
+  // nothing to match anyway. metaCompact stays width-driven on purpose: whether
+  // a weight class is worth showing is a property of THIS card's strings, not
+  // of the neighbours' team names.
   const rootRef = useRef<HTMLDivElement>(null);
   const [colWidth, setColWidth] = useState(0);
   useEffect(() => {
@@ -230,11 +250,11 @@ export default function EventCard({
     return () => ro.disconnect();
   }, []);
   const compact = namesCompact ?? (colWidth > 0 && colWidth < 155);
-  // colWidth 0 = not yet measured — start compact so the first paint can't
-  // flash the overlapping full row. 210px is what the widest full row actually
-  // needs at the meta font: "8:00PM" + the Co-Main pill (or "Lightweight") +
-  // "Paramount+" + gaps ≈ 195px — below that the pill overflowed its center
-  // slot into the time and weight classes truncated to fragments ("Ligh…").
+  // metaCompact now gates ONLY the weight class (time/pill/broadcast handle
+  // narrow columns by wrapping/shrinking, see the meta-row comment): below
+  // ~210px "8:00PM … Lightweight … Paramount+" leaves so little center room
+  // that the weight class truncated to fragments ("Ligh…") — drop it instead.
+  // colWidth 0 = not yet measured — start without it (no flash of fragments).
   const metaCompact = colWidth < 210;
 
   // ── UFC: one card per bout, main event first ──
@@ -251,6 +271,7 @@ export default function EventCard({
             onPlay={play}
             compact={compact}
             metaCompact={metaCompact}
+            selectedDate={selectedDate}
           />
         ))}
       </div>
@@ -261,41 +282,63 @@ export default function EventCard({
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
-  // whenLabel ("Sat 9:00AM" — day+time, no long date). The old tile showed the
-  // raw statusDetail left and a full "Sat, Jul 18, 9:00 AM" date right, a
-  // format no other card uses; whenLabel also already handles the midnight
-  // (TBD) placeholder, so the bespoke fullWhen block is gone with it.
-  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(event.date) || event.statusDetail;
+  // whenLabel ("Sat 9:00AM" for another day, bare "9:00AM" when the race is on
+  // the viewed date — selectedDate — same rule as the game cards' time).
+  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(event.date, selectedDate) || event.statusDetail;
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
+  // Clicking the tile body opens the ESPN race page — the game cards' "click
+  // for more details" affordance (there's no F1 GameDetailModal; ESPN's race
+  // hub is the detail view). Pre/live ONLY, mirroring GameCard's rule that a
+  // finished game never links to ESPN (the page shows the finishing order — a
+  // result spoiler). After the race the highlight button is the affordance.
+  // PlayBtn stopPropagations so highlights don't also fire this.
+  const clickable = !!event.eventUrl && !isPost;
+  const openDetails = () => { if (event.eventUrl) openExternal(event.eventUrl); };
 
   return (
-    <div ref={rootRef} className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    <div ref={rootRef} className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
-      {/* Meta row — game-meta-row like FightCard, so an F1 tile is the SAME
-          height/font as an MLB card: status/time left, broadcast right (dropped
-          when the column is too narrow, same metaCompact rule as UFC). */}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+      onClick={clickable ? openDetails : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(); } } : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${event.title} — race details on ESPN` : undefined}
+      title={clickable ? "Race details on ESPN" : undefined}>
+      {/* Meta row — game-meta-row like FightCard/GameCard, so an F1 tile is the
+          SAME height as an MLB card: status/time left, broadcast right (dropped
+          when the column is too narrow, same metaCompact rule as UFC). An
+          upcoming time renders at text-[11px] muted — the exact classes
+          GameCard's future-time span uses — while Final/Live keep the row's
+          text-xs like GameCard's FINAL/clock. */}
       <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
-          {status}
+          {isPost || isLive ? status : <span className="text-[11px] whitespace-nowrap">{status}</span>}
         </span>
         {!metaCompact && event.broadcasts.length > 0 && (
           <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{event.broadcasts[0]}</span>
         )}
       </div>
-      <div className="flex items-start gap-1 sm:gap-1.5">
-        <span aria-hidden className="text-base leading-none mt-0.5">🏁</span>
-        <div className="min-w-0 flex-1">
-          {/* Race name gets the fighter/team-name treatment: text-sm .team-name
-              at full size, text-xs sm:text-sm when the game columns abbreviate
-              (compact) — not the old always-small font-medium. Race names are
-              long, so it wraps instead of truncating. */}
-          <div className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-snug`} style={{ color: "var(--text)" }}>{event.title}</div>
-          {event.subtitle && (
-            <div className="text-[10px] sm:text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }} title={event.subtitle}>{event.subtitle}</div>
-          )}
+      {/* Body — the game cards' EXACT two-row team skeleton (logo slot + name,
+          gap-y-0.5, leading-none, truncate), with 🏁 in the away-logo slot and
+          the circuit in the home row, so the tile's height and fonts track an
+          MLB card 1:1 at every breakpoint. */}
+      <div className="flex flex-col gap-y-0.5">
+        {/* min-h-6 — same fix as FighterRow: a game card's team row is 24px at
+            EVERY width (its team-name-container is a full line box), while
+            these rows' 16px mobile logo slot + leading-none text would collapse
+            shorter, drifting the column heights apart as cards stack. */}
+        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
+          <span aria-hidden className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">🏁</span>
+          <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={event.title}>{event.title}</span>
         </div>
+        {event.subtitle && (
+          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
+            <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
+            <span className="text-[10px] sm:text-xs leading-none truncate min-w-0" style={{ color: "var(--text-muted)" }} title={event.subtitle}>{event.subtitle}</span>
+          </div>
+        )}
       </div>
       {/* One official-channel button, like UFC's — the unscoped "Search" test
           button is gone. strict=true hard-gates the in-app result to the real
