@@ -76,6 +76,13 @@ html.blur-news-media .news-media-preview > * {
   filter: blur(12px);
   transform: scale(1.08);
 }
+@media (prefers-reduced-motion: reduce) {
+  /* Apply the blur mask instantly — no animated filter/scale sweep when the
+     user toggles "blur news media." The end state (blur + the small scale-up
+     that clips the blurred edges) is preserved; only the 150ms transition is
+     dropped. Matches the per-rule reduced-motion overrides below. */
+  .news-media-preview > * { transition: none; }
+}
 
 :root {
   /* Tell the browser which theme its native UI (scrollbars, the text-input
