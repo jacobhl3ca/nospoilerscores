@@ -71,11 +71,21 @@ const RANKS: Record<string, number> = {
   "cote d'ivoire": 33, // vs. "ivory coast" (FIFA's official French name)
 };
 
-// Normalize a team display name (lowercase, strip diacritics) for lookup.
+// Normalize a team display name (lowercase, strip diacritics, fold typographic
+// apostrophes) for lookup.
 export function fifaRank(displayName: string): number | null {
   const key = displayName
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Fold curly apostrophes (\u2019 U+2019, \u2018 U+2018) to the straight ASCII ' the
+    // keys use \u2014 NFD leaves them untouched, so the sole apostrophe key
+    // ("cote d'ivoire", added when ESPN began sending the French "C\u00f4te
+    // d'Ivoire" form) missed whenever ESPN's string carried the typographic \u2019
+    // that properly-rendered French names use, hiding the #33 rank chip. Same
+    // "normalize away an insignificant character variant" intent as the
+    // diacritic strip above; a straight-apostrophe or apostrophe-free name is
+    // unaffected.
+    .replace(/[\u2018\u2019]/g, "'")
     .toLowerCase()
     .trim();
   return RANKS[key] ?? null;
