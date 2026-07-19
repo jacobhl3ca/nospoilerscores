@@ -198,13 +198,20 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
                 // leaving two duplicate WebSite entities for hidescore.com.
                 isPartOf: { "@id": "https://hidescore.com/#website" },
                 about: [
-                  { "@type": "SportsTeam", name: team.name, sport: "Soccer" },
+                  // Reference the fuller standalone SportsTeam node below by
+                  // @id rather than re-declaring a thinner (no memberOf) copy
+                  // here. Both live in the same @graph, so this deduplicates
+                  // the team to one entity — the same node-linking pattern the
+                  // WebSite isPartOf ref above uses — instead of leaving two
+                  // separate SportsTeam nodes for the same team on the page.
+                  { "@id": `https://hidescore.com${canonical}#team` },
                   { "@type": "SportsEvent", name: "2026 FIFA World Cup" },
                   { "@type": "Thing", name: "spoiler-free sports scores" },
                 ],
               },
               {
                 "@type": "SportsTeam",
+                "@id": `https://hidescore.com${canonical}#team`,
                 name: team.name,
                 sport: "Soccer",
                 memberOf: { "@type": "SportsOrganization", name: "FIFA World Cup" },
