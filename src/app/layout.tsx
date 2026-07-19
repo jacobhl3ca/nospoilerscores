@@ -125,6 +125,13 @@ const JSON_LD = {
       // 2024. A broken SearchAction earns no rich result and risks a Search
       // Console structured-data error, so the WebSite node stands on its own.
       "@type": "WebSite",
+      // Stable @id so per-page WebPage nodes (the SEO landing pages' own
+      // JSON-LD) can point isPartOf at this exact site entity instead of
+      // re-declaring a second, @id-less WebSite for the same URL. Google merges
+      // every JSON-LD block on a page into one graph, so the reference resolves
+      // here and both blocks read as one WebSite — same node-linking pattern the
+      // publisher/#organization references above use.
+      "@id": "https://hidescore.com/#website",
       name: "HideScore",
       url: "https://hidescore.com",
       inLanguage: "en",
