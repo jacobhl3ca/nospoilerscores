@@ -134,6 +134,12 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
   const hlCardRef = useRef<HTMLDivElement | null>(null);
   // The dialog container — focused on open for keyboard/SR users (see below).
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  // Mirror the explainer-open state into a ref so the empty-dep focus-trap effect
+  // can read the latest value without re-subscribing. While the bracket-spoiler
+  // explainer is up the Tab trap steps aside — that nested dialog renders its own
+  // Cancel / Show buttons OUTSIDE this container (see the effect below).
+  const explainerOpenRef = useRef(showBracketExplainer);
+  explainerOpenRef.current = showBracketExplainer;
   const [query, setQuery] = useState("");
   // Single-select: at most one day active at a time. If an older multi-select
   // state is persisted, collapse to one (today wins, else the first enabled).
@@ -204,8 +210,41 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
   // `groupsOpen &&`), so this fires on every open/close — matching GameDetailModal.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus({ preventScroll: true });
-    return () => opener?.focus?.();
+    const dialog = dialogRef.current;
+    dialog?.focus({ preventScroll: true });
+    // Trap Tab within the dialog (WCAG 2.4.3) — same pattern GameDetailModal /
+    // SettingsPanel adopted. aria-modal only marks the page behind inert for
+    // assistive tech; it does NOT stop a sighted keyboard user from Tabbing out
+    // of the overlay into the scores/news behind it. Wrap focus at the first/last
+    // focusable control so Tab / Shift+Tab cycle inside the dialog. Focusables are
+    // queried live per keypress (so the async-loaded groups grid / bracket controls
+    // are included) and offsetParent-filtered so focus never lands on a hidden
+    // (display:none) control. Suspended while the bracket-spoiler explainer is up —
+    // that nested dialog renders its Cancel / Show buttons OUTSIDE this container,
+    // so trapping here would put them out of Tab reach.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !dialog || explainerOpenRef.current) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      opener?.focus?.();
+    };
   }, []);
 
   // When opened to spotlight a group, scroll its card into view — it can sit
