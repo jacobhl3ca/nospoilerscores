@@ -144,6 +144,13 @@ const JSON_LD = {
       // so inLanguage is valid here and keeps all product nodes consistent.
       inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      // Same publisher link the WebApplication/WebSite nodes carry — points this
+      // iOS app node at the Organization's @id below so all three product nodes
+      // read as one linked entity, not three unrelated ones. `publisher` is a
+      // CreativeWork property and MobileApplication is a CreativeWork subtype,
+      // so it's valid here for the exact reason it's valid on WebApplication;
+      // this node was the lone product outlier still missing the link.
+      publisher: { "@id": "https://hidescore.com/#organization" },
     },
     {
       // No Android MobileApplication node: the Google Play listing is still a
