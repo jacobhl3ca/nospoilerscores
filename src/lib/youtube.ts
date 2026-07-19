@@ -219,22 +219,52 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
   }
 }
 
+// English (ESPN `shortDisplayName`) → Spanish nation name, so the Telemundo
+// Deportes "resumen Copa Mundial" query is built with the name that channel's
+// recap titles actually use. Any nation absent here falls back to aliasTeam()
+// (i.e. the English name), which under-matches on a Spanish-language channel —
+// so the map is kept complete across the qualified field. Spellings follow
+// Telemundo's own usage (e.g. "Catar", "Arabia Saudita"). Keyed alphabetically.
 const TELEMUNDO_WORLD_CUP_TEAM_ALIASES: Record<string, string> = {
+  Algeria: "Argelia",
   Argentina: "Argentina",
   Australia: "Australia",
+  Austria: "Austria",
   Belgium: "Bélgica",
   Brazil: "Brasil",
+  Canada: "Canadá",
   Colombia: "Colombia",
+  Croatia: "Croacia",
+  Ecuador: "Ecuador",
   Egypt: "Egipto",
   England: "Inglaterra",
   France: "Francia",
   Germany: "Alemania",
+  Ghana: "Ghana",
+  Iran: "Irán",
+  Iraq: "Irak",
+  "Ivory Coast": "Costa de Marfil",
+  Japan: "Japón",
+  Jordan: "Jordania",
+  Mexico: "México",
   Morocco: "Marruecos",
   Netherlands: "Países Bajos",
+  "New Zealand": "Nueva Zelanda",
   Norway: "Noruega",
+  Panama: "Panamá",
   Paraguay: "Paraguay",
+  Portugal: "Portugal",
+  Qatar: "Catar",
+  "Saudi Arabia": "Arabia Saudita",
+  Scotland: "Escocia",
+  Senegal: "Senegal",
+  "South Africa": "Sudáfrica",
+  "South Korea": "Corea del Sur",
   Spain: "España",
+  Sweden: "Suecia",
   Switzerland: "Suiza",
+  Tunisia: "Túnez",
+  Uruguay: "Uruguay",
   USA: "Estados Unidos",
 };
 
