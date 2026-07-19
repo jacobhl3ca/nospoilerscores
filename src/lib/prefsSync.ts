@@ -50,6 +50,37 @@ export async function fetchRemotePrefs(): Promise<Partial<Preferences> | null> {
 // PUT.
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingPrefs: Preferences | null = null;
+let flushHookAttached = false;
+
+function putPrefs(body: string, keepalive: boolean): void {
+  fetch("/api/prefs", {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body,
+    // keepalive lets the request outlive a page teardown — see flushPendingPrefs.
+    keepalive,
+  }).catch(() => {});
+}
+
+// Fire any queued PUT immediately, bypassing the 800ms debounce. Without this a
+// toggle made inside the debounce window and immediately followed by a tab close
+// or background is silently dropped — the pending timer never fires — so the
+// change lands in localStorage but never reaches the server, and the user's other
+// devices lose it. keepalive:true lets the in-flight PUT survive the page being
+// torn down. Idempotent (PUT replaces the whole blob), so a stray double-send is
+// harmless.
+function flushPendingPrefs(): void {
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+  if (pendingPrefs === null) return;
+  const body = JSON.stringify(pendingPrefs);
+  pendingPrefs = null;
+  putPrefs(body, true);
+}
+
 export function pushRemotePrefs(prefs: Preferences): void {
   pendingPrefs = prefs;
   if (pushTimer) clearTimeout(pushTimer);
@@ -57,13 +88,22 @@ export function pushRemotePrefs(prefs: Preferences): void {
     const body = JSON.stringify(pendingPrefs);
     pushTimer = null;
     pendingPrefs = null;
-    fetch("/api/prefs", {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body,
-    }).catch(() => {});
+    putPrefs(body, false);
   }, 800);
+  // Attach the flush-on-hide hook lazily and once. Only signed-in users reach
+  // pushRemotePrefs (setRemoteSync is wired after auth), so anonymous users never
+  // register a listener — the module stays inert when signed out (see header).
+  if (!flushHookAttached && typeof window !== "undefined") {
+    flushHookAttached = true;
+    // pagehide covers tab close / navigation / bfcache; visibilitychange→hidden
+    // covers the mobile "switch app / lock screen" case where pagehide can be
+    // skipped. Both just flush what's queued, so firing both is harmless (the
+    // second sees pendingPrefs === null and no-ops).
+    window.addEventListener("pagehide", flushPendingPrefs);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flushPendingPrefs();
+    });
+  }
 }
 
 export function signInWithApple(returnTo?: string): void {
