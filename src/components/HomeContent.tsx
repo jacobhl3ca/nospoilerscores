@@ -432,9 +432,36 @@ export default function HomeContent({
   useEffect(() => {
     if (!showRatingsExplainer && !showNewsExplainer) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setShowRatingsExplainer(false);
-      setShowNewsExplainer(false);
+      if (e.key === "Escape") {
+        setShowRatingsExplainer(false);
+        setShowNewsExplainer(false);
+        return;
+      }
+      // Trap Tab within the open dialog (WCAG 2.4.3) — mirror GameDetailModal /
+      // SettingsPanel. aria-modal="true" only marks the page behind inert to
+      // assistive tech; it does NOT stop a sighted keyboard user Tabbing out of
+      // the overlay into the content behind it. Wrap focus at the first/last
+      // focusable control so Tab / Shift+Tab cycle inside the dialog until
+      // Escape or a button dismisses it. Focusables are queried live so any
+      // disabled/hidden control is excluded (offsetParent filters display:none).
+      if (e.key !== "Tab") return;
+      const dialog = (showRatingsExplainer ? ratingsExplainerRef : newsExplainerRef).current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     // Lock body scroll while the explainer is open, matching every other modal
@@ -1267,7 +1294,32 @@ export default function HomeContent({
   // never pinned the feed behind it or moved focus off the trigger).
   useEffect(() => {
     if (!showLeaguePicker) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") skipLeaguePicker(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { skipLeaguePicker(); return; }
+      // Trap Tab within the dialog (WCAG 2.4.3) — same wrap-at-first/last pattern
+      // as the ratings/news explainers and GameDetailModal. Without it a keyboard
+      // user could Tab off the last league pill into the inert feed behind the
+      // overlay. Focusables queried live so the disabled (3-picked) pills and any
+      // hidden control are excluded (offsetParent drops display:none).
+      if (e.key !== "Tab") return;
+      const dialog = leaguePickerRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
     // Lock body scroll (position:fixed + negative top pins iOS WebKit too, where
     // plain overflow:hidden leaks the feed behind the overlay); restore returns
