@@ -25,7 +25,8 @@ const SPORT_PATHS: Record<Sport, string> = {
 };
 
 // Seasonal league config: show/hide based on date
-// endDate: day after championship — league hides the day after its final game
+// endDate: inclusive last day the league is shown (= its championship date, per
+//   isLeagueActive's `mmdd <= endDate`), so the league hides the day after its final game
 // startDate: when the sport's season starts
 export interface LeagueConfig {
   sport: Sport;
