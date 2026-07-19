@@ -2011,10 +2011,13 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
   // Based on how tight the top of the leaderboard is
   let rating: number | null = null;
   if (state !== "pre" && players.length >= 5) {
-    // Parse numeric scores for top players
-    const parseScore = (s: string): number => {
+    // Parse numeric scores for top players. Non-numeric statuses ("CUT", "WD",
+    // "DQ", "MC") and not-yet-posted scores ("-") return null so they're dropped
+    // from the tightness sample — otherwise parseInt(...)||0 would collapse them
+    // to even par and falsely count them as tied with the leader.
+    const parseScore = (s: string): number | null => {
       if (s === "E") return 0;
-      return parseInt(s, 10) || 0;
+      return /^[+-]?\d+$/.test(s) ? parseInt(s, 10) : null;
     };
     // "Rate from Round 1", minus the opening-holes artifact: at the very start
     // of R1 the whole field is bunched at even par, which reads as a maximally-
@@ -2029,24 +2032,30 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     // Past the opening holes — compute the real leaderboard-tightness rating.
     // While still in the opening holes, rating stays null (no badge shown).
     if (anyRoundDone || deepestThru >= 6) {
-      const topScores = players.slice(0, 10).map(p => parseScore(p.score));
-      const leader = topScores[0];
-      // Spread between 1st and 5th
-      const top5spread = Math.abs((topScores[4] ?? leader) - leader);
-      // Spread between 1st and 10th
-      const top10spread = Math.abs((topScores[9] ?? leader) - leader);
-      // Number of players within 2 strokes of lead
-      const within2 = topScores.filter(s => Math.abs(s - leader) <= 2).length;
+      const topScores = players
+        .slice(0, 10)
+        .map(p => parseScore(p.score))
+        .filter((n): n is number => n !== null);
+      // All non-numeric (e.g. field withdrew/cut) — leave rating null, no badge.
+      if (topScores.length > 0) {
+        const leader = topScores[0];
+        // Spread between 1st and 5th
+        const top5spread = Math.abs((topScores[4] ?? leader) - leader);
+        // Spread between 1st and 10th
+        const top10spread = Math.abs((topScores[9] ?? leader) - leader);
+        // Number of players within 2 strokes of lead
+        const within2 = topScores.filter(s => Math.abs(s - leader) <= 2).length;
 
-      // Tight leaderboard = high rating
-      // 0 spread = 100, each stroke of spread reduces by ~12
-      const spreadScore = Math.max(0, 100 - top5spread * 12);
-      // Depth bonus: more players bunched = more exciting
-      const depthBonus = Math.min(15, within2 * 2);
-      // Top 10 tightness (secondary factor)
-      const top10Score = Math.max(0, 50 - top10spread * 5);
+        // Tight leaderboard = high rating
+        // 0 spread = 100, each stroke of spread reduces by ~12
+        const spreadScore = Math.max(0, 100 - top5spread * 12);
+        // Depth bonus: more players bunched = more exciting
+        const depthBonus = Math.min(15, within2 * 2);
+        // Top 10 tightness (secondary factor)
+        const top10Score = Math.max(0, 50 - top10spread * 5);
 
-      rating = Math.min(100, Math.round(spreadScore * 0.6 + top10Score * 0.2 + depthBonus));
+        rating = Math.min(100, Math.round(spreadScore * 0.6 + top10Score * 0.2 + depthBonus));
+      }
     }
   }
 
