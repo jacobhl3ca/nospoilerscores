@@ -931,9 +931,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               {/* Ranking chip (#N) next to the name. World Cup uses the static
                   FIFA world ranking — a fixed pre-tournament fact, spoiler-safe
                   in every stage (its live group standing would NOT be). Every
-                  other league uses its current overall standings rank, gated
-                  exactly like the W-L record (upcoming/live only, hidden on
-                  finished/past cards) so it leaks no more than the record does. */}
+                  other league uses its current overall standings rank, hidden on
+                  finished/past cards — the same spoiler gate the W-L record below
+                  uses (!effectivePastDate && !isFinished) — so it leaks no more
+                  than the record does. The record is additionally hidden on
+                  upcoming cards (its extra !isFuture); the rank still shows there,
+                  since a pre-game standing isn't a spoiler. */}
               {(() => {
                 if (isTBD) return null;
                 let rank: number | null = null;
