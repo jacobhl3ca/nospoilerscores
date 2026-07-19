@@ -128,7 +128,14 @@ export default function SeoLandingPage({
                 description: schemaDescription,
                 url: `https://hidescore.com${canonical}`,
                 inLanguage: "en",
-                isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
+                // Reference the site-level WebSite node by @id (declared in
+                // layout.tsx's JSON-LD @graph) rather than re-declaring an
+                // @id-less WebSite here. Both blocks render on the same page, so
+                // Google merges them into one graph and this resolves to the
+                // single shared WebSite entity — the same node-linking the site
+                // uses for publisher/#organization — instead of leaving two
+                // duplicate WebSite entities for hidescore.com on the page.
+                isPartOf: { "@id": "https://hidescore.com/#website" },
                 about: about.map((name) => ({ "@type": "Thing", name })),
               },
               {
