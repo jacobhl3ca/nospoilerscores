@@ -339,6 +339,10 @@ function ArticleMeta({ byline, published, className, style }: {
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // The dialog root (role="dialog") — used by the focus-management effect below
+  // to seat focus inside the modal on open, trap Tab within it, and restore it
+  // to the opener on close.
+  const dialogRef = useRef<HTMLDivElement>(null);
   // Horizontal swipe on the image lightbox → prev/next post (mobile parity with
   // the bottom Prev/Next buttons and the desktop ← → keys).
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
@@ -852,6 +856,51 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     return () => document.removeEventListener("keydown", handler);
   }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay, onPrev, onNext]);
 
+  // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
+  // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
+  // the app's most-used overlay, was still missing. On open, seat focus on the
+  // dialog CONTAINER (tabIndex=-1) so keyboard / screen-reader users land inside
+  // the lightbox instead of being stranded on the thumbnail behind it; focusing
+  // the container (not a control) keeps mouse users from seeing a stray focus
+  // ring, and the first Tab reaches the Close button. On close, restore focus to
+  // whatever opened it. And trap Tab so it can't wander into the page behind the
+  // overlay: aria-modal="true" only marks that content inert to assistive tech,
+  // it does NOT stop a sighted keyboard user Tabbing out. Focusables are queried
+  // live per keypress (so per-mode controls — image / text / video — are always
+  // current) and offsetParent filters hidden ones. The modal mounts fresh per
+  // open (the parent guards it), so this fires on every open/close — empty deps
+  // capture the opener once. (Once focus enters the cross-origin YouTube iframe
+  // the browser routes keydown to the iframe's own document, so the trap governs
+  // the dialog's own controls, not the embed's internals — same as elsewhere.)
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    dialog?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      opener?.focus?.();
+    };
+  }, []);
+
   // Lock body scroll while the modal is open — WITHOUT losing the user's place.
   // Plain `overflow:hidden` doesn't reliably lock scroll on iOS WebKit and, with
   // the news feed's relayout, drops you back to the TOP of the list on close
@@ -1359,7 +1408,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           or any whitespace around them dismisses. The video player and CC
           button stop propagation themselves so playback controls keep working. */}
       <div
-        className="group relative w-full max-w-7xl" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
+        ref={dialogRef}
+        // tabIndex=-1 makes the dialog programmatically focusable (see the
+        // focus-management effect) without adding it to the tab order; outline
+        // none suppresses the ring since it's focused only to seat assistive tech.
+        tabIndex={-1}
+        className="group relative w-full max-w-7xl focus:outline-none" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
         style={{ zIndex: 1 }}
         role="dialog"
         aria-modal="true"
