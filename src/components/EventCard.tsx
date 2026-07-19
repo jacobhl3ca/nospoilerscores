@@ -109,7 +109,25 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
   );
 }
 
-function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
+// Tiered fighter names, following the golf leaderboard's precedent exactly:
+// full ("Kamaru Usman") when the longest name on the card fits, else the ESPN
+// short name ("K. Usman"), else — desktop only — last name alone ("Usman").
+// On mobile never drop the first-name initial (golf's rule: it's load-bearing
+// for recognition; below that, rely on truncate).
+export type FighterNameTier = "full" | "short" | "last";
+
+// Drop the first-name initial from "D. Du Plessis" → "Du Plessis" (same helper
+// as GolfLeaderboard's lastNameOnly).
+function lastNameOnly(shortName: string): string {
+  return shortName.split(". ").pop() ?? shortName;
+}
+
+function fighterLabel(f: FightBout["red"], tier: FighterNameTier): string {
+  if (tier === "full" || !f.shortName) return f.name;
+  return tier === "short" ? f.shortName : lastNameOnly(f.shortName);
+}
+
+function FighterRow({ f, compact, nameTier, showRecord }: { f: FightBout["red"]; compact: boolean; nameTier: FighterNameTier; showRecord: boolean }) {
   return (
     // min-h-6: a game card's team row is 24px tall at EVERY width — its
     // team-name-container is a full line box (16px/24px root line-height) even
@@ -136,9 +154,9 @@ function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
           branch keeps .team-name so single-column large mode scales it to 1rem
           alongside the team names (abbreviations don't carry it in GameCard
           either). */}
-      <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={f.name}>{f.name}</span>
+      <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={f.name}>{fighterLabel(f, nameTier)}</span>
       <span className="flex-1 min-w-0" />
-      {f.record && (
+      {showRecord && f.record && (
         <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none" style={{ color: "var(--text-muted)" }}>{f.record}</span>
       )}
     </div>
@@ -146,7 +164,7 @@ function FighterRow({ f, compact }: { f: FightBout["red"]; compact: boolean }) {
 }
 
 function FightCard({
-  fight, label, broadcasts, loadingId, onPlay, compact, metaCompact, selectedDate,
+  fight, label, broadcasts, loadingId, onPlay, compact, metaCompact, nameTier, showRecords, selectedDate,
 }: {
   fight: FightBout;
   label?: string;
@@ -155,6 +173,8 @@ function FightCard({
   onPlay: (id: string, query: string, channel?: string) => void;
   compact: boolean;
   metaCompact: boolean;
+  nameTier: FighterNameTier;
+  showRecords: boolean;
   selectedDate?: string;
 }) {
   const isLive = fight.state === "in";
@@ -199,8 +219,8 @@ function FightCard({
         )}
       </div>
       <div className="flex flex-col gap-y-0.5">
-        <FighterRow f={fight.red} compact={compact} />
-        <FighterRow f={fight.blue} compact={compact} />
+        <FighterRow f={fight.red} compact={compact} nameTier={nameTier} showRecord={showRecords} />
+        <FighterRow f={fight.blue} compact={compact} nameTier={nameTier} showRecord={showRecords} />
       </div>
       {isPost && (
         <div className="mt-1 sm:mt-2 flex gap-1">
@@ -257,6 +277,64 @@ export default function EventCard({
   // colWidth 0 = not yet measured — start without it (no flash of fragments).
   const metaCompact = colWidth < 210;
 
+  // Fighter-name tier — the golf leaderboard's probe-measure pattern verbatim:
+  // pick the longest tier (full → "K. Usman" → "Usman") whose LONGEST name on
+  // the card fits the room a fighter row actually has (column minus card
+  // padding, flag, gaps, and the widest record). One tier for the whole card,
+  // like golf's one tier per leaderboard and MLB's one abbreviation state per
+  // column — mixed formats within a column read as a bug. On mobile never drop
+  // below the ESPN short name (golf's rule: the first-name initial is
+  // load-bearing for recognition; below that, truncate is the safety net).
+  const fights = event.kind === "ufc" ? event.fights : undefined;
+  const [nameFit, setNameFit] = useState<{ tier: FighterNameTier; records: boolean }>({ tier: "full", records: true });
+  useEffect(() => {
+    if (!fights?.length || !colWidth) return;
+    // rAF, matching LeagueColumn's checkIfFullNamesFit: measurement runs off
+    // the commit (no sync setState in the effect body / no layout thrash).
+    const raf = requestAnimationFrame(() => {
+      const isMobile = window.innerWidth < 640; // sm breakpoint, as in GolfLeaderboard
+      const nameFs = compact && isMobile ? 12 : 14; // text-xs sm:text-sm vs text-sm
+      const recFs = isMobile ? 10 : 12; // record: text-[10px] sm:text-xs
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-family:inherit;";
+      document.body.appendChild(probe);
+      const maxW = (texts: string[], fs: number) => {
+        probe.style.fontSize = `${fs}px`;
+        let max = 0;
+        for (const t of texts) {
+          probe.textContent = t;
+          if (probe.offsetWidth > max) max = probe.offsetWidth;
+        }
+        return max;
+      };
+      const all = fights.flatMap((f) => [f.red, f.blue]);
+      const recordW = maxW(all.map((f) => f.record).filter(Boolean), recFs);
+      const cardPadding = isMobile ? 16 : 32; // px-2 vs sm:px-4
+      const flagW = isMobile ? 16 : 24; // w-4 vs sm:w-6
+      const gaps = 3 * (isMobile ? 4 : 6); // gap-1 vs sm:gap-1.5, flag|name|spacer|record
+      const availWith = colWidth - cardPadding - flagW - recordW - gaps - 4; // 4px safety
+      const availWithout = colWidth - cardPadding - flagW - gaps - 4;
+      const fullMax = maxW(all.map((f) => f.name), nameFs);
+      const shortMax = maxW(all.map((f) => f.shortName || f.name), nameFs);
+      document.body.removeChild(probe);
+      // Priority ladder: full+records → short+records → short WITHOUT records
+      // (the record is the least load-bearing field — same call as the tight
+      // board hiding MLB's #rank chips — but only hide it when that's what
+      // makes the short name fit) → desktop last-name-only → short+records
+      // with truncate as the last-resort safety net.
+      if (fullMax <= availWith) setNameFit({ tier: "full", records: true });
+      else if (shortMax <= availWith) setNameFit({ tier: "short", records: true });
+      else if (shortMax <= availWithout) setNameFit({ tier: "short", records: false });
+      else if (!isMobile && maxW(all.map((f) => lastNameOnly(f.shortName || f.name)), nameFs) <= availWith) setNameFit({ tier: "last", records: true });
+      // Ultra-narrow last resort: the short name doesn't fit even alone — give
+      // the name every pixel (records are the least load-bearing field) and let
+      // truncate absorb the remainder, rather than hard-truncating beside a
+      // record ("D. Du…  24-3-0").
+      else setNameFit({ tier: "short", records: false });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [fights, compact, colWidth]);
+
   // ── UFC: one card per bout, main event first ──
   if (event.kind === "ufc" && event.fights?.length) {
     return (
@@ -271,6 +349,8 @@ export default function EventCard({
             onPlay={play}
             compact={compact}
             metaCompact={metaCompact}
+            nameTier={nameFit.tier}
+            showRecords={nameFit.records}
             selectedDate={selectedDate}
           />
         ))}
