@@ -74,6 +74,7 @@ export default {
       if (request.method === "PUT") return prefsPut(request, env);
       return prefsGet(request, env);
     }
+    if (url.pathname === "/api/account" && request.method === "DELETE") return accountDelete(request, env);
 
     // --- Serve a stored share card (rendered server-side by the prebake cron).
     if (url.pathname.startsWith("/cards/") && url.pathname.endsWith(".png")) {
@@ -1972,9 +1973,35 @@ async function prefsPut(request, env) {
   if (text.length > 64 * 1024) return _siwaJson({ error: "too_large" }, 413);
   let parsed;
   try { parsed = JSON.parse(text); } catch { return _siwaJson({ error: "bad_json" }, 400); }
+  // Prefs must be a plain JSON object. Reject arrays / strings / numbers / null so a
+  // malformed body can't be stored and then break the client-side prefs reader.
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return _siwaJson({ error: "bad_shape" }, 400);
+  }
   await env.DATA.put(`prefs/${u.sub}.json`, JSON.stringify(parsed),
     { httpMetadata: { contentType: "application/json" } });
   return _siwaJson({ ok: true });
+}
+
+// DELETE /api/account -> delete the signed-in user's stored data + clear the session.
+// Satisfies Apple's in-app account-deletion requirement (App Store guideline 5.1.1(v)).
+// All data we hold for a user is their prefs object at `prefs/<sub>.json`; sessions are
+// stateless HMAC cookies (no server-side store), so clearing the cookie fully signs out.
+// The iOS app loads this site in a WebView sharing the same cookie, so this deletes
+// on-device too. We can't unlink their Apple/Google ID (external), only erase our data.
+async function accountDelete(request, env) {
+  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  if (env.DATA) {
+    try { await env.DATA.delete(`prefs/${u.sub}.json`); } catch (_e) { /* already gone */ }
+  }
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, "", 0),
+    },
+  });
 }
 
 // ===========================================================================

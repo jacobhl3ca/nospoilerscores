@@ -2,6 +2,19 @@
 
 Single source of truth for the App Store Connect listing. Copy-paste ready.
 
+> ⚠️ **STALE — must fix before the next submission (flagged 2026-07-18).** Since this pack was
+> written, HideScore shipped **Sign in with Apple/Google accounts** (6/22) and **Sentry crash
+> reporting** (7/7). The "No accounts / no tracking / we do not collect data" answers below (App
+> Privacy section, ~line 85, and the "No accounts, no tracking, no ads" bullet) are now **factually
+> wrong**. Before resubmitting, update **App Privacy** to declare at least **Diagnostics → Crash
+> Data** (Sentry) and, since a Sign-in-with-Apple/Google identifier/email is now stored, the relevant
+> **Identifiers / Contact Info**. Apple also **requires in-app account deletion** (guideline
+> 5.1.1(v)) once an app supports account creation — **this is now BUILT (2026-07-20)**: Settings →
+> Account → "Delete account" (confirm + type-DELETE gate) calls `DELETE /api/account`, which erases
+> the user's R2 prefs object and clears the session. The iOS WebView shares that cookie, so it
+> satisfies 5.1.1(v) in-app. Confirm against your actual data flows before answering Apple's
+> questionnaire; don't copy the old "all No" answers.
+
 ---
 
 ## App Information
