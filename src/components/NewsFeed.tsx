@@ -109,16 +109,22 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly }:
     [visible]
   );
 
+  // The feed starts at items === null ("Loading feed…") and asynchronously
+  // settles to the post list or an empty result ("No posts to show.") as each
+  // source resolves. role=status + aria-live=polite voices that transition, so
+  // an SR user who switches into the Feed view hears that it's loading / came
+  // back empty instead of getting silence — matching the status lines in
+  // TeamView / FeedbackBox / SettingsPanel (WCAG 4.1.3).
   if (items === null) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
+      <div role="status" aria-live="polite" className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
         Loading feed…
       </div>
     );
   }
   if (visible.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
+      <div role="status" aria-live="polite" className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
         No posts to show.
       </div>
     );
