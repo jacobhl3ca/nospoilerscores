@@ -282,9 +282,14 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   // column, above the official highlight video and the ESPN catch-all.
   const reddit = REDDIT_SUB[sport];
   if (reddit) out.push({ label: reddit.label, key: reddit.key, kind: "prebaked", logoUrl });
-  // World Cup also gets the high-volume r/soccer firehose alongside r/worldcup
-  // (Jacob 6/4). reddit-soccer is baked by prebake-news.mjs.
-  if (sport === "fifa") out.push({ label: "r/soccer", key: "reddit-soccer", kind: "prebaked", logoUrl });
+  // The soccer league columns also get the high-volume r/soccer firehose
+  // alongside their dedicated subs (World Cup Jacob 6/4; EPL/UCL/UEL Jacob
+  // 7/20 — their own subs are lower-volume). One shared reddit-soccer bake
+  // feeds all four cards. MLS deliberately excluded: r/soccer is Euro-centric
+  // and r/MLS carries the MLS discussion.
+  if (sport === "fifa" || sport === "epl" || sport === "ucl" || sport === "uel") {
+    out.push({ label: "r/soccer", key: "reddit-soccer", kind: "prebaked", logoUrl });
+  }
   // Spoiler-safe highlight video next, where the league has a prebaked feed.
   const officialVideos = PREBAKED_VIDEOS[sport];
   if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
