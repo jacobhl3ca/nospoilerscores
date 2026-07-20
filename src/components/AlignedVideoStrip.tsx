@@ -299,6 +299,7 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
   if (onPlay) {
     return (
       <button
+        type="button"
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
             if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
@@ -373,6 +374,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
   if (shouldPopModal) {
     return (
       <button
+        type="button"
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
             if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
@@ -385,6 +387,12 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
             window.open(item.articleUrl, "_blank", "noopener,noreferrer");
           }
         }}
+        // Same inline-play control as VideoStripRow's button (its thumb is
+        // alt=""), so the accessible name would otherwise be just the headline
+        // with no cue this PLAYS a highlight vs. the sibling <a> tail rows that
+        // open an article. Name the action explicitly; the headline stays in
+        // the label so "Label in Name" (WCAG 2.5.3) still holds.
+        aria-label={`Play highlight: ${item.headline}`}
         className={`${rowCls} cursor-pointer`}
         style={rowStyle}
       >
