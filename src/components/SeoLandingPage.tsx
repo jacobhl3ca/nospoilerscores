@@ -136,10 +136,23 @@ export default function SeoLandingPage({
                 // uses for publisher/#organization — instead of leaving two
                 // duplicate WebSite entities for hidescore.com on the page.
                 isPartOf: { "@id": "https://hidescore.com/#website" },
+                // Point this page at its own BreadcrumbList node (below) by @id,
+                // the same @graph node-linking the WebPage→WebSite isPartOf above
+                // and layout.tsx's publisher/#organization refs use. The
+                // BreadcrumbList was the one sibling node left unlinked — a bare,
+                // @id-less list floating beside the page it describes. `breadcrumb`
+                // is a valid WebPage property, and tying it to the page node is
+                // Google's recommended pattern for the breadcrumb rich result.
+                breadcrumb: { "@id": `https://hidescore.com${canonical}#breadcrumb` },
                 about: about.map((name) => ({ "@type": "Thing", name })),
               },
               {
                 "@type": "BreadcrumbList",
+                // Stable per-page @id so the WebPage node above can reference this
+                // exact list (Google merges the page's JSON-LD into one graph, so
+                // the ref resolves here). Keyed on the canonical path so each
+                // landing page gets its own unambiguous breadcrumb node.
+                "@id": `https://hidescore.com${canonical}#breadcrumb`,
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
                   { "@type": "ListItem", position: 2, name: h1, item: `https://hidescore.com${canonical}` },
