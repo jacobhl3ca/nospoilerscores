@@ -68,7 +68,14 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
+    // The googleBot block opts into the most permissive preview limits Google
+    // offers: "large" image previews and unbounded text snippets. HideScore's
+    // core content is spoiler-free video highlights, yet the one preview lever
+    // that governs VIDEO — max-video-preview — was the lone omission, so Google
+    // fell back to its conservative default clip length for any video result.
+    // -1 means "no limit", matching the intent of the image/snippet directives
+    // beside it so all three preview types are treated the same.
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
   },
   // Stop iOS Safari (and the Capacitor WebView) from auto-linking the app's
   // pervasive time/date/number text. Every card, header subtitle, and date pill
