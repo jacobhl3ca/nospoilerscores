@@ -197,6 +197,14 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
                 // node-linking the SeoLandingPage WebPage uses — instead of
                 // leaving two duplicate WebSite entities for hidescore.com.
                 isPartOf: { "@id": "https://hidescore.com/#website" },
+                // Point this page at its own BreadcrumbList node (below) by @id,
+                // the same @graph node-linking the WebPage→WebSite isPartOf above
+                // and the SeoLandingPage WebPage uses. The BreadcrumbList was the
+                // one sibling node left unlinked here — a bare, @id-less list
+                // floating beside the page it describes. `breadcrumb` is a valid
+                // WebPage property, and tying it to the page node is Google's
+                // recommended shape for the breadcrumb rich result.
+                breadcrumb: { "@id": `https://hidescore.com${canonical}#breadcrumb` },
                 about: [
                   // Reference the fuller standalone SportsTeam node below by
                   // @id rather than re-declaring a thinner (no memberOf) copy
@@ -218,6 +226,11 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
               },
               {
                 "@type": "BreadcrumbList",
+                // Stable per-page @id so the WebPage node above can reference this
+                // exact list (Google merges the page's JSON-LD into one graph, so
+                // the ref resolves here). Keyed on the canonical path so each of
+                // the 48 generated team pages gets its own unambiguous node.
+                "@id": `https://hidescore.com${canonical}#breadcrumb`,
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
                   { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
