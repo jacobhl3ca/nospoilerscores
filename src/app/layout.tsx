@@ -285,6 +285,20 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="HideScore" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        {/* iOS Safari Smart App Banner. The site already promotes the HideScore
+            iOS app everywhere else — the footer "also on the App Store" link, the
+            MobileApplication JSON-LD node above, the manifest's sameAs — but this
+            was the one surface still missing Apple's own native banner, the
+            highest-intent install prompt (it deep-links to Open when the app is
+            already installed, App Store otherwise). app-id is the same App Store
+            ID (6766885311) used by those other references, so app promotion stays
+            consistent across every surface. Safety: the banner is a Safari.app
+            feature — WKWebView (the Capacitor native wrapper) does NOT render it,
+            so users already inside the app never see a "get the app" bar; on
+            desktop and non-Safari browsers the tag is silently ignored. It's slim,
+            native Safari chrome above the page (not part of the layout) and is
+            user-dismissible, so it changes no in-page design or behavior. */}
+        <meta name="apple-itunes-app" content="app-id=6766885311" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
