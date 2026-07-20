@@ -2279,13 +2279,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
           </a>
           {shareUrl && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); copyLink(); }}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
-            >
-              {copied ? "Copied ✓" : "Copy link"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); copyLink(); }}
+                className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
+              >
+                {copied ? "Copied ✓" : "Copy link"}
+              </button>
+              {/* The "Copied ✓" swap on the button above is a visual-only
+                  confirmation — a screen reader activating "Copy link" gets no
+                  cue the copy landed. Voice it through a dedicated sr-only live
+                  region (WCAG 4.1.3 Status Messages), matching the same
+                  role="status" aria-live="polite" pattern the news/video strips
+                  and FeedbackBox already use. The region mounts empty with the
+                  button (before any copy), so the text change is announced. */}
+              <span role="status" aria-live="polite" className="sr-only">
+                {copied ? "Link copied" : ""}
+              </span>
+            </>
           )}
         </div>
         )}
