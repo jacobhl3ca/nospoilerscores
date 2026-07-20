@@ -47,6 +47,41 @@ function whenLabel(iso?: string, refYmd?: string): string {
   return midnight ? wd : `${wd} ${time}`;
 }
 
+// Rights-holder channels that post per-BOUT UFC highlights, best coverage
+// first. Verified against the live YouTube results for UFC Oklahoma City
+// (2026-07-19): "UFC on Paramount+" posted a clip for every bout on the card
+// (main → prelims) as "<result tag> | A vs. B | UFC Fight Night Mini Fight
+// Highlights"; "UFC" posts the marquee bouts; "ESPN MMA" posts one event recap
+// ("UFC Fight Night Highlights: A vs. B | ESPN MMA"). Exact author_name strings
+// — the worker matches channel identity via oembed, so a wrong string silently
+// falls through to the search fallback.
+//
+// Why strict-only in-app: an unscoped UFC search surfaces titles that give the
+// result away outright ("Dricus Du Plessis defeats Kamaru Usman", "… BATTERED
+// …" — both on page 1 for this card). Playing only channel-verified uploads in
+// the masked player, and handing anything else off to a YouTube search OUTSIDE
+// the app, is the same rule the F1 tile already follows.
+// NOTE even the official clips' TITLES carry a partial spoiler ("ROUND 1 SUB",
+// "UNANIMOUS DEC"), which the masked player never shows — one more reason the
+// native-YouTube-controls option stays off (it would surface the title).
+const UFC_HIGHLIGHT_CHANNELS = ["UFC on Paramount+", "UFC", "ESPN MMA"] as const;
+
+// What the play button reports once a bout has been resolved: the channel it
+// actually came from, or "Search" when nothing official matched and we handed
+// off to YouTube. Keyed by bout id so each card says where ITS video came from.
+export type HighlightSource = { label: string; official: boolean; videoId?: string };
+
+// "A vs B highlights" — deliberately WITHOUT the "UFC" token that espn.ts's
+// generic highlightQuery adds. Measured against the live resolver 2026-07-19:
+// "Chase Hooper vs Mitch Ramirez UFC highlights" returned nothing, while the
+// same query minus "UFC" resolved the rights-holder clip, as did every other
+// bout tried — the extra token reorders YouTube's results enough that the
+// worker's matcher stops finding a qualifying video. The channel gate (not the
+// query text) is what keeps the result on-brand here.
+function boutHighlightQuery(fight: FightBout): string {
+  return `${fight.red.name} vs ${fight.blue.name} highlights`;
+}
+
 function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: string) => void) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   // strict → the worker oembed-verifies the result's uploader equals `channel`
@@ -71,7 +106,36 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     if (videoId) onPlayHighlight(videoId, fallback);
     else openExternal(fallback);
   };
-  return { loadingId, play };
+
+  // UFC: walk the rights-holder channels in coverage order, each strict
+  // (channel-verified), and play the first hit in the masked player. Nothing
+  // official → hand off to a YouTube search outside the app rather than play an
+  // unvetted upload. Returns which source won so the button can report it.
+  // Sequential on purpose: the worker scrapes YouTube's results page and gets
+  // rate-limited into empty responses under bursts (measured 2026-07-19), so a
+  // second channel is only ever tried when the first genuinely missed.
+  const playUfc = async (id: string, query: string): Promise<HighlightSource> => {
+    const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    if (!onPlayHighlight) { openExternal(fallback); return { label: "Search", official: false }; }
+    setLoadingId(id);
+    try {
+      for (const channel of UFC_HIGHLIGHT_CHANNELS) {
+        const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, true);
+        if (videoId) {
+          onPlayHighlight(videoId, fallback);
+          // "UFC on Paramount+" → "Paramount+" on the button (the channel name
+          // repeats the league label the button already sits under).
+          return { label: channel.replace(/^UFC on /, ""), official: true, videoId };
+        }
+      }
+    } finally {
+      setLoadingId(null);
+    }
+    openExternal(fallback);
+    return { label: "Search", official: false };
+  };
+
+  return { loadingId, play, playUfc };
 }
 
 // Play button styled exactly like the game cards' highlight buttons
@@ -164,7 +228,7 @@ function FighterRow({ f, compact, nameTier, showRecord }: { f: FightBout["red"];
 }
 
 function FightCard({
-  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, compact, metaCompact, nameTier, showRecords, selectedDate,
+  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate,
 }: {
   fight: FightBout;
   label?: string;
@@ -177,6 +241,9 @@ function FightCard({
   broadcasts: string[];
   loadingId: string | null;
   onPlay: (id: string, query: string, channel?: string) => void;
+  // Resolved source for THIS bout once played ("Paramount+" / "UFC" / "ESPN
+  // MMA" / "Search"), so each card reports where its video actually came from.
+  source?: HighlightSource;
   compact: boolean;
   metaCompact: boolean;
   nameTier: FighterNameTier;
@@ -230,7 +297,12 @@ function FightCard({
       </div>
       {isPost && (
         <div className="mt-1 sm:mt-2 flex gap-1">
-          <PlayBtn label="UFC" loading={loadingId === fight.id} onClick={() => onPlay(fight.id, fight.highlightQuery, "UFC")} />
+          {/* Label reports the SOURCE once resolved — "Paramount+" when the
+              rights-holder clip played in-app, "Search" when nothing official
+              matched and we handed off to YouTube. Until then it's the generic
+              "UFC" (we don't know yet, and claiming a source we haven't
+              verified would be the lie the strict gate exists to prevent). */}
+          <PlayBtn label={source?.label ?? "UFC"} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
         </div>
       )}
     </div>
@@ -254,7 +326,23 @@ export default function EventCard({
   // viewed slate.
   selectedDate?: string;
 }) {
-  const { loadingId, play } = useHighlightPlayer(onPlayHighlight);
+  const { loadingId, play, playUfc } = useHighlightPlayer(onPlayHighlight);
+  // Where each bout's highlight actually came from, once played (bout id →
+  // source). Sticky per card so the button keeps reporting its source.
+  const [sources, setSources] = useState<Record<string, HighlightSource>>({});
+  const playBout = async (id: string, query: string) => {
+    // Already resolved this bout — replay the same video instead of walking the
+    // channel chain again. The resolver scrapes YouTube's results page and
+    // rate-limits into empty responses under load (measured 2026-07-19), so
+    // re-watching a highlight must not cost another 1-3 lookups.
+    const known = sources[id];
+    if (known?.videoId && onPlayHighlight) {
+      onPlayHighlight(known.videoId, `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
+      return;
+    }
+    const src = await playUfc(id, query);
+    setSources((prev) => ({ ...prev, [id]: src }));
+  };
 
   // Fighter-name size follows namesCompact — the game columns' REAL
   // abbreviate/full flip. That flip depends on the day's longest team name (and
@@ -392,7 +480,8 @@ export default function EventCard({
             showBroadcast={metaFit.broadcast}
             broadcasts={event.broadcasts}
             loadingId={loadingId}
-            onPlay={play}
+            onPlay={playBout}
+            source={sources[f.id]}
             compact={compact}
             metaCompact={metaCompact}
             nameTier={nameFit.tier}
