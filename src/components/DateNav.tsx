@@ -136,7 +136,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
       style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
     >
       <div className="flex items-center justify-between mb-2">
-        <button onClick={prevMonth} aria-label="Previous month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
+        <button type="button" onClick={prevMonth} aria-label="Previous month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
           ‹
         </button>
         {/* Live region: the ‹/› buttons swap the grid in place, so without
@@ -144,7 +144,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
             aria-live="polite" + atomic re-reads the full "July 2026" caption
             on each navigation so SR users know which month they're viewing. */}
         <span className="text-sm font-semibold" style={{ color: "var(--text)" }} aria-live="polite" aria-atomic="true">{monthLabel}</span>
-        <button onClick={nextMonth} aria-label="Next month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
+        <button type="button" onClick={nextMonth} aria-label="Next month" className="w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-[var(--bg-card)]" style={{ color: "var(--text-muted)" }}>
           ›
         </button>
       </div>
@@ -182,6 +182,7 @@ function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps 
 
           return (
             <button
+              type="button"
               key={dateStr}
               onClick={() => { onDateChange(dateStr); onClose(); }}
               aria-label={ariaLabel}
@@ -265,6 +266,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
           without it. Desktop keeps it for the MLB-column alignment. */}
       {trailing && <span aria-hidden className="hidden sm:block sm:w-8 sm:h-8 sm:mr-1 shrink-0" />}
       <button
+        type="button"
         onClick={goEarlier}
         className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
@@ -285,6 +287,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
         const isSelected = knowsSelection && effectiveDate === btn.date;
         return (
           <button
+            type="button"
             key={btn.date}
             onClick={() => onDateChange(btn.date)}
             // The selected pill is styled only via background + weight; mark it
@@ -309,6 +312,7 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
         );
       })}
       <button
+        type="button"
         onClick={goLater}
         className="date-nav-arrow w-7 h-7 sm:w-8 sm:h-8 shrink-0 flex items-center justify-center rounded-full text-base transition-colors cursor-pointer"
         style={{ color: "var(--text-muted)" }}
