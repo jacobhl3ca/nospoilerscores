@@ -293,7 +293,12 @@ export function CompactUpcomingCard({
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
-      onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
+      // Only open details when the CARD ITSELF is the keyboard target — the
+      // nested network link stops click propagation via handleExternalClick, so
+      // a mouse click never bubbles here, but keydown had no guard and pressing
+      // Enter on the focused link bubbled up to also open the details modal (a
+      // double activation). Mirrors the main GameCard's keydown guard above.
+      onKeyDown={cardClickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
       tabIndex={cardClickable ? 0 : undefined}
       aria-label={cardClickable ? cardLabel : undefined}
@@ -525,7 +530,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
-      onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
+      // Only open details when the CARD ITSELF is the keyboard target
+      // (e.target === e.currentTarget). Nested controls — the favorite star,
+      // the "+N" networks toggle, team-name buttons, and the network/ESPN
+      // links — already stopPropagation on their onClick, so a mouse click on
+      // one never bubbles to the card. Keydown had no such guard, so pressing
+      // Enter/Space while focused on a nested control bubbled up here and fired
+      // onShowDetails too — hijacking the keystroke and popping the details
+      // modal on top of the control's own action (a double activation). The
+      // target check mirrors the mouse stopPropagation contract for the keyboard.
+      onKeyDown={cardClickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
       tabIndex={cardClickable ? 0 : undefined}
       aria-label={cardClickable ? cardLabel : undefined}
