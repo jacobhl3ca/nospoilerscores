@@ -177,3 +177,16 @@ export function signOut(): void {
   // The worker clears the cookie and 303s back to "/".
   window.location.href = "/auth/logout";
 }
+
+// Permanently delete the signed-in user's server-stored data, then sign out.
+// Backs Apple's in-app account-deletion requirement (guideline 5.1.1(v)); the
+// worker (DELETE /api/account) removes the user's prefs object from R2 and clears
+// the session cookie. Returns true on success so the caller can reload to "/".
+export async function deleteAccount(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/account", { method: "DELETE", credentials: "include" });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}

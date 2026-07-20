@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write   # the failure-alert step below opens/updates an issue
+      actions: read   # the alert step reads the previous run's conclusion (grace check)
     steps:
       # Treat pre-script GitHub infra failures (checkout 403s, setup-node hiccups)
       # as skips, not job failures — only the staleness script's exit code should
@@ -36,39 +36,35 @@ jobs:
       # the Mac mini's residential IP via launchd com.jacob.highlight-fallback-monitor
       # (wrapper ~/bin/highlight-fallback-cron.sh) → ntfy on real misses.
       # check-highlight-fallbacks.mjs stays in the repo; the mini runs it from main.
-      # Real-failure alert. This step only runs when an actual check step above
-      # FAILED — a job that never got a runner ("not acquired by Runner of type
-      # hosted") runs zero steps, so GitHub-infra blips stay silent here. Lets us
-      # mute GitHub's native per-run failure emails and only hear about genuine
-      # staleness. De-dupes onto one open issue (hourly re-runs just comment), so
-      # a sustained outage = one @-mention email, not one per hour.
-      - name: Alert on real check failure
+      # Real-failure alert — ntfy ONLY, never a GitHub issue.
+      #
+      # Rewritten 2026-07-20. The old version opened/commented on a GitHub issue,
+      # which @-mentioned Jacob and emailed him on EVERY hourly failure plus a
+      # "Recovered" close comment. The feeds flap (fail at :20, heal by :29), so
+      # a self-healing blip cost 4 emails. House rule for all monitors:
+      # DOWN-only + 1h grace, no green "recovered" pings.
+      #
+      # Grace: this run only alerts if the PREVIOUS run of this workflow also
+      # failed, i.e. the feeds have been stale for 2 consecutive hourly checks.
+      # A single-run blip that self-heals stays completely silent.
+      - name: Alert on sustained failure (ntfy, 1h grace)
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
-          title="Feed staleness check is failing"
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          stamp="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          existing="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "Still failing as of $stamp — $run_url"
-          else
-            gh issue create --title "🔴 $title" \
-              --body "$(printf 'A staleness/highlight check ran and **failed** — a real problem, not a GitHub runner blip.\n\nFirst seen: %s\nRun log: %s\n\ncc @jacobhl3ca' "$stamp" "$run_url")"
+          prev="$(gh run list --workflow staleness-check.yml --status completed \
+                    --limit 1 --json conclusion --jq '.[0].conclusion // empty')"
+          if [ "$prev" != "failure" ]; then
+            echo "First failure (previous run: ${prev:-none}) — inside 1h grace, staying silent."
+            exit 0
           fi
-      # Auto-close on recovery: when the check passes and an alert issue is still
-      # open, the feeds have healed — close it with a note instead of leaving a
-      # stale red issue that has to be closed by hand (as #18 did).
-      - name: Auto-close alert issue on recovery
-        if: steps.check.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          title="Feed staleness check is failing"
-          stamp="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          existing="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
-          if [ -n "$existing" ]; then
-            gh issue close "$existing" --comment "Recovered — staleness check passed as of $stamp ($run_url). Auto-closing."
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::warning::NTFY_TOPIC secret unset — cannot alert."
+            exit 0
           fi
+          curl -s -H "Title: HideScore feeds stale 2h+" -H "Priority: high" -H "Tags: rotating_light" \
+            -d "Staleness check has failed twice in a row. $run_url" \
+            "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
+      # No recovery notification by design — silence IS the recovery signal.

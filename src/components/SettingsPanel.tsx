@@ -10,7 +10,7 @@ import {
   DefaultLandingView,
   DefaultRatings,
 } from "@/lib/preferences";
-import { getAuthState, signInWithApple, signInWithGoogle, signOut, type AuthState } from "@/lib/prefsSync";
+import { getAuthState, signInWithApple, signInWithGoogle, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
 interface LeagueOption { sport: Sport; label: string }
 
@@ -542,6 +542,32 @@ export default function SettingsPanel({
                 >
                   Sign out
                 </button>
+                {/* Apple requires in-app account deletion (guideline 5.1.1(v)) for any
+                    app with accounts. Deletes the user's server-stored prefs + signs out. */}
+                <button
+                  onClick={async () => {
+                    if (!confirm("Permanently delete your account? This erases your synced teams, layout, and settings from our servers and signs you out. This cannot be undone.")) return;
+                    // Second, deliberate step: typing the word is enough friction that an
+                    // accidental or half-sure tap can't wipe an account, while still being
+                    // a plain in-app flow (Apple 5.1.1(v) wants it easy to FIND, not frictionless).
+                    const typed = prompt("Last check — this permanently erases your synced data and cannot be undone.\n\nType DELETE to confirm.");
+                    if (typed === null) return;
+                    if (typed.trim().toUpperCase() !== "DELETE") {
+                      alert("Account not deleted — you didn't type DELETE.");
+                      return;
+                    }
+                    const ok = await deleteAccount();
+                    if (ok) window.location.href = "/";
+                    else alert("Couldn't delete your account. Please try again in a moment.");
+                  }}
+                  className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                  style={{ background: "transparent", color: "rgb(239,68,68)", border: "1px solid rgb(239,68,68)" }}
+                >
+                  Delete account
+                </button>
+                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  Deleting removes your synced data from our servers. This cannot be undone.
+                </p>
               </div>
             ) : (
               <div className="space-y-2">

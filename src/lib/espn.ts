@@ -1604,8 +1604,10 @@ async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>
     if (date && date.length === 8) {
       apiDate = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
     } else {
-      const now = new Date();
-      apiDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      // ET service day (matches the date-nav) — not the server's local day, which
+      // reintroduced the midnight–1AM drift etDay.ts already eliminated elsewhere.
+      const ymd = toYmd(getEtServiceDate());
+      apiDate = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
     }
     const res = await fetchWithRetry(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${apiDate}&hydrate=team,linescore`, 1, 5000);
     if (!res.ok) return map;
@@ -1663,8 +1665,10 @@ async function fetchNHLGameIds(date?: string): Promise<Map<string, string>> {
     if (date && date.length === 8) {
       apiDate = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
     } else {
-      const now = new Date();
-      apiDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      // ET service day (matches the date-nav) — not the server's local day, which
+      // reintroduced the midnight–1AM drift etDay.ts already eliminated elsewhere.
+      const ymd = toYmd(getEtServiceDate());
+      apiDate = `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
     }
     const res = await fetchWithRetry(`https://api-web.nhle.com/v1/score/${apiDate}`, 1, 5000);
     if (!res.ok) return map;
