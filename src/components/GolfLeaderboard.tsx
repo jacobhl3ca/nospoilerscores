@@ -609,6 +609,7 @@ export default function GolfLeaderboard({
             <>
               {allPlayers.length > INITIAL_SHOW && (
                 <button
+                  type="button"
                   onClick={() => setExpandLevel("top25")}
                   aria-expanded={false}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -619,6 +620,7 @@ export default function GolfLeaderboard({
               )}
               {allPlayers.length > TOP25_SHOW && (
                 <button
+                  type="button"
                   onClick={() => setExpandLevel("all")}
                   aria-expanded={false}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -632,6 +634,7 @@ export default function GolfLeaderboard({
           {expandLevel === "top25" && (
             <>
               <button
+                type="button"
                 onClick={() => setExpandLevel("collapsed")}
                 aria-expanded={true}
                 className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -641,6 +644,7 @@ export default function GolfLeaderboard({
               </button>
               {allPlayers.length > TOP25_SHOW && (
                 <button
+                  type="button"
                   onClick={() => setExpandLevel("all")}
                   aria-expanded={true}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -653,6 +657,7 @@ export default function GolfLeaderboard({
           )}
           {expandLevel === "all" && (
             <button
+              type="button"
               onClick={() => setExpandLevel("collapsed")}
               aria-expanded={true}
               className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -678,6 +683,7 @@ export default function GolfLeaderboard({
             return (
               <button
                 key={index}
+                type="button"
                 onClick={() => {
                   // visibleHighlightSlots filters to slots whose id has resolved,
                   // so id is always set here. If onPlayHighlight isn't wired up
