@@ -88,6 +88,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
     >
       {/* Collapsed pill — one line, ~1 card height. Spoiler-safe (no stakes). */}
       <button
+        type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
         aria-controls="wc-matters-details"
