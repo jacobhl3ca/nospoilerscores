@@ -438,6 +438,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
         aria-label={view === "bracket" ? "World Cup bracket" : view === "ranked" ? "World Cup teams by FIFA ranking" : "World Cup groups"}
       >
         <button
+          type="button"
           onClick={onClose}
           aria-label="Close"
           className="absolute top-3 right-3 text-lg leading-none cursor-pointer"
@@ -461,6 +462,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
                 const active = view === o.v;
                 return (
                   <button
+                    type="button"
                     key={o.v}
                     onClick={() => changeView(o.v)}
                     aria-pressed={active}
@@ -511,6 +513,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
                       const active = band === o.key;
                       return (
                         <button
+                          type="button"
                           key={o.key}
                           onClick={() => changeBand(active ? "all" : o.key)}
                           aria-pressed={active}
@@ -539,6 +542,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
                 const active = days[def.key];
                 return (
                   <button
+                    type="button"
                     key={def.key}
                     onClick={() => selectDay(def.key)}
                     aria-pressed={active}
@@ -676,6 +680,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
             </p>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={cancelBracket}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
@@ -685,6 +690,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={confirmBracket}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
