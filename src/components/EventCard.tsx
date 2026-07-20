@@ -75,8 +75,8 @@ function whenLabel(iso?: string, refYmd?: string): string {
 const UFC_HIGHLIGHT_CHANNELS = ["UFC on Paramount+", "UFC", "ESPN MMA"] as const;
 
 // What the play button reports once a bout has been resolved: the channel it
-// actually came from, or "Search" when nothing official matched and we handed
-// off to YouTube. Keyed by bout id so each card says where ITS video came from.
+// actually came from. Keyed by bout id so each card says where ITS video came
+// from; a null entry (not this type) means no rights-holder had the clip.
 export type HighlightSource = { label: string; official: boolean; videoId?: string };
 
 // "A vs B highlights" — deliberately WITHOUT the "UFC" token that espn.ts's
