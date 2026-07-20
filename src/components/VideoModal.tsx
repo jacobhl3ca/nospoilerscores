@@ -150,6 +150,26 @@ function extractSearchQuery(fallbackUrl: string): string | null {
   }
 }
 
+// Channels the fallback retry is allowed to play from, in preference order,
+// carried on the fallback URL as `nss_channels=A|B&nss_strict=1` by callers
+// that resolved their video under a strict channel gate (F1, golf). YouTube
+// ignores the extra params on a /results URL, so the same string still works
+// verbatim as the external "Watch on YouTube" hand-off — same trick as the
+// existing `nss_no_fallback=1`. Empty list = ungated caller (news, per-game
+// league highlights): retry behavior there is unchanged.
+function strictFallbackChannels(fallbackUrl: string): string[] {
+  try {
+    const u = new URL(fallbackUrl);
+    if (u.searchParams.get("nss_strict") !== "1") return [];
+    return (u.searchParams.get("nss_channels") || "")
+      .split("|")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 // Minimal Reddit selftext renderer. Reddit selftext is markdown but we only
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
@@ -388,6 +408,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // loops. Instead of leaving YouTube's own "Video unavailable" screen, we show a
   // clean overlay with a "Watch on YouTube" button (Jacob 7/14).
   const [ytFailed, setYtFailed] = useState(false);
+  // Flips true when a direct-stream clip (hlsMode: v.redd.it HLS / MP4, streamff
+  // et al., or an MLB .m3u8) fails to load — a fatal hls.js error or a native
+  // <video> "error"/stalled event. Without this the native player's built-in
+  // spinner just spins forever on a dead segment (e.g. Reddit revokes segment
+  // access on a pulled clip → the CMAF .mp4 404/403s while the manifest still
+  // parses). Common on r/soccer, whose goal clips rotate through fragile
+  // external hosts and get pulled fast. Instead of an endless spinner we show a
+  // clean "Open on <source>" fallback, mirroring the ytFailed overlay.
+  const [mediaFailed, setMediaFailed] = useState(false);
   // Captions: default OFF, custom toggle button surfaces them prominently
   // instead of leaving the user to dig through Safari's "more" overflow menu.
   // hasCaptionTrack hides the button on streams with no CC track at all
@@ -428,6 +457,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // spoiler titles for search-path clips, so most titles here are clean; this
   // also covers reddit/unvetted clips by re-checking client-side.
   const [titleSafe, setTitleSafe] = useState(false);
+  // PAUSED (or ENDED) means YouTube draws its own overlay on top of the iframe:
+  // the "More videos" grid on pause, the suggested-video endscreen at the end.
+  // Both are pure spoiler vectors — rel:0 only narrows them to the SAME channel,
+  // which for a UFC clip serves you a "POST-FIGHT INTERVIEW" thumbnail with the
+  // winner's face on it. No playerVar can turn either off, so we cover them.
+  const [ytPaused, setYtPaused] = useState(false);
+  // Latch so the near-end auto-pause (see the progress poll) runs once per clip.
+  const endLatchRef = useRef(false);
   // controls:0 hides YouTube's native mute button, and clips autoplay muted
   // (browsers block unmuted autoplay) — so we render a custom mute toggle + a
   // volume slider. `volume` is 0–100 (the YT player's scale); it's the level we
@@ -488,6 +525,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (drop the one that just failed).
   const embedAlternates = (alternates ?? []).filter((a) => a.videoId && a.videoId !== currentId);
   const linkLabel = sourceLabel ? `Open on ${sourceLabel}` : sourceLabelFromUrl(fallbackUrl);
+  // Stable per-post identity. Prev/next paging REUSES this same modal (stepVideo
+  // only swaps props — the modal isn't remounted), so any child holding local
+  // state persists across posts unless it's re-keyed. PeekBlur owns the
+  // headline/body spoiler reveal in its own useState, so without keying it by
+  // the post a headline the user revealed on post A stays revealed on post B
+  // (Jacob 7/19). Keying each PeekBlur by postKey remounts it fresh per post,
+  // resetting the reveal, while leaving the video player + modal chrome mounted.
+  const postKey = String(currentId ?? playbackUrl ?? embedUrl ?? imageUrl ?? fallbackUrl ?? headline ?? "");
 
   const clearAutoplayBlocked = useCallback(() => {
     autoplayBlockedRef.current = false;
@@ -517,6 +562,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   useEffect(() => {
     clearAutoplayBlocked();
+    // New post / new stream — clear any prior playback-failure overlay so the
+    // fresh clip gets a clean attempt (prev/next paging reuses this modal).
+    setMediaFailed(false);
   }, [currentId, playbackUrl, embedUrl, clearAutoplayBlocked]);
   // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
   // text card) — used both for the footer link and the hidescore deep-link.
@@ -671,6 +719,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const d = p?.getDuration?.() ?? 0;
       const t = p?.getCurrentTime?.() ?? 0;
       if (d > 0) setProgress(Math.min(1, t / d));
+      // Stop just short of the end so the player never reaches ENDED, which is
+      // what triggers YouTube's full-screen suggested-video endscreen. Pausing
+      // here raises our own cover instead (ytPaused), so the last frame stays
+      // put and no "up next" thumbnails ever render. Guarded on d > 2 so short
+      // clips and the pre-metadata window (d === 0) are left alone.
+      // Fires at most once per clip: without the latch, resuming at the end
+      // would be re-paused 350ms later, trapping the viewer on the last frame.
+      if (d > 2 && t > 0 && d - t <= 1 && !endLatchRef.current) {
+        endLatchRef.current = true;
+        p?.pauseVideo?.();
+      }
     }, 350);
     return () => window.clearInterval(id);
   }, [ytMode]);
@@ -946,6 +1005,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // swap) until onReady/PLAYING re-confirms the new clip's title is clean.
   useEffect(() => {
     setTitleSafe(false);
+    setYtPaused(false);
+    endLatchRef.current = false;
   }, [currentId]);
 
   // Direct-stream playback branch — handles two URL shapes:
@@ -967,29 +1028,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     video.textTracks.addEventListener("addtrack", refreshHasCaptionTrack);
     video.addEventListener("loadedmetadata", refreshHasCaptionTrack);
     video.addEventListener("playing", clearAutoplayBlocked);
+    // Native <video> load failure — a pulled/geo-blocked v.redd.it clip parses
+    // its manifest but 403/404s the actual CMAF segment, so the element fires
+    // "error" (or "stalled" with no data). On Safari this is the ONLY signal (it
+    // takes the native-HLS branch below), so without it the clip spins forever.
+    // Surface the fallback overlay instead. A "playing" event means it recovered.
     const isHls = /\.m3u8(\?|$)/i.test(playbackUrl);
-    // Plain MP4 / Safari native HLS — set src and play.
-    if (!isHls || video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = playbackUrl;
-      video.play().catch(handleNativePlayError);
-      return () => {
-        video.textTracks.removeEventListener("addtrack", refreshHasCaptionTrack);
-        video.removeEventListener("loadedmetadata", refreshHasCaptionTrack);
-        video.removeEventListener("playing", clearAutoplayBlocked);
-      };
-    }
-    // hls.js fallback for Chrome/Firefox/etc. on .m3u8 only. (Safari/iOS never
-    // reach here — they take the native-HLS branch above, where the rendition
-    // is governed by the <video> element's rendered size, i.e. the modal width.)
-    // Configured to favor the top rendition from the first frame: these are
-    // short highlight clips (MLB ~30-90s, v.redd.it), so the default ABR — which
-    // starts on a low/mid level and ramps up over several segments — would often
-    // let the clip end before it ever reached max quality.
     let hls: InstanceType<typeof import("hls.js").default> | null = null;
     let cancelled = false;
-    import("hls.js").then(({ default: Hls }) => {
+    let triedHlsJs = false;
+    // hls.js path for Chrome/Firefox/etc. on .m3u8 only — also the rescue path
+    // when the native attempt below fails (see onMediaError). Configured to
+    // favor the top rendition from the first frame: these are short highlight
+    // clips (MLB ~30-90s, v.redd.it), so the default ABR — which starts on a
+    // low/mid level and ramps up over several segments — would often let the
+    // clip end before it ever reached max quality.
+    const startHlsJs = () => {
+      if (cancelled || triedHlsJs) return;
+      triedHlsJs = true;
+      import("hls.js").then(({ default: Hls }) => {
       if (cancelled) return;
-      if (!Hls.isSupported()) return;
+      if (!Hls.isSupported()) { setMediaFailed(true); return; }
       const player = new Hls({
         // Don't let the (deliberately small) modal cap the level, and assume
         // broadband so the very first segment isn't fetched at a low rendition.
@@ -1002,6 +1061,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // subtitleDisplay. The enforce loop below is the real source of truth;
       // this just keeps hls.js from fighting it during init.
       try { player.subtitleDisplay = false; } catch {}
+      // Fatal-error handling (Chrome/Firefox path). A pulled/geo-blocked clip
+      // 403/404s its segments after the manifest parses; hls.js emits a fatal
+      // networkError that would otherwise leave the spinner running forever. Try
+      // hls.js's built-in recovery a bounded number of times for each fatal
+      // class, then give up to the "Open on <source>" overlay rather than
+      // spinning. (Non-fatal errors are routine buffer hiccups hls.js self-heals
+      // — ignore them.) The caps stop a permanently-dead segment from looping
+      // recover→fatal→recover forever without ever surfacing the fallback.
+      let netRecoveries = 0;
+      let mediaRecoveries = 0;
+      player.on(Hls.Events.ERROR, (_evt, data) => {
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries < 2) {
+          mediaRecoveries += 1;
+          try { player.recoverMediaError(); return; } catch {}
+        } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR && netRecoveries < 2) {
+          netRecoveries += 1;
+          try { player.startLoad(); return; } catch {}
+        }
+        setMediaFailed(true);
+      });
       player.loadSource(playbackUrl);
       player.attachMedia(video);
       player.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -1016,12 +1096,45 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         }
         video.play().catch(handleNativePlayError);
       });
-    });
+      }).catch(() => { if (!cancelled) setMediaFailed(true); });
+    };
+    // Native <video> load failure. Two very different causes, so try the cheap
+    // rescue before declaring the clip dead:
+    //  1. canPlayType lied. It answers "maybe" for HLS on some Chromium builds
+    //     (headless / Chrome for Testing) that can't actually decode it, so the
+    //     native branch below grabs an .m3u8 it will always fail on. Hand off to
+    //     hls.js once — that's the path those browsers should have taken.
+    //  2. The clip really is gone (Reddit revokes segment access on pulled
+    //     posts — the manifest still parses while the CMAF .mp4 403s). Common on
+    //     r/soccer, whose goal clips rotate through fragile hosts and get pulled
+    //     fast. Nothing can play it, so surface the "Open on <source>" overlay.
+    // Safari is unaffected: its native HLS works, so this never fires there.
+    const onMediaError = () => {
+      if (isHls && !triedHlsJs) {
+        video.removeAttribute("src");
+        video.load();
+        startHlsJs();
+        return;
+      }
+      setMediaFailed(true);
+    };
+    const onMediaPlaying = () => setMediaFailed(false);
+    video.addEventListener("error", onMediaError);
+    video.addEventListener("playing", onMediaPlaying);
+    // Plain MP4 / Safari native HLS — set src and play.
+    if (!isHls || video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = playbackUrl;
+      video.play().catch(handleNativePlayError);
+    } else {
+      startHlsJs();
+    }
     return () => {
       cancelled = true;
       video.textTracks.removeEventListener("addtrack", refreshHasCaptionTrack);
       video.removeEventListener("loadedmetadata", refreshHasCaptionTrack);
       video.removeEventListener("playing", clearAutoplayBlocked);
+      video.removeEventListener("error", onMediaError);
+      video.removeEventListener("playing", onMediaPlaying);
       if (hls) hls.destroy();
     };
   }, [hlsMode, playbackUrl, clearAutoplayBlocked, handleNativePlayError]);
@@ -1123,13 +1236,36 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // Mark current id as failed and ask the worker for an alternate
       const failed = [...failedIdsRef.current, currentId];
       failedIdsRef.current = failed;
+      // Channel gate carried by the caller (nss_channels + nss_strict on the
+      // fallback URL). Without it this retry re-searched UNSCOPED, which is how
+      // a blocked FORMULA 1 embed got swapped for a fan reupload ("Final
+      // Highlights Race | 2026 Belgian Grand Prix" by "John Maxwell", 7/19) —
+      // the strict gate the caller paid for was silently dropped the moment the
+      // official clip failed to play, i.e. exactly when it mattered. The retry
+      // now walks the SAME allowed channels, strict, in order, and gives up to
+      // the "Watch on YouTube" card rather than playing an unvetted upload.
+      const strictChannels = strictFallbackChannels(fallbackUrl);
       try {
-        const res = await fetch(
-          `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${encodeURIComponent(failed.join(","))}`
-        );
-        const data = res.ok ? await res.json() : null;
-        if (data?.videoId && data.videoId !== currentId) {
-          setCurrentId(data.videoId); // an untried alternate — the effect resets ytFailed
+        const excl = encodeURIComponent(failed.join(","));
+        let nextId: string | null = null;
+        if (strictChannels.length) {
+          // Sequential, not parallel: the worker scrapes YouTube's results page
+          // and rate-limits into empty responses under bursts (same reason
+          // EventCard's UFC chain is sequential).
+          for (const channel of strictChannels) {
+            const res = await fetch(
+              `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1`
+            );
+            const data = res.ok ? await res.json() : null;
+            if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
+          }
+        } else {
+          const res = await fetch(`${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}`);
+          const data = res.ok ? await res.json() : null;
+          if (data?.videoId && data.videoId !== currentId) nextId = data.videoId;
+        }
+        if (nextId) {
+          setCurrentId(nextId); // an untried alternate — the effect resets ytFailed
         } else {
           setYtFailed(true); // exhausted alternates → show the "Watch on YouTube" card
         }
@@ -1218,6 +1354,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // returns the real list — onReady gives []. setPlaybackQuality is
           // a deprecated suggestion, but it's the only knob we have.
           onStateChange: (event: YTPlayerEvent) => {
+            // Drive the spoiler cover: PAUSED (2) and ENDED (0) are exactly the
+            // states where YouTube paints its related-video overlays.
+            if (event.data === 2 || event.data === 0) setYtPaused(true);
+            else if (event.data === 1 || event.data === 3) setYtPaused(false);
             // Playback actually started — kill the watchdog.
             if (event.data === 1 || event.data === 3) {
               clearAutoplayBlocked();
@@ -1545,11 +1685,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
               )}
               {headline && (
-                <PeekBlur tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
+                <PeekBlur key={`h-${postKey}`} tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
               )}
               <ArticleMeta byline={byline} published={published} className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }} />
               {body && (
                 <PeekBlur
+                  key={`b-${postKey}`}
                   className="text-sm sm:text-base leading-relaxed mt-4 pt-4"
                   style={{ color: "var(--text)", borderTop: "1px solid var(--border)" }}
                 >
@@ -1663,6 +1804,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 </div>
               )}
               {!ytFailed && autoplayPrompt}
+              {/* Spoiler cover for YouTube's pause / endscreen overlays. Must be
+                  fully OPAQUE — a dim or blur still leaves thumbnail faces and
+                  "POST-FIGHT INTERVIEW" text readable, which is the whole leak.
+                  pointer-events-none so the tap still falls through to the
+                  click-catcher below (z-10) and resumes playback as before.
+                  With YouTube's native controls on, stop short of the bottom so
+                  its control bar stays visible and usable — the related-video
+                  grid is centred, so it's still fully covered. */}
+              {ytPaused && !ytFailed && !autoplayBlocked && (
+                <div
+                  aria-hidden
+                  className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center ${youtubeNativeControls ? "bottom-12" : "bottom-0"}`}
+                  style={{ background: "#000" }}
+                >
+                  <svg width="46" height="46" viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)"><polygon points="6,4 20,12 6,20" /></svg>
+                </div>
+              )}
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
                   through to the cross-origin iframe. This is what makes the
@@ -2067,6 +2225,31 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               />
             )}
             {hlsMode && autoplayPrompt}
+            {/* Direct-stream load failure — a pulled/geo-blocked clip (common on
+                r/soccer, whose goal clips rotate through fragile external hosts
+                and get taken down fast) 403/404s its segments while the manifest
+                still parses, so the native player would just spin forever. Cover
+                that with a clean prompt + a jump to the source, mirroring the
+                YouTube ytFailed overlay. */}
+            {hlsMode && mediaFailed && (
+              <div
+                className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 px-6 text-center"
+                style={{ background: "#000" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg aria-hidden="true" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                <p className="text-white/85 text-sm sm:text-base font-medium max-w-xs leading-snug">This clip can’t play here — it may have been removed or blocked at the source.</p>
+                <button
+                  type="button"
+                  onClick={() => openExternal(sourceShareUrl || fallbackUrl)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-transform hover:scale-105 cursor-pointer"
+                  style={{ background: "var(--accent)" }}
+                >
+                  {linkLabel}
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
+                </button>
+              </div>
+            )}
           </div>
         )}
         {/* Footer — headline + source/copy actions. The pre-7/13 look Jacob
@@ -2078,7 +2261,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <div className="mt-3 text-center px-2">
             {/* Only the text itself swallows the click (so selecting the headline
                 doesn't close); the surrounding strip stays a dismiss target. */}
-            <PeekBlur tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
+            <PeekBlur key={`f-${postKey}`} tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
             {byline && (
               <ArticleMeta byline={byline} published={null} className="text-xs text-white/40 mt-1" />
             )}
