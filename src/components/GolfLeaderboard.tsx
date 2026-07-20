@@ -290,12 +290,19 @@ export default function GolfLeaderboard({
   const highlightQuery = highlightsAvailable
     ? getGolfHighlightQuery(leagueLabel!, completedRounds, highlightYear)
     : null;
-  const highlightFallbackUrl = highlightsAvailable
-    ? getGolfHighlightUrl(leagueLabel!, completedRounds, highlightYear)
-    : null;
   const officialChannel = highlightsAvailable ? getOfficialChannelName("golf", leagueLabel) : null;
   const secondaryChannels = highlightsAvailable ? getSecondaryChannels("golf", leagueLabel) : [];
   const secondaryChannelsKey = secondaryChannels.join("|");
+  // Every slot below resolves under a strict channel gate, so the modal's
+  // embed-failure retry must stay inside the same curated chain — an unscoped
+  // re-search there would hand a major's recap slot to a reuploader, the exact
+  // failure the strict gate exists to prevent (see VideoModal's
+  // strictFallbackChannels). Same channel order the resolver uses.
+  const highlightFallbackUrl = highlightsAvailable
+    ? `${getGolfHighlightUrl(leagueLabel!, completedRounds, highlightYear)}&nss_strict=1&nss_channels=${encodeURIComponent(
+        [...secondaryChannels, ...(officialChannel && !secondaryChannels.includes(officialChannel) ? [officialChannel] : [])].join("|")
+      )}`
+    : null;
 
   useEffect(() => {
     if (!highlightQuery || prefetchedQuery.current === highlightQuery) return;
