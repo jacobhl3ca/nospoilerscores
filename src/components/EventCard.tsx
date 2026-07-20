@@ -164,10 +164,16 @@ function FighterRow({ f, compact, nameTier, showRecord }: { f: FightBout["red"];
 }
 
 function FightCard({
-  fight, label, broadcasts, loadingId, onPlay, compact, metaCompact, nameTier, showRecords, selectedDate,
+  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, compact, metaCompact, nameTier, showRecords, selectedDate,
 }: {
   fight: FightBout;
   label?: string;
+  // false when the meta row can't fit status + pill + broadcast on ONE line —
+  // the pill is what gives way (Jacob 7/19: "maybe main and comain dont show
+  // if no space"), keeping every card's meta to a single line on phones.
+  showLabel: boolean;
+  // false only when status + channel can't share one line either (~108px card).
+  showBroadcast: boolean;
   broadcasts: string[];
   loadingId: string | null;
   onPlay: (id: string, query: string, channel?: string) => void;
@@ -202,19 +208,19 @@ function FightCard({
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {status}
         </span>
-        {label ? (
+        {label && showLabel ? (
           <span className="flex-auto flex justify-center">
             <span className="inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap"
               style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 15%, transparent)" }}>
               {label}
             </span>
           </span>
-        ) : !metaCompact && fight.weightClass ? (
+        ) : !label && !metaCompact && fight.weightClass ? (
           <span className="flex-auto flex justify-center min-w-0">
             <span className="truncate" style={{ color: "var(--text-muted)" }}>{fight.weightClass}</span>
           </span>
         ) : null}
-        {broadcasts.length > 0 && (
+        {broadcasts.length > 0 && showBroadcast && (
           <span className="shrink-0 ml-auto" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
         )}
       </div>
@@ -287,6 +293,12 @@ export default function EventCard({
   // load-bearing for recognition; below that, truncate is the safety net).
   const fights = event.kind === "ufc" ? event.fights : undefined;
   const [nameFit, setNameFit] = useState<{ tier: FighterNameTier; records: boolean }>({ tier: "full", records: true });
+  // Does the meta row hold status + Main/Co-Main pill + broadcast on ONE line?
+  // If not the PILL gives way (Jacob 7/19) — the channel and the time both stay,
+  // so no card ever grows a second meta line on a phone. Measured, not guessed:
+  // the pill's width depends on the label text at 10px semibold uppercase plus
+  // its rounded-full padding.
+  const [metaFit, setMetaFit] = useState<{ pill: boolean; broadcast: boolean }>({ pill: true, broadcast: true });
   useEffect(() => {
     if (!fights?.length || !colWidth) return;
     // rAF, matching LeagueColumn's checkIfFullNamesFit: measurement runs off
@@ -316,7 +328,39 @@ export default function EventCard({
       const availWithout = colWidth - cardPadding - flagW - gaps - 4;
       const fullMax = maxW(all.map((f) => f.name), nameFs);
       const shortMax = maxW(all.map((f) => f.shortName || f.name), nameFs);
+
+      // Meta row: status (widest of the card's time/Final labels) + the widest
+      // pill ("CO-MAIN") + the broadcast, at the meta font (10px on the tight
+      // board, else 12px — .ns-board-tight/text-xs). The pill adds its own
+      // padding (px-1.5 mobile / px-2 desktop, both sides) and letter-spacing.
+      // Read the meta row's ACTUAL font size off the DOM rather than inferring
+      // it: .ns-board-tight drops this row to 10px based on the COLUMN COUNT,
+      // not the column width, so a width heuristic said 10px on a 108px 2-column
+      // card that was really rendering 12px — and the row wrapped anyway.
+      const metaEl = rootRef.current?.querySelector(".game-meta-row");
+      const metaFs = metaEl ? parseFloat(getComputedStyle(metaEl).fontSize) || 12 : 12;
+      const statusMax = maxW(fights.map((f) => f.state === "post" ? "Final" : f.state === "in" ? "Live" : whenLabel(f.date, selectedDate) || f.statusDetail), metaFs);
+      probe.style.fontWeight = "600";
+      probe.style.textTransform = "uppercase";
+      probe.style.letterSpacing = "0.025em";
+      const pillText = maxW(["Co-Main"], 10);
+      probe.style.fontWeight = "";
+      probe.style.textTransform = "";
+      probe.style.letterSpacing = "";
+      const pillW = pillText + (isMobile ? 12 : 16);
+      const bcW = event.broadcasts.length ? maxW([event.broadcasts[0]], metaFs) : 0;
       document.body.removeChild(probe);
+      const metaGaps = isMobile ? 4 : 6; // gap-x-1 / sm:gap-x-1.5
+      const metaAvail = colWidth - cardPadding - 2;
+      // Ladder — always ONE line, never a wrap (Jacob 7/19: a card that grew a
+      // second meta line on mobile). The pill goes first, then, only if status +
+      // channel STILL don't fit (3 columns on a small phone ≈ 108px of card),
+      // the channel — a per-card repeat of one event-wide fact, so it's the
+      // cheapest thing left to lose once the pill is already gone.
+      setMetaFit({
+        pill: statusMax + pillW + bcW + 2 * metaGaps <= metaAvail,
+        broadcast: statusMax + bcW + metaGaps <= metaAvail,
+      });
       // Priority ladder: full+records → short+records → short WITHOUT records
       // (the record is the least load-bearing field — same call as the tight
       // board hiding MLB's #rank chips — but only hide it when that's what
@@ -333,7 +377,7 @@ export default function EventCard({
       else setNameFit({ tier: "short", records: false });
     });
     return () => cancelAnimationFrame(raf);
-  }, [fights, compact, colWidth]);
+  }, [fights, compact, colWidth, event.broadcasts, selectedDate]);
 
   // ── UFC: one card per bout, main event first ──
   if (event.kind === "ufc" && event.fights?.length) {
@@ -344,6 +388,8 @@ export default function EventCard({
             key={f.id}
             fight={f}
             label={i === 0 ? "Main" : i === 1 ? "Co-Main" : undefined}
+            showLabel={metaFit.pill}
+            showBroadcast={metaFit.broadcast}
             broadcasts={event.broadcasts}
             loadingId={loadingId}
             onPlay={play}
