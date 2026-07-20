@@ -58,17 +58,25 @@ function whenLabel(iso?: string, refYmd?: string): string {
 //
 // Why strict-only in-app: an unscoped UFC search surfaces titles that give the
 // result away outright ("Dricus Du Plessis defeats Kamaru Usman", "… BATTERED
-// …" — both on page 1 for this card). Playing only channel-verified uploads in
-// the masked player, and handing anything else off to a YouTube search OUTSIDE
-// the app, is the same rule the F1 tile already follows.
+// …" — both on page 1 for this card). So we play ONLY channel-verified uploads
+// in the masked player — and when none of the three channels has one, the
+// button HIDES itself rather than handing off to a YouTube search (Jacob 7/19).
+// That search hand-off was the spoiler hole: those same result titles are the
+// thing this whole card exists to keep off screen, so "we couldn't find it"
+// beats "here's a page that spoils it". This makes UFC honour the contract
+// every other league already had — GameHighlights' "missing" state and
+// GolfLeaderboard's visibleHighlightSlots both hide a highlight button whose
+// chain came up empty instead of dropping the user on a search page. F1 is now
+// the only tile that still falls back to a search (its strict FORMULA 1 gate
+// means a miss is usually just FOM blocking the embed, not an unknown clip).
 // NOTE even the official clips' TITLES carry a partial spoiler ("ROUND 1 SUB",
 // "UNANIMOUS DEC"), which the masked player never shows — one more reason the
 // native-YouTube-controls option stays off (it would surface the title).
 const UFC_HIGHLIGHT_CHANNELS = ["UFC on Paramount+", "UFC", "ESPN MMA"] as const;
 
 // What the play button reports once a bout has been resolved: the channel it
-// actually came from, or "Search" when nothing official matched and we handed
-// off to YouTube. Keyed by bout id so each card says where ITS video came from.
+// actually came from. Keyed by bout id so each card says where ITS video came
+// from; a null entry (not this type) means no rights-holder had the clip.
 export type HighlightSource = { label: string; official: boolean; videoId?: string };
 
 // "A vs B highlights" — deliberately WITHOUT the "UFC" token that espn.ts's
@@ -91,7 +99,15 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
   // a YouTube search OUTSIDE the app instead of playing an unvetted upload in
   // the masked player.
   const play = async (id: string, query: string, channel?: string, strict?: boolean) => {
-    const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    // nss_channels/nss_strict ride along so VideoModal's embed-failure retry
+    // keeps THIS call's channel gate. FOM blocks the FORMULA 1 embed often, and
+    // an ungated retry is what put a fan reupload in the masked player (7/19);
+    // YouTube ignores the extra params, so the string is still a valid search
+    // URL for the external hand-off below.
+    const gate = strict && channel
+      ? `&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`
+      : "";
+    const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${gate}`;
     // Route the YouTube-search fallback through openExternal (not raw
     // window.open) so it behaves like every other external YouTube open in the
     // app: on the website it's byte-identical (openExternal does the same
@@ -108,21 +124,24 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
   };
 
   // UFC: walk the rights-holder channels in coverage order, each strict
-  // (channel-verified), and play the first hit in the masked player. Nothing
-  // official → hand off to a YouTube search outside the app rather than play an
-  // unvetted upload. Returns which source won so the button can report it.
+  // (channel-verified), and play the first hit in the masked player. Returns
+  // which source won so the button can report it, or NULL when no channel has
+  // a verified clip — the caller hides the button on null (see the spoiler note
+  // on UFC_HIGHLIGHT_CHANNELS; there is deliberately no search fallback here).
   // Sequential on purpose: the worker scrapes YouTube's results page and gets
   // rate-limited into empty responses under bursts (measured 2026-07-19), so a
   // second channel is only ever tried when the first genuinely missed.
-  const playUfc = async (id: string, query: string): Promise<HighlightSource> => {
-    const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    if (!onPlayHighlight) { openExternal(fallback); return { label: "Search", official: false }; }
+  const playUfc = async (id: string, query: string): Promise<HighlightSource | null> => {
+    if (!onPlayHighlight) return null;
     setLoadingId(id);
     try {
       for (const channel of UFC_HIGHLIGHT_CHANNELS) {
         const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, true);
         if (videoId) {
-          onPlayHighlight(videoId, fallback);
+          // The modal's "Watch on YouTube" fallback is this EXACT clip's watch
+          // page, never a /results search — an embed block must not become the
+          // spoiler surface the strict gate just avoided.
+          onPlayHighlight(videoId, `https://www.youtube.com/watch?v=${videoId}`);
           // "UFC on Paramount+" → "Paramount+" on the button (the channel name
           // repeats the league label the button already sits under).
           return { label: channel.replace(/^UFC on /, ""), official: true, videoId };
@@ -131,8 +150,7 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     } finally {
       setLoadingId(null);
     }
-    openExternal(fallback);
-    return { label: "Search", official: false };
+    return null;
   };
 
   return { loadingId, play, playUfc };
@@ -242,8 +260,10 @@ function FightCard({
   loadingId: string | null;
   onPlay: (id: string, query: string, channel?: string) => void;
   // Resolved source for THIS bout once played ("Paramount+" / "UFC" / "ESPN
-  // MMA" / "Search"), so each card reports where its video actually came from.
-  source?: HighlightSource;
+  // MMA"), so each card reports where its video actually came from. null =
+  // resolved and nothing official has it → the button is hidden (no search
+  // fallback). undefined = not attempted yet.
+  source?: HighlightSource | null;
   compact: boolean;
   metaCompact: boolean;
   nameTier: FighterNameTier;
@@ -295,13 +315,19 @@ function FightCard({
         <FighterRow f={fight.red} compact={compact} nameTier={nameTier} showRecord={showRecords} />
         <FighterRow f={fight.blue} compact={compact} nameTier={nameTier} showRecord={showRecords} />
       </div>
-      {isPost && (
+      {/* source === null → resolved, and no rights-holder channel has this
+          bout's clip: drop the button entirely rather than offer a YouTube
+          search whose result titles spoil the finish (see the
+          UFC_HIGHLIGHT_CHANNELS note). undefined → not attempted yet, so the
+          button shows. Same hide-on-empty contract as GameHighlights /
+          GolfLeaderboard. */}
+      {isPost && source !== null && (
         <div className="mt-1 sm:mt-2 flex gap-1">
-          {/* Label reports the SOURCE once resolved — "Paramount+" when the
-              rights-holder clip played in-app, "Search" when nothing official
-              matched and we handed off to YouTube. Until then it's the generic
-              "UFC" (we don't know yet, and claiming a source we haven't
-              verified would be the lie the strict gate exists to prevent). */}
+          {/* Label reports the SOURCE once resolved — "Paramount+" / "UFC" /
+              "ESPN MMA" once the rights-holder clip played in-app. Until then
+              it's the generic "UFC" (we don't know yet, and claiming a source
+              we haven't verified would be the lie the strict gate exists to
+              prevent). It can no longer read "Search" — that path is gone. */}
           <PlayBtn label={source?.label ?? "UFC"} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
         </div>
       )}
@@ -328,8 +354,11 @@ export default function EventCard({
 }) {
   const { loadingId, play, playUfc } = useHighlightPlayer(onPlayHighlight);
   // Where each bout's highlight actually came from, once played (bout id →
-  // source). Sticky per card so the button keeps reporting its source.
-  const [sources, setSources] = useState<Record<string, HighlightSource>>({});
+  // source). Sticky per card so the button keeps reporting its source. A NULL
+  // entry means "resolved, and no rights-holder has it" — FightCard hides that
+  // bout's button from then on instead of offering a YouTube search. Absent
+  // (undefined) = not attempted yet, so the button still shows as plain "UFC".
+  const [sources, setSources] = useState<Record<string, HighlightSource | null>>({});
   const playBout = async (id: string, query: string) => {
     // Already resolved this bout — replay the same video instead of walking the
     // channel chain again. The resolver scrapes YouTube's results page and
@@ -337,7 +366,7 @@ export default function EventCard({
     // re-watching a highlight must not cost another 1-3 lookups.
     const known = sources[id];
     if (known?.videoId && onPlayHighlight) {
-      onPlayHighlight(known.videoId, `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`);
+      onPlayHighlight(known.videoId, `https://www.youtube.com/watch?v=${known.videoId}`);
       return;
     }
     const src = await playUfc(id, query);
