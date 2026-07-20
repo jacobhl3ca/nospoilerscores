@@ -234,6 +234,18 @@ export default function RootLayout({
             thumbnail requests it. DNS resolution is the cheap, always-useful
             part with no idle-socket cost. */}
         <link rel="dns-prefetch" href="https://images.weserv.nl" />
+        {/* Playing a highlight in the embedded player (VideoModal) injects the
+            YouTube iframe API script from www.youtube.com and then mounts a
+            www.youtube.com/embed iframe — the app's core "watch highlights
+            without spoilers" interaction. Resolve that host's DNS during HTML
+            parse so the lookup isn't the first thing blocking the connection
+            when the user taps a highlight. dns-prefetch only, NOT preconnect:
+            the player loads on demand (only for visitors who open a clip), so a
+            warmed TCP+TLS socket would idle unused for everyone who doesn't —
+            the same idle-socket reasoning as the weserv proxy and analytics
+            hosts. (Thumbnails/posters are routed through weserv above, so this
+            covers the player connection itself, not the images.) */}
+        <link rel="dns-prefetch" href="https://www.youtube.com" />
         {/* Both analytics tags (GoatCounter + Umami, at the end of <body>) fetch
             their loader script and then beacon a pageview on EVERY load — so
             these three hosts are always hit: gc.zgo.at (the GoatCounter loader),
