@@ -612,6 +612,7 @@ export default function SettingsPanel({
               in here, and dark/light is the most-frequently-flipped setting. */}
           <Section title="Theme">
             <RadioGroup
+              label="Theme"
               value={prefs.theme}
               options={THEME_OPTIONS}
               onChange={(v) => {
@@ -633,6 +634,7 @@ export default function SettingsPanel({
           <Section title="Default view">
             <Field label="Landing date" hint="What day to show when you open the app">
               <RadioGroup
+                label="Landing date"
                 value={prefs.defaultDateMode ?? "smart"}
                 options={DATE_MODE_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultDateMode: v })}
@@ -660,6 +662,7 @@ export default function SettingsPanel({
             )}
             <Field label="Landing view" hint="Scores or news on launch">
               <RadioGroup
+                label="Landing view"
                 value={prefs.defaultLandingView ?? "remember"}
                 options={LANDING_VIEW_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultLandingView: v })}
@@ -667,6 +670,7 @@ export default function SettingsPanel({
             </Field>
             <Field label="Ratings on launch" hint="Show or hide game ratings + best-games sort">
               <RadioGroup
+                label="Ratings on launch"
                 value={prefs.defaultRatings ?? "auto"}
                 options={DEFAULT_RATINGS_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultRatings: v })}
@@ -755,6 +759,7 @@ export default function SettingsPanel({
             })}
             <Field label="Header league switcher" hint="How tapping a column header behaves">
               <RadioGroup
+                label="Header league switcher"
                 value={prefs.leagueSwitcherMode ?? "dropdown"}
                 options={SWITCHER_MODE_OPTIONS}
                 onChange={(v) => updatePrefs({ leagueSwitcherMode: v })}
@@ -927,6 +932,7 @@ export default function SettingsPanel({
             />
             <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
               <RadioGroup
+                label="Skip controls"
                 value={prefs.videoSeekControl ?? "both"}
                 options={SEEK_CONTROL_OPTIONS}
                 onChange={(v) => updatePrefs({ videoSeekControl: v })}
@@ -934,6 +940,7 @@ export default function SettingsPanel({
             </Field>
             <Field label="Seek bar fill" hint="The bar shows no position by default so it can't spoil how far in you are">
               <RadioGroup
+                label="Seek bar fill"
                 value={prefs.videoSeekFill ?? "off"}
                 options={SEEK_FILL_OPTIONS}
                 onChange={(v) => updatePrefs({ videoSeekFill: v })}
@@ -1081,16 +1088,25 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 interface RadioOption<T extends string> { value: T; label: string; hint?: string }
 function RadioGroup<T extends string>({
+  label,
   value,
   options,
   onChange,
 }: {
+  // Names the set of options for assistive tech. The visual <Field> label above
+  // each group is a bare, unassociated <label>, so without this a screen reader
+  // read the options as free-floating toggle buttons ("Today, pressed") with no
+  // hint at what they configure. role="group" + aria-label ties them together
+  // and voices the setting ("Landing date"). Kept as role="group" (not
+  // radiogroup) because the buttons stay aria-pressed toggles, not roving-focus
+  // radios — purely additive, so tab order and behavior are unchanged.
+  label: string;
   value: T;
   options: RadioOption<T>[];
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1.5">
+    <div role="group" aria-label={label} className="grid grid-cols-3 gap-1.5">
       {options.map((o) => {
         const active = o.value === value;
         return (
