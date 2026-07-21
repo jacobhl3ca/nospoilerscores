@@ -240,6 +240,19 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
               },
               {
                 "@type": "FAQPage",
+                // Tie this node to the same page URL as the WebPage node above
+                // and into the shared WebSite entity. FAQPage is a WebPage
+                // subtype, so without a `url`/`isPartOf` it floated as a SECOND,
+                // disconnected page node beside the WebPage describing the exact
+                // same address — the lone sibling in this @graph still left
+                // unlinked, after the WebPage→#website and WebPage→#breadcrumb
+                // refs above already tied the rest together. Anchoring it to the
+                // canonical URL + #website (the same node-linking pattern the
+                // WebPage/BreadcrumbList use) makes the two page nodes read as
+                // one entity for this URL across all 48 generated team pages —
+                // matching the SeoLandingPage FAQPage fix.
+                url: `https://hidescore.com${canonical}`,
+                isPartOf: { "@id": "https://hidescore.com/#website" },
                 // Same locale signal as the WebPage node above, matching the
                 // inLanguage the FAQPage nodes already carry on SeoLandingPage
                 // and /faq.
