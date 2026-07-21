@@ -270,6 +270,18 @@ export default function RootLayout({
             as the www.youtube.com hint above (the player loads only for visitors
             who open a clip, so a warmed TCP+TLS socket would idle unused). */}
         <link rel="dns-prefetch" href="https://s.ytimg.com" />
+        {/* The game-detail modal's venue weather (lib/weather.ts) is warmed on
+            card hover/pointerdown (prefetchGameWeather) — it geocodes the venue
+            via geocoding-api.open-meteo.com then pulls the forecast from
+            api.open-meteo.com. Resolve both hosts' DNS during HTML parse so the
+            lookup isn't the first thing blocking the connection when the user
+            hovers a card, shaving the "weather pops in a beat late" delay the
+            prefetch already targets. dns-prefetch only, NOT preconnect: weather
+            fetches only for visitors who hover/open a game, so a warmed TCP+TLS
+            socket would idle unused for everyone who doesn't — the same on-demand
+            idle-socket reasoning as the youtube/ytimg hints above. */}
+        <link rel="dns-prefetch" href="https://geocoding-api.open-meteo.com" />
+        <link rel="dns-prefetch" href="https://api.open-meteo.com" />
         {/* Both analytics tags (GoatCounter + Umami, at the end of <body>) fetch
             their loader script and then beacon a pageview on EVERY load — so
             these three hosts are always hit: gc.zgo.at (the GoatCounter loader),
