@@ -20,9 +20,14 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     // Surface the failure in the console for debugging (digest links it to any
-    // server-side log), and report it to Sentry for crash visibility.
+    // server-side log), and report it to Sentry for crash visibility. In
+    // production Next redacts a Server Component error's message down to just
+    // its `digest`, so without forwarding that digest the client-side Sentry
+    // event can't be tied back to the server log entry keyed on it. Attach it
+    // as a searchable tag (falling back to "none" for client-only errors, which
+    // carry no digest) so the two records line up in the Sentry UI.
     console.error(error);
-    Sentry.captureException(error);
+    Sentry.captureException(error, { tags: { nextjs_digest: error.digest ?? "none" } });
   }, [error]);
 
   return (
