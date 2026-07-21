@@ -2998,7 +2998,12 @@ export async function fetchAllLeagues(
     return true;
   });
   if (final.length < targetCount) {
-    const backfill = pickAndAssignLeagues(viewDate, MAX_LEAGUES).filter(
+    // Draw the backfill pool at slotCount, NOT MAX_LEAGUES: on a wide (5-column)
+    // board pickAndAssignLeagues only builds a candidate pool up to `count`, so
+    // MAX_LEAGUES (3) yielded just the top-3 leagues — all already placed and in
+    // seenSport — leaving slots 4-5 un-backfillable. The board then rendered 4
+    // columns instead of 5 after a dedupe, the very shrink this block prevents.
+    const backfill = pickAndAssignLeagues(viewDate, slotCount).filter(
       (l) => !seenSport.has(l.sport),
     );
     for (const l of backfill) {
