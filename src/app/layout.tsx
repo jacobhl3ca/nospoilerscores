@@ -97,6 +97,13 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
   ],
   viewportFit: "cover",
+  width: "device-width",
+  initialScale: 1,
+  // Lock out pinch/double-tap zoom in the Capacitor WebView — an accidental
+  // pinch left the page scaled and panned, showing blank strips top/bottom.
+  // Mobile Safari ignores user-scalable=no, so browser zoom still works.
+  maximumScale: 1,
+  userScalable: false,
 };
 
 const JSON_LD = {
