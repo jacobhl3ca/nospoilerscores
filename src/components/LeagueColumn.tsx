@@ -1187,6 +1187,7 @@ export default function LeagueColumn({
                 const cycle = (dir: 1 | -1) => onCycleLeague(dir);
                 const arrowBtn = (dir: 1 | -1) => (
                   <button
+                    type="button"
                     onClick={() => cycle(dir)}
                     aria-label={dir === 1 ? "Next league" : "Previous league"}
                     title={dir === 1 ? "Next league" : "Previous league"}
@@ -1213,6 +1214,7 @@ export default function LeagueColumn({
             ) : isSwappable ? (
               <div ref={swapRef} className="relative">
                 <button
+                  type="button"
                   onClick={() => setSwapOpen(!swapOpen)}
                   className="cursor-pointer transition-colors hover:opacity-80"
                   style={{ color: "var(--text)" }}
@@ -1256,6 +1258,7 @@ export default function LeagueColumn({
                   >
                     {/* Auto option — always present so the dropdown is consistent per column */}
                     <button
+                      type="button"
                       onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{ color: "var(--text-muted)" }}
@@ -1277,6 +1280,7 @@ export default function LeagueColumn({
                       return (
                         <button
                           key={opt.sport}
+                          type="button"
                           onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
                           // The active league is otherwise signalled only by color +
                           // weight; aria-current voices it to screen readers (matches
@@ -1297,6 +1301,7 @@ export default function LeagueColumn({
                     })}
                     {/* Remove col — hides the column entirely until switched back. */}
                     <button
+                      type="button"
                       onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{
