@@ -93,6 +93,15 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "FAQPage",
+            // Anchor this node to the canonical /faq URL and into the shared
+            // WebSite entity declared in layout.tsx. FAQPage is a WebPage subtype,
+            // so without a `url`/`isPartOf` it floated as a page node describing
+            // /faq that was disconnected from the site graph — the same gap the
+            // SeoLandingPage and worldcup/teams FAQ nodes already had fixed.
+            // Linking it to the canonical URL + #website makes Google read it as
+            // this page's FAQ block on the known site rather than an orphan node.
+            url: "https://hidescore.com/faq",
+            isPartOf: { "@id": "https://hidescore.com/#website" },
             // Declare the Q&A content language, matching the inLanguage signal
             // the site adds to its other CreativeWork schema nodes (the
             // WebApplication/WebSite in layout, the WebPage in SeoLandingPage).
