@@ -253,6 +253,16 @@ export default function RootLayout({
             hosts. (Thumbnails/posters are routed through weserv above, so this
             covers the player connection itself, not the images.) */}
         <link rel="dns-prefetch" href="https://www.youtube.com" />
+        {/* The www.youtube.com/iframe_api script the player injects (VideoModal)
+            is only a tiny loader — it in turn pulls the real YouTube widget API
+            and the embed player's static assets (www-widgetapi.js, base.js, CSS,
+            sprites) from s.ytimg.com. So a highlight play hits a SECOND host the
+            www.youtube.com prefetch above doesn't cover; warm its DNS too, on the
+            same on-demand path, so neither lookup blocks the connection when the
+            user taps a clip. dns-prefetch only, for the same idle-socket reason
+            as the www.youtube.com hint above (the player loads only for visitors
+            who open a clip, so a warmed TCP+TLS socket would idle unused). */}
+        <link rel="dns-prefetch" href="https://s.ytimg.com" />
         {/* Both analytics tags (GoatCounter + Umami, at the end of <body>) fetch
             their loader script and then beacon a pageview on EVERY load — so
             these three hosts are always hit: gc.zgo.at (the GoatCounter loader),
