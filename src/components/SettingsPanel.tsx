@@ -1283,6 +1283,29 @@ function TeamPicker({
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
       />
 
+      {/* The team grid below conveys its result state purely visually — a
+          pulsing skeleton, a "No matches" line, or a grid of team buttons —
+          so a screen-reader user typing in the search box above gets no cue
+          how many teams matched or that a query came up empty. Voice a
+          concise summary through a dedicated sr-only live region (WCAG 4.1.3
+          Status Messages), mirroring the same role="status" aria-live="polite"
+          pattern the news feed, video strips, and FeedbackBox already use.
+          Kept to a short count (not the team names, which the grid itself
+          exposes) so polite announcements stay terse as the query changes. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {showSkeleton
+          ? "Loading teams…"
+          : !activeSport && !trimmedQuery
+            ? ""
+            : filtered.length === 0
+              ? trimmedQuery
+                ? loadingSports.size > 0
+                  ? "Searching…"
+                  : "No matching teams"
+                : "No teams available"
+              : `${filtered.length} team${filtered.length === 1 ? "" : "s"} found`}
+      </div>
+
       {/* Team grid */}
       <div className="max-h-72 overflow-y-auto -mx-1 px-1">
         {showSkeleton ? (
