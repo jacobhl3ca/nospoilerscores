@@ -201,6 +201,13 @@ export default function SpoilerFreeSportsPage() {
                 // node-linking the SeoLandingPage WebPage uses — instead of
                 // leaving two duplicate WebSite entities for hidescore.com.
                 isPartOf: { "@id": "https://hidescore.com/#website" },
+                // Point this page at its own BreadcrumbList node (below) by @id,
+                // the same @graph node-linking the WebPage→WebSite isPartOf above
+                // uses. The BreadcrumbList here was the one sibling node left
+                // unlinked — a bare, @id-less list floating beside the page it
+                // describes — while the shared SeoLandingPage component already
+                // ties the two together. `breadcrumb` is a valid WebPage property.
+                breadcrumb: { "@id": "https://hidescore.com/spoiler-free-sports#breadcrumb" },
                 about: [
                   { "@type": "Thing", name: "spoiler-free sports" },
                   { "@type": "Thing", name: "sports scores" },
@@ -209,6 +216,10 @@ export default function SpoilerFreeSportsPage() {
               },
               {
                 "@type": "BreadcrumbList",
+                // Stable @id so the WebPage node above can reference this exact
+                // list (Google merges the page's JSON-LD into one graph, so the
+                // ref resolves here), matching the SeoLandingPage breadcrumb node.
+                "@id": "https://hidescore.com/spoiler-free-sports#breadcrumb",
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
                   { "@type": "ListItem", position: 2, name: "Spoiler-Free Sports", item: "https://hidescore.com/spoiler-free-sports" },
@@ -216,6 +227,16 @@ export default function SpoilerFreeSportsPage() {
               },
               {
                 "@type": "FAQPage",
+                // Tie this node to the same page URL as the WebPage node above and
+                // into the shared WebSite entity. FAQPage is a WebPage subtype, so
+                // without a `url`/`isPartOf` it floated as a SECOND, disconnected
+                // page node beside the WebPage describing the exact same address —
+                // the lone sibling in this @graph still left unlinked. Anchoring it
+                // to the canonical URL + #website (the same node-linking the
+                // WebPage/BreadcrumbList use) makes the two page nodes read as one
+                // entity for this URL, matching the shared SeoLandingPage component.
+                url: "https://hidescore.com/spoiler-free-sports",
+                isPartOf: { "@id": "https://hidescore.com/#website" },
                 // Same locale signal as the WebPage node above, matching the
                 // inLanguage the FAQPage nodes already carry on /faq and the
                 // shared SeoLandingPage component. FAQPage is a WebPage subtype,
