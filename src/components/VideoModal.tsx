@@ -1477,13 +1477,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // reach; desktop gets subtle side chevrons so the footer links never overlap.
   const mobilePager = hasPager ? (
     <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex sm:hidden items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
-      <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
+      <button type="button" onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         Prev
       </button>
-      <button onClick={(e) => { e.stopPropagation(); onNext?.(); }} disabled={!onNext} aria-label="Next post" title="Next post"
+      <button type="button" onClick={(e) => { e.stopPropagation(); onNext?.(); }} disabled={!onNext} aria-label="Next post" title="Next post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         Next
@@ -1493,7 +1493,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   ) : null;
   const desktopPager = hasPager ? (
     <>
-      <button
+      <button type="button"
         onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
         disabled={!onPrev}
         aria-label="Previous post"
@@ -1503,7 +1503,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       >
         <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
       </button>
-      <button
+      <button type="button"
         onClick={(e) => { e.stopPropagation(); onNext?.(); }}
         disabled={!onNext}
         aria-label="Next post"
@@ -1583,7 +1583,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             onClick={(e) => e.stopPropagation()}
           >
             {hlsMode && hasCaptionTrack && (
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
                 aria-pressed={showCC}
                 aria-label={showCC ? "Hide captions" : "Show captions"}
@@ -1598,7 +1598,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 CC
               </button>
             )}
-            <button
+            <button type="button"
               onClick={(e) => { e.stopPropagation(); onClose(); }}
               className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
               aria-label="Close"
@@ -1626,7 +1626,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             {/* Close sits OUTSIDE the image — a right-aligned row the image's own
                 width, so it hugs the top-right corner without covering content. */}
             <div className="mb-2 flex justify-end">
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
@@ -1668,7 +1668,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             onTouchEnd={onSwipeEnd}
           >
             <div className="mb-2 flex justify-end">
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
@@ -1728,7 +1728,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               style={{ width: ytFrameWidth }}
               onClick={(e) => e.stopPropagation()}
             >
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
                 aria-pressed={showCC}
                 aria-label={showCC ? "Hide captions" : "Show captions"}
@@ -1742,7 +1742,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               >
                 CC
               </button>
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
@@ -1914,7 +1914,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   so you can bring the controls back. Nothing to toggle when
                   YouTube's native controls replace this chrome entirely. */}
               {!youtubeNativeControls && (
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); setControlsHidden((v) => !v); }}
                 aria-label={controlsHidden ? "Show controls" : "Hide controls"}
                 title={controlsHidden ? "Show controls" : "Hide controls"}
@@ -1943,14 +1943,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     Skip to about {pendingSeek.pct}%? That&apos;s past halfway — you might catch up to late-game action.
                   </p>
                   <div className="flex items-center gap-2">
-                    <button
+                    <button type="button"
                       onClick={(e) => { e.stopPropagation(); setPendingSeek(null); }}
                       className="px-3 py-1.5 rounded-md text-sm font-medium text-white/80 hover:text-white cursor-pointer"
                       style={{ border: "1px solid rgba(255,255,255,0.3)" }}
                     >
                       Cancel
                     </button>
-                    <button
+                    <button type="button"
                       onClick={(e) => { e.stopPropagation(); const run = pendingSeek.run; setPendingSeek(null); run(); }}
                       className="px-3 py-1.5 rounded-md text-sm font-semibold text-white cursor-pointer"
                       style={{ background: "var(--accent)" }}
@@ -2059,7 +2059,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   the icon). The icon's waves reflect the level; the fill shows
                   the current volume. */}
               <div className="justify-self-start flex items-center gap-1.5 min-w-0">
-                <button
+                <button type="button"
                   onClick={(e) => { e.stopPropagation(); toggleMute(); }}
                   aria-label={muted ? "Unmute" : "Mute"}
                   title={muted ? "Sound on" : "Mute"}
@@ -2126,7 +2126,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   so the fullscreen button stays right-aligned. */}
               {seekControl !== "bar" ? (
                 <div className="min-w-0 flex items-center justify-center gap-0.5 flex-nowrap">
-                  <button
+                  <button type="button"
                     onClick={(e) => { e.stopPropagation(); seekBy(-SEEK_STEP); }}
                     aria-label="Back 5 seconds"
                     title="Back 5 seconds (←)"
@@ -2140,7 +2140,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       it squeezed the side cells until the fixed-width volume
                       slider overflowed into this row. Gate the full set on lg. */}
                   {[25, 50, 75].map((p) => (
-                    <button
+                    <button type="button"
                       key={`m${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
                       className="flex lg:hidden items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
@@ -2153,7 +2153,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   {/* Large windows: full 10→90 set (80/90 dimmed — nearest the ending) */}
                   <span className="hidden lg:inline text-[11px] text-white/35 mx-1 select-none">Skip to</span>
                   {JUMP_PCTS.map((p) => (
-                    <button
+                    <button type="button"
                       key={`d${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
                       className={`hidden lg:flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
@@ -2163,7 +2163,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       {p}%
                     </button>
                   ))}
-                  <button
+                  <button type="button"
                     onClick={(e) => { e.stopPropagation(); seekBy(SEEK_STEP); }}
                     aria-label="Forward 5 seconds"
                     title="Forward 5 seconds (→)"
@@ -2176,7 +2176,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               ) : <div />}
 
               {/* Fullscreen toggle */}
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
                 aria-label={fsActive ? "Exit fullscreen" : "Fullscreen"}
                 title={fsActive ? "Exit fullscreen (Esc)" : "Fullscreen (f)"}
