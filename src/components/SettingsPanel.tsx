@@ -507,7 +507,7 @@ export default function SettingsPanel({
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           <h2 className="text-base font-bold" style={{ color: "var(--text)" }}>Settings</h2>
-          <button
+          <button type="button"
             onClick={onClose}
             aria-label="Close settings"
             className="w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
@@ -535,7 +535,7 @@ export default function SettingsPanel({
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                   Your teams, layout, and settings sync automatically across all your browsers and devices.
                 </p>
-                <button
+                <button type="button"
                   onClick={() => signOut()}
                   className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
                   style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
@@ -544,7 +544,7 @@ export default function SettingsPanel({
                 </button>
                 {/* Apple requires in-app account deletion (guideline 5.1.1(v)) for any
                     app with accounts. Deletes the user's server-stored prefs + signs out. */}
-                <button
+                <button type="button"
                   onClick={async () => {
                     if (!confirm("Permanently delete your account? This erases your synced teams, layout, and settings from our servers and signs you out. This cannot be undone.")) return;
                     // Second, deliberate step: typing the word is enough friction that an
@@ -572,7 +572,7 @@ export default function SettingsPanel({
             ) : (
               <div className="space-y-2">
                 {auth.providers?.apple !== false && (
-                <button
+                <button type="button"
                   onClick={() => signInWithApple()}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
                   style={{
@@ -587,7 +587,7 @@ export default function SettingsPanel({
                 </button>
                 )}
                 {auth.providers?.google && (
-                <button
+                <button type="button"
                   onClick={() => signInWithGoogle()}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
                   style={{ background: "#fff", color: "#1f1f1f", border: "1px solid #dadce0" }}
@@ -704,7 +704,7 @@ export default function SettingsPanel({
                   className="w-28 px-3 py-2 rounded-lg text-sm"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 />
-                <button
+                <button type="button"
                   onClick={resolveZip}
                   disabled={zip.length !== 5 || zipBusy}
                   className="px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-default"
@@ -838,7 +838,7 @@ export default function SettingsPanel({
                       <span className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
                         {SPORT_LABEL[sport] ?? sport}
                       </span>
-                      <button
+                      <button type="button"
                         onClick={() => clearTeamsForSport(sport)}
                         aria-label={`Clear ${SPORT_LABEL[sport] ?? sport} teams`}
                         className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
@@ -849,7 +849,7 @@ export default function SettingsPanel({
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {teams.map((t) => (
-                        <button
+                        <button type="button"
                           key={t.id}
                           onClick={() => removeTeam(t.id)}
                           className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
@@ -880,7 +880,7 @@ export default function SettingsPanel({
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {prefs.favoriteTeams.length} total
                   </span>
-                  <button
+                  <button type="button"
                     onClick={clearAllTeams}
                     className="text-xs underline underline-offset-2 cursor-pointer hover:opacity-80"
                     style={{ color: "var(--text-muted)" }}
@@ -983,7 +983,7 @@ export default function SettingsPanel({
                 const nothingToShare = prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague;
                 return (
                   <>
-                    <button
+                    <button type="button"
                       onClick={onShareFavorites}
                       disabled={nothingToShare}
                       className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -1042,7 +1042,7 @@ export default function SettingsPanel({
                   </>
                 );
               })()}
-              <button
+              <button type="button"
                 onClick={() => {
                   if (confirm("Reset all settings to defaults? Favorites will be cleared.")) resetAll();
                 }}
@@ -1110,7 +1110,7 @@ function RadioGroup<T extends string>({
       {options.map((o) => {
         const active = o.value === value;
         return (
-          <button
+          <button type="button"
             key={o.value}
             onClick={() => onChange(o.value)}
             aria-pressed={active}
@@ -1238,7 +1238,7 @@ function TeamPicker({
         {tabSports.map((s) => {
           const active = s.sport === activeSport;
           return (
-            <button
+            <button type="button"
               key={s.sport}
               onClick={() => setSelectedSport(active ? null : s.sport)}
               // State is otherwise conveyed only by accent color; expose the
@@ -1312,7 +1312,7 @@ function TeamPicker({
             {filtered.map((t) => {
               const isFav = favSet.has(t.id);
               return (
-                <button
+                <button type="button"
                   key={t.id}
                   onClick={() => onToggle(t.id)}
                   // Favorited state is otherwise conveyed only by accent color;
