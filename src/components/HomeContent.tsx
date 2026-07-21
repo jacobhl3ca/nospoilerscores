@@ -1896,6 +1896,7 @@ export default function HomeContent({
                 <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
                   <span className="relative inline-flex items-center mr-2 shrink-0">
                     <button
+                      type="button"
                       data-cal-toggle
                       onClick={() => setCalendarOpen(!calendarOpen)}
                       className="ml-0.5 w-7 h-7 shrink-0 flex items-center justify-center rounded-full transition-colors cursor-pointer"
@@ -1965,6 +1966,7 @@ export default function HomeContent({
             {showNews && (
               <div ref={newsFilterRef} className="relative">
                 <button
+                  type="button"
                   onClick={() => setNewsFilterOpen(!newsFilterOpen)}
                   className="monkey-toggle relative w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
                   style={{
@@ -2003,6 +2005,7 @@ export default function HomeContent({
                     />
                     {newsTypeFilter !== "all" && (
                       <button
+                        type="button"
                         onClick={() => setNewsTypeFilter("all")}
                         className="mt-3 text-xs underline cursor-pointer"
                         style={{ color: "var(--text-muted)" }}
@@ -2019,6 +2022,7 @@ export default function HomeContent({
                 the calendar moved to a bare icon at the end of the DateNav row).
                 Shown in every view. */}
             <button
+              type="button"
               onClick={() => {
                 const next = resolvedTheme === "dark" ? "light" : "dark";
                 updatePrefs({ theme: next });
@@ -2045,6 +2049,7 @@ export default function HomeContent({
             </button>
 
             <button
+              type="button"
               onClick={() => setSettingsOpen(true)}
               className="monkey-toggle w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
               style={{
@@ -2073,6 +2078,7 @@ export default function HomeContent({
           <DateNav selectedDate={selectedDate} onDateChange={setSelectedDate} initialOffset={initialOffset} trailing={
             <span className="relative inline-flex items-center">
               <button
+                type="button"
                 data-cal-toggle
                 onClick={() => setCalendarOpen(!calendarOpen)}
                 className="ml-1 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
@@ -2106,6 +2112,7 @@ export default function HomeContent({
             <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               {([["Cards", false], ["Feed", true]] as const).map(([label, on]) => (
                 <button
+                  type="button"
                   key={label}
                   onClick={() => updatePrefs({ newsFeedView: on })}
                   className="px-4 py-1 rounded-full text-sm font-semibold transition-colors cursor-pointer"
@@ -2672,6 +2679,7 @@ export default function HomeContent({
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <p style={{ color: "var(--text-muted)" }}>Failed to load games</p>
             <button
+              type="button"
               // Retry with the user's configured columns (thirdLeague + slot
               // overrides), matching every other fetchData call. Passing only
               // the date let thirdLeague/slotOverrides default to undefined, so
@@ -2804,6 +2812,7 @@ export default function HomeContent({
                 </span>
                 {firstEmptySlot !== undefined ? (
                   <button
+                    type="button"
                     onClick={() => setSlotLeague(firstEmptySlot, "fifa")}
                     data-umami-event="wc-banner-add-empty-slot"
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
@@ -2813,6 +2822,7 @@ export default function HomeContent({
                   </button>
                 ) : !wcReplaceOpen ? (
                   <button
+                    type="button"
                     onClick={() => setWcReplaceOpen(true)}
                     data-umami-event="wc-banner-open-replace-picker"
                     className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
@@ -2825,6 +2835,7 @@ export default function HomeContent({
                     <span className="text-sm" style={{ color: "var(--text-muted)" }}>Replace:</span>
                     {slotEntries.map((entry) => (
                       <button
+                        type="button"
                         key={entry.slotIdx}
                         onClick={() => { setSlotLeague(entry.slotIdx, "fifa"); setWcReplaceOpen(false); }}
                         data-umami-event={`wc-banner-replace-${entry.league.sport}`}
@@ -2838,6 +2849,7 @@ export default function HomeContent({
                       </button>
                     ))}
                     <button
+                      type="button"
                       onClick={() => setWcReplaceOpen(false)}
                       data-umami-event="wc-banner-cancel-replace"
                       className="text-sm px-1.5 py-1 cursor-pointer"
@@ -2849,6 +2861,7 @@ export default function HomeContent({
                   </span>
                 )}
                 <button
+                  type="button"
                   onClick={() => updatePrefs({ wcBannerDismissed: true })}
                   data-umami-event="wc-banner-dismiss"
                   aria-label="Dismiss World Cup banner"
@@ -3110,6 +3123,7 @@ export default function HomeContent({
                 Favorites saved to this browser
               </p>
               <button
+                type="button"
                 onClick={dismissFavToast}
                 className="text-xs shrink-0 mt-0.5 cursor-pointer"
                 style={{ color: "var(--text-muted)" }}
@@ -3122,6 +3136,7 @@ export default function HomeContent({
               Bookmark or copy link to keep across devices
             </p>
             <button
+              type="button"
               onClick={copyFavLink}
               className="mt-2 w-full py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
               style={{ background: "var(--accent)", color: "white" }}
@@ -3190,6 +3205,7 @@ export default function HomeContent({
             </div>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setShowRatingsExplainer(false)}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
@@ -3199,6 +3215,7 @@ export default function HomeContent({
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => confirmRatings()}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
@@ -3245,6 +3262,7 @@ export default function HomeContent({
             </p>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setShowNewsExplainer(false)}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
@@ -3254,6 +3272,7 @@ export default function HomeContent({
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => confirmNews()}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
@@ -3324,6 +3343,7 @@ export default function HomeContent({
             </div>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={skipLeaguePicker}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
@@ -3333,6 +3353,7 @@ export default function HomeContent({
                 Use defaults
               </button>
               <button
+                type="button"
                 onClick={confirmLeaguePicker}
                 className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
                 style={{ background: "var(--accent)", color: "white" }}
