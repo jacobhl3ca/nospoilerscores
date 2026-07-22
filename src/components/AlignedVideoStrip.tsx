@@ -30,6 +30,16 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
 
   useEffect(() => {
     let cancelled = false;
+    // Clear stale columns whenever the source SET changes (e.g. a league swap
+    // relabels a column while this strip stays mounted — its key only bumps on a
+    // news refresh, not on a swap). Without this reset the positional colItems
+    // array keeps the OUTGOING league's thumbnails at that index and renders
+    // them under the INCOMING league's header during the refetch gap; worse,
+    // the stale (truthy) entry keeps `allLoaded` true so no skeleton shows. The
+    // fresh null array (sized to the current sources) restores the loading
+    // skeleton and guarantees the render only ever pairs a column's items with
+    // its own header. Also resizes the array on add/remove.
+    setColItems(sources.map(() => null));
     sources.forEach((source, idx) => {
       source.fetch().then((items) => {
         if (cancelled) return;
@@ -93,14 +103,14 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
       }}
     >
       {sources.map((source, colIdx) => {
-        // `colItems` is sized once from the initial `sources.length` (useState
-        // initializer above) and the refetch effect only assigns `next[idx]` —
-        // it never grows the array. So when a video column is added while this
-        // strip stays mounted (its key only changes on a news refresh), the new
-        // colIdx reads `undefined` until its fetch resolves. Normalize that to
-        // `null` so the `=== null` "still loading" guards below (skeleton, pad
-        // count) catch it too — otherwise `items.slice(...)` runs on `undefined`
-        // and throws, crashing the news view for that render.
+        // The refetch effect resizes `colItems` to the current `sources` on
+        // every source-set change, so colIdx normally has a matching slot. This
+        // `?? null` stays as belt-and-suspenders for the one render between a
+        // sources change and the effect firing (a new colIdx would otherwise
+        // read `undefined`): normalize it to `null` so the `=== null` "still
+        // loading" guards below (skeleton, pad count) catch it too — otherwise
+        // `items.slice(...)` runs on `undefined` and throws, crashing the news
+        // view for that render.
         const items = colItems[colIdx] ?? null;
         const isTailCol = tailHasItems && colIdx === tailColIdx;
         const capped = isTailCol
