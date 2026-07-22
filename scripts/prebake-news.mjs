@@ -1254,7 +1254,14 @@ async function getRedditToken() {
 // via p.stickied + flair, but RSS carries no stickied/flair field, so match on
 // the (stable) title patterns instead. Belt-and-suspenders with the author skip.
 const REDDIT_META_TITLE =
-  /daily (discussion|game) thread|game thread index|post[- ]?game thread|free talk|sunday brunch|shitpost saturday|moronic monday|megathread|simple questions|weekly|^\s*\[?\s*off[- ]?topic/i;
+  /daily (discussion|game)(?: thread)?|wunderkind watch|game thread index|post[- ]?game thread|free talk|sunday brunch|shitpost saturday|moronic monday|megathread|simple questions|weekly|^\s*\[?\s*off[- ]?topic/i;
+
+// Recurring-thread bots that aren't AutoModerator. r/soccer's u/2soccer2bot
+// posts "Daily Discussion" + "Wunderkind Watch" every day; neither is stickied
+// in the RSS view, so they took two of the twelve card slots as permanently
+// blank headlines (no image, no video, no selftext) — a chunk of the 83%-blank
+// r/soccer feed Jacob's media watchdog flagged 2026-07-22.
+const REDDIT_BOT_AUTHOR = /^(AutoModerator|2soccer2bot)$/i;
 
 // ── Redlib video-id recovery ──────────────────────────────────────
 // RSS drops the one field that powers inline playback: the v.redd.it video id.
@@ -1396,7 +1403,7 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     if (REDDIT_META_TITLE.test(title)) continue;
     if (/rule|mod|meta|pinned/i.test(flair)) continue;
     const author = (block.match(/class="post_author[^"]*"[^>]*href="\/u\/([^"\/]+)"/) || [])[1] || "";
-    if (/^AutoModerator$/i.test(author)) continue;
+    if (REDDIT_BOT_AUTHOR.test(author)) continue;
     // Date lives in <span class="created" title="Jun 12 2026, 08:30:10 UTC">.
     const dtitle = (block.match(/class="created"[^>]*title="([^"]+)"/) || [])[1] || "";
     const ts = dtitle ? Date.parse(dtitle.replace(/\sUTC$/, " GMT")) : NaN;
@@ -1685,7 +1692,7 @@ async function fetchRedditRSS(subreddit, sectionLabel) {
     if (!passesArticleBlocklist(title)) continue;
     if (REDDIT_META_TITLE.test(title)) continue;
     let author = ((e.match(/<name>([\s\S]*?)<\/name>/) || [])[1] || "").trim().replace(/^\/?u\//i, "");
-    if (/^AutoModerator$/i.test(author)) continue;
+    if (REDDIT_BOT_AUTHOR.test(author)) continue;
     const link = ((e.match(/<link[^>]*href="([^"]+)"/) || [])[1] || "").trim();
     if (!link) continue;
     const id = ((e.match(/<id>([\s\S]*?)<\/id>/) || [])[1] || link).trim();
