@@ -1044,9 +1044,16 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
       if (!playoffLabel) playoffLabel = headline;
     }
   }
-  // Also check season type from the API if available
-  if (event.season?.type === 3 || event.season?.type === 4) {
-    isPlayoff = true; // type 3 = postseason, type 4 = off-season/all-star but sometimes playoff
+  // Also check season type from the API when the notes above didn't flag it.
+  // ESPN's seasontype numbering is 1=preseason, 2=regular, 3=postseason,
+  // 4=off-season (all-star / exhibition) — the same convention this file relies
+  // on elsewhere, where seasontype 1 is filtered out as preseason. Only type 3
+  // is the playoffs; type 4 was mislabeling all-star/exhibition games as playoff,
+  // which (via game.isPlayoff → GameCard's `period >= 5 && !isPlayoff` check)
+  // suppressed the shootout "SO" label on any such game that reached a 5th period.
+  // playoffLabel is unaffected — it's driven only by the notes match above.
+  if (event.season?.type === 3) {
+    isPlayoff = true;
   }
 
   // Playoff series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
