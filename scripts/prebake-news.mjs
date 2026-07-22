@@ -1341,16 +1341,24 @@ async function fetchRedditVideoMap(subreddit) {
 // client never depends on a volunteer instance staying up. fetchReddit() falls
 // back to the gated reddit.com RSS only when every mirror is down.
 let _redlibWinner = null;
+// Mirrors caught serving a stale CACHED listing (see STALE_LISTING_MAX_H below).
+// A mirror can be up, return HTTP 200 and parse perfectly while handing back a
+// days-old snapshot of /hot — the failure that put r/baseball 4 days behind on
+// 2026-07-22 while every freshness monitor read green (fetchedAt is stamped at
+// bake time, so stale CONTENT looks identical to fresh content). Sticky for the
+// whole run so we don't re-poison another sub with the same bad mirror.
+const _redlibStale = new Set();
+const STALE_LISTING_MAX_H = 36;
 async function fetchRedlibHTML(subreddit) {
   // Try the instance that last worked first (usually one volunteer host is up at
   // a time), then the hash-rotated rest, so we don't re-pay dead-mirror timeouts
   // on every sub.
   const order = [];
-  if (_redlibWinner) order.push(_redlibWinner);
+  if (_redlibWinner && !_redlibStale.has(_redlibWinner)) order.push(_redlibWinner);
   const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
   for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
     const inst = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
-    if (!order.includes(inst)) order.push(inst);
+    if (!order.includes(inst) && !_redlibStale.has(inst)) order.push(inst);
   }
   for (const base of order) {
     try {
@@ -1362,7 +1370,7 @@ async function fetchRedlibHTML(subreddit) {
       const html = await res.text();
       if (/<div class="post[ "]/.test(html)) {
         _redlibWinner = base;
-        return html;
+        return { html, base };
       }
     } catch {
       continue; // dead / blocked mirror — try the next
@@ -1589,10 +1597,31 @@ async function fetchRedditViaRedlib(subreddit, sectionLabel) {
   // Retry with backoff before falling through to the gated reddit.com RSS, which
   // is itself IP-rate-limited and likely to 429 anyway.
   for (let attempt = 0; attempt < 3; attempt++) {
-    const html = await fetchRedlibHTML(subreddit);
-    if (html) {
-      const items = await parseRedlibListing(html, subreddit, sectionLabel);
-      if (items.length) return await fillMissingRedlibVideos(items, subreddit);
+    const hit = await fetchRedlibHTML(subreddit);
+    if (hit) {
+      const items = await parseRedlibListing(hit.html, subreddit, sectionLabel);
+      if (items.length) {
+        // Reject a stale cached snapshot. Even the quietest sub we bake
+        // (r/ncaaw, r/EuropaLeague in the off-season) has a top-of-hot post
+        // inside ~18h, so a whole listing older than STALE_LISTING_MAX_H means
+        // the mirror is serving cache, not that the sub went quiet. Burn that
+        // mirror for the rest of the run and retry — next loop rotates to
+        // another instance, and if they're all bad we fall through to the
+        // gated reddit.com RSS, which is always live.
+        const newest = Math.max(
+          ...items.map((it) => Date.parse(it.published || "") || 0),
+        );
+        if (newest && Date.now() - newest > STALE_LISTING_MAX_H * 3600e3) {
+          const ageH = ((Date.now() - newest) / 3600e3).toFixed(1);
+          console.warn(
+            `redlib ${hit.base} served a STALE r/${subreddit} listing (newest post ${ageH}h old) — blacklisting for this run`,
+          );
+          _redlibStale.add(hit.base);
+          if (_redlibWinner === hit.base) _redlibWinner = null;
+          continue; // no backoff sleep: a cache hit cost us nothing
+        }
+        return await fillMissingRedlibVideos(items, subreddit);
+      }
     }
     if (attempt < 2) await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
   }
