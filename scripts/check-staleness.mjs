@@ -31,6 +31,14 @@ const NEWS_HOURLY = [
   "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-wnba",
   "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",
+  // Editorial substitute feeds + the two league video feeds that shipped after
+  // this list was last swept and were never added — they baked unwatched for
+  // weeks (found 2026-07-22 by diffing prebake's job table against this list;
+  // rerun that diff whenever a feed is added). fetchedAt-only on purpose: BBC
+  // tennis/golf legitimately go 2-3 days without a story between majors, so a
+  // content-age rule would page every off-week.
+  "bbc-football", "bbc-tennis", "bbc-golf", "guardian-football",
+  "fifa-videos", "mls-videos",
 ];
 
 // The low-volume soccer/World-Cup + college reddit tail is the family the
