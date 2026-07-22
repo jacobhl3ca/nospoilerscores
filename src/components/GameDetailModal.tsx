@@ -302,6 +302,7 @@ export default function GameDetailModal({
         aria-label={dialogLabel}
       >
         <button
+          type="button"
           onClick={onClose}
           className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer"
           style={{ color: "var(--text-muted)" }}
@@ -455,6 +456,7 @@ export default function GameDetailModal({
         {/* Watch-live button for in-progress games with a stream link. */}
         {isLive && liveUrl ? (
           <button
+            type="button"
             onClick={() => { openExternal(liveUrl); onClose(); }}
             className="mt-4 w-full py-2 rounded-lg text-sm font-medium cursor-pointer"
             style={{ background: "var(--accent)", color: "white" }}
