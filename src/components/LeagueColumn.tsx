@@ -1160,7 +1160,13 @@ export default function LeagueColumn({
       style={isDragging ? { opacity: 0.55 } : undefined}
     >
       {showHeader && (
-        <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: "1.75rem" }}>
+        // The 1.75rem top padding lines the header up with the "+" add-column
+        // button in row layout (pt-7 there matches it). Single-column mode's
+        // add button uses its own tighter mt-1 instead, so that alignment
+        // doesn't apply here — condense (singleColumn) keeps just enough
+        // padding to clear the sticky background bleed (Jacob screenshot:
+        // dead gap above the league title on the phone single-column board).
+        <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}>
           <div
             className="flex items-center justify-center"
             style={canDrag ? { cursor: isDragging ? "grabbing" : "grab", touchAction: "pan-y" } : undefined}
