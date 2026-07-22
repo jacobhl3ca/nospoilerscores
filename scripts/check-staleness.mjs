@@ -61,7 +61,18 @@ const FEEDS = [
     // *-videos, every 2h) keep the looser 24h that tolerates an overnight blip.
     const reddit = slug.startsWith("reddit-");
     const critH = reddit ? (RATE_LIMIT_PRONE_REDDIT.has(slug) ? 24 : 12) : 24;
-    return { path: `/news/${slug}.json`, warnH: reddit ? 4 : 6, critH };
+    // CONTENT age (newest item's `published`), not just `fetchedAt`. A feed can
+    // rebake on schedule — fresh fetchedAt, green table — while every post in it
+    // is days old, because a redlib mirror handed the baker a stale cached
+    // /hot snapshot. That's exactly how r/baseball sat 4 days behind on
+    // 2026-07-22 with all 49 feeds reading "fresh" (Jacob spotted it in the UI,
+    // not the monitor). prebake now rejects stale mirrors; this is the net that
+    // catches the next variant of the same class of bug. Thresholds are loose on
+    // purpose — even the quietest sub we bake tops out around 18h — so this
+    // fires on "went static", never on a genuinely slow news day.
+    const contentWarnH = reddit ? 24 : null;
+    const contentCritH = reddit ? (RATE_LIMIT_PRONE_REDDIT.has(slug) ? 72 : 48) : null;
+    return { path: `/news/${slug}.json`, warnH: reddit ? 4 : 6, critH, contentWarnH, contentCritH };
   }),
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
   // prime-asins is a best-effort nicety: it deep-links Prime broadcasts to the
@@ -110,6 +121,18 @@ function extractTimestamp(json) {
   return null;
 }
 
+// Newest `published` across a feed's items — the age of the CONTENT, which is
+// independent of when the bake last ran.
+function newestItemTs(json) {
+  const items = Array.isArray(json?.items) ? json.items : [];
+  let newest = 0;
+  for (const it of items) {
+    const ts = Date.parse(it?.published || "");
+    if (!Number.isNaN(ts) && ts > newest) newest = ts;
+  }
+  return newest || null;
+}
+
 const now = Date.now();
 
 const rows = await Promise.all(
@@ -132,6 +155,21 @@ const rows = await Promise.all(
           row.note = `>${feed.warnH}h warn (field=${ts.field})`;
         }
       }
+      // Content-age check runs even when fetchedAt is green — that combination
+      // (fresh bake, ancient posts) IS the stale-mirror signature.
+      if (feed.contentCritH != null) {
+        const newest = newestItemTs(json);
+        if (newest) {
+          row.contentAgeH = (now - newest) / 3600000;
+          if (row.contentAgeH > feed.contentCritH) {
+            row.status = "crit";
+            row.note = `newest post ${row.contentAgeH.toFixed(1)}h old (>${feed.contentCritH}h) — feed went static`;
+          } else if (row.contentAgeH > feed.contentWarnH && row.status === "ok") {
+            row.status = "warn";
+            row.note = `newest post ${row.contentAgeH.toFixed(1)}h old (>${feed.contentWarnH}h warn)`;
+          }
+        }
+      }
     } catch (err) {
       row.status = "error";
       row.note = String(err?.message || err);
@@ -147,8 +185,9 @@ console.log(`Feeds: ${rows.length}\n`);
 const pathW = Math.max(...rows.map((r) => r.path.length));
 for (const r of rows) {
   const age = r.ageH == null ? "—" : `${r.ageH.toFixed(1)}h`;
+  const post = r.contentAgeH == null ? "" : ` post=${`${r.contentAgeH.toFixed(1)}h`.padStart(6)}`;
   console.log(
-    `${r.status.padEnd(5)} ${r.path.padEnd(pathW)}  age=${age.padStart(6)}  warn=${String(r.warnH).padStart(2)}h crit=${String(r.critH).padStart(3)}h  ${r.note}`,
+    `${r.status.padEnd(5)} ${r.path.padEnd(pathW)}  age=${age.padStart(6)}${post}  warn=${String(r.warnH).padStart(2)}h crit=${String(r.critH).padStart(3)}h  ${r.note}`,
   );
 }
 
