@@ -107,6 +107,15 @@ export default function FaqPage() {
             // WebApplication/WebSite in layout, the WebPage in SeoLandingPage).
             // FAQPage is a WebPage subtype, so this is a valid locale hint.
             inLanguage: "en",
+            // Point this page node at its BreadcrumbList (below) by @id — the
+            // same @graph node-linking the isPartOf ref above and the
+            // SeoLandingPage WebPage→#breadcrumb ref already use. The
+            // BreadcrumbList was the one sibling node left unlinked — a bare,
+            // @id-less list floating beside the page it describes. `breadcrumb`
+            // is a valid WebPage property (FAQPage is a WebPage subtype), and
+            // tying it to the page node is Google's recommended pattern for the
+            // breadcrumb rich result.
+            breadcrumb: { "@id": "https://hidescore.com/faq#breadcrumb" },
             mainEntity: FAQ.map((item) => ({
               "@type": "Question",
               name: item.q,
@@ -127,6 +136,12 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "BreadcrumbList",
+            // Stable @id so the FAQPage node above can reference this exact list
+            // (Google merges the page's JSON-LD blocks into one graph, so the
+            // ref resolves here) instead of leaving it a bare, @id-less list
+            // floating beside the page — matching the SeoLandingPage's
+            // WebPage→#breadcrumb node-linking.
+            "@id": "https://hidescore.com/faq#breadcrumb",
             itemListElement: [
               { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
               { "@type": "ListItem", position: 2, name: "FAQ", item: "https://hidescore.com/faq" },
