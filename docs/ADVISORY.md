@@ -5,6 +5,101 @@
 
 ---
 
+## 2026-07-22 — Post-WC lull + fall sports on deck
+
+**Context this week:** World Cup 2026 finished 7/19 (3 days ago). NFL Preseason opened today. EPL returns 8/16 (25 days). NCAAF starts 8/22, NFL regular season 9/4. This is the quietest traffic window of the year — the best time for structural work that has been deferred while the WC was live.
+
+---
+
+### 1. Reddit OAuth creds — unlock comments + news feeds now (Effort: S)
+
+**Why it matters:** Comments are fully built and waiting behind a single 2-minute registration step (`reddit.com/prefs/apps → script app type`). Once `client_id` + `secret` land in `~/.config/hidescore/reddit.env` and are sourced in the cron, three things unlock at once: (a) Reddit news feeds re-enable for MLB, NBA, NFL, NHL, and soon EPL; (b) blurred tap-to-reveal comments in Feed view go live; (c) the r/soccer firehose column (already wired for EPL/UCL/UEL per the 7/20 commit) starts populating 25 days before the EPL opener — prime time to build the habit with soccer fans. The banned account is irrelevant; a fresh app registration on any account works.
+
+**Do this week.** Every day of delay is news cards the news view can't fill.
+
+---
+
+### 2. Mobile column layout overhaul — horizontal-scroll or 2-column (Effort: M)
+
+**Why it matters:** At 390px the 3-column board gives each column ~100px — too narrow to show DOW + time + network + team names without truncation. This is HideScore's biggest UX problem on phones, where most casual sports fans check scores. The backlog has tabled this twice; the post-WC lull (low traffic, no must-watch column) is the right window to ship a breaking redesign without it landing on a busy day.
+
+**Recommended approach:** Horizontal-scroll columns — each league column gets `min-width: 160px`, the row overflows horizontally, and the user swipes to reach the 3rd column. Momentum-scroll snap between columns makes the swipe feel native. Unlocks: time alignment, full team names without abbreviation, a wider network-chip tap target, and room for future card features (score-bug mask, series status, etc.).
+
+---
+
+### 3. Post-WC evergreen archive page `/worldcup/2026` (Effort: S/M)
+
+**Why it matters:** Right now `"2026 World Cup results"`, `"World Cup 2026 highlights"`, and `"2026 World Cup bracket"` are being searched in peak volume. HideScore has spoiler-free ratings for every WC game and video highlights — no competitor combines those. A permanent `/worldcup/2026` page (static, no expiry) listing all 104 matches with their game-quality ratings and highlight links will rank for this long tail for years. The WC hub page and bracket component are already built; this is mostly a static render of the final data.
+
+**Detail:** Bake the final bracket + all group-stage and knockout games + ratings into a static JSON at build time. Reuse `WorldCupBracket` and `GameCard` in read-only/archive mode. OG title: "2026 FIFA World Cup Results & Game Ratings — No Spoilers". The spoiler-free angle is unique: every other archive shows scores by default.
+
+---
+
+### 4. La Liga, Bundesliga, Serie A, Ligue 1 — add as swap-only options (Effort: S)
+
+**Why it matters:** The WC introduced international soccer to US fans exactly when these leagues are about to restart (La Liga ~Aug 15, Bundesliga ~Aug 22, Serie A ~Aug 23, Ligue 1 ~Aug 8). Adding them as `excludeFromAuto` swap options (selectable from the slot dropdown, never auto-picked) costs almost nothing — each is a 2-line `LeagueConfig` entry + an ESPN scoreboard path, identical to the MLS/EPL pattern. Soccer fans who tracked the WC on HideScore can now follow their club on the same spoiler-safe board.
+
+**ESPN paths to add:**
+- La Liga: `/soccer/esp.1/scoreboard` (window ~08-15 → 05-24)
+- Bundesliga: `/soccer/ger.1/scoreboard` (~08-22 → 05-17)
+- Serie A: `/soccer/ita.1/scoreboard` (~08-23 → 05-25)
+- Ligue 1: `/soccer/fra.1/scoreboard` (~08-08 → 05-24)
+
+---
+
+### 5. "Surprise me" classic-game discovery (Effort: M)
+
+**Why it matters:** The post-WC dead zone (and any off-season) is when users want passive entertainment, not live scores. A "Surprise me" button that surfaces a randomly-selected high-rated past game (rating ≥ 85, biased toward the user's favorite leagues) gives HideScore a retention hook no competitor has. The user sees a game card with the rating badge, teams, and a "Watch highlights" button — no score until they choose to reveal. Mentioned in the 7/18 optimal-improvements audit as a new idea.
+
+**Detail:** Simplest version: a pre-baked static JSON of curated great games per league (50–100 per sport) served from R2. A "Surprise me" button in the date-nav or settings panel picks one at random weighted toward favorite leagues and shows it as a modal game card. Also the basis for a `/classics` route ("best NBA games ever", etc.) with solid SEO value.
+
+---
+
+### 6. EPL/NCAAF/NFL fall-season column QA pass (Effort: S)
+
+**Why it matters:** EPL starts 8/16, NCAAF 8/22, NFL 9/4. The league config has all three wired, but after a summer of soccer/golf/WC edge cases the auto-pick logic and column rendering should be tested before millions of fans start checking daily.
+
+**Items to verify before 8/16:**
+- EPL auto-picks correctly when active (MLS is the only other active soccer league right now)
+- NCAAF doesn't displace NFL Preseason awkwardly in center slot
+- 5-column wide-board assigns EPL/NCAAF/NFL to sensible slots simultaneously
+- r/soccer firehose card annotates EPL posts correctly (wired 7/20 but needs live match-day verification)
+- `matchupLabel`/`playoffLabel` doesn't render "Playoff" for EPL regular-season match weeks
+
+---
+
+### 7. Score-bug mask in the video player (Effort: M)
+
+**Why it matters:** HideScore already masks the YouTube title strip (top) and player bottom chrome. The remaining spoiler is the broadcast score bug — the live-score overlay baked into footage (typically top-left corner). A CSS overlay targeting that region (roughly 10% width × 6% height) would complete the spoiler-safety story for highlights. This is the feature most likely to convert a skeptical new user who tries the video player and still sees a score.
+
+**Detail:** A semi-transparent colored block rendered over the embed, togglable via a new `maskScoreBug` pref (default: off — position-sensitive). Adds a "Mask score bug" toggle in Settings → "Highlight video" next to the existing title/bottom toggles. Start with the ESPN/NBC/CBS typical position (top-left); offer a "right corner" option for Fox broadcasts.
+
+---
+
+### 8. Season-start teaser state for upcoming leagues (Effort: S)
+
+**Why it matters:** When a user checks HideScore in the week before a new season opens, the league column shows "No games today" — a dead end. An upcoming-season preview state for known start-date leagues would replace the empty column with something engaging: "NFL starts in 3 days", a countdown, and a first-week schedule teaser if the ESPN API has fixtures. Low effort because `startDate` already lives in `LeagueConfig`.
+
+**Detail:** When a league's `startDate` is within 7 days and the column would otherwise be empty, render a "Season preview" card with the league logo, days-to-go countdown, and the first week's marquee matchup from the ESPN lookahead. Extend the existing next-game-day logic's look-ahead window for this pre-season period.
+
+---
+
+### 9. Accessibility: focus trap + ARIA in all modals (Effort: S)
+
+**Why it matters:** `VideoModal`, `GameDetailModal`, and `SettingsPanel` don't trap focus — a keyboard user tabbing through a modal escapes into the background. This is a WCAG 2.1 AA gap. Screen-reader users also lose their place when modals open without `aria-modal` containment.
+
+**Detail:** Each modal needs: (a) `role="dialog"` + `aria-modal="true"` + `aria-labelledby` pointing at the modal title; (b) focus moved to the first focusable element on open; (c) a lightweight FocusTrap (100 lines of vanilla JS, no library) that constrains Tab/Shift+Tab to the modal's children; (d) Escape closes. The `SettingsPanel` drawer ref is the right anchor for its trap.
+
+---
+
+### 10. iOS App Clip / Android Instant App for "check today's scores" (Effort: L)
+
+**Why it matters:** iOS App Clips and Android Instant Apps let users experience the core of an app without a full install. For HideScore the core loop — "check today's scores, spoiler-free" — is a perfect App Clip: tiny, single-purpose, fast. A user who gets texted a HideScore share link can open a full-screen scores view instantly, no install gate. If they love it, one tap installs the full app. This is the most friction-free new-user acquisition path when someone gets referred by an existing user.
+
+**Detail:** An App Clip targets ≤15 MB. The scores board (today's games, 3 leagues, no auth, no news) comfortably fits. The associated domain is already set up via universal links. The main App Store app already exists; an App Clip is a new Xcode target pointing at the same codebase with a reduced feature set. Android Instant App is a similar split-module build from the Capacitor project.
+
+---
+
 ## 2026-07-15
 
 **Context this week:** World Cup 2026 enters its final four days (semis/finals, through July 19). News feed shipped July 14. Telemundo Spanish highlights fixed. Reddit comments are built but dark, waiting on OAuth creds. F1/UFC cards still hidden. iOS/Android apps trailing web by several releases.
