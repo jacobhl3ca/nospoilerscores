@@ -32,20 +32,40 @@ export default function TomorrowPage() {
   return (
     <>
       <HomeContent initialOffset={1} />
-      {/* BreadcrumbList lets Google render a Home › Tomorrow trail in the search
-          result instead of the bare /tomorrow URL — matching the /faq, /privacy,
-          /worldcup, and guide pages that already declare the same hierarchy.
-          Server-rendered: this page has no "use client", so the script ships in
-          the static HTML for crawlers. */}
+      {/* Page graph: a WebPage node linked into the site's shared #website
+          entity (declared in layout.tsx) plus its own BreadcrumbList, so Google
+          renders a Home › Tomorrow trail in the search result AND reads the
+          breadcrumb as this page's rather than an orphan list. The three date
+          routes were the only pages still emitting a bare, @id-less
+          BreadcrumbList with no WebPage node — every other route (SeoLandingPage,
+          /faq, /spoiler-free-sports, the World Cup pages) already uses this
+          WebPage→#website / WebPage→#breadcrumb node-linking. Server-rendered:
+          this page has no "use client", so the script ships in the static HTML
+          for crawlers. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
-              { "@type": "ListItem", position: 2, name: "Tomorrow", item: "https://hidescore.com/tomorrow" },
+            "@graph": [
+              {
+                "@type": "WebPage",
+                name: "Tomorrow's Sports Schedule — No Spoilers | HideScore",
+                description:
+                  "Tomorrow's NBA, MLB, NHL, NFL, and soccer schedule without spoilers. Plan which games to watch — spoiler-free previews and ratings.",
+                url: "https://hidescore.com/tomorrow",
+                inLanguage: "en",
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                breadcrumb: { "@id": "https://hidescore.com/tomorrow#breadcrumb" },
+              },
+              {
+                "@type": "BreadcrumbList",
+                "@id": "https://hidescore.com/tomorrow#breadcrumb",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+                  { "@type": "ListItem", position: 2, name: "Tomorrow", item: "https://hidescore.com/tomorrow" },
+                ],
+              },
             ],
           }).replace(/</g, "\\u003c"),
         }}
