@@ -1255,7 +1255,11 @@ const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–]\s*\d{1,3}\b(?![-/])/;
 //     decision"/"controversial decision" all pass through untouched — those three adjectives only ever
 //     precede "decision" as a judges' verdict in the per-match highlight titles this filter sees. The
 //     "[- ]?" covers "unanimous decision"/"unanimous-decision". Byte-identical to the worker's copy.
-//     "qualif(?:y|ies|ied)" is the bare-verb advancement reveal the phrasing-specific idioms above
+//     "qualif(?:ies|ied)" is the bare-verb advancement reveal the phrasing-specific idioms above
+//     NOTE: the bare infinitive "qualify" was deliberately REMOVED from this branch — it masked
+//     ordinary previews/explainers that name no result ("How to qualify for the Champions League",
+//     "which teams can still qualify", "what each team needs to qualify from Group C"). Only the
+//     forms that assert it already happened (qualifies/qualified) stay. Do not re-add "y|".
 //     ("book their place"/"reach the …"/"through to the …"/"advanc\w*") all miss: in this WC-heavy app a
 //     side "qualifying" from the group or a tie is a pure result reveal that names who went through
 //     ("Spain qualify for the last 16", "Argentina have qualified", "USA qualify" — and the flip
