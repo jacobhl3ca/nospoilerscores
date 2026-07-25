@@ -186,7 +186,14 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
                 description: DESC,
                 url: URL,
                 inLanguage: "en",
-                isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
+                // Reference the site-level WebSite node by @id (declared in
+                // layout.tsx's root JSON-LD @graph) rather than re-declaring a
+                // second, @id-less WebSite here. The root layout renders on
+                // every page, so Google merges both blocks into one graph and
+                // this resolves to the single shared WebSite entity — the same
+                // node-linking the SeoLandingPage WebPage uses — instead of
+                // leaving two duplicate WebSite entities for hidescore.com.
+                isPartOf: { "@id": "https://hidescore.com/#website" },
                 about: [
                   { "@type": "Thing", name: "sports highlights without spoilers" },
                   { "@type": "Thing", name: "spoiler-free sports highlights" },

@@ -68,7 +68,14 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
+    // The googleBot block opts into the most permissive preview limits Google
+    // offers: "large" image previews and unbounded text snippets. HideScore's
+    // core content is spoiler-free video highlights, yet the one preview lever
+    // that governs VIDEO — max-video-preview — was the lone omission, so Google
+    // fell back to its conservative default clip length for any video result.
+    // -1 means "no limit", matching the intent of the image/snippet directives
+    // beside it so all three preview types are treated the same.
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
   },
   // Stop iOS Safari (and the Capacitor WebView) from auto-linking the app's
   // pervasive time/date/number text. Every card, header subtitle, and date pill
@@ -117,6 +124,13 @@ const JSON_LD = {
       // crawlers and voice assistants target the right locale.
       inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      // Tie this product node to the publishing Organization below via its @id,
+      // so the four sibling @graph nodes read as one linked entity instead of
+      // four unrelated ones. `publisher` is a valid CreativeWork property, and
+      // referencing the Organization's @id is schema.org's standard node-linking
+      // pattern — it tells crawlers "HideScore the app is published by HideScore
+      // the Organization," strengthening entity/knowledge-panel understanding.
+      publisher: { "@id": "https://hidescore.com/#organization" },
     },
     {
       // No SearchAction: the site has no URL-driven search endpoint (team
@@ -125,9 +139,19 @@ const JSON_LD = {
       // 2024. A broken SearchAction earns no rich result and risks a Search
       // Console structured-data error, so the WebSite node stands on its own.
       "@type": "WebSite",
+      // Stable @id so per-page WebPage nodes (the SEO landing pages' own
+      // JSON-LD) can point isPartOf at this exact site entity instead of
+      // re-declaring a second, @id-less WebSite for the same URL. Google merges
+      // every JSON-LD block on a page into one graph, so the reference resolves
+      // here and both blocks read as one WebSite — same node-linking pattern the
+      // publisher/#organization references above use.
+      "@id": "https://hidescore.com/#website",
       name: "HideScore",
       url: "https://hidescore.com",
       inLanguage: "en",
+      // Same publisher link as the WebApplication node — points the site entity
+      // at the Organization's @id below (schema.org node reference).
+      publisher: { "@id": "https://hidescore.com/#organization" },
     },
     {
       "@type": "MobileApplication",
@@ -141,6 +165,13 @@ const JSON_LD = {
       // so inLanguage is valid here and keeps all product nodes consistent.
       inLanguage: "en",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      // Same publisher link the WebApplication/WebSite nodes carry — points this
+      // iOS app node at the Organization's @id below so all three product nodes
+      // read as one linked entity, not three unrelated ones. `publisher` is a
+      // CreativeWork property and MobileApplication is a CreativeWork subtype,
+      // so it's valid here for the exact reason it's valid on WebApplication;
+      // this node was the lone product outlier still missing the link.
+      publisher: { "@id": "https://hidescore.com/#organization" },
     },
     {
       // No Android MobileApplication node: the Google Play listing is still a
@@ -149,8 +180,17 @@ const JSON_LD = {
       // here would advertise a native app crawlers/users following the URL can't
       // install. Restore this node alongside the iOS one when Play goes public.
       "@type": "Organization",
+      // Stable @id so the WebApplication/WebSite nodes above can reference this
+      // Organization as their `publisher`, linking the @graph into one entity.
+      "@id": "https://hidescore.com/#organization",
       name: "HideScore",
       url: "https://hidescore.com",
+      // Google lists `description` as a recommended Organization property — it
+      // feeds the entity/knowledge-panel understanding of who publishes the
+      // site. Every sibling node here already carries rich metadata; this one
+      // was the lone outlier. Reuse SITE_DESC so the brand summary stays in one
+      // place and matches the <meta name="description"> and OG/Twitter copy.
+      description: SITE_DESC,
       logo: "https://hidescore.com/icon-512.png",
       sameAs: [
         "https://apps.apple.com/app/hidescore/id6766885311",
@@ -208,6 +248,40 @@ export default function RootLayout({
             thumbnail requests it. DNS resolution is the cheap, always-useful
             part with no idle-socket cost. */}
         <link rel="dns-prefetch" href="https://images.weserv.nl" />
+        {/* Playing a highlight in the embedded player (VideoModal) injects the
+            YouTube iframe API script from www.youtube.com and then mounts a
+            www.youtube.com/embed iframe — the app's core "watch highlights
+            without spoilers" interaction. Resolve that host's DNS during HTML
+            parse so the lookup isn't the first thing blocking the connection
+            when the user taps a highlight. dns-prefetch only, NOT preconnect:
+            the player loads on demand (only for visitors who open a clip), so a
+            warmed TCP+TLS socket would idle unused for everyone who doesn't —
+            the same idle-socket reasoning as the weserv proxy and analytics
+            hosts. (Thumbnails/posters are routed through weserv above, so this
+            covers the player connection itself, not the images.) */}
+        <link rel="dns-prefetch" href="https://www.youtube.com" />
+        {/* The www.youtube.com/iframe_api script the player injects (VideoModal)
+            is only a tiny loader — it in turn pulls the real YouTube widget API
+            and the embed player's static assets (www-widgetapi.js, base.js, CSS,
+            sprites) from s.ytimg.com. So a highlight play hits a SECOND host the
+            www.youtube.com prefetch above doesn't cover; warm its DNS too, on the
+            same on-demand path, so neither lookup blocks the connection when the
+            user taps a clip. dns-prefetch only, for the same idle-socket reason
+            as the www.youtube.com hint above (the player loads only for visitors
+            who open a clip, so a warmed TCP+TLS socket would idle unused). */}
+        <link rel="dns-prefetch" href="https://s.ytimg.com" />
+        {/* The game-detail modal's venue weather (lib/weather.ts) is warmed on
+            card hover/pointerdown (prefetchGameWeather) — it geocodes the venue
+            via geocoding-api.open-meteo.com then pulls the forecast from
+            api.open-meteo.com. Resolve both hosts' DNS during HTML parse so the
+            lookup isn't the first thing blocking the connection when the user
+            hovers a card, shaving the "weather pops in a beat late" delay the
+            prefetch already targets. dns-prefetch only, NOT preconnect: weather
+            fetches only for visitors who hover/open a game, so a warmed TCP+TLS
+            socket would idle unused for everyone who doesn't — the same on-demand
+            idle-socket reasoning as the youtube/ytimg hints above. */}
+        <link rel="dns-prefetch" href="https://geocoding-api.open-meteo.com" />
+        <link rel="dns-prefetch" href="https://api.open-meteo.com" />
         {/* Both analytics tags (GoatCounter + Umami, at the end of <body>) fetch
             their loader script and then beacon a pageview on EVERY load — so
             these three hosts are always hit: gc.zgo.at (the GoatCounter loader),
@@ -225,14 +299,35 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://stats.hidescore.com" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {/* sizes="any" marks the SVG as scalable so browsers prefer it over the
+            fixed 16/32px PNGs above — the crisp, DPI-independent tab icon. It's
+            the same monkey glyph the PNGs raster, so there's no visual change,
+            just a sharper icon on hi-DPI displays (and on the static SEO/legal
+            pages, which don't run HomeContent's runtime favicon swap). */}
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+        {/* The asset is 180×180; declaring sizes makes the hint explicit, matching
+            the favicon PNGs above (iOS already uses this icon either way). */}
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
         {/* theme-color is emitted from the `viewport` export above (light/dark) */}
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="HideScore" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        {/* iOS Safari Smart App Banner. The site already promotes the HideScore
+            iOS app everywhere else — the footer "also on the App Store" link, the
+            MobileApplication JSON-LD node above, the manifest's sameAs — but this
+            was the one surface still missing Apple's own native banner, the
+            highest-intent install prompt (it deep-links to Open when the app is
+            already installed, App Store otherwise). app-id is the same App Store
+            ID (6766885311) used by those other references, so app promotion stays
+            consistent across every surface. Safety: the banner is a Safari.app
+            feature — WKWebView (the Capacitor native wrapper) does NOT render it,
+            so users already inside the app never see a "get the app" bar; on
+            desktop and non-Safari browsers the tag is silently ignored. It's slim,
+            native Safari chrome above the page (not part of the layout) and is
+            user-dismissible, so it changes no in-page design or behavior. */}
+        <meta name="apple-itunes-app" content="app-id=6766885311" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

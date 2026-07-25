@@ -52,8 +52,13 @@ export function buildShareCard(game: Game, leagueLabel?: string): ShareCardMeta 
 
   return {
     key,
-    away: { name: away.shortDisplayName || away.displayName, abbr: away.abbreviation || away.shortDisplayName, logo: away.logo },
-    home: { name: home.shortDisplayName || home.displayName, abbr: home.abbreviation || home.shortDisplayName, logo: home.logo },
+    // `name` falls through to `abbreviation` last, mirroring the `abbr`/`a`/`h`
+    // chains and the guard above (which only requires `abbreviation ||
+    // shortDisplayName`). Without it, a team carrying an abbreviation but empty
+    // shortDisplayName AND displayName — all string fields default to "" in
+    // parseTeam, so it passes the guard — would render a blank side on the card.
+    away: { name: away.shortDisplayName || away.displayName || away.abbreviation, abbr: away.abbreviation || away.shortDisplayName, logo: away.logo },
+    home: { name: home.shortDisplayName || home.displayName || home.abbreviation, abbr: home.abbreviation || home.shortDisplayName, logo: home.logo },
     dateLabel,
     league: leagueLabel || game.sport.toUpperCase(),
   };

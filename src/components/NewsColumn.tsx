@@ -203,6 +203,7 @@ export function NewsColumnTitle({
               >
                 {/* Auto reverts to the in-season default for this slot. */}
                 <button
+                  type="button"
                   onClick={() => { onSwapLeague!(undefined); setSwapOpen(false); }}
                   className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                   style={{ color: "var(--text-muted)" }}
@@ -216,6 +217,7 @@ export function NewsColumnTitle({
                   const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
                   return (
                     <button
+                      type="button"
                       key={opt.sport}
                       onClick={() => { onSwapLeague!(opt.sport); setSwapOpen(false); }}
                       // The active league is otherwise signalled only by color +
@@ -240,6 +242,7 @@ export function NewsColumnTitle({
                     and is always reachable (re-adds the column if it was gone). */}
                 {onPickEspn && (
                   <button
+                    type="button"
                     onClick={() => { onPickEspn(); setSwapOpen(false); }}
                     aria-current={espnActive ? "true" : undefined}
                     className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
@@ -258,6 +261,7 @@ export function NewsColumnTitle({
                     behavior). User re-adds via the + button on scores or via
                     the focus pill. */}
                 <button
+                  type="button"
                   onClick={() => { onSwapLeague!("empty"); setSwapOpen(false); }}
                   className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                   style={{
@@ -538,6 +542,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   if (shouldPopModal) {
     return (
       <button
+        type="button"
         onClick={(e) => {
           // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
           // later" — never blow away the currently-open modal. Without this
@@ -665,6 +670,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
             if (onPlay) {
               return (
                 <button
+                  type="button"
                   key={item.id}
                   onClick={(e) => {
                     // Modifier-click → open the source article in a background

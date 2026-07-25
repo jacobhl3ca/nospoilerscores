@@ -70,10 +70,11 @@ function RatingBadge({ rating }: { rating: number }) {
     // it's the game's worth-watching rating. role="img" + a spoken aria-label give
     // the badge a self-describing name; the visible all-caps text is unchanged.
     // Title case in the label ("Meh"/"Skip") stops some engines spelling the short
-    // all-caps words out letter-by-letter.
+    // all-caps words out letter-by-letter — except "OK", which is an initialism
+    // and stays "OK" so it isn't mangled to "Ok".
     <span
       role="img"
-      aria-label={`Worth-watching rating: ${label.charAt(0) + label.slice(1).toLowerCase()}`}
+      aria-label={`Worth-watching rating: ${label === "OK" ? "OK" : label.charAt(0) + label.slice(1).toLowerCase()}`}
       className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}
     >
       {label}
@@ -292,7 +293,12 @@ export function CompactUpcomingCard({
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
-      onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
+      // Only open details when the CARD ITSELF is the keyboard target — the
+      // nested network link stops click propagation via handleExternalClick, so
+      // a mouse click never bubbles here, but keydown had no guard and pressing
+      // Enter on the focused link bubbled up to also open the details modal (a
+      // double activation). Mirrors the main GameCard's keydown guard above.
+      onKeyDown={cardClickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
       tabIndex={cardClickable ? 0 : undefined}
       aria-label={cardClickable ? cardLabel : undefined}
@@ -524,7 +530,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onClick={cardClickable ? () => onShowDetails!(game) : undefined}
-      onKeyDown={cardClickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onShowDetails!(game); } } : undefined}
+      // Only open details when the CARD ITSELF is the keyboard target
+      // (e.target === e.currentTarget). Nested controls — the favorite star,
+      // the "+N" networks toggle, team-name buttons, and the network/ESPN
+      // links — already stopPropagation on their onClick, so a mouse click on
+      // one never bubbles to the card. Keydown had no such guard, so pressing
+      // Enter/Space while focused on a nested control bubbled up here and fired
+      // onShowDetails too — hijacking the keystroke and popping the details
+      // modal on top of the control's own action (a double activation). The
+      // target check mirrors the mouse stopPropagation contract for the keyboard.
+      onKeyDown={cardClickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(game); } } : undefined}
       role={cardClickable ? "button" : undefined}
       tabIndex={cardClickable ? 0 : undefined}
       aria-label={cardClickable ? cardLabel : undefined}
@@ -930,9 +945,12 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
               {/* Ranking chip (#N) next to the name. World Cup uses the static
                   FIFA world ranking — a fixed pre-tournament fact, spoiler-safe
                   in every stage (its live group standing would NOT be). Every
-                  other league uses its current overall standings rank, gated
-                  exactly like the W-L record (upcoming/live only, hidden on
-                  finished/past cards) so it leaks no more than the record does. */}
+                  other league uses its current overall standings rank, hidden on
+                  finished/past cards — the same spoiler gate the W-L record below
+                  uses (!effectivePastDate && !isFinished) — so it leaks no more
+                  than the record does. The record is additionally hidden on
+                  upcoming cards (its extra !isFuture); the rank still shows there,
+                  since a pre-game standing isn't a spoiler. */}
               {(() => {
                 if (isTBD) return null;
                 let rank: number | null = null;

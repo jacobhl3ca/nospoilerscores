@@ -3,8 +3,9 @@
 import { useState } from "react";
 
 // Minimal inline feedback line that lives inside the footer. Submits on Enter
-// (no button) straight to the same Formspree endpoint the jacobhl.com contact
-// form uses, so notes land in the same inbox — no extra service or account.
+// or via the send button straight to the same Formspree endpoint the
+// jacobhl.com contact form uses, so notes land in the same inbox — no extra
+// service or account.
 const FORMSPREE_ENDPOINT = "https://formspree.io/f/mkgqkgyr";
 
 export default function FeedbackBox() {

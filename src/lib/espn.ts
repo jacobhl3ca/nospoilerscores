@@ -25,7 +25,8 @@ const SPORT_PATHS: Record<Sport, string> = {
 };
 
 // Seasonal league config: show/hide based on date
-// endDate: day after championship — league hides the day after its final game
+// endDate: inclusive last day the league is shown (= its championship date, per
+//   isLeagueActive's `mmdd <= endDate`), so the league hides the day after its final game
 // startDate: when the sport's season starts
 export interface LeagueConfig {
   sport: Sport;
@@ -875,6 +876,12 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     "round-of-16": "Round of 16",
     "quarterfinals": "Quarterfinals",
     "semifinals": "Semifinals",
+    // ESPN's fifa.world scoreboard tags the third-place playoff's season.slug as
+    // "3rd-place-match" — that is the exact key wcBracket.ts's SLUG2ROUND routes
+    // the bracket's third-place slot on, so it's the one ESPN actually sends.
+    // Keep the "third-place" spelling too so the label resolves either way and
+    // this fallback can't silently return null for that one match.
+    "3rd-place-match": "Third Place",
     "third-place": "Third Place",
     "final": "Final",
   };
@@ -1037,9 +1044,16 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
       if (!playoffLabel) playoffLabel = headline;
     }
   }
-  // Also check season type from the API if available
-  if (event.season?.type === 3 || event.season?.type === 4) {
-    isPlayoff = true; // type 3 = postseason, type 4 = off-season/all-star but sometimes playoff
+  // Also check season type from the API when the notes above didn't flag it.
+  // ESPN's seasontype numbering is 1=preseason, 2=regular, 3=postseason,
+  // 4=off-season (all-star / exhibition) — the same convention this file relies
+  // on elsewhere, where seasontype 1 is filtered out as preseason. Only type 3
+  // is the playoffs; type 4 was mislabeling all-star/exhibition games as playoff,
+  // which (via game.isPlayoff → GameCard's `period >= 5 && !isPlayoff` check)
+  // suppressed the shootout "SO" label on any such game that reached a 5th period.
+  // playoffLabel is unaffected — it's driven only by the notes match above.
+  if (event.season?.type === 3) {
+    isPlayoff = true;
   }
 
   // Playoff series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
@@ -2009,10 +2023,13 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
   // Based on how tight the top of the leaderboard is
   let rating: number | null = null;
   if (state !== "pre" && players.length >= 5) {
-    // Parse numeric scores for top players
-    const parseScore = (s: string): number => {
+    // Parse numeric scores for top players. Non-numeric statuses ("CUT", "WD",
+    // "DQ", "MC") and not-yet-posted scores ("-") return null so they're dropped
+    // from the tightness sample — otherwise parseInt(...)||0 would collapse them
+    // to even par and falsely count them as tied with the leader.
+    const parseScore = (s: string): number | null => {
       if (s === "E") return 0;
-      return parseInt(s, 10) || 0;
+      return /^[+-]?\d+$/.test(s) ? parseInt(s, 10) : null;
     };
     // "Rate from Round 1", minus the opening-holes artifact: at the very start
     // of R1 the whole field is bunched at even par, which reads as a maximally-
@@ -2027,24 +2044,30 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
     // Past the opening holes — compute the real leaderboard-tightness rating.
     // While still in the opening holes, rating stays null (no badge shown).
     if (anyRoundDone || deepestThru >= 6) {
-      const topScores = players.slice(0, 10).map(p => parseScore(p.score));
-      const leader = topScores[0];
-      // Spread between 1st and 5th
-      const top5spread = Math.abs((topScores[4] ?? leader) - leader);
-      // Spread between 1st and 10th
-      const top10spread = Math.abs((topScores[9] ?? leader) - leader);
-      // Number of players within 2 strokes of lead
-      const within2 = topScores.filter(s => Math.abs(s - leader) <= 2).length;
+      const topScores = players
+        .slice(0, 10)
+        .map(p => parseScore(p.score))
+        .filter((n): n is number => n !== null);
+      // All non-numeric (e.g. field withdrew/cut) — leave rating null, no badge.
+      if (topScores.length > 0) {
+        const leader = topScores[0];
+        // Spread between 1st and 5th
+        const top5spread = Math.abs((topScores[4] ?? leader) - leader);
+        // Spread between 1st and 10th
+        const top10spread = Math.abs((topScores[9] ?? leader) - leader);
+        // Number of players within 2 strokes of lead
+        const within2 = topScores.filter(s => Math.abs(s - leader) <= 2).length;
 
-      // Tight leaderboard = high rating
-      // 0 spread = 100, each stroke of spread reduces by ~12
-      const spreadScore = Math.max(0, 100 - top5spread * 12);
-      // Depth bonus: more players bunched = more exciting
-      const depthBonus = Math.min(15, within2 * 2);
-      // Top 10 tightness (secondary factor)
-      const top10Score = Math.max(0, 50 - top10spread * 5);
+        // Tight leaderboard = high rating
+        // 0 spread = 100, each stroke of spread reduces by ~12
+        const spreadScore = Math.max(0, 100 - top5spread * 12);
+        // Depth bonus: more players bunched = more exciting
+        const depthBonus = Math.min(15, within2 * 2);
+        // Top 10 tightness (secondary factor)
+        const top10Score = Math.max(0, 50 - top10spread * 5);
 
-      rating = Math.min(100, Math.round(spreadScore * 0.6 + top10Score * 0.2 + depthBonus));
+        rating = Math.min(100, Math.round(spreadScore * 0.6 + top10Score * 0.2 + depthBonus));
+      }
     }
   }
 
@@ -2982,7 +3005,12 @@ export async function fetchAllLeagues(
     return true;
   });
   if (final.length < targetCount) {
-    const backfill = pickAndAssignLeagues(viewDate, MAX_LEAGUES).filter(
+    // Draw the backfill pool at slotCount, NOT MAX_LEAGUES: on a wide (5-column)
+    // board pickAndAssignLeagues only builds a candidate pool up to `count`, so
+    // MAX_LEAGUES (3) yielded just the top-3 leagues — all already placed and in
+    // seenSport — leaving slots 4-5 un-backfillable. The board then rendered 4
+    // columns instead of 5 after a dedupe, the very shrink this block prevents.
+    const backfill = pickAndAssignLeagues(viewDate, slotCount).filter(
       (l) => !seenSport.has(l.sport),
     );
     for (const l of backfill) {

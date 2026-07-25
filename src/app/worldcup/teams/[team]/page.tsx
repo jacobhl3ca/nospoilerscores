@@ -189,21 +189,48 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
                 // WebApplication nodes (layout). Keeps every WebPage node's locale
                 // signal consistent across the site.
                 inLanguage: "en",
-                isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
+                // Reference the site-level WebSite node by @id (declared in
+                // layout.tsx's root JSON-LD @graph) rather than re-declaring a
+                // second, @id-less WebSite here. The root layout renders on
+                // every page, so Google merges both blocks into one graph and
+                // this resolves to the single shared WebSite entity — the same
+                // node-linking the SeoLandingPage WebPage uses — instead of
+                // leaving two duplicate WebSite entities for hidescore.com.
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                // Point this page at its own BreadcrumbList node (below) by @id,
+                // the same @graph node-linking the WebPage→WebSite isPartOf above
+                // and the SeoLandingPage WebPage uses. The BreadcrumbList was the
+                // one sibling node left unlinked here — a bare, @id-less list
+                // floating beside the page it describes. `breadcrumb` is a valid
+                // WebPage property, and tying it to the page node is Google's
+                // recommended shape for the breadcrumb rich result.
+                breadcrumb: { "@id": `https://hidescore.com${canonical}#breadcrumb` },
                 about: [
-                  { "@type": "SportsTeam", name: team.name, sport: "Soccer" },
+                  // Reference the fuller standalone SportsTeam node below by
+                  // @id rather than re-declaring a thinner (no memberOf) copy
+                  // here. Both live in the same @graph, so this deduplicates
+                  // the team to one entity — the same node-linking pattern the
+                  // WebSite isPartOf ref above uses — instead of leaving two
+                  // separate SportsTeam nodes for the same team on the page.
+                  { "@id": `https://hidescore.com${canonical}#team` },
                   { "@type": "SportsEvent", name: "2026 FIFA World Cup" },
                   { "@type": "Thing", name: "spoiler-free sports scores" },
                 ],
               },
               {
                 "@type": "SportsTeam",
+                "@id": `https://hidescore.com${canonical}#team`,
                 name: team.name,
                 sport: "Soccer",
                 memberOf: { "@type": "SportsOrganization", name: "FIFA World Cup" },
               },
               {
                 "@type": "BreadcrumbList",
+                // Stable per-page @id so the WebPage node above can reference this
+                // exact list (Google merges the page's JSON-LD into one graph, so
+                // the ref resolves here). Keyed on the canonical path so each of
+                // the 48 generated team pages gets its own unambiguous node.
+                "@id": `https://hidescore.com${canonical}#breadcrumb`,
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
                   { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
@@ -213,6 +240,19 @@ export default async function WorldCupTeamPage({ params }: PageProps) {
               },
               {
                 "@type": "FAQPage",
+                // Tie this node to the same page URL as the WebPage node above
+                // and into the shared WebSite entity. FAQPage is a WebPage
+                // subtype, so without a `url`/`isPartOf` it floated as a SECOND,
+                // disconnected page node beside the WebPage describing the exact
+                // same address — the lone sibling in this @graph still left
+                // unlinked, after the WebPage→#website and WebPage→#breadcrumb
+                // refs above already tied the rest together. Anchoring it to the
+                // canonical URL + #website (the same node-linking pattern the
+                // WebPage/BreadcrumbList use) makes the two page nodes read as
+                // one entity for this URL across all 48 generated team pages —
+                // matching the SeoLandingPage FAQPage fix.
+                url: `https://hidescore.com${canonical}`,
+                isPartOf: { "@id": "https://hidescore.com/#website" },
                 // Same locale signal as the WebPage node above, matching the
                 // inLanguage the FAQPage nodes already carry on SeoLandingPage
                 // and /faq.

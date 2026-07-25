@@ -359,6 +359,10 @@ function ArticleMeta({ byline, published, className, style }: {
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // The dialog root (role="dialog") — used by the focus-management effect below
+  // to seat focus inside the modal on open, trap Tab within it, and restore it
+  // to the opener on close.
+  const dialogRef = useRef<HTMLDivElement>(null);
   // Horizontal swipe on the image lightbox → prev/next post (mobile parity with
   // the bottom Prev/Next buttons and the desktop ← → keys).
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
@@ -911,6 +915,51 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     return () => document.removeEventListener("keydown", handler);
   }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay, onPrev, onNext]);
 
+  // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
+  // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
+  // the app's most-used overlay, was still missing. On open, seat focus on the
+  // dialog CONTAINER (tabIndex=-1) so keyboard / screen-reader users land inside
+  // the lightbox instead of being stranded on the thumbnail behind it; focusing
+  // the container (not a control) keeps mouse users from seeing a stray focus
+  // ring, and the first Tab reaches the Close button. On close, restore focus to
+  // whatever opened it. And trap Tab so it can't wander into the page behind the
+  // overlay: aria-modal="true" only marks that content inert to assistive tech,
+  // it does NOT stop a sighted keyboard user Tabbing out. Focusables are queried
+  // live per keypress (so per-mode controls — image / text / video — are always
+  // current) and offsetParent filters hidden ones. The modal mounts fresh per
+  // open (the parent guards it), so this fires on every open/close — empty deps
+  // capture the opener once. (Once focus enters the cross-origin YouTube iframe
+  // the browser routes keydown to the iframe's own document, so the trap governs
+  // the dialog's own controls, not the embed's internals — same as elsewhere.)
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    dialog?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      opener?.focus?.();
+    };
+  }, []);
+
   // Lock body scroll while the modal is open — WITHOUT losing the user's place.
   // Plain `overflow:hidden` doesn't reliably lock scroll on iOS WebKit and, with
   // the news feed's relayout, drops you back to the TOP of the list on close
@@ -1428,13 +1477,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // reach; desktop gets subtle side chevrons so the footer links never overlap.
   const mobilePager = hasPager ? (
     <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex sm:hidden items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
-      <button onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
+      <button type="button" onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         Prev
       </button>
-      <button onClick={(e) => { e.stopPropagation(); onNext?.(); }} disabled={!onNext} aria-label="Next post" title="Next post"
+      <button type="button" onClick={(e) => { e.stopPropagation(); onNext?.(); }} disabled={!onNext} aria-label="Next post" title="Next post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         Next
@@ -1444,7 +1493,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   ) : null;
   const desktopPager = hasPager ? (
     <>
-      <button
+      <button type="button"
         onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
         disabled={!onPrev}
         aria-label="Previous post"
@@ -1454,7 +1503,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       >
         <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
       </button>
-      <button
+      <button type="button"
         onClick={(e) => { e.stopPropagation(); onNext?.(); }}
         disabled={!onNext}
         aria-label="Next post"
@@ -1499,7 +1548,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           or any whitespace around them dismisses. The video player and CC
           button stop propagation themselves so playback controls keep working. */}
       <div
-        className="group relative w-full max-w-7xl" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
+        ref={dialogRef}
+        // tabIndex=-1 makes the dialog programmatically focusable (see the
+        // focus-management effect) without adding it to the tab order; outline
+        // none suppresses the ring since it's focused only to seat assistive tech.
+        tabIndex={-1}
+        className="group relative w-full max-w-7xl focus:outline-none" /* PROTOTYPE 6/2: 6xl→7xl modal-width lever (Safari/iOS quality). Revert to max-w-6xl if the desktop trade-off isn't worth it. */
         style={{ zIndex: 1 }}
         role="dialog"
         aria-modal="true"
@@ -1529,7 +1583,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             onClick={(e) => e.stopPropagation()}
           >
             {hlsMode && hasCaptionTrack && (
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
                 aria-pressed={showCC}
                 aria-label={showCC ? "Hide captions" : "Show captions"}
@@ -1544,7 +1598,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 CC
               </button>
             )}
-            <button
+            <button type="button"
               onClick={(e) => { e.stopPropagation(); onClose(); }}
               className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
               aria-label="Close"
@@ -1572,7 +1626,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             {/* Close sits OUTSIDE the image — a right-aligned row the image's own
                 width, so it hugs the top-right corner without covering content. */}
             <div className="mb-2 flex justify-end">
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
@@ -1614,7 +1668,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             onTouchEnd={onSwipeEnd}
           >
             <div className="mb-2 flex justify-end">
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
@@ -1674,7 +1728,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               style={{ width: ytFrameWidth }}
               onClick={(e) => e.stopPropagation()}
             >
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); setShowCC((v) => !v); }}
                 aria-pressed={showCC}
                 aria-label={showCC ? "Hide captions" : "Show captions"}
@@ -1688,7 +1742,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               >
                 CC
               </button>
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
@@ -1860,7 +1914,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   so you can bring the controls back. Nothing to toggle when
                   YouTube's native controls replace this chrome entirely. */}
               {!youtubeNativeControls && (
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); setControlsHidden((v) => !v); }}
                 aria-label={controlsHidden ? "Show controls" : "Hide controls"}
                 title={controlsHidden ? "Show controls" : "Hide controls"}
@@ -1889,14 +1943,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                     Skip to about {pendingSeek.pct}%? That&apos;s past halfway — you might catch up to late-game action.
                   </p>
                   <div className="flex items-center gap-2">
-                    <button
+                    <button type="button"
                       onClick={(e) => { e.stopPropagation(); setPendingSeek(null); }}
                       className="px-3 py-1.5 rounded-md text-sm font-medium text-white/80 hover:text-white cursor-pointer"
                       style={{ border: "1px solid rgba(255,255,255,0.3)" }}
                     >
                       Cancel
                     </button>
-                    <button
+                    <button type="button"
                       onClick={(e) => { e.stopPropagation(); const run = pendingSeek.run; setPendingSeek(null); run(); }}
                       className="px-3 py-1.5 rounded-md text-sm font-semibold text-white cursor-pointer"
                       style={{ background: "var(--accent)" }}
@@ -2005,7 +2059,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   the icon). The icon's waves reflect the level; the fill shows
                   the current volume. */}
               <div className="justify-self-start flex items-center gap-1.5 min-w-0">
-                <button
+                <button type="button"
                   onClick={(e) => { e.stopPropagation(); toggleMute(); }}
                   aria-label={muted ? "Unmute" : "Mute"}
                   title={muted ? "Sound on" : "Mute"}
@@ -2072,7 +2126,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   so the fullscreen button stays right-aligned. */}
               {seekControl !== "bar" ? (
                 <div className="min-w-0 flex items-center justify-center gap-0.5 flex-nowrap">
-                  <button
+                  <button type="button"
                     onClick={(e) => { e.stopPropagation(); seekBy(-SEEK_STEP); }}
                     aria-label="Back 5 seconds"
                     title="Back 5 seconds (←)"
@@ -2086,7 +2140,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       it squeezed the side cells until the fixed-width volume
                       slider overflowed into this row. Gate the full set on lg. */}
                   {[25, 50, 75].map((p) => (
-                    <button
+                    <button type="button"
                       key={`m${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
                       className="flex lg:hidden items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium text-white/55 hover:text-white"
@@ -2099,7 +2153,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   {/* Large windows: full 10→90 set (80/90 dimmed — nearest the ending) */}
                   <span className="hidden lg:inline text-[11px] text-white/35 mx-1 select-none">Skip to</span>
                   {JUMP_PCTS.map((p) => (
-                    <button
+                    <button type="button"
                       key={`d${p}`}
                       onClick={(e) => { e.stopPropagation(); seekToPct(p); }}
                       className={`hidden lg:flex items-center justify-center rounded-md transition-colors cursor-pointer h-7 px-1.5 text-xs font-medium ${p >= 80 ? "text-white/25 hover:text-white/55" : "text-white/55 hover:text-white"}`}
@@ -2109,7 +2163,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                       {p}%
                     </button>
                   ))}
-                  <button
+                  <button type="button"
                     onClick={(e) => { e.stopPropagation(); seekBy(SEEK_STEP); }}
                     aria-label="Forward 5 seconds"
                     title="Forward 5 seconds (→)"
@@ -2122,7 +2176,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               ) : <div />}
 
               {/* Fullscreen toggle */}
-              <button
+              <button type="button"
                 onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
                 aria-label={fsActive ? "Exit fullscreen" : "Fullscreen"}
                 title={fsActive ? "Exit fullscreen (Esc)" : "Fullscreen (f)"}
@@ -2215,23 +2269,42 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         )}
         {!(ytMode && controlsHidden) && (
         <div className={`${textMode ? "mt-4" : "mt-3"} flex items-center justify-center gap-3`}>
-          <a
-            href={sourceShareUrl || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
-          >
-            {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
-          </a>
-          {shareUrl && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); copyLink(); }}
-              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
+          {/* Only render the source link when there's a real URL. For a text/
+              image post with no YouTube id and no fallbackUrl, sourceShareUrl is
+              "", and an href="#" + target="_blank" would open a useless blank
+              tab. Guard it the same way the "Copy link" button below guards on
+              shareUrl, so only the strictly-broken URL-less case is dropped. */}
+          {sourceShareUrl && (
+            <a
+              href={sourceShareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
             >
-              {copied ? "Copied ✓" : "Copy link"}
-            </button>
+              {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
+            </a>
+          )}
+          {shareUrl && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); copyLink(); }}
+                className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2 cursor-pointer"
+              >
+                {copied ? "Copied ✓" : "Copy link"}
+              </button>
+              {/* The "Copied ✓" swap on the button above is a visual-only
+                  confirmation — a screen reader activating "Copy link" gets no
+                  cue the copy landed. Voice it through a dedicated sr-only live
+                  region (WCAG 4.1.3 Status Messages), matching the same
+                  role="status" aria-live="polite" pattern the news/video strips
+                  and FeedbackBox already use. The region mounts empty with the
+                  button (before any copy), so the text change is announced. */}
+              <span role="status" aria-live="polite" className="sr-only">
+                {copied ? "Link copied" : ""}
+              </span>
+            </>
           )}
         </div>
         )}

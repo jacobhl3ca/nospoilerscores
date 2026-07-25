@@ -117,7 +117,13 @@ export function getGolfLiveThru(tournament: GolfTournament): string {
   for (const p of top10) {
     if (!p.thru || p.thru === "F") continue;
     const n = parseInt(p.thru, 10);
-    if (!Number.isFinite(n)) continue;
+    // Require a genuinely mid-round hole (0 < n < 18) — the same "on the course"
+    // definition isGolfLive uses. espn.ts maps a completed round to "F" and never
+    // emits "0"/"18" today, so this is byte-for-byte unchanged now; the guard just
+    // keeps the two functions from disagreeing about what "still on the course"
+    // means if ESPN's thru mapping ever shifts (an 18/0 would otherwise surface as
+    // a bogus live-progress label instead of resolving to no group on the course).
+    if (!Number.isFinite(n) || n <= 0 || n >= 18) continue;
     if (lowest === null || n < lowest) lowest = n;
   }
   return lowest === null ? "" : String(lowest);

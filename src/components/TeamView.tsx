@@ -295,6 +295,7 @@ export default function TeamView({
               {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}
             </h2>
             <button
+              type="button"
               onClick={() => onToggleFavoriteTeam(team.id)}
               className={`text-sm leading-none transition-colors cursor-pointer shrink-0 ml-1.5 ${favoriteTeams.includes(team.id) ? "text-yellow-400" : "hover:text-yellow-400/50"}`}
               style={favoriteTeams.includes(team.id) ? undefined : { color: "var(--text-muted)", opacity: 0.4 }}

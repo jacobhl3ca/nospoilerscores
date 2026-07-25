@@ -221,8 +221,41 @@ export default function SettingsPanel({
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
-    drawerRef.current?.focus();
-    return () => opener?.focus?.();
+    const drawer = drawerRef.current;
+    drawer?.focus();
+    // Trap Tab within the drawer (WCAG 2.4.3) — mirror GameDetailModal, whose
+    // focus-trap comment invited the other overlays to follow. On its own,
+    // aria-modal="true" only tells assistive tech the page behind is inert; it
+    // does NOT stop a sighted keyboard user from Tabbing out of the drawer into
+    // the scores/news content behind it. Wrap focus at the first/last focusable
+    // control so Tab / Shift+Tab cycle inside the panel until Escape or the
+    // backdrop dismisses it, matching the focus-in / restore this effect already
+    // does. Focusables are queried live on each keypress so the async team-picker
+    // / league-dropdown controls that mount as the user drills in are included,
+    // and offsetParent filters out any hidden (display:none) control.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !drawer) return;
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === drawer) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      opener?.focus?.();
+    };
   }, [open]);
 
   // Lock body scroll while open
@@ -474,7 +507,7 @@ export default function SettingsPanel({
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           <h2 className="text-base font-bold" style={{ color: "var(--text)" }}>Settings</h2>
-          <button
+          <button type="button"
             onClick={onClose}
             aria-label="Close settings"
             className="w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
@@ -502,7 +535,7 @@ export default function SettingsPanel({
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                   Your teams, layout, and settings sync automatically across all your browsers and devices.
                 </p>
-                <button
+                <button type="button"
                   onClick={() => signOut()}
                   className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
                   style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
@@ -511,7 +544,7 @@ export default function SettingsPanel({
                 </button>
                 {/* Apple requires in-app account deletion (guideline 5.1.1(v)) for any
                     app with accounts. Deletes the user's server-stored prefs + signs out. */}
-                <button
+                <button type="button"
                   onClick={async () => {
                     if (!confirm("Permanently delete your account? This erases your synced teams, layout, and settings from our servers and signs you out. This cannot be undone.")) return;
                     // Second, deliberate step: typing the word is enough friction that an
@@ -539,7 +572,7 @@ export default function SettingsPanel({
             ) : (
               <div className="space-y-2">
                 {auth.providers?.apple !== false && (
-                <button
+                <button type="button"
                   onClick={() => signInWithApple()}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
                   style={{
@@ -554,7 +587,7 @@ export default function SettingsPanel({
                 </button>
                 )}
                 {auth.providers?.google && (
-                <button
+                <button type="button"
                   onClick={() => signInWithGoogle()}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
                   style={{ background: "#fff", color: "#1f1f1f", border: "1px solid #dadce0" }}
@@ -579,6 +612,7 @@ export default function SettingsPanel({
               in here, and dark/light is the most-frequently-flipped setting. */}
           <Section title="Theme">
             <RadioGroup
+              label="Theme"
               value={prefs.theme}
               options={THEME_OPTIONS}
               onChange={(v) => {
@@ -600,6 +634,7 @@ export default function SettingsPanel({
           <Section title="Default view">
             <Field label="Landing date" hint="What day to show when you open the app">
               <RadioGroup
+                label="Landing date"
                 value={prefs.defaultDateMode ?? "smart"}
                 options={DATE_MODE_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultDateMode: v })}
@@ -627,6 +662,7 @@ export default function SettingsPanel({
             )}
             <Field label="Landing view" hint="Scores or news on launch">
               <RadioGroup
+                label="Landing view"
                 value={prefs.defaultLandingView ?? "remember"}
                 options={LANDING_VIEW_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultLandingView: v })}
@@ -634,6 +670,7 @@ export default function SettingsPanel({
             </Field>
             <Field label="Ratings on launch" hint="Show or hide game ratings + best-games sort">
               <RadioGroup
+                label="Ratings on launch"
                 value={prefs.defaultRatings ?? "auto"}
                 options={DEFAULT_RATINGS_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultRatings: v })}
@@ -667,7 +704,7 @@ export default function SettingsPanel({
                   className="w-28 px-3 py-2 rounded-lg text-sm"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 />
-                <button
+                <button type="button"
                   onClick={resolveZip}
                   disabled={zip.length !== 5 || zipBusy}
                   className="px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-default"
@@ -722,6 +759,7 @@ export default function SettingsPanel({
             })}
             <Field label="Header league switcher" hint="How tapping a column header behaves">
               <RadioGroup
+                label="Header league switcher"
                 value={prefs.leagueSwitcherMode ?? "dropdown"}
                 options={SWITCHER_MODE_OPTIONS}
                 onChange={(v) => updatePrefs({ leagueSwitcherMode: v })}
@@ -800,7 +838,7 @@ export default function SettingsPanel({
                       <span className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text-muted)" }}>
                         {SPORT_LABEL[sport] ?? sport}
                       </span>
-                      <button
+                      <button type="button"
                         onClick={() => clearTeamsForSport(sport)}
                         aria-label={`Clear ${SPORT_LABEL[sport] ?? sport} teams`}
                         className="text-[11px] underline underline-offset-2 cursor-pointer hover:opacity-80"
@@ -811,7 +849,7 @@ export default function SettingsPanel({
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {teams.map((t) => (
-                        <button
+                        <button type="button"
                           key={t.id}
                           onClick={() => removeTeam(t.id)}
                           className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs cursor-pointer transition-opacity hover:opacity-80"
@@ -842,7 +880,7 @@ export default function SettingsPanel({
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {prefs.favoriteTeams.length} total
                   </span>
-                  <button
+                  <button type="button"
                     onClick={clearAllTeams}
                     className="text-xs underline underline-offset-2 cursor-pointer hover:opacity-80"
                     style={{ color: "var(--text-muted)" }}
@@ -894,6 +932,7 @@ export default function SettingsPanel({
             />
             <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
               <RadioGroup
+                label="Skip controls"
                 value={prefs.videoSeekControl ?? "both"}
                 options={SEEK_CONTROL_OPTIONS}
                 onChange={(v) => updatePrefs({ videoSeekControl: v })}
@@ -901,6 +940,7 @@ export default function SettingsPanel({
             </Field>
             <Field label="Seek bar fill" hint="The bar shows no position by default so it can't spoil how far in you are">
               <RadioGroup
+                label="Seek bar fill"
                 value={prefs.videoSeekFill ?? "off"}
                 options={SEEK_FILL_OPTIONS}
                 onChange={(v) => updatePrefs({ videoSeekFill: v })}
@@ -943,7 +983,7 @@ export default function SettingsPanel({
                 const nothingToShare = prefs.favoriteTeams.length === 0 && prefs.favoriteLeagues.length === 0 && !prefs.firstLeague && !prefs.secondLeague && !prefs.thirdLeague && !prefs.fourthLeague && !prefs.fifthLeague;
                 return (
                   <>
-                    <button
+                    <button type="button"
                       onClick={onShareFavorites}
                       disabled={nothingToShare}
                       className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -1002,7 +1042,7 @@ export default function SettingsPanel({
                   </>
                 );
               })()}
-              <button
+              <button type="button"
                 onClick={() => {
                   if (confirm("Reset all settings to defaults? Favorites will be cleared.")) resetAll();
                 }}
@@ -1048,20 +1088,29 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 interface RadioOption<T extends string> { value: T; label: string; hint?: string }
 function RadioGroup<T extends string>({
+  label,
   value,
   options,
   onChange,
 }: {
+  // Names the set of options for assistive tech. The visual <Field> label above
+  // each group is a bare, unassociated <label>, so without this a screen reader
+  // read the options as free-floating toggle buttons ("Today, pressed") with no
+  // hint at what they configure. role="group" + aria-label ties them together
+  // and voices the setting ("Landing date"). Kept as role="group" (not
+  // radiogroup) because the buttons stay aria-pressed toggles, not roving-focus
+  // radios — purely additive, so tab order and behavior are unchanged.
+  label: string;
   value: T;
   options: RadioOption<T>[];
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-1.5">
+    <div role="group" aria-label={label} className="grid grid-cols-3 gap-1.5">
       {options.map((o) => {
         const active = o.value === value;
         return (
-          <button
+          <button type="button"
             key={o.value}
             onClick={() => onChange(o.value)}
             aria-pressed={active}
@@ -1189,7 +1238,7 @@ function TeamPicker({
         {tabSports.map((s) => {
           const active = s.sport === activeSport;
           return (
-            <button
+            <button type="button"
               key={s.sport}
               onClick={() => setSelectedSport(active ? null : s.sport)}
               // State is otherwise conveyed only by accent color; expose the
@@ -1234,6 +1283,29 @@ function TeamPicker({
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
       />
 
+      {/* The team grid below conveys its result state purely visually — a
+          pulsing skeleton, a "No matches" line, or a grid of team buttons —
+          so a screen-reader user typing in the search box above gets no cue
+          how many teams matched or that a query came up empty. Voice a
+          concise summary through a dedicated sr-only live region (WCAG 4.1.3
+          Status Messages), mirroring the same role="status" aria-live="polite"
+          pattern the news feed, video strips, and FeedbackBox already use.
+          Kept to a short count (not the team names, which the grid itself
+          exposes) so polite announcements stay terse as the query changes. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {showSkeleton
+          ? "Loading teams…"
+          : !activeSport && !trimmedQuery
+            ? ""
+            : filtered.length === 0
+              ? trimmedQuery
+                ? loadingSports.size > 0
+                  ? "Searching…"
+                  : "No matching teams"
+                : "No teams available"
+              : `${filtered.length} team${filtered.length === 1 ? "" : "s"} found`}
+      </div>
+
       {/* Team grid */}
       <div className="max-h-72 overflow-y-auto -mx-1 px-1">
         {showSkeleton ? (
@@ -1263,7 +1335,7 @@ function TeamPicker({
             {filtered.map((t) => {
               const isFav = favSet.has(t.id);
               return (
-                <button
+                <button type="button"
                   key={t.id}
                   onClick={() => onToggle(t.id)}
                   // Favorited state is otherwise conveyed only by accent color;
