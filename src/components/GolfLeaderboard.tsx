@@ -53,10 +53,11 @@ function RatingBadge({ rating }: { rating: number }) {
     // it's the round's worth-watching rating. role="img" + a spoken aria-label give
     // the badge a self-describing name; the visible all-caps text is unchanged.
     // Title case in the label ("Meh"/"Skip") stops some engines spelling the short
-    // all-caps words out letter-by-letter.
+    // all-caps words out letter-by-letter — except "OK", which is an initialism
+    // and stays "OK" so it isn't mangled to "Ok".
     <span
       role="img"
-      aria-label={`Worth-watching rating: ${label.charAt(0) + label.slice(1).toLowerCase()}`}
+      aria-label={`Worth-watching rating: ${label === "OK" ? "OK" : label.charAt(0) + label.slice(1).toLowerCase()}`}
       className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}
     >
       {label}
@@ -608,6 +609,7 @@ export default function GolfLeaderboard({
             <>
               {allPlayers.length > INITIAL_SHOW && (
                 <button
+                  type="button"
                   onClick={() => setExpandLevel("top25")}
                   aria-expanded={false}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -618,6 +620,7 @@ export default function GolfLeaderboard({
               )}
               {allPlayers.length > TOP25_SHOW && (
                 <button
+                  type="button"
                   onClick={() => setExpandLevel("all")}
                   aria-expanded={false}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -631,6 +634,7 @@ export default function GolfLeaderboard({
           {expandLevel === "top25" && (
             <>
               <button
+                type="button"
                 onClick={() => setExpandLevel("collapsed")}
                 aria-expanded={true}
                 className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -640,6 +644,7 @@ export default function GolfLeaderboard({
               </button>
               {allPlayers.length > TOP25_SHOW && (
                 <button
+                  type="button"
                   onClick={() => setExpandLevel("all")}
                   aria-expanded={true}
                   className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -652,6 +657,7 @@ export default function GolfLeaderboard({
           )}
           {expandLevel === "all" && (
             <button
+              type="button"
               onClick={() => setExpandLevel("collapsed")}
               aria-expanded={true}
               className="flex-1 text-center text-[10px] sm:text-xs py-1 rounded transition-colors cursor-pointer hover:opacity-80"
@@ -677,6 +683,7 @@ export default function GolfLeaderboard({
             return (
               <button
                 key={index}
+                type="button"
                 onClick={() => {
                   // visibleHighlightSlots filters to slots whose id has resolved,
                   // so id is always set here. If onPlayHighlight isn't wired up

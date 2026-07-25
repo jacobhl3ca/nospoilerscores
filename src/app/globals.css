@@ -76,6 +76,13 @@ html.blur-news-media .news-media-preview > * {
   filter: blur(12px);
   transform: scale(1.08);
 }
+@media (prefers-reduced-motion: reduce) {
+  /* Apply the blur mask instantly — no animated filter/scale sweep when the
+     user toggles "blur news media." The end state (blur + the small scale-up
+     that clips the blurred edges) is preserved; only the 150ms transition is
+     dropped. Matches the per-rule reduced-motion overrides below. */
+  .news-media-preview > * { transition: none; }
+}
 
 :root {
   /* Tell the browser which theme its native UI (scrollbars, the text-input
@@ -235,6 +242,17 @@ body {
 }
 .highlight-btn:hover {
   filter: brightness(1.15);
+}
+/* Visible keyboard focus ring on the highlight/recap action buttons (WCAG
+   2.4.7). These are the app's primary "watch" controls (EventCard, GameHighlights,
+   GolfLeaderboard) yet were the last interactive control class still falling back
+   to the inconsistent default browser outline. Re-use the same accent ring the
+   date-nav pills, view tabs, and monkey toggle use — keyboard-only
+   (:focus-visible) so mouse/touch taps stay clean, offset to sit outside the
+   button's rounded corners. */
+.highlight-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 

@@ -342,6 +342,7 @@ export default function GameHighlights({
         <div className={`${wrapMargin} flex gap-1`}>
           {hasOfficialButton && officialStatus === "found" && (
             <button
+              type="button"
               onClick={async (e) => {
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
@@ -383,6 +384,7 @@ export default function GameHighlights({
           )}
           {searchStatus === "found" && (
             <button
+              type="button"
               onClick={async (e) => {
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
@@ -435,6 +437,7 @@ export default function GameHighlights({
         <div className={`${wrapMargin} flex gap-1`}>
           {mlbRecapPlayback && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 const page = mlbRecapPage || mlbRecapPlayback!;
@@ -452,6 +455,7 @@ export default function GameHighlights({
           )}
           {showMlbCondensed && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 // STRICT MLB.com only (see showMlbCondensed): always the date-exact
@@ -487,6 +491,7 @@ export default function GameHighlights({
         <div className={`${showYouTube ? "mt-1" : wrapMargin} flex gap-1`}>
           {telemundoShortStatus === "found" && (
             <button
+              type="button"
               onClick={async (e) => {
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
@@ -522,6 +527,7 @@ export default function GameHighlights({
           )}
           {telemundoLongStatus === "found" && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
@@ -562,6 +568,7 @@ export default function GameHighlights({
         <div className={`${showYouTube ? "mt-1" : wrapMargin} flex gap-1`}>
           {game.nhlRecapEmbed && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 const embed = game.nhlRecapEmbed!;
@@ -580,6 +587,7 @@ export default function GameHighlights({
           )}
           {game.nhlCondensedEmbed && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 const embed = game.nhlCondensedEmbed!;

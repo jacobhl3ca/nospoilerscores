@@ -16,8 +16,6 @@ export interface GameWeather {
   icon: string; // emoji condition glyph
   label: string; // "Partly cloudy"
   rainPct: number; // gametime chance
-  peakRainPct: number; // highest chance across the day's watch window
-  peakLabel: string; // "2 PM"
   timeline: WeatherHour[]; // 9 AM–11 PM local, for the rain bar chart
   gameHour24: number; // venue-local start hour (0-23), for the game-time window
   // Live "right now" conditions at the venue (Open-Meteo `current` block). The
@@ -227,18 +225,12 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
 
   const timeline: WeatherHour[] = [];
   let gameIdx = -1;
-  let peakRainPct = 0;
-  let peakLabel = "";
   for (let i = 0; i < times.length; i++) {
     const hr = parseInt(times[i].slice(11, 13), 10);
     if (!isNaN(localHour) && hr === localHour) gameIdx = i;
     if (hr >= 9 && hr <= 23) {
       const rp = Math.round(rains[i] ?? 0);
       timeline.push({ hour24: hr, label: hourLabel(hr), rainPct: rp });
-      if (rp > peakRainPct) {
-        peakRainPct = rp;
-        peakLabel = hourLabel(hr);
-      }
     }
   }
   if (gameIdx < 0) gameIdx = Math.min(Math.max(isNaN(localHour) ? 0 : localHour, 0), times.length - 1);
@@ -259,8 +251,6 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
     icon: cond.icon,
     label: cond.label,
     rainPct: Math.round(rains[gameIdx] ?? 0),
-    peakRainPct,
-    peakLabel,
     timeline,
     gameHour24: parseInt(times[gameIdx].slice(11, 13), 10),
     nowTempF: Math.round(typeof cur.temperature_2m === "number" ? cur.temperature_2m : (temps[gameIdx] ?? 0)),

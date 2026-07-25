@@ -69,13 +69,33 @@ const RANKS: Record<string, number> = {
   // primary keys stay put, so no currently-working lookup can regress.
   "dr congo": 46, // vs. "congo dr"
   "cote d'ivoire": 33, // vs. "ivory coast" (FIFA's official French name)
+  // Same fix again for the two nations FIFA lists under an official name that
+  // differs from the everyday one this table was seeded with. The groups
+  // overlay reads ESPN's fifa.world *standings* endpoint (WorldCupGroupsModal),
+  // which labels teams with FIFA's official names — "Korea Republic" for South
+  // Korea and "IR Iran" for Iran — not the "South Korea"/"Iran" forms the
+  // scoreboard sends. Without these aliases those two showed "—" and sank to the
+  // bottom of their group in the overlay. Alias to the same rank; the "south
+  // korea"/"iran" primary keys stay put, so no scoreboard lookup can regress.
+  "korea republic": 25, // vs. "south korea" (FIFA's official name)
+  "ir iran": 20, // vs. "iran" (FIFA's official name)
 };
 
-// Normalize a team display name (lowercase, strip diacritics) for lookup.
+// Normalize a team display name (lowercase, strip diacritics, fold typographic
+// apostrophes) for lookup.
 export function fifaRank(displayName: string): number | null {
   const key = displayName
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Fold curly apostrophes (\u2019 U+2019, \u2018 U+2018) to the straight ASCII ' the
+    // keys use \u2014 NFD leaves them untouched, so the sole apostrophe key
+    // ("cote d'ivoire", added when ESPN began sending the French "C\u00f4te
+    // d'Ivoire" form) missed whenever ESPN's string carried the typographic \u2019
+    // that properly-rendered French names use, hiding the #33 rank chip. Same
+    // "normalize away an insignificant character variant" intent as the
+    // diacritic strip above; a straight-apostrophe or apostrophe-free name is
+    // unaffected.
+    .replace(/[\u2018\u2019]/g, "'")
     .toLowerCase()
     .trim();
   return RANKS[key] ?? null;

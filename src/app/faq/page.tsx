@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 const FAQ: { q: string; a: string }[] = [
   {
     q: "What is HideScore?",
-    a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
+    a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, soccer, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
   },
   {
     q: "How do HideScore's game ratings work?",
@@ -93,11 +93,29 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "FAQPage",
+            // Anchor this node to the canonical /faq URL and into the shared
+            // WebSite entity declared in layout.tsx. FAQPage is a WebPage subtype,
+            // so without a `url`/`isPartOf` it floated as a page node describing
+            // /faq that was disconnected from the site graph — the same gap the
+            // SeoLandingPage and worldcup/teams FAQ nodes already had fixed.
+            // Linking it to the canonical URL + #website makes Google read it as
+            // this page's FAQ block on the known site rather than an orphan node.
+            url: "https://hidescore.com/faq",
+            isPartOf: { "@id": "https://hidescore.com/#website" },
             // Declare the Q&A content language, matching the inLanguage signal
             // the site adds to its other CreativeWork schema nodes (the
             // WebApplication/WebSite in layout, the WebPage in SeoLandingPage).
             // FAQPage is a WebPage subtype, so this is a valid locale hint.
             inLanguage: "en",
+            // Point this page node at its BreadcrumbList (below) by @id — the
+            // same @graph node-linking the isPartOf ref above and the
+            // SeoLandingPage WebPage→#breadcrumb ref already use. The
+            // BreadcrumbList was the one sibling node left unlinked — a bare,
+            // @id-less list floating beside the page it describes. `breadcrumb`
+            // is a valid WebPage property (FAQPage is a WebPage subtype), and
+            // tying it to the page node is Google's recommended pattern for the
+            // breadcrumb rich result.
+            breadcrumb: { "@id": "https://hidescore.com/faq#breadcrumb" },
             mainEntity: FAQ.map((item) => ({
               "@type": "Question",
               name: item.q,
@@ -118,6 +136,12 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "BreadcrumbList",
+            // Stable @id so the FAQPage node above can reference this exact list
+            // (Google merges the page's JSON-LD blocks into one graph, so the
+            // ref resolves here) instead of leaving it a bare, @id-less list
+            // floating beside the page — matching the SeoLandingPage's
+            // WebPage→#breadcrumb node-linking.
+            "@id": "https://hidescore.com/faq#breadcrumb",
             itemListElement: [
               { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
               { "@type": "ListItem", position: 2, name: "FAQ", item: "https://hidescore.com/faq" },

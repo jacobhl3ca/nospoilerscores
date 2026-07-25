@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import { getTimeZone } from "@/lib/etDay";
+import { handleExternalClick } from "@/lib/openExternal";
 import {
   NewsSource,
   PlayHandler,
@@ -108,16 +109,22 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly }:
     [visible]
   );
 
+  // The feed starts at items === null ("Loading feed…") and asynchronously
+  // settles to the post list or an empty result ("No posts to show.") as each
+  // source resolves. role=status + aria-live=polite voices that transition, so
+  // an SR user who switches into the Feed view hears that it's loading / came
+  // back empty instead of getting silence — matching the status lines in
+  // TeamView / FeedbackBox / SettingsPanel (WCAG 4.1.3).
   if (items === null) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
+      <div role="status" aria-live="polite" className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
         Loading feed…
       </div>
     );
   }
   if (visible.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
+      <div role="status" aria-live="polite" className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
         No posts to show.
       </div>
     );
@@ -291,9 +298,10 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
       {/* Actions */}
       <div className="flex items-center gap-2 px-4 pt-2 pb-3">
         <a
-          href={item.articleUrl || "#"}
+          href={item.articleUrl || undefined}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
           style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}
         >

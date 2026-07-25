@@ -219,27 +219,87 @@ export async function fetchFirstVideoId(query: string, channel?: string, exclude
   }
 }
 
+// English (ESPN `shortDisplayName`) → Spanish nation name, so the Telemundo
+// Deportes "resumen Copa Mundial" query is built with the name that channel's
+// recap titles actually use. Any nation absent here falls back to aliasTeam()
+// (i.e. the English name), which under-matches on a Spanish-language channel —
+// so the map is kept complete across the qualified field. Spellings follow
+// Telemundo's own usage (e.g. "Catar", "Arabia Saudita"). Keyed alphabetically.
 const TELEMUNDO_WORLD_CUP_TEAM_ALIASES: Record<string, string> = {
+  Algeria: "Argelia",
   Argentina: "Argentina",
   Australia: "Australia",
+  Austria: "Austria",
   Belgium: "Bélgica",
+  "Bosnia-Herzegovina": "Bosnia y Herzegovina",
   Brazil: "Brasil",
+  Canada: "Canadá",
+  "Cape Verde": "Cabo Verde",
   Colombia: "Colombia",
+  "Congo DR": "RD Congo",
+  Croatia: "Croacia",
+  Curacao: "Curazao",
+  Czechia: "Chequia",
+  Ecuador: "Ecuador",
   Egypt: "Egipto",
   England: "Inglaterra",
   France: "Francia",
   Germany: "Alemania",
+  Ghana: "Ghana",
+  Haiti: "Haití",
+  Iran: "Irán",
+  Iraq: "Irak",
+  "Ivory Coast": "Costa de Marfil",
+  Japan: "Japón",
+  Jordan: "Jordania",
+  Mexico: "México",
   Morocco: "Marruecos",
   Netherlands: "Países Bajos",
+  "New Zealand": "Nueva Zelanda",
   Norway: "Noruega",
+  Panama: "Panamá",
   Paraguay: "Paraguay",
+  Portugal: "Portugal",
+  Qatar: "Catar",
+  "Saudi Arabia": "Arabia Saudita",
+  Scotland: "Escocia",
+  Senegal: "Senegal",
+  "South Africa": "Sudáfrica",
+  "South Korea": "Corea del Sur",
   Spain: "España",
+  Sweden: "Suecia",
   Switzerland: "Suiza",
+  Tunisia: "Túnez",
+  Turkiye: "Turquía",
+  Uruguay: "Uruguay",
   USA: "Estados Unidos",
+  Uzbekistan: "Uzbekistán",
 };
 
+// Fold diacritics + typographic apostrophes and lowercase for lookup — the SAME
+// normalization fifaRank() uses (fifaRankings.ts), which this Telemundo map's raw
+// exact-match lookup previously skipped. ESPN's shortDisplayName can arrive
+// accented ("Türkiye", "Curaçao"), and an exact index against the plain-ASCII
+// keys ("Turkiye", "Curacao") then missed and fell through to the English name on
+// a Spanish-language channel, silently dropping the Telemundo highlight button for
+// those nations. Normalizing both sides resolves the variant; a plain-ASCII name
+// normalizes to its own lowercased key, so every currently-working lookup is
+// unchanged (distinct nations can't collide under case/diacritic folding).
+function normalizeTeamName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // strip combining diacritical marks
+    .replace(/[‘’]/g, "'") // fold curly apostrophes to ASCII
+    .toLowerCase()
+    .trim();
+}
+
+const TELEMUNDO_ALIASES_NORMALIZED: Record<string, string> = Object.fromEntries(
+  Object.entries(TELEMUNDO_WORLD_CUP_TEAM_ALIASES).map(([k, v]) => [normalizeTeamName(k), v]),
+);
+
 function telemundoWorldCupTeam(name: string): string {
-  return TELEMUNDO_WORLD_CUP_TEAM_ALIASES[name] ?? aliasTeam(name);
+  return TELEMUNDO_ALIASES_NORMALIZED[normalizeTeamName(name)] ?? aliasTeam(name);
 }
 
 function buildTelemundoWorldCupQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {

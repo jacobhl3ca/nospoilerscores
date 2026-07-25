@@ -45,21 +45,39 @@ export default function WorldCupPage() {
   return (
     <>
       <HomeContent initialOffset={0} worldCupHub />
-      {/* BreadcrumbList lets Google render a Home › World Cup trail in the
-          search result instead of the bare /worldcup URL. The /watch-world-cup-
-          without-spoilers guide already declares this same hierarchy (with
-          /worldcup as position 2), so the hub now closes the loop by claiming
-          its own place in the trail. Server-rendered: page.tsx has no
-          "use client", so the script ships in the static HTML for crawlers. */}
+      {/* Page graph: a WebPage node linked into the site's shared #website
+          entity (declared in layout.tsx) plus its own BreadcrumbList, so Google
+          renders a Home › World Cup trail in the search result AND reads the
+          breadcrumb as this page's rather than an orphan list. The World Cup
+          hub was still emitting a bare, @id-less BreadcrumbList with no WebPage
+          node — every other route (the date pages, /worldcup/teams, the SEO
+          landings, /faq) already uses this WebPage→#website / WebPage→#breadcrumb
+          node-linking, so this brings the marquee World Cup hub in line.
+          Server-rendered: page.tsx has no "use client", so the script ships in
+          the static HTML for crawlers. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
-              { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
+            "@graph": [
+              {
+                "@type": "WebPage",
+                name: TITLE,
+                description: DESC,
+                url: "https://hidescore.com/worldcup",
+                inLanguage: "en",
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                breadcrumb: { "@id": "https://hidescore.com/worldcup#breadcrumb" },
+              },
+              {
+                "@type": "BreadcrumbList",
+                "@id": "https://hidescore.com/worldcup#breadcrumb",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+                  { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
+                ],
+              },
             ],
           }).replace(/</g, "\\u003c"),
         }}

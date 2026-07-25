@@ -90,7 +90,14 @@ export default function WorldCupTeamsPage() {
                 // component, and the sibling /worldcup/teams/<slug> CollectionPage).
                 // CollectionPage is a WebPage subtype, so this is a valid locale hint.
                 inLanguage: "en",
-                isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
+                // Reference the site-level WebSite node by @id (declared in
+                // layout.tsx's root JSON-LD @graph) rather than re-declaring a
+                // second, @id-less WebSite here. The root layout renders on
+                // every page, so Google merges both blocks into one graph and
+                // this resolves to the single shared WebSite entity — the same
+                // node-linking the SeoLandingPage WebPage uses — instead of
+                // leaving two duplicate WebSite entities for hidescore.com.
+                isPartOf: { "@id": "https://hidescore.com/#website" },
                 // Enumerate the team links this page renders so crawlers can
                 // discover every /worldcup/teams/<slug> detail page from the
                 // structured data, not just the visible <a> grid. Mirrors the

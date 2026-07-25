@@ -128,11 +128,31 @@ export default function SeoLandingPage({
                 description: schemaDescription,
                 url: `https://hidescore.com${canonical}`,
                 inLanguage: "en",
-                isPartOf: { "@type": "WebSite", name: "HideScore", url: "https://hidescore.com" },
+                // Reference the site-level WebSite node by @id (declared in
+                // layout.tsx's JSON-LD @graph) rather than re-declaring an
+                // @id-less WebSite here. Both blocks render on the same page, so
+                // Google merges them into one graph and this resolves to the
+                // single shared WebSite entity — the same node-linking the site
+                // uses for publisher/#organization — instead of leaving two
+                // duplicate WebSite entities for hidescore.com on the page.
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                // Point this page at its own BreadcrumbList node (below) by @id,
+                // the same @graph node-linking the WebPage→WebSite isPartOf above
+                // and layout.tsx's publisher/#organization refs use. The
+                // BreadcrumbList was the one sibling node left unlinked — a bare,
+                // @id-less list floating beside the page it describes. `breadcrumb`
+                // is a valid WebPage property, and tying it to the page node is
+                // Google's recommended pattern for the breadcrumb rich result.
+                breadcrumb: { "@id": `https://hidescore.com${canonical}#breadcrumb` },
                 about: about.map((name) => ({ "@type": "Thing", name })),
               },
               {
                 "@type": "BreadcrumbList",
+                // Stable per-page @id so the WebPage node above can reference this
+                // exact list (Google merges the page's JSON-LD into one graph, so
+                // the ref resolves here). Keyed on the canonical path so each
+                // landing page gets its own unambiguous breadcrumb node.
+                "@id": `https://hidescore.com${canonical}#breadcrumb`,
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
                   { "@type": "ListItem", position: 2, name: h1, item: `https://hidescore.com${canonical}` },
@@ -140,6 +160,18 @@ export default function SeoLandingPage({
               },
               {
                 "@type": "FAQPage",
+                // Tie this node to the same page URL as the WebPage node above and
+                // into the shared WebSite entity. FAQPage is a WebPage subtype, so
+                // without a `url`/`isPartOf` it floated as a SECOND, disconnected
+                // page node beside the WebPage describing the exact same address —
+                // the lone sibling in this @graph still left unlinked, after the
+                // WebPage→#website and WebPage→#breadcrumb refs above already tied
+                // the rest together. Anchoring it to the canonical URL + #website
+                // (the same node-linking pattern the WebPage/BreadcrumbList use)
+                // makes the two page nodes read as one entity for this URL instead
+                // of two, matching layout.tsx's publisher/#organization approach.
+                url: `https://hidescore.com${canonical}`,
+                isPartOf: { "@id": "https://hidescore.com/#website" },
                 // Declare the Q&A content language, matching the WebPage node
                 // above and the inLanguage signal the site adds to its other
                 // CreativeWork schema nodes (WebApplication/WebSite in layout).
