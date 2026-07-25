@@ -2269,15 +2269,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         )}
         {!(ytMode && controlsHidden) && (
         <div className={`${textMode ? "mt-4" : "mt-3"} flex items-center justify-center gap-3`}>
-          <a
-            href={sourceShareUrl || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
-          >
-            {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
-          </a>
+          {/* Only render the source link when there's a real URL. For a text/
+              image post with no YouTube id and no fallbackUrl, sourceShareUrl is
+              "", and an href="#" + target="_blank" would open a useless blank
+              tab. Guard it the same way the "Copy link" button below guards on
+              shareUrl, so only the strictly-broken URL-less case is dropped. */}
+          {sourceShareUrl && (
+            <a
+              href={sourceShareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
+            >
+              {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
+            </a>
+          )}
           {shareUrl && (
             <>
               <button
