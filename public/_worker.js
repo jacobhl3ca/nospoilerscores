@@ -2137,7 +2137,7 @@ async function accountDelete(request, env) {
   const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
   if (!u) return _siwaJson({ error: "unauthorized" }, 401);
   if (env.DATA) {
-    try { await env.DATA.delete(`prefs/${u.sub}.json`); } catch (_e) { /* already gone */ }
+    try { await env.DATA.delete(`prefs/${u.sub}.json`); } catch { /* already gone */ }
   }
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
