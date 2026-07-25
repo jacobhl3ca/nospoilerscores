@@ -69,6 +69,16 @@ const RANKS: Record<string, number> = {
   // primary keys stay put, so no currently-working lookup can regress.
   "dr congo": 46, // vs. "congo dr"
   "cote d'ivoire": 33, // vs. "ivory coast" (FIFA's official French name)
+  // Same fix again for the two nations FIFA lists under an official name that
+  // differs from the everyday one this table was seeded with. The groups
+  // overlay reads ESPN's fifa.world *standings* endpoint (WorldCupGroupsModal),
+  // which labels teams with FIFA's official names — "Korea Republic" for South
+  // Korea and "IR Iran" for Iran — not the "South Korea"/"Iran" forms the
+  // scoreboard sends. Without these aliases those two showed "—" and sank to the
+  // bottom of their group in the overlay. Alias to the same rank; the "south
+  // korea"/"iran" primary keys stay put, so no scoreboard lookup can regress.
+  "korea republic": 25, // vs. "south korea" (FIFA's official name)
+  "ir iran": 20, // vs. "iran" (FIFA's official name)
 };
 
 // Normalize a team display name (lowercase, strip diacritics, fold typographic
