@@ -276,8 +276,30 @@ const TELEMUNDO_WORLD_CUP_TEAM_ALIASES: Record<string, string> = {
   Uzbekistan: "Uzbekistán",
 };
 
+// Fold diacritics + typographic apostrophes and lowercase for lookup — the SAME
+// normalization fifaRank() uses (fifaRankings.ts), which this Telemundo map's raw
+// exact-match lookup previously skipped. ESPN's shortDisplayName can arrive
+// accented ("Türkiye", "Curaçao"), and an exact index against the plain-ASCII
+// keys ("Turkiye", "Curacao") then missed and fell through to the English name on
+// a Spanish-language channel, silently dropping the Telemundo highlight button for
+// those nations. Normalizing both sides resolves the variant; a plain-ASCII name
+// normalizes to its own lowercased key, so every currently-working lookup is
+// unchanged (distinct nations can't collide under case/diacritic folding).
+function normalizeTeamName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // strip combining diacritical marks
+    .replace(/[‘’]/g, "'") // fold curly apostrophes to ASCII
+    .toLowerCase()
+    .trim();
+}
+
+const TELEMUNDO_ALIASES_NORMALIZED: Record<string, string> = Object.fromEntries(
+  Object.entries(TELEMUNDO_WORLD_CUP_TEAM_ALIASES).map(([k, v]) => [normalizeTeamName(k), v]),
+);
+
 function telemundoWorldCupTeam(name: string): string {
-  return TELEMUNDO_WORLD_CUP_TEAM_ALIASES[name] ?? aliasTeam(name);
+  return TELEMUNDO_ALIASES_NORMALIZED[normalizeTeamName(name)] ?? aliasTeam(name);
 }
 
 function buildTelemundoWorldCupQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null): string {
