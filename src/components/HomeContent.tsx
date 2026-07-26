@@ -991,7 +991,19 @@ export default function HomeContent({
   // refetch every 10s so the Q4/period and clock keep advancing (matches
   // Google's sports-card behavior — clock jumps every poll, not every second).
   // Pauses when the tab is hidden so background tabs don't burn ESPN calls.
-  const hasLiveGames = leagues.some(l => l.games.some(g => g.state === "in"));
+  // Golf and F1/UFC columns carry no `games` — their live state lives on
+  // `golfTournament`/`eventCard` — so they must be checked too, or a Sunday
+  // final round (or a live race/fight card) that's the only live thing on the
+  // board would never start the poll and freeze at its load-time state. Golf
+  // gates on `roundStatus`, not the tournament-level `state` (which stays "in"
+  // for the whole multi-day event), so we poll only while players are actually
+  // on course — the same "live now" signal isGolfLive uses — not all night
+  // between rounds.
+  const hasLiveGames = leagues.some(l =>
+    l.games.some(g => g.state === "in") ||
+    l.golfTournament?.roundStatus === "in" ||
+    l.eventCard?.state === "in"
+  );
   useEffect(() => {
     if (!hasLiveGames || !selectedDate) return;
     const id = window.setInterval(() => {
