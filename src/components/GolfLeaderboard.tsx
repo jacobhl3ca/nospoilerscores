@@ -313,6 +313,14 @@ export default function GolfLeaderboard({
     // bails when prev[0] is set; tryFill fills the first open slot), so without
     // this reset a date change couldn't overwrite the stale IDs at all.
     setHighlightSlots([null, null, null, null]);
+    // Guard against a prior round's in-flight fetches writing into the new
+    // round's slots. This effect re-runs whenever highlightQuery changes (the
+    // component stays mounted across date/round navigation), and each
+    // fetchFirstVideoId is a ~1-2s live YouTube lookup. Without this flag a
+    // stale R1 promise resolving after the R2 reset would drop the WRONG
+    // round's recap into a freshly-nulled slot — including the labeled slot 0.
+    // Same cancelled-flag pattern as GameHighlights.tsx / TeamView.tsx.
+    let cancelled = false;
     (async () => {
       // Drive the slot list from the curated secondary chain (ESPN
       // first — the reliable full-day recap source Jacob flagged).
@@ -332,7 +340,7 @@ export default function GolfLeaderboard({
       // takes the next open slot, deduped by videoId.
       const seen = new Set<string>();
       const tryFill = (id: string | null) => {
-        if (!id) return;
+        if (cancelled || !id) return;
         setHighlightSlots((prev) => {
           if (prev.includes(id) || seen.has(id)) return prev;
           const nextOpen = prev.findIndex((s, i) => i > 0 && s === null);
@@ -352,7 +360,7 @@ export default function GolfLeaderboard({
         // strict=1: oembed-verify the uploader is this curated channel, so a
         // reuploader's "Round N highlights" title can't win a golf slot.
         fetchFirstVideoId(highlightQuery, mainChannel, undefined, undefined, true).then((id) => {
-          if (!id) return;
+          if (cancelled || !id) return;
           seen.add(id);
           setHighlightSlots((prev) => {
             // Skip if slot 0 is taken OR this id already landed in a later slot:
@@ -391,6 +399,7 @@ export default function GolfLeaderboard({
         }
       }
     })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightQuery, officialChannel, secondaryChannelsKey]);
 
