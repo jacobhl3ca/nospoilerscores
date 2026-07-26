@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fifaRank } from "@/lib/fifaRankings";
-import { getTimeZone } from "@/lib/etDay";
+import { getEtServiceDate, toYmd } from "@/lib/etDay";
 import WorldCupBracket from "./WorldCupBracket";
 import { KNOCKOUT_START_YMD } from "@/lib/wcBracket";
 
@@ -47,14 +47,16 @@ function norm(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
-// YYYYMMDD for an offset in days, in the app's effective time zone (Settings →
-// Time zone) — matches how the rest of the app buckets ESPN by calendar day.
+// YYYYMMDD for an offset in days off the app's canonical "service day" — the
+// same 1 AM-rollover boundary getEtServiceDate gives the date nav and the data
+// layer (see etDay.ts). Deriving from that single source keeps the "Playing:
+// Today" pill and the knockout/Bracket-tab gate on the same slate as the board
+// the user is looking at; a raw new Date() drifts a day between local midnight
+// and 1 AM, before the service day rolls over.
 function etDate(offsetDays: number): string {
-  const d = new Date();
+  const d = getEtServiceDate();
   d.setDate(d.getDate() + offsetDays);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" })
-    .format(d)
-    .replace(/-/g, "");
+  return toYmd(d);
 }
 
 function loadView(): View {
