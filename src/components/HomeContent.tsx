@@ -2579,7 +2579,7 @@ export default function HomeContent({
                       // setNewsThirdLeague — matches hidescore.com's "News ▾".
                       const isEspn = entry.id === "espn";
                       return (
-                        <div key={`title-${entry.id}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                        <div key={`title-${entry.slotIdx}-${entry.id}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                           <NewsColumnTitle
                             title={entry.label}
                             swappableOptions={switcherOptions}
@@ -2634,7 +2634,7 @@ export default function HomeContent({
                   const isEspn = entry.id === "espn";
                   return (
                     <NewsColumn
-                      key={`nc-${entry.id}-${newsRefreshKey}`}
+                      key={`nc-${entry.slotIdx}-${entry.id}-${newsRefreshKey}`}
                       title={entry.label}
                       sources={sourcesForEntry(entry, idx)}
                       swappableOptions={switcherOptions}
