@@ -194,6 +194,12 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
                 // node-linking the SeoLandingPage WebPage uses — instead of
                 // leaving two duplicate WebSite entities for hidescore.com.
                 isPartOf: { "@id": "https://hidescore.com/#website" },
+                // Point this WebPage at its own BreadcrumbList by @id so Google
+                // reads the trail as this page's, instead of leaving the list an
+                // orphan node in the graph. Matches the WebPage→#breadcrumb
+                // node-linking every other route already uses (SeoLandingPage,
+                // /faq, the date routes, /privacy, and the World Cup pages).
+                breadcrumb: { "@id": `${URL}#breadcrumb` },
                 about: [
                   { "@type": "Thing", name: "sports highlights without spoilers" },
                   { "@type": "Thing", name: "spoiler-free sports highlights" },
@@ -202,6 +208,9 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
               },
               {
                 "@type": "BreadcrumbList",
+                // @id so the WebPage's `breadcrumb` ref above resolves to this
+                // node rather than to a disconnected, unnamed list.
+                "@id": `${URL}#breadcrumb`,
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
                   { "@type": "ListItem", position: 2, name: "How to watch sports highlights without spoilers", item: URL },
