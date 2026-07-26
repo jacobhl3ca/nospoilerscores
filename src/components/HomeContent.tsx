@@ -330,14 +330,21 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
 // A labeled on/off chip for the news toolbar (Headlines / Videos / Text posts).
 // Filled accent = ON, outline = OFF — one consistent shape so the row is easy to
 // read and toggle (Jacob 7/14).
-function NewsToggleChip({ active, onClick, title, children }: {
-  active: boolean; onClick: () => void; title: string; children: ReactNode;
+function NewsToggleChip({ active, onClick, title, ariaLabel, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
+      // The visible text label is display:none below 640px (`hidden sm:inline`)
+      // and the icon is aria-hidden, so on phones the only name source left is
+      // `title` — which iOS VoiceOver doesn't reliably announce for buttons,
+      // leaving these chips as unnamed "button, pressed/not pressed". Pin an
+      // explicit aria-label so the name survives on every viewport, matching the
+      // icon-button convention used elsewhere (e.g. SingleColToggle above).
+      aria-label={ariaLabel}
       aria-pressed={active}
       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
       style={{
@@ -2153,6 +2160,7 @@ export default function HomeContent({
               active={!!prefs.revealNewsTitles}
               onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
               title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
+              ariaLabel="Toggle headline reveal"
             >
               {prefs.revealNewsTitles ? (
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -2165,6 +2173,7 @@ export default function HomeContent({
               active={!!prefs.newsVideosOnly}
               onClick={() => updatePrefs({ newsVideosOnly: !prefs.newsVideosOnly })}
               title="Show only video posts (highlights + Reddit clips)"
+              ariaLabel="Toggle videos-only filter"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
               <span className="hidden sm:inline">Videos</span>
@@ -2173,6 +2182,7 @@ export default function HomeContent({
               active={prefs.revealNewsMedia === true}
               onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
               title="Show or spoiler-blur news image and video previews"
+              ariaLabel="Toggle media previews"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
               <span className="hidden sm:inline">Media</span>
@@ -2181,6 +2191,7 @@ export default function HomeContent({
               active={!!prefs.showTextPosts}
               onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
               title="Show or hide headline-only text posts"
+              ariaLabel="Toggle text posts"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
               <span className="hidden sm:inline">Text posts</span>
