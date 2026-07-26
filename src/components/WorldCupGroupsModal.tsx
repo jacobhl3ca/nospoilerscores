@@ -136,6 +136,9 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
   const hlCardRef = useRef<HTMLDivElement | null>(null);
   // The dialog container — focused on open for keyboard/SR users (see below).
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  // The nested bracket-spoiler confirm — focused + trapped on its own while up,
+  // since it renders OUTSIDE dialogRef and the main trap steps aside for it.
+  const explainerRef = useRef<HTMLDivElement | null>(null);
   // Mirror the explainer-open state into a ref so the empty-dep focus-trap effect
   // can read the latest value without re-subscribing. While the bracket-spoiler
   // explainer is up the Tab trap steps aside — that nested dialog renders its own
@@ -177,6 +180,10 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
       try { window.localStorage.setItem(VIEW_KEY, "groups"); } catch {}
     }
   };
+  // Mirror cancelBracket into a ref so the empty-dep Escape effect below always
+  // calls the latest one (it reads the current `view`) without re-subscribing.
+  const cancelBracketRef = useRef(cancelBracket);
+  cancelBracketRef.current = cancelBracket;
   const changeBand = (b: Band) => {
     setBand(b);
     try { window.localStorage.setItem(BAND_KEY, b); } catch {}
@@ -196,7 +203,15 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
   };
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // While the bracket-spoiler confirm is up, Escape backs out of just that
+      // dialog — matching its backdrop click (cancelBracket) — instead of
+      // closing the whole World Cup overlay. Before this, Escape called onClose
+      // unconditionally, so the two dismiss paths disagreed.
+      if (explainerOpenRef.current) cancelBracketRef.current();
+      else onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -248,6 +263,43 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
       opener?.focus?.();
     };
   }, []);
+
+  // Focus management for the nested bracket-spoiler confirm (WCAG 2.4.3). It's a
+  // modal dialog rendered OUTSIDE dialogRef, so the main trap above steps aside
+  // while it's up (explainerOpenRef) — leaving it, uniquely among the app's
+  // dialogs, with no focus handling at all: focus stayed on the Bracket tab
+  // behind the dim and Tab walked the group/search controls the warning exists
+  // to gate. Give it its own trap: seat focus on open, cycle Tab between its
+  // Cancel / Show buttons, and restore focus to the opener on close. Escape is
+  // handled by the effect above (it cancels the explainer). Runs only on the
+  // showBracketExplainer edge so it can't steal focus back on every render.
+  useEffect(() => {
+    if (!showBracketExplainer) return;
+    const opener = document.activeElement as HTMLElement | null;
+    const box = explainerRef.current;
+    box?.focus({ preventScroll: true });
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !box) return;
+      const focusable = Array.from(
+        box.querySelectorAll<HTMLElement>('button:not([disabled])')
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === box) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      opener?.focus?.();
+    };
+  }, [showBracketExplainer]);
 
   // When opened to spotlight a group, scroll its card into view — it can sit
   // below the fold in the 12-group grid. Wait a tick for the grid to render.
@@ -668,11 +720,16 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); cancelBracket(); }}>
           <div className="absolute inset-0 bg-black/50" />
           <div
+            ref={explainerRef}
+            // tabIndex=-1 makes the container programmatically focusable (see the
+            // explainer focus effect) without adding it to the tab order; outline
+            // none suppresses the ring since it's focused only to seat assistive tech.
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="bracket-explainer-title"
             className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)" }}
+            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-2">
