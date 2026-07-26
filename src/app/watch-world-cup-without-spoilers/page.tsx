@@ -262,6 +262,15 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                   logo: { "@type": "ImageObject", url: "https://hidescore.com/icon-512.png" },
                 },
                 mainEntityOfPage: "https://hidescore.com/watch-world-cup-without-spoilers",
+                // Tie this guide into the site's WebSite entity (@id declared in
+                // layout.tsx's @graph) rather than letting it read as a standalone
+                // Article. `isPartOf` is a valid CreativeWork property and Google
+                // merges every JSON-LD block on the page into one graph, so the
+                // #website reference resolves against the layout's node — the same
+                // node-linking the SeoLandingPage WebPage nodes already use to
+                // point isPartOf at #website. This Article was the lone CreativeWork
+                // on the site still not linked into that shared entity.
+                isPartOf: { "@id": "https://hidescore.com/#website" },
               },
               {
                 // BreadcrumbList lets Google render a Home › World Cup › this-guide
