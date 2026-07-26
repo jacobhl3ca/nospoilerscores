@@ -51,6 +51,19 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
           next[idx] = filtered;
           return next;
         });
+      }).catch(() => {
+        // A rejected fetch would leave this column null forever, so `allLoaded`
+        // (below) never flips and the WHOLE subgrid stays pinned on skeletons
+        // with no empty state or retry. Settle it empty — mirroring NewsFeed's
+        // `.catch(() => [])` guard — so the strip renders with its other columns
+        // instead of hanging. (Built-in fetchers swallow errors today, so this
+        // only fires if a source ever rejects/throws.)
+        if (cancelled) return;
+        setColItems((prev) => {
+          const next = [...prev];
+          next[idx] = [];
+          return next;
+        });
       });
     });
     return () => { cancelled = true; };
@@ -65,6 +78,11 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
     let cancelled = false;
     tailFetch().then((items) => {
       if (!cancelled) setTailItems(items);
+    }).catch(() => {
+      // Same guard as the column fetch above: a rejected tail fetch would leave
+      // tailItems null (its "still loading" sentinel) permanently. Settle it
+      // empty so the tail simply doesn't render instead of hanging.
+      if (!cancelled) setTailItems([]);
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
