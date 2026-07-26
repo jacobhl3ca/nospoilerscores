@@ -59,8 +59,20 @@ export default function GlobalError({
           .ge-btn--secondary { background:var(--ge-card); border:1px solid var(--ge-border); color:var(--ge-accent); }
         `}</style>
         <div className="ge-wrap">
-          <h1>Something went wrong</h1>
-          <p>That didn&apos;t load right. Try again — your scores are still hidden.</p>
+          {/* role="alert" so a screen reader announces the failure, matching the
+              page-level error.tsx boundary. This global boundary swaps in
+              dynamically when the root layout throws, so the alert node is
+              inserted into the live document at error time (not present at
+              initial load) — the reliable case for role="alert" to fire. Wraps
+              the heading + message (not the recovery buttons) so the
+              announcement is just what went wrong; the buttons stay ordinary
+              controls. The wrapper adds no box styling, and the h1/p margins
+              still come from the `.ge-wrap h1`/`.ge-wrap p` descendant rules, so
+              the card renders pixel-for-pixel unchanged. */}
+          <div role="alert">
+            <h1>Something went wrong</h1>
+            <p>That didn&apos;t load right. Try again — your scores are still hidden.</p>
+          </div>
           <div className="ge-actions">
             <button type="button" className="ge-btn ge-btn--primary" onClick={() => unstable_retry()}>
               Try again
