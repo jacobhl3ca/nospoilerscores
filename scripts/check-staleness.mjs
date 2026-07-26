@@ -61,6 +61,22 @@ const RATE_LIMIT_PRONE_REDDIT = new Set([
   "reddit-wnba",
 ]);
 
+// Competition-specific subs go genuinely DORMANT in their own off-season: the
+// bake keeps running (fetchedAt stays <4h) but r/UEFAEuropaLeague simply has no
+// new posts for days, because there is no Europa League in July. That is the
+// sub being quiet, not the feed being broken, so a content-age CRIT here pages
+// on the calendar rather than on a bug — reddit-uel sat at 118h and alerted
+// every hour overnight 2026-07-25/26, with reddit-ncaaw (dormant until
+// November) at 64h right behind it. Same call already made for bbc-tennis/golf
+// between majors: content age stays WARN-only so drift is still visible in the
+// table, and the fetchedAt crit above still catches a genuinely stuck bake.
+// The 13 year-round subs keep the strict 48h content crit, which is what
+// actually catches the stale-mirror bug this rule was written for — a mirror
+// serving stale snapshots hits those first, not the off-season tail.
+const SEASONAL_REDDIT = new Set([
+  "reddit-uel", "reddit-ucl", "reddit-ncaaw", "reddit-ncaaf", "reddit-fifa",
+]);
+
 const FEEDS = [
   ...NEWS_HOURLY.map((slug) => {
     // Reddit subs bake HOURLY on the mini, so a 24h crit is far too loose for the
@@ -79,7 +95,11 @@ const FEEDS = [
     // purpose — even the quietest sub we bake tops out around 18h — so this
     // fires on "went static", never on a genuinely slow news day.
     const contentWarnH = reddit ? 24 : null;
-    const contentCritH = reddit ? (RATE_LIMIT_PRONE_REDDIT.has(slug) ? 72 : 48) : null;
+    const contentCritH = reddit
+      ? (SEASONAL_REDDIT.has(slug)
+          ? Infinity
+          : (RATE_LIMIT_PRONE_REDDIT.has(slug) ? 72 : 48))
+      : null;
     return { path: `/news/${slug}.json`, warnH: reddit ? 4 : 6, critH, contentWarnH, contentCritH };
   }),
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
