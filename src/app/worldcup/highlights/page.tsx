@@ -39,16 +39,39 @@ export default function WorldCupHighlightsPage() {
   return (
     <>
       <HomeContent initialOffset={-1} worldCupHub worldCupHubMode="highlights" />
+      {/* Page graph: a WebPage node linked into the site's shared #website entity
+          (declared in layout.tsx) plus its own BreadcrumbList, so Google renders a
+          Home › World Cup › Highlights trail in the search result AND reads the
+          breadcrumb as this page's rather than an orphan list. This route was still
+          emitting a bare, @id-less BreadcrumbList with no WebPage node — every other
+          route (SeoLandingPage, /faq, /privacy, the date routes, /worldcup and the
+          team pages) already uses this WebPage→#website / WebPage→#breadcrumb
+          node-linking. Server-rendered: no "use client" here, so the script ships in
+          the static HTML for crawlers. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
-              { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
-              { "@type": "ListItem", position: 3, name: "Highlights", item: "https://hidescore.com/worldcup/highlights" },
+            "@graph": [
+              {
+                "@type": "WebPage",
+                name: TITLE,
+                description: DESC,
+                url: "https://hidescore.com/worldcup/highlights",
+                inLanguage: "en",
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                breadcrumb: { "@id": "https://hidescore.com/worldcup/highlights#breadcrumb" },
+              },
+              {
+                "@type": "BreadcrumbList",
+                "@id": "https://hidescore.com/worldcup/highlights#breadcrumb",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+                  { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
+                  { "@type": "ListItem", position: 3, name: "Highlights", item: "https://hidescore.com/worldcup/highlights" },
+                ],
+              },
             ],
           }).replace(/</g, "\\u003c"),
         }}
