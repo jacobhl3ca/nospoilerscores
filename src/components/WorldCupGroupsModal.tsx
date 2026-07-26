@@ -561,9 +561,19 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
           ) : null}
         </div>
 
-        {view === "bracket" ? (
+        {view === "bracket" && !showBracketExplainer ? (
           // Bracket loads its own data live from ESPN (independent of the groups
           // standings fetch), so it renders regardless of the groups state.
+          // Gated on the spoiler explainer being dismissed: on the first knockout
+          // open we default `view` to "bracket" AND raise the explainer at the
+          // same time (see the initial state above), so without this guard the
+          // bracket — which reveals who advanced, who was eliminated, and match
+          // winners — would mount and paint behind the warning's 50%-opacity dim,
+          // leaking the exact result the warning exists to gate. While the
+          // explainer is up we fall through to the spoiler-safe groups grid below
+          // (names only); Show Bracket clears the explainer and it renders, Cancel
+          // flips `view` to "groups". Only the auto-defaulted open hits this — the
+          // Bracket-tab path (changeView) never sets view=bracket until confirmed.
           <WorldCupBracket selectedDate={selectedDate} />
         ) : failed ? (
           <p className="text-xs py-6 text-center" style={{ color: "var(--text-muted)" }}>
