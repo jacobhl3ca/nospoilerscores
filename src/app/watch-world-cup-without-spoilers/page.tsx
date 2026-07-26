@@ -278,6 +278,13 @@ export default function WatchWorldCupWithoutSpoilersPage() {
                 // mirrors the page's own links (it points readers to /worldcup), so
                 // the trail matches how the site is actually navigated.
                 "@type": "BreadcrumbList",
+                // Stable @id so the page node below can reference this exact list
+                // (Google merges the page's JSON-LD into one graph, so the ref
+                // resolves here) instead of leaving it a bare, @id-less list
+                // floating beside the page it describes — the last route on the
+                // site still emitting an orphan BreadcrumbList, matching the
+                // /privacy, /faq, /worldcup/teams, and SeoLandingPage node-linking.
+                "@id": "https://hidescore.com/watch-world-cup-without-spoilers#breadcrumb",
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
                   { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
@@ -286,6 +293,23 @@ export default function WatchWorldCupWithoutSpoilersPage() {
               },
               {
                 "@type": "FAQPage",
+                // Anchor this Q&A node to the page's canonical URL and into the
+                // shared WebSite entity. FAQPage is a WebPage subtype, so without a
+                // `url`/`isPartOf` it floated as a SECOND, disconnected page node
+                // beside the Article describing the exact same address — the lone
+                // sibling in this @graph still left unlinked, after the Article
+                // already carries isPartOf → #website. Anchoring it the same way
+                // (the node-linking /faq, the SEO landing pages, and the World Cup
+                // team pages already use) makes the two page nodes read as one
+                // entity for this URL instead of two.
+                url: "https://hidescore.com/watch-world-cup-without-spoilers",
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                // Point this page node at the BreadcrumbList above by @id — the
+                // Article node is a CreativeWork (not a WebPage), so `breadcrumb`
+                // can't validly sit on it; FAQPage is a WebPage subtype and is the
+                // correct node to carry the breadcrumb reference, the same
+                // WebPage→#breadcrumb node-linking every other route already uses.
+                breadcrumb: { "@id": "https://hidescore.com/watch-world-cup-without-spoilers#breadcrumb" },
                 // Same locale signal as the Article node above, matching the
                 // inLanguage the FAQPage nodes already carry on /faq and the SEO
                 // landing / World Cup team pages. FAQPage is a WebPage subtype, so
