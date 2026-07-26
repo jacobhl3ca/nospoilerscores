@@ -124,7 +124,15 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
         const siblings: PlayOpts[] = modalItems.map(newsItemToPlayOpts);
         return (
           <div
-            key={source.label}
+            // Composite key: the strip is fed one lead source per column
+            // (stripCols.map((s) => s[0]) in HomeContent), and two columns CAN
+            // share a label — e.g. the 3rd news column (prefs.newsThirdLeague)
+            // set to a league already shown in the first two, giving sources
+            // like [MLB, NBA, MLB]. A bare source.label key would then collide,
+            // so React reconciles the wrong column's items under a header. This
+            // whole component is already positional (colItems[colIdx], etc.), so
+            // folding colIdx into the key restores unique, stable identity.
+            key={`${source.label}-${colIdx}`}
             // overflow-clip (not overflow-hidden) so the sticky SourceHeader
             // below pins to window scroll instead of being trapped inside this
             // card. See feedback_overflow_clip_for_sticky.md.
