@@ -447,7 +447,19 @@ export default function GameDetailModal({
         {/* Competitiveness rating — ONLY when the user already revealed ratings. */}
         {showRatings && game.rating !== null && (isFinal || isLive) && !isDelayed ? (
           <div className="flex items-center gap-2 mt-3">
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${ratingTier(game.rating).bg}`}>
+            {/* Screen readers otherwise announce a bare "MEH"/"SKIP" here with no
+                hint it's the game's worth-watching rating — the same role="img" +
+                spoken aria-label the score-card badge (GameCard/GolfLeaderboard
+                RatingBadge) already carries; this modal was the lone outlier.
+                Title-case the label in the spoken name so engines don't spell the
+                short all-caps word out letter-by-letter. Unlike the card, this
+                modal's ratingTier never yields the "OK" initialism (GREAT/GOOD/
+                MEH/SKIP only), so no OK guard is needed. Visible text unchanged. */}
+            <span
+              role="img"
+              aria-label={`Worth-watching rating: ${ratingTier(game.rating).label.charAt(0) + ratingTier(game.rating).label.slice(1).toLowerCase()}`}
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${ratingTier(game.rating).bg}`}
+            >
               {ratingTier(game.rating).label}
             </span>
           </div>
