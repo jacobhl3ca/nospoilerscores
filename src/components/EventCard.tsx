@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, getEtServiceDate, toYmd } from "@/lib/etDay";
 import { openExternal } from "@/lib/openExternal";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
@@ -18,7 +18,13 @@ import { openExternal } from "@/lib/openExternal";
 // `refYmd` (YYYYMMDD, the board's viewed date) decides what "today" means: the
 // game cards drop the day prefix for games on the VIEWED slate, so an F1/UFC
 // tile must too — navigating to Sunday should show the Sunday race as just
-// "9:00AM", not "Sun 9:00AM". Falls back to the real today when absent.
+// "9:00AM", not "Sun 9:00AM". When absent, falls back to the app's canonical
+// service day (getEtServiceDate) — NOT a raw `new Date()` calendar day — so the
+// fallback respects the same 1 AM rollover the date nav and data layer use.
+// A bare calendar day was the one spot still computing "today" independently,
+// the exact UI/data drift etDay.ts's single-source-of-truth exists to prevent:
+// between midnight and 1 AM local, the board still shows yesterday's slate, so
+// "today" here must be that service day, not the new calendar day.
 function whenLabel(iso?: string, refYmd?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -30,7 +36,7 @@ function whenLabel(iso?: string, refYmd?: string): string {
   const tz = getTimeZone();
   const ymd = (date: Date) =>
     new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date).replace(/-/g, "");
-  const sameDay = ymd(d) === (refYmd || ymd(new Date()));
+  const sameDay = ymd(d) === (refYmd || toYmd(getEtServiceDate()));
   // Detect the midnight (TBD) placeholder in the SAME zone the time is shown in
   // (tz), not the device's own zone. Reading d.getHours()/getMinutes() uses the
   // device zone, so a Settings "Time zone" override desyncs it from the
