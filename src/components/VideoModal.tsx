@@ -2211,14 +2211,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
-                aria-label={headline || "Video player"}
+                // Spoiler-safe accessible name. The parent dialog deliberately
+                // does NOT surface `headline` (see its aria-label above): the
+                // headline is PeekBlur'd because it can carry a score, so naming
+                // this element with it would read the spoiler aloud unblurred to
+                // screen readers — defeating the whole visual blur. Match the
+                // dialog's generic video-mode label instead of the headline.
+                aria-label="Video player"
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (
               <iframe
                 ref={iframeRef}
                 src={withAutoplay(embedUrl!)}
-                title={headline || "Video player"}
+                // Spoiler-safe accessible name — see the <video> note above and
+                // the dialog's aria-label: the PeekBlur'd headline can carry a
+                // score, so an iframe `title` set to it would announce the
+                // spoiler unblurred to screen readers. Use the generic label.
+                title="Video player"
                 className="absolute inset-0 w-full h-full"
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowFullScreen
