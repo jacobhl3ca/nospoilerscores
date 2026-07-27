@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import { GolfTournament } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
+import { handleExternalClick } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import {
   isGolfLive,
@@ -440,6 +441,7 @@ export default function GolfLeaderboard({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-green-500 font-medium hover:text-green-400 transition-colors"
+                onClick={handleExternalClick(tournament.streamUrl)}
               >
                 {liveLabel}
               </a>
@@ -468,7 +470,7 @@ export default function GolfLeaderboard({
                   className="hover:underline transition-colors"
                   style={{ color: "var(--text-muted)" }}
                   title={`Watch on ${name}`}
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={handleExternalClick(href)}
                 >
                   {name}
                 </a>
