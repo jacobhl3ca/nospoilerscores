@@ -210,7 +210,15 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         <button
           type="button"
           onClick={onOpen}
-          className="news-media-preview relative block w-full cursor-pointer bg-black"
+          // min-h keeps this button a tappable black tile even when its only
+          // child collapses to zero height — an image post whose proxied
+          // thumbnail 404s hides the <img> (onError below), and a video post's
+          // play overlay is absolute-positioned, so without a floor the button
+          // (this is the ONLY in-app lightbox opener for the post — the headline
+          // above is a peek toggle when hasMedia) shrinks to ~0px and can't be
+          // tapped. Every other .news-media-preview sets its own w/h or
+          // aspect-video; this full-width one was the lone reliant-on-content case.
+          className="news-media-preview relative block w-full min-h-[3rem] cursor-pointer bg-black"
           aria-label="Open post"
         >
           {img ? (
