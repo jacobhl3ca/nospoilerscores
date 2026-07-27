@@ -207,7 +207,18 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
                 onPointerDown={(e) => startDrag(e, opt.value)}
                 className="shrink-0 px-1 py-2 cursor-grab active:cursor-grabbing"
                 style={{ color: "var(--text-muted)" }}
-                aria-label="Drag to reorder"
+                // Pointer-only reorder handle (onPointerDown drag, no HTML5 DnD so
+                // it works on iOS) with no keyboard/AT equivalent. It used to carry
+                // aria-label="Drag to reorder" on this bare, non-focusable span,
+                // which advertised a "Drag to reorder" control to screen readers
+                // that a keyboard/SR user then had no way to operate. Selecting a
+                // filter is already fully keyboard-accessible via the row's <button>
+                // below; reordering is a pointer-only enhancement whose persisted
+                // order degrades gracefully (applyOrder tolerates any/no custom
+                // order). So hide the handle from assistive tech — the honest state
+                // for an inoperable affordance — matching the aria-hidden the
+                // decorative grip glyph inside already carries.
+                aria-hidden="true"
               >
                 <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" />
