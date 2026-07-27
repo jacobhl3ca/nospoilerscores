@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, getEtServiceDate, toYmd } from "@/lib/etDay";
 import {
   fetchBracket,
   type Bracket,
@@ -106,7 +106,13 @@ export default function WorldCupBracket({ selectedDate }: { selectedDate?: strin
   const treeRounds = useMemo(() => bracket?.rounds.filter((r) => r.key !== "third") ?? [], [bracket]);
   const third = useMemo(() => bracket?.rounds.find((r) => r.key === "third") ?? null, [bracket]);
   const focusRoundKey = useMemo(() => {
-    const target = selectedDate || ymd(new Date().toISOString());
+    // Fall back to the canonical service day (etDay.ts) — NOT a raw new Date() —
+    // so this matches the selectedDate the parent normally passes in, which is
+    // itself getDateString(0) = the service day with the 1 AM rollover. A bare
+    // new Date() skips that rollover, so between local midnight and 1 AM it would
+    // resolve to the next calendar day and auto-scroll the bracket to the wrong
+    // round while the date nav still shows the previous service day.
+    const target = selectedDate || toYmd(getEtServiceDate());
     return treeRounds.find((round) => round.matches.some((m) => ymd(m.date) === target))?.key ?? null;
   }, [selectedDate, treeRounds]);
 
