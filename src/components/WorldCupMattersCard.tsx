@@ -91,7 +91,14 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        aria-controls="wc-matters-details"
+        // Only reference the details panel while it's actually in the DOM. The
+        // card is collapsed by default, and the panel below is mounted only when
+        // `expanded` (it's kept out of the tree until opt-in for spoiler-safety),
+        // so a constant aria-controls dangled to a non-existent id on the very
+        // first paint every World Cup viewer sees — an aria-valid-attr-value
+        // violation axe flags. Drop the attribute while collapsed; aria-expanded
+        // still conveys the collapsed/expanded state.
+        aria-controls={expanded ? "wc-matters-details" : undefined}
         className="w-full flex items-start gap-2 px-3 py-2 text-left"
         style={{ background: "transparent", color: "var(--text)" }}
       >
