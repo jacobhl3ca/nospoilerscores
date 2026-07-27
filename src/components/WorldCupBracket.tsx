@@ -59,8 +59,15 @@ function Side({ side, bracket }: { side: BracketSide; bracket: Bracket }) {
 }
 
 function MatchCard({ match, bracket }: { match: Bracket["rounds"][number]["matches"][number]; bracket: Bracket }) {
-  const dateLabel = match.date
-    ? new Date(match.date).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() })
+  // Guard the parse before formatting: toLocaleDateString on an Invalid Date
+  // doesn't throw, it returns the literal string "Invalid Date" — so a present-
+  // but-unparseable match.date from ESPN would render "Invalid Date" in the card
+  // corner. isNaN-check it (the same guard etSlateYmd/shareCard already apply to
+  // their date parses, and matching this file's own try/guarded ymd() helper) so
+  // a bad date simply drops the corner label instead. Valid dates are unchanged.
+  const parsed = match.date ? new Date(match.date) : null;
+  const dateLabel = parsed && !isNaN(parsed.getTime())
+    ? parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() })
     : null;
   return (
     <div className={`relative rounded-lg p-1.5 w-full ${dateLabel ? "pr-8" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
