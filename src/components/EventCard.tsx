@@ -123,10 +123,18 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     // missing the handoff — matching GameHighlights' openExternal fallbacks.
     if (!onPlayHighlight) { openExternal(fallback); return; }
     setLoadingId(id);
-    const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, strict);
-    setLoadingId(null);
-    if (videoId) onPlayHighlight(videoId, fallback);
-    else openExternal(fallback);
+    // try/finally so a throw from fetchFirstVideoId can't strand the F1 button
+    // disabled on "Loading…" forever — mirrors the guard playUfc already uses.
+    // fetchFirstVideoId catches internally today (so it can't reject now), but
+    // the sibling UFC path is wrapped and this one wasn't; match it so a future
+    // refactor that lets the lookup reject can't wedge the button's loading state.
+    try {
+      const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, strict);
+      if (videoId) onPlayHighlight(videoId, fallback);
+      else openExternal(fallback);
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   // UFC: walk the rights-holder channels in coverage order, each strict
