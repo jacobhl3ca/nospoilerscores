@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { getWorldCupStakes, WcStakes, WcTier } from "@/lib/wcStakes";
 
 // "What matters today" — a spoiler-safe, tap-to-reveal summary of which World
@@ -25,6 +25,13 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
   const [stakes, setStakes] = useState<WcStakes | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [prevDate, setPrevDate] = useState(date);
+  // Unique per instance: this card is the footer of a FIFA league column, and
+  // the board's slots are user-swappable, so two World Cup columns can coexist
+  // (a manual slot override isn't deduped like auto-pick). A hardcoded panel id
+  // would then emit two elements with the same id when both expand — invalid
+  // HTML and an ambiguous aria-controls where both toggles resolve to the first
+  // panel. useId() gives each instance its own stable, SSR-safe id.
+  const panelId = useId();
 
   // Collapse and clear whenever the viewed date changes — never auto-reveal
   // stakes, and never flash the previous day's matches. Doing this during render
@@ -98,7 +105,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
         // first paint every World Cup viewer sees — an aria-valid-attr-value
         // violation axe flags. Drop the attribute while collapsed; aria-expanded
         // still conveys the collapsed/expanded state.
-        aria-controls={expanded ? "wc-matters-details" : undefined}
+        aria-controls={expanded ? panelId : undefined}
         className="w-full flex items-start gap-2 px-3 py-2 text-left"
         style={{ background: "transparent", color: "var(--text)" }}
       >
@@ -134,7 +141,7 @@ export default function WorldCupMattersCard({ date }: { date: string }) {
       </button>
 
       {expanded && (
-        <div id="wc-matters-details" className="px-3 pt-2.5 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
+        <div id={panelId} className="px-3 pt-2.5 pb-2.5" style={{ borderTop: "1px solid var(--border)" }}>
           <ul className="flex flex-col gap-2">
             {stakes.matches.map((m) => {
               const meta = TIER_META[m.tier];
