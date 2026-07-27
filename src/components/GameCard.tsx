@@ -368,8 +368,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       if (broadcastOverlayRef.current?.contains(e.target as Node)) return;
       setBroadcastExpanded(false);
     };
+    // Keyboard parity with the app's other dropdowns/modals: Escape dismisses
+    // the popup the "+N" chip promises via aria-haspopup="dialog". Without it a
+    // keyboard user who opened this role="dialog" overlay had no way to close
+    // it (the outside-click above is pointer-only) — the lone popover missing
+    // the Escape handler LeagueColumn/NewsColumn's swap dropdowns already carry.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBroadcastExpanded(false);
+    };
     document.addEventListener("pointerdown", closeOnOutside, true);
-    return () => document.removeEventListener("pointerdown", closeOnOutside, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [broadcastExpanded]);
 
   // Live outdoor games: pull current venue conditions so a small weather emoji
