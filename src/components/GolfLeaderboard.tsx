@@ -689,6 +689,17 @@ export default function GolfLeaderboard({
         <div className="mt-1.5 grid grid-cols-2 gap-1">
           {visibleHighlightSlots.map(({ id, index }) => {
             const isMainSlot = index === 0;
+            // Slots 1–3 are all "more on YouTube" play buttons; without the slot
+            // number folded in, every secondary slot resolved the SAME accessible
+            // name, so a screen-reader/voice-control user heard 2–3 identical
+            // "…more on YouTube" buttons with no way to tell them apart or target
+            // one by voice. Number the secondaries (1/2/3) so each has a unique
+            // name — the same disambiguation the repo already applies to
+            // GameCard's favorite stars and LeagueColumn's per-league Retry
+            // buttons. One label const keeps aria-label and title in sync.
+            const highlightLabel = isMainSlot
+              ? `ESPN — Round ${completedRounds} highlights`
+              : `Round ${completedRounds} highlights — more on YouTube (${index})`;
             return (
               <button
                 key={index}
@@ -701,16 +712,8 @@ export default function GolfLeaderboard({
                 }}
                 className="highlight-btn flex items-center justify-center py-1.5 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
                 style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-                aria-label={
-                  isMainSlot
-                    ? `ESPN — Round ${completedRounds} highlights`
-                    : `Round ${completedRounds} highlights — more on YouTube`
-                }
-                title={
-                  isMainSlot
-                    ? `ESPN — Round ${completedRounds} highlights`
-                    : `Round ${completedRounds} highlights — more on YouTube`
-                }
+                aria-label={highlightLabel}
+                title={highlightLabel}
               >
                 <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               </button>
