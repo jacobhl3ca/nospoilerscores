@@ -123,16 +123,28 @@ export default function TeamView({
   const { past, upcoming } = useMemo(() => {
     if (!allGames) return { past: [] as Game[], upcoming: [] as Game[] };
     const now = Date.now();
+    // Parse the kickoff once, coercing an unparseable/missing date to 0 (epoch).
+    // A raw new Date(bad).getTime() is NaN, and every comparison against NaN is
+    // false — so a finished game with a bad date fell out of BOTH the `<= now`
+    // (Recent) and `> now` (Upcoming) filters and vanished from the schedule
+    // entirely, and NaN in the sort comparators left the order undefined. Epoch
+    // keeps such a game in exactly one section (oldest in Recent) and sorts it
+    // stably. Byte-for-byte unchanged for every real, parseable ESPN date — the
+    // same defensive guard the card/bracket date paths already carry.
+    const ms = (g: Game) => {
+      const t = new Date(g.date).getTime();
+      return Number.isNaN(t) ? 0 : t;
+    };
     // Future-dated "post" games (e.g. a suspended/rescheduled fixture ESPN still
     // tags final) belong under Upcoming, per the liveAndPre clause below. Anchor
     // Recent to post games at/before now so such a game lands in exactly one
     // section — otherwise it rendered in BOTH Recent and Upcoming.
     const finished = allGames
-      .filter((g) => g.state === "post" && new Date(g.date).getTime() <= now)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .filter((g) => g.state === "post" && ms(g) <= now)
+      .sort((a, b) => ms(b) - ms(a));
     const liveAndPre = allGames
-      .filter((g) => g.state === "in" || g.state === "pre" || (g.state === "post" && new Date(g.date).getTime() > now))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .filter((g) => g.state === "in" || g.state === "pre" || (g.state === "post" && ms(g) > now))
+      .sort((a, b) => ms(a) - ms(b));
     return { past: finished, upcoming: liveAndPre };
   }, [allGames]);
 
