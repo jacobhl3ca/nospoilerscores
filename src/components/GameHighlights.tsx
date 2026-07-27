@@ -53,6 +53,12 @@ export default function GameHighlights({
   // still surface a shorter team recap when one is available.
   const isMlb = game.sport === "mlb";
   const isFifa = game.sport === "fifa";
+  // ?demo=1 is a page-load staging toggle (it never changes without a
+  // navigation that remounts this component), so read it once on mount instead
+  // of re-parsing window.location.search on every render — these buttons
+  // reconcile on each 10s score poll for every finished game on screen. Mirrors
+  // HomeContent, which likewise reads isDemoModeActive() once at fetch time.
+  const demoActive = useMemo(() => isDemoModeActive(), []);
   // FIFA's short 2m clips frequently hit YouTube embed restrictions AND the live
   // resolver often lands the wrong clip for them, so keep the primary row to the
   // FOX full cut; the Spanish Telemundo pair still fills the second row when
@@ -377,7 +383,7 @@ export default function GameHighlights({
               ) : (
                 <>
                   <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
+                  <span className="text-[10px] font-medium">{demoActive ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
                 </>
               )}
             </button>
