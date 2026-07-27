@@ -526,6 +526,12 @@ function GolfSubtitle({ league, selectedDate }: { league: LeagueData; selectedDa
         href={href}
         target="_blank"
         rel="noopener noreferrer"
+        // Route the tap through openExternal so the Capacitor native wrapper
+        // deep-links into the installed streaming app (PGA Tour / Golf Channel /
+        // Peacock are all in APP_LINK_HOSTS) instead of opening the in-app
+        // browser — matching the sibling PlayoffSubtitle link and every other
+        // external anchor in the app. No behavior change on the plain web.
+        onClick={handleExternalClick(href)}
         className={`${baseClass} hover:underline transition-colors`}
         style={{ color: "var(--text-muted)" }}
       >
