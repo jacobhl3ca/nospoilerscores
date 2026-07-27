@@ -729,12 +729,23 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    source.fetch().then((data) => {
-      if (!cancelled) {
-        setItems(data);
-        setLoading(false);
-      }
-    });
+    // Guard the fetch: without a .catch a rejected source.fetch() would skip the
+    // .then entirely, so setLoading(false) never fires and the card stays pinned
+    // on its loading skeletons forever. Settle to [] on rejection so the card
+    // degrades to its "No headlines"/"No videos" empty state instead — the same
+    // .catch(() => []) guard NewsFeed and AlignedVideoStrip already put on the
+    // identical source.fetch() call. Latent today (the built-in fetchers catch
+    // internally and resolve []), so no happy-path change; this hardens the
+    // rejection case (a future source, or a synchronous throw inside a fetch
+    // closure, would otherwise hang the column).
+    source.fetch()
+      .catch(() => [] as NewsItem[])
+      .then((data) => {
+        if (!cancelled) {
+          setItems(data);
+          setLoading(false);
+        }
+      });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.label]);
