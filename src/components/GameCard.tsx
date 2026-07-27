@@ -691,7 +691,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // condition emoji right after the clock (🌧️). Spoiler-free
                   // and only when wet, so it never clutters a clear-sky card.
                   const wx = cardWeather?.rainingNow ? (
-                    <span className="ml-1" title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
+                    // role="img" + a spoken name so this bare condition emoji
+                    // isn't read as an ambiguous glyph (or silently skipped) by
+                    // screen readers — the `title` only surfaces on mouse hover,
+                    // so SR/touch users got nothing. Matches the role="img" +
+                    // aria-label pattern the rating badge and the detail modal's
+                    // rain timeline already use; unlike the modal's live-weather
+                    // line this emoji stands alone with no adjacent label text.
+                    <span className="ml-1" role="img" aria-label={`${cardWeather.nowLabel} at the venue`} title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
                   ) : null;
                   return liveUrl ? (
                     <><a href={liveUrl} target="_blank" rel="noopener noreferrer" aria-label={gameProgress.label || undefined} className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
