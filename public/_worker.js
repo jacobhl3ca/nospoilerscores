@@ -37,6 +37,25 @@ class AttrSetter {
   element(el) { el.setAttribute(this.attr, this.value); }
 }
 
+// Map a redlib media-proxy URL back to Reddit's own CDN. The bake stopped
+// emitting these in 5969c0d7 (redlibMediaToReddit in scripts/prebake-news.mjs),
+// but every link shared BEFORE that still carries one in ?hp / ?hi — and the
+// volunteer media hosts answer weserv with a 403, which silently trips the
+// &default= fallback so the unfurl showed the generic site blob instead of the
+// clip's still. Path shapes are redlib's own (/preview/pre/, /preview/external-pre/,
+// /img/); /img/ is generic enough that it's gated on a known redlib host so a
+// legitimate someothersite.com/img/… is never rewritten to i.redd.it.
+const REDLIB_MEDIA_HOST = /(redlib|safereddit|perennialte|catsarch|kittywit|bloat\.cat)/i;
+function deRedlibMedia(u) {
+  const m = String(u).match(/^https?:\/\/([^/]+)(\/(?:img|preview)\/.+)$/i);
+  if (!m) return u;
+  const [, host, p] = m;
+  if (p.startsWith("/preview/external-pre/")) return "https://external-preview.redd.it/" + p.slice(22);
+  if (p.startsWith("/preview/pre/")) return "https://preview.redd.it/" + p.slice(13);
+  if (p.startsWith("/img/") && REDLIB_MEDIA_HOST.test(host)) return "https://i.redd.it/" + p.slice(5);
+  return u;
+}
+
 // Bump when the card design changes — appended to og:image as ?r=N so crawlers
 // and the CDN fetch a fresh URL instead of a stale cached image.
 const CARD_REV = 4;
@@ -49,7 +68,7 @@ const CARD_REV = 4;
 // the branded site card if the source ever 404s, so a dead link can never beat
 // the default blob.
 function newsOgImage(raw) {
-  const src = raw.replace(/^https?:\/\//, "");
+  const src = deRedlibMedia(raw).replace(/^https?:\/\//, "");
   const fallback = encodeURIComponent("https://hidescore.com/og-image.png");
   return `https://images.weserv.nl/?url=${encodeURIComponent(src)}&w=1200&h=630&fit=cover&a=attention&output=jpg&q=82&default=${fallback}`;
 }

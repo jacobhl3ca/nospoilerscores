@@ -22,6 +22,10 @@ interface VideoModalProps {
   // When set, the modal renders an image lightbox instead of any video. Used
   // for i.redd.it image posts so they pop in-context like videos do.
   imageUrl?: string | null;
+  // Reddit gallery ("more than 1 picture") posts: every image in the post.
+  // The lightbox pages through these in place — arrows / swipe / ← → keys —
+  // and only steps to the next POST once you're off the end of the gallery.
+  images?: string[] | null;
   // When set, the modal renders this URL in a plain <iframe> — used for
   // Brightcove-hosted NHL recaps, which aren't YouTube and so bypass the
   // YouTube player API / watchdog / fallback-retry machinery entirely.
@@ -356,15 +360,36 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // The dialog root (role="dialog") — used by the focus-management effect below
   // to seat focus inside the modal on open, trap Tab within it, and restore it
   // to the opener on close.
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Gallery ("more than 1 picture") posts: which picture of the post is showing.
+  // Reset per post — prev/next paging REUSES this modal instance, so without the
+  // reset post B would open on post A's 4th picture (same trap PeekBlur's
+  // postKey solves for the headline reveal).
+  const gallery = (images ?? []).filter(Boolean);
+  const galLen = gallery.length;
+  const isGallery = galLen > 1 && !playbackUrl && !embedUrl && !videoId;
+  const [galIdx, setGalIdx] = useState(0);
+  const galAt = Math.min(galIdx, Math.max(0, galLen - 1));
+  // Step within the gallery. Returns false at either end (and for single-image
+  // posts) so the caller falls through to prev/next POST.
+  const stepGallery = useCallback((dir: number) => {
+    if (!isGallery) return false;
+    const next = galAt + dir;
+    if (next < 0 || next >= galLen) return false;
+    setGalIdx(next);
+    setImgFailed(false); // a dud frame shouldn't collapse the whole gallery
+    return true;
+  }, [isGallery, galAt, galLen]);
   // Horizontal swipe on the image lightbox → prev/next post (mobile parity with
-  // the bottom Prev/Next buttons and the desktop ← → keys).
+  // the bottom Prev/Next buttons and the desktop ← → keys). Inside a gallery it
+  // walks the pictures first and only leaves the post at either end, so a swipe
+  // never skips over photos the user hasn't seen.
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
   const onSwipeStart = (e: React.TouchEvent) => {
     swipeRef.current = e.touches.length === 1
@@ -380,7 +405,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     const dy = t.clientY - s.y;
     // Decisive horizontal flick only — ignore taps and vertical scrolls.
     if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    if (dx < 0) onNext?.(); else onPrev?.();
+    if (dx < 0) {
+      if (stepGallery(1)) return;
+      onNext?.();
+    } else {
+      if (stepGallery(-1)) return;
+      onPrev?.();
+    }
   };
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -533,6 +564,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (Jacob 7/19). Keying each PeekBlur by postKey remounts it fresh per post,
   // resetting the reveal, while leaving the video player + modal chrome mounted.
   const postKey = String(currentId ?? playbackUrl ?? embedUrl ?? imageUrl ?? fallbackUrl ?? headline ?? "");
+  // Same reuse trap as PeekBlur: page to another post and the gallery cursor
+  // must go back to picture 1 (post B would otherwise open on post A's 4th).
+  useEffect(() => { setGalIdx(0); }, [postKey]);
 
   const clearAutoplayBlocked = useCallback(() => {
     autoplayBlockedRef.current = false;
@@ -904,6 +938,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        // Inside a gallery the arrows walk its pictures first (same rule as
+        // swipe), then continue on to the neighbouring post at either end.
+        if (stepGallery(e.key === "ArrowLeft" ? -1 : 1)) { e.preventDefault(); return; }
         if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
         else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
         else if (ytMode) { e.preventDefault(); seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP); }
@@ -920,7 +957,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay, onPrev, onNext]);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay, onPrev, onNext, stepGallery]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -1655,7 +1692,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black leading-[0]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={proxyImage(imageUrl!)}
+                // Gallery frames come off Reddit at capture resolution (4000px+,
+                // several MB each) — cap the delivered width at the proxy so a
+                // phone isn't downloading 3.5 MB per swipe.
+                src={proxyImage(isGallery ? gallery[galAt] : imageUrl!, 1400)}
                 alt=""
                 decoding="async"
                 className="block max-w-full object-contain"
@@ -1663,6 +1703,51 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 draggable={false}
                 onError={() => setImgFailed(true)}
               />
+              {isGallery && (
+                <>
+                  {/* Picture counter — the cue that there's more than one, which
+                      the old single-image lightbox gave no hint of. */}
+                  <span
+                    className="absolute top-2 right-2 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none text-white"
+                    style={{ background: "rgba(0,0,0,0.6)" }}
+                  >
+                    {galAt + 1} / {galLen}
+                  </span>
+                  {/* On-image arrows: the fixed side chevrons page POSTS, so the
+                      within-post controls have to live on the photo itself. */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); stepGallery(-1); }}
+                    disabled={galAt === 0}
+                    aria-label="Previous picture"
+                    title="Previous picture"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full text-white/80 hover:text-white disabled:opacity-0 disabled:cursor-default transition-opacity cursor-pointer"
+                    style={{ background: "rgba(0,0,0,0.5)" }}
+                  >
+                    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); stepGallery(1); }}
+                    disabled={galAt === galLen - 1}
+                    aria-label="Next picture"
+                    title="Next picture"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full text-white/80 hover:text-white disabled:opacity-0 disabled:cursor-default transition-opacity cursor-pointer"
+                    style={{ background: "rgba(0,0,0,0.5)" }}
+                  >
+                    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                  </button>
+                  <span className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5" aria-hidden="true">
+                    {gallery.map((g, i) => (
+                      <span
+                        key={g}
+                        className="block w-1.5 h-1.5 rounded-full"
+                        style={{ background: i === galAt ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.4)" }}
+                      />
+                    ))}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         ) : textMode ? (
@@ -1697,6 +1782,20 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             <div ref={containerRef} className="relative w-full rounded-lg p-6 sm:p-8 overflow-y-auto" style={{ maxHeight: mediaMaxH, background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               {sourceLabel && (
                 <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>{sourceLabel}</p>
+              )}
+              {poster && (
+                // External-link posts only carry Reddit's 140px preview crop, so
+                // they land here rather than in the lightbox. Show it at its own
+                // size — a link-card tile, never stretched into a blurry hero.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={proxyImage(poster)}
+                  alt=""
+                  decoding="async"
+                  className="block rounded-md mb-3 max-w-full h-auto"
+                  draggable={false}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
               )}
               {headline && (
                 <PeekBlur key={`h-${postKey}`} tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>

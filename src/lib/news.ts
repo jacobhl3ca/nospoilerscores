@@ -67,6 +67,13 @@ export interface NewsItem {
   // i.redd.it full-res image URL — set when the post is an image post hosted
   // on Reddit. Lets the client pop a lightbox instead of bouncing out.
   imageFullUrl?: string | null;
+  // Every picture of a multi-image (Reddit gallery) post, full-res, in post
+  // order. imageFullUrl is images[0]; the modal pages through the rest.
+  images?: string[] | null;
+  // The only picture we have is Reddit's 140px listing thumbnail (external-link
+  // posts — the article's preview crop). Fine as a row tile, a blurry postage
+  // stamp blown up, so the modal must NOT lightbox it.
+  thumbOnly?: boolean;
   // Reddit selftext for text posts (no image/video). Raw markdown — rendered
   // by the modal with minimal formatting (paragraph breaks + autolinking).
   // Null for non-text posts so the modal layout stays a clean lightbox.
@@ -343,10 +350,16 @@ export function classifySource(src: { key?: string; label?: string }): NewsSourc
 // a stable, widely-used free image proxy (Cloudflare-fronted, IIIF-compatible)
 // that returns the image with permissive CORS and re-encodes WebP→JPEG so
 // older clients are happy. No-op for non-redd.it URLs.
-export function proxyImage(url: string | null | undefined): string | undefined {
+// `width` caps the delivered pixels: Reddit gallery images come through at the
+// original capture size (4000px+ / 3.5 MB each), which is absurd for a phone
+// lightbox — weserv resizes on its side, so we ship ~1400px/0.5 MB instead.
+// `&we` = never enlarge, so a small thumbnail is passed through untouched
+// rather than being upscaled into mush.
+export function proxyImage(url: string | null | undefined, width?: number): string | undefined {
   if (!url) return undefined;
   if (!/\.redd\.it\//.test(url)) return url;
-  return `https://images.weserv.nl/?url=${encodeURIComponent(url.replace(/^https?:\/\//, ""))}`;
+  const w = width ? `&w=${width}&we` : "";
+  return `https://images.weserv.nl/?url=${encodeURIComponent(url.replace(/^https?:\/\//, ""))}${w}`;
 }
 
 export function formatPublished(iso: string): string {
