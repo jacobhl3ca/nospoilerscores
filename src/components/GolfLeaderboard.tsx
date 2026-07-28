@@ -531,8 +531,19 @@ export default function GolfLeaderboard({
                 ? player.shortName
                 : lastNameOnly(player.shortName);
           return (
+            // Key by the player's stable identity (name), NOT the array index:
+            // this list reorders while mounted — it flips alpha↔position order on
+            // the hidden↔revealed toggle, and in the revealed state each player's
+            // `position` shifts on every live poll — so an index key made a player
+            // who moved rows unmount+remount (needless DOM churn, and a 404'd
+            // flag's hidden state re-attempts) instead of React moving the row in
+            // place. The same stable-identity keying the golf highlight chips and
+            // WorldCupMattersCard already use; the row list was the last holdout.
+            // Fall back to the index only for a blank-name row (espn.ts can yield
+            // name "" when displayName is missing) so the uniqueness the `-${idx}`
+            // suffix guarded is preserved for that degenerate case.
             <div
-              key={`${player.name}-${idx}`}
+              key={player.name || `pos-${idx}`}
               className="flex items-center gap-1.5 py-[3px]"
               style={{
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
