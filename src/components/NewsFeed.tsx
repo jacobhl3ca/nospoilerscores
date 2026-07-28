@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import { getTimeZone } from "@/lib/etDay";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -148,6 +148,11 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly }:
 function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
   const [peek, setPeek] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  // Stable, SSR-safe id tying the comments disclosure button to the strip it
+  // reveals. useId() (not a hard-coded id) keeps every FeedPost in the merged
+  // scroll unique — many posts render this toggle at once, so a constant id
+  // would emit duplicate ids and an ambiguous aria-controls across the feed.
+  const commentsId = useId();
   const isReddit = !!item.section?.startsWith("r/");
   const img = item.imageFullUrl || item.imageUrl;
   const isVideo = !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
@@ -263,6 +268,12 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
             // (WCAG 4.1.2 Name, Role, Value), matching the aria-pressed peek
             // toggles elsewhere in this card.
             aria-expanded={showComments}
+            // Point the toggle at the strip it reveals so screen readers can
+            // follow the disclosure relationship (WCAG 4.1.2). Unconditional
+            // here — unlike WorldCupMattersCard, whose panel unmounts while
+            // collapsed (so it drops the attr to avoid dangling to a missing
+            // id), this strip is always mounted, so commentsId always resolves.
+            aria-controls={commentsId}
             className="inline-flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer"
             style={{ color: "var(--text-muted)" }}
           >
@@ -270,7 +281,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
             {comments.length} top {comments.length === 1 ? "comment" : "comments"}
             <span style={{ opacity: 0.7 }}>{showComments ? "· hide" : "· tap to reveal (spoilers)"}</span>
           </button>
-          <div className="mt-2 flex flex-col gap-2">
+          <div id={commentsId} className="mt-2 flex flex-col gap-2">
             {comments.map((c, ci) => (
               <p
                 key={ci}
