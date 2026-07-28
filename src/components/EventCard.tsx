@@ -536,6 +536,18 @@ export default function EventCard({
     );
   }
 
+  // Guard the fall-through on the discriminant. LeagueEventCard is a flat
+  // interface (kind: "f1" | "ufc" with fights?: optional), so a UFC event whose
+  // bout card hasn't populated — ESPN can return an announced fight night before
+  // its competitions are set, leaving { kind: "ufc", fights: [] } (see the UFC
+  // builder in espn.ts, which returns unconditionally) — slips past the UFC
+  // guard above and would render below as an F1 race tile: the 🏁 glyph, a
+  // "race details on ESPN" affordance, and an "F1" button hitting the FORMULA 1
+  // channel with officialChannel "UFC". Only a real F1 event should reach the
+  // race render; an empty UFC card renders nothing, matching how the app hides
+  // other empty states rather than showing the wrong sport.
+  if (event.kind !== "f1") return null;
+
   // ── F1: single race tile ──
   const isLive = event.state === "in";
   const isPost = event.state === "post";
