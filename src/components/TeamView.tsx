@@ -190,9 +190,16 @@ export default function TeamView({
   const doubleheaderIds = useMemo(() => {
     const byDay = new Map<string, string[]>();
     for (const g of past) {
+      // Same bad-date defense as the Recent/Upcoming split above: a `post` game
+      // with an unparseable/missing date is epoch-coerced into `past`, but
+      // Intl.DateTimeFormat.format() THROWS "Invalid time value" on an Invalid
+      // Date — which would crash the whole TeamView render here. Skip it; a game
+      // with no valid date can't be grouped into a calendar-day doubleheader.
+      const d = new Date(g.date);
+      if (Number.isNaN(d.getTime())) continue;
       const ymd = new Intl.DateTimeFormat("en-CA", {
         timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-      }).format(new Date(g.date));
+      }).format(d);
       const arr = byDay.get(ymd) ?? [];
       arr.push(g.id);
       byDay.set(ymd, arr);
