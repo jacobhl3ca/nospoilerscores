@@ -485,22 +485,20 @@ export default function GameHighlights({
                 if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, mlbCondensedPlayback, mlbCondensedPoster);
                 else openExternal(page);
               }}
-              disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="MLB 10 minute condensed game"
-              // aria-busy conveys the in-flight fetch that the visible "Loading..."
-              // swap shows sighted users; the aria-label stays pinned so the name
-              // never collapses to "Loading...". Matches the YouTube buttons above.
-              aria-busy={fetchingOnClick === "official"}
+              // No loading/disabled/aria-busy state here (unlike the YouTube and
+              // Telemundo buttons): this opens the pre-resolved date-exact clip
+              // synchronously via onPlayEmbed with no click-time fetch, so
+              // `fetchingOnClick` is never set on the MLB path (showYouTube needs
+              // !isMlb, showTelemundo needs FIFA). The old loading swap keyed off
+              // it was therefore dead code — the button never dimmed or showed
+              // "Loading...".
               title="MLB 10 minute condensed game"
             >
-              {fetchingOnClick === "official" ? <span className="text-[10px]">Loading...</span> : (
-                <>
-                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
-                </>
-              )}
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
             </button>
           )}
         </div>
