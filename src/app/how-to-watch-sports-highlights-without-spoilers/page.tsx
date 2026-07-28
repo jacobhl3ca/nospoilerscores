@@ -218,6 +218,15 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
               },
               {
                 "@type": "FAQPage",
+                // Tie this node to the same page URL as the WebPage node above and
+                // into the shared WebSite entity. FAQPage is a WebPage subtype, so
+                // without a `url`/`isPartOf` it floated as a SECOND, disconnected
+                // page node beside the WebPage describing the exact same address.
+                // Anchoring it to the canonical URL + #website (the same node-linking
+                // the WebPage/BreadcrumbList above use) makes the two page nodes read
+                // as one entity for this URL, matching every other FAQ-bearing route.
+                url: URL,
+                isPartOf: { "@id": "https://hidescore.com/#website" },
                 inLanguage: "en",
                 mainEntity: FAQ.map((item) => ({
                   "@type": "Question",
