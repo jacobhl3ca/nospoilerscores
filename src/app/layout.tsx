@@ -408,7 +408,7 @@ export default function RootLayout({
         <script
           defer
           src="https://stats.hidescore.com/script.js"
-          data-website-id="bd9fa6f3-8754-4ca6-b439-f9e2bdeec66d"
+          data-website-id="bd9fa6f3-8754-4ca6-b439-f9e2bdeec66d" data-domains="hidescore.com,www.hidescore.com"
         />
         {/* PWA service worker — prod only; in dev it caches stale chunks and breaks hydration */}
         {process.env.NODE_ENV === "production" && (
