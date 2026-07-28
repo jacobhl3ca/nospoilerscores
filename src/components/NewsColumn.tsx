@@ -185,17 +185,25 @@ export function NewsColumnTitle({
       <div className="relative flex items-center justify-center px-6 w-full">
         {isSwappable ? (
           <div ref={swapRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setSwapOpen(!swapOpen)}
-              className="cursor-pointer transition-colors hover:opacity-80"
-              style={{ color: "var(--text)" }}
-              title="Switch news league"
-              aria-haspopup="dialog"
-              aria-expanded={swapOpen}
-            >
-              <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
-            </button>
+            {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern), not
+                the reverse: a <button>'s content model is phrasing content, so an
+                <h2> nested inside it is invalid HTML and assistive tech may drop
+                the heading role. This keeps the swappable title a real <h2>
+                heading — matching the non-swappable branch below — while the
+                button stays the interactive trigger. The button inherits the
+                heading's font + color, so it renders pixel-for-pixel unchanged. */}
+            <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+              <button
+                type="button"
+                onClick={() => setSwapOpen(!swapOpen)}
+                className="cursor-pointer transition-colors hover:opacity-80"
+                title="Switch news league"
+                aria-haspopup="dialog"
+                aria-expanded={swapOpen}
+              >
+                {title}
+              </button>
+            </h2>
             {swapOpen && (
               <div
                 // The toggle above declares aria-haspopup + aria-expanded, so
