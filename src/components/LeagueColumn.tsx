@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -331,7 +331,17 @@ function getPlayoffSubtitle(
 let cachedBigInningSchedule: BigInningSchedule | null = null;
 
 function PlayoffSubtitle({ sport, selectedDate, games, onClick }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void }) {
-  if (isDemoModeActive()) return null;
+  // Read the ?demo=1 staging flag once on mount instead of on every render.
+  // This gate runs for EVERY league-column header on EVERY 10s score-poll
+  // re-render (before PlayoffSubtitleInner is even reached), so a fresh
+  // `URLSearchParams(window.location.search)` was being built ~once per column
+  // per poll, all the time — not just inside a playoff window. Demo mode is a
+  // page-load URL toggle that never changes without a navigation that remounts
+  // this component, so useMemo([]) reads it once (mirroring GameHighlights'
+  // isDemoModeActive memo). A module-level cache would be wrong — it would leak
+  // a stale value across a client-side nav from ?demo=1 to a non-demo route.
+  const demoActive = useMemo(() => isDemoModeActive(), []);
+  if (demoActive) return null;
   return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} />;
 }
 
