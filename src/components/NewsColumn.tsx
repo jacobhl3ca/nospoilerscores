@@ -418,7 +418,13 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
+        // Announce the resolved-empty result too, not just the loading state
+        // above — the load swaps role=status "Loading headlines…" out for this
+        // bare line, so without its own live region a screen-reader user heard
+        // "Loading…" then silence, never learning the column came back empty.
+        // role=status + aria-live matches the loading skeleton here and the
+        // "No games found" empty state in TeamView (WCAG 4.1.3).
+        <p role="status" aria-live="polite" className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => (
@@ -618,7 +624,10 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
+        // Announce the resolved-empty result, mirroring the loading role=status
+        // above and the TextSourceCard empty state — otherwise the load swaps
+        // "Loading videos…" out for a silent line (WCAG 4.1.3).
+        <p role="status" aria-live="polite" className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => {
