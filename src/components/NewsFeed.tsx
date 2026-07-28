@@ -149,9 +149,14 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
   const [peek, setPeek] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const isReddit = !!item.section?.startsWith("r/");
-  const img = item.imageFullUrl || item.imageUrl;
+  // Hero = a real picture (gallery cover / full-res image post). A thumbOnly
+  // item has nothing but Reddit's 140px link-preview crop: stretched to card
+  // width that's the blurry-smear bug, so it renders as a small tile instead.
+  const gallery = item.images ?? [];
+  const img = gallery[0] || item.imageFullUrl || (item.thumbOnly ? null : item.imageUrl);
+  const tile = !img && item.imageUrl ? item.imageUrl : null;
   const isVideo = !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
-  const hasMedia = !!img || isVideo;
+  const hasMedia = !!img || !!tile || isVideo;
   const comments = item.comments ?? [];
 
   return (
@@ -213,14 +218,15 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
           className="news-media-preview relative block w-full cursor-pointer bg-black"
           aria-label="Open post"
         >
-          {img ? (
+          {img || tile ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={proxyImage(img)}
+              // Cap the delivered width: a gallery cover is a multi-MB original.
+              src={proxyImage((img || tile)!, 1200)}
               alt=""
               loading="lazy"
               decoding="async"
-              className="block w-full max-h-[70vh] object-contain"
+              className={img ? "block w-full max-h-[70vh] object-contain" : "block mx-auto max-h-32 w-auto"}
               draggable={false}
               // If the proxied thumbnail 404s (or the image proxy fails), hide the
               // broken-image glyph so the media button degrades cleanly to its black
@@ -239,6 +245,16 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
               <span className="flex items-center justify-center w-14 h-14 rounded-full" style={{ background: "rgba(0,0,0,0.55)" }}>
                 <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
               </span>
+            </span>
+          )}
+          {gallery.length > 1 && (
+            // Multi-picture posts show only their cover here — say so, so the
+            // other photos aren't invisible until you happen to tap in.
+            <span
+              className="absolute top-2 right-2 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none text-white"
+              style={{ background: "rgba(0,0,0,0.6)" }}
+            >
+              1 / {gallery.length}
             </span>
           )}
         </button>

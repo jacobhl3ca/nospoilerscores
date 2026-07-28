@@ -22,6 +22,8 @@ export interface PlayOpts {
   // Brightcove iframe URL (NHL videos) — modal renders it in embedMode.
   embedUrl?: string | null;
   imageUrl?: string | null;
+  // Gallery posts: the full picture set, paged inside the lightbox.
+  images?: string[] | null;
   fallbackUrl: string;
   poster?: string | null;
   sourceLabel?: string | null;
@@ -63,7 +65,12 @@ export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
     playbackUrl: item.playbackUrl || item.videoUrl || null,
     embedUrl: item.embedUrl || null,
     videoId: item.youtubeVideoId || undefined,
-    imageUrl: hasPlayableMedia ? null : (item.imageFullUrl || item.imageUrl || null),
+    // Lightbox source = a REAL picture only. item.imageUrl is a 140px listing
+    // thumbnail on external-link posts (thumbOnly), and blowing that up to
+    // lightbox size is the blurry-postage-stamp bug — such posts open as a text
+    // card with the thumbnail shown at its own size instead (Jacob 7/28).
+    imageUrl: hasPlayableMedia ? null : (item.imageFullUrl || (item.thumbOnly ? null : item.imageUrl) || null),
+    images: hasPlayableMedia ? null : (item.images ?? null),
     fallbackUrl: item.articleUrl,
     poster: item.imageUrl || null,
     sourceLabel: item.section || null,
@@ -466,7 +473,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={proxyImage(item.imageUrl!)}
+        src={proxyImage(item.imageUrl!, 160)}
         alt=""
         loading="lazy"
         // decoding="async" moves the image decode off the main thread so a

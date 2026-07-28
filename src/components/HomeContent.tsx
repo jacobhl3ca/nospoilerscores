@@ -392,7 +392,7 @@ export default function HomeContent({
   // World Cup banner: "Add" expands into a replace-which-column picker when
   // there's no emptied slot to fill (Jacob 6/11).
   const [wcReplaceOpen, setWcReplaceOpen] = useState(false);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] } | null>(null);
+  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
@@ -838,6 +838,7 @@ export default function HomeContent({
     playbackUrl: opts.playbackUrl || null,
     embedUrl: opts.embedUrl || null,
     imageUrl: opts.imageUrl || null,
+    images: opts.images || null,
     poster: opts.poster || null,
     fallbackUrl: opts.fallbackUrl,
     sourceLabel: opts.sourceLabel || null,
@@ -3381,6 +3382,7 @@ export default function HomeContent({
           fallbackUrl={videoModal.fallbackUrl}
           playbackUrl={videoModal.playbackUrl}
           imageUrl={videoModal.imageUrl}
+          images={videoModal.images}
           embedUrl={videoModal.embedUrl}
           poster={videoModal.poster}
           sourceLabel={videoModal.sourceLabel}
