@@ -608,6 +608,7 @@ export default function HomeContent({
     //     on             → always on on launch
     //   News view does NOT reset — it's a viewer choice, not a spoiler surface.
     const applyLaunchState = (p: Preferences) => {
+      const landing = p.defaultLandingView ?? "remember";
       const ratingsMode = p.defaultRatings ?? "auto";
       if (ratingsMode === "on") {
         p.showRatings = true;
@@ -616,15 +617,19 @@ export default function HomeContent({
       } else if (getETHour() < 12) {
         p.showRatings = false;
       }
+      // Landing on Ratings is as explicit an opt-in as "Ratings on launch: on",
+      // so it wins over the auto morning reset above — otherwise choosing it
+      // would silently do nothing before noon ET. Resolved before setPrefs so
+      // the first render already has it.
+      if (landing === "ratings") p.showRatings = true;
       setPrefs(p);
       // Landing view: "remember" restores the last view EXCEPT across a day
       // boundary — a new calendar day (ET) since the last open drops a remembered
       // News view to Scores so the user never lands on yesterday's spoilers
       // (Jacob 6/19). Same-day reopens still restore News.
-      const landing = p.defaultLandingView ?? "remember";
       const newDayPassed = !!p.lastOpenDay && p.lastOpenDay !== getDateString(0);
       if (landing === "news") setShowNews(true);
-      else if (landing === "scores") setShowNews(false);
+      else if (landing === "scores" || landing === "ratings") setShowNews(false);
       else if (p.showNews && !newDayPassed) setShowNews(true);
       document.documentElement.setAttribute("data-theme", getResolvedTheme(p.theme));
       // Apply the headline reveal state at launch (mirrored in the effect below)

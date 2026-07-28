@@ -1478,8 +1478,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // the bottom edge (Jacob 7/11–13). imageMode has no bottom pager band anymore
   // (desktop uses side chevrons, mobile uses swipe), so the reserve is the same
   // whether or not paging is available.
+  // imageMode used to ignore hasPager entirely, because image posts navigated
+  // by swipe alone and had no pager band to clear. They show the same Prev/Next
+  // buttons as everything else now, so a tall portrait shot — a screenshotted
+  // Instagram story, say — has to give back the same room or it runs on past
+  // the buttons and pushes the Open-on / Copy-link row off the bottom edge.
   const mediaMaxH = imageMode
-    ? "min(82vh, 100dvh - 12rem)"
+    ? (hasPager ? "min(78vh, 100dvh - 16.5rem)" : "min(82vh, 100dvh - 12rem)")
     : (hasPager ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)");
   const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
@@ -1576,10 +1581,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       <div
         // Wider side padding on desktop when a pager is present so the fixed
         // left/right chevrons sit in a gutter beside the media instead of on top
-        // of it (Jacob 7/11–13). The bottom Prev/Next buttons (video/text only —
-        // image posts navigate by swipe) need a bottom reserve so the footer
-        // clears them; image posts don't.
-        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "sm:px-24 sm:py-8" : "sm:p-8"}${(hasPager && !imageMode) ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)]" : ""}`}
+        // of it (Jacob 7/11–13). The bottom Prev/Next buttons need a bottom
+        // reserve so the footer clears them — image posts included, now that
+        // they get the buttons too.
+        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "sm:px-24 sm:py-8" : "sm:p-8"}${hasPager ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)]" : ""}`}
       >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
@@ -2410,7 +2415,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
         {/* Image posts navigate by swipe on mobile (no bottom buttons) so the
             photo gets the full screen; video/text keep the labelled buttons. */}
-        {!imageMode && mobilePager}
+        {/* Image posts used to page by swipe only, with nothing on screen to
+            say so — an Instagram screenshot filled the phone and looked like a
+            dead end. Swipe still works; the buttons just make it visible. */}
+        {mobilePager}
         {desktopPager}
       </div>
       </div>

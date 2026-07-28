@@ -30,7 +30,9 @@ function decodeTeamId(short: string): string {
 
 export type Theme = "dark" | "light" | "system";
 export type DefaultDateMode = "smart" | "today" | "yesterday";
-export type DefaultLandingView = "remember" | "scores" | "news";
+// "ratings" is the third segment of the header control (🙉), not a fourth
+// screen: it lands on Scores with ratings already showing.
+export type DefaultLandingView = "remember" | "scores" | "news" | "ratings";
 // auto = current behavior (off in morning, last state after noon ET).
 // off / on = explicit override.
 export type DefaultRatings = "auto" | "off" | "on";
@@ -40,8 +42,8 @@ const THEME_TO_SHORT: Record<Theme, string> = { system: "s", light: "l", dark: "
 const SHORT_TO_THEME: Record<string, Theme> = { s: "system", l: "light", d: "dark" };
 const DATE_MODE_TO_SHORT: Record<DefaultDateMode, string> = { smart: "s", today: "t", yesterday: "y" };
 const SHORT_TO_DATE_MODE: Record<string, DefaultDateMode> = { s: "smart", t: "today", y: "yesterday" };
-const LANDING_TO_SHORT: Record<DefaultLandingView, string> = { remember: "r", scores: "s", news: "n" };
-const SHORT_TO_LANDING: Record<string, DefaultLandingView> = { r: "remember", s: "scores", n: "news" };
+const LANDING_TO_SHORT: Record<DefaultLandingView, string> = { remember: "r", scores: "s", news: "n", ratings: "g" };
+const SHORT_TO_LANDING: Record<string, DefaultLandingView> = { r: "remember", s: "scores", n: "news", g: "ratings" };
 const RATINGS_TO_SHORT: Record<DefaultRatings, string> = { auto: "a", off: "f", on: "o" };
 const SHORT_TO_RATINGS: Record<string, DefaultRatings> = { a: "auto", f: "off", o: "on" };
 
