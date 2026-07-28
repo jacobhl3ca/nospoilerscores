@@ -55,7 +55,19 @@ export default function WorldCupTeamsPage() {
             </span>
             <span className="min-w-0 flex-1">
               {team.name}
-              {team.rank ? <span className="ml-1 font-normal" style={{ color: "var(--text-muted)" }}>#{team.rank}</span> : null}
+              {team.rank ? (
+                // The bare "#12" is part of the link's accessible name, so a
+                // screen reader announces "United States number 12" with no hint
+                // it's a FIFA ranking (the detail page spells it out as "FIFA
+                // ranking snapshot: #12"; this grid never did). Voice the "#N"
+                // glyph as "FIFA rank N" and hide the visual token from AT —
+                // same aria-hidden + sr-only split the loading state uses in
+                // HomeContent — so the label reads clearly with no visual change.
+                <span className="ml-1 font-normal" style={{ color: "var(--text-muted)" }}>
+                  <span aria-hidden="true">#{team.rank}</span>
+                  <span className="sr-only">FIFA rank {team.rank}</span>
+                </span>
+              ) : null}
             </span>
           </Link>
         ))}
