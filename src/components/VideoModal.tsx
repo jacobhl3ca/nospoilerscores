@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBase } from "@/lib/youtube";
-import { openExternal } from "@/lib/openExternal";
+import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
@@ -2289,7 +2289,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               href={sourceShareUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              // Route through handleExternalClick so a YouTube sourceShareUrl
+              // deep-links into the installed YouTube app on native (matching
+              // the sibling "Open on…" buttons above that already call
+              // openExternal) instead of opening the in-app browser. The helper
+              // still stopPropagation()s — so the click doesn't dismiss the
+              // modal — and leaves modifier/middle-clicks to the browser.
+              onClick={handleExternalClick(sourceShareUrl)}
               className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
             >
               {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}
