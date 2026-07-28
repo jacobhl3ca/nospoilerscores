@@ -933,7 +933,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // overlay: aria-modal="true" only marks that content inert to assistive tech,
   // it does NOT stop a sighted keyboard user Tabbing out. Focusables are queried
   // live per keypress (so per-mode controls — image / text / video — are always
-  // current) and offsetParent filters hidden ones. The modal mounts fresh per
+  // current) and getClientRects() filters hidden ones. The modal mounts fresh per
   // open (the parent guards it), so this fires on every open/close — empty deps
   // capture the opener once. (Once focus enters the cross-origin YouTube iframe
   // the browser routes keydown to the iframe's own document, so the trap governs
@@ -948,7 +948,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         dialog.querySelectorAll<HTMLElement>(
           'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
         )
-      ).filter((el) => el.offsetParent !== null);
+      // getClientRects().length, NOT offsetParent: offsetParent is null for
+      // BOTH display:none elements AND any position:fixed element, so the earlier
+      // offsetParent test silently dropped the desktop Prev/Next post chevrons
+      // (rendered inside this dialog, `position:fixed`) from the trap — leaving
+      // them visible but Tab-unreachable. getClientRects() is empty only when the
+      // element is genuinely unrendered (display:none, incl. the off-breakpoint
+      // pager variant), so it keeps hiding those while re-including the fixed one.
+      ).filter((el) => el.getClientRects().length > 0);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
