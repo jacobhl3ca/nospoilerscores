@@ -764,19 +764,25 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const as = Number(awayTeam.score) || 0;
   const diff = Math.abs(hs - as);
   const setNow = match.status?.period ?? 0; // current set number
+  // Best-of-3 (all women's draws) needs 2 sets to win; best-of-5 (men's Slam
+  // singles) needs 3. The grouping slug tells us which — ESPN's `format` field
+  // is unreliable (reports 5 for both). Hoisted above the rating block so the
+  // "went the distance" gate can require the winner to have actually reached it.
+  const setsToWin = /women/.test(slug) ? 2 : 3;
   let rating: number | null = null;
   if (state === "post") {
     // GREAT is reserved for a match that went to a deciding final set (2-1 or
-    // 3-2). Require the LOSER to have won at least one set — otherwise a
-    // first-set retirement (winner up 1-0 in sets when the opponent retires) or
-    // a walkover (0-0, no sets played) also passes `diff <= 1` and gets rated
-    // GREAT, sorting the LEAST watchable outcome to the top of the Rated view.
-    // Retirements/walkovers aren't filtered out (buildTennisGames only drops
-    // POSTPONED/CANCELED/SUSPENDED), so they reach here as finished games. A
-    // normally-completed match always has its winner at setsToWin (2 or 3), so
-    // this only ever excludes those set-less pathological finishes; every real
-    // 2-1 / 3-2 decider keeps its 90.
-    if (diff <= 1 && Math.min(hs, as) >= 1) rating = 90; // went the distance (2-1 / 3-2)
+    // 3-2). Require the LOSER to have won at least one set AND the WINNER to have
+    // reached setsToWin — otherwise a retirement (e.g. a man retiring at 1-1,
+    // 2-1 or 2-2 in sets, or a first-set retirement up 1-0) or a walkover (0-0,
+    // no sets played) also passes `diff <= 1` and gets rated GREAT, sorting the
+    // LEAST watchable outcome to the top of the Rated view. Retirements/walkovers
+    // aren't filtered out (buildTennisGames only drops POSTPONED/CANCELED/
+    // SUSPENDED), so they reach here as finished games. A normally-completed
+    // match always has its winner at setsToWin (2 or 3); an incomplete retirement
+    // does not, so the `max >= setsToWin` check routes those to the 65 bucket
+    // below while every real 2-1 / 3-2 decider keeps its 90.
+    if (diff <= 1 && Math.min(hs, as) >= 1 && Math.max(hs, as) >= setsToWin) rating = 90; // went the distance (2-1 / 3-2)
     else if (hs + as >= 4 && diff === 2) rating = 78; // long match (3-1)
     else rating = 65;                       // straight sets / retirement / walkover
   } else if (state === "in" && setNow >= 2) {
@@ -786,9 +792,8 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   }
   // Deciding set: a live match level on sets and into the final set — the
   // win-or-go-home stretch. Best-of-3 (all women's draws) decides at 1-1 in
-  // set 3; best-of-5 (men's Slam singles) at 2-2 in set 5. The grouping slug
-  // tells us which — ESPN's `format` field is unreliable (reports 5 for both).
-  const setsToWin = /women/.test(slug) ? 2 : 3;
+  // set 3; best-of-5 (men's Slam singles) at 2-2 in set 5 (setsToWin, hoisted
+  // above the rating block).
   const decidingSet = state === "in" && hs === as && hs === setsToWin - 1;
   // 1st set (or pre) → rating stays null (Too Early / unrated)
   // Gather broadcasts — tennis nests these on the match (competition) object
