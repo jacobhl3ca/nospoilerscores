@@ -133,8 +133,18 @@ async function geocode(city: string, region: string): Promise<Geo | null> {
 
 // venueLocation|gameDateISO → in-flight-or-resolved forecast. Sharing the
 // Promise means a prefetch (card hover/tap) and the modal's own fetch dedupe
-// to ONE request, and reopening a game is instant.
-const resultCache = new Map<string, Promise<GameWeather | null>>();
+// to ONE request, and reopening a game within the TTL is instant.
+//
+// Entries carry a timestamp and expire after WEATHER_TTL_MS: the forecast half
+// is fine to hold, but GameWeather also carries LIVE "right now" conditions
+// (nowTempF/nowIcon/nowLabel/rainingNow, the Open-Meteo `current` block) that
+// the detail modal renders for in-progress games. A session-lifetime cache
+// froze those at first fetch — a drizzle that rolled in mid-game never surfaced
+// on reopen, the exact staleness the now-* fields exist to fix. A short TTL lets
+// the next open refetch while still deduping the prefetch→open burst and keeping
+// rapid reopens instant (multi-day-out forecasts barely move in 5 min anyway).
+const WEATHER_TTL_MS = 5 * 60_000;
+const resultCache = new Map<string, { at: number; p: Promise<GameWeather | null> }>();
 
 // Warm the cache before the modal opens — call on card hover/pointerdown so the
 // forecast is usually ready by the time the detail popup renders (kills the
@@ -156,11 +166,13 @@ export function prefetchGameWeather(game: {
 export function fetchGameWeather(venueLocation: string, gameDateISO: string): Promise<GameWeather | null> {
   const key = `${venueLocation}|${gameDateISO}`;
   const hit = resultCache.get(key);
-  if (hit) return hit;
+  if (hit && Date.now() - hit.at < WEATHER_TTL_MS) return hit.p;
   const p = computeWeather(venueLocation, gameDateISO).catch(() => null);
-  resultCache.set(key, p);
+  resultCache.set(key, { at: Date.now(), p });
   // Drop a null (failed/transient) so a later open can retry; keep real hits.
-  p.then((w) => { if (w === null) resultCache.delete(key); });
+  // Guard the delete on identity so a retry that already replaced this entry
+  // isn't clobbered by the stale promise's late rejection.
+  p.then((w) => { if (w === null && resultCache.get(key)?.p === p) resultCache.delete(key); });
   return p;
 }
 
