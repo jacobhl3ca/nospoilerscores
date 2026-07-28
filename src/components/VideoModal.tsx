@@ -1706,12 +1706,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               {isGallery && (
                 <>
                   {/* Picture counter — the cue that there's more than one, which
-                      the old single-image lightbox gave no hint of. */}
+                      the old single-image lightbox gave no hint of. Purely visual
+                      ("2 / 3" reads as a bare "2 3" to a screen reader), so hide it
+                      from AT and voice the position through the sr-only live region
+                      below instead. */}
                   <span
+                    aria-hidden="true"
                     className="absolute top-2 right-2 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none text-white"
                     style={{ background: "rgba(0,0,0,0.6)" }}
                   >
                     {galAt + 1} / {galLen}
+                  </span>
+                  {/* The gallery frames all carry alt="" (no per-image caption is
+                      available), and the counter + dots above are aria-hidden, so
+                      paging with the Prev/Next buttons gave a screen-reader user no
+                      cue which picture they'd landed on. Voice the new position
+                      through a dedicated sr-only live region (WCAG 4.1.3 Status
+                      Messages), matching the same role="status" aria-live="polite"
+                      pattern the copy-link confirmation and FeedbackBox already use.
+                      Its text changes on every step, so each page is announced. */}
+                  <span role="status" aria-live="polite" className="sr-only">
+                    Picture {galAt + 1} of {galLen}
                   </span>
                   {/* On-image arrows: the fixed side chevrons page POSTS, so the
                       within-post controls have to live on the photo itself. */}
