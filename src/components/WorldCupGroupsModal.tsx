@@ -486,6 +486,15 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        // While the nested bracket-spoiler explainer is up, mark THIS dialog
+        // inert to assistive tech so its virtual cursor can't swipe the groups/
+        // ranked grid behind the warning. The keyboard Tab-trap already steps
+        // aside for the explainer (explainerOpenRef), but aria-modal on the
+        // explainer alone doesn't hide this sibling from a screen reader's swipe
+        // navigation — two live aria-modal dialogs otherwise stack. The explainer
+        // renders OUTSIDE this container and its focus effect seats focus on the
+        // explainer box, so hiding this subtree never buries the focused control.
+        aria-hidden={showBracketExplainer || undefined}
         // Keep the dialog's accessible name in sync with the view on screen —
         // a static "World Cup groups" mislabels the Bracket view (the default
         // once the knockout stage starts) and the Ranked view for screen readers.
