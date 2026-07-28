@@ -940,11 +940,82 @@ async function fetchESPNTopHeadlinesFromHtml(html) {
   return [];
 }
 
+// ── Article lead images (ESPN top headlines) ──────────────────────
+//
+// ESPN's homepage headline list is text-only — there is no <img> anywhere in
+// the <li> — so espn-top baked `imageUrl: null` on all 9-15 items. That left
+// the cards picture-less AND made every shared ESPN link unfurl with the
+// generic site blob instead of the story's art (Jacob, 7/28). The article page
+// itself carries a normal og:image, so resolve it per headline.
+//
+// Cached by article URL because a story's lead art doesn't change: we pay one
+// extra fetch per NEW headline, not per hourly bake. Only HITS are cached —
+// a transient block would otherwise pin `null` for the whole TTL. Any failure
+// leaves imageUrl null and the item ships anyway; a missing picture is a
+// cosmetic downgrade, never a dropped story.
+const ARTICLE_IMG_CACHE_PATH = `${OUT_DIR}/_article-img-cache.json`;
+let _artCache = null;
+let _artDirty = false;
+
+async function loadArticleImgCache() {
+  if (_artCache) return _artCache;
+  try { _artCache = JSON.parse(await readFile(ARTICLE_IMG_CACHE_PATH, "utf8")); } catch { _artCache = {}; }
+  const cutoff = Date.now() - 14 * 864e5;
+  for (const [k, v] of Object.entries(_artCache)) {
+    if (!v || !v.at || v.at < cutoff) delete _artCache[k];
+  }
+  return _artCache;
+}
+
+async function saveArticleImgCache() {
+  if (!_artDirty || !_artCache) return;
+  try {
+    await mkdir(OUT_DIR, { recursive: true });
+    await writeFile(ARTICLE_IMG_CACHE_PATH, JSON.stringify(_artCache));
+    _artDirty = false;
+  } catch { /* best-effort cache */ }
+}
+
+async function fetchArticleOgImage(articleUrl) {
+  const cache = await loadArticleImgCache();
+  const hit = cache[articleUrl];
+  if (hit && hit.img) return hit.img;
+  try {
+    const html = await getText(articleUrl);
+    const m =
+      html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i) ||
+      html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i);
+    if (!m) return null;
+    const img = decodeEntities(m[1]);
+    cache[articleUrl] = { img, at: Date.now() };
+    _artDirty = true;
+    return img;
+  } catch {
+    return null; // blocked/slow article → ship the headline without art
+  }
+}
+
+// Fill in `imageUrl` for any item that lacks one, 4 article fetches at a time.
+async function attachArticleImages(items) {
+  const queue = items.filter((it) => !it.imageUrl && it.articleUrl);
+  if (!queue.length) return items;
+  await Promise.all(
+    Array.from({ length: Math.min(4, queue.length) }, async () => {
+      while (queue.length) {
+        const it = queue.shift();
+        it.imageUrl = await fetchArticleOgImage(it.articleUrl);
+      }
+    })
+  );
+  await saveArticleImgCache();
+  return items;
+}
+
 async function fetchESPNTopHeadlines() {
   // First try the shared cached homepage HTML — most jobs hit the same fetch.
   let html = await getESPNHomeHtml();
   let items = await fetchESPNTopHeadlinesFromHtml(html);
-  if (items.length > 0) return items;
+  if (items.length > 0) return attachArticleImages(items);
   // ESPN intermittently serves a homepage variant *without* the
   // headlineStack block. Verified 2026-05-13: same Mac mini residential IP,
   // 5 minutes apart, opposite results. Retry with fresh fetches; a different
@@ -958,7 +1029,7 @@ async function fetchESPNTopHeadlines() {
         // Refresh shared cache so subsequent jobs (videos) hit the same
         // headline-bearing variant we just successfully scraped.
         _espnHomeHtmlPromise = Promise.resolve(html);
-        return items;
+        return attachArticleImages(items);
       }
     } catch {
       // Treat as retry — fall through to next attempt.
@@ -2148,12 +2219,19 @@ function parseCBSItems(xml, sectionLabel) {
     const pub = ((block.match(/<pubDate>([\s\S]*?)<\/pubDate>/) || [])[1] || "").trim();
     if (!title || !link) continue;
     if (!passesArticleBlocklist(title)) continue;
+    // CBS DOES ship a per-item picture — as an <enclosure type="image/*">, not
+    // the <media:*> tags BBC/Guardian use (the note below used to claim CBS had
+    // none). Without it every CBS card AND every CBS share link unfurled with
+    // the generic site blob. Attribute order varies, so try both.
+    const enc =
+      (block.match(/<enclosure\b[^>]*\burl="([^"]+)"[^>]*\btype="image\/[^"]*"/) || [])[1] ||
+      (block.match(/<enclosure\b[^>]*\btype="image\/[^"]*"[^>]*\burl="([^"]+)"/) || [])[1];
     items.push({
       id: link,
       headline: title,
       description: "",
       published: pub ? new Date(pub).toISOString() : "",
-      imageUrl: null,
+      imageUrl: enc ? decodeEntities(enc) : null,
       articleUrl: link,
       byline: "",
       section: sectionLabel,
@@ -2164,7 +2242,8 @@ function parseCBSItems(xml, sectionLabel) {
 
 // ── BBC Sport / The Guardian RSS — editorial substitute feeds for the soccer,
 // tennis, and golf columns, where no league .com publishes an open feed. Both
-// are clean RSS WITH per-item images (unlike CBS): BBC carries a single
+// are clean RSS WITH per-item images (in <media:*> tags rather than CBS's
+// <enclosure>, handled above): BBC carries a single
 // <media:thumbnail url> (bumped 240→480 for retina); the Guardian carries
 // several <media:content width url> — take the widest.
 function parseEditorialRSS(xml, sectionLabel) {
