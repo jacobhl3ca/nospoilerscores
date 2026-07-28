@@ -134,7 +134,20 @@ export default function GameHighlights({
   // title's date strictly, and a UTC-shifted browser would push a late ET
   // game one day forward and 404 every labeled button. (Display time uses the
   // device's local zone; this is only the recap search key.)
-  const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: getTimeZone() });
+  //
+  // Guard the parse before formatting: a completed game (state === "post") is
+  // gated on `game.state`, not the date, so a present-but-malformed game.date
+  // from ESPN still reaches here — and toLocaleDateString on an Invalid Date
+  // returns the literal string "Invalid Date", which would get baked into every
+  // highlight query ("Away vs Home highlights Invalid Date") and 404 the labeled
+  // lookups. Fall back to an empty date token so the query degrades to the
+  // undated form the resolvers already retry with, instead of a poisoned one.
+  // (Same isNaN guard etSlateYmd/shareCard/WorldCupBracket already apply; valid
+  // dates are byte-for-byte unchanged.)
+  const gameDate = new Date(game.date);
+  const dateStr = isNaN(gameDate.getTime())
+    ? ""
+    : gameDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: getTimeZone() });
   // Competition token required in highlight titles for sports where the same two
   // teams meet across many competitions (World Cup only — see getCompetitionName).
   // null for every other league, so their query + behaviour are unchanged.
