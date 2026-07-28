@@ -1353,27 +1353,47 @@ async function fetchRedlibHTML(subreddit) {
   // Try the instance that last worked first (usually one volunteer host is up at
   // a time), then the hash-rotated rest, so we don't re-pay dead-mirror timeouts
   // on every sub.
+  for (const base of redlibOrder(subreddit)) {
+    const html = await redlibGet(base, `/r/${subreddit}/hot`, /<div class="post[ "]/);
+    if (html) {
+      _redlibWinner = base;
+      return { html, base };
+    }
+  }
+  return null;
+}
+
+// Mirror-order for any redlib page: last winner first, then hash-rotated so
+// different subs don't dog-pile the same volunteer host.
+function redlibOrder(seed) {
   const order = [];
   if (_redlibWinner && !_redlibStale.has(_redlibWinner)) order.push(_redlibWinner);
-  const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
+  const offset = [...seed].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
   for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
     const inst = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
     if (!order.includes(inst) && !_redlibStale.has(inst)) order.push(inst);
   }
-  for (const base of order) {
+  return order;
+}
+
+// GET a redlib page, trying BOTH User-Agent variants before giving up on a
+// mirror. The instances disagree about what a bot looks like: perennialte.ch
+// 403s a request with no UA, while safereddit.com serves a ~4KB Anubis
+// challenge page (HTTP 200, no posts) to our Safari UA and the real page to a
+// bare request. We only ever sent the Safari UA, so safereddit — the mirror
+// that's up most often — silently counted as "down" for every fetch, and the
+// whole fallback chain collapsed onto the IP-rate-limited reddit.com RSS
+// whenever perennialte blipped. `mustContain` is what a REAL page has, so a
+// 200-with-a-challenge is treated as a miss, not as success.
+async function redlibGet(base, path, mustContain) {
+  for (const headers of [{ "User-Agent": UA }, {}]) {
     try {
-      const res = await fetch(`${base}/r/${subreddit}/hot`, {
-        headers: { "User-Agent": UA },
-        signal: AbortSignal.timeout(9000),
-      });
+      const res = await fetch(`${base}${path}`, { headers, signal: AbortSignal.timeout(9000) });
       if (!res.ok) continue;
       const html = await res.text();
-      if (/<div class="post[ "]/.test(html)) {
-        _redlibWinner = base;
-        return { html, base };
-      }
+      if (mustContain.test(html)) return html;
     } catch {
-      continue; // dead / blocked mirror — try the next
+      continue; // dead / blocked mirror-variant — try the next
     }
   }
   return null;
@@ -1383,7 +1403,16 @@ async function fetchRedlibHTML(subreddit) {
 // never touches the volunteer instance. Returns null for shapes we don't know.
 function redlibMediaToReddit(path) {
   if (!path) return null;
-  const p = decodeEntities(path);
+  let p = decodeEntities(path);
+  // Some builds (perennialte.ch) emit ABSOLUTE URLs on their own media host —
+  // https://redlib-media.<instance>/preview/pre/… — instead of the relative
+  // /preview/… path. Those baked straight through the `^https?://` early-out
+  // below, so every reddit image we served pointed at a volunteer proxy: when
+  // that host blips, EVERY picture in the app breaks (and it's an extra hop on
+  // every load even when it's up). Strip the host and re-apply the path rules
+  // so we always land on Reddit's own CDN.
+  const abs = p.match(/^https?:\/\/[^/]+(\/(?:img|preview)\/.+)$/i);
+  if (abs) p = abs[1];
   if (/^https?:\/\//.test(p)) return p;
   if (p.startsWith("/img/")) return "https://i.redd.it/" + p.slice(5);
   if (p.startsWith("/preview/external-pre/")) return "https://external-preview.redd.it/" + p.slice(22);
@@ -1391,8 +1420,86 @@ function redlibMediaToReddit(path) {
   return null;
 }
 
+// ── Reddit galleries ("more than 1 picture" posts) ────────────────
+// A gallery post renders in the redlib LISTING as nothing but a 140×140
+// square-cropped thumbnail plus a literal <span>gallery</span> marker — the
+// other images aren't in the listing at all. Baking that thumbnail as the
+// post's image meant the lightbox popped a 140px postage stamp and the rest of
+// the pictures were unreachable (Jacob 7/28: "picture posts don't show
+// properly, especially if more than 1 picture"). The post PAGE carries every
+// image at full res, so resolve galleries there and cache the result by post id
+// (a post's gallery never changes) so we pay one extra fetch per gallery post
+// ONCE, not on every hourly bake — the mirrors are volunteer-run and the reddit
+// budget on the mini is already tight (see the contention notes above).
+const GALLERY_CACHE_PATH = `${OUT_DIR}/_gallery-cache.json`;
+let _galCache = null;
+let _galDirty = false;
+
+async function loadGalleryCache() {
+  if (_galCache) return _galCache;
+  try { _galCache = JSON.parse(await readFile(GALLERY_CACHE_PATH, "utf8")); } catch { _galCache = {}; }
+  const cutoff = Date.now() - 14 * 864e5;
+  for (const [k, v] of Object.entries(_galCache)) {
+    if (!v || !v.at || v.at < cutoff) delete _galCache[k];
+  }
+  return _galCache;
+}
+
+async function saveGalleryCache() {
+  if (!_galDirty || !_galCache) return;
+  try {
+    await mkdir(OUT_DIR, { recursive: true });
+    await writeFile(GALLERY_CACHE_PATH, JSON.stringify(_galCache));
+  } catch { /* best-effort cache */ }
+}
+
+// Resolve every image in a gallery post. `budget` bounds the NETWORK fetches per
+// subreddit (cache hits are free); returns null when unresolved so the caller
+// keeps its thumbnail-only behaviour.
+async function fetchGalleryImages(permPath, postId, budget) {
+  const cache = await loadGalleryCache();
+  const hit = cache[postId];
+  if (hit && Array.isArray(hit.images) && hit.images.length) return hit.images;
+  if (budget.n >= budget.max) return null;
+  // Space repeat hits inside one listing — safereddit (the only mirror serving
+  // post pages reliably) starts refusing on a back-to-back burst.
+  if (budget.n > 0) await new Promise((r) => setTimeout(r, 800));
+  budget.n++;
+  // A mirror can serve listings fine and 503 post pages (perennialte does, they
+  // cost it more), so rotate rather than trusting the listing winner.
+  for (const base of redlibOrder(postId)) {
+    const html = await redlibGet(base, permPath, /class="gallery"/);
+    if (!html) continue;
+    const gi = html.indexOf('class="gallery"');
+    // Bound the scan to the gallery block — comment bodies further down the page
+    // carry their own image links and would otherwise be swept in as "photos".
+    const ends = ['class="post_footer"', 'id="comments"', 'class="comment ']
+      .map((s) => html.indexOf(s, gi))
+      .filter((i) => i > gi);
+    const seg = html.slice(gi, ends.length ? Math.min(...ends) : gi + 80000);
+    const urls = [];
+    // Each gallery figure is <a href="/preview/pre/<id>.jpg?width=<full>…"> —
+    // reddit's own full-res crop, signed, so it survives the mirror going away.
+    const re = /<a[^>]+href="(\/(?:img|preview)\/[^"]+)"/g;
+    let m;
+    while ((m = re.exec(seg)) !== null && urls.length < 20) {
+      const u = redlibMediaToReddit(m[1]);
+      if (u && !urls.includes(u)) urls.push(u);
+    }
+    if (!urls.length) continue;
+    cache[postId] = { images: urls, at: Date.now() };
+    _galDirty = true;
+    return urls;
+  }
+  return null; // every mirror refused — fall back to the thumbnail
+}
+
 async function parseRedlibListing(html, subreddit, sectionLabel) {
   const out = [];
+  // At most 6 gallery post-page fetches per subreddit per bake (cache hits are
+  // free and don't count) so a photo-heavy sub can't turn one listing into 12
+  // extra requests at a volunteer mirror.
+  const galleryBudget = { n: 0, max: 6 };
   for (const block of html.split(/<div class="post[ "]/).slice(1)) {
     const head = block.slice(0, Math.max(0, block.indexOf(">")));
     if (/\bstickied\b/.test(head)) continue; // pinned meta/rules
@@ -1422,6 +1529,13 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     let imageFullUrl = null;
     let youtubeVideoId = null;
     let body = null;
+    // Every image of a multi-picture (gallery) post, full-res and in order.
+    let images = null;
+    // True when the ONLY image we found is redlib's 140px listing thumbnail
+    // (external-link posts: the article's preview crop). Fine as a row tile,
+    // garbage blown up — the client uses this to keep such posts out of the
+    // image lightbox instead of popping a blurry postage stamp.
+    let thumbOnly = false;
 
     // 1) Reddit-hosted video (v.redd.it) → the open HLS CDN (audio + CORS:*).
     const vm = block.match(/\/(?:hls|vid)\/([a-z0-9]{8,16})\b/i) || block.match(/v\.redd\.it\/([a-z0-9]{8,16})/i);
@@ -1459,7 +1573,13 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
       const extUrl = decodeEntities(tHref);
       if (!imageUrl) {
         const tImg = block.match(/<a[^>]*class="post_thumbnail[^"]*"[\s\S]{0,500}?<img[^>]*src="([^"]+)"/);
-        if (tImg) imageUrl = redlibMediaToReddit(tImg[1]);
+        if (tImg) {
+          imageUrl = redlibMediaToReddit(tImg[1]);
+          // Listing thumbnails are 140px (square-cropped for galleries). Mark it
+          // so the client shows it as a tile, not as a lightbox "photo", unless
+          // the gallery resolver below finds the real images.
+          if (imageUrl) thumbOnly = true;
+        }
         // "no_thumbnail" image posts: redlib draws an SVG placeholder (no <img>),
         // but the anchor href IS the image — /img/<id>.jpg or a direct
         // i.redd.it/preview URL. Use it as the row thumbnail AND lightbox full-res
@@ -1509,6 +1629,18 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
       }
     }
 
+    // 4b) Gallery ("more than 1 picture") post — redlib flags it with a literal
+    //     <span>gallery</span> beside the thumbnail and shows nothing else, so
+    //     go read the post page for the actual pictures. Cached by post id.
+    if (!videoUrl && /class="post_thumbnail[\s\S]{0,800}?<span>gallery<\/span>/.test(block)) {
+      const gimgs = await fetchGalleryImages(permPath, postId, galleryBudget);
+      if (gimgs && gimgs.length) {
+        images = gimgs;
+        imageFullUrl = gimgs[0];
+        thumbOnly = false;
+      }
+    }
+
     // 5) Selftext body for text posts with no media (parity with OAuth path).
     //    Key on the actual selftext container `<div class="md">` — link posts
     //    render an EMPTY post_body (no md div), so this skips them instead of
@@ -1535,6 +1667,8 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
       videoUrl,
       imageFullUrl,
       body,
+      ...(images ? { images } : {}),
+      ...(thumbOnly ? { thumbOnly: true } : {}),
       ...(youtubeVideoId ? { youtubeVideoId } : {}),
     });
     if (out.length >= 12) break;
@@ -2763,6 +2897,9 @@ const results = await Promise.allSettled(
 );
 
 if (!ONLY_REDDIT) await saveYTCache(ytCache);
+// Gallery lookups are keyed by post id and never change, so persisting them
+// means each multi-picture post costs exactly one extra mirror fetch, ever.
+await saveGalleryCache();
 
 // Bake per-game highlight video IDs (score-card buttons read these instead of
 // live-scraping). Runs on the same cadence as the video feeds; skipped in
