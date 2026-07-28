@@ -766,9 +766,19 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const setNow = match.status?.period ?? 0; // current set number
   let rating: number | null = null;
   if (state === "post") {
-    if (diff <= 1) rating = 90;             // went the distance (2-1 / 3-2)
+    // GREAT is reserved for a match that went to a deciding final set (2-1 or
+    // 3-2). Require the LOSER to have won at least one set — otherwise a
+    // first-set retirement (winner up 1-0 in sets when the opponent retires) or
+    // a walkover (0-0, no sets played) also passes `diff <= 1` and gets rated
+    // GREAT, sorting the LEAST watchable outcome to the top of the Rated view.
+    // Retirements/walkovers aren't filtered out (buildTennisGames only drops
+    // POSTPONED/CANCELED/SUSPENDED), so they reach here as finished games. A
+    // normally-completed match always has its winner at setsToWin (2 or 3), so
+    // this only ever excludes those set-less pathological finishes; every real
+    // 2-1 / 3-2 decider keeps its 90.
+    if (diff <= 1 && Math.min(hs, as) >= 1) rating = 90; // went the distance (2-1 / 3-2)
     else if (hs + as >= 4 && diff === 2) rating = 78; // long match (3-1)
-    else rating = 65;                       // straight sets
+    else rating = 65;                       // straight sets / retirement / walkover
   } else if (state === "in" && setNow >= 2) {
     // Rate a live match by how level it is, capped below GREAT — GREAT is
     // reserved for finished deciders. Level (e.g. 1-1) reads best.
