@@ -562,10 +562,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   useEffect(() => {
     clearAutoplayBlocked();
-    // New post / new stream — clear any prior playback-failure overlay so the
-    // fresh clip gets a clean attempt (prev/next paging reuses this modal).
+    // New post / new stream — clear any prior failure overlay so the fresh clip
+    // gets a clean attempt (prev/next paging reuses this modal, so a flag set on
+    // the previous post persists otherwise). setImgFailed clears the lightbox
+    // image-error flag for the same reason: two consecutive image posts both
+    // have videoId/currentId/playbackUrl/embedUrl undefined, so imageUrl is the
+    // only dep that changes between them — without it here, a broken image on
+    // post A left imgFailed stuck true and post B's valid image was suppressed
+    // into text-card mode until the modal was closed and reopened.
     setMediaFailed(false);
-  }, [currentId, playbackUrl, embedUrl, clearAutoplayBlocked]);
+    setImgFailed(false);
+  }, [currentId, playbackUrl, embedUrl, imageUrl, clearAutoplayBlocked]);
   // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
   // text card) — used both for the footer link and the hidescore deep-link.
   const ytId = ytMode ? currentId : null;
