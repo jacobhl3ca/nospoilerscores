@@ -43,6 +43,7 @@ const DATE_MODE_OPTIONS: { value: DefaultDateMode; label: string; hint: string }
 const LANDING_VIEW_OPTIONS: { value: DefaultLandingView; label: string; hint: string }[] = [
   { value: "remember", label: "Last opened", hint: "Pick up where you left off" },
   { value: "scores", label: "Scores", hint: "Always start on scores" },
+  { value: "ratings", label: "Ratings", hint: "Always start on scores with ratings on (spoilers)" },
   { value: "news", label: "News", hint: "Always start on news (spoilers)" },
 ];
 
@@ -672,7 +673,7 @@ export default function SettingsPanel({
                 </select>
               </Field>
             )}
-            <Field label="Landing view" hint="Scores or news on launch">
+            <Field label="Landing view" hint="Scores, ratings or news on launch">
               <RadioGroup
                 label="Landing view"
                 value={prefs.defaultLandingView ?? "remember"}
