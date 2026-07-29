@@ -115,6 +115,13 @@ export default function GameHighlights({
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
+    // A completed game is gated on game.state, not the date, so a present-but-
+    // malformed game.date from ESPN reaches here (same note as the dateStr guard
+    // below). An unparseable date makes gameStart NaN, so the `nowMs > gameStart
+    // + bufferMs` check is forever false and this today's-final card would NEVER
+    // reveal its highlight buttons short of a reload. Treat a bad date as ready,
+    // matching the !isToday early-return and the degrade-safely dateStr fallback.
+    if (Number.isNaN(gameStart)) return true;
     const otPeriods = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
     const otExtra = otPeriods * (game.sport === "mlb" ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
