@@ -717,6 +717,15 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                       window.open(item.articleUrl, "_blank", "noopener,noreferrer");
                     }
                   }}
+                  // The button wraps the thumbnail (alt="") + headline, so its
+                  // accessible name is just the headline — a screen-reader/voice-
+                  // control user hears the title but gets no cue this control PLAYS
+                  // a highlight inline (vs. the sibling <a> row below that opens an
+                  // article). Name the action explicitly; the headline stays inside
+                  // the label so "Label in Name" (WCAG 2.5.3) still holds and voice
+                  // users can say the visible title to activate it. Matches the twin
+                  // Play button in AlignedVideoStrip's VideoRow/CompactTailRow.
+                  aria-label={`Play highlight: ${item.headline}`}
                   className={commonCls}
                   style={commonStyle}
                 >
