@@ -1497,9 +1497,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // buttons as everything else now, so a tall portrait shot — a screenshotted
   // Instagram story, say — has to give back the same room or it runs on past
   // the buttons and pushes the Open-on / Copy-link row off the bottom edge.
+  // The reserve is capped as a SHARE of the viewport, not just a flat rem, so a
+  // short window can't starve the media (Jacob 7/28). A flat 16.5rem is ~31% of
+  // a 775px phone but ~65% of a 406px-tall landscape/resized window, which left
+  // a postage-stamp image floating in black. Each `min(<rem>, <dvh>)` crosses
+  // over at ~775px: at or above that height the hand-tuned rem still wins and
+  // nothing changes, below it the reserve shrinks with the viewport so the
+  // image keeps filling the screen. The wrapper scrolls if a wrapped headline
+  // still needs more room than the shrunken reserve.
   const mediaMaxH = imageMode
-    ? (hasPager ? "min(78vh, 100dvh - 16.5rem)" : "min(82vh, 100dvh - 12rem)")
-    : (hasPager ? "min(78vh, 100dvh - 15rem)" : "min(85vh, 100dvh - 10rem)");
+    ? (hasPager ? "min(78vh, 100dvh - min(16.5rem, 34dvh))" : "min(82vh, 100dvh - min(12rem, 25dvh))")
+    : (hasPager ? "min(78vh, 100dvh - min(15rem, 31dvh))" : "min(85vh, 100dvh - min(10rem, 21dvh))");
   const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
 
