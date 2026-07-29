@@ -58,9 +58,19 @@ function useAggregatedFeed(sources: NewsSource[]) {
       if (!alive || (acc.size === 0 && !force)) return;
       setItems(
         [...acc.values()].sort((a, b) => {
-          const ta = a.published ? Date.parse(a.published) : 0;
-          const tb = b.published ? Date.parse(b.published) : 0;
-          return tb - ta;
+          // Coerce an unparseable timestamp to 0, not NaN. The `published ? … : 0`
+          // guard alone only catches an EMPTY string — a present-but-malformed
+          // date (feeds are heterogeneous; some emit non-ISO strings) makes
+          // Date.parse return NaN, and `tb - ta` then evaluates NaN for every
+          // comparison touching that item. NaN is an inconsistent comparator, so
+          // V8 leaves the surrounding order undefined and the post lands at an
+          // arbitrary spot. Number.isNaN → 0 sinks the bad item to the bottom,
+          // matching the same guard in TeamView's sort and news.ts formatPublished.
+          const ms = (s?: string) => {
+            const t = s ? Date.parse(s) : 0;
+            return Number.isNaN(t) ? 0 : t;
+          };
+          return ms(b.published) - ms(a.published);
         })
       );
     };
