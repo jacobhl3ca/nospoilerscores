@@ -750,8 +750,23 @@ export default function LeagueColumn({
 
   // Remove any in-flight drag's window listeners if the column unmounts
   // mid-drag (see onHeaderPointerDown). Intentionally does NOT call endDrag —
-  // an unmount must not fire a reorder or setState, only detach the listeners.
-  useEffect(() => () => { dragListenersRef.current?.(); }, []);
+  // an unmount must not fire a reorder or setState. But it must still revert the
+  // GLOBAL DOM side-effects an active drag left on the document: the "grabbing"
+  // body cursor, the ghost label appended to <body>, and the hover-highlight
+  // background on whatever column the pointer was over. Without this, unmounting
+  // mid-drag (the live-poll re-render / slot swap the code above anticipates)
+  // strands the grabbing cursor app-wide and leaks an orphaned ghost <div>,
+  // since onUp/onCancel — the only other path that clears them — never fire.
+  // Mirrors endDrag's visual teardown (cursor/ghost/hoverEl) minus its state.
+  useEffect(() => () => {
+    dragListenersRef.current?.();
+    const d = dragRef.current;
+    if (d) {
+      document.body.style.cursor = "";
+      d.ghost?.remove();
+      if (d.hoverEl) d.hoverEl.style.background = "";
+    }
+  }, []);
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
   // Done in the effect cleanup (fires before the next run on a league change and
