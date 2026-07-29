@@ -720,6 +720,15 @@ export default function SettingsPanel({
                 <button type="button"
                   onClick={resolveZip}
                   disabled={zip.length !== 5 || zipBusy}
+                  // Pin a stable, descriptive accessible name. The visible text
+                  // is a terse "Set" (ambiguous out of context next to a ZIP
+                  // field) and flips to a bare "…" while resolving — a meaningless
+                  // accessible name for that transient state. An aria-label
+                  // overrides the text content, so the button reads the same in
+                  // both states, matching the descriptive labels the app already
+                  // gives its other short buttons (the feedback "+", the golf
+                  // highlight buttons). Purely additive — no visual change.
+                  aria-label="Set time zone from ZIP code"
                   className="px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-default"
                   style={{ background: "var(--accent)", color: "white" }}
                 >
