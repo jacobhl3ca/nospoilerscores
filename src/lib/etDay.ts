@@ -11,7 +11,27 @@ export function setServiceTimeZone(tz: string | undefined): void {
 }
 
 export function getTimeZone(): string {
-  if (overrideTz) return overrideTz;
+  if (overrideTz) {
+    // Validate the stored override before handing it to the dozens of
+    // Intl.DateTimeFormat({ timeZone }) / toLocaleString({ timeZone }) calls
+    // across the app. The override is loaded straight from localStorage (and
+    // synced from the server for signed-in users) with no schema check, so a
+    // corrupted, stale, or cross-build IANA name (a zone this ICU build doesn't
+    // recognize) would make EVERY one of those calls throw "Invalid time zone
+    // specified" — including getEtServiceDate() below, the app's single source
+    // of truth for "today", which is unguarded and would take down the whole
+    // board. Constructing a formatter throws on a bad zone, so this catches it
+    // and falls through to the device zone. The device-zone path below is
+    // already try/catch-guarded for the same reason; this extends the identical
+    // defense to the override path. Valid zones (the universal common case)
+    // validate and return unchanged, so behavior is byte-for-byte the same.
+    try {
+      new Intl.DateTimeFormat(undefined, { timeZone: overrideTz });
+      return overrideTz;
+    } catch {
+      /* bad override — fall through to the device zone */
+    }
+  }
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
   } catch {
