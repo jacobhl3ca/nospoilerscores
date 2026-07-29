@@ -1773,8 +1773,21 @@ export default function HomeContent({
         setNewsFilterOpen(false);
       }
     };
+    // Escape closes the source-filter popover too — it's a role="dialog", and
+    // every other overlay in the app dismisses on Escape (the DateNav calendar
+    // popover, GameDetailModal, WorldCupGroupsModal, the ratings/news
+    // explainers). This dialog was the lone outlier: a keyboard user who opened
+    // it had no keyboard way out short of tabbing back to the toggle or picking
+    // an option, so Escape now matches the click-away dismissal already here.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNewsFilterOpen(false);
+    };
     document.addEventListener("mousedown", onClickAway);
-    return () => document.removeEventListener("mousedown", onClickAway);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClickAway);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [newsFilterOpen]);
   // Aggregate teams seen across loaded leagues so the settings panel can map
   // favorite-team IDs to display names + logos. Teams favorited but not
