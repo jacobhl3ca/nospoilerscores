@@ -80,8 +80,19 @@ async function geocode(city: string, region: string): Promise<Geo | null> {
       const stored = window.localStorage.getItem(`nss-geo:${key}`);
       if (stored) {
         const geo = JSON.parse(stored) as Geo;
-        geoCache.set(key, geo);
-        return geo;
+        // Only trust a cached hit whose coordinates are real finite numbers.
+        // The network path below validates lat/lon before it ever persists a
+        // Geo, but a legacy build's differently-shaped entry (or a partial/
+        // corrupt write) can still be valid JSON with missing/NaN coords. Left
+        // untrusted it would flow straight into the forecast URL as
+        // `latitude=undefined`, 400 the request, and — because geoCache then
+        // holds the bad entry — silently kill weather for that venue all
+        // session. Drop it and re-geocode instead.
+        if (Number.isFinite(geo?.lat) && Number.isFinite(geo?.lon)) {
+          geoCache.set(key, geo);
+          return geo;
+        }
+        window.localStorage.removeItem(`nss-geo:${key}`);
       }
     } catch {
       /* ignore */
