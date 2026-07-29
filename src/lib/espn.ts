@@ -24,6 +24,23 @@ const SPORT_PATHS: Record<Sport, string> = {
   ufc: "/mma/ufc/scoreboard",
 };
 
+// Sortable epoch-ms for a Game's ISO date, NaN-safe. A Game can carry an empty
+// or missing date — a TBD future fixture, or a UFC card that resolved neither
+// the event nor the main-card date (see the `|| ""` fallback in the UFC parse)
+// — and `new Date("").getTime()` is NaN. A comparator that returns NaN is
+// inconsistent, so V8's sort leaves the surrounding order undefined and
+// SCATTERS the whole slate, not just the undated game. Coerce an unparseable
+// date to a finite far-future sentinel (the max valid timestamp) so those games
+// sink to the END of an ascending chronological sort — not jump to the top, the
+// same intent as the TeamView undated-game fix — without reintroducing NaN: two
+// sentinels subtract to 0, whereas an Infinity sentinel would give
+// `Infinity - Infinity === NaN` and re-scatter the very case this guards. Same
+// NaN-comparator guard the NewsFeed feed sort and news.ts formatPublished use.
+function chronoMs(iso: string): number {
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 8.64e15 : t;
+}
+
 // Seasonal league config: show/hide based on date
 // endDate: inclusive last day the league is shown (= its championship date, per
 //   isLeagueActive's `mmdd <= endDate`), so the league hides the day after its final game
@@ -2263,7 +2280,7 @@ async function fetchNextGameDayRange(
       return "";
     }
   };
-  const chrono = (gs: Game[]) => [...gs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const chrono = (gs: Game[]) => [...gs].sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
   // allDays: every upcoming fixture in the window, chronological. Used for
   // NBA/NHL in the playoffs. We want exactly ONE series — the most imminent —
@@ -3369,7 +3386,7 @@ export async function fetchTeamSchedule(
       }
     })
   );
-  all.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  all.sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   // Fill missing records (mostly future games) from standings lookup.
   const standings = await standingsPromise;
   if (standings.size > 0) {
