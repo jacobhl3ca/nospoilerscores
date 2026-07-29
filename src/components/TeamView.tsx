@@ -135,6 +135,20 @@ export default function TeamView({
       const t = new Date(g.date).getTime();
       return Number.isNaN(t) ? 0 : t;
     };
+    // Sort key for the ASCENDING Upcoming sort (soonest first). `ms` coerces a
+    // bad/missing date to epoch (0) — the smallest possible value — which is
+    // correct for Recent (descending → sorts oldest, as the comment above says)
+    // but wrong here: an undated pre/in game (e.g. a TBD tournament fixture ESPN
+    // hasn't dated yet) would sort to the very TOP of Upcoming, ahead of real
+    // soonest games. Map a bad date to MAX_SAFE_INTEGER so it sinks to the end
+    // instead. A finite sentinel (not Infinity) keeps `msUp(a) - msUp(b)` from
+    // going NaN when two undated games meet, so their order stays stable. The
+    // Upcoming FILTER still uses `ms` (a bad-date post game must land in Recent
+    // via `ms(g) <= now`, not here), so only ordering changes.
+    const msUp = (g: Game) => {
+      const t = new Date(g.date).getTime();
+      return Number.isNaN(t) ? Number.MAX_SAFE_INTEGER : t;
+    };
     // Future-dated "post" games (e.g. a suspended/rescheduled fixture ESPN still
     // tags final) belong under Upcoming, per the liveAndPre clause below. Anchor
     // Recent to post games at/before now so such a game lands in exactly one
@@ -144,7 +158,7 @@ export default function TeamView({
       .sort((a, b) => ms(b) - ms(a));
     const liveAndPre = allGames
       .filter((g) => g.state === "in" || g.state === "pre" || (g.state === "post" && ms(g) > now))
-      .sort((a, b) => ms(a) - ms(b));
+      .sort((a, b) => msUp(a) - msUp(b));
     return { past: finished, upcoming: liveAndPre };
   }, [allGames]);
 
