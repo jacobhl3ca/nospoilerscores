@@ -107,6 +107,15 @@ interface RawArticle {
 function parseArticle(raw: RawArticle): NewsItem {
   const links = raw.links ?? {};
   const articleUrl = links.web?.href ?? links.mobile?.href ?? "";
+  // ESPN articles normally carry a stable id (or nowId/contentKey on the "now"
+  // homepage feed). When every identifier AND the article URL are absent — seen
+  // on some link-less "now" items — String(undefined ?? "") collapses to "", so
+  // two such items would share the same empty React key (item.id is the key in
+  // NewsColumn/AlignedVideoStrip) and reconcile onto each other, reusing the
+  // wrong post on refresh. Fall back to the headline+published pair so a
+  // link-less item still gets a distinct, render-stable key. Unchanged whenever
+  // any real id — or a non-empty articleUrl — is present (the overwhelming case).
+  const fallbackId = articleUrl || `${raw.headline ?? raw.title ?? ""}|${raw.published ?? raw.lastModified ?? ""}`;
   // Prefer the largest header-like image ESPN returns; fall back to first one with a url.
   const images = (raw.images ?? []).filter((i): i is RawImage & { url: string } => !!i.url);
   const best = images.reduce<(RawImage & { url: string }) | null>((acc, img) => {
@@ -116,7 +125,7 @@ function parseArticle(raw: RawArticle): NewsItem {
     return area > accArea ? img : acc;
   }, null);
   return {
-    id: String(raw.id ?? raw.nowId ?? raw.contentKey ?? articleUrl),
+    id: String(raw.id ?? raw.nowId ?? raw.contentKey ?? fallbackId),
     headline: raw.headline ?? raw.title ?? "",
     description: raw.description ?? "",
     published: raw.published ?? raw.lastModified ?? "",
