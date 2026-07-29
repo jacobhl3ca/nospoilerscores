@@ -199,11 +199,20 @@ export default function GolfLeaderboard({
   if (showTeeTime && tournament.eventDate) {
     try {
       const d = new Date(tournament.eventDate);
-      teeTimeLabel = d.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: getTimeZone(),
-      });
+      // Guard the parse before formatting: toLocaleTimeString on an Invalid Date
+      // returns the literal string "Invalid Date" (it does NOT throw), so the
+      // surrounding try/catch can't catch it — a malformed ESPN eventDate would
+      // render "Invalid Date" as this card's tee-time label. Bail to null on a
+      // bad date so the label simply drops, the same Number.isNaN(getTime())
+      // guard golf.ts's getGolfSubtitle / shareCard / the card date paths carry.
+      // Byte-identical for every valid eventDate.
+      if (!Number.isNaN(d.getTime())) {
+        teeTimeLabel = d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: getTimeZone(),
+        });
+      }
     } catch {
       /* ignore */
     }
