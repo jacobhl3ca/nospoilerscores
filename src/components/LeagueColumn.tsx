@@ -936,6 +936,15 @@ export default function LeagueColumn({
   const getCombinedWins = (game: Game): number =>
     getWins(game.homeTeam.record) + getWins(game.awayTeam.record);
 
+  // NaN-safe chronological key: a raw new Date(bad).getTime() is NaN, and every
+  // comparison against NaN is false, so one undated game scatters the whole
+  // column. Sink an unparseable date to a far-future sentinel (like chronoMs in
+  // lib/espn.ts) so it sorts last instead of jumbling the slate.
+  const chronoMs = (iso: string): number => {
+    const t = new Date(iso).getTime();
+    return Number.isNaN(t) ? 8.64e15 : t;
+  };
+
   const sorted = [...league.games].sort((a, b) => {
     const aPri = getFavPriority(a);
     const bPri = getFavPriority(b);
@@ -959,7 +968,7 @@ export default function LeagueColumn({
         const aDel = isDelayed(a), bDel = isDelayed(b);
         if (aDel !== bDel) return aDel ? 1 : -1;
       }
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
+      return chronoMs(a.date) - chronoMs(b.date);
     }
 
     // Monkey ON: competitive sort
@@ -999,7 +1008,7 @@ export default function LeagueColumn({
       return getCombinedWins(b) - getCombinedWins(a);
     }
 
-    return new Date(a.date).getTime() - new Date(b.date).getTime();
+    return chronoMs(a.date) - chronoMs(b.date);
   });
 
   // Split into sections
