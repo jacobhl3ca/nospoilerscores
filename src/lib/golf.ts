@@ -170,11 +170,20 @@ export function getGolfSubtitle(
       if (selMidnight.getTime() === tomorrowMidnight.getTime()) {
         try {
           const d = new Date(tournament.eventDate);
-          timeLabel = ` · ${d.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            timeZone: getTimeZone(),
-          })}`;
+          // Guard a malformed eventDate: toLocaleTimeString on an Invalid Date
+          // returns the literal string "Invalid Date" (it does NOT throw), so
+          // the surrounding try/catch can't catch it — a bad ESPN date would
+          // otherwise render "Round 3 of 4 · Invalid Date" in the column header.
+          // Skip the time label entirely on a bad date so the subtitle falls
+          // back to the clean "Round N of 4", the same isNaN(getTime()) guard
+          // the card/bracket/shareCard date paths already carry.
+          if (!Number.isNaN(d.getTime())) {
+            timeLabel = ` · ${d.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              timeZone: getTimeZone(),
+            })}`;
+          }
         } catch {
           /* ignore */
         }
