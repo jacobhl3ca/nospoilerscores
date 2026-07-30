@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
 // Highlight-button fallback check.
 //
 // For every finished game from the past ~36h across the in-season leagues,
@@ -7,18 +9,21 @@
 //   1. channel-filtered query (the labeled "official" highlight button)
 //   2. channel-filtered alternate slot for leagues with official channels
 //      (unscoped only when there is no official channel)
-// If both chains end empty for any game, the UI would hide one or both
-// highlight buttons — that's the inconsistency Jacob wants to know about while
-// the card is still live on the site.
+// A game only becomes an incident when it is past the same readiness buffer as
+// the UI, has no prebaked clip, and every route to a visible YouTube button is
+// still empty after confirmation.
 //
-// Exit 1 (so GitHub Actions emails the repo owner) when any chain misses;
-// the per-game report prints to stdout so the email body shows what to fix.
+// Exit 1 only after the same incident survives a 1h grace period. Persisted
+// incident state also makes each outage alert once rather than every run.
 //
 // Run locally:   node scripts/check-highlight-fallbacks.mjs
 // Override base: HIDESCORE_BASE=https://staging.example.com node scripts/check-highlight-fallbacks.mjs
 
 const BASE = process.env.HIDESCORE_BASE || "https://hidescore.com";
 const LOOKBACK_HOURS = 36;
+const ALERT_GRACE_MS = 60 * 60 * 1000;
+const STATE_FILE = process.env.HIGHLIGHT_STATE_FILE
+  || path.join(process.env.HOME || ".", "Library", "Application Support", "hidescore-highlight-fallback-state.json");
 
 // Pacing. youtube.com soft-blocks the Worker's datacenter IP when /api/youtube
 // is scraped in a tight burst — it serves a renderer-less page that the endpoint
@@ -56,6 +61,17 @@ const ESPN_PATHS = {
 const OFFICIAL_CHANNELS = {
   nba: "NBA", wnba: "WNBA", mlb: "MLB", nhl: "NHL", nfl: "NFL", ncaam: "March Madness",
   fifa: "FIFA", epl: "NBC Sports", mls: "Major League Soccer",
+};
+
+// Mirrors GameHighlights.tsx. A same-day final does not promise highlight
+// buttons until this post-start window has opened.
+const HIGHLIGHT_BUFFER_HOURS = {
+  nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, mlb: 5,
+  nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
+};
+const REGULATION_PERIODS = {
+  nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9,
+  nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.
@@ -108,6 +124,20 @@ function isFinished(ev) {
   return ev?.status?.type?.state === "post" && ev?.status?.type?.completed === true;
 }
 
+const etDay = (value) =>
+  new Date(value).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+
+function highlightsReady(ev, sport) {
+  if (etDay(ev.date) !== etDay(Date.now())) return true;
+  const gameStart = Date.parse(ev.date);
+  if (Number.isNaN(gameStart)) return false;
+  const period = Number(ev?.status?.period ?? ev?.competitions?.[0]?.status?.period ?? 0);
+  const otPeriods = Math.max(0, period - (REGULATION_PERIODS[sport] ?? 4));
+  const otExtra = otPeriods * (sport === "mlb" ? 0.25 : 0.5);
+  const bufferHours = (HIGHLIGHT_BUFFER_HOURS[sport] ?? 4) + otExtra;
+  return Date.now() > gameStart + bufferHours * 3_600_000;
+}
+
 function endedWithinLookback(ev) {
   const finishedAt = ev?.status?.type?.detail ? Date.parse(ev.date) : Date.parse(ev.date);
   if (Number.isNaN(finishedAt)) return false;
@@ -116,6 +146,30 @@ function endedWithinLookback(ev) {
   // a long stretch of play counts as "recently live."
   const ageH = (Date.now() - finishedAt) / 3_600_000;
   return ageH >= 0 && ageH <= LOOKBACK_HOURS + 8;
+}
+
+async function fetchBakedHighlights() {
+  try {
+    const res = await tfetch(`${BASE}/news/highlights.json`);
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data?.games ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function loadIncidentState() {
+  try {
+    return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveIncidentState(state) {
+  fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+  fs.writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
 }
 
 function extractTeams(ev) {
@@ -177,7 +231,10 @@ const dates = [0, 1, 2].map((daysAgo) => {
 
 const exhausted = []; // chain returned null — UI hides the button → email
 const aliasNeeded = []; // channel step missed but later retry caught it → log only
+const bakedGames = await fetchBakedHighlights();
 let scanned = 0;
+let deferred = 0;
+let baked = 0;
 
 for (const sport of Object.keys(ESPN_PATHS)) {
   const channel = OFFICIAL_CHANNELS[sport];
@@ -188,14 +245,41 @@ for (const sport of Object.keys(ESPN_PATHS)) {
       if (!endedWithinLookback(ev)) continue;
       const teams = extractTeams(ev);
       if (!teams) continue;
+      if (!highlightsReady(ev, sport)) {
+        deferred++;
+        continue;
+      }
       scanned++;
+      const bakedHighlight = bakedGames[`${sport}:${ev.id}`];
+      if (bakedHighlight && (
+        bakedHighlight.official
+        || bakedHighlight.extended
+        || bakedHighlight.telemundo
+        || bakedHighlight.telemundoExtended
+      )) {
+        baked++;
+        continue;
+      }
       const dateStr = fmtUIDate(ev.date);
 
-      const official = channel
-        ? await resolve(teams.away, teams.home, dateStr, channel, FIRST_PASS_GAP_MS)
+      const primaryChannel = sport === "fifa" ? null : channel;
+      const secondaryChannel = sport === "mlb"
+        ? null
+        : sport === "fifa"
+          ? "FOX Sports"
+          : channel;
+      const official = primaryChannel
+        ? await resolve(teams.away, teams.home, dateStr, primaryChannel, FIRST_PASS_GAP_MS)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(FIRST_PASS_GAP_MS);
-      const search = await resolve(teams.away, teams.home, dateStr, channel, FIRST_PASS_GAP_MS, !!channel);
+      const search = await resolve(
+        teams.away,
+        teams.home,
+        dateStr,
+        secondaryChannel,
+        FIRST_PASS_GAP_MS,
+        !!secondaryChannel,
+      );
       await sleep(FIRST_PASS_GAP_MS);
 
       const row = {
@@ -204,18 +288,19 @@ for (const sport of Object.keys(ESPN_PATHS)) {
         matchup: `${teams.away} @ ${teams.home}`,
         score: `${teams.awayScore}-${teams.homeScore}`,
         query: `${aliasTeam(teams.away)} vs ${aliasTeam(teams.home)} highlights ${dateStr}`,
-        channel: channel ?? "(none)",
+        channel: [primaryChannel, secondaryChannel].filter(Boolean).join(" / ") || "(none)",
         officialResult: official.videoId ? `${official.videoId} (${official.via})` : "EXHAUSTED",
         searchResult: search.videoId ? `${search.videoId} (${search.via})` : "EXHAUSTED",
         // Raw inputs kept so the confirmation pass below can re-resolve.
         away: teams.away,
         home: teams.home,
         dateStr,
-        channelKey: channel,
+        primaryChannel,
+        secondaryChannel,
+        eventId: String(ev.id),
       };
-      const officialExhausted = channel && !official.videoId;
-      const searchExhausted = !search.videoId;
-      if (officialExhausted || searchExhausted) {
+      const anyVisibleButton = (primaryChannel ? !!official.videoId : false) || !!search.videoId;
+      if (!anyVisibleButton) {
         exhausted.push(row);
       }
     }
@@ -239,24 +324,30 @@ if (exhausted.length) {
   // lifts. Only the games still empty after all that get emailed.
   await sleep(CONFIRM_COOLOFF_MS);
   for (const row of exhausted) {
-    let official = { videoId: row.channelKey ? null : "n/a", via: "exhausted" };
+    let official = { videoId: row.primaryChannel ? null : "n/a", via: "exhausted" };
     let search = { videoId: null, via: "exhausted" };
     for (let attempt = 0; attempt < CONFIRM_ATTEMPTS; attempt++) {
       if (attempt > 0) await sleep(CONFIRM_RETRY_BACKOFF_MS); // let a lingering block lift
-      official = row.channelKey
-        ? await resolve(row.away, row.home, row.dateStr, row.channelKey, CONFIRM_GAP_MS)
+      official = row.primaryChannel
+        ? await resolve(row.away, row.home, row.dateStr, row.primaryChannel, CONFIRM_GAP_MS)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(CONFIRM_GAP_MS);
-      search = await resolve(row.away, row.home, row.dateStr, row.channelKey, CONFIRM_GAP_MS, !!row.channelKey);
-      const officialOk = row.channelKey ? !!official.videoId : true;
-      if (officialOk && search.videoId) break; // recovered — stop retrying this game
+      search = await resolve(
+        row.away,
+        row.home,
+        row.dateStr,
+        row.secondaryChannel,
+        CONFIRM_GAP_MS,
+        !!row.secondaryChannel,
+      );
+      const anyVisibleButton = (row.primaryChannel ? !!official.videoId : false) || !!search.videoId;
+      if (anyVisibleButton) break; // recovered — stop retrying this game
     }
     // Refresh the printed results with the final attempt's outcome either way.
     row.officialResult = official.videoId ? `${official.videoId} (${official.via})` : "EXHAUSTED";
     row.searchResult = search.videoId ? `${search.videoId} (${search.via})` : "EXHAUSTED";
-    const officialStillEmpty = row.channelKey && !official.videoId;
-    const searchStillEmpty = !search.videoId;
-    if (officialStillEmpty || searchStillEmpty) {
+    const anyVisibleButton = (row.primaryChannel ? !!official.videoId : false) || !!search.videoId;
+    if (!anyVisibleButton) {
       confirmedExhausted.push(row);
     } else {
       recovered.push(row);
@@ -277,8 +368,10 @@ console.log(`hidescore highlight fallback check`);
 console.log(`base:        ${BASE}`);
 console.log(`window:      past ${LOOKBACK_HOURS}h (≈${dates.length} ET days)`);
 console.log(`leagues:     ${Object.keys(ESPN_PATHS).join(", ")}`);
-console.log(`scanned:     ${scanned} finished game(s)`);
-console.log(`exhausted:   ${confirmedExhausted.length}   (still empty after a confirmation retry — button is hidden)`);
+console.log(`scanned:     ${scanned} highlight-ready finished game(s)`);
+console.log(`deferred:    ${deferred} (inside the UI's upload buffer; not promised yet)`);
+console.log(`prebaked:    ${baked} (visible without a live lookup)`);
+console.log(`exhausted:   ${confirmedExhausted.length}   (no visible YouTube button after confirmation)`);
 console.log(`recovered:   ${recovered.length}  (first pass missed, retry caught it — transient throttle, no email)`);
 console.log(`alias-needed: ${aliasNeeded.length}  (official-channel filter missed — broader retry caught it)\n`);
 
@@ -316,13 +409,53 @@ if (confirmedExhausted.length) {
     process.exit(0);
   }
 
-  console.log("--- EXHAUSTED (UI hides the button) ---");
-  console.log(`(endpoint healthy: ${probeHits}/${PROBES.length} evergreen probes resolved)\n`);
-  confirmedExhausted.forEach(printRow);
-  console.log("Fix path: add a TEAM_NAME_ALIASES entry in src/lib/youtube.ts and mirror it in this script,");
-  console.log("or extend the chain in resolveHighlightVideo() with an additional retry.");
-  process.exit(1);
+  const now = Date.now();
+  const oldState = loadIncidentState();
+  const newState = {};
+  const alertable = [];
+  const pending = [];
+  const alreadyAlerted = [];
+
+  for (const row of confirmedExhausted) {
+    const key = `${row.sport.toLowerCase()}:${row.eventId}`;
+    const previous = oldState[key] ?? {};
+    const incident = {
+      firstSeen: Number(previous.firstSeen) || now,
+      alerted: previous.alerted === true,
+      lastSeen: now,
+      matchup: row.matchup,
+    };
+    newState[key] = incident;
+    if (incident.alerted) {
+      alreadyAlerted.push(row);
+    } else if (now - incident.firstSeen >= ALERT_GRACE_MS) {
+      alertable.push(row);
+      incident.alerted = true;
+    } else {
+      pending.push(row);
+    }
+  }
+  saveIncidentState(newState);
+
+  if (pending.length) {
+    console.log(`--- GRACE: ${pending.length} incident(s) first seen less than 1h ago; no alert ---`);
+    pending.forEach(printRow);
+  }
+  if (alreadyAlerted.length) {
+    console.log(`--- SUPPRESSED: ${alreadyAlerted.length} incident(s) already alerted; no repeat ---`);
+    alreadyAlerted.forEach(printRow);
+  }
+  if (alertable.length) {
+    console.log("--- EXHAUSTED (no visible button after 1h grace) ---");
+    console.log(`(endpoint healthy: ${probeHits}/${PROBES.length} evergreen probes resolved)\n`);
+    alertable.forEach(printRow);
+    console.log("Fix path: check the prebake and the official-channel lookup for these games.");
+    process.exit(1);
+  }
+
+  process.exit(0);
 }
 
+saveIncidentState({});
 console.log("✅ no exhausted lookups — no UI fallbacks in the audit window.");
 process.exit(0);
