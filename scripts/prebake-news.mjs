@@ -2804,8 +2804,9 @@ async function writeFeed(name, items) {
   // cards go blank until someone eyeballs the app (Jacob: "happened multiple
   // times"). A "blank" card has no image, video, youtube, OR selftext: just a
   // headline that links out. Defenses:
-  //   1. Video flap: 0 playable video now but a still-fresh prior HAD video →
-  //      keep prior so clips don't flap to static (the original guard).
+  //   1. Video flap: carry a still-fresh prior video onto the SAME post ID when
+  //      this bake misses its media. Never freeze the whole listing: current
+  //      hot posts matter more than retaining videos that fell out of /hot.
   //   1b. Catastrophic extractor break: this bake is mostly blank but a fresh
   //      prior was healthy → keep prior and shout MEDIA-REGRESSION in the log.
   //   2. Always log coverage so a *partial* degradation (e.g. images vanish while
@@ -2813,8 +2814,8 @@ async function writeFeed(name, items) {
   //      instead of failing silently. Grep the cron log for MEDIA-REGRESSION /
   //      MEDIA-LOW to alert.
   const isBlank = (i) => !i.imageUrl && !i.imageFullUrl && !i.videoUrl && !i.youtubeVideoId && !i.body;
-  const blankFrac = items.length ? items.filter(isBlank).length / items.length : 1;
-  const newHasVideo = items.some((i) => i.videoUrl || i.youtubeVideoId);
+  let blankFrac = items.length ? items.filter(isBlank).length / items.length : 1;
+  let newHasVideo = items.some((i) => i.videoUrl || i.youtubeVideoId);
   if (name.startsWith("reddit-")) {
     try {
       const prev = JSON.parse(await readFile(path, "utf8"));
@@ -2823,8 +2824,28 @@ async function writeFeed(name, items) {
       const prevBlankFrac = prevItems.length ? prevItems.filter(isBlank).length / prevItems.length : 1;
       const ageH = prev.fetchedAt ? (Date.now() - Date.parse(prev.fetchedAt)) / 3600e3 : Infinity;
       if (!newHasVideo && prevHasVideo && ageH < 6) {
-        console.log(`skipped ${path} (0 video this bake — keeping prior with-video file, age ${ageH.toFixed(1)}h)`);
-        return;
+        const priorById = new Map(prevItems.map((item) => [item.id, item]));
+        let carried = 0;
+        items = items.map((item) => {
+          const prior = priorById.get(item.id);
+          if (!prior) return item;
+          const carryVideoUrl = !item.videoUrl && !!prior.videoUrl;
+          const carryYoutubeId = !item.youtubeVideoId && !!prior.youtubeVideoId;
+          if (!carryVideoUrl && !carryYoutubeId) return item;
+          carried++;
+          return {
+            ...item,
+            ...(carryVideoUrl ? { videoUrl: prior.videoUrl } : {}),
+            ...(carryYoutubeId ? { youtubeVideoId: prior.youtubeVideoId } : {}),
+          };
+        });
+        newHasVideo = items.some((i) => i.videoUrl || i.youtubeVideoId);
+        blankFrac = items.length ? items.filter(isBlank).length / items.length : 1;
+        if (carried > 0) {
+          console.log(`MEDIA-CARRY ${path}: restored video on ${carried} matching post(s) from ${ageH.toFixed(1)}h-old prior; writing fresh hot listing`);
+        } else {
+          console.warn(`MEDIA-VIDEO-LOW ${path}: fresh hot listing has 0 video and no matching prior video posts; writing fresh listing`);
+        }
       }
       if (blankFrac >= 0.5 && prevBlankFrac < 0.25 && ageH < 6) {
         console.warn(`MEDIA-REGRESSION ${path}: ${(blankFrac * 100).toFixed(0)}% blank this bake vs ${(prevBlankFrac * 100).toFixed(0)}% prior (age ${ageH.toFixed(1)}h) — extractor likely broke, KEEPING PRIOR`);
