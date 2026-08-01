@@ -307,17 +307,17 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
         : `${s.name} are all but through (a draw seals it)`;
     return `${through} and ${out[0].name} are out — the result only affects ${s.name}'s seeding, so top ${group} for an easier path.`;
   }
-  // Both sides are already out (out.length === 2) — the only combination left
-  // in this tier once safe===2 and safe===1/out===1 are handled above. Neither
-  // team can advance, so there is nothing at stake: NOT seeding, NOT goal
-  // difference (both matter only to teams still in the tournament). The old
-  // fallback ("nothing left to settle but seeding and goal difference") wrongly
-  // cast this dead rubber as a fight for group position, mirroring the decider
-  // tier's "already out" wording above but for the both-eliminated case.
-  if (out.length === 2) {
-    return `Both are already out — a dead rubber with nothing at stake.`;
-  }
-  return `${group}: nothing left to settle but seeding and goal difference.`;
+  // Both sides are already out — the ONLY combination left in this tier once
+  // safe===2 (line 299) and safe===1/out===1 (line 302) are handled above: the
+  // seeding tier is reached only when live.length===0 (see tierFor), so every
+  // side is safe or eliminated, and with two sides that leaves out.length===2 as
+  // the exhaustive remainder. Neither team can advance, so there is nothing at
+  // stake: NOT seeding, NOT goal difference (both matter only to teams still in
+  // the tournament). This is the unconditional final return — the previous
+  // `if (out.length === 2)` guard left a trailing fallback ("nothing left to
+  // settle but seeding and goal difference") that was both unreachable AND wrong
+  // (it cast this dead rubber as a fight for group position), so it's dropped.
+  return `Both are already out — a dead rubber with nothing at stake.`;
 }
 
 // Group-stage and knockout tiers never appear on the same day, so they share
