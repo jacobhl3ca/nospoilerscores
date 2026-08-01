@@ -374,11 +374,20 @@ export default function GolfLeaderboard({
       const seen = new Set<string>();
       const tryFill = (id: string | null) => {
         if (cancelled || !id) return;
+        // Keep this updater PURE — no `seen.add(id)` inside it. React can invoke
+        // a state updater more than once for a single update (StrictMode's dev
+        // double-invoke, or a concurrent render that gets discarded and rebased),
+        // and mutating `seen` here made the second pass hit the `seen.has(id)`
+        // branch and silently drop the slot, so a secondary highlight button
+        // could intermittently fail to appear. The dedup is already pure:
+        // `prev.includes(id)` blocks a repeat within these slots (queued
+        // updaters run sequentially against the updated `prev`), and `seen.has`
+        // still defers to slot 0's claim — the slot-0 resolver populates `seen`
+        // before its own updater (see below), which is the only writer needed.
         setHighlightSlots((prev) => {
           if (prev.includes(id) || seen.has(id)) return prev;
           const nextOpen = prev.findIndex((s, i) => i > 0 && s === null);
           if (nextOpen === -1) return prev;
-          seen.add(id);
           const next = [...prev];
           next[nextOpen] = id;
           return next;
