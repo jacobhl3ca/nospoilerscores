@@ -21,11 +21,20 @@ function encodeTeamId(id: string): string {
   return (SPORT_TO_SHORT[sport] ?? sport) + id.slice(dash + 1);
 }
 
-function decodeTeamId(short: string): string {
+// Returns the full team id ("mlb-1") or null when the token isn't a decodable
+// `<shortcode><digits>` pair whose prefix is a known sport. Previously an
+// unrecognized token (a truncated/hand-edited share URL, e.g. "zz9") fell
+// through both `return short` branches unchanged; because that's a non-empty
+// string it survived the caller's `.filter(Boolean)` and landed a bogus,
+// team-matching-nothing id in `favoriteTeams` — which then persists to
+// localStorage AND (for signed-in users) syncs to the server. Return null so
+// the caller drops it, matching how the sibling thirdLeague/slotLeagues decodes
+// in decodeFavorites already reject unknown codes.
+function decodeTeamId(short: string): string | null {
   const match = short.match(/^([a-z]+)(\d+)$/);
-  if (!match) return short;
+  if (!match) return null;
   const sport = SHORT_TO_SPORT[match[1]];
-  return sport ? `${sport}-${match[2]}` : short;
+  return sport ? `${sport}-${match[2]}` : null;
 }
 
 export type Theme = "dark" | "light" | "system";
@@ -109,7 +118,7 @@ export function decodeFavorites(params: URLSearchParams): {
   const l = params.get("l");
   const t = params.get("t");
   const s = params.get("s");
-  if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
+  if (f) result.teams = f.split(".").map(decodeTeamId).filter((id): id is string => id !== null);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
   // Guard the unknown-code case: SHORT_TO_SPORT is typed Record<string, Sport>,
   // so an unrecognized `t` (malformed/hand-edited share URL) silently yields
