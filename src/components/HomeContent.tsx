@@ -943,13 +943,22 @@ export default function HomeContent({
     // new pull resolves, which prevents the "all 3 columns flash gray" effect.
     if (!silent) setLoading(true);
     setError(false);
-    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    // Watchdog lifecycle across fetchData's five concurrent callers, all sharing
+    // one watchdogRef slot. Capture THIS call's timer locally so the finally can
+    // tell whether the shared ref still points at our timer or a newer call's.
+    // Only a non-silent call owns a watchdog: clear the previous one and install
+    // ours here, guarded by !silent so a silent poll can't clear a visible load's
+    // watchdog and then install no replacement (that left the skeleton with no
+    // safety net).
+    let myWatchdog: ReturnType<typeof setTimeout> | null = null;
     if (!silent) {
-      watchdogRef.current = setTimeout(() => {
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+      myWatchdog = setTimeout(() => {
         watchdogRef.current = null;
         setLoading(false);
         setError(true);
       }, 40_000);
+      watchdogRef.current = myWatchdog;
     }
     try {
       // Slot count reads the live viewport so the initial desktop load fetches
@@ -974,7 +983,11 @@ export default function HomeContent({
       setLeagues([]);
       setError(true);
     } finally {
-      if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+      // Clear the shared watchdog only if it's still OURS. A newer non-silent
+      // fetch may have replaced it while we awaited; cancelling that call's timer
+      // (the old bug) would defeat the very safety net it just installed, so an
+      // earlier call resolving must leave the latest call's watchdog running.
+      if (myWatchdog && watchdogRef.current === myWatchdog) { clearTimeout(myWatchdog); watchdogRef.current = null; }
       if (!silent) setLoading(false);
     }
   }, []);
