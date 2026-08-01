@@ -1865,7 +1865,18 @@ export default function HomeContent({
           style={{
             top: "calc(env(safe-area-inset-top) + var(--header-h, 4rem))",
             transform: `translate3d(-50%, ${ptrTranslateY}px, 0)`,
-            transition: refreshing ? "transform 200ms ease-out" : "none",
+            // Honor prefers-reduced-motion for the puck's settle slide, matching
+            // the .ptr-spinner guard in globals.css — the spinner inside this same
+            // element is already silenced under reduced-motion, so the transform
+            // transition was the lone unguarded piece. Read live (an OS toggle
+            // takes effect without reload) and only when refreshing gates it on,
+            // so matchMedia stays out of the pull-gesture render path.
+            transition:
+              refreshing &&
+              !(typeof window !== "undefined" &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+                ? "transform 200ms ease-out"
+                : "none",
             opacity: refreshing ? 1 : ptrProgress,
           }}
         >
