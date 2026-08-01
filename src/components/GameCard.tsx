@@ -733,12 +733,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   </span>
                 )
               ) : isFuture ? (
-                // Normal today/future card with no date label — just the time
-                // (left), full ":00" on desktop, shortened on mobile.
+                // Normal today/future card with no date label — just the game
+                // time (left), identical at every breakpoint: formatTime only
+                // tightens the AM/PM spacing ("7:00 PM" → "7:00PM") and has no
+                // separate shortened mobile form, so a single span serves all
+                // widths (the old sm:hidden / hidden sm:inline pair rendered the
+                // exact same string twice).
                 withEspn(
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    <span className="sm:hidden">{formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}</span>
-                    <span className="hidden sm:inline">{formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}</span>
+                    {formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}
                   </span>
                 )
               ) : null}
