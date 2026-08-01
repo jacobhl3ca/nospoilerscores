@@ -796,7 +796,14 @@ export default function SettingsPanel({
               />
             )}
             <Field label="Leagues in the switcher" hint="Unchecked leagues stay out of the header switcher">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+              {/* Name the checkbox group for assistive tech, mirroring RadioGroup
+                  below: the visual <Field> label above is a bare, unassociated
+                  <label>, so without this a screen reader read these as
+                  free-floating checkboxes ("NBA, checked") with no hint at what
+                  they configure. role="group" + aria-label ties them together and
+                  voices the setting — the same additive fix the option groups get.
+                  Purely additive: tab order, layout, and behavior are unchanged. */}
+              <div role="group" aria-label="Leagues in the switcher" className="grid grid-cols-2 gap-x-3 gap-y-1.5">
                 {thirdLeagueOptions.map((o) => {
                   const hidden = prefs.hiddenLeagues?.includes(o.sport) ?? false;
                   return (
