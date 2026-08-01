@@ -82,6 +82,29 @@ export default function GolfLeaderboard({
   const containerRef = useRef<HTMLDivElement>(null);
   const [nameTier, setNameTier] = useState<"full" | "initial" | "last">("full");
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
+  // Any click outside the expanded network list (or Escape) collapses it —
+  // mirrors GameCard's "+N" broadcast overlay, which added the same dismiss
+  // paths (Jacob 6/11). Without this the golf "+N" chip was a one-way toggle:
+  // once tapped, the expanded row stayed open for the card's whole lifetime
+  // with no collapse control, Escape, or outside-click to close it. Capture
+  // phase so another card's stopPropagation can't keep a stale row open.
+  const broadcastRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!broadcastExpanded) return;
+    const closeOnOutside = (e: PointerEvent) => {
+      if (broadcastRef.current?.contains(e.target as Node)) return;
+      setBroadcastExpanded(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBroadcastExpanded(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutside, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [broadcastExpanded]);
   // Four highlight slots, in Jacob's preferred order:
   //   0: official channel video (the "main recap" — labeled "ESPN"
   //      since that's the brand he trusts for the full recap)
@@ -487,7 +510,7 @@ export default function GolfLeaderboard({
             };
             if (tournament.broadcasts.length > 1) {
               return (
-                <span className="text-[10px] sm:text-xs">
+                <span ref={broadcastRef} className="text-[10px] sm:text-xs">
                   {broadcastExpanded ? (
                     tournament.broadcasts.map((b, i) => (
                       <span key={b}>
