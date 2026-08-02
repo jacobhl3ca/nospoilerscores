@@ -592,6 +592,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             title={game.isPerfectGame
               ? `${game.noHitterPitchingTeam}: no batter has reached base`
               : `${game.noHitterPitchingTeam} has not allowed a hit`}
+            // The which-team detail lived only in `title` (mouse hover), so a
+            // screen reader/touch user heard "No-Hitter" but never the pitching
+            // team. role="img" + aria-label speaks the whole thing — the same
+            // bare-<span> glyph treatment the live-status/weather badges use
+            // (aria-label alone is dropped on a generic <span>). No visual change.
+            role="img"
+            aria-label={game.isPerfectGame
+              ? `Perfect game alert: ${game.noHitterPitchingTeam} — no batter has reached base`
+              : `No-hitter alert: ${game.noHitterPitchingTeam} has not allowed a hit`}
           >
             <span aria-hidden>⚾</span>
             {game.isPerfectGame ? "Perfect Game" : "No-Hitter"}
@@ -609,6 +618,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-500"
             style={{ background: "rgba(14, 165, 233, 0.12)" }}
             title={`${game.cycleWatch.player} needs a ${game.cycleWatch.needs} for the cycle`}
+            // Spoken detail (who + which hit) rode only in `title`; role="img" +
+            // aria-label reads it to AT too, matching the no-hitter badge above.
+            role="img"
+            aria-label={`Cycle watch: ${game.cycleWatch.player} needs a ${game.cycleWatch.needs} for the cycle`}
           >
             <span aria-hidden>💎</span>
             Cycle Watch
@@ -629,6 +642,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-500"
             style={{ background: "rgba(139, 92, 246, 0.12)" }}
             title="Match level on sets — into the deciding set"
+            // The "level on sets" context lived only in `title`; role="img" +
+            // aria-label voices it to AT too, matching the badges above.
+            role="img"
+            aria-label="Deciding set: the match is level on sets, into the deciding set"
           >
             <span aria-hidden>🎾</span>
             Deciding Set
