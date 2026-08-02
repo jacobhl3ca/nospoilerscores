@@ -2080,8 +2080,15 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
         .slice(0, 10)
         .map(p => parseScore(p.score))
         .filter((n): n is number => n !== null);
-      // All non-numeric (e.g. field withdrew/cut) — leave rating null, no badge.
-      if (topScores.length > 0) {
+      // Need a real top-5 sample before rating. With <5 numeric scores the
+      // `topScores[4] ?? leader` fallbacks below collapse the spread to 0 →
+      // spreadScore 100 → a maximal "GREAT" badge on almost no data. That's the
+      // same opening-holes artifact the gate above guards against: e.g. an R1
+      // weather suspension where the leader is thru ≥6 (so the gate opens) but
+      // most of the field still shows "-"/"CUT"/"WD" (parseScore → null). Every
+      // normally-populated leaderboard has 10 numeric top-10 scores, so this is
+      // a no-op there; it only withholds the badge when the sample is too thin.
+      if (topScores.length >= 5) {
         const leader = topScores[0];
         // Spread between 1st and 5th
         const top5spread = Math.abs((topScores[4] ?? leader) - leader);
