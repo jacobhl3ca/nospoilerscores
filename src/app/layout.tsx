@@ -215,6 +215,19 @@ export default function RootLayout({
             dns-prefetch is the fallback for browsers that ignore preconnect. */}
         <link rel="preconnect" href="https://a.espncdn.com" />
         <link rel="dns-prefetch" href="https://a.espncdn.com" />
+        {/* ESPN's CDN doesn't host league marks for NCAA (M/W/F) or tennis, so
+            those columns' source-header logos are hotlinked from
+            upload.wikimedia.org instead (LEAGUE_LOGO in lib/news.ts) — the one
+            runtime image host the hints above don't already cover. Warm its DNS
+            during HTML parse so the lookup isn't the first thing blocking that
+            <img> when one of those columns is on the board. dns-prefetch only,
+            NOT a full preconnect like the espncdn logos above: those fire on
+            nearly every card unconditionally, whereas Wikimedia is gated on a
+            user having a niche NCAA/tennis column shown, so a warmed TCP+TLS
+            socket would idle unused for everyone else — the same on-demand
+            idle-socket reasoning as the statsapi.mlb.com hint below. DNS
+            resolution is the cheap, always-useful part with no idle-socket cost. */}
+        <link rel="dns-prefetch" href="https://upload.wikimedia.org" />
         {/* The first paint is data-driven: on load the app immediately fetches
             the ESPN scoreboard from site.api.espn.com to fill every league
             column (BASE_URL in lib/espn.ts). Warm that host's DNS + TCP + TLS
