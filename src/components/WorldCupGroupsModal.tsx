@@ -44,7 +44,21 @@ type DayKey = (typeof DAY_DEFS)[number]["key"];
 // Lowercase + strip diacritics so ESPN's standings/scoreboard names and the
 // search box all compare on the same key (Türkiye, Curaçao, …).
 function norm(s: string): string {
-  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    // Fold curly apostrophes (’ U+2019, ‘ U+2018) to the straight ASCII
+    // ' — NFD leaves them untouched, and ESPN's fifa.world feed sends the
+    // typographic ’ that "Côte d'Ivoire" renders with, so a user typing a
+    // plain apostrophe ("cote d'ivoire") produced q="…'…" that n.includes(q)
+    // couldn't find in the curly-quoted row name, silently failing the search
+    // highlight for that nation. Mirrors the same fold in fifaRankings.fifaRank
+    // and youtube.ts; a straight-apostrophe or apostrophe-free name is
+    // unaffected, and applying it to both sides keeps the day-fixture pairing
+    // (which also runs through norm) consistent.
+    .replace(/[‘’]/g, "'")
+    .toLowerCase()
+    .trim();
 }
 
 // YYYYMMDD for an offset in days off the app's canonical "service day" — the
