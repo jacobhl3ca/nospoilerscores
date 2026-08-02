@@ -139,7 +139,12 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: h, short: h };
   }
-  if (sport === "nba" || sport === "wnba") {
+  if (sport === "nba" || sport === "wnba" || sport === "ncaaw") {
+    // NCAAW plays four 10-min quarters (then OT), same structure as WNBA/NBA —
+    // the rest of the app already classifies it that way (SPORT_RATING_CONFIG
+    // regulationPeriods: 4, PERIOD_SECONDS 600). Without this branch a live
+    // NCAAW card fell through to the generic status, so ESPN's "8:32 - 2nd"
+    // rendered raw on desktop and truncated to "8:3" on mobile instead of "Q2".
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
     if (clock && clock !== "0.0") return { full: `${q} - ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
