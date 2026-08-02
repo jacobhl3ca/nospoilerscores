@@ -715,7 +715,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   return liveUrl ? (
                     <><a href={liveUrl} target="_blank" rel="noopener noreferrer" aria-label={gameProgress.label || undefined} className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
                   ) : (
-                    <><span className={staticCls} aria-label={gameProgress.label || undefined}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
+                    // No live-stream link, so this is a bare <span> — implicit
+                    // role "generic", on which aria-label is prohibited and
+                    // dropped by AT, so an MLB "▲5"/"▼5" leaks through as
+                    // "down-pointing triangle 5". role="img" (only when a spoken
+                    // `label` exists — i.e. MLB; other sports read their visible
+                    // "Q3 - 4:32" fine and keep it) makes the alt text
+                    // authoritative, the same glyph treatment the live-weather
+                    // emoji above and the rating badge already use. The <a>
+                    // branch needs none of this: link role honors aria-label.
+                    <><span className={staticCls} role={gameProgress.label ? "img" : undefined} aria-label={gameProgress.label || undefined}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
                   );
                 })()
               ) : showFinal && !hasRating ? (
