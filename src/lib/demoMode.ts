@@ -123,6 +123,17 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         awayProbable: null,
         noHitterPitchingTeam: null,
         cycleWatch: null,
+        // The NHL recap/condensed clips are pre-attached direct URLs that
+        // GameHighlights plays verbatim — unlike the YouTube path, they aren't
+        // re-resolved off the (scrubbed) team names, so they rode straight
+        // through `...game` and, when tapped on a finished demo card, played the
+        // REAL recap: real team names and the real final score, the exact
+        // spoiler ?demo=1 exists to hide. Null them so `showNhl` is false and
+        // the buttons don't render, matching how golf/eventCard are nulled.
+        nhlRecapUrl: null,
+        nhlRecapEmbed: null,
+        nhlCondensedUrl: null,
+        nhlCondensedEmbed: null,
       };
     };
     return {
