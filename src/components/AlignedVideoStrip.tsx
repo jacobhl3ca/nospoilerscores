@@ -137,7 +137,18 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
         const itemCount = items === null ? 0 : capped;
         const padCount = Math.max(0, maxItems - itemCount);
         const tail = isTailCol ? visibleTailItems : [];
-        const hasTail = tail.length > 0 && padCount > 0;
+        // Gate the tail on the column's OWN items having settled (items !== null),
+        // not just on padCount. The tail column runs two fetches: its live
+        // per-league video source (colItems[tailColIdx], slow ESPN API) AND the
+        // static ESPN-top tailFetch (fast JSON). When the static tail resolves
+        // first — the common case — items is still null so the skeleton branch
+        // renders 5 SkeletonRows at rows 2..6, while padCount == maxItems (5) made
+        // hasTail true and the tail <div> spanned `gridRow: itemCount+2 / span
+        // padCount` == `2 / span 5`, painting the ESPN headlines directly on top
+        // of those skeletons. The pad `else` branch below already guards items !==
+        // null for the same reason; mirror it so the tail simply waits for the
+        // column to load. Once items settle, this is byte-identical to before.
+        const hasTail = items !== null && tail.length > 0 && padCount > 0;
         const modalItems = [...(items?.slice(0, itemCount) ?? []), ...(hasTail ? tail : [])];
         const siblings: PlayOpts[] = modalItems.map(newsItemToPlayOpts);
         return (
