@@ -1259,16 +1259,25 @@ export default function LeagueColumn({
               })()
             ) : isSwappable ? (
               <div ref={swapRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setSwapOpen(!swapOpen)}
-                  className="cursor-pointer transition-colors hover:opacity-80"
-                  style={{ color: "var(--text)" }}
-                  title="Switch league"
-                  aria-haspopup="dialog"
-                  aria-expanded={swapOpen}
-                >
-                  <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
+                {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern),
+                    not the reverse: a <button>'s content model is phrasing
+                    content, so an <h2> nested inside it is invalid HTML and
+                    assistive tech may drop the heading role. This keeps the
+                    swappable title a real <h2> — matching the arrows and
+                    non-swappable branches — while the button stays the
+                    interactive trigger. The button inherits the heading's font
+                    + color and carries the flex layout for the chevron, so it
+                    renders pixel-for-pixel unchanged. Mirrors NewsColumn's
+                    swappable header, which already fixed this same pattern. */}
+                <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setSwapOpen(!swapOpen)}
+                    className="cursor-pointer transition-colors hover:opacity-80 inline-flex items-center gap-1"
+                    title="Switch league"
+                    aria-haspopup="dialog"
+                    aria-expanded={swapOpen}
+                  >
                     {league.label}
                     {/* ▾ switcher affordance (Jacob 6/11). Settings → League
                         columns can hide it; tap-to-switch works either way. */}
@@ -1288,8 +1297,8 @@ export default function LeagueColumn({
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     )}
-                  </h2>
-                </button>
+                  </button>
+                </h2>
                 {swapOpen && (
                   <div
                     // The league-switch button declares aria-haspopup + aria-expanded,
