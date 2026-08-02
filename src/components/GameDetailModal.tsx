@@ -358,11 +358,20 @@ export default function GameDetailModal({
               // Live game → show the venue's CURRENT conditions (real-time
               // emoji), so a mid-game drizzle reads even when the first-pitch
               // forecast was dry. Pre-game → the gametime forecast.
+              // The condition emoji is decorative here: the spelled-out label
+              // ({nowLabel}/{label}) sits right beside it, so left exposed a
+              // screen reader reads the glyph's raw Unicode name ("sun behind
+              // small cloud") on top of "Partly cloudy". aria-hidden drops the
+              // redundant glyph so only the temp + label speak — the intended
+              // treatment the GameCard live-weather emoji's comment already
+              // names as the reason this line differs from its own (that emoji
+              // stands alone with no adjacent label, so it gets role="img"). No
+              // visual change: aria-hidden on an inline span doesn't affect layout.
               <span className="shrink-0 whitespace-nowrap">
                 {game.state === "in" ? (
-                  <>{weather.nowIcon} {weather.nowTempF}° · <span className="font-semibold">{weather.nowLabel}{weather.rainingNow ? " now" : ""}</span></>
+                  <><span aria-hidden="true">{weather.nowIcon}</span> {weather.nowTempF}° · <span className="font-semibold">{weather.nowLabel}{weather.rainingNow ? " now" : ""}</span></>
                 ) : (
-                  <>{weather.icon} {weather.tempF}° · <span className="font-semibold">{weather.label}</span></>
+                  <><span aria-hidden="true">{weather.icon}</span> {weather.tempF}° · <span className="font-semibold">{weather.label}</span></>
                 )}
               </span>
             ) : null}
