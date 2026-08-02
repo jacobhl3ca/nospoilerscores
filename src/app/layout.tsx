@@ -237,6 +237,19 @@ export default function RootLayout({
             so it carries crossOrigin to match, with dns-prefetch as fallback. */}
         <link rel="preconnect" href="https://site.web.api.espn.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://site.web.api.espn.com" />
+        {/* MLB game metadata (linescore + cycle/no-hitter watch) comes from a
+            separate provider, statsapi.mlb.com, not ESPN: fetchMLBGameMeta in
+            lib/espn.ts fires it whenever an MLB column is on the board, on the
+            same first-paint load path as the ESPN scoreboard above. Warm its DNS
+            during HTML parse so the lookup isn't the first thing blocking that
+            fetch. dns-prefetch only, NOT a full preconnect like the ESPN data
+            hosts above: those fire on EVERY load unconditionally, whereas this
+            one is gated on MLB being among the shown leagues (a user can drop it,
+            and it's off-season half the year), so a warmed TCP+TLS socket would
+            idle unused for anyone not viewing MLB — the same on-demand idle-socket
+            reasoning as the weather/youtube hints below. DNS resolution is the
+            cheap, always-useful part with no idle-socket cost. */}
+        <link rel="dns-prefetch" href="https://statsapi.mlb.com" />
         {/* Every news-column and video-strip thumbnail is routed through the
             images.weserv.nl proxy (proxyImage in lib/news.ts) — the heaviest
             images on the board. Resolve its DNS during HTML parse so the first
