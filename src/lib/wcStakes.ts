@@ -297,7 +297,18 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
 
   // seeding — both settled
   if (safe.length === 2) {
-    return `Both are through — this decides who wins ${group} (1st vs 2nd) and the kinder Round-of-32 draw.`;
+    // Both sides are top-two SAFE, but only a genuinely "through" side advances
+    // on ANY result. A "drawsafe" side clinches with a draw yet a DEFEAT can
+    // still drop it (see the Status doc), so a decisive result here can decide
+    // qualification — not just seeding — and claiming "both are through" would
+    // falsely tell the user a team has already qualified. Only make that claim
+    // when both truly are through; otherwise say what's actually at stake. This
+    // is the same through/drawsafe split the decider (safe===1) and safe===1/
+    // out===1 branches above already make.
+    if (safe.every((t) => t.s === "through")) {
+      return `Both are through — this decides who wins ${group} (1st vs 2nd) and the kinder Round-of-32 draw.`;
+    }
+    return `A draw sends both through as ${group}'s top two, but a defeat could drop the loser into the best-third-place scramble.`;
   }
   if (safe.length === 1 && out.length === 1) {
     const s = safe[0];
