@@ -347,20 +347,30 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 px-4 pt-2 pb-3">
-        <a
-          href={item.articleUrl || undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={handleExternalClick(item.articleUrl)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-          style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}
-        >
-          Open{isReddit && item.section ? ` on ${item.section}` : ""}
-          <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
-        </a>
-      </div>
+      {/* Actions — rendered only when the post has a real external URL. Link-less
+          ESPN "now" items carry articleUrl="" (see parseArticle in lib/news.ts,
+          which the React-key fallback there already accounts for); with the URL
+          absent, href={articleUrl || undefined} dropped the attribute, leaving a
+          visible "Open ↗" anchor that does nothing on click AND is skipped by the
+          keyboard tab order (an href-less <a> isn't focusable) — WCAG 2.1.1 /
+          4.1.2. Gate the whole row on the URL so that dead control never renders;
+          the post is still openable via the headline/media button above. Mirrors
+          the same href-less-anchor guard VideoModal already applies. */}
+      {item.articleUrl && (
+        <div className="flex items-center gap-2 px-4 pt-2 pb-3">
+          <a
+            href={item.articleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleExternalClick(item.articleUrl)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+            style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}
+          >
+            Open{isReddit && item.section ? ` on ${item.section}` : ""}
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
+          </a>
+        </div>
+      )}
     </article>
   );
 }
