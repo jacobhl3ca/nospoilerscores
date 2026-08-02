@@ -239,7 +239,14 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
           // tapped. Every other .news-media-preview sets its own w/h or
           // aspect-video; this full-width one was the lone reliant-on-content case.
           className="news-media-preview relative block w-full min-h-[3rem] cursor-pointer bg-black"
-          aria-label="Open post"
+          // The tile's <img> is alt="", so this button's only accessible name is
+          // this label. For a video post (isVideo) it's the inline play trigger,
+          // yet a flat "Open post" gives no cue it PLAYS a clip and drops the
+          // headline — the twin control in NewsColumn (Cards view) already names
+          // it "Play highlight: {headline}". Mirror that here: name the action and
+          // keep the visible headline in the label so "Label in Name" (WCAG 2.5.3)
+          // holds and voice users can say the title to activate it.
+          aria-label={isVideo ? `Play video: ${item.headline}` : `Open post: ${item.headline}`}
         >
           {img || tile ? (
             // eslint-disable-next-line @next/next/no-img-element
