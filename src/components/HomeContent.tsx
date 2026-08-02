@@ -1764,18 +1764,6 @@ export default function HomeContent({
   }, []);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [newsOrderOpen, setNewsOrderOpen] = useState(false);
-  const newsOrderRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!newsOrderOpen) return;
-    const onClickAway = (e: MouseEvent) => {
-      if (newsOrderRef.current && !newsOrderRef.current.contains(e.target as Node)) {
-        setNewsOrderOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClickAway);
-    return () => document.removeEventListener("mousedown", onClickAway);
-  }, [newsOrderOpen]);
   // News filter popover (source type + focus league) — same click-away pattern.
   const [newsFilterOpen, setNewsFilterOpen] = useState(false);
   const newsFilterRef = useRef<HTMLDivElement>(null);
