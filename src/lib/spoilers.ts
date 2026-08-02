@@ -16,6 +16,16 @@
 //     for SPOILER_RX to catch. Capped at 3 digits (not 4+) precisely so it
 //     still excludes 4-digit years; the lookbehind/lookahead exclude M-D-Y
 //     date hyphens and "2025-26" season spans so they don't false-positive.
+//     The separator class is [-–—:] (hyphen, en-dash, em-dash, colon) so it
+//     ALSO catches the colon scoreline European soccer titles lean on
+//     ("Real Madrid 3:1 Barcelona") and the em-dash form ("3—2") — both
+//     slipped past the hyphen/en-dash-only class and, since isScoreSpoiler is
+//     used ONLY to UN-mask a played video's title (VideoModal), any over-match
+//     merely keeps a title covered (the app's safe default — a masked title
+//     costs a tap to reveal; a leaked one breaks the whole promise). A colon
+//     between two 1-3 digit runs is a score in a per-match title; the 4-digit
+//     cap still drops "3: 2026" (2026 fails \d{1,3}\b). Byte-identical to the
+//     worker's copy.
 //   • SPOILER_RX — outcome keywords ("walk-off", "stuns", "wins", "hat-trick",
 //     "red card", …). Tuned to leave "champion"/"champions" alone so
 //     "Premier League"/"Champions League" don't trip it. Also catches the
@@ -295,7 +305,7 @@
 //     appears in a highlight title), so the trailing \w* covers snatch/snatches/snatched/
 //     snatching at the same negligible false-positive risk as the sibling verbs. Kept
 //     byte-identical to the worker's copy.
-const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–]\s*\d{1,3}\b(?![-/])/;
+const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-/])/;
 //     "outclass\w*" catches the superiority framing headlines lean on ("Brazil
 //     outclass Chile", "Spain outclassed Georgia") — a decisive-win reveal the
 //     blowout verbs above miss, and one that means nothing but winning
