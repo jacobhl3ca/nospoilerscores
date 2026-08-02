@@ -191,15 +191,6 @@ body {
   outline-offset: 2px;
 }
 
-.theme-toggle {
-  box-shadow: 0 0 0 0px var(--accent);
-  transition: box-shadow 0.2s, background 0.2s, color 0.2s;
-}
-.theme-toggle:hover {
-  box-shadow: 0 0 0 2px var(--accent);
-  color: var(--accent);
-}
-
 .monkey-toggle {
   /* Outline (not box-shadow) so the ring stays uniform around rounded corners
      instead of AA-flattening at top/bottom. Inline 1px var(--border) is
