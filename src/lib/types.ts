@@ -1,4 +1,4 @@
-export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "f1" | "ufc";
+export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "f1" | "ufc";
 
 export interface Game {
   id: string;

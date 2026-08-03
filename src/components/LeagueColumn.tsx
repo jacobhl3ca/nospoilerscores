@@ -928,7 +928,7 @@ export default function LeagueColumn({
   // right. Grabbing the second segment for soccer would read DRAWS as losses
   // and mis-flag a winning side (e.g. 8W-9D-4L → 8 vs 9 → "not winning"),
   // demoting a genuinely strong upcoming matchup in the top-matchups sort.
-  const SOCCER_SPORTS = new Set<Sport>(["fifa", "epl", "mls", "ucl", "uel"]);
+  const SOCCER_SPORTS = new Set<Sport>(["fifa", "epl", "mls", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1"]);
   const getLosses = (record: string): number => {
     const parts = record.split("-");
     if (SOCCER_SPORTS.has(league.sport) && parts.length === 3) {

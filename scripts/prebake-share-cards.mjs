@@ -31,6 +31,10 @@ const LEAGUE_PATHS = {
   mls: "/soccer/usa.1/scoreboard",
   ucl: "/soccer/uefa.champions/scoreboard",
   uel: "/soccer/uefa.europa/scoreboard",
+  laliga: "/soccer/esp.1/scoreboard",
+  seriea: "/soccer/ita.1/scoreboard",
+  bundesliga: "/soccer/ger.1/scoreboard",
+  ligue1: "/soccer/fra.1/scoreboard",
 };
 
 const OUT_DIR = "./share-cards-out";

@@ -8,7 +8,13 @@ const STORAGE_KEY = "nss-preferences";
 // so wnba doesn't need a single char — keeps fifa→w stable for existing share URLs.
 // Added 2026-05-27: ncaaw→cw (women's college bb), ncaaf→cf (college football),
 // ucl→uc (Champions League), uel→ue (Europa League).
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", f1: "fo", ufc: "u" };
+// Added 2026-08-03: laliga→ll, seriea→sa, bundesliga→bl, ligue1→lg. Codes must
+// stay collision-free against every existing value (mls is already "s", so
+// Serie A takes "sa", not "s") and must be LETTERS ONLY — decodeTeamId splits
+// on /^([a-z]+)(\d+)$/, so a digit in the code (ligue1→"l1") gets swallowed
+// into the team-id group and the whole id fails to decode. That's the same
+// reason f1 is encoded "fo".
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", f1: "fo", ufc: "u" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;
