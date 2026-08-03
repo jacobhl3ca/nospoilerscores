@@ -204,8 +204,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // dir="ltr" is set explicitly (not left to the browser default) per W3C i18n
+  // guidance to always declare a base direction on the <html> element — it pins
+  // bidirectional-text and form-control behavior instead of relying on the
+  // implicit default, and matches the `"dir": "ltr"` already declared in
+  // public/manifest.json so the document and the installed-PWA metadata agree.
+  // No visual change for this LTR English site.
   return (
-    <html lang="en" className={geistSans.variable} suppressHydrationWarning>
+    <html lang="en" dir="ltr" className={geistSans.variable} suppressHydrationWarning>
       <head>
         {/* Team & league logos load from ESPN's image CDN above the fold on
             nearly every game card. Warm the DNS + TCP + TLS connection before
