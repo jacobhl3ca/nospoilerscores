@@ -31,7 +31,13 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en">
+    // dir="ltr" mirrors the root layout's <html> (layout.tsx): this boundary
+    // REPLACES that layout and ships its own <html>, so it's the one full
+    // document that didn't inherit the explicit base direction. Declaring it
+    // here per W3C i18n guidance (always set a base direction on <html>) keeps
+    // the crash screen consistent with every normal page and the manifest's
+    // "dir": "ltr". No visual change for this LTR English site.
+    <html lang="en" dir="ltr">
       <body>
         {/* This boundary REPLACES the root layout, so layout.tsx's `viewport`
             export (which emits the width=device-width meta on every normal page)
