@@ -732,9 +732,10 @@ export default function GolfLeaderboard({
         </div>
       )}
 
-      {/* Highlights — slot 0 is the main "ESPN" recap button
-          (prefetched from the tournament's YouTube channel chain),
-          slots 1–3 are additional top videos. Laid out as a 2-column
+      {/* Highlights — slot 0 is the main round-recap button, named after
+          the channel its clip is prefetched from (the first curated channel
+          in the tournament's chain — Golf Channel across the majors); slots
+          1–3 are additional top videos. Laid out as a 2-column
           grid so buttons match the Show Top / Show All callout width
           above and wrap cleanly on narrow cards: slots 0–1 on the top
           row, slots 2–3 underneath. Only slot 0 carries a text label;
@@ -751,8 +752,19 @@ export default function GolfLeaderboard({
             // name — the same disambiguation the repo already applies to
             // GameCard's favorite stars and LeagueColumn's per-league Retry
             // buttons. One label const keeps aria-label and title in sync.
+            // Name slot 0 after the channel its clip is ACTUALLY pulled from —
+            // channelsInOrder[0] === secondaryChannels[0] (Golf Channel across
+            // the majors; see SECONDARY_CHANNELS in youtube.ts) — not a
+            // hardcoded "ESPN". The chain was reordered to lead with Golf
+            // Channel, and ESPN isn't in the US Open / The Open chains at all,
+            // so the old literal misnamed the strictly-verified source. This
+            // button is icon-only, so aria-label/title is its ONLY accessible
+            // name (screen reader, voice control, hover). Fall back to a plain
+            // "Round N highlights" if no channel is known (unreachable for a
+            // visible slot 0, which only resolves once mainChannel is truthy).
+            const mainChannelName = secondaryChannels[0] ?? officialChannel;
             const highlightLabel = isMainSlot
-              ? `ESPN — Round ${completedRounds} highlights`
+              ? `${mainChannelName ? `${mainChannelName} — ` : ""}Round ${completedRounds} highlights`
               : `Round ${completedRounds} highlights — more on YouTube (${index})`;
             return (
               <button
