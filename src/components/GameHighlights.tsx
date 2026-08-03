@@ -123,7 +123,18 @@ export default function GameHighlights({
     // reveal its highlight buttons short of a reload. Treat a bad date as ready,
     // matching the !isToday early-return and the degrade-safely dateStr fallback.
     if (Number.isNaN(gameStart)) return true;
-    const otPeriods = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
+    // A regular-season NHL game still tied after its single overtime goes to a
+    // SHOOTOUT, which ESPN reports as period 5 (period 4 = the lone OT). Counting
+    // that as two overtimes — the raw period-minus-3 = 2 math — padded the buffer
+    // by a full extra 30-min "OT" (~1h over regulation) even though a shootout
+    // adds only minutes, so a today's NHL shootout final revealed its highlight
+    // buttons ~30 min later than it should. Multiple OTs (periods 5, 6, …) exist
+    // only in the PLAYOFFS, which never have a shootout — so cap the OT count at 1
+    // for a non-playoff NHL game only, disambiguating period 5 exactly the way
+    // GameCard's live-status labeler already does (shootout = period >= 5 &&
+    // !isPlayoff). Every other sport and playoff NHL are byte-for-byte unchanged.
+    const rawOt = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
+    const otPeriods = game.sport === "nhl" && !game.isPlayoff ? Math.min(rawOt, 1) : rawOt;
     const otExtra = otPeriods * (game.sport === "mlb" ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
     return nowMs > gameStart + bufferMs;
