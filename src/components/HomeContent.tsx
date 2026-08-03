@@ -1519,7 +1519,7 @@ export default function HomeContent({
   // Source cards use the current deterministic smart cascade. Ignore stale
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
   // local preference can silently bury a newly added source forever.
-  const newsTypeFilter = prefs.newsTypeFilter ?? "all";
+  const newsTypeFilter = prefs.newsTypeFilter ?? "reddit";
   const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
   // The 🎥 Videos quick-filter is ITEM-level (not source-level) so it includes
   // Reddit video posts (v.redd.it clips), not just the "Top Videos" highlight
@@ -2422,9 +2422,17 @@ export default function HomeContent({
             ? visibleNewsEntries.filter((e) => e.id === newsFocusLeague)
             : visibleNewsEntries;
           const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
-            const filtered = entry.orderedCascade
-              .filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter)
-              .filter((s) => !newsHiddenSources.includes(s.label));
+            const visible = entry.orderedCascade.filter((s) => !newsHiddenSources.includes(s.label));
+            const typeMatched = visible.filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter);
+            // Not every league has a source of every type — NWSL and cricket
+            // have no Reddit card at all (r/soccer is men's club football, so
+            // it is deliberately kept out of the NWSL column). Since the
+            // default filter is now "reddit", a strict filter would render
+            // those columns completely blank on first visit with nothing to
+            // explain why. Fall back to the league's full cascade whenever the
+            // type filter would empty the column, so the filter narrows a
+            // column that has the type and is a no-op for one that doesn't.
+            const filtered = typeMatched.length > 0 ? typeMatched : visible;
             // When viewing "All", honor the user's source-type order from the
             // funnel popover (Jacob 6/1) — dragging a source higher makes its
             // items lead in every column. Stable within a type so the per-sport

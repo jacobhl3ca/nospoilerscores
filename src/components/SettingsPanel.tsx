@@ -456,9 +456,9 @@ export default function SettingsPanel({
       // and every read falls back to its documented default (`?? true`/`?? false`
       // /`?? "both"` /`!!`). The three prefs with an explicit non-undefined
       // default in `defaults` (smartCutoffHour: 13, newsColCount: 3,
-      // newsTypeFilter: "all") can't rely on that undefined fallback, so reset
+      // newsTypeFilter: "reddit") can't rely on that undefined fallback, so reset
       // each to its documented default value instead — otherwise a user's chosen
-      // news source-type filter (e.g. "Reddit only") survived "Reset to defaults".
+      // news source-type filter (e.g. "ESPN only") survived "Reset to defaults".
       maskVideoTitle: undefined,
       youtubeNativeControls: undefined,
       videoSeekControl: undefined,
@@ -485,7 +485,7 @@ export default function SettingsPanel({
       timezone: undefined,
       smartCutoffHour: 13,
       newsColCount: 3,
-      newsTypeFilter: "all",
+      newsTypeFilter: "reddit",
     });
   };
 
