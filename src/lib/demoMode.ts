@@ -149,6 +149,20 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         mlbCondensedUrl: null,
         mlbCondensedPlaybackUrl: null,
         mlbCondensedPoster: null,
+        // Same leak as the recap clips above, for the live "where to watch"
+        // links. A live game's streamUrl is a pre-resolved real broadcast URL
+        // that GameCard/GameDetailModal reuse verbatim — most concretely the
+        // MLB.tv gamePk deep link (mlb.com/tv/g{gamePk}), which the card's
+        // "Stream" chip serves straight through even though the anonymized
+        // network name never matches ESPN/Prime. It rode through `...game`, so a
+        // tapped stream chip on a live demo card opened the REAL broadcast page —
+        // real team names and the live score, the exact identity ?demo=1 hides.
+        // Null both so the chip falls back to the generic per-sport watch page
+        // (sportStreamFallback — mlb.com/tv, nba.com/watch…), which names no
+        // teams. Every consumer guards on a truthy streamUrl before using it, so
+        // this only drops the real deep link; no card behavior changes otherwise.
+        streamUrl: null,
+        primeStreamUrl: null,
       };
     };
     return {
