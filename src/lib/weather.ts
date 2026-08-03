@@ -69,6 +69,21 @@ function hourLabel(h: number): string {
   return `${h12} ${ampm}`;
 }
 
+// A tz string safe to hand to Intl.DateTimeFormat({ timeZone }), or undefined
+// (→ the device zone). The geocoder's "auto" sentinel AND any malformed IANA
+// name both throw a RangeError from toLocale*({ timeZone }), so validate by
+// construction — the same probe getTimeZone() in lib/etDay.ts uses on the stored
+// zone override. A real IANA zone returns unchanged.
+function usableTz(tz: string | undefined): string | undefined {
+  if (!tz || tz === "auto") return undefined;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return undefined;
+  }
+}
+
 async function geocode(city: string, region: string): Promise<Geo | null> {
   const key = `${city}|${region}`.toLowerCase();
   const cached = geoCache.get(key);
@@ -199,13 +214,18 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   const start = new Date(gameDateISO);
   if (isNaN(start.getTime())) return null;
   // geo.tz is an IANA zone from the geocoder, but it can be the "auto" sentinel
-  // when that result carried no timezone (see geocode's `?? "auto"`). "auto" is
-  // valid for Open-Meteo's `timezone=` API param below, but NOT for Intl —
-  // toLocale*({ timeZone: "auto" }) throws a RangeError, which (these calls sit
-  // outside the try) would reject the whole forecast and silently drop weather
-  // for the venue. Coerce it to the device zone so the intended graceful
-  // fallback actually works; a real IANA tz is used unchanged.
-  const tz = geo.tz && geo.tz !== "auto" ? geo.tz : undefined;
+  // when that result carried no timezone (see geocode's `?? "auto"`), and a hit
+  // restored from localStorage can carry ANY malformed tz — geocode()'s cache
+  // guard validates lat/lon but not tz, so a legacy/partial/corrupt write with
+  // real coords but a bad zone flows straight through. "auto" is valid for
+  // Open-Meteo's `timezone=` API param below, but NEITHER "auto" nor a bad IANA
+  // name is valid for Intl — toLocale*({ timeZone }) throws a RangeError, which
+  // (these calls sit outside the try) would reject the whole forecast and, since
+  // geoCache/localStorage still hold the entry, silently drop weather for that
+  // venue all session. usableTz probes the zone and coerces any unusable value to
+  // the device zone so the intended graceful fallback works; a real IANA tz is
+  // used unchanged.
+  const tz = usableTz(geo.tz);
   // The hourly request must return times in the SAME zone `localDate` and
   // `localHour` (below) are computed in, or the `hr === localHour` gametime
   // match reads the wrong hour. `timezone=auto` resolves times in the venue's
