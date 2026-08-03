@@ -521,12 +521,33 @@ export default function GolfLeaderboard({
               return (
                 <span ref={broadcastRef} className="text-[10px] sm:text-xs">
                   {broadcastExpanded ? (
-                    tournament.broadcasts.map((b, i) => (
-                      <span key={b}>
-                        {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
-                        {networkLink(b, b)}
-                      </span>
-                    ))
+                    <>
+                      {tournament.broadcasts.map((b, i) => (
+                        <span key={b}>
+                          {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
+                          {networkLink(b, b)}
+                        </span>
+                      ))}
+                      {/* Collapse control — mirrors GameCard's expanded-networks
+                          ✕ so the revealed list carries a discoverable,
+                          keyboard-operable way back to the "+N" state. The
+                          disclosure toggle unmounts once open (this branch drops
+                          it), so without an in-DOM control the list could be
+                          dismissed only via Escape or an outside click (the
+                          effect above) — no visible affordance for a keyboard/SR
+                          user, who also lost focus to <body> on expand. Same
+                          aria-label="Hide networks" ✕ GameCard's overlay uses. */}
+                      <button
+                        type="button"
+                        className="ml-1.5 cursor-pointer hover:underline"
+                        style={{ color: "var(--text-muted)" }}
+                        title="Hide networks"
+                        aria-label="Hide networks"
+                        onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(false); }}
+                      >
+                        ✕
+                      </button>
+                    </>
                   ) : (
                     <>
                       {networkLink(tournament.broadcasts[0], 0)}
