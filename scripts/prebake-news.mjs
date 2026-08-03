@@ -2363,6 +2363,13 @@ const HL_LEAGUES = [
   { sport: "mls",   path: "/soccer/usa.1/scoreboard",                         channel: "Major League Soccer" },
   { sport: "ucl",   path: "/soccer/uefa.champions/scoreboard",                channel: "CBS Sports Golazo" },
   { sport: "uel",   path: "/soccer/uefa.europa/scoreboard",                   channel: "CBS Sports Golazo" },
+  // Big-five domestic leagues added 2026-08-03. laliga/ligue1 run channel-less
+  // (unscoped search) on purpose — see the OFFICIAL_CHANNELS note in
+  // src/lib/youtube.ts for why guessing their channel strings is worse.
+  { sport: "seriea",     path: "/soccer/ita.1/scoreboard",                    channel: "CBS Sports Golazo" },
+  { sport: "bundesliga", path: "/soccer/ger.1/scoreboard",                    channel: "Bundesliga" },
+  { sport: "laliga",     path: "/soccer/esp.1/scoreboard",                    channel: null },
+  { sport: "ligue1",     path: "/soccer/fra.1/scoreboard",                    channel: null },
   { sport: "tennis", path: "/tennis/atp/scoreboard",                          channel: null },
 ];
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.

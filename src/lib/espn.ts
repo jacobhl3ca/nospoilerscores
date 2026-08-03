@@ -20,6 +20,13 @@ const SPORT_PATHS: Record<Sport, string> = {
   mls: "/soccer/usa.1/scoreboard",
   ucl: "/soccer/uefa.champions/scoreboard",
   uel: "/soccer/uefa.europa/scoreboard",
+  // The other four "big five" domestic leagues (added 2026-08-03 on a user
+  // request via the footer feedback box). Same ESPN soccer shape as eng.1 —
+  // country code + tier.
+  laliga: "/soccer/esp.1/scoreboard",
+  seriea: "/soccer/ita.1/scoreboard",
+  bundesliga: "/soccer/ger.1/scoreboard",
+  ligue1: "/soccer/fra.1/scoreboard",
   f1: "/racing/f1/scoreboard",
   ufc: "/mma/ufc/scoreboard",
 };
@@ -84,6 +91,21 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "ucl", label: "UCL", startDate: "09-14", endDate: "06-05", championshipDate: "06-05" },
   // ── UEFA Europa League (Sep group → late May Final) ──
   { sport: "uel", label: "UEL", startDate: "09-24", endDate: "05-22", championshipDate: "05-22" },
+  // ── The other four big-five domestic leagues (Aug–May) ──
+  // All excludeFromAuto: the 3-column default layout is already tuned around
+  // NBA/MLB/NHL/NFL + EPL/UCL, and four more Aug–May soccer leagues competing
+  // for the leftover slot would shuffle it out from under existing users.
+  // They're opt-in from the league switcher / Settings, which is what the
+  // feedback actually asked for ("all-in-one spoiler free site").
+  // Windows are the real 2026-27 opener and final-matchday dates, read off
+  // ESPN's own fixture lists on 2026-08-03 (esp.1 Aug 15 → May 30, ita.1 Aug 22
+  // → May 30, ger.1 Aug 28 → May 22, fra.1 Aug 21 → May 29). They are NOT
+  // interchangeable: an early startDate puts a permanently empty column in the
+  // switcher, and a late one hides the opener.
+  { sport: "laliga",     label: "La Liga",    startDate: "08-15", endDate: "05-30", championshipDate: "05-30", excludeFromAuto: true },
+  { sport: "seriea",     label: "Serie A",    startDate: "08-22", endDate: "05-30", championshipDate: "05-30", excludeFromAuto: true },
+  { sport: "bundesliga", label: "Bundesliga", startDate: "08-28", endDate: "05-22", championshipDate: "05-22", excludeFromAuto: true },
+  { sport: "ligue1",     label: "Ligue 1",    startDate: "08-21", endDate: "05-29", championshipDate: "05-29", excludeFromAuto: true },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
   { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
   // ── NCAAF (College Football, Aug–early Jan, CFB Championship ~Jan 11) ──
@@ -212,12 +234,19 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   ucl: 10,
   uel: 11,
   mls: 12,
-  fifa: 13,
-  ncaaw: 14,
-  wnba: 15,
+  // The other big-five domestic leagues sort right below MLS, in the order a
+  // US viewer is most likely to want them. excludeFromAuto means these never
+  // actually win a slot on their own — the number only orders the switcher.
+  laliga: 13,
+  seriea: 14,
+  bundesliga: 15,
+  ligue1: 16,
+  fifa: 17,
+  ncaaw: 18,
+  wnba: 19,
   // Opt-in event leagues sort to the bottom of the switcher (like WNBA).
-  f1: 16,
-  ufc: 17,
+  f1: 20,
+  ufc: 21,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -401,6 +430,12 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // UCL / UEL: 90-min soccer, mirrors EPL.
   ucl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   uel:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // La Liga / Serie A / Bundesliga / Ligue 1: 90-min domestic soccer, same
+  // rating shape as EPL.
+  laliga:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  seriea:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  bundesliga: { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  ligue1:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
   // F1 / UFC render as single-event tiles (no Game objects), so these are
@@ -421,7 +456,7 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
 };
 // Soccer is different: status.clock counts UP and equals total elapsed match
 // seconds (5400 = 90'), so progress is just clock / full match.
-const SOCCER_SPORTS = new Set<Sport>(["epl", "mls", "ucl", "uel", "fifa"]);
+const SOCCER_SPORTS = new Set<Sport>(["epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1"]);
 const FULL_MATCH_SECONDS = 5400;
 
 // Minimal shape of an ESPN game's live status — the only fields this progress
@@ -1350,6 +1385,10 @@ export function espnGameUrl(game: Game): string {
     case "fifa":
     case "ucl":
     case "uel":
+    case "laliga":
+    case "seriea":
+    case "bundesliga":
+    case "ligue1":
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
     case "golf": return `https://www.espn.com/golf/leaderboard`;
     case "tennis": return `https://www.espn.com/tennis/scoreboard`;
@@ -1378,6 +1417,13 @@ export function sportStreamFallback(sport: Sport): string {
     // UCL / UEL: Paramount+ holds US rights through 2030.
     case "ucl": return "https://www.paramountplus.com/shows/uefa-champions-league/";
     case "uel": return "https://www.paramountplus.com/shows/uefa-europa-league/";
+    // US rights for the other big-five leagues: ESPN+ carries LaLiga and the
+    // Bundesliga, Paramount+ carries Serie A (same house as UCL/UEL), beIN
+    // Sports carries Ligue 1. Verified reachable 2026-08-03.
+    case "laliga": return "https://plus.espn.com/";
+    case "bundesliga": return "https://plus.espn.com/";
+    case "seriea": return "https://www.paramountplus.com/shows/serie-a/";
+    case "ligue1": return "https://www.beinsports.com/en-us/";
     case "tennis": return "https://www.tennischannel.com/";
     case "golf": return "https://www.pgatour.com/live";
     case "f1": return "https://f1tv.formula1.com/";
@@ -2668,6 +2714,10 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
     case "fifa":
     case "ucl":
     case "uel":
+    case "laliga":
+    case "seriea":
+    case "bundesliga":
+    case "ligue1":
       return `https://a.espncdn.com/i/teamlogos/soccer/500/${rawId}.png`;
     default:
       return undefined;
@@ -3071,7 +3121,7 @@ export async function fetchAllLeagues(
         // gaps) longer than the day-by-day lookahead. When that finds nothing,
         // widen with a single range query so the column shows the real next
         // match day instead of "Schedule TBD".
-        const SOCCER: Sport[] = ["mls", "epl", "ucl", "uel"];
+        const SOCCER: Sport[] = ["mls", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1"];
         if (!nextGameDay && SOCCER.includes(cfg.sport)) {
           nextGameDay = await fetchNextGameDayRange(cfg.sport, date);
         }
@@ -3176,6 +3226,9 @@ export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>
 // team standings and never reach this path.
 const RANK_LEAGUES = new Set<Sport>([
   "mlb", "nba", "wnba", "ncaam", "ncaaw", "ncaaf", "nfl", "nhl", "epl", "mls", "ucl", "uel",
+  // Single-table domestic leagues — ESPN's standings carry a real league-wide
+  // `rank`, so they need no RANK_METRIC entry (same as EPL).
+  "laliga", "seriea", "bundesliga", "ligue1",
 ]);
 
 // When ESPN groups standings by conference/division (no single league-wide

@@ -37,6 +37,19 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // because nothing else competes at the same tier.
   ucl: "CBS Sports Golazo",
   uel: "CBS Sports Golazo",
+  // Serie A: Paramount+ / CBS holds the US rights, same as UCL/UEL, and the
+  // same Golazo channel posts the per-match Extended Highlights.
+  seriea: "CBS Sports Golazo",
+  // Bundesliga: the league's own channel is the per-match highlight source.
+  // Exact author_name verified 2026-08-03 via the channel RSS feed (it is
+  // "Bundesliga", not "Bundesliga Official" or similar).
+  bundesliga: "Bundesliga",
+  // laliga + ligue1 deliberately have NO official channel — same call as UFC.
+  // LALIGA's channel ("LALIGA EA SPORTS") posts Spanish-language full matches
+  // rather than clean per-match English highlights, and Ligue 1's author name
+  // is sponsor-suffixed with a curly apostrophe ("Ligue 1 McDonald's") that
+  // re-brands every cycle. A wrong string silently kills the official slot, so
+  // both fall through to the unscoped search instead.
   // Golf majors — each tournament has its own channel. Keys must match the
   // label-derived lookup key `golf_${label.toLowerCase().replace(/\s+/g,"")}`
   // (see getOfficialChannelName), so the PGA Championship — whose league label
