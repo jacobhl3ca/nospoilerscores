@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
-import { getTimeZone, getEtServiceDate, toYmd } from "@/lib/etDay";
+import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
 import { openExternal } from "@/lib/openExternal";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
@@ -34,9 +34,6 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // this, an F1/UFC tile showed kickoff times in the device's zone even when
   // the user had picked another, disagreeing with the cards beside it.
   const tz = getTimeZone();
-  const ymd = (date: Date) =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date).replace(/-/g, "");
-  const sameDay = ymd(d) === (refYmd || toYmd(getEtServiceDate()));
   // Detect the midnight (TBD) placeholder in the SAME zone the time is shown in
   // (tz), not the device's own zone. Reading d.getHours()/getMinutes() uses the
   // device zone, so a Settings "Time zone" override desyncs it from the
@@ -45,6 +42,24 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // (same guard as weather.ts / etDay.ts / DateNav.ts).
   const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   const midnight = hm === "00:00" || hm === "24:00";
+  // Bucket a REAL kickoff to its SLATE day (etSlateYmd's 1 AM rollover), not a
+  // raw effective-tz calendar day, so the "is this on the viewed slate?" test
+  // uses the SAME boundary the board, the soccer cards, and the data layer all
+  // use. The fallback below already reads the slate-aware service day
+  // (getEtServiceDate), so a plain-calendar bucket compared an apples-to-oranges
+  // day: a UFC main event at 12:30 AM — which ESPN files on (and the board shows
+  // under) the PREVIOUS day's slate — counted as the next calendar day and
+  // flashed a spurious "Sun 12:30AM" prefix while the user was viewing that
+  // fight's own Saturday slate. Now it just reads "12:30AM", matching a soccer
+  // card on the same slate. A midnight (00:00) value is the TBD placeholder, not
+  // a real 12 AM start, so it keeps the plain calendar day — otherwise the
+  // rollover would push a time-unknown event onto the prior slate and show a
+  // stray weekday where the label should be empty. Daytime events (>= 1 AM) are
+  // unaffected either way — etSlateYmd and the calendar day agree there.
+  const eventYmd = midnight
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d).replace(/-/g, "")
+    : etSlateYmd(iso);
+  const sameDay = eventYmd === (refYmd || toYmd(getEtServiceDate()));
   // Strip the space before AM/PM so it reads "8:00PM" like the game cards'
   // formatTime (GameCard's "1:10PM"), not "8:00 PM".
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).replace(/(\d)\s+([AP]M)\b/i, "$1$2");
