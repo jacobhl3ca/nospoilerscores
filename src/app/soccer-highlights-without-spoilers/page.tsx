@@ -69,7 +69,7 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
       sections={[
         {
           h: "Built for global schedules",
-          p: "Premier League, MLS, Champions League, and international matches often happen while you are busy. HideScore helps you catch up without opening a result-first site.",
+          p: "Premier League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, Champions League, and international matches often happen while you are busy. HideScore helps you catch up without opening a result-first site.",
         },
         {
           h: "World Cup coverage has its own hub",
