@@ -3020,8 +3020,13 @@ export async function fetchAllLeagues(
     // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
   } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
-    // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen league.
-    final = [...auto.slice(0, MAX_LEAGUES - 1), slot3Cfg];
+    // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen
+    // league. Slice at slotCount, NOT MAX_LEAGUES: `auto` holds up to slotCount
+    // configs, so on a wide (5-column) board MAX_LEAGUES-1 (2) kept only the
+    // first two auto columns and dropped slots 4-5 — the same shrink the dedupe
+    // backfill below already fixed by switching off MAX_LEAGUES. When slotCount
+    // is the default 3 this is byte-identical (slotCount-1 === MAX_LEAGUES-1).
+    final = [...auto.slice(0, slotCount - 1), slot3Cfg];
   } else {
     final = auto;
   }
