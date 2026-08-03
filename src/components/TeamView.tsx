@@ -46,6 +46,7 @@ function rawEspnTeamId(teamId: string, sport: Sport): string {
 // events (fetchTeamSchedule dedups + sorts, and no-ops on an empty/failed year).
 const TWO_CALENDAR_YEAR_SPORTS = new Set<Sport>([
   "epl", "mls", "fifa", "ucl", "uel", "nba", "nhl", "ncaam", "ncaaw",
+  "laliga", "seriea", "bundesliga", "ligue1",
 ]);
 
 // Fallback multi-year window so a season that spans (or hasn't filled) the

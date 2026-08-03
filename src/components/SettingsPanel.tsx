@@ -130,6 +130,10 @@ const SPORT_LABEL: Record<Sport, string> = {
   mls: "MLS",
   ucl: "UCL",
   uel: "UEL",
+  laliga: "La Liga",
+  seriea: "Serie A",
+  bundesliga: "Bundesliga",
+  ligue1: "Ligue 1",
   f1: "F1",
   ufc: "UFC",
 };

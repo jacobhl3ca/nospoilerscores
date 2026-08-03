@@ -28,6 +28,10 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   mls: "/soccer/usa.1",
   ucl: "/soccer/uefa.champions",
   uel: "/soccer/uefa.europa",
+  laliga: "/soccer/esp.1",
+  seriea: "/soccer/ita.1",
+  bundesliga: "/soccer/ger.1",
+  ligue1: "/soccer/fra.1",
   // Racing/combat leagues share ESPN's league-base + /news pattern (the path is
   // the scoreboard path minus /scoreboard — see espn.ts). Without these, the
   // "ESPN F1"/"ESPN UFC" cards that leagueSourceCascade() builds for every sport
@@ -215,7 +219,13 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   // UCL = ESPN soccer league id 2; UEL = id 2310.
   ucl: "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png",
   uel: "https://a.espncdn.com/i/leaguelogos/soccer/500/2310.png",
-  f1: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/f1.png&w=40&h=40&transparent=true",
+  // ESPN soccer league ids, read straight off each scoreboard's `leagues[0].logos`
+  // (verified 2026-08-03): LaLiga 15, Bundesliga 10, Serie A 12, Ligue 1 9.
+  laliga: "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png",
+  bundesliga: "https://a.espncdn.com/i/leaguelogos/soccer/500/10.png",
+  seriea: "https://a.espncdn.com/i/leaguelogos/soccer/500/12.png",
+  ligue1: "https://a.espncdn.com/i/leaguelogos/soccer/500/9.png",
+  f1:"https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/f1.png&w=40&h=40&transparent=true",
   ufc: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
 };
 
@@ -282,6 +292,21 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
 // coverage and the substitutes went unused. PREBAKED_FEEDS is still exported /
 // baked in case we want to re-add them. CBS Sports + theScore were dropped
 // earlier for the same duplicate-of-ESPN reason.
+const SOCCER_REDDIT_FIREHOSE = new Set<Sport>([
+  "fifa", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
+]);
+
+// ESPN card label per league. Default is `ESPN ${sport.toUpperCase()}`, which
+// reads fine for acronym sports (ESPN NBA) but not for the word-shaped soccer
+// keys — "ESPN LALIGA" / "ESPN SERIEA" / "ESPN LIGUE1". Override those.
+const ESPN_LEAGUE_LABEL: Partial<Record<Sport, string>> = {
+  fifa: "ESPN World Cup",
+  laliga: "ESPN La Liga",
+  seriea: "ESPN Serie A",
+  bundesliga: "ESPN Bundesliga",
+  ligue1: "ESPN Ligue 1",
+};
+
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
@@ -294,7 +319,13 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   // 7/20 — their own subs are lower-volume). One shared reddit-soccer bake
   // feeds all four cards. MLS deliberately excluded: r/soccer is Euro-centric
   // and r/MLS carries the MLS discussion.
-  if (sport === "fifa" || sport === "epl" || sport === "ucl" || sport === "uel") {
+  // La Liga / Serie A / Bundesliga / Ligue 1 get r/soccer as their ONLY Reddit
+  // card — deliberately no dedicated per-league sub. Each new sub means another
+  // prebake job on the Mac mini, and that box's Reddit per-IP budget is already
+  // the known cause of 429 storms across the 19 existing feeds (see the
+  // reddit-budget contention notes). r/soccer is Euro-centric and covers all
+  // four leagues heavily, so the marginal value doesn't justify the risk.
+  if (SOCCER_REDDIT_FIREHOSE.has(sport)) {
     out.push({ label: "r/soccer", key: "reddit-soccer", kind: "prebaked", logoUrl });
   }
   // Spoiler-safe highlight video next, where the league has a prebaked feed.
@@ -302,7 +333,7 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
   if (officialVideos) out.push({ label: officialVideos.label, key: officialVideos.key, kind: "prebaked", logoUrl, variant: "video", youtubeChannel: officialVideos.channel });
   // ESPN headlines close out the column — the reliable catch-all. fifa's ESPN
   // feed is the World Cup league feed (see SPORT_NEWS_PATHS), labeled as such.
-  const espnLabel = sport === "fifa" ? "ESPN World Cup" : `ESPN ${sport.toUpperCase()}`;
+  const espnLabel = ESPN_LEAGUE_LABEL[sport] ?? `ESPN ${sport.toUpperCase()}`;
   out.push({ label: espnLabel, key: `espn-${sport}`, kind: "espn-league", sport, logoUrl: ESPN_BRAND_LOGO });
   return out;
 }
@@ -316,7 +347,8 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 // tail in their column order.
 export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf",
-  "fifa", "epl", "ucl", "uel", "mls", "golf", "tennis", "wnba", "ncaaw",
+  "fifa", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
+  "mls", "golf", "tennis", "wnba", "ncaaw",
   "ufc", "f1",
 ];
 

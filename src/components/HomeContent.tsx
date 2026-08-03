@@ -3002,6 +3002,20 @@ export default function HomeContent({
           return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
 
+        {/* Standing announcement line (added 2026-08-03). Doubles as the reply
+            to the footer-feedback note that asked for the big-five soccer
+            leagues — the sender left no email, so this is the only channel
+            back to them. It also carries the discoverability point that note
+            revealed: they assumed NBA/NHL/Prem were missing when all three
+            were already there, just not in the default three columns. Say
+            plainly that leagues live in Settings and only surface in season. */}
+        <p className="italic max-w-[46rem] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+          New: La Liga, Serie A, Bundesliga and Ligue 1 — thank you to whoever asked for them
+          through this feedback box. Every league we cover is in Settings, and each one appears
+          in the column switcher only while its season is running, so the soccer leagues arrive
+          in mid-to-late August.
+        </p>
+
         {/* ONE footer row (Jacob 7/14): About is the first inline item, then
             Feedback / Settings / Privacy / App Store — no second row. `relative`
             anchors the About panel, which drops BELOW the row (absolute) so
@@ -3018,8 +3032,9 @@ export default function HomeContent({
             <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(42rem,90vw)] max-h-[60vh] overflow-y-auto text-left text-xs leading-relaxed space-y-2 z-20 rounded-lg p-3 shadow-lg" style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
             <p>
               HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
-              MLB, MLS, the Premier League, the 2026 World Cup and golf without ever seeing who won —
-              every score and result stays hidden until you choose to reveal it.
+              MLB, MLS, the Premier League, La Liga, Serie A, the Bundesliga, Ligue 1, the Champions
+              League, the 2026 World Cup and golf without ever seeing who won — every score and
+              result stays hidden until you choose to reveal it.
             </p>
             <p>
               Before you commit to a replay, our competitiveness rating tells you whether a game was a
