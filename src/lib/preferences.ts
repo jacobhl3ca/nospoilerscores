@@ -303,7 +303,13 @@ const defaults: Preferences = {
   defaultRatings: "auto",
   newsColCount: 3,
   smartCutoffHour: 13,
-  newsTypeFilter: "all",
+  // Reddit-only by default (2026-08-03, ahead of the Product Hunt launch).
+  // Reddit is where the game-worth-watching discussion actually lives, and it
+  // is the feed a first-time visitor should land on; ESPN/homepage/top-videos
+  // are still one tap away in the source filter, and the "Clear filter" link
+  // is visible by default now precisely because the filter is no longer "all".
+  // Existing users are unaffected — a saved newsTypeFilter always wins.
+  newsTypeFilter: "reddit",
 };
 
 export function loadPreferences(): Preferences {
