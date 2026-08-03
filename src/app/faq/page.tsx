@@ -93,6 +93,17 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "FAQPage",
+            // This FAQPage IS the page-level node for /faq (there's no separate
+            // WebPage node here, unlike the SeoLandingPage routes where the
+            // WebPage carries these). Give it the page's name + description so it
+            // matches every other route's page node (the /privacy and date-route
+            // WebPage nodes both carry name + description) — Google lists `name`
+            // as a recommended WebPage property, and FAQPage is a WebPage subtype,
+            // so both are valid here. Reuse the same constants the <title> and
+            // <meta name="description"> emit so the graph node stays in lockstep
+            // with the page metadata. Purely additive JSON-LD; no visual change.
+            name: FAQ_TITLE,
+            description: FAQ_DESC,
             // Anchor this node to the canonical /faq URL and into the shared
             // WebSite entity declared in layout.tsx. FAQPage is a WebPage subtype,
             // so without a `url`/`isPartOf` it floated as a page node describing
