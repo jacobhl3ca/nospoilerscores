@@ -163,7 +163,14 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
     if (!shootout && clock && clock !== "0.0") return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
-  if (sport === "nfl") {
+  if (sport === "nfl" || sport === "ncaaf") {
+    // NCAAF plays four 15-min quarters (then OT), the same period structure as
+    // the NFL — the rest of the app already classifies it that way (espn.ts:
+    // regulationPeriods 4, PERIOD_SECONDS 900). Without this branch a live NCAAF
+    // card fell through to the generic status, so ESPN's "8:32 - 2nd" rendered
+    // raw on desktop and truncated to "8:3" on mobile instead of "Q2 - 8:32".
+    // College-football OT is untimed (no game clock), so the clock guard below
+    // falls through to the bare "OT"/"2OT" label there, same as the NFL path.
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
     if (clock && clock !== "0.0") return { full: `${q} - ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
