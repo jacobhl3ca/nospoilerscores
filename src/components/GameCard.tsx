@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
+import { isDemoModeActive } from "@/lib/demoMode";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
@@ -424,6 +425,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // Team-view treats finished games like past-date cards (hide records, show highlights).
   const effectivePastDate = isPastDate || (teamView && isFinished);
   const espnUrl = espnGameUrl(game);
+  // Under ?demo=1 the team names are anonymized ("Team A1 at Team A2"), but
+  // espnUrl still points at the REAL ESPN gamecast — game.recapUrl (which
+  // demoMode can't scrub without breaking the non-demo id-fallback) or the
+  // /game/_/gameId/{game.id} fallback built from the real event id. So tapping
+  // the date/time label — the one card element wrapped in this link — opened
+  // the real matchup page: real team names and the final score, the exact
+  // spoiler ?demo=1 hides (same leak class as the streamUrl/recap fixes in
+  // demoMode.ts, which fall back to a team-less page). Drop the link in demo
+  // mode so the label renders as plain text; production is unaffected. Memoized
+  // like GameHighlights' own demo check so score-poll re-renders don't re-parse
+  // the query string.
+  const demoActive = useMemo(() => isDemoModeActive(), []);
   const teamViewDateLabel = teamView ? (() => {
     const d = new Date(game.date);
     if (isNaN(d.getTime())) return "";
@@ -678,20 +691,25 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         // not in the status bar's middle cell, so it's gone from showBar here.
         const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView;
         if (!showBar) return null;
-        // Small ESPN link wrapper for upcoming-time / date labels.
-        const withEspn = (node: ReactNode) => (
-          <a
-            href={espnUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline transition-colors"
-            style={{ color: "inherit" }}
-            title="View on ESPN"
-            onClick={handleExternalClick(espnUrl)}
-          >
-            {node}
-          </a>
-        );
+        // Small ESPN link wrapper for upcoming-time / date labels. In demo mode
+        // the link would leak the real matchup (see demoActive above), so render
+        // the label as plain text there instead.
+        const withEspn = (node: ReactNode) =>
+          demoActive ? (
+            <>{node}</>
+          ) : (
+            <a
+              href={espnUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline transition-colors"
+              style={{ color: "inherit" }}
+              title="View on ESPN"
+              onClick={handleExternalClick(espnUrl)}
+            >
+              {node}
+            </a>
+          );
         return (
           <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
             {/* Date/time never shrinks or clips (shrink-0) so the time always
