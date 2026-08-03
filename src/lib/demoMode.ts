@@ -134,6 +134,21 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         nhlRecapEmbed: null,
         nhlCondensedUrl: null,
         nhlCondensedEmbed: null,
+        // Same leak as the NHL clips above, for MLB. The board enrich pre-
+        // attaches MLB.com recap/condensed URLs (applyMlbVideos in espn.ts) that
+        // GameHighlights plays verbatim; they rode straight through `...game` and
+        // a tapped "Recap"/"Condensed" button on a finished demo card played the
+        // REAL clip — real team names, real final score — the exact spoiler
+        // ?demo=1 hides. Null them so `showMlb` is false and the buttons don't
+        // render. The self-resolve fallback (GameHighlights, when the playback
+        // URL is absent) matches on the now-scrubbed team displayNames, so it
+        // returns no entry and can't re-leak — same fail-safe as the YouTube path.
+        mlbRecapUrl: null,
+        mlbRecapPlaybackUrl: null,
+        mlbRecapPoster: null,
+        mlbCondensedUrl: null,
+        mlbCondensedPlaybackUrl: null,
+        mlbCondensedPoster: null,
       };
     };
     return {
