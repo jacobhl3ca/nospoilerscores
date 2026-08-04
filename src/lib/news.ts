@@ -282,7 +282,7 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   ufc: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
   // ESPN publishes no league logo for either (it does not carry the sports),
   // so these fall back to its generic sport glyphs rather than 404ing.
-  boxing: "https://a.espncdn.com/i/espn/networks_shows/500/boxing.png&w=40&h=40&transparent=true",
+  boxing: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
   chess: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
   esports: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
 };
