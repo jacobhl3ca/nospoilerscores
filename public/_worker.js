@@ -1549,10 +1549,19 @@ export default {
             (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId)
           );
         }
-        if (!videoId && !isGolfQuery && !queryHasSpecificTeams) {
+        if (!videoId && !isGolfQuery && !queryHasSpecificTeams && raceTokens.length === 0) {
           // Raw-regex fallback — only for non-golf. For golf we'd
           // rather return 404 than guess wrong and let a random
           // PGA TOUR highlight win the Masters slot.
+          //
+          // ⚠️ Racing is excluded for EXACTLY the same reason, added 2026-08-04
+          // after the race gate above looked correct in isolation but changed
+          // nothing in production. This fallback takes the first videoId in the
+          // whole results page with no title check at all, so every candidate
+          // the race gate had just rejected came straight back in through here
+          // — and `strict=1` passed it, because the CHANNEL was right and only
+          // the race was wrong. A query carrying race tokens has asked for a
+          // specific event; if nothing matches it, 404 and hide the button.
           const allMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
           const firstAllowed = allMatches.find((m) => !excludeSet.has(m[1]));
           videoId = firstAllowed ? firstAllowed[1] : null;
