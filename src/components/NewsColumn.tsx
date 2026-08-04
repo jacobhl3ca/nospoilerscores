@@ -502,7 +502,13 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       {hasInlineMedia && (
         <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
           <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-            {(item.videoUrl || item.youtubeVideoId) ? (
+            {/* Pick the play triangle for ANY playable clip, not just
+                videoUrl/youtubeVideoId: hasInlineMedia (above) also lets a
+                direct-HLS (playbackUrl) or Brightcove-embed (embedUrl) item into
+                this branch, and those play on tap too — so the old check drew the
+                open-external/expand arrows over a video. Reuse itemIsVideo(), the
+                same signal the NewsFeed twin and the 🎥 Videos filter use. */}
+            {itemIsVideo(item) ? (
               <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
             ) : (
               <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -527,7 +533,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       style={{ background: "var(--bg-card-hover)" }}
     >
       <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-        {(item.videoUrl || item.youtubeVideoId) ? (
+        {itemIsVideo(item) ? (
           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
         ) : (
           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
