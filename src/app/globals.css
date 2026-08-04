@@ -364,6 +364,18 @@ html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
   outline-offset: 1px;
 }
 
+/* Same WCAG 2.4.7 fix for the feedback form's email field, the twin of the
+   message input above. It ships the identical Tailwind outline-none and its
+   border only changes color in the invalid (emailLooksWrong) state — never on
+   focus — so a keyboard Tab into the optional email field showed no cue on the
+   empty/valid path. Re-add the same keyboard-only (:focus-visible) accent ring;
+   the red error border still wins for the invalid state (it sits on the element
+   itself, distinct from this outline). Mouse clicks stay clean. */
+#hs-feedback-email:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* Same WCAG 2.4.7 fix for the World Cup groups/ranked "Highlight a country"
    filter input: it also ships Tailwind's outline-none and its border doesn't
    change on focus, so a keyboard Tab landing on it gave no visible cue. Re-add
