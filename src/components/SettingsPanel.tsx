@@ -1153,6 +1153,18 @@ function RadioGroup<T extends string>({
               border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
               color: active ? "white" : "var(--text)",
             }}
+            // The per-option hint carries the detail that distinguishes the
+            // choices — and for the Landing view / Ratings groups that detail is
+            // the spoiler warning itself ("Always start on news (spoilers)"). It
+            // rode ONLY on `title`, a mouse-hover tooltip that assistive tech and
+            // keyboard/voice users never get, so a screen-reader user choosing a
+            // landing view was never told which options reveal scores — the one
+            // thing this app exists to hide. Fold the hint into the accessible
+            // name so it's announced with the button; the visible `o.label` stays
+            // the leading token, keeping voice-control's "Label in Name" (WCAG
+            // 2.5.3) intact and the visible pill text unchanged. `title` stays for
+            // the mouse tooltip. Falls back to the bare label if a hint is absent.
+            aria-label={o.hint ? `${o.label} — ${o.hint}` : undefined}
             title={o.hint}
           >
             {o.label}
