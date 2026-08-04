@@ -40,6 +40,10 @@ export interface PlayOpts {
 }
 export type PlayHandler = (opts: PlayOpts) => void;
 
+// What a source card actually put on screen. "hidden" = it fetched fine but the
+// active toolbar filters removed every item, so it rendered nothing at all.
+type SourceRenderState = "loading" | "hidden" | "shown";
+
 // Build the modal payload for a news item. Single source of truth so TextRow
 // (click) and HomeContent (prev/next paging) produce identical payloads.
 // A "text post" is a headline-only item with no pic/video (no thumbnail,
@@ -727,7 +731,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex, videosOnly, showTextPosts }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -760,7 +764,17 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, siblings, baseIndex
   // Publish exactly what is rendered so modal prev/next never pages into a row
   // that the active Videos filter hid.
   useEffect(() => { onItemsLoaded?.(source.label, shown); }, [shown, source.label, onItemsLoaded]);
-  if (!loading && items.length > 0 && shown.length === 0) return null;
+  // A source whose items all got filtered out renders nothing (see below). When
+  // EVERY source in a column does that, the column body is blank with no
+  // explanation — which reads as a broken app rather than an active filter
+  // (Jacob 8/3: MLB looked empty because the funnel defaults to Reddit-only, so
+  // the column held just r/baseball, and Videos hid it on a day with no clips).
+  // Report the outcome up so NewsColumn can say so. `loading` is distinct from
+  // `hidden` so the message can't flash before the fetches settle.
+  const hidden = !loading && items.length > 0 && shown.length === 0;
+  const renderState: SourceRenderState = loading ? "loading" : hidden ? "hidden" : "shown";
+  useEffect(() => { onRenderState?.(source.label, renderState); }, [renderState, source.label, onRenderState]);
+  if (hidden) return null;
 
   if (source.variant === "video") {
     return (
@@ -804,6 +818,17 @@ export default function NewsColumn({
     setItemsBySource((prev) => (prev[label] === items ? prev : { ...prev, [label]: items }));
   }, []);
 
+  // Per-source render outcome, so an all-filtered-out column can explain itself
+  // instead of rendering a bare title over blank space (see SourceSection).
+  const [stateBySource, setStateBySource] = useState<Record<string, SourceRenderState>>({});
+  const handleRenderState = useCallback((label: string, state: SourceRenderState) => {
+    setStateBySource((prev) => (prev[label] === state ? prev : { ...prev, [label]: state }));
+  }, []);
+  // Only once every source has settled AND every one of them was filtered away.
+  // A column that is merely still loading, or that has a source rendering its
+  // own "No headlines" card, must not show this.
+  const allFiltered = sources.length > 0 && sources.every((s) => stateBySource[s.label] === "hidden");
+
   // Walk sections in render order, append every post, and record where each
   // source starts in the shared modal list.
   const { siblings, baseIndexBySource } = useMemo(() => {
@@ -841,12 +866,30 @@ export default function NewsColumn({
             source={source}
             onPlayVideo={onPlayVideo}
             onItemsLoaded={handleItemsLoaded}
+            onRenderState={handleRenderState}
             siblings={siblings}
             baseIndex={baseIndexBySource[source.label] ?? null}
             videosOnly={videosOnly}
             showTextPosts={showTextPosts}
           />
         ))}
+        {allFiltered && (
+          // role=status so a screen reader hears why the column went quiet,
+          // matching the Feed view's "No posts to show." treatment.
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-lg px-3 py-6 text-center text-xs leading-relaxed"
+            style={{ background: "var(--bg-card)", boxShadow: "inset 0 0 0 1px var(--border)", color: "var(--text-muted)" }}
+          >
+            {videosOnly ? "No videos here right now." : "Nothing to show with these filters."}
+            <span className="block mt-1" style={{ opacity: 0.8 }}>
+              {videosOnly
+                ? "Turn off Videos, or widen Source in the filter menu."
+                : "Try widening Source in the filter menu."}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
