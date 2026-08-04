@@ -120,7 +120,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", marchMadnessLabel: true },
   { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
   { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", championshipDate: "11-01", mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
-  { sport: "nhl",   label: "NHL",   startDate: "04-07", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
+  // Oct→Jun season (opener 10-07), so the window wraps the New Year and takes
+  // isLeagueActive's `startDate > endDate` branch — same shape as NBA above. A
+  // non-wrapping "04-07" start silently limited NHL to Apr 7–Jun 19, hiding the
+  // whole regular season from both the default board (mustInclude is only
+  // honored among already-active leagues) and the header switcher.
+  { sport: "nhl",   label: "NHL",   startDate: "10-07", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
   { sport: "nfl",   label: "NFL",   startDate: "09-04", endDate: "02-09", championshipDate: "02-09", mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
   // NFL Preseason backfills the Jul 21 – Aug 15 thin window where only MLB + MLS are active.
   // Window ends Sep 3 (regular NFL takes over Sep 4) — but EPL kickoff Aug 16 already fills
