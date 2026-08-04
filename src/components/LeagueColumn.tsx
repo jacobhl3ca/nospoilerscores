@@ -126,16 +126,25 @@ interface SubtitleResult {
   live?: boolean;
 }
 
+// Promo link to the trade board, appended to the MLB column's subtitle.
+//
+// It rides the SAME line as Big Inning rather than adding a row: this slot is a
+// single line whose height is reserved even when empty (see the eventCard
+// branch below), so giving one column a second line would drop its card top
+// ~16px below its neighbours. The tier list pairs the trade label with every
+// width of the existing label and only then falls back to the bare label, so a
+// narrow column drops the promo instead of truncating Big Inning.
+//
+// Expires on its own — delete this constant, tradeBoardActive() and the
+// suffix wiring in PlayoffSubtitleInner once it lapses.
 const TRADE_BOARD_URL = "https://trades.hidescore.com";
+const TRADE_BOARD_LABEL = "Trades";
+const TRADE_BOARD_UNTIL_YMD = 20260807; // added 2026-08-04, runs 4th-6th
 
-// The header subtitle is a single line that already reserves its height even
-// when empty (a transparent nbsp), so column headers stay aligned. Big Inning
-// and the playoff countdown own that line whenever they have something to say;
-// the trade board only fills it the rest of the time. Nothing moves, and no
-// second row is added.
-function tradeBoardSubtitle(sport: Sport): SubtitleResult | null {
-  if (sport !== "mlb") return null;
-  return { tiers: ["Trade Board", "Trades"], href: TRADE_BOARD_URL };
+function tradeBoardActive(sport: Sport): boolean {
+  if (sport !== "mlb") return false;
+  const now = nowInEt();
+  return now.y * 10000 + now.mo * 100 + now.d < TRADE_BOARD_UNTIL_YMD;
 }
 
 // Tennis round wording for the italic header subtitle (parallels golf's
@@ -397,10 +406,17 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
     return () => clearInterval(id);
   }, [needsBigInningTick]);
 
-  const result =
-    getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule) ??
-    tradeBoardSubtitle(sport);
-  const tiers = result?.tiers ?? [];
+  const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
+  const baseTiers = result?.tiers ?? [];
+  // Widest-first: every "<label> · Trades" pairing, then the bare labels. The
+  // probe takes the first that fits, so the promo is preferred but is the first
+  // thing dropped when the column is too narrow.
+  const suffixTiers = tradeBoardActive(sport)
+    ? baseTiers.length
+      ? baseTiers.map((t) => `${t} · ${TRADE_BOARD_LABEL}`)
+      : [TRADE_BOARD_LABEL]
+    : [];
+  const tiers = [...suffixTiers, ...baseTiers];
   const href = result?.href;
   const tiersKey = tiers.join("|");
   const [tierIdx, setTierIdx] = useState(tiers.length ? tiers.length - 1 : 0);
@@ -462,7 +478,15 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
     visibility: ready || !tiers.length ? ("visible" as const) : ("hidden" as const),
     color: isLive ? undefined : (tiers.length ? "var(--text-muted)" : "transparent"),
   };
-  const text = tiers.length ? tiers[tierIdx] : "\u00A0";
+  // A chosen tier below suffixTiers.length is a paired one, so the trailing
+  // " \u00B7 Trades" is peeled back off and re-rendered as its own link.
+  const showsTradeBoard = tierIdx < suffixTiers.length;
+  const chosen = tiers.length ? tiers[tierIdx] : "\u00A0";
+  const text = showsTradeBoard
+    ? baseTiers.length
+      ? chosen.slice(0, -(TRADE_BOARD_LABEL.length + 3))
+      : ""
+    : chosen;
   // When live, peel the leading "\u25CF" off so we can animate just the dot.
   // The probe still measures the full string (including "\u25CF"), so layout
   // math stays accurate.
@@ -476,6 +500,63 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
     }
     return t;
   };
+  // The trade-board promo needs its own href, so when it is showing alongside a
+  // label that is itself a link the line has to hold two anchors. In that case
+  // the measured/styled element becomes a wrapper span and the pieces sit
+  // inside it; layout is identical because the wrapper carries the same classes
+  // the single element used to.
+  if (showsTradeBoard) {
+    const tradeLink = (
+      <a
+        href={TRADE_BOARD_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleExternalClick(TRADE_BOARD_URL)}
+        className="hover:underline transition-colors"
+      >
+        {TRADE_BOARD_LABEL}
+      </a>
+    );
+    let label: React.ReactNode = null;
+    if (text && href) {
+      label = (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleExternalClick(href)}
+          className={
+            isLive
+              ? "text-green-500 font-medium hover:text-green-400 transition-colors hover:underline not-italic"
+              : "hover:underline transition-colors"
+          }
+        >
+          {renderText(text)}
+        </a>
+      );
+    } else if (text && onClick) {
+      label = (
+        <button type="button" onClick={onClick} className="hover:underline transition-colors cursor-pointer">
+          {renderText(text)}{" ▸"}
+        </button>
+      );
+    } else if (text) {
+      label = renderText(text);
+    }
+    return (
+      <span
+        ref={ref as React.RefObject<HTMLSpanElement>}
+        className={spanCls}
+        // The wrapper always carries the muted colour so the promo reads as
+        // muted italic; a live label overrides it with its own green class.
+        style={{ ...baseStyle, color: "var(--text-muted)" }}
+      >
+        {label}
+        {label ? " · " : null}
+        {tradeLink}
+      </span>
+    );
+  }
   if (href && tiers.length) {
     return (
       <a
