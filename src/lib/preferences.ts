@@ -180,6 +180,11 @@ export interface Preferences {
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
   hideTeamStars?: boolean;
+  // Show W-L records on in-progress game cards. OPT-IN (default off): a record
+  // is a second-order spoiler — today's 63-49 encodes whether the team won last
+  // night, which is exactly what a delayed viewer is avoiding. Jacob flagged it
+  // across five screenshots before it was gated (8/4).
+  showTeamRecords?: boolean;
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
