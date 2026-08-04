@@ -550,6 +550,7 @@ export default function SettingsPanel({
                 <p className="text-sm" style={{ color: "var(--text)" }}>
                   Signed in{auth.email ? <> as <span className="font-medium">{auth.email}</span></> : ""}.
                 </p>
+                <AccountFacts auth={auth} />
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                   Your teams, layout, and settings sync automatically across all your browsers and devices.
                 </p>
@@ -1079,6 +1080,57 @@ export default function SettingsPanel({
           </Section>
         </div>
       </div>
+    </div>
+  );
+}
+
+// What we actually know about the signed-in account: which identity is linked,
+// which HideScore clients it has been used on (the iPhone app is invisible to the
+// server without the X-HS-Client header — see hsPlatform in lib/prefsSync.ts), and
+// how long it has existed. All of it comes from users/<sub>.json in R2 via /api/me.
+const PLATFORM_LABEL: Record<string, string> = {
+  ios: "iPhone app",
+  android: "Android app",
+  web: "Web browser",
+};
+
+function shortDate(iso?: string | null): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function AccountFacts({ auth }: { auth: AuthState }) {
+  const provider = auth.provider === "google" ? "Google" : auth.provider === "apple" ? "Apple" : null;
+  // Newest-first so the client they actually use leads.
+  const used = Object.entries(auth.platforms || {})
+    .filter(([, seen]) => !!seen)
+    .sort((a, b) => Date.parse(b[1] as string) - Date.parse(a[1] as string));
+  const since = shortDate(auth.firstSeen);
+  if (!provider && used.length === 0 && !since) return null;
+  return (
+    <div className="rounded-lg px-3 py-2 space-y-1" style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)" }}>
+      {provider && (
+        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+          Linked with <span className="font-medium" style={{ color: "var(--text)" }}>{provider}</span>
+          {since ? <> · account created {since}</> : null}
+        </p>
+      )}
+      {used.length > 0 && (
+        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+          Used on{" "}
+          {used.map(([p, seen], i) => (
+            <span key={p}>
+              {i > 0 ? " · " : ""}
+              <span className="font-medium" style={{ color: "var(--text)" }}>
+                {PLATFORM_LABEL[p] || p}
+              </span>
+              {shortDate(seen as string) ? <> (last {shortDate(seen as string)})</> : null}
+            </span>
+          ))}
+        </p>
+      )}
     </div>
   );
 }
