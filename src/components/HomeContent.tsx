@@ -385,7 +385,9 @@ export default function HomeContent({
       setSelectedDate(getDateString(initialOffset ?? resolveDefaultOffset(stored.defaultDateMode, stored.smartCutoffHour)));
     }
   }, [initialOffset, selectedDate]);
-  const [showRatingsExplainer, setShowRatingsExplainer] = useState(false);
+  // First-time notice for the Ratings tab. Was a blocking confirm dialog until
+  // 2026-08-04 — see the inline-bar note on handleViewModeClick.
+  const [ratingsNotice, setRatingsNotice] = useState(false);
   const [showShareCopied, setShowShareCopied] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [showFavToast, setShowFavToast] = useState(false);
@@ -399,7 +401,8 @@ export default function HomeContent({
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
-  const [showNewsExplainer, setShowNewsExplainer] = useState(false);
+  // Same, for the News tab's spoiler warning.
+  const [newsNotice, setNewsNotice] = useState(false);
   // Per-column team-name abbreviation reports (keyed by slot; null-report =
   // column left/has no names). Any abbreviated game column → namesCompact, so
   // the UFC column's fighter names shrink exactly when the team names beside
@@ -418,92 +421,10 @@ export default function HomeContent({
     });
   }, []);
   const namesCompact = Object.values(colAbbrev).some(Boolean);
-  // Dialog containers for the ratings/news explainer warnings — targeted by the
-  // focus-management effect below so keyboard/SR users land inside the overlay.
-  const ratingsExplainerRef = useRef<HTMLDivElement>(null);
-  const newsExplainerRef = useRef<HTMLDivElement>(null);
-  // Same, for the first-run league picker — see its Escape/scroll-lock/focus effect.
+  // Dialog container for the first-run league picker — see its Escape/scroll-lock/
+  // focus effect. The ratings/news explainers used to need the same treatment;
+  // as of 2026-08-04 they're non-modal inline bars, so they need none of it.
   const leaguePickerRef = useRef<HTMLDivElement>(null);
-  // Escape closes the ratings/news explainer warnings, matching their existing
-  // backdrop-tap dismissal and the rest of the app's modals (GameDetailModal,
-  // VideoModal, WorldCupGroupsModal all close on Escape). This effect also seats
-  // focus into the open dialog and locks body scroll while it's up — the same
-  // treatment those other modals already get.
-  useEffect(() => {
-    if (!showRatingsExplainer && !showNewsExplainer) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setShowRatingsExplainer(false);
-        setShowNewsExplainer(false);
-        return;
-      }
-      // Trap Tab within the open dialog (WCAG 2.4.3) — mirror GameDetailModal /
-      // SettingsPanel. aria-modal="true" only marks the page behind inert to
-      // assistive tech; it does NOT stop a sighted keyboard user Tabbing out of
-      // the overlay into the content behind it. Wrap focus at the first/last
-      // focusable control so Tab / Shift+Tab cycle inside the dialog until
-      // Escape or a button dismisses it. Focusables are queried live so any
-      // disabled/hidden control is excluded (offsetParent filters display:none).
-      if (e.key !== "Tab") return;
-      const dialog = (showRatingsExplainer ? ratingsExplainerRef : newsExplainerRef).current;
-      if (!dialog) return;
-      const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>(
-          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => el.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (e.shiftKey) {
-        if (active === first || active === dialog) { e.preventDefault(); last.focus(); }
-      } else if (active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    // Lock body scroll while the explainer is open, matching every other modal
-    // in the app (GameDetailModal / VideoModal / SettingsPanel / WorldCupGroupsModal).
-    // These two confirm dialogs fire mid-session — the feed is usually already
-    // scrolled when you toggle ratings or open news — so the background scrolling
-    // behind the dialog was the most visible gap. Plain overflow:hidden doesn't
-    // reliably stop iOS WebKit scrolling the feed behind the overlay; pinning the
-    // body with position:fixed + a negative top does, and restoring it returns
-    // you exactly where you were (the dialog root is position:fixed, so pinning
-    // the body underneath doesn't move it).
-    const scrollY = window.scrollY;
-    const body = document.body;
-    const prevBody = {
-      overflow: body.style.overflow,
-      position: body.style.position,
-      top: body.style.top,
-      width: body.style.width,
-    };
-    body.style.overflow = "hidden";
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.width = "100%";
-    // Focus management (WCAG 2.4.3): move focus into the open dialog so keyboard
-    // and screen-reader users land inside the overlay instead of being stranded
-    // on the tab/toggle behind it, and restore focus to the opener on close.
-    // These dialogs already declare role="dialog" + aria-modal + aria-labelledby
-    // but never seated focus — the gap GameDetailModal / SettingsPanel already
-    // close. Focus the CONTAINER (tabIndex=-1) so no ring shows for mouse users;
-    // the first Tab then reaches the Cancel button.
-    const opener = document.activeElement as HTMLElement | null;
-    (showRatingsExplainer ? ratingsExplainerRef : newsExplainerRef).current?.focus();
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      body.style.overflow = prevBody.overflow;
-      body.style.position = prevBody.position;
-      body.style.top = prevBody.top;
-      body.style.width = prevBody.width;
-      window.scrollTo(0, scrollY);
-      opener?.focus?.();
-    };
-  }, [showRatingsExplainer, showNewsExplainer]);
   // First-run league picker (shown once, only on a brand-new install — see the
   // mount effect). pickerSel is the ordered set of chosen leagues (max 3, mapped
   // to slots 1/2/3 on confirm); firstRunRef captures "no stored prefs" at mount
@@ -1035,41 +956,23 @@ export default function HomeContent({
     }
     if (mode === "scores-rated") {
       if (showNews) setShowNews(false);
-      if (!prefs.showRatings && !prefs.skipExplainer) {
-        // First time only: show the explainer AND mark it seen now, so it
-        // never reappears regardless of the "don't show again" checkbox
-        // (Jacob 5/30 — popup should fire exactly once). Ratings flip on
-        // when the explainer confirms.
-        updatePrefs({ showNews: false, skipExplainer: true });
-        setShowRatingsExplainer(true);
-      } else {
-        updatePrefs({ showNews: false, showRatings: true });
-      }
+      // The tab always takes effect immediately. Until 2026-08-04 the first
+      // click on Ratings / News opened a blocking confirm dialog instead, so a
+      // brand-new visitor hit three modals in a row (league picker, then these
+      // two) before ever seeing the product work — the drop-off cost of that
+      // was the reason for the change, ahead of the Product Hunt launch. The
+      // explanation still shows, as a dismissible bar above the board, and is
+      // still first-time-only: skipExplainer/skipNewsExplainer are set the
+      // moment the notice appears, so it never fires twice.
+      const firstTime = !prefs.showRatings && !prefs.skipExplainer;
+      updatePrefs({ showNews: false, showRatings: true, skipExplainer: true });
+      if (firstTime) setRatingsNotice(true);
       return;
     }
     // mode === "news"
-    if (prefs.skipNewsExplainer) {
-      setShowNews(true);
-      updatePrefs({ showNews: true });
-    } else {
-      // First time only — mark seen immediately so it never reappears.
-      updatePrefs({ skipNewsExplainer: true });
-      setShowNewsExplainer(true);
-    }
-  };
-
-  // The explainer popups are first-time-only — `skipExplainer`/`skipNewsExplainer`
-  // is set the moment each one is shown (see handleViewModeClick / the news
-  // brancher above), so confirming just flips the corresponding view on.
-  const confirmRatings = () => {
-    setShowRatingsExplainer(false);
-    updatePrefs({ showRatings: true, skipExplainer: true });
-  };
-
-  const confirmNews = () => {
-    setShowNewsExplainer(false);
     setShowNews(true);
     updatePrefs({ showNews: true, skipNewsExplainer: true });
+    if (!prefs.skipNewsExplainer) setNewsNotice(true);
   };
 
   const setNewsThirdLeague = (sport: Sport | undefined) => {
@@ -2189,6 +2092,61 @@ export default function HomeContent({
           the extra leagues load; the layout swaps once, when they arrive
           (Jacob 6/11). The skeleton keys off the viewport (no data yet). */}
       <main id="main-content" tabIndex={-1} className={`${!showNews && (sortedLeagues.length > 3 || (loading && slotCount === 5)) ? "max-w-7xl" : "max-w-6xl"} mx-auto px-4 pt-0 pb-6 flex-1 w-full focus:outline-none`}>
+        {/* First-run explanations for the Ratings and News tabs. These replaced
+            blocking confirm dialogs on 2026-08-04 (see handleViewModeClick):
+            the tab now applies instantly and the reason arrives here, in flow,
+            dismissible — same shape as the World Cup banner below. role="status"
+            (not "alert") announces them to screen readers without stealing
+            focus, which is the whole point of not being a dialog anymore. */}
+        {ratingsNotice && (
+          <div
+            role="status"
+            className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
+          >
+            <p className="text-sm" style={{ color: "var(--text)" }}>
+              <span aria-hidden="true">🙉 </span>
+              <strong>Ratings are on.</strong>{" "}They show how competitive a game is — based on score closeness, not who&apos;s winning — so they can hint at the outcome. Games are also reordered by top records and best matchups.
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+              <span className="font-medium" style={{ color: "var(--text-muted)" }}>SCALE</span>
+              <span><span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-600 text-white mr-1">GREAT</span>down to the wire</span>
+              <span><span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-600 text-white mr-1">GOOD</span>competitive</span>
+              <span><span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-600 text-white mr-1">MEH</span>one-sided</span>
+              <span><span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-700 text-white mr-1">SKIP</span>blowout</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRatingsNotice(false)}
+              aria-label="Dismiss ratings explanation"
+              className="absolute top-1.5 right-2 text-lg leading-none cursor-pointer transition-opacity hover:opacity-70"
+              style={{ color: "var(--text-muted)", background: "none", border: "none" }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+        {newsNotice && (
+          <div
+            role="status"
+            className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid #f59e0b" }}
+          >
+            <p className="text-sm" style={{ color: "var(--text)" }}>
+              <span aria-hidden="true">⚠️ </span>
+              <strong>News is full of spoilers.</strong>{" "}Headlines and images give away results, player performance, and outcomes. That&apos;s why they start blurred — tap one to reveal it, or use the Headlines toggle to un-blur everything.
+            </p>
+            <button
+              type="button"
+              onClick={() => setNewsNotice(false)}
+              aria-label="Dismiss news spoiler warning"
+              className="absolute top-1.5 right-2 text-lg leading-none cursor-pointer transition-opacity hover:opacity-70"
+              style={{ color: "var(--text-muted)", background: "none", border: "none" }}
+            >
+              ×
+            </button>
+          </div>
+        )}
         {/* World Cup hub framing — only on /worldcup. The WC column is already
             auto-pinned to the board below (it's an active firstPref league
             through 07-19), so this banner just sets the context for marketing
@@ -3180,145 +3138,6 @@ export default function HomeContent({
             >
               {favToastCopied ? "Copied!" : "Copy favorites link"}
             </button>
-          </div>
-        </div>
-      )}
-
-      {showRatingsExplainer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowRatingsExplainer(false)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div
-            ref={ratingsExplainerRef}
-            // tabIndex=-1 makes the container programmatically focusable (see the
-            // focus-management effect) without joining the tab order; outline
-            // none suppresses the ring since it's focused only to seat SR focus.
-            tabIndex={-1}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ratings-explainer-title"
-            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-center mb-2">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="warning">
-                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </div>
-            <h3 id="ratings-explainer-title" className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>Show Game Ratings?</h3>
-            {/* Previous wording (finished games only):
-            <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
-              This will reveal how competitive each game was. Ratings are based on how close the game was —<br />not who won — but they can hint at the outcome.
-            </p>
-            */}
-            <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
-              Ratings show how competitive each game is:<br />based on <strong>score closeness</strong>, not who&apos;s winning.<br />They can hint at the outcome.
-            </p>
-            <p className="text-sm mb-3" style={{ color: "var(--text-secondary)" }}>
-              Games will also be reordered by <strong>top records and best matchups</strong>. <em>This is my preferred view!</em>
-            </p>
-            <div className="rounded-lg p-3 mb-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
-              <p className="text-xs font-medium mb-2" style={{ color: "var(--text-muted)" }}>RATING SCALE</p>
-              <div className="flex flex-col gap-1.5 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-600 text-white w-14 text-center">GREAT</span>
-                  <span style={{ color: "var(--text-secondary)" }}>Must-watch — down to the wire</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-600 text-white w-14 text-center">GOOD</span>
-                  <span style={{ color: "var(--text-secondary)" }}>Competitive and entertaining</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-600 text-white w-14 text-center">MEH</span>
-                  <span style={{ color: "var(--text-secondary)" }}>One-sided, but watchable</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-700 text-white w-14 text-center">SKIP</span>
-                  <span style={{ color: "var(--text-secondary)" }}>Blowout — skip unless your team</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowRatingsExplainer(false)}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-card-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => confirmRatings()}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                style={{ background: "var(--accent)", color: "white" }}
-                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
-              >
-                Show Ratings
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showNewsExplainer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowNewsExplainer(false)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div
-            ref={newsExplainerRef}
-            // tabIndex=-1 makes the container programmatically focusable (see the
-            // focus-management effect) without joining the tab order; outline
-            // none suppresses the ring since it's focused only to seat SR focus.
-            tabIndex={-1}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="news-explainer-title"
-            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
-            style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-center mb-2">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="warning">
-                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </div>
-            <h3 id="news-explainer-title" className="font-bold text-base mb-2 text-center" style={{ color: "var(--text)" }}>
-              Warning
-              <br />
-              FULL OF SPOILERS
-            </h3>
-            <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
-              News headlines and images give away game results, player performance, and outcomes.
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowNewsExplainer(false)}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-card-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => confirmNews()}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                style={{ background: "var(--accent)", color: "white" }}
-                onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.filter = "none"; }}
-              >
-                Show News
-              </button>
-            </div>
           </div>
         </div>
       )}
