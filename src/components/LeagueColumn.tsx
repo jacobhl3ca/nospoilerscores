@@ -572,6 +572,12 @@ function formatDateCompact(yyyymmdd: string): string {
   return `${dow} ${md}`;
 }
 
+// Short header forms for league labels too long to sit on one line in a narrow
+// column. Keyed on the exact LEAGUES label; anything absent renders in full.
+const SHORT_LEAGUE_LABELS: Record<string, string> = {
+  "NFL Preseason": "NFL Pre",
+};
+
 export default function LeagueColumn({
   league,
   favoriteTeams,
@@ -607,6 +613,12 @@ export default function LeagueColumn({
   const swapRef = useRef<HTMLDivElement>(null);
   const [condenseExpanded, setCondenseExpanded] = useState(false); // "Show more" in condensed single-column mode
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
+  // A long league name ("NFL Preseason") wraps to two lines in a narrow mobile
+  // column and collides with its own ▾ chevron and the + add-column button
+  // (Jacob 8/4). Reuse the column's existing narrow-width signal so the short
+  // form only appears when space is actually tight — the full name comes back
+  // as soon as the column is wide enough for unabbreviated team names.
+  const headerLabel = (useAbbreviations && SHORT_LEAGUE_LABELS[league.label]) || league.label;
   const [swapOpen, setSwapOpen] = useState(false);
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
   // Capture "now" once at mount so the day-granular "Last played" label below
@@ -1169,7 +1181,10 @@ export default function LeagueColumn({
         // doesn't apply here — condense (singleColumn) keeps just enough
         // padding to clear the sticky background bleed (Jacob screenshot:
         // dead gap above the league title on the phone single-column board).
-        <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}>
+        // pb-3: at pb-2 the first card's top border sat flush against the
+        // subtitle line ("Big Inning · 7:30 PM ET"), so the card read as
+        // clipped by the title block (Jacob 8/4).
+        <div className="league-sticky-top flex flex-col items-center pb-3 sm:pb-4 sticky z-30" style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}>
           <div
             className="flex items-center justify-center"
             style={canDrag ? { cursor: isDragging ? "grabbing" : "grab", touchAction: "pan-y" } : undefined}
@@ -1214,7 +1229,7 @@ export default function LeagueColumn({
                   <div className="flex items-center gap-0.5">
                     {arrowBtn(-1)}
                     <h2 className="text-base sm:text-lg font-bold tracking-wide px-0.5" style={{ color: "var(--text)" }}>
-                      {league.label}
+                      {headerLabel}
                     </h2>
                     {arrowBtn(1)}
                   </div>
@@ -1232,7 +1247,7 @@ export default function LeagueColumn({
                   aria-expanded={swapOpen}
                 >
                   <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
-                    {league.label}
+                    {headerLabel}
                     {/* ▾ switcher affordance (Jacob 6/11). Settings → League
                         columns can hide it; tap-to-switch works either way. */}
                     {showSwapChevron !== false && (
@@ -1328,7 +1343,7 @@ export default function LeagueColumn({
               </div>
             ) : (
               <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-                {league.label}
+                {headerLabel}
               </h2>
             )}
           </div>
