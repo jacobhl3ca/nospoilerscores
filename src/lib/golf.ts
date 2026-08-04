@@ -109,12 +109,20 @@ export function isGolfLive(tournament: GolfTournament): boolean {
   });
 }
 
-// The lowest non-F numeric thru in the top 10 — i.e. the latest group still
-// on the course. Used as the "Q3 4:32"-style live progress indicator.
+// The lowest non-F numeric thru across the WHOLE field — i.e. the latest group
+// still on the course. Used as the "Q3 4:32"-style live progress indicator.
+// Scan every player, not just the top 10: in a two-wave R1/R2 the morning wave
+// finishes and posts low scores that fill the top 10 (all "F"), while the
+// afternoon wave — still mid-round — sits lower on the board, outside it. A
+// top-10-only scan then found no on-course player and returned "", so the card
+// fell back to a bare "Live" instead of the real "Thru N" progress even though
+// isGolfLive (which scans the whole field) had lit the live indicator. Matching
+// its whole-field basis keeps the two in agreement. R3/R4 are unaffected: the
+// field is re-paired by score so the leaders tee off last and ARE the latest
+// groups, so the full scan lands on the same group the top-10 scan did.
 export function getGolfLiveThru(tournament: GolfTournament): string {
-  const top10 = tournament.players.slice(0, 10);
   let lowest: number | null = null;
-  for (const p of top10) {
+  for (const p of tournament.players) {
     if (!p.thru || p.thru === "F") continue;
     const n = parseInt(p.thru, 10);
     // Require a genuinely mid-round hole (0 < n < 18) — the same "on the course"
