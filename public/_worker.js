@@ -101,8 +101,21 @@ const RACE_TOKEN_ALIASES = {
 // permissive on WORD PREFIXES in both directions — "Chicago" must match
 // "Chicagoland Speedway", and "Sonoma" must match "Sonoma Raceway" — but it
 // will not match a different race, which is the whole point.
+// Sessions that happen AT the same circuit, carry the same venue token, and are
+// not the race. Verified 2026-08-04 in production: a Bahrain Grand Prix query
+// matched "Day 1 Highlights | 2026 Bahrain Pre-Season Test 1" — correct
+// channel, correct venue word, correct "highlights" keyword, wrong event
+// entirely. The venue token alone cannot separate these, because the venue IS
+// the same. F1 runs testing and practice at race circuits; NASCAR posts
+// qualifying reels; sprints are their own event and not what the race tile
+// promises. Rejecting one of these hides the button, which is the intended
+// failure direction.
+const NON_RACE_SESSION_RX =
+  /\b(pre[\s-]?season|testing|test \d|practice|fp[123]\b|qualifying|qualifier|shootout|warm[\s-]?up|sprint)\b/i;
+
 function raceTitleMatches(tokens, titleLower) {
   if (tokens.length === 0) return true; // no gate requested → unchanged behaviour
+  if (NON_RACE_SESSION_RX.test(titleLower)) return false;
   const nt = normalizeRaceToken(titleLower);
   const titleWords = nt.split(" ");
   for (const tok of tokens) {
