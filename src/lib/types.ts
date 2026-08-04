@@ -1,4 +1,4 @@
-export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "f1" | "ufc";
+export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "cricket" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess";
 
 export interface Game {
   id: string;
@@ -181,7 +181,10 @@ export interface FightBout {
 }
 
 export interface LeagueEventCard {
-  kind: "f1" | "ufc";
+  // "f1" is the single-event RACE layout (shared by F1/NASCAR/IndyCar), "ufc"
+  // the fight-card layout. "boxing" reuses the fight-card shape; "chess" is a
+  // multi-day tournament, closer to the golf tile than to either.
+  kind: "f1" | "ufc" | "boxing" | "chess";
   title: string;            // "Spanish Grand Prix" / "UFC Fight Night: Kape vs. Horiguchi"
   subtitle?: string;        // circuit + city (F1) / venue city (UFC)
   headline?: string;        // UFC main event "Kape vs. Horiguchi"; F1 leaves null
@@ -195,7 +198,28 @@ export interface LeagueEventCard {
   fights?: FightBout[];
   highlightQuery?: string;  // YouTube search query for post-event highlights
   officialChannel?: string; // preferred YouTube channel for the highlight
+  // Motorsport only — token(s) identifying WHICH race, so the worker can reject
+  // a reel for a different round from the same official channel. See
+  // buildRaceTokens in lib/espn.ts and raceTitleMatches in public/_worker.js.
+  raceTokens?: string[];
+  // Text on the official-channel play button. The race tile is shared by F1,
+  // NASCAR and IndyCar (kind stays "f1" — it's the single-race layout, not the
+  // series), so the button can't hardcode "F1" or a NASCAR race would offer an
+  // "F1" highlight button. Defaults to "F1" when unset.
+  officialLabel?: string;
   eventUrl?: string;        // ESPN event page (external fallback)
+  // Boxing: fight-card poster from boxing-data.com. Boxing sells cards on the
+  // poster, and unlike a score graphic it gives nothing away.
+  posterUrl?: string;
+  // ── Chess (kind: "chess") ──
+  // None of these are spoilers: they describe the FIELD and the FORMAT, never a
+  // result. Deliberately no standings/score field — the whole point is that you
+  // can decide whether a round is worth watching without learning who won it.
+  chessRound?: string;      // "Round 7"
+  chessFormat?: string;     // "10-player round-robin"
+  chessTimeControl?: string;// "25 min + 10 sec / move"
+  chessPlayers?: string[];  // ["Caruana", "Keymer", …] — the draw, not the table
+  chessTier?: number;       // Lichess tier; 5 = marquee, 4 = strong international
 }
 
 export interface LeagueData {

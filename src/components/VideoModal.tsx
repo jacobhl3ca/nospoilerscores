@@ -174,6 +174,20 @@ function strictFallbackChannels(fallbackUrl: string): string[] {
   }
 }
 
+// Motorsport race gate carried the same way (`nss_race=` — see EventCard).
+// Exactly the same failure mode the channel gate above was added for: the
+// official F1/NASCAR/INDYCAR channel uploads every round, so an ungated retry
+// after an embed block would serve a DIFFERENT race from the very same
+// (correct) channel — which the channel gate cannot catch.
+function raceFallbackParam(fallbackUrl: string): string {
+  try {
+    const race = new URL(fallbackUrl).searchParams.get("nss_race");
+    return race ? `&race=${encodeURIComponent(race)}` : "";
+  } catch {
+    return "";
+  }
+}
+
 // Minimal Reddit selftext renderer. Reddit selftext is markdown but we only
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
@@ -1296,6 +1310,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // now walks the SAME allowed channels, strict, in order, and gives up to
       // the "Watch on YouTube" card rather than playing an unvetted upload.
       const strictChannels = strictFallbackChannels(fallbackUrl);
+      const raceParam = raceFallbackParam(fallbackUrl);
       try {
         const excl = encodeURIComponent(failed.join(","));
         let nextId: string | null = null;
@@ -1305,13 +1320,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           // EventCard's UFC chain is sequential).
           for (const channel of strictChannels) {
             const res = await fetch(
-              `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1`
+              `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}`
             );
             const data = res.ok ? await res.json() : null;
             if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
           }
         } else {
-          const res = await fetch(`${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}`);
+          const res = await fetch(`${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}${raceParam}`);
           const data = res.ok ? await res.json() : null;
           if (data?.videoId && data.videoId !== currentId) nextId = data.videoId;
         }

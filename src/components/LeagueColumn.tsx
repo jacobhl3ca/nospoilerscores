@@ -120,6 +120,21 @@ function shortenPlayoffLabel(headline: string): string {
 interface SubtitleResult {
   tiers: string[];
   href?: string;
+  // Green pulsing-dot treatment. Kept explicit rather than inferred from
+  // `href`, so a subtitle can link somewhere without claiming to be live.
+  live?: boolean;
+}
+
+const TRADE_BOARD_URL = "https://trades.hidescore.com";
+
+// The header subtitle is a single line that already reserves its height even
+// when empty (a transparent nbsp), so column headers stay aligned. Big Inning
+// and the playoff countdown own that line whenever they have something to say;
+// the trade board only fills it the rest of the time. Nothing moves, and no
+// second row is added.
+function tradeBoardSubtitle(sport: Sport): SubtitleResult | null {
+  if (sport !== "mlb") return null;
+  return { tiers: ["Trade Board", "Trades"], href: TRADE_BOARD_URL };
 }
 
 // Tennis round wording for the italic header subtitle (parallels golf's
@@ -292,6 +307,7 @@ function getPlayoffSubtitle(
         // lives) instead of the browser, falling back to the web URL if the
         // MLB app isn't installed. On the web this stays the plain https link.
         href: entry.selectionUrl ?? "https://www.mlb.com/tv",
+        live: true,
       };
     }
     // Past the 3h air window today: show ended, hide the subtitle entirely.
@@ -390,7 +406,9 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
     return () => clearInterval(id);
   }, [needsBigInningTick]);
 
-  const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
+  const result =
+    getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule) ??
+    tradeBoardSubtitle(sport);
   const tiers = result?.tiers ?? [];
   const href = result?.href;
   const tiersKey = tiers.join("|");
@@ -441,10 +459,10 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tiersKey]);
 
-  // Within PlayoffSubtitle, `href` is only set when Big Inning is live \u2014
-  // safe trigger for the "green & clickable" live treatment that mirrors
-  // the GameCard live-progress indicator.
-  const isLive = !!href && tiers.length > 0;
+  // The "green & clickable" treatment that mirrors the GameCard live-progress
+  // indicator. Only Big Inning sets `live`; the trade board links from the same
+  // slot without borrowing the live styling.
+  const isLive = !!result?.live && tiers.length > 0;
   const baseCls = "text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5";
   const liveCls = `${baseCls} text-green-500 font-medium hover:text-green-400 transition-colors hover:underline`;
   const linkCls = `${baseCls} italic hover:underline transition-colors`;
@@ -588,6 +606,12 @@ function formatDateCompact(yyyymmdd: string): string {
   return `${dow} ${md}`;
 }
 
+// Short header forms for league labels too long to sit on one line in a narrow
+// column. Keyed on the exact LEAGUES label; anything absent renders in full.
+const SHORT_LEAGUE_LABELS: Record<string, string> = {
+  "NFL Preseason": "NFL Pre",
+};
+
 export default function LeagueColumn({
   league,
   favoriteTeams,
@@ -623,6 +647,12 @@ export default function LeagueColumn({
   const swapRef = useRef<HTMLDivElement>(null);
   const [condenseExpanded, setCondenseExpanded] = useState(false); // "Show more" in condensed single-column mode
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
+  // A long league name ("NFL Preseason") wraps to two lines in a narrow mobile
+  // column and collides with its own ▾ chevron and the + add-column button
+  // (Jacob 8/4). Reuse the column's existing narrow-width signal so the short
+  // form only appears when space is actually tight — the full name comes back
+  // as soon as the column is wide enough for unabbreviated team names.
+  const headerLabel = (useAbbreviations && SHORT_LEAGUE_LABELS[league.label]) || league.label;
   const [swapOpen, setSwapOpen] = useState(false);
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
   // Capture "now" once at mount so the day-granular "Last played" label below
@@ -928,7 +958,10 @@ export default function LeagueColumn({
   // right. Grabbing the second segment for soccer would read DRAWS as losses
   // and mis-flag a winning side (e.g. 8W-9D-4L → 8 vs 9 → "not winning"),
   // demoting a genuinely strong upcoming matchup in the top-matchups sort.
-  const SOCCER_SPORTS = new Set<Sport>(["fifa", "epl", "mls", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1"]);
+  const SOCCER_SPORTS = new Set<Sport>([
+    "fifa", "epl", "mls", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
+    "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
+  ]);
   const getLosses = (record: string): number => {
     const parts = record.split("-");
     if (SOCCER_SPORTS.has(league.sport) && parts.length === 3) {
@@ -1206,7 +1239,10 @@ export default function LeagueColumn({
         // doesn't apply here — condense (singleColumn) keeps just enough
         // padding to clear the sticky background bleed (Jacob screenshot:
         // dead gap above the league title on the phone single-column board).
-        <div className="league-sticky-top flex flex-col items-center pb-2 sm:pb-3 sticky z-30" style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}>
+        // pb-3: at pb-2 the first card's top border sat flush against the
+        // subtitle line ("Big Inning · 7:30 PM ET"), so the card read as
+        // clipped by the title block (Jacob 8/4).
+        <div className="league-sticky-top flex flex-col items-center pb-3 sm:pb-4 sticky z-30" style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}>
           <div
             className="flex items-center justify-center"
             style={canDrag ? { cursor: isDragging ? "grabbing" : "grab", touchAction: "pan-y" } : undefined}
@@ -1251,7 +1287,7 @@ export default function LeagueColumn({
                   <div className="flex items-center gap-0.5">
                     {arrowBtn(-1)}
                     <h2 className="text-base sm:text-lg font-bold tracking-wide px-0.5" style={{ color: "var(--text)" }}>
-                      {league.label}
+                      {headerLabel}
                     </h2>
                     {arrowBtn(1)}
                   </div>
@@ -1259,26 +1295,17 @@ export default function LeagueColumn({
               })()
             ) : isSwappable ? (
               <div ref={swapRef} className="relative">
-                {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern),
-                    not the reverse: a <button>'s content model is phrasing
-                    content, so an <h2> nested inside it is invalid HTML and
-                    assistive tech may drop the heading role. This keeps the
-                    swappable title a real <h2> — matching the arrows and
-                    non-swappable branches — while the button stays the
-                    interactive trigger. The button inherits the heading's font
-                    + color and carries the flex layout for the chevron, so it
-                    renders pixel-for-pixel unchanged. Mirrors NewsColumn's
-                    swappable header, which already fixed this same pattern. */}
-                <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-                  <button
-                    type="button"
-                    onClick={() => setSwapOpen(!swapOpen)}
-                    className="cursor-pointer transition-colors hover:opacity-80 inline-flex items-center gap-1"
-                    title="Switch league"
-                    aria-haspopup="dialog"
-                    aria-expanded={swapOpen}
-                  >
-                    {league.label}
+                <button
+                  type="button"
+                  onClick={() => setSwapOpen(!swapOpen)}
+                  className="cursor-pointer transition-colors hover:opacity-80"
+                  style={{ color: "var(--text)" }}
+                  title="Switch league"
+                  aria-haspopup="dialog"
+                  aria-expanded={swapOpen}
+                >
+                  <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
+                    {headerLabel}
                     {/* ▾ switcher affordance (Jacob 6/11). Settings → League
                         columns can hide it; tap-to-switch works either way. */}
                     {showSwapChevron !== false && (
@@ -1374,7 +1401,7 @@ export default function LeagueColumn({
               </div>
             ) : (
               <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
-                {league.label}
+                {headerLabel}
               </h2>
             )}
           </div>

@@ -930,7 +930,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start gap-1.5">
-            <div className="flex flex-col gap-0.5 text-[10px] sm:text-xs leading-tight">
+            {/* Match the team-name size (text-xs sm:text-sm) rather than the
+                muted-metadata size — at 10px these were small and hard to hit
+                on a phone even though every row is a tappable watch link
+                (Jacob 8/4). gap-1 keeps the rows from merging into one target. */}
+            <div className="flex flex-col gap-1 text-xs sm:text-sm leading-tight">
               {game.broadcasts.map((b) => {
                 const isPrime = /\b(amazon|prime)\b/i.test(b);
                 const isEspn = /\b(espn|abc)\b/i.test(b);

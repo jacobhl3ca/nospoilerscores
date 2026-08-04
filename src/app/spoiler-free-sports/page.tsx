@@ -143,6 +143,13 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/nhl-scores-without-spoilers" className="underline underline-offset-2">
             NHL
           </Link>
+          {/* Cricket shipped 2026-08-03 as a sitemap-only page with ZERO inbound
+              internal links — an orphan, which crawlers reach late and rank
+              poorly. Liga MX got its link from the soccer page; this is
+              cricket's. Any new per-league landing page needs one of these. */}
+          <Link href="/cricket-highlights-without-spoilers" className="underline underline-offset-2">
+            Cricket
+          </Link>
           <Link href="/today" className="underline underline-offset-2">
             Today
           </Link>

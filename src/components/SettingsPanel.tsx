@@ -134,8 +134,20 @@ const SPORT_LABEL: Record<Sport, string> = {
   seriea: "Serie A",
   bundesliga: "Bundesliga",
   ligue1: "Ligue 1",
+  ligamx: "Liga MX",
+  nwsl: "NWSL",
+  efl: "Championship",
+  libertadores: "Libertadores",
+  euro: "Euro",
+  afcon: "AFCON",
+  saudi: "Saudi PL",
+  cricket: "IPL",
   f1: "F1",
+  nascar: "NASCAR",
+  indycar: "IndyCar",
   ufc: "UFC",
+  boxing: "Boxing",
+  chess: "Chess",
 };
 
 function teamSportFromId(id: string): Sport | null {

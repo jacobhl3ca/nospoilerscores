@@ -119,15 +119,20 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
   // nothing strict matches, the openExternal fallback below sends the user to
   // a YouTube search OUTSIDE the app instead of playing an unvetted upload in
   // the masked player.
-  const play = async (id: string, query: string, channel?: string, strict?: boolean) => {
+  const play = async (id: string, query: string, channel?: string, strict?: boolean, raceTokens?: string[]) => {
     // nss_channels/nss_strict ride along so VideoModal's embed-failure retry
     // keeps THIS call's channel gate. FOM blocks the FORMULA 1 embed often, and
     // an ungated retry is what put a fan reupload in the masked player (7/19);
     // YouTube ignores the extra params, so the string is still a valid search
     // URL for the external hand-off below.
-    const gate = strict && channel
+    const gate = (strict && channel
       ? `&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`
-      : "";
+      : "")
+      // nss_race rides along for the same reason nss_channels does: VideoModal's
+      // embed-failure retry must keep THIS call's race gate, or an FOM embed
+      // block on the F1 reel would retry ungated and put a different round's
+      // race in the masked player.
+      + (raceTokens?.length ? `&nss_race=${encodeURIComponent(raceTokens.join("|"))}` : "");
     const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${gate}`;
     // Route the YouTube-search fallback through openExternal (not raw
     // window.open) so it behaves like every other external YouTube open in the
@@ -138,18 +143,10 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     // missing the handoff — matching GameHighlights' openExternal fallbacks.
     if (!onPlayHighlight) { openExternal(fallback); return; }
     setLoadingId(id);
-    // try/finally so a throw from fetchFirstVideoId can't strand the F1 button
-    // disabled on "Loading…" forever — mirrors the guard playUfc already uses.
-    // fetchFirstVideoId catches internally today (so it can't reject now), but
-    // the sibling UFC path is wrapped and this one wasn't; match it so a future
-    // refactor that lets the lookup reject can't wedge the button's loading state.
-    try {
-      const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, strict);
-      if (videoId) onPlayHighlight(videoId, fallback);
-      else openExternal(fallback);
-    } finally {
-      setLoadingId(null);
-    }
+    const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, strict, raceTokens);
+    setLoadingId(null);
+    if (videoId) onPlayHighlight(videoId, fallback);
+    else openExternal(fallback);
   };
 
   // UFC: walk the rights-holder channels in coverage order, each strict
@@ -551,19 +548,17 @@ export default function EventCard({
     );
   }
 
-  // Guard the fall-through on the discriminant. LeagueEventCard is a flat
-  // interface (kind: "f1" | "ufc" with fights?: optional), so a UFC event whose
-  // bout card hasn't populated — ESPN can return an announced fight night before
-  // its competitions are set, leaving { kind: "ufc", fights: [] } (see the UFC
-  // builder in espn.ts, which returns unconditionally) — slips past the UFC
-  // guard above and would render below as an F1 race tile: the 🏁 glyph, a
-  // "race details on ESPN" affordance, and an "F1" button hitting the FORMULA 1
-  // channel with officialChannel "UFC". Only a real F1 event should reach the
-  // race render; an empty UFC card renders nothing, matching how the app hides
-  // other empty states rather than showing the wrong sport.
-  if (event.kind !== "f1") return null;
-
-  // ── F1: single race tile ──
+  // ── Single-event tile — races (F1/NASCAR/IndyCar), boxing cards, chess ──
+  // One layout, three glyphs. Boxing and chess reuse the race tile because the
+  // shape is identical (one headline event, a venue subtitle, a status) and it
+  // is already height-matched to an MLB card at every breakpoint; a bespoke
+  // layout would drift out of alignment the first time either was touched.
+  const isRace = event.kind === "f1";
+  const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : "🏁";
+  // What the tile body links to, and what to call it. Chess points at the
+  // Lichess broadcast (a live BOARD, not a results table); boxing has no
+  // per-event page worth linking, so its tile is inert.
+  const detailNoun = event.kind === "chess" ? "Follow live on Lichess" : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
@@ -588,8 +583,8 @@ export default function EventCard({
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(); } } : undefined}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `${event.title} — race details on ESPN` : undefined}
-      title={clickable ? "Race details on ESPN" : undefined}>
+      aria-label={clickable ? `${event.title} — ${detailNoun}` : undefined}
+      title={clickable ? detailNoun : undefined}>
       {/* Meta row — game-meta-row like FightCard/GameCard, so an F1 tile is the
           SAME height as an MLB card: status/time left, broadcast right (dropped
           when the column is too narrow, same metaCompact rule as UFC). An
@@ -615,7 +610,7 @@ export default function EventCard({
             these rows' 16px mobile logo slot + leading-none text would collapse
             shorter, drifting the column heights apart as cards stack. */}
         <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
-          <span aria-hidden className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">🏁</span>
+          <span aria-hidden className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
           <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={event.title}>{event.title}</span>
         </div>
         {event.subtitle && (
@@ -631,9 +626,20 @@ export default function EventCard({
           most of its uploads, so when nothing strict/playable matches, the
           fallback opens a YouTube search externally rather than playing some
           random reupload in the masked player. */}
-      {isPost && (
+      {/* Racing ONLY. Boxing and chess deliberately ship with no highlight
+          button, on the same rule the new soccer leagues were just held to: a
+          button goes in once its official channel has been verified end-to-end,
+          not before. Boxing highlights are split across DAZN / Top Rank /
+          Matchroom / PBC with no single reliable uploader, and chess has no
+          highlight reel at all — its "highlight" is the live board, which the
+          tile already links to. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts for
+          the same call on cricket. */}
+      {isPost && isRace && (
         <div className="mt-1 sm:mt-2 flex gap-1">
-          <PlayBtn label="F1" loading={loadingId === "f1-official"} onClick={() => play("f1-official", f1Query, event.officialChannel, true)} />
+          {/* Label follows the series, not the tile: this same race layout also
+              renders NASCAR and IndyCar, which would otherwise both offer an
+              "F1" highlight button. Falls back to "F1" for older cards. */}
+          <PlayBtn label={event.officialLabel ?? "F1"} loading={loadingId === "f1-official"} onClick={() => play("f1-official", f1Query, event.officialChannel, true, event.raceTokens)} />
         </div>
       )}
     </div>
