@@ -578,7 +578,7 @@ function formatDateCompact(yyyymmdd: string): string {
   const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffDays = Math.round((startDate.getTime() - startToday.getTime()) / 86400000);
   if (diffDays === 1) return "Tomorrow";
-  const md = `${parseInt(m)}/${parseInt(d)}`;
+  const md = `${parseInt(m, 10)}/${parseInt(d, 10)}`;
   // A weekday name only reads unambiguously within a week ("Thursday" 9 days out
   // could be either Thursday). 7+ days out, show just the date — the card bolds
   // the first token, so a far game reads "7/16 - 7:30 PM" instead of a vague
