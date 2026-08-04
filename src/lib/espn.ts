@@ -1783,6 +1783,25 @@ function espnToMlbAbbrev(espnAbbrev: string): string {
   return ESPN_TO_MLB_ABBREV[espnAbbrev] || espnAbbrev;
 }
 
+// NHL team abbreviation mapping: ESPN → NHL public API (api-web.nhle.com).
+// Most codes match, but ESPN uses 2-char abbreviations for a few teams where
+// NHL's own API uses its canonical 3-char form (ESPN "TB" vs NHL "TBL", etc.).
+// The nhl.com/tv deep-link lookup below keys an ESPN abbreviation against the
+// NHL-abbrev map from fetchNHLGameIds, so without translating, those teams
+// silently miss and keep the generic espn.com/watch fallback — the same
+// ESPN-vs-league divergence ESPN_TO_MLB_ABBREV handles for MLB, and the reason
+// enrichNhlVideos matches on displayName instead of abbreviation.
+const ESPN_TO_NHL_ABBREV: Record<string, string> = {
+  TB: "TBL",
+  SJ: "SJS",
+  LA: "LAK",
+  NJ: "NJD",
+};
+
+function espnToNhlAbbrev(espnAbbrev: string): string {
+  return ESPN_TO_NHL_ABBREV[espnAbbrev] || espnAbbrev;
+}
+
 // Map ESPN country codes (from flag URLs) to display names
 const COUNTRY_NAMES: Record<string, string> = {
   usa: "United States", can: "Canada", mex: "Mexico",
@@ -2574,7 +2593,13 @@ export async function fetchGames(
     const nhlIds = await nhlIdsPromise;
     for (const game of games) {
       if (game.streamUrl !== "https://www.espn.com/watch/") continue;
-      const nhlId = nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`);
+      // Try the raw ESPN abbreviations first (most teams' codes match NHL's),
+      // then the ESPN→NHL translation for the handful that diverge (TB→TBL, …).
+      // A matchup key is unique per date, so the fallback can only ADD a match,
+      // never replace a correct one — teams already resolving stay unchanged.
+      const nhlId =
+        nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`) ??
+        nhlIds.get(`${espnToNhlAbbrev(game.awayTeam.abbreviation)}@${espnToNhlAbbrev(game.homeTeam.abbreviation)}`);
       if (nhlId) game.streamUrl = `https://www.nhl.com/tv/${nhlId}`;
     }
   }
