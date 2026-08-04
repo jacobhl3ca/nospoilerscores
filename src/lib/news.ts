@@ -354,9 +354,10 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
 };
 
 // Cascade of news cards for a league column. The stable smart order is:
-//   highlights video → Reddit → ESPN headlines.
-// A playable visual lead keeps every Cards column aligned; Reddit remains the
-// freshest discussion layer and ESPN closes as the reliable catch-all. The
+//   Reddit → highlights video → ESPN headlines.
+// Reddit's community discussion leads every column (Jacob 7/16, matching the
+// per-push order below and GENERIC_CASCADE); the playable highlight video keeps
+// the Cards columns aligned and ESPN closes as the reliable catch-all. The
 // official-site feeds (MLB.com Most Popular / NBA.com) and the BBC / Guardian
 // editorial substitutes were dropped here: the .com feeds duplicated ESPN
 // coverage and the substitutes went unused. PREBAKED_FEEDS is still exported /
