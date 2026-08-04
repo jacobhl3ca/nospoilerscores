@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // Minimal inline feedback line that lives inside the footer. Submits on Enter
 // or via the send button straight to the same Formspree endpoint the
@@ -30,6 +30,22 @@ export default function FeedbackBox() {
     setEmail("");
     setOpen(false);
   };
+
+  // Escape closes from anywhere in the dialog, not just the two inputs — the
+  // backdrop and the send button are focusable targets too, and a modal that
+  // only listens on its text fields traps a keyboard user who tabbed past them.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,15 +111,13 @@ export default function FeedbackBox() {
         </div>
       ) : (
         <>
-          {/* The trigger stays in the row, unchanged in width, while the form
-              itself floats above it. Two stacked fields no longer fit inline:
-              the old single w-36 input did, but message + email + send at a
-              usable width blew the one-line footer past 390px and clipped
-              "About" and "App Store" off both edges on a phone. Same escape
-              hatch the About disclosure next door uses — absolute, anchored to
-              the row (this wrapper is deliberately NOT `relative`, so the panel
-              centers on the whole row rather than on the little trigger and
-              can't hang off-screen). */}
+          {/* The trigger stays in the footer row; the form is a CENTERED MODAL
+              rather than a panel floating above the row (Jacob 8/4). Anchored
+              to the footer it collided with the scroll-to-top FAB in the same
+              corner, and at 22rem it was cramped enough that the fields read as
+              an afterthought. Fixed + centered also means it can never hang
+              off-screen on a narrow phone, which the absolute version had to
+              work around. */}
           <button
             type="button"
             onClick={close}
@@ -114,17 +128,42 @@ export default function FeedbackBox() {
           >
             Feedback
           </button>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.6)" }}
+            // Backdrop click closes. The check keeps a click that started
+            // inside the form (e.g. a drag-select that ended on the backdrop)
+            // from dismissing a half-typed message.
+            onClick={(e) => { if (e.target === e.currentTarget) close(); }}
+          >
           <form
             id="hs-feedback-form"
             onSubmit={submit}
-            className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-20 w-[min(22rem,92vw)] flex flex-col items-stretch gap-1 text-left rounded-lg p-2 shadow-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="hs-feedback-title"
+            className="w-[min(26rem,100%)] max-h-[90vh] overflow-y-auto flex flex-col items-stretch gap-2 text-left rounded-xl p-4 shadow-2xl"
             // --bg, not --bg-card: in dark mode --bg-card is
-            // rgba(255,255,255,0.05), i.e. all but transparent. A floating
-            // panel filled with it let the announcement paragraph underneath
+            // rgba(255,255,255,0.05), i.e. all but transparent — the page would
             // read straight through the fields. --bg is the only opaque
-            // surface token, and the border + shadow still lift it off the page.
+            // surface token.
             style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
           >
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="hs-feedback-title" className="text-sm font-bold" style={{ color: "var(--text)" }}>
+              Send feedback
+            </h2>
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close feedback"
+              title="Close"
+              className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-sm leading-none cursor-pointer transition-opacity hover:opacity-70"
+              style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
+            >
+              ×
+            </button>
+          </div>
           <label htmlFor="hs-feedback-input" className="sr-only">Feedback</label>
           <input
             id="hs-feedback-input"
@@ -150,7 +189,7 @@ export default function FeedbackBox() {
             // a team-name filter). No behavior change on desktop.
             enterKeyHint="send"
             autoComplete="off"
-            className="w-full text-xs px-2 py-1 leading-none rounded outline-none"
+            className="w-full text-sm px-3 py-2 rounded outline-none"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />
           <div className="flex items-center gap-1.5">
@@ -182,7 +221,7 @@ export default function FeedbackBox() {
               // the spoken state tracks the visual one exactly (WCAG 4.1.2).
               aria-invalid={emailLooksWrong || undefined}
               aria-describedby={emailLooksWrong ? "hs-feedback-email-hint" : undefined}
-              className="flex-1 w-0 text-xs px-2 py-1 leading-none rounded outline-none"
+              className="flex-1 w-0 text-sm px-3 py-2 rounded outline-none"
               style={{
                 background: "var(--bg-card-hover)",
                 color: "var(--text)",
@@ -197,9 +236,9 @@ export default function FeedbackBox() {
               aria-label="Send feedback"
               title="Send feedback"
               className="shrink-0 flex items-center justify-center rounded-full transition-opacity enabled:hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ width: 18, height: 18, background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
+              style={{ width: 32, height: 32, background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
             >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 19V5" />
                 <path d="m5 12 7-7 7 7" />
               </svg>
@@ -208,11 +247,12 @@ export default function FeedbackBox() {
           {emailLooksWrong && (
             // Advisory only — the send button stays enabled and the message
             // still goes through, just without a reply address attached.
-            <span id="hs-feedback-email-hint" className="text-[10px] leading-tight" style={{ color: "var(--text-muted)" }}>
+            <span id="hs-feedback-email-hint" className="text-xs leading-tight" style={{ color: "var(--text-muted)" }}>
               That doesn&apos;t look like an email — the note will send without it.
             </span>
           )}
           </form>
+          </div>
         </>
       )}
     </div>
