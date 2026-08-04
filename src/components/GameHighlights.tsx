@@ -6,7 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, hasNoTrustedHighlightSource, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
@@ -19,13 +19,23 @@ const highlightBufferHours: Record<string, number> = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, mlb: 5,
   nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
   laliga: 3, seriea: 3, bundesliga: 3, ligue1: 3,
+  // Second-wave soccer: same 3-hour post-match buffer as every other 90-minute
+  // league. Liga MX and Libertadores skew to late-night ET kickoffs, but the
+  // buffer is measured from kickoff, not wall clock, so 3 still holds.
+  ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, euro: 3, afcon: 3, saudi: 3,
+  // Cricket: 7 hours, and it is NOT a padded soccer number. The buffer counts
+  // from the scheduled START, and a T20 runs ~3h20m of play before the innings
+  // break and presentation — so an official highlight package doesn't exist
+  // until roughly four hours in even on a fast turnaround. A 3-hour buffer would
+  // surface the button while the second innings is still being bowled.
+  cricket: 7,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
 // quarters in 2015-16), so a finished regulation game reports period 4. A value
 // of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
 // 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, golf: 4, tennis: 3 };
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 3 };
 
 // Shared highlight buttons for a finished game — the official-channel + top-
 // search YouTube clips, plus official league-site recap / condensed videos
@@ -134,7 +144,14 @@ export default function GameHighlights({
   // teams meet across many competitions (World Cup only — see getCompetitionName).
   // null for every other league, so their query + behaviour are unchanged.
   const competition = getCompetitionName(game.sport);
-  const highlightUrl = highlightsReady
+  // Leagues with no trustworthy uploader (IPL / EURO — see
+  // hasNoTrustedHighlightSource) get NO highlight URL at all. highlightUrl is
+  // what gates the prefetch effect AND is the modal's fallback link, so nulling
+  // it here is the single point that keeps both highlight buttons off the card:
+  // without it the no-official-channel branch would run an unscoped search and
+  // hand the user a fan re-upload.
+  const noTrustedSource = hasNoTrustedHighlightSource(game.sport);
+  const highlightUrl = highlightsReady && !noTrustedSource
     ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, competition)
     : null;
 

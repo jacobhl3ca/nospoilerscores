@@ -32,11 +32,36 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   seriea: "/soccer/ita.1",
   bundesliga: "/soccer/ger.1",
   ligue1: "/soccer/fra.1",
+  // Second wave — same league-base + /news pattern (scoreboard path minus
+  // /scoreboard). Without an entry here fetchLeagueNews() bails and the
+  // column's ESPN card comes back permanently empty.
+  ligamx: "/soccer/mex.1",
+  nwsl: "/soccer/usa.nwsl",
+  efl: "/soccer/eng.2",
+  libertadores: "/soccer/conmebol.libertadores",
+  euro: "/soccer/uefa.euro",
+  afcon: "/soccer/caf.nations",
+  saudi: "/soccer/ksa.1",
+  // Cricket: same league-base + /news shape. Note this feed is ESPNcricinfo's
+  // GENERAL cricket wire, not IPL-only — it carries county / Hundred / Test
+  // headlines too. That's still the right feed (it's the only one ESPN serves
+  // for the sport) and it's the same tradeoff tennis already makes by routing
+  // through the ATP feed.
+  cricket: "/cricket/8048",
   // Racing/combat leagues share ESPN's league-base + /news pattern (the path is
   // the scoreboard path minus /scoreboard — see espn.ts). Without these, the
   // "ESPN F1"/"ESPN UFC" cards that leagueSourceCascade() builds for every sport
   // always came back empty, since fetchLeagueNews() bails on a missing path.
   f1: "/racing/f1",
+  // IndyCar's feed works (6 articles on 2026-08-03). NASCAR's is mapped to the
+  // correct path but ESPN currently returns ZERO articles for it — every
+  // nascar-* slug does, while the sibling f1 and irl feeds populate normally.
+  // That reads as ESPN no longer producing NASCAR editorial (they haven't held
+  // the rights in years), not a wrong path. Left wired anyway: it costs nothing,
+  // it self-heals if ESPN ever backfills, and the NASCAR column's real payload
+  // is the race tile, not the news card.
+  indycar: "/racing/irl",
+  nascar: "/racing/nascar-premier",
   ufc: "/mma/ufc",
 };
 
@@ -225,8 +250,31 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   bundesliga: "https://a.espncdn.com/i/leaguelogos/soccer/500/10.png",
   seriea: "https://a.espncdn.com/i/leaguelogos/soccer/500/12.png",
   ligue1: "https://a.espncdn.com/i/leaguelogos/soccer/500/9.png",
+  // Second-wave league ids, read the same way — straight off each scoreboard's
+  // `leagues[0].logos[0].href` on 2026-08-03: Liga MX 22, EFL Championship 24,
+  // Libertadores 58, Euro 74, AFCON 76, NWSL 2323, Saudi Pro League 2488.
+  ligamx: "https://a.espncdn.com/i/leaguelogos/soccer/500/22.png",
+  efl: "https://a.espncdn.com/i/leaguelogos/soccer/500/24.png",
+  libertadores: "https://a.espncdn.com/i/leaguelogos/soccer/500/58.png",
+  euro: "https://a.espncdn.com/i/leaguelogos/soccer/500/74.png",
+  afcon: "https://a.espncdn.com/i/leaguelogos/soccer/500/76.png",
+  nwsl: "https://a.espncdn.com/i/leaguelogos/soccer/500/2323.png",
+  saudi: "https://a.espncdn.com/i/leaguelogos/soccer/500/2488.png",
+  // Cricket keys its league logos by series id under its own /cricket/ path
+  // (8048 = IPL), not the /soccer/ path. Verified 200 on 2026-08-03.
+  cricket: "https://a.espncdn.com/i/leaguelogos/cricket/500/8048.png",
+  // Racing has no entry in the `teamlogos/leagues` set (nascar/indycar/irl all
+  // 404 there). NASCAR does have one in ESPN's redesign sport-icon set; IndyCar
+  // has neither, so it falls back to Wikimedia exactly like NCAAM and tennis
+  // already do. Both verified 200 image/png on 2026-08-03.
+  nascar: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-nascar.png",
+  indycar: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/INDYCAR_textlogo.svg/250px-INDYCAR_textlogo.svg.png",
   f1:"https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/f1.png&w=40&h=40&transparent=true",
   ufc: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
+  // ESPN publishes no league logo for either (it does not carry the sports),
+  // so these fall back to its generic sport glyphs rather than 404ing.
+  boxing: "https://a.espncdn.com/i/espn/networks_shows/500/boxing.png&w=40&h=40&transparent=true",
+  chess: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
 };
 
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds
@@ -278,9 +326,21 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   uel: { key: "reddit-uel", label: "r/EuropaLeague" },
   fifa: { key: "reddit-fifa", label: "r/worldcup" },
   ncaaf: { key: "reddit-ncaaf", label: "r/CFB" },
+  // r/Cricket added 2026-08-03. It is the general cricket sub (county, the
+  // Hundred, Tests, internationals), which matches our ESPN cricket wire —
+  // deliberately not an IPL-only sub. One more feed costs one more 45s gate
+  // slot in the reddit bake; see the batch/cooldown notes in prebake-news.mjs.
+  cricket: { key: "reddit-cricket", label: "r/Cricket" },
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
   f1: { key: "reddit-f1", label: "r/formula1" },
+  // NWSL + the two US racing series added 2026-08-04, same 45s-per-feed cost
+  // as cricket. NWSL gets its own sub rather than the r/soccer firehose for
+  // the reason spelled out in SOCCER_REDDIT_FIREHOSE below. NASCAR and IndyCar
+  // had no discussion layer at all — ESPN's racing wire is their only card.
+  nwsl: { key: "reddit-nwsl", label: "r/NWSL" },
+  nascar: { key: "reddit-nascar", label: "r/NASCAR" },
+  indycar: { key: "reddit-indycar", label: "r/INDYCAR" },
 };
 
 // Cascade of news cards for a league column. The stable smart order is:
@@ -294,6 +354,15 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
 // earlier for the same duplicate-of-ESPN reason.
 const SOCCER_REDDIT_FIREHOSE = new Set<Sport>([
   "fifa", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
+  // Second wave joins the shared r/soccer bake rather than getting seven new
+  // per-league subs — same call, and same reason, as the big-five block: every
+  // new sub is another prebake job competing for the Mac mini's Reddit per-IP
+  // budget, which is the known cause of the 429 storms.
+  "ligamx", "efl", "libertadores", "euro", "afcon", "saudi",
+  // nwsl is deliberately NOT here. r/soccer is overwhelmingly men's club
+  // football, so piping it into the NWSL column would fill that column with
+  // news about a different sport. As of 2026-08-04 NWSL has its own r/NWSL
+  // entry in REDDIT_SUB above instead.
 ]);
 
 // ESPN card label per league. Default is `ESPN ${sport.toUpperCase()}`, which
@@ -305,6 +374,14 @@ const ESPN_LEAGUE_LABEL: Partial<Record<Sport, string>> = {
   seriea: "ESPN Serie A",
   bundesliga: "ESPN Bundesliga",
   ligue1: "ESPN Ligue 1",
+  // Second wave — every one of these keys is word-shaped, so without an
+  // override they'd render as "ESPN LIGAMX" / "ESPN LIBERTADORES" / "ESPN EFL".
+  // (nwsl and afcon are genuine acronyms and fall through to the default.)
+  ligamx: "ESPN Liga MX",
+  efl: "ESPN Championship",
+  libertadores: "ESPN Libertadores",
+  euro: "ESPN Euro",
+  saudi: "ESPN Saudi Pro League",
 };
 
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
@@ -349,7 +426,13 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf",
   "fifa", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
   "mls", "golf", "tennis", "wnba", "ncaaw",
-  "ufc", "f1",
+  // Second-wave soccer sorts below the established leagues in the merged mobile
+  // feed, Liga MX first (largest US audience of the group). The two
+  // yearCycle-gated national-team tournaments sit just above it, since in a year
+  // when they're active they're the biggest story in the sport.
+  "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
+  "cricket",
+  "ufc", "f1", "nascar", "indycar",
 ];
 
 // Col 3's default (no league picked): Reddit-first (Jacob 7/16) — r/sports leads,

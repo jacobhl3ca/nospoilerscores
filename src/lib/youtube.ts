@@ -44,6 +44,40 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // Exact author_name verified 2026-08-03 via the channel RSS feed (it is
   // "Bundesliga", not "Bundesliga Official" or similar).
   bundesliga: "Bundesliga",
+  // ── Leagues added 2026-08-03. Every string below is the exact YouTube
+  // author_name, verified END-TO-END against the LIVE worker with strict=1 on
+  // real completed fixtures (a strict hit proves both the string and that the
+  // channel actually carries that match). Without these entries each league
+  // fell through to the unscoped search, which measurably served junk: Liga MX
+  // → club/aggregator uploads, NWSL → single-club channels, EFL → "Wrexham
+  // AFC", Saudi PL → "Santos El Creador", Libertadores → nothing at all.
+  //
+  // Liga MX: TUDN is the Univision rightsholder. The MX feed posts the
+  // per-match "RESUMEN Y GOLES I A vs B | Liga MX - Jornada N" recap and is
+  // what the search consistently ranks; the sibling "TUDN USA" posts an
+  // English "HIGHLIGHTS -" cut but ranks inconsistently, so it is NOT used —
+  // a second channel here would only widen the strict gate, not deepen it.
+  ligamx: "TUDN México",
+  // NWSL: the league channel's author_name is the FULL name, not the
+  // abbreviation — "NWSL" never matched. Club channels (Seattle Reign FC,
+  // San Diego Wave FC) also post per-match highlights and were winning the
+  // unscoped search, which is exactly the inconsistency the gate exists to
+  // stop. CBS Sports Golazo's NWSL playlist is NOT a fallback: verified 0/3
+  // on strict, its uploads aren't titled per-match the way UCL/UEL's are.
+  nwsl: "National Women's Soccer League",
+  // EFL Championship: the league's own channel, author_name is the bare
+  // "EFL" (not "Sky Bet EFL", not "Sky Sports Football" — both verified 0/1).
+  efl: "EFL",
+  // Copa Libertadores: CONMEBOL's own channel carries the per-match cut.
+  libertadores: "CONMEBOL Libertadores",
+  // Saudi Pro League: the official channel's author_name is bilingual and
+  // leads with the ARABIC name — the English-only "Saudi Pro League" and
+  // "Roshn Saudi League" both verified 0/2. Keep this string byte-exact.
+  saudi: "الدوري السعودي للمحترفين - Saudi Pro League",
+  // AFCON: CAF's own channel ("CAFOnline" verified 0/1). Gated to 2027 in
+  // ALL_LEAGUES, so this sits inert until the tournament year.
+  afcon: "CAF TV",
+  // ⛔ euro + cricket deliberately have NO entry — see the block comment below.
   // laliga + ligue1 deliberately have NO official channel — same call as UFC.
   // LALIGA's channel ("LALIGA EA SPORTS") posts Spanish-language full matches
   // rather than clean per-match English highlights, and Ligue 1's author name
@@ -76,6 +110,37 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   f1: "FORMULA 1",
   ufc: "UFC",
 };
+
+// Leagues where NO trustworthy uploader exists on YouTube, so the unscoped
+// "any title that matches" fallback must NOT run — a null here hides the
+// highlight button entirely rather than serving a re-upload.
+//
+// ⚠️ This is the opposite of laliga/ligue1, which have no OFFICIAL_CHANNELS
+// entry but are still fine on the unscoped search (Spanish/French rightsholder
+// cuts rank #1 there). Membership in this set is a stronger claim: the unscoped
+// result was CHECKED and found to be junk.
+//
+// cricket (IPL): verified 2026-08-03 against three real 2026 fixtures. The
+// unscoped search returned "Cricket fan 🏏786", "BCCI Cricket Match Highlights"
+// (an unaffiliated channel that merely names itself after the board) and
+// "Cricastra" — 3 for 3 fan re-uploads, zero official results. There is no
+// official YouTube per-match highlight at all: IPL match highlights are
+// exclusive to JioHotstar and geo-locked to India, and the official @IPL
+// channel posts only promos and short clips. "IPL", "Indian Premier League"
+// and "Star Sports" all verified 0/3 on strict. So the IPL card shows its
+// scorecard + rating and NO highlight button. Re-check if the rights move.
+//
+// euro: verified 0/1 — UEFA's own channel does not post per-match EURO
+// highlights (the unscoped winner was a TSN re-upload). Gated to 2028 in
+// ALL_LEAGUES anyway, so re-verify at the next tournament rather than now.
+const NO_HIGHLIGHT_FALLBACK = new Set(["cricket", "euro"]);
+
+// True when a league has no acceptable highlight source at all — neither an
+// official channel nor a trustworthy unscoped search. Callers must render no
+// highlight button (not a search-page link) for these.
+export function hasNoTrustedHighlightSource(sport: string): boolean {
+  return NO_HIGHLIGHT_FALLBACK.has(sport);
+}
 
 // Curated channel chain for golf highlight buttons — used directly
 // (not as a fallback) because the tournament-run channels ("The
@@ -212,10 +277,13 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[]): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
+    // Motorsport race gate — the channel gate can't tell two races apart when
+    // one channel uploads every round. See buildRaceTokens in lib/espn.ts.
+    if (raceTokens?.length) url += `&race=${encodeURIComponent(raceTokens.join("|"))}`;
     const excludeIds = (exclude ?? []).filter((id): id is string => !!id);
     if (excludeIds.length) url += `&exclude=${encodeURIComponent(excludeIds.join(","))}`;
     if (preferExtended) url += `&prefer=extended`;

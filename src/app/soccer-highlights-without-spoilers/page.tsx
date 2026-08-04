@@ -23,6 +23,14 @@ const FAQ = [
     q: "Can ratings help with soccer matches?",
     a: "Yes. Ratings help flag close, dramatic, or high-value matches without revealing the winner or final score.",
   },
+  {
+    q: "Which soccer leagues does HideScore cover?",
+    a: "The Premier League, MLS, Champions League and Europa League, La Liga, Serie A, Bundesliga and Ligue 1, plus Liga MX, the NWSL, the EFL Championship, Copa Libertadores and the Saudi Pro League. The Euros and the Africa Cup of Nations appear in their tournament years.",
+  },
+  {
+    q: "Is women's soccer covered?",
+    a: "Yes. The NWSL has its own spoiler-free column, hidden the same way as every other league.",
+  },
 ];
 
 export const metadata: Metadata = {
@@ -75,12 +83,17 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
           h: "World Cup coverage has its own hub",
           p: "For the 2026 World Cup, HideScore already has dedicated routes for today's slate, tomorrow's schedule, and spoiler-free highlights.",
         },
+        {
+          h: "Beyond the big five",
+          p: "Alongside the Premier League, La Liga, Serie A, Bundesliga and Ligue 1, HideScore covers Liga MX, the NWSL, the EFL Championship, Copa Libertadores and the Saudi Pro League — with the Euros and the Africa Cup of Nations appearing in their tournament years. Every one of them is hidden by default and reveals only on tap.",
+        },
       ]}
       bullets={[
         "Soccer scores hidden until tap.",
         "Spoiler-free match ratings for completed games.",
         "A safer route to highlights, recaps, and match news.",
         "Dedicated World Cup pages for tournament catch-up.",
+        "Liga MX, NWSL, Championship, Libertadores, and Saudi Pro League columns.",
       ]}
       ctaLabel="Open soccer highlights"
       ctaHref="/worldcup/highlights"
@@ -88,6 +101,7 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
         { href: "/worldcup", label: "World Cup" },
         { href: "/worldcup/tomorrow", label: "Tomorrow" },
         { href: "/worldcup/highlights", label: "World Cup highlights" },
+        { href: "/liga-mx-scores-without-spoilers", label: "Liga MX" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
       ]}
       faq={FAQ}

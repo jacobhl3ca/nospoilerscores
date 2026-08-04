@@ -55,12 +55,43 @@ const ESPN_PATHS = {
   epl:   "/soccer/eng.1/scoreboard",
   mls:   "/soccer/usa.1/scoreboard",
   fifa:  "/soccer/fifa.world/scoreboard",
+  // ⚠️ These were all shipping UNMONITORED (added here 2026-08-03). Every
+  // league added to src/lib/espn.ts SPORT_PATHS since this file was last swept
+  // — the UEFA cups, the four big European leagues, and the second wave below
+  // — had a highlight button in the app and no check behind it, so a channel
+  // rename would have gone silent. Same class of gap as the six unmonitored
+  // news feeds found on 2026-07-22.
+  ucl:   "/soccer/uefa.champions/scoreboard",
+  uel:   "/soccer/uefa.europa/scoreboard",
+  laliga:       "/soccer/esp.1/scoreboard",
+  seriea:       "/soccer/ita.1/scoreboard",
+  bundesliga:   "/soccer/ger.1/scoreboard",
+  ligue1:       "/soccer/fra.1/scoreboard",
+  ligamx:       "/soccer/mex.1/scoreboard",
+  nwsl:         "/soccer/usa.nwsl/scoreboard",
+  efl:          "/soccer/eng.2/scoreboard",
+  libertadores: "/soccer/conmebol.libertadores/scoreboard",
+  saudi:        "/soccer/ksa.1/scoreboard",
+  // ⛔ Deliberately absent: euro + afcon (year-gated, off until 2027/2028 —
+  // add them in their tournament year) and cricket (no trusted uploader
+  // exists, so it has no highlight button to monitor; see
+  // NO_HIGHLIGHT_FALLBACK in src/lib/youtube.ts).
 };
 
 // Matches OFFICIAL_CHANNELS in src/lib/youtube.ts. Keep in sync.
+// A sport listed in ESPN_PATHS with NO entry here (laliga, ligue1) is checked
+// on its unscoped-search path only — that's intentional, those two have no
+// official channel by design.
 const OFFICIAL_CHANNELS = {
   nba: "NBA", wnba: "WNBA", mlb: "MLB", nhl: "NHL", nfl: "NFL", ncaam: "March Madness",
   fifa: "FIFA", epl: "NBC Sports", mls: "Major League Soccer",
+  ucl: "CBS Sports Golazo", uel: "CBS Sports Golazo", seriea: "CBS Sports Golazo",
+  bundesliga: "Bundesliga",
+  ligamx: "TUDN México",
+  nwsl: "National Women's Soccer League",
+  efl: "EFL",
+  libertadores: "CONMEBOL Libertadores",
+  saudi: "الدوري السعودي للمحترفين - Saudi Pro League",
 };
 
 // Mirrors GameHighlights.tsx. A same-day final does not promise highlight
@@ -68,10 +99,14 @@ const OFFICIAL_CHANNELS = {
 const HIGHLIGHT_BUFFER_HOURS = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, mlb: 5,
   nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
+  laliga: 3, seriea: 3, bundesliga: 3, ligue1: 3,
+  ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3,
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9,
   nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
+  laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2,
+  ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.
