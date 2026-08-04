@@ -54,7 +54,7 @@ export const metadata: Metadata = {
         url: "https://hidescore.com/og-image.png",
         width: 1200,
         height: 630,
-        alt: "HideScore - spoiler-free sports scores and highlights",
+        alt: "HideScore — spoiler-free sports scores and highlights",
       },
     ],
   },
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: TITLE,
     description: DESC,
-    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore - spoiler-free sports scores and highlights" }],
+    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — spoiler-free sports scores and highlights" }],
   },
 };
 
