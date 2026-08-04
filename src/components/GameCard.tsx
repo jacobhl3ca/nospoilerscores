@@ -693,9 +693,14 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         if (!showBar) return null;
         // Small ESPN link wrapper for upcoming-time / date labels. In demo mode
         // the link would leak the real matchup (see demoActive above), so render
-        // the label as plain text there instead.
+        // the label as plain text there instead. Esports has no ESPN gamecast —
+        // its games come from PandaScore, so espnGameUrl() falls back to
+        // pandascore.co (a B2B API homepage, not a match page) for that sport.
+        // Linking there would send the user to an irrelevant vendor site under a
+        // "View on ESPN" tooltip that's wrong on both counts, so drop the link
+        // for esports too and let the date/time read as plain text.
         const withEspn = (node: ReactNode) =>
-          demoActive ? (
+          demoActive || game.sport === "esports" ? (
             <>{node}</>
           ) : (
             <a
