@@ -35,7 +35,7 @@ const highlightBufferHours: Record<string, number> = {
 // of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
 // 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 3 };
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 4 };
 
 // Shared highlight buttons for a finished game — the official-channel + top-
 // search YouTube clips, plus official league-site recap / condensed videos
