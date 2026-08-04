@@ -23,6 +23,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/mlb-highlights-without-spoilers",
     "/nfl-highlights-without-spoilers",
     "/soccer-highlights-without-spoilers",
+    "/liga-mx-scores-without-spoilers",
+    "/cricket-highlights-without-spoilers",
     "/watch-world-cup-without-spoilers",
     "/faq",
     "/privacy",
@@ -40,6 +42,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/mlb-highlights-without-spoilers",
     "/nfl-highlights-without-spoilers",
     "/soccer-highlights-without-spoilers",
+    // Added 2026-08-03 with the Liga MX and IPL columns. Same 0.7 league-intent
+    // priority as the other per-league pages — these two got their own routes
+    // (rather than a mention on the soccer page) because they carry real
+    // standalone search demand: "liga mx without spoilers", "ipl highlights
+    // without spoilers". The other six new soccer competitions deliberately did
+    // NOT get routes; thin near-duplicate pages read as doorway content.
+    "/liga-mx-scores-without-spoilers",
+    "/cricket-highlights-without-spoilers",
   ]);
 
   // Build timestamp. This file is statically emitted on every Cloudflare deploy,

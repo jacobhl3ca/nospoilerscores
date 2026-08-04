@@ -2951,6 +2951,9 @@ const jobs = [
   // alongside r/worldcup — see leagueSourceCascade("fifa") in src/lib/news.ts.
   ["reddit-soccer", () => fetchReddit("soccer", "r/soccer")],
   ["reddit-ncaaf", () => fetchReddit("CFB", "r/CFB")],
+  // 2026-08-03: cricket. General sub, not IPL-only, to match our ESPN cricket
+  // wire. Adds one 45s gate slot to the bake (see REDDIT_BATCH_COOLDOWN_MS).
+  ["reddit-cricket", () => fetchReddit("Cricket", "r/Cricket")],
   ["reddit-ncaaw", () => fetchReddit("ncaaw", "r/ncaaw")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],

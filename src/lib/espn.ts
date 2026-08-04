@@ -5,6 +5,13 @@ import { getEtServiceDate, toYmd, getTimeZone, etSlateYmd, nextYmd } from "./etD
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
 const SPORT_PATHS: Record<Sport, string> = {
+  // Chess + boxing have NO ESPN path — they are served by worker routes
+  // (/api/chess, /api/boxing). The empty string is never fetched: both are
+  // dispatched before fetchGames in fetchLeague. Present only so this stays a
+  // total Record<Sport,string>, which is what forces a new sport to be
+  // considered here at all.
+  chess: "",
+  boxing: "",
   mlb: "/baseball/mlb/scoreboard",
   nba: "/basketball/nba/scoreboard",
   wnba: "/basketball/wnba/scoreboard",
@@ -27,7 +34,44 @@ const SPORT_PATHS: Record<Sport, string> = {
   seriea: "/soccer/ita.1/scoreboard",
   bundesliga: "/soccer/ger.1/scoreboard",
   ligue1: "/soccer/fra.1/scoreboard",
+  // Second wave of soccer competitions (added 2026-08-03). Every path below was
+  // probed live against site.api.espn.com and returned 200 with a populated
+  // `events` array — they are NOT guesses. Same ESPN soccer response shape as
+  // eng.1, so they need no new parser, only the config/label plumbing.
+  //   mex.1  = Liga MX, the most-watched soccer league in the US
+  //   usa.nwsl, eng.2, conmebol.libertadores, caf.nations, ksa.1, uefa.euro
+  ligamx: "/soccer/mex.1/scoreboard",
+  nwsl: "/soccer/usa.nwsl/scoreboard",
+  efl: "/soccer/eng.2/scoreboard",
+  libertadores: "/soccer/conmebol.libertadores/scoreboard",
+  euro: "/soccer/uefa.euro/scoreboard",
+  afcon: "/soccer/caf.nations/scoreboard",
+  saudi: "/soccer/ksa.1/scoreboard",
+  // Cricket (added 2026-08-03). ESPN's cricket API is keyed by ESPNcricinfo
+  // SERIES id, not by a league slug — 8048 is the IPL. Verified 2026-08-03: it
+  // returns a full 62-date calendar (03-28 → 05-31) and standard two-competitor
+  // events with homeAway/winner/logo, so it rides parseGame like any team sport.
+  //
+  // Only the IPL ships. The other ids worth knowing, and why they're NOT here:
+  //   8039  "World Cup"  — responds 200 but its calendar is [] and its single
+  //                        event is all-nulls. A live shell, not usable data.
+  //                        Re-check when the 2027 ODI World Cup approaches.
+  //   19430 ICC World Test Championship — real, but Test cricket is a five-DAY
+  //                        match, which the one-row-per-day slate model cannot
+  //                        represent without a dedicated multi-day card.
+  //   8044  Big Bash League — real (Dec–Jan), but a small US audience.
+  // Adding any of them ungated would park a permanently empty column in the
+  // switcher, which is exactly the failure the big-five block warns about.
+  cricket: "/cricket/8048/scoreboard",
   f1: "/racing/f1/scoreboard",
+  // NASCAR Cup + IndyCar (added 2026-08-03). Both share F1's racing shape, so
+  // they render through the same single-race event tile. Two differences from
+  // F1, handled in fetchLeagueEvent: neither carries a `circuit` object (NASCAR
+  // has competition.venue, IndyCar has nothing), and neither tags its sessions
+  // with a type.id, so the "find the race session" lookup falls through to the
+  // sole competition — which is the race.
+  nascar: "/racing/nascar-premier/scoreboard",
+  indycar: "/racing/irl/scoreboard",
   ufc: "/mma/ufc/scoreboard",
 };
 
@@ -106,6 +150,48 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "seriea",     label: "Serie A",    startDate: "08-22", endDate: "05-30", championshipDate: "05-30", excludeFromAuto: true },
   { sport: "bundesliga", label: "Bundesliga", startDate: "08-28", endDate: "05-22", championshipDate: "05-22", excludeFromAuto: true },
   { sport: "ligue1",     label: "Ligue 1",    startDate: "08-21", endDate: "05-29", championshipDate: "05-29", excludeFromAuto: true },
+  // ── Second wave of soccer competitions (added 2026-08-03) ──
+  // All excludeFromAuto for the same reason as the big-five block above: these
+  // are opt-in from the switcher and must never reshuffle the default 3-column
+  // board out from under existing users.
+  //
+  // Liga MX is the headline add — it routinely out-rates the EPL and MLS in US
+  // households. It plays TWO tournaments a year (Clausura ~Jan–May, Apertura
+  // ~Jul–Dec) and LeagueConfig only models one window, so this is a single
+  // 01-05 → 12-15 span with a real ~6-week hole in Jun/early-Jul. That's the
+  // same tradeoff UCL already makes on non-matchdays: the column shows news
+  // only. Do NOT "tighten" this to the Apertura calendar ESPN returns today —
+  // that silently hides the entire Clausura half of the season.
+  { sport: "ligamx", label: "Liga MX", startDate: "01-05", endDate: "12-15", championshipDate: "12-15", excludeFromAuto: true },
+  // NWSL: ESPN's calendar runs 03-13 → 11-01 for the regular season; the
+  // playoffs and Championship push into late November, hence 11-22.
+  { sport: "nwsl", label: "NWSL", startDate: "03-13", endDate: "11-22", championshipDate: "11-22", excludeFromAuto: true },
+  // EFL Championship: ESPN calendar 08-14 → 05-01, plus the promotion playoff
+  // final at Wembley in late May (the single most-watched match of its season).
+  { sport: "efl", label: "Championship", startDate: "08-14", endDate: "05-26", championshipDate: "05-26", excludeFromAuto: true },
+  // Copa Libertadores: ESPN returns no `calendar` array for this competition,
+  // so the window is the competition's real shape — qualifying from February,
+  // groups in spring, knockouts Aug–Oct, final in late November.
+  { sport: "libertadores", label: "Libertadores", startDate: "02-01", endDate: "11-30", championshipDate: "11-30", excludeFromAuto: true },
+  // ── Quadrennial / biennial national-team tournaments ──
+  // Both are gated by yearCycle so they stay COMPLETELY out of the switcher
+  // until their tournament year. That matters: ESPN's uefa.euro scoreboard
+  // still serves the 2024 final today, so an ungated Euro entry would sit in
+  // the switcher for two years showing stale 2024 results as if they were live.
+  // Euro 2028 (UK + Ireland) — anchor is the tournament year, mod 4.
+  { sport: "euro", label: "Euro", startDate: "06-01", endDate: "07-15", championshipDate: "07-15", excludeFromAuto: true, yearCycle: { mod: 4, anchor: 2028 } },
+  // AFCON: biennial, next edition 2027 (Kenya/Uganda/Tanzania). ⚠️ The 06-15 →
+  // 07-20 window is PROVISIONAL — CAF had not published the 2027 match calendar
+  // as of 2026-08-03, and the 2025 edition was itself moved to Dec–Jan for
+  // weather. Re-check these dates before the 2027 cycle opens; being wrong here
+  // only costs a hidden column, never a wrong score.
+  { sport: "afcon", label: "AFCON", startDate: "06-15", endDate: "07-20", championshipDate: "07-20", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
+  // Saudi Pro League: ESPN calendar 08-13 → 05-28.
+  { sport: "saudi", label: "Saudi PL", startDate: "08-13", endDate: "05-28", championshipDate: "05-28", excludeFromAuto: true },
+  // ── Cricket (IPL) ──
+  // Window is ESPN's own calendar for the competition, first date → final:
+  // 2026-03-28 → 2026-05-31. Opt-in like the rest of the second wave.
+  { sport: "cricket", label: "IPL", startDate: "03-28", endDate: "05-31", championshipDate: "05-31", excludeFromAuto: true },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
   { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
   // ── NCAAF (College Football, Aug–early Jan, CFB Championship ~Jan 11) ──
@@ -129,7 +215,25 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // openExternal fallback), so it's back in the switcher — opt-in only,
   // like UFC. F1 = Mar–early Dec.
   { sport: "f1",  label: "F1",  startDate: "03-01", endDate: "12-14", excludeFromAuto: true },
+  // NASCAR + IndyCar, opt-in like F1. Windows are ESPN's own race calendars,
+  // read on 2026-08-03: Cup Series 02-05 → 11-08 (40 races), IndyCar 03-01 →
+  // 09-06 (18 races). BACKLOG.md previously called these "skip unless
+  // interested" — they're in now because the F1 tile does all the rendering,
+  // so the marginal cost was a config block rather than a new card.
+  { sport: "nascar",  label: "NASCAR",  startDate: "02-05", endDate: "11-08", excludeFromAuto: true },
+  { sport: "indycar", label: "IndyCar", startDate: "03-01", endDate: "09-06", excludeFromAuto: true },
   { sport: "ufc", label: "UFC", excludeFromAuto: true },
+  // Boxing + chess (added 2026-08-04). Both are year-round and event-driven —
+  // no season window, same as UFC — and both are opt-in only, so they never
+  // take a slot from a league someone actually follows.
+  //
+  // Boxing earns a column because it is close to a worst case for spoilers:
+  // ~8-12 marquee cards a year, all on late-night US time, and the result is a
+  // single word that every push notification carries.
+  { sport: "boxing", label: "Boxing", excludeFromAuto: true },
+  // Chess is the same argument in a purer form: an elite game is genuinely
+  // worth watching move by move and is destroyed completely by one number.
+  { sport: "chess", label: "Chess", excludeFromAuto: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -241,12 +345,30 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   seriea: 14,
   bundesliga: 15,
   ligue1: 16,
-  fifa: 17,
-  ncaaw: 18,
-  wnba: 19,
+  // Second-wave soccer, ordered by how likely a US viewer is to want it.
+  // Liga MX leads the group — it out-draws every other league on this list in
+  // US households. Like the big-five block these are excludeFromAuto, so the
+  // number only orders the switcher; it never wins a slot on its own.
+  ligamx: 17,
+  nwsl: 18,
+  efl: 19,
+  libertadores: 20,
+  saudi: 21,
+  // National-team tournaments outrank club soccer *during their year* (they're
+  // yearCycle-gated, so they're absent from the switcher entirely otherwise).
+  euro: 22,
+  afcon: 23,
+  fifa: 24,
+  ncaaw: 25,
+  wnba: 26,
+  cricket: 27,
   // Opt-in event leagues sort to the bottom of the switcher (like WNBA).
-  f1: 20,
-  ufc: 21,
+  f1: 28,
+  nascar: 29,
+  indycar: 30,
+  ufc: 31,
+  boxing: 32,
+  chess: 33,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -379,6 +501,19 @@ type RawCompetitor = {
   winner?: boolean;
 };
 
+// ESPN's cricket `score` is a whole sentence, not a score:
+//   "161/5 (18/20 ov, target 156)"
+// Two problems with rendering that verbatim in a score slot sized for "4".
+// First it's simply too long. Second — and this is the one that matters for a
+// no-spoiler app — the "target 156" clause states the first innings total, so a
+// chasing team's score tile silently reveals the OTHER side's score. Keep only
+// the "runs/wickets" head. Non-cricket scores pass through untouched.
+function formatScore(raw: string, sport: Sport): string {
+  if (sport !== "cricket") return raw;
+  const head = raw.split("(")[0]?.trim();
+  return head || raw;
+}
+
 function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
   let record = competitor.records?.[0]?.summary ?? "";
@@ -394,7 +529,7 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     shortDisplayName: competitor.team?.shortDisplayName ?? "",
     logo: competitor.team?.logo ?? "",
     color: competitor.team?.color ?? "666666",
-    score: competitor.score ?? "0",
+    score: formatScore(competitor.score ?? "0", sport),
     winner: competitor.winner ?? false,
     record,
     rank: null, // hydrated post-fetch from the standings endpoint
@@ -436,12 +571,37 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   seriea:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   bundesliga: { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   ligue1:     { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // Second-wave soccer: all 90-minute association football, so they take the
+  // identical EPL calibration. The two knockout-heavy competitions (Copa
+  // Libertadores, AFCON) and the Euro use fifa's slightly higher overtimeBonus
+  // (25) because extra time there is a genuine drama signal, not a league-game
+  // curiosity — same reasoning already applied to the World Cup.
+  ligamx:       { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  nwsl:         { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  efl:          { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  saudi:        { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
+  libertadores: { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  euro:         { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  afcon:        { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // Cricket never reaches the generic scorer — calculateRating hands a T20
+  // innings off to cricketRating() before any of this applies (runs and wickets
+  // are not interchangeable with goals/points). regulationPeriods: 2 is the one
+  // field that IS still read, by gameProgress: a limited-overs match is two
+  // innings, so innings 1 reads as ~25% elapsed and clears the "too early" gate.
+  cricket: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
   // F1 / UFC render as single-event tiles (no Game objects), so these are
   // placeholders only — calculateRating never runs on them.
   f1:     { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  nascar: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  indycar:{ multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   ufc:    { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  // Boxing + chess are event tiles with no per-game score to rate, exactly
+  // like UFC and the racing series. These values are inert — nothing calls
+  // the shared scorer for an eventCard league — but the Record must be total.
+  boxing: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  chess:  { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
 };
 
 // Regulation period length in seconds, for count-down sports where ESPN's
@@ -456,7 +616,10 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
 };
 // Soccer is different: status.clock counts UP and equals total elapsed match
 // seconds (5400 = 90'), so progress is just clock / full match.
-const SOCCER_SPORTS = new Set<Sport>(["epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1"]);
+const SOCCER_SPORTS = new Set<Sport>([
+  "epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1",
+  "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
+]);
 const FULL_MATCH_SECONDS = 5400;
 
 // Minimal shape of an ESPN game's live status — the only fields this progress
@@ -491,7 +654,19 @@ function gameProgress(game: GameStatusLike, sport: Sport, regulationPeriods: num
 
 // Minimal shape of an ESPN competitor's per-period linescores — the only field
 // the margin helpers below read off the raw scoreboard payload.
-type LineScore = { value?: number };
+// `value` is the per-period score every other sport uses. The four optional
+// fields are cricket-only: ESPN gives each competitor one linescore row per
+// INNINGS of the match (not per period they batted), and marks the side that
+// actually batted in that innings with isBatting. The non-batting side's row
+// mirrors the batting side's overs with runs/wickets zeroed, so reading a row
+// without checking isBatting silently yields 0/0.
+type LineScore = {
+  value?: number;
+  runs?: number;
+  wickets?: number;
+  overs?: number;
+  isBatting?: boolean;
+};
 type MarginCompetitor = { linescores?: LineScore[] };
 
 // Calculate running margin from linescores: average absolute margin across all periods
@@ -601,6 +776,114 @@ type RatingGame = {
   >;
 };
 
+// ── Cricket (limited-overs) closeness ────────────────────────────────────────
+// Cricket cannot use the generic three-factor scorer, and the failure is not
+// subtle: a chase ends the instant the target is passed, so the winning side's
+// run total is ALWAYS within a few runs of the loser's. Feeding those two
+// numbers to the shared margin model rates every successful chase — including
+// a ten-wicket demolition with eight overs to spare — as a nail-biter.
+//
+// The real measure of a close limited-overs match depends on who won:
+//   • Team batting FIRST won  → margin is the run gap they defended.
+//   • Team batting SECOND won → margin is what they had left: wickets in hand
+//     and balls to spare. One wicket standing off the final ball is the
+//     tightest possible finish; ten wickets and eight overs spare is a rout.
+// A tie (Super Over) is the maximum.
+type CricketInnings = { runs: number; wickets: number; overs: number };
+
+// Pull the two innings out of a cricket competition. Returns null unless BOTH
+// innings have a batting side identified — a first-innings-only (live) match has
+// no closeness signal yet, and neither does a rain-abandoned game.
+function readCricketInnings(competitors: MarginCompetitor[]): {
+  first: CricketInnings;
+  second: CricketInnings;
+} | null {
+  const byPeriod = new Map<number, CricketInnings>();
+  for (const c of competitors) {
+    const rows = c.linescores ?? [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      // Only the row flagged isBatting carries this innings' real runs/wickets.
+      if (!row?.isBatting) continue;
+      byPeriod.set(i + 1, {
+        runs: row.runs ?? 0,
+        wickets: row.wickets ?? 0,
+        overs: row.overs ?? 0,
+      });
+    }
+  }
+  const first = byPeriod.get(1);
+  const second = byPeriod.get(2);
+  if (!first || !second) return null;
+  return { first, second };
+}
+
+// ESPN reports overs as a decimal where the fraction is BALLS, not tenths:
+// 18.3 means 18 overs and 3 balls = 111 balls, NOT 18.5 overs. Converting with
+// plain arithmetic overstates every partial over.
+function oversToBalls(overs: number): number {
+  const whole = Math.floor(overs);
+  const balls = Math.round((overs - whole) * 10);
+  return whole * 6 + Math.min(balls, 5);
+}
+
+// 0-100 watchability for a completed/in-progress limited-overs match.
+// Returns null when there isn't enough of the match on the board to judge.
+function cricketRating(competitors: MarginCompetitor[], state: string): number | null {
+  const innings = readCricketInnings(competitors);
+  // Only the first innings has been batted — the chase hasn't started, so there
+  // is no closeness to measure yet. Matches every other sport's "Too Early".
+  if (!innings) return null;
+  const { first, second } = innings;
+
+  // Total overs allotted, inferred from the first innings rather than hardcoded
+  // to 20: the same parser then handles a 50-over ODI, and a rain-shortened
+  // innings scores against its own real allotment instead of a phantom 20.
+  const allottedBalls = Math.max(oversToBalls(first.overs), 1);
+
+  const chaseWon = second.runs > first.runs;
+  const tied = second.runs === first.runs && state === "post";
+
+  let closeness: number;
+  if (tied) {
+    // Tie → Super Over. The best possible finish in the format.
+    closeness = 100;
+  } else if (chaseWon) {
+    // Won the chase. Two independent "how much was left" signals.
+    // Wickets in hand: 1 = survived by a thread, 10 = never threatened.
+    const wicketsInHand = Math.max(0, 10 - second.wickets);
+    const wicketCloseness = Math.max(0, 100 - (wicketsInHand - 1) * 11);
+    // Balls to spare, as a share of the innings. Winning off the last ball = 100.
+    const ballsSpare = Math.max(0, allottedBalls - oversToBalls(second.overs));
+    const ballCloseness = Math.max(0, 100 - (ballsSpare / allottedBalls) * 100);
+    // Wickets weighted slightly higher: a side can win with overs to spare and
+    // still have been three balls from collapse, and that match was tense.
+    closeness = wicketCloseness * 0.55 + ballCloseness * 0.45;
+  } else if (state === "post") {
+    // Defended the total. Margin is the run gap — a sub-10-run defence is a
+    // thriller, ~45 is comfortable, 60+ is a rout.
+    closeness = Math.max(0, 100 - (first.runs - second.runs) * 2.2);
+  } else {
+    // Chase in progress and still behind. Rate the required rate against what's
+    // left — a chase needing ~9 an over with wickets standing is the good stuff.
+    const ballsLeft = Math.max(0, allottedBalls - oversToBalls(second.overs));
+    if (ballsLeft === 0) return null;
+    const runsNeeded = first.runs + 1 - second.runs;
+    const required = (runsNeeded / ballsLeft) * 6;
+    // 6/over or below = cruising; 12+/over = effectively gone. Peak tension
+    // sits around 9-10, so score distance from a 9.5 target rather than
+    // treating "higher required rate" as monotonically better.
+    closeness = Math.max(0, 100 - Math.abs(required - 9.5) * 14);
+    // A chase with no wickets left isn't tense, it's over.
+    if (second.wickets >= 9) closeness *= 0.5;
+  }
+
+  // High-scoring games are more watchable — same idea as the generic scoring
+  // bonus, scaled to T20 totals (a 200+ chase is a genuine spectacle).
+  const scoringBonus = Math.min((first.runs + second.runs) / 45, 10);
+  return Math.round(Math.max(0, Math.min(100, closeness + scoringBonus)));
+}
+
 function calculateRating(game: RatingGame): number | null {
   const competition = game.competitions?.[0];
   if (!competition) return null;
@@ -610,6 +893,10 @@ function calculateRating(game: RatingGame): number | null {
 
   const competitors = competition.competitors;
   if (!competitors || competitors.length < 2) return null;
+
+  // Cricket branches out before the shared scorer touches it — see cricketRating
+  // for why runs-vs-runs is actively misleading in this sport.
+  if (game._sport === "cricket") return cricketRating(competitors, state);
 
   const score1 = parseInt(competitors[0].score ?? "0", 10);
   const score2 = parseInt(competitors[1].score ?? "0", 10);
@@ -1389,13 +1676,30 @@ export function espnGameUrl(game: Game): string {
     case "seriea":
     case "bundesliga":
     case "ligue1":
+    case "ligamx":
+    case "nwsl":
+    case "efl":
+    case "libertadores":
+    case "euro":
+    case "afcon":
+    case "saudi":
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
+    // ESPN serves cricket off its India edition; 8048 is the IPL series id
+    // (same id as SPORT_PATHS). The /scorecard/ path is the per-match page.
+    case "cricket": return `https://www.espn.in/cricket/series/8048/scorecard/${game.id}`;
     case "golf": return `https://www.espn.com/golf/leaderboard`;
     case "tennis": return `https://www.espn.com/tennis/scoreboard`;
     // F1/UFC render as event tiles (no Game objects) — these are here only for
     // switch exhaustiveness.
     case "f1": return `https://www.espn.com/f1/`;
+    case "nascar": return `https://www.espn.com/racing/`;
+    case "indycar": return `https://www.espn.com/racing/indycar/`;
     case "ufc": return `https://www.espn.com/mma/`;
+    // Neither sport produces `Game` rows (both are eventCard leagues), so
+    // these are unreachable in practice — but the switch must be total, and
+    // a sport-section landing beats falling through to a wrong league page.
+    case "boxing": return `https://www.espn.com/boxing/`;
+    case "chess": return `https://lichess.org/broadcast`;
   }
 }
 
@@ -1424,10 +1728,44 @@ export function sportStreamFallback(sport: Sport): string {
     case "bundesliga": return "https://plus.espn.com/";
     case "seriea": return "https://www.paramountplus.com/shows/serie-a/";
     case "ligue1": return "https://www.beinsports.com/en-us/";
+    // Second-wave soccer — US streaming homes. Every URL below was fetched with
+    // a browser UA on 2026-08-03 and returned 200; none is a guess. As with the
+    // big-five block these are last-resort landings, so a league-level watch
+    // page is correct even where rights are split across several carriers.
+    // Liga MX: rights are split by club — ViX (TelevisaUnivision) carries the
+    // largest share and is the single best landing; TUDN/Fox Deportes hold the
+    // rest.
+    case "ligamx": return "https://vix.com/";
+    // NWSL rights are split four ways (ESPN, Prime Video, CBS, Scripps), so the
+    // league's own watch page is the only destination that covers every match.
+    case "nwsl": return "https://www.nwslsoccer.com/watch";
+    case "efl": return "https://plus.espn.com/";
+    case "libertadores": return "https://www.beinsports.com/en-us/";
+    case "afcon": return "https://www.beinsports.com/en-us/";
+    case "euro": return "https://www.foxsports.com/soccer/uefa-european-championship";
+    case "saudi": return "https://www.fanatiz.com/";
+    // Willow TV holds the US broadcast rights to the IPL (and to most
+    // international cricket). Verified reachable 2026-08-03.
+    case "cricket": return "https://www.willow.tv/";
     case "tennis": return "https://www.tennischannel.com/";
     case "golf": return "https://www.pgatour.com/live";
     case "f1": return "https://f1tv.formula1.com/";
+    // NASCAR's US rights are split four ways (FOX / Prime / TNT / NBC), so the
+    // league's own watch hub is the only landing that covers the whole season.
+    // Heads-up for anyone reading a link-check report: nascar.com sits behind a
+    // bot wall and returns 403 to every scripted request, including its own
+    // homepage. check-watch-links.mjs already classifies 403 as WARN-not-FAIL
+    // for exactly this case — it is not rot, do not "fix" it.
+    case "nascar": return "https://www.nascar.com/watch/";
+    // FOX Sports holds exclusive US IndyCar rights; indycar.com/tv is the
+    // league's own where-to-watch page and returns 200.
+    case "indycar": return "https://www.indycar.com/tv";
     case "ufc": return "https://www.espn.com/watch/";
+    // Boxing has no single home — cards split across DAZN, ESPN and
+    // Prime PPV — so send people to the schedule rather than guess a
+    // streamer that is wrong most nights. Chess streams free on Lichess.
+    case "boxing": return "https://www.espn.com/boxing/schedule/";
+    case "chess": return "https://lichess.org/broadcast";
   }
 }
 
@@ -1790,7 +2128,10 @@ function eventBroadcasts(comp: { broadcasts?: BroadcastEntry[] } | null | undefi
 // Minimal shapes of ESPN's F1/UFC single-event payload — only the fields
 // fetchLeagueEvent reads. `competitions` are the race sessions (F1) or the
 // individual bouts (UFC); each bout's competitors are the two fighters.
-type LeagueEventVenue = { address?: { city?: string; state?: string; country?: string } };
+// fullName is the track/arena name. Only the racing tile reads it (NASCAR puts
+// its track here because it has no `circuit` object); the UFC path uses the
+// address alone, which is why the field wasn't needed before.
+type LeagueEventVenue = { fullName?: string; address?: { city?: string; state?: string; country?: string } };
 type LeagueEventCircuit = { fullName?: string; address?: { city?: string; country?: string } };
 type LeagueEventCompetitor = {
   athlete?: { displayName?: string; shortName?: string; flag?: { href?: string; alt?: string } };
@@ -1820,7 +2161,181 @@ type LeagueEvent = {
 // Tries the viewed date first; if ESPN has no event that day (most days), it
 // falls back to the current/next event so an opt-in column always shows the
 // upcoming race / fight card rather than going empty.
-async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<LeagueEventCard | null> {
+// Per-series bits for the shared race tile. `channel` is the exact YouTube
+// author_name (the highlight worker matches on channel identity, not title
+// text) — both were read off the canonical channel's RSS <author><name> on
+// 2026-08-03, NOT guessed from the @handle. That distinction matters: the
+// @NASCAR and @IndyCar landing pages surface a *different* channelId in their
+// markup than their own rel=canonical, so scraping the page body yields
+// "NASCAR Classics" / "INDY NXT by Firestone" — sibling channels that post no
+// Cup or IndyCar race highlights at all.
+const RACING_SERIES: Record<"f1" | "nascar" | "indycar", {
+  label: string;
+  queryPrefix: string;
+  channel: string;
+}> = {
+  f1: { label: "F1", queryPrefix: "Formula 1", channel: "FORMULA 1" },
+  nascar: { label: "NASCAR", queryPrefix: "NASCAR Cup Series", channel: "NASCAR" },
+  // ⚠️ Sponsor-prefixed, the exact hazard the Ligue 1 note in youtube.ts calls
+  // out: title sponsors rotate and the channel renames with them. A stale
+  // string doesn't break anything — the official slot just goes unfilled and
+  // the tile falls back to the unscoped search — but re-verify if the IndyCar
+  // highlight button ever stops resolving.
+  indycar: { label: "IndyCar", queryPrefix: "INDYCAR", channel: "NTT INDYCAR SERIES" },
+};
+
+// Reduce an ESPN race name to the token(s) that identify WHICH race it is, for
+// the worker's race gate (`race=` on /api/youtube — see raceTitleMatches in
+// public/_worker.js). Each series has exactly one official channel that uploads
+// all season, so the channel gate cannot tell two races apart; without a token
+// the tile plays whatever that channel posted most recently.
+//
+// Verified 2026-08-03 against all 50 completed 2026 races: with these tokens
+// every one of the 43 correctly-matched races still resolves, and all 7
+// mismatches are rejected (button hides instead of playing the wrong race).
+export function buildRaceTokens(sport: string, name: string): string[] {
+  const n = name.trim();
+  if (!n) return [];
+  if (sport === "f1") {
+    // ESPN prefixes the title sponsor, which is actively dangerous here:
+    // "Qatar Airways Australian Grand Prix" is the AUSTRALIAN race, and a
+    // naive token would match the Qatar GP. The identifying word is always the
+    // last one before "Grand Prix" ("Australian", "Barcelona-Catalunya").
+    const m = n.match(/(\S+)\s+Grand\s+Prix/i);
+    return m ? [m[1]] : [n];
+  }
+  if (sport === "nascar") {
+    // "NASCAR Cup Series at Watkins Glen" → "Watkins Glen".
+    // "NASCAR Cup Series All Star Race" → "All Star Race" (channel hyphenates
+    // it; the gate normalizes punctuation). "Daytona 500" passes through.
+    const stripped = n
+      .replace(/^NASCAR\s+[\w'’]+(?:\s+Auto\s+Parts)?\s+Series\s*/i, "")
+      .replace(/^at\s+/i, "")
+      .trim();
+    return [stripped || n];
+  }
+  if (sport === "indycar") {
+    // "Grand Prix of Mid-Ohio" → "Mid-Ohio". The parenthetical on
+    // "Grand Prix of Indianapolis (Road Course)" is dropped — the channel
+    // titles it plainly "INDYCAR at Indianapolis".
+    const stripped = n
+      .replace(/^Grand\s+Prix\s+of\s+/i, "")
+      .replace(/\s*\([^)]*\)\s*$/, "")
+      .trim();
+    return [stripped || n];
+  }
+  return [];
+}
+
+// ── Chess + Boxing: the two Phase-D leagues that do NOT come from ESPN ──────
+// ESPN has no endpoint for either (its core API literally rejects boxing:
+// "Invalid sport (boxing)"), so both are served by worker routes — /api/chess
+// proxies Lichess's broadcast API, /api/boxing calls boxing-data.com with a
+// key that must stay server-side. See public/_worker.js.
+
+interface ChessApiEvent {
+  id: string; name: string; state: "pre" | "in" | "post"; round: string;
+  startsAt: number | null; endsAt: number | null; format: string;
+  timeControl: string; location: string; players: string[];
+  url: string | null; website: string | null; tier: number;
+}
+
+// Pick the event to show for `date`: prefer one actually running, then the next
+// one due, then the most recent finished. Mirrors how the F1/UFC tile behaves
+// on a day with no session — an empty column is worse than a nearby event.
+export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | null> {
+  try {
+    const res = await fetchWithRetry(`${getApiBase()}/api/chess`);
+    if (!res.ok) return null;
+    const { events } = (await res.json()) as { events: ChessApiEvent[] };
+    if (!events?.length) return null;
+    const target = date ? new Date(`${date}T12:00:00`).getTime() : Date.now();
+    const onDate = (e: ChessApiEvent) =>
+      e.startsAt != null && Math.abs(e.startsAt - target) < 24 * 60 * 60 * 1000;
+    const byTier = (a: ChessApiEvent, b: ChessApiEvent) => (b.tier || 0) - (a.tier || 0);
+    const chosen =
+      events.filter((e) => e.state === "in" && onDate(e)).sort(byTier)[0] ??
+      events.filter((e) => e.state === "in").sort(byTier)[0] ??
+      events.filter((e) => e.state === "pre").sort((a, b) => (a.startsAt ?? 0) - (b.startsAt ?? 0))[0] ??
+      events.filter((e) => e.state === "post").sort((a, b) => (b.startsAt ?? 0) - (a.startsAt ?? 0))[0];
+    if (!chosen) return null;
+    // Lichess names read "GCT: Saint Louis Rapid & Blitz 2026 | Rapid" — the
+    // segment after "|" duplicates what chessFormat/timeControl already say.
+    const [name, ...rest] = chosen.name.split("|").map((s) => s.trim());
+    return {
+      kind: "chess",
+      title: name || chosen.name,
+      subtitle: [chosen.location, rest.join(" · ")].filter(Boolean).join(" · ") || undefined,
+      state: chosen.state,
+      statusDetail: chosen.state === "in" ? "Live" : chosen.state === "post" ? "Final" : "Upcoming",
+      date: new Date(chosen.startsAt ?? Date.now()).toISOString(),
+      broadcasts: [],
+      chessRound: chosen.round || undefined,
+      chessFormat: chosen.format || undefined,
+      chessTimeControl: chosen.timeControl || undefined,
+      chessPlayers: chosen.players?.length ? chosen.players : undefined,
+      chessTier: chosen.tier,
+      // Lichess's own board is the watch destination — it is live, free, and
+      // (unlike a results page) shows the game rather than the outcome.
+      eventUrl: chosen.url ?? chosen.website ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface BoxingApiEvent {
+  id: string; title: string; date: string; venue: string | null;
+  location: string | null; broadcasts: string[]; poster: string | null;
+}
+
+export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard | null> {
+  try {
+    const res = await fetchWithRetry(`${getApiBase()}/api/boxing`);
+    if (!res.ok) return null;
+    const { events } = (await res.json()) as { events: BoxingApiEvent[] };
+    if (!events?.length) return null;
+    const target = date ? new Date(`${date}T12:00:00`).getTime() : Date.now();
+    const ts = (e: BoxingApiEvent) => new Date(e.date).getTime();
+    // Prefer a card the user can actually WATCH. Nearest-by-date alone picks
+    // badly here: the feed carries every sanctioned card worldwide, so on
+    // 2026-08-04 it surfaced "Nyika vs. Masson" at a stadium in North Shore, NZ
+    // with no listed broadcaster, ahead of an ESPN/Sky card in Orlando five
+    // days later. Rank on a US/UK broadcast first, then by nearness — this is
+    // the boxing analogue of the chess `tier` filter, which the API gives us
+    // for free but boxing-data.com does not.
+    const watchable = (e: BoxingApiEvent) => (e.broadcasts?.length ? 0 : 1);
+    const chosen = [...events].sort(
+      (a, b) =>
+        watchable(a) - watchable(b) ||
+        Math.abs(ts(a) - target) - Math.abs(ts(b) - target),
+    )[0];
+    if (!chosen) return null;
+    const now = Date.now();
+    const t = ts(chosen);
+    // Boxing cards run ~4h from first bell. No live API state is available, so
+    // derive it from the clock rather than claiming a status we cannot know.
+    const state: "pre" | "in" | "post" =
+      now < t ? "pre" : now < t + 4 * 60 * 60 * 1000 ? "in" : "post";
+    return {
+      kind: "boxing",
+      title: chosen.title,
+      subtitle: [chosen.venue, chosen.location].filter(Boolean).join(" · ") || undefined,
+      state,
+      statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : "Fight Night",
+      date: new Date(t).toISOString(),
+      broadcasts: chosen.broadcasts ?? [],
+      posterUrl: chosen.poster ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchLeagueEvent(
+  sport: "f1" | "ufc" | "nascar" | "indycar",
+  date?: string,
+): Promise<LeagueEventCard | null> {
   const load = async (d?: string) => {
     const url = new URL(BASE_URL + SPORT_PATHS[sport]);
     if (d) url.searchParams.set("dates", d);
@@ -1839,13 +2354,29 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
   const comps: LeagueEventCompetition[] = event.competitions ?? [];
   const eventUrl: string | undefined = event.links?.find((l) => l?.href)?.href;
 
-  if (sport === "f1") {
-    // The race is competition.type.id === "3"; fall back to the last session.
+  if (sport === "f1" || sport === "nascar" || sport === "indycar") {
+    const series = RACING_SERIES[sport];
+    // F1 tags the race session competition.type.id === "3". NASCAR and IndyCar
+    // ship a single untyped competition, so the find() misses and the fallback
+    // to the last (only) competition is the race — which is what we want.
     const race = comps.find((c) => String(c?.type?.id) === "3") ?? comps[comps.length - 1] ?? null;
     const state = (race?.status?.type?.state ?? event.status?.type?.state ?? "pre") as "pre" | "in" | "post";
-    const circuit: LeagueEventCircuit = event.circuit ?? {};
-    const loc = [circuit.address?.city, circuit.address?.country].filter(Boolean).join(", ");
-    const subtitle = [circuit.fullName, loc].filter(Boolean).join(" · ") || undefined;
+    // Location: F1 carries a `circuit`; the US series don't. NASCAR puts the
+    // track on competition.venue instead, and IndyCar supplies neither — it
+    // just renders without a subtitle rather than with a wrong one.
+    let subtitle: string | undefined;
+    if (sport === "f1") {
+      const circuit: LeagueEventCircuit = event.circuit ?? {};
+      const loc = [circuit.address?.city, circuit.address?.country].filter(Boolean).join(", ");
+      subtitle = [circuit.fullName, loc].filter(Boolean).join(" · ") || undefined;
+    } else {
+      const venue: LeagueEventVenue = race?.venue ?? event.venue ?? {};
+      // ESPN pads some track cities with a trailing space ("Newton ").
+      const city = (venue.address?.city ?? "").trim();
+      const region = (venue.address?.state || venue.address?.country || "").trim();
+      const loc = [city, region].filter(Boolean).join(", ");
+      subtitle = [venue.fullName, loc].filter(Boolean).join(" · ") || undefined;
+    }
     const raceDate = race?.date ?? event.date;
     const year = new Date(raceDate).getFullYear() || new Date().getFullYear();
     const cleanName = (event.shortName || event.name || "Grand Prix").replace(/\bGP\b/i, "Grand Prix");
@@ -1857,9 +2388,20 @@ async function fetchLeagueEvent(sport: "f1" | "ufc", date?: string): Promise<Lea
       statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Race",
       date: raceDate,
       broadcasts: eventBroadcasts(race),
-      highlightQuery: `Formula 1 ${year} ${cleanName} race highlights`,
-      officialChannel: "FORMULA 1",
-      eventUrl,
+      // Skip the series prefix when ESPN's own event name already carries it —
+      // NASCAR names every race "NASCAR Cup Series at <track>", which otherwise
+      // produced "NASCAR Cup Series 2026 NASCAR Cup Series at Iowa race
+      // highlights" and buried the actual track name in duplicate tokens.
+      highlightQuery: cleanName.toLowerCase().startsWith(series.queryPrefix.toLowerCase())
+        ? `${year} ${cleanName} race highlights`
+        : `${series.queryPrefix} ${year} ${cleanName} race highlights`,
+      officialChannel: series.channel,
+      officialLabel: series.label,
+      raceTokens: buildRaceTokens(sport, event.name || event.shortName || ""),
+      // F1's own event links point at espn.com. NASCAR's and IndyCar's point at
+      // VividSeats — a ticket reseller, not a race page — so only pass through a
+      // link that's actually on ESPN and leave the tile un-linked otherwise.
+      eventUrl: sport === "f1" || (eventUrl && /(^|\.)espn\.(com|in)\//.test(eventUrl)) ? eventUrl : undefined,
     };
   }
 
@@ -2714,6 +3256,9 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
       return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
     case "ncaam":
       return `https://a.espncdn.com/i/teamlogos/ncaa/500/${rawId}.png`;
+    // Cricket follows the soccer convention (team id under its own sport path).
+    case "cricket":
+      return `https://a.espncdn.com/i/teamlogos/cricket/500/${rawId}.png`;
     case "epl":
     case "mls":
     case "fifa":
@@ -2723,6 +3268,13 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
     case "seriea":
     case "bundesliga":
     case "ligue1":
+    case "ligamx":
+    case "nwsl":
+    case "efl":
+    case "libertadores":
+    case "euro":
+    case "afcon":
+    case "saudi":
       return `https://a.espncdn.com/i/teamlogos/soccer/500/${rawId}.png`;
     default:
       return undefined;
@@ -3082,8 +3634,18 @@ export async function fetchAllLeagues(
       if (!golfTournament) return null;
       return { sport: cfg.sport, label, games: [], golfTournament };
     }
-    if (cfg.sport === "f1" || cfg.sport === "ufc") {
+    if (cfg.sport === "f1" || cfg.sport === "ufc" || cfg.sport === "nascar" || cfg.sport === "indycar") {
       const eventCard = await fetchLeagueEvent(cfg.sport, date);
+      if (!eventCard) return null;
+      return { sport: cfg.sport, label, games: [], eventCard };
+    }
+    // Chess + boxing come from worker routes, not ESPN — see fetchChessEvent /
+    // fetchBoxingEvent. Both return null on any failure, which drops the column
+    // rather than showing a broken one.
+    if (cfg.sport === "chess" || cfg.sport === "boxing") {
+      const eventCard = cfg.sport === "chess"
+        ? await fetchChessEvent(date)
+        : await fetchBoxingEvent(date);
       if (!eventCard) return null;
       return { sport: cfg.sport, label, games: [], eventCard };
     }
@@ -3126,8 +3688,12 @@ export async function fetchAllLeagues(
         // gaps) longer than the day-by-day lookahead. When that finds nothing,
         // widen with a single range query so the column shows the real next
         // match day instead of "Schedule TBD".
-        const SOCCER: Sport[] = ["mls", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1"];
-        if (!nextGameDay && SOCCER.includes(cfg.sport)) {
+        // Derived from the canonical SOCCER_SPORTS set rather than a second
+        // hand-maintained list — the old duplicate array silently excluded any
+        // newly added league from the widened lookahead. SOCCER_SPORTS also
+        // contains fifa, but this branch is unreachable for it: the World Cup
+        // is handled above with its own 80-day maxDays:1 window.
+        if (!nextGameDay && SOCCER_SPORTS.has(cfg.sport)) {
           nextGameDay = await fetchNextGameDayRange(cfg.sport, date);
         }
       }
@@ -3234,6 +3800,12 @@ const RANK_LEAGUES = new Set<Sport>([
   // Single-table domestic leagues — ESPN's standings carry a real league-wide
   // `rank`, so they need no RANK_METRIC entry (same as EPL).
   "laliga", "seriea", "bundesliga", "ligue1",
+  // Second-wave single-table leagues. Liga MX qualifies because each tournament
+  // (Apertura / Clausura) is its own single table.
+  "ligamx", "nwsl", "efl", "saudi",
+  // Deliberately NOT here: libertadores, euro, afcon. All three are group-stage
+  // tournaments with no league-wide rank, and — exactly like the World Cup
+  // exclusion above — a live group position is itself a spoiler.
 ]);
 
 // When ESPN groups standings by conference/division (no single league-wide

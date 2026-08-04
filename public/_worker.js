@@ -73,6 +73,51 @@ function newsOgImage(raw) {
   return `https://images.weserv.nl/?url=${encodeURIComponent(src)}&w=1200&h=630&fit=cover&a=attention&output=jpg&q=82&default=${fallback}`;
 }
 
+// ── Racing race-gate helpers (see the `race` param in /api/youtube) ─────────
+// Punctuation-insensitive compare: ESPN writes "Mid-Ohio" / "St. Petersburg",
+// the channels write "Mid Ohio" / "St. Pete", and NASCAR hyphenates
+// "All-Star Race" where ESPN does not.
+function normalizeRaceToken(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+// Tracks the official channel titles differently than ESPN names them. Without
+// these the gate would HIDE three races it currently gets RIGHT: Atlanta races
+// are titled "EchoPark Speedway" (the track's sponsor name since 2024),
+// Charlotte's is titled by the race ("Coca-Cola 600"), and INDYCAR's St.
+// Petersburg reel says "St. Pete". Illinois is the reverse case — the gate
+// needs these to know that "World Wide Technology Raceway" IS the Grand Prix
+// of Illinois, rather than falling through to whatever raced most recently.
+// Keyed by the NORMALIZED ESPN token. Add a row whenever a track is renamed.
+const RACE_TOKEN_ALIASES = {
+  atlanta: ["echopark"],
+  charlotte: ["coca cola 600"],
+  illinois: ["world wide technology", "gateway", "wwt"],
+  indianapolis: ["brickyard"],
+  "st petersburg": ["st pete"],
+};
+
+// True when `title` is plausibly about the race `tokens` describe. Deliberately
+// permissive on WORD PREFIXES in both directions — "Chicago" must match
+// "Chicagoland Speedway", and "Sonoma" must match "Sonoma Raceway" — but it
+// will not match a different race, which is the whole point.
+function raceTitleMatches(tokens, titleLower) {
+  if (tokens.length === 0) return true; // no gate requested → unchanged behaviour
+  const nt = normalizeRaceToken(titleLower);
+  const titleWords = nt.split(" ");
+  for (const tok of tokens) {
+    if (!tok) continue;
+    if (nt.includes(tok)) return true;
+    for (const w of titleWords) {
+      if (w.length >= 5 && (w.startsWith(tok) || tok.startsWith(w))) return true;
+    }
+    for (const alias of RACE_TOKEN_ALIASES[tok] || []) {
+      if (nt.includes(alias)) return true;
+    }
+  }
+  return false;
+}
+
 export default {
   async fetch(request, env) {
    try {
@@ -218,6 +263,18 @@ export default {
       // unless the caller sets it, so leagues whose official channel reliably
       // ranks #1 (MLB/NBA/…) are unaffected and pay no extra oembed round-trip.
       const strictChannelParam = url.searchParams.get("strict") === "1";
+      // race=<a|b|c> → RACE GATE for motorsport (see RACE_TOKEN_ALIASES and
+      // buildRaceTokens in src/lib/espn.ts). The channel gate alone is not
+      // enough here: F1 / NASCAR / INDYCAR each upload to ONE official channel
+      // all season, so when that channel has no reel for the race you asked
+      // about, the matcher happily returns its most recent race reel instead.
+      // Measured 2026-08-03 over all 50 completed 2026 races: 7 served the
+      // WRONG race (Grand Prix of Illinois → Nashville, Bahrain GP →
+      // Barcelona-Catalunya, Saudi GP → Hungarian, plus the four Daytona
+      // speedweek exhibitions, which have no Cup reel at all). This is the
+      // motorsport analogue of the golf-tournament and World Cup gates.
+      const raceTokens = (url.searchParams.get("race") || "")
+        .split("|").map((s) => normalizeRaceToken(s)).filter(Boolean);
       const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
       const excludeSet = new Set(
         (excludeParam || "").split(",").map((s) => s.trim()).filter(Boolean)
@@ -549,6 +606,14 @@ export default {
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             roundOnlyTitleOk;
           if (!isHighlight) continue;
+
+          // Racing race gate (see the `race` param above). The official channel
+          // posts one reel per race all season, so without this the F1 /
+          // NASCAR / INDYCAR tile silently plays a DIFFERENT race whenever the
+          // one you asked about has no reel. Same "better to 404 than serve the
+          // wrong event" posture as the World Cup gate below — a rejected race
+          // resolves to null and the tile hides its button.
+          if (!raceTitleMatches(raceTokens, titleLower)) continue;
 
           // World Cup gate (see isWorldCupQuery above) — drop any video whose
           // title doesn't say "World Cup" so a friendly / qualifier / continental
@@ -1210,7 +1275,30 @@ export default {
           //     appears in a highlight or headline feed, and no in-scope team is named anything beginning
           //     with it), so the trailing \w* covers whitewash/whitewashes/whitewashed/whitewashing at the
           //     same negligible false-positive risk as the sweep/rout family. Byte-identical to spoilers.ts.
-          const SPOILER_RX = /\b(walk[- ]?off|buzzer[- ]?beaters?|comeback|come[- ]from[- ]behind|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|fight(?:s|ing)?[- ]?back|fought[- ]?back|rall(?:y|ies|ied|ying) (?:past|back|from)|extra[- ]?innings?|overtime|extra[- ]?time|sudden[- ]?death|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|overwhelm\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|relegat\w*|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|hold(?:s|ing)?[- ]?on|held[- ]?on|hang(?:s|ing)?[- ]?on|hung[- ]?on|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|top(?:s|ped)|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|choke\w*|collaps\w*|obliterat\w*|annihilat\w*|decimat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|brush(?:es|ed|ing)?[- ]?aside|(?:runs?|running|ran) riot|to the sword|hammer(?:ed|ing)|batter(?:ed|ing)|cruise(?:s|d)?|canter(?:s|ed|ing)?|(?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|coast(?:s|ed)?|stroll(?:s|ed)?|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past|(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past|triumph\w*|romp\w*|conquer\w*|dethron\w*|upset\w*|clinch\w*|seals?|sealed|snatch\w*|sweep\w*|swept|whitewash\w*|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|knock out|knock(?:s|ed|ing)? off|sent[- ]?packing|qualif(?:y|ies|ied)|advanc\w*|book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)|punch(?:es|ed)? (?:their|its|a) ticket|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|crowned (?:world )?champions?|world[- ]?(?:cup[- ]?)?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|trophy)|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|(?:comes?|came)[- ]?out on top|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]?hitter|empty[- ]?net(?:s|ter|ters)?|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|salvag\w*|rescu\w*|consolat\w*|share(?:s|d)? the spoils|share(?:s|d)? the points|share(?:s|d)? the honou?rs|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|all[- ]?square|equali[sz]\w*|level(?:l)?ers?|go[- ]?ahead (?:goal|run|homer|home[- ]?run|score|basket|bucket|touchdown|header|strike)s?|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|all three points|TKO|submission\w*|submit(?:s|ted|ting)|tap(?:s|ped|ping)?[- ]?out|(?:unanimous|split|majority)[- ]?decision)\b/i;
+          //     ── Cricket (added 2026-08-03 with the IPL column) ──
+          //     Cricket states its results in vocabulary no other sport uses, so ten of the commonest IPL
+          //     result headlines walked straight through the filter above. Measured before this block:
+          //     "Mumbai Indians all out for 98", "Gujarat Titans bowled out for 155", "Chennai chase down
+          //     201", "Rajasthan chased 210", "Super Over drama", "SRH post 277 for 3", "RCB 161/5",
+          //     "Titans defend 155" and "Punjab skittled for 88" all PASSED. Each of them names the result.
+          //     Every term here is deliberately narrower than its natural phrasing, because this regex also
+          //     runs against NFL/NBA/soccer titles:
+          //       "bowl(?:s|ed|ing)[- ]?out" REQUIRES a verb suffix. The bare "bowl out" would fire on
+          //         "Super Bowl out of reach for the Jets" — the [- ]? also matches a space. Cricket only
+          //         ever says bowled/bowls/bowling out, so demanding the suffix costs nothing.
+          //       "defend(?:s|ed|ing)? \d{2,3}" and "chas(?:e|es|ed) \d{2,3}" REQUIRE the digits, so
+          //         "Chiefs defending champions" and "Curry chasing history in Game 5" stay clean.
+          //       "\d{2,3}\/(?:10|\d)" is the runs/wickets notation. The 2-3 digit head and the 0-10
+          //         wicket tail are what keep US date formats out: "12/25" fails the wicket group and
+          //         "5/31" fails the runs group, so neither a schedule nor a game-time headline trips it.
+          //       "\d{2,3} for \d" is the spoken form of the same score ("277 for 3"); the 2-3 digit head
+          //         keeps a basketball shooting line like "5 for 12" out.
+          //     "all[- ]?out for", "super[- ]?over" (which reveals a tie), "five[- ]?for", "fifer",
+          //     "wicket haul" and "skittl\w*" carry no non-cricket sense in a sports feed at all.
+          //     Verified against a 24-case battery (10 cricket results blocked, 14 non-spoiler headlines
+          //     still passing, including the Super Bowl and date-format traps). Byte-identical to the
+          //     worker's copy.
+          const SPOILER_RX = /\b(walk[- ]?off|buzzer[- ]?beaters?|comeback|come[- ]from[- ]behind|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|fight(?:s|ing)?[- ]?back|fought[- ]?back|rall(?:y|ies|ied|ying) (?:past|back|from)|extra[- ]?innings?|overtime|extra[- ]?time|sudden[- ]?death|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|overwhelm\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|relegat\w*|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|hold(?:s|ing)?[- ]?on|held[- ]?on|hang(?:s|ing)?[- ]?on|hung[- ]?on|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|top(?:s|ped)|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|choke\w*|collaps\w*|obliterat\w*|annihilat\w*|decimat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|brush(?:es|ed|ing)?[- ]?aside|(?:runs?|running|ran) riot|to the sword|hammer(?:ed|ing)|batter(?:ed|ing)|cruise(?:s|d)?|canter(?:s|ed|ing)?|(?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|coast(?:s|ed)?|stroll(?:s|ed)?|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past|(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past|triumph\w*|romp\w*|conquer\w*|dethron\w*|upset\w*|clinch\w*|seals?|sealed|snatch\w*|sweep\w*|swept|whitewash\w*|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|knock out|knock(?:s|ed|ing)? off|sent[- ]?packing|qualif(?:y|ies|ied)|advanc\w*|book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)|punch(?:es|ed)? (?:their|its|a) ticket|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|crowned (?:world )?champions?|world[- ]?(?:cup[- ]?)?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|trophy)|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|(?:comes?|came)[- ]?out on top|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]?hitter|empty[- ]?net(?:s|ter|ters)?|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|salvag\w*|rescu\w*|consolat\w*|share(?:s|d)? the spoils|share(?:s|d)? the points|share(?:s|d)? the honou?rs|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|all[- ]?square|equali[sz]\w*|level(?:l)?ers?|go[- ]?ahead (?:goal|run|homer|home[- ]?run|score|basket|bucket|touchdown|header|strike)s?|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|all three points|bowl(?:s|ed|ing)[- ]?out|all[- ]?out for|chas(?:e|es|ed|ing)[- ]?down|chas(?:e|es|ed) \d{2,3}\b|super[- ]?over|defend(?:s|ed|ing)? \d{2,3}\b|\d{2,3}\/(?:10|\d)\b|\d{2,3} for \d\b|five[- ]?for\b|fifer|wicket haul|skittl\w*|TKO|submission\w*|submit(?:s|ted|ting)|tap(?:s|ped|ping)?[- ]?out|(?:unanimous|split|majority)[- ]?decision)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks
@@ -1615,6 +1703,152 @@ export default {
     // MLB.com recap + condensed-game video links. StatsAPI sends the per-game
     // highlight payload, but browsers/Capacitor should not call it directly from
     // every card. Normalize it here into the shape espn.ts expects.
+    // ── Chess: upcoming/live/finished elite broadcasts (Lichess) ────────────
+    // Lichess DOES send `Access-Control-Allow-Origin: *`, so this proxy is not
+    // strictly required — it exists to cache. Every browser hitting Lichess
+    // directly would be a needless load on a free volunteer-funded service for
+    // data that is identical for all users; one cached edge response is
+    // neighbourly and faster. No key, no auth.
+    //
+    // `tier` does the curation: 5 = marquee (Grand Chess Tour, FIDE world
+    // championships), 4 = strong international, 3 = local Swiss opens. Probed
+    // 2026-08-03: 53 active broadcasts, of which only 8 were tier >= 4. Without
+    // the filter the column is 45 rows of amateur weekend events.
+    if (url.pathname === "/api/chess") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const corsJson = (body, status = 200, maxAge = 600) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      const MIN_TIER = 4;
+      try {
+        const res = await fetch("https://lichess.org/api/broadcast/top?nb=20", {
+          // Lichess asks API consumers to identify themselves. A generic
+          // browser UA is what gets projects rate-limited here.
+          headers: { "User-Agent": "HideScore/1.0 (+https://hidescore.com)", Accept: "application/json" },
+        });
+        if (!res.ok) return corsJson({ events: [] }, 200, 60);
+        const data = await res.json();
+        const pick = (t, state) => {
+          const tour = t?.tour || {};
+          const round = t?.round || {};
+          const info = tour.info || {};
+          if ((tour.tier || 0) < MIN_TIER) return null;
+          return {
+            id: String(tour.id || ""),
+            name: String(tour.name || ""),
+            state,                                  // "in" | "pre" | "post"
+            round: String(round.name || ""),
+            startsAt: round.startsAt || (tour.dates && tour.dates[0]) || null,
+            endsAt: (tour.dates && tour.dates[1]) || null,
+            format: info.format || "",
+            timeControl: info.tc || "",
+            location: info.location || "",
+            // Player list is a plain comma string on Lichess. It is NOT a
+            // spoiler (it's the field, not the result) and it is the single
+            // most useful "is this worth watching" signal a chess card has.
+            players: String(info.players || "").split(",").map((s) => s.trim()).filter(Boolean),
+            url: tour.url || (tour.slug && tour.id ? `https://lichess.org/broadcast/${tour.slug}/${tour.id}` : null),
+            website: info.website || null,
+            image: tour.image || null,
+            tier: tour.tier || 0,
+          };
+        };
+        const events = [];
+        for (const [key, state] of [["active", "in"], ["upcoming", "pre"], ["past", "post"]]) {
+          // ⚠️ `active` and `upcoming` are plain arrays but `past` is PAGINATED
+          // — an object with the rows under `currentPageResults`. Iterating it
+          // as an array throws and takes the whole endpoint down with it, so
+          // normalize the shape rather than assuming. (Caught in testing
+          // 2026-08-04, before deploy.)
+          const raw = data?.[key];
+          const list = Array.isArray(raw) ? raw : (raw?.currentPageResults || []);
+          for (const t of list) {
+            const row = pick(t, state);
+            if (row && row.id && row.name) events.push(row);
+          }
+        }
+        return corsJson({ events });
+      } catch {
+        return corsJson({ events: [] }, 200, 60);
+      }
+    }
+
+    // ── Boxing: fight-card schedule (boxing-data.com via RapidAPI) ──────────
+    // ESPN has NO boxing endpoint — its core API rejects the sport outright
+    // ("Invalid sport (boxing)"), so this is the only structured source.
+    // BOXING_API_KEY is a Pages secret; it must never reach the client, which
+    // is the whole reason this is a worker route rather than a direct fetch.
+    // The plan is Basic: 100 requests/month, HARD-capped, no card on file — so
+    // this cannot generate a bill, but it also cannot absorb per-user traffic.
+    // Hence the long cache: boxing announces cards 6-8 weeks out and the feed
+    // only carries a handful of events, so hourly is far more than fresh
+    // enough and keeps us near ~24 requests/day worst case.
+    if (url.pathname === "/api/boxing") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const corsJson = (body, status = 200, maxAge = 3600) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      if (!env.BOXING_API_KEY) return corsJson({ events: [], disabled: true }, 200, 300);
+      try {
+        const host = "boxing-data-api.p.rapidapi.com";
+        const res = await fetch(`https://${host}/v2/events/schedule`, {
+          headers: {
+            "x-rapidapi-host": host,
+            "x-rapidapi-key": env.BOXING_API_KEY,
+            "Content-Type": "application/json",
+          },
+        });
+        // A 429 here means the month's 100 requests are spent. Serve empty and
+        // let the column fall back rather than surfacing an error to the user.
+        if (!res.ok) return corsJson({ events: [] }, 200, 900);
+        const data = await res.json();
+        const events = (data?.data || []).map((e) => ({
+          id: String(e.id || ""),
+          title: String(e.title || ""),
+          date: e.date || null,
+          venue: e.venue || null,
+          location: e.location || null,
+          // `broadcast` is per-country: [{country, broadcasters:[...]}]. Keep
+          // only the US/UK rows — those are the ones Jacob can actually watch.
+          broadcasts: (e.broadcast || [])
+            .filter((b) => ["United States", "United Kingdom"].includes(b?.country))
+            .flatMap((b) => b?.broadcasters || []),
+          poster: e.poster_image_url || null,
+        })).filter((e) => e.id && e.title && e.date);
+        return corsJson({ events });
+      } catch {
+        return corsJson({ events: [] }, 200, 300);
+      }
+    }
+
     if (url.pathname === "/api/mlb-videos") {
       if (request.method === "OPTIONS") {
         return new Response(null, {

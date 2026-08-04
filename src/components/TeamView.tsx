@@ -47,6 +47,12 @@ function rawEspnTeamId(teamId: string, sport: Sport): string {
 const TWO_CALENDAR_YEAR_SPORTS = new Set<Sport>([
   "epl", "mls", "fifa", "ucl", "uel", "nba", "nhl", "ncaam", "ncaaw",
   "laliga", "seriea", "bundesliga", "ligue1",
+  // Second-wave leagues whose season spans two calendar years. EFL Championship
+  // and the Saudi Pro League run Aug–May like the big five. Liga MX belongs here
+  // too — ESPN identifies its season 2026-06-01 → 2027-06-01, so the Clausura
+  // half lives in the following calendar year. NWSL, Libertadores, Euro and
+  // AFCON are all single-calendar-year and correctly fall through to [y, y-1].
+  "ligamx", "efl", "saudi",
 ]);
 
 // Fallback multi-year window so a season that spans (or hasn't filled) the

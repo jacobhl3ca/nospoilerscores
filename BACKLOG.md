@@ -1,5 +1,26 @@
 # HideScore — Master Backlog
 
+## 2026-08-03 — "MLB news feed empty in Safari" = NOT a bug, it's the funnel default. Empty-state SHIPPED (`23d5e938`)
+🔍 **Report:** Jacob's screenshot — News tab, Cards, 🎥 Videos ON, columns MLB + News. **MLB column completely blank**; News showed r/sports clips fine.
+✅ **Root cause (not Safari, not a code bug):** `const newsTypeFilter = prefs.newsTypeFilter ?? "reddit"` in `src/components/HomeContent.tsx` — the **funnel Source filter defaults to Reddit-only**, so a league column holds *exactly one* source (MLB = `reddit-mlb` / r/baseball). The Videos toggle then hides any source with no clips (`SourceSection`: `if (!loading && items.length > 0 && shown.length === 0) return null`). On a day r/baseball has no v.redd.it posts → every source in the column returns null → bare title over blank space.
+✅ **Jacob's 2-tap fix:** funnel icon (top-right) → **Source** → **All** (or "Clear filter"). Proved live: funnel=reddit + Videos → `R/BASEBALL, R/NFL, R/SPORTS`; funnel=**all** + Videos → `R/BASEBALL, MLB MOST POPULAR, R/NFL, R/SPORTS`.
+✅ **Shipped `23d5e938` → main, GHA "Deploy to Cloudflare Pages" success, live-verified.** `src/components/NewsColumn.tsx`: new `SourceRenderState = "loading" | "hidden" | "shown"`; `SourceSection` reports its outcome up via `onRenderState`; `NewsColumn` renders a card — *"No videos here right now. / Turn off Videos, or widen Source in the filter menu."* — **only** once every source has settled AND all were filtered away. A still-loading column, or one whose source shows its own "No headlines", is untouched. `role=status` + `aria-live=polite`.
+✅ **Verified:** forced the exact case locally (mirrored live feeds into `public/news/`, nulled r/baseball's video fields, Videos ON) → message rendered in MLB only, other columns intact; control with Videos OFF → message gone, R/BASEBALL back. `tsc --noEmit` + eslint + full `npm run build` clean. Post-deploy: new string present in shipped bundle `1f0dlfy16v50-.js`, News renders, 0 page errors.
+⚠️ **THE REAL LESSON — `~/nospoilerscores-feed` was 305 commits behind `origin/main`.** I first "found and fixed" a genuine-looking bug there (`itemIsVideo` missing `playbackUrl`, which MLB Most Popular items carry *exclusively*) and was one command from deploying it — **`origin/main` already had that fix**. Wasted a full cycle. **Before diagnosing anything from that worktree: `git fetch origin +refs/heads/main:refs/remotes/origin/main` && `git rev-list --count HEAD..origin/main`.** Non-zero ⇒ read via `git show origin/main:<path>`, never the working tree. Recorded in memory `reference_nospoilerscores_deploy_and_bot`.
+📌 **Repro recipe (reusable):** `curl https://hidescore.com/news/<feed>.json` into `public/news/` (gitignored) → null out video fields to force the empty case → `npm run dev` (⚠️ needs the Bash sandbox OFF, else `listen EPERM`) → Playwright via `/opt/homebrew/bin/python3` with `localStorage nss-preferences = {leaguesOnboarded:true, newsVideosOnly:true}` → click **News** → dismiss **"FULL OF SPOILERS → Show News"**.
+
+**Done:** `23d5e938` live on hidescore.com; memory + this backlog updated.
+**Next:** decide whether Reddit-only should remain the funnel DEFAULT — the empty-state is a band-aid over that choice.
+**How to resume:** worktree `~/nospoilerscores-feed` is on branch `fix/news-empty-state` @ `23d5e938` (= `origin/main`). Re-read this entry + memory `reference_nospoilerscores_deploy_and_bot`.
+**Needs-Jacob:**
+- ⚠️ **Never verified in Safari.** All checks ran headless Chromium; WebKit isn't installable via `playwright-core`. Diagnosis is data/logic-level so browser-independent, but the *rendered* empty-state card is unconfirmed on Safari/iOS. Hard-reload (**Cmd+Opt+R**) and eyeball it.
+- ⚠️ **Never verified the funnel CLICK path.** I set `newsTypeFilter` via localStorage, not by clicking funnel → Source → All. Mapping is from code (`setNewsTypeFilter`), not observed.
+- ⚠️ **Never saw the empty state render on PRODUCTION** — only that its string shipped in the bundle. Can't force the all-filtered case on live data.
+- ❓ **Product call:** is Reddit-only the right funnel default? It's why a league column can hold a single source. "All" would have prevented this outright.
+- 🧹 `feat/news-feed-comments` still holds redundant local commit `450a1f8f` and is 305 behind — rebase or drop before reusing that branch.
+- 🔐 Push output flagged **4 Dependabot vulns (3 high, 1 moderate)** on the default branch — unreviewed this session.
+_src: 2026-08-03 session_
+
 ## 2026-07-22 — "83% of cards blank" media alert = FALSE ALARM (post-WC r/soccer), plus a real bot-thread fix
 🔍 Jacob's `hidescore-media-check` watchdog popped "r/soccer: 83% of cards blank (0 vid, 2 img)". **The extractor is fine** — same hour, `reddit-mlb.json` baked 5 videos / 9 images and `reddit-nfl.json` 4 / 4. r/soccer itself is genuinely media-free right now: the World Cup final was 7/19, so the sub is a pure transfer-window feed (rumors, quotes, journalist tweets) with no matches to clip. Live RSS check: **5 of 25** hot posts carry an image, **1** carries a video.
 ✅ Watchdog retuned (`~/scripts/hidescore-media-check.py`, MacBook-local, not in this repo): r/soccer dropped from `FEEDS` the same way nba/nhl are dropped in their offseasons — its WC-era "0 videos = broken" rule was written when the sub reliably carried goal clips. **Re-add ~Aug 15** when the EPL kicks off.
@@ -171,6 +192,52 @@
   > - **Rugby (Six Nations, RWC)** — `rugby/<league>`. Niche in the US.
   > - **UEFA Conference League** — `soccer/uefa.europa.conf`. Pairs with UCL + UEL.
   > _src: session 2026-05-27 sports-audit_
+  >
+  > **Update 2026-08-03 — most of this list SHIPPED.** Added and verified live against
+  > ESPN: Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, Euro
+  > (yearCycle-gated to 2028), AFCON (gated to 2027), Cricket/IPL, NASCAR, IndyCar.
+  > NCAAM/NCAAW were already in. Still open from the list above: Olympics, Ryder Cup,
+  > Rugby (ESPN's `rugby/*` scoreboard 400s — no working path found), UEFA Conference
+  > League.
+
+- [ ] **Esports column (LoL) — new data provider, not ESPN.** Biggest remaining audience gap. Worlds peaks ~6M+ concurrent excluding China and is watched almost entirely on VOD in the West because it's played in Asian timezones, which makes it the purest spoiler use-case after cricket.
+  > **Source found and de-risked (2026-08-03):** `https://esports-api.lolesports.com/persisted/gw/getSchedule?hl=en-US`
+  > with the `x-api-key` header set to Riot's PUBLIC lolesports web key — the constant hardcoded in
+  > their own browser client, not a credential. Not pasted here: it is high-entropy enough that
+  > gitleaks blocks the commit, and an allowlist entry would weaken the hook for a value anyone can
+  > read out of lolesports.com in devtools (Network tab → any `persisted/gw/*` request). Returns 200,
+  > **and it sends `access-control-allow-origin: *`** — so it can be fetched straight from the browser
+  > with NO worker proxy. That was the expensive part and it's not needed.
+  > Payload maps onto the existing two-team `Game` card almost 1:1: `match.teams[].name/code/image`,
+  > `result.gameWins` → score, `record.wins/losses` → record, `strategy.count` → Bo1/Bo3/Bo5,
+  > `state` unstarted/inProgress/completed → pre/in/post, `blockName` → "Week 3"/"Playoffs".
+  > **Two real design decisions before building:**
+  > 1. The endpoint is a rolling ~80-event firehose across **22 leagues** (LCK, LPL, LEC, LCS, LCP down
+  >    to Hellenic Legends League). Needs a majors allowlist — suggest LCK/LPL/LEC/LCS/LCP + Worlds/MSI.
+  > 2. It is **not date-keyed** the way every ESPN endpoint is — there's no `?dates=` param, just a rolling
+  >    window plus `pageToken` for older pages. Date navigation (Yesterday / a past tab) needs a
+  >    fetch-then-filter layer, which is the one genuinely new bit of plumbing.
+  > ⚠️ Team logos come back as `http://static.lolesports.com/...` — must be upgraded to https or they
+  > break on the HTTPS page.
+
+- [ ] **Chess column — Lichess broadcasts.** Small audience (~1–2M engaged) but structurally the best fit of any sport on this list: the dominant way people consume chess IS a recap video, so spoilers are the whole problem.
+  > **Source found and de-risked (2026-08-03):** `https://lichess.org/api/broadcast?nb=N` (NDJSON, no key,
+  > **`access-control-allow-origin: *`** → browser-direct, no proxy). Each record carries
+  > `tour.name`, `tour.info.location`, `tour.dates`, `tour.tier`, `tour.url`, `tour.image`.
+  > Shape is a tournament + rounds, not two teams — so this should render as the **single-event tile**
+  > (the `kind: "f1"` layout that F1/NASCAR/IndyCar now share), titled with the event and subtitled with
+  > the location, NOT as a game card.
+  > Open question: `tier` semantics need confirming before it can be used to filter to marquee events
+  > (Candidates / World Championship / Tata Steel) instead of showing every club tournament.
+  > ⚠️ Audit `tour.description` for result leakage before rendering it.
+
+- [ ] **Boxing — BLOCKED on a data source, needs a Jacob decision.** Spiky but enormous (tens of millions per PPV), and replay-heavy, so it fits the app. There is just nothing to read.
+  > Confirmed 2026-08-03: ESPN has **no** boxing endpoint. `sports/boxing/scoreboard` → 404,
+  > `sports/mma/boxing/scoreboard` → 400, `site.web.api` variant → 404. No free feed found.
+  > Three options, all requiring a call: (1) pay for a sports-data API that carries boxing cards;
+  > (2) hand-curate — it's only ~8–12 events a year, so a small JSON file in the repo is genuinely
+  > viable and costs nothing; (3) drop it. Option 2 is the cheapest real answer.
+  > Note boxing is also a weak retention driver either way — a handful of events a year, no daily slate.
 
 - [ ] **Header overflow — bottom-toolbar / tab-bar redesign.** Fix the header overflowing on narrow screens, likely by moving icons to a bottom toolbar.
   > It needs ~422px but phones give 360–414px → 8–62px overflow → the whole page becomes pannable (scores + Settings look mis-scaled). Confirmed live via Playwright at 360/390/414px — a website bug both native apps inherit through the WebView. Root cause: the right-side icon cluster (`justify-self-end … flex-shrink-0` in `HomeContent.tsx`) can't compress. Options: (1) **bottom toolbar / iOS tab bar** (Jacob's pick) — move all icons except date nav (share, monkey-sort, news, calendar, theme, settings) into a fixed bottom bar; header keeps the H logo + ‹ Yest/Today/Tomo ›. Uses `position:fixed` + `env(safe-area-inset-bottom)` like the footer; cleaner inside the native apps than mobile Safari. Note a true tab bar is for nav (Scores/News/Settings) — toggles like monkey-sort/theme aren't nav, so accept a mixed bar or split them. (2) wrap header to two rows on narrow screens. (3) shrink icons `w-7→w-6` + tighten gaps + drop calendar on mobile. (4) collapse secondary icons behind a `⋯` menu. Don't regress the `xl:` logo / DateNav-centering breakpoint — see `feedback_hidescore_header_compact.md`. **Update (5/21):** option (2) the 2-row wrap was shipped (`833e45a3`) then **REVERTED** (`2165e68b`) — Jacob disliked the unbalanced look. Agreed next = **remove redundant icons**: delete the header App Store icon (it duplicates the footer App Store badge) + fold the calendar into tapping the date label → 3 icons (monkey · news · settings), one row. **The 5/28 layout overhaul on `staging` reworks the header into a bottom tab bar (option 1, Jacob's pick) and likely supersedes this — verify that's merged before doing the standalone trim.** _src: session_hidescore_iphone_toolbar_overflow_2026_05_20.md, session_hidescore_android_app_build_2026_05_20_to_21.md_
@@ -415,3 +482,26 @@
 - **"Columns don't align"**: measured live DOM — MLB team rows are 24px line-boxes at every width; fighter rows collapsed to the 16px mobile flag → every UFC card 16px short, columns drifted. Fix `min-h-6` on FighterRow. Live-verified: 225px cols MLB 102 = UFC 102; 143px non-pill UFC 90 = MLB 90; only Main/Co-Main wrap (~107) on narrow phones.
 - **⚠️ Parallel-session note**: the other repo session (F1 parity work) swept these uncommitted EventCard edits into its commits `b52ab69b`/`a4fdde8a` and pushed; deploys `29646323615`/`29646518479` green; final result verified on hidescore.com. `APP_STORE_SUBMISSION.md` still modified/uncommitted (theirs).
 - **Offered, awaiting Jacob**: last-names-only fighter names on compact columns (full names still truncate "Dricus Du Ple…" — no abbreviations exist for fighters).
+
+## 2026-07-28 — News picture posts fixed (galleries + 140px thumbnails) — LIVE `5969c0d7`, then deps `6220ab55`
+
+**Trigger:** Jacob — "a lot of the picture posts in hidescore news don't show properly, especially if more than 1 picture posted" + a screenshot of a tiny blurry golf photo in the lightbox.
+
+**Two real bugs, both in the redlib listing path (`scripts/prebake-news.mjs` → `parseRedlibListing`):**
+- **Gallery posts** — redlib's listing shows a multi-image post as *only* a 140×140 square-crop thumb + a `<span>gallery</span>` marker. We baked that as the picture. Now the post page is fetched, every image pulled at full res into a new `images[]` field, cached by post id in `public/news/_gallery-cache.json` (one extra fetch per gallery post, ever; 6/sub/bake cap, 800ms spacing).
+- **The screenshot** (Lucas Glover, r/sports) — an external-LINK post whose only image is a 140×78 preview crop. Reddit has no bigger version (the size is inside the `s=` signature; the post page has no preview). Now flagged `thumbOnly` → opens as a text card with the crop at its true size instead of an upscaled smear.
+
+**Found + fixed along the way:**
+- Every reddit picture was being served from **redlib-media.perennialte.ch** (a volunteer proxy) because absolute URLs skipped the CDN rewrite. Now always Reddit's own CDN.
+- ⭐ **safereddit served a challenge page to our Safari UA** → the mirror that's up most often counted as "down" for every fetch, collapsing the fallback chain onto the rate-limited reddit.com RSS. Mirror fetches now retry bare-UA. Plausibly a past feed-staleness cause too.
+- Images now go through weserv width-capped (gallery frames arrive at 4000px+/3.5MB each).
+
+**Client:** `VideoModal` gallery paging in place — chevrons/swipe/←→ walk the pictures, then continue to the next post at the ends; `1 / N` counter + dots; NewsFeed shows the cover with a `1 / N` badge.
+
+**Deploys:** GHA `30364051682` ✅ (pics) and `30365635814` ✅ (deps), both smoke-tested; gallery UI confirmed in the live bundle. Pushed 4 feeds straight to R2 so it was visible immediately instead of waiting on the mini's hourly bake.
+
+**Deps side-quest:** 48 Dependabot alerts → **4**. next 16.2.1 → 16.2.12 + `npm audit fix`. Worth knowing: the scary ones were all *server-side* Next advisories and this app is `output:"export"` on Cloudflare Pages — no Next server runs in prod. Residual 3 (postcss, sharp) are pinned inside next itself; the only fix npm offers downgrades next, so leave them.
+
+**Needs-Jacob / open:**
+- Eyeball it in Safari (Cmd+Opt+R) and relaunch the iOS app to pick up the new bundle.
+- Gallery resolution depends on safereddit's post pages; when every mirror refuses, the post silently falls back to thumbnail-only (no error, just no gallery). If galleries look sparse later, that's why.
