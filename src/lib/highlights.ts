@@ -36,7 +36,19 @@ export function loadBakedHighlights(): Promise<Record<string, BakedHighlight>> {
           return {};
         }
         const data = await res.json();
-        bakedCache = (data?.games ?? {}) as Record<string, BakedHighlight>;
+        // A 200 whose body carries no `games` map — a malformed or partial
+        // deploy, an R2 stub, or a bare `{}` — is a miss, not an empty day:
+        // clear the promise so the next card retries, rather than caching an
+        // empty map for the page's whole lifetime (the documented behavior in
+        // this file's header, until now wired only for the !res.ok and
+        // thrown-error branches). A present-but-empty `{games:{}}` (a valid day
+        // with nothing baked yet) still caches as before — one request, no
+        // per-card refetch.
+        if (!data?.games) {
+          bakedPromise = null;
+          return {};
+        }
+        bakedCache = data.games as Record<string, BakedHighlight>;
         return bakedCache;
       } catch {
         bakedPromise = null;
