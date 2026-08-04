@@ -2271,9 +2271,14 @@ function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
       // Filter out postponed/canceled/suspended games
       const statusName = e.status?.type?.name ?? "";
       if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
-      // Filter out preseason/spring training — bad highlights, ties in records, low-quality games
+      // Filter out preseason/spring training — bad highlights, ties in records, low-quality games.
+      // EXCEPT the NFL: LEAGUES carries a dedicated "NFL Preseason" column
+      // (07-21 → 09-03) whose entire slate is seasontype 1, so this blanket
+      // filter emptied it for its whole run — every day rendered "Upcoming
+      // Schedule TBD" while ESPN had 49 games on the board. The regular NFL
+      // config doesn't start until 09-04, so no type-1 event can leak into it.
       const seasonType = e.season?.type ?? 0;
-      if (seasonType === 1) return false;
+      if (seasonType === 1 && sport !== "nfl") return false;
       // Tournament-wrapper events with no competitors aren't real matches.
       const competitors = e.competitions?.[0]?.competitors ?? [];
       if (competitors.length < 2) return false;
@@ -3433,7 +3438,9 @@ export async function fetchTeamSchedule(
         const statusName = e.status?.type?.name ?? "";
         if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) continue;
         const seasonType = e.season?.type ?? 0;
-        if (seasonType === 1) continue;
+        // Same NFL-preseason carve-out as eventsToGames — a team's schedule
+        // should list its preseason games while the Preseason column is live.
+        if (seasonType === 1 && sport !== "nfl") continue;
         if (!e.id || seen.has(e.id)) continue;
         seen.add(e.id);
         const game = parseGame(e, sport);
