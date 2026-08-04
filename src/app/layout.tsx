@@ -160,6 +160,14 @@ const JSON_LD = {
       applicationCategory: "SportsApplication",
       url: "https://apps.apple.com/app/hidescore/id6766885311",
       installUrl: "https://apps.apple.com/app/hidescore/id6766885311",
+      // Google lists `description` as a recommended property for the
+      // SoftwareApplication family (MobileApplication is a subtype) — it feeds
+      // the app's entity/rich-result understanding. The sibling WebApplication
+      // node above already carries it (as does the Organization node below);
+      // this iOS product node was the lone outlier still missing it. Reuse
+      // SITE_DESC so the app summary stays in one place and matches the
+      // WebApplication description, the <meta name="description">, and OG copy.
+      description: SITE_DESC,
       // Same locale signal the sibling WebApplication/WebSite nodes carry —
       // MobileApplication is a SoftwareApplication → CreativeWork subtype too,
       // so inLanguage is valid here and keeps all product nodes consistent.
