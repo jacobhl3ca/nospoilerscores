@@ -175,6 +175,12 @@ export default function FeedbackBox() {
               inputMode="email"
               autoComplete="email"
               enterKeyHint="send"
+              // Expose the malformed-address state programmatically, not just
+              // via the red border + describedby hint below: without aria-invalid
+              // a screen reader announces this as an ordinary email field even
+              // while sighted users see it flagged. Mirrors emailLooksWrong so
+              // the spoken state tracks the visual one exactly (WCAG 4.1.2).
+              aria-invalid={emailLooksWrong || undefined}
               aria-describedby={emailLooksWrong ? "hs-feedback-email-hint" : undefined}
               className="flex-1 w-0 text-xs px-2 py-1 leading-none rounded outline-none"
               style={{
