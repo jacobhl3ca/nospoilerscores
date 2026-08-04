@@ -120,6 +120,21 @@ function shortenPlayoffLabel(headline: string): string {
 interface SubtitleResult {
   tiers: string[];
   href?: string;
+  // Green pulsing-dot treatment. Kept explicit rather than inferred from
+  // `href`, so a subtitle can link somewhere without claiming to be live.
+  live?: boolean;
+}
+
+const TRADE_BOARD_URL = "https://trades.hidescore.com";
+
+// The header subtitle is a single line that already reserves its height even
+// when empty (a transparent nbsp), so column headers stay aligned. Big Inning
+// and the playoff countdown own that line whenever they have something to say;
+// the trade board only fills it the rest of the time. Nothing moves, and no
+// second row is added.
+function tradeBoardSubtitle(sport: Sport): SubtitleResult | null {
+  if (sport !== "mlb") return null;
+  return { tiers: ["Trade Board", "Trades"], href: TRADE_BOARD_URL };
 }
 
 // Tennis round wording for the italic header subtitle (parallels golf's
@@ -292,6 +307,7 @@ function getPlayoffSubtitle(
         // lives) instead of the browser, falling back to the web URL if the
         // MLB app isn't installed. On the web this stays the plain https link.
         href: entry.selectionUrl ?? "https://www.mlb.com/tv",
+        live: true,
       };
     }
     // Past the 3h air window today: show ended, hide the subtitle entirely.
@@ -380,7 +396,9 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
     return () => clearInterval(id);
   }, [needsBigInningTick]);
 
-  const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
+  const result =
+    getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule) ??
+    tradeBoardSubtitle(sport);
   const tiers = result?.tiers ?? [];
   const href = result?.href;
   const tiersKey = tiers.join("|");
@@ -431,10 +449,10 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tiersKey]);
 
-  // Within PlayoffSubtitle, `href` is only set when Big Inning is live \u2014
-  // safe trigger for the "green & clickable" live treatment that mirrors
-  // the GameCard live-progress indicator.
-  const isLive = !!href && tiers.length > 0;
+  // The "green & clickable" treatment that mirrors the GameCard live-progress
+  // indicator. Only Big Inning sets `live`; the trade board links from the same
+  // slot without borrowing the live styling.
+  const isLive = !!result?.live && tiers.length > 0;
   const baseCls = "text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5";
   const liveCls = `${baseCls} text-green-500 font-medium hover:text-green-400 transition-colors hover:underline`;
   const linkCls = `${baseCls} italic hover:underline transition-colors`;
