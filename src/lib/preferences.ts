@@ -19,7 +19,7 @@ const STORAGE_KEY = "nss-preferences";
 // collision-free against every code already in this map (note nwsl is "nw", NOT
 // a reversal risk with wnba's existing "wn"; they are distinct keys and both
 // must stay, since changing either would break already-shared URLs).
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", cricket: "ck", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch" };
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", cricket: "ck", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", esports: "es" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;

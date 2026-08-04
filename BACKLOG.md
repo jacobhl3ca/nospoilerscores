@@ -10,13 +10,14 @@
 📌 **Repro recipe (reusable):** `curl https://hidescore.com/news/<feed>.json` into `public/news/` (gitignored) → null out video fields to force the empty case → `npm run dev` (⚠️ needs the Bash sandbox OFF, else `listen EPERM`) → Playwright via `/opt/homebrew/bin/python3` with `localStorage nss-preferences = {leaguesOnboarded:true, newsVideosOnly:true}` → click **News** → dismiss **"FULL OF SPOILERS → Show News"**.
 
 **Done:** `23d5e938` live on hidescore.com; memory + this backlog updated.
-**Next:** decide whether Reddit-only should remain the funnel DEFAULT — the empty-state is a band-aid over that choice.
+**Next:** nothing open. ✅ **8/3 Jacob DECIDED: Reddit-only STAYS the funnel default** (re-confirms his 7/16 "Reddit-first" call) — the shipped empty-state is the answer to the blank column, not a default change. ⛔ Don't re-propose flipping it to "All".
 **How to resume:** worktree `~/nospoilerscores-feed` is on branch `fix/news-empty-state` @ `23d5e938` (= `origin/main`). Re-read this entry + memory `reference_nospoilerscores_deploy_and_bot`.
 **Needs-Jacob:**
 - ⚠️ **Never verified in Safari.** All checks ran headless Chromium; WebKit isn't installable via `playwright-core`. Diagnosis is data/logic-level so browser-independent, but the *rendered* empty-state card is unconfirmed on Safari/iOS. Hard-reload (**Cmd+Opt+R**) and eyeball it.
 - ⚠️ **Never verified the funnel CLICK path.** I set `newsTypeFilter` via localStorage, not by clicking funnel → Source → All. Mapping is from code (`setNewsTypeFilter`), not observed.
 - ⚠️ **Never saw the empty state render on PRODUCTION** — only that its string shipped in the bundle. Can't force the all-filtered case on live data.
-- ❓ **Product call:** is Reddit-only the right funnel default? It's why a league column can hold a single source. "All" would have prevented this outright.
+- ✅ ~~Product call: Reddit-only as funnel default?~~ **DECIDED 8/3 — keep Reddit-only.** Closed, don't re-ask.
+- 🔒 **Dependabot 3 high = WON'T FIX (assessed 8/3).** All inside `next@16.2.12`'s own tree: postcss ×2 + sharp ×1. `next.config` is `output:"export"` → static on CF Pages, **no Next server, no image optimizer**, so sharp likely never runs and postcss only touches Jacob's own CSS at build. Dependabot's `scope=runtime` = "in `dependencies`", NOT "runs in prod". `next@16.3.0` ships postcss 8.5.23 and would likely clear the postcss pair — fold that bump into a future real deploy with a full build + smoke test, never as a standalone security push.
 - 🧹 `feat/news-feed-comments` still holds redundant local commit `450a1f8f` and is 305 behind — rebase or drop before reusing that branch.
 - 🔐 Push output flagged **4 Dependabot vulns (3 high, 1 moderate)** on the default branch — unreviewed this session.
 _src: 2026-08-03 session_
