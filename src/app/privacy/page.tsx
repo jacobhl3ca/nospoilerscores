@@ -89,7 +89,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-semibold mt-6">Credits</h2>
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          The HideScore monkey icon is derived from <a href="https://github.com/twitter/twemoji" className="underline underline-offset-2" target="_blank" rel="noreferrer">Twemoji</a>, copyright Twitter, Inc. and other contributors, licensed under CC-BY 4.0.
+          The HideScore monkey icon is derived from <a href="https://github.com/twitter/twemoji" className="underline underline-offset-2" target="_blank" rel="noopener noreferrer">Twemoji</a>, copyright Twitter, Inc. and other contributors, licensed under CC-BY 4.0.
         </p>
       </section>
 
