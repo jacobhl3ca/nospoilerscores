@@ -51,6 +51,7 @@ interface LeagueColumnProps {
   // Favorite-stars next to team names on the cards (Settings can hide them).
   // Suppressed automatically when the column is a single Finals matchup.
   showTeamStars?: boolean;
+  showTeamRecords?: boolean;
   // Sports shown in the other columns — dropdown greys these (still selectable).
   shownElsewhere?: Sport[];
   // Manual retry for the "Schedule unavailable" empty state. Pull-to-refresh
@@ -617,6 +618,7 @@ export default function LeagueColumn({
   switcherMode,
   onCycleLeague,
   showTeamStars,
+  showTeamRecords,
   shownElsewhere,
   onRetry,
   slotIdx,
@@ -1070,6 +1072,7 @@ export default function LeagueColumn({
         onSelectTeam={setTeamViewTeam}
         onShowDetails={onShowDetails}
         showStars={cardStars}
+              showRecords={showTeamRecords}
       />
     );
     return (
@@ -1137,6 +1140,7 @@ export default function LeagueColumn({
           onSelectTeam={setTeamViewTeam}
           onShowDetails={onShowDetails}
           showStars={cardStars}
+              showRecords={showTeamRecords}
         />
       );
     });
@@ -1171,6 +1175,7 @@ export default function LeagueColumn({
             onSelectTeam={setTeamViewTeam}
             onShowDetails={onShowDetails}
             showStars={cardStars}
+              showRecords={showTeamRecords}
           />
         ))}
       </div>
@@ -1481,6 +1486,7 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
+              showRecords={showTeamRecords}
             />
           ))}
         </div>
@@ -1500,6 +1506,7 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
+              showRecords={showTeamRecords}
             />
           ))}
           {renderUpcoming && preGames.map((game) => (
@@ -1516,6 +1523,7 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
+              showRecords={showTeamRecords}
             />
           ))}
           {/* Upcoming future-day games shown alongside today's slate (NBA/NHL
@@ -1547,6 +1555,7 @@ export default function LeagueColumn({
               onSelectTeam={setTeamViewTeam}
               onShowDetails={onShowDetails}
               showStars={cardStars}
+              showRecords={showTeamRecords}
             />
           ))}
         </div>

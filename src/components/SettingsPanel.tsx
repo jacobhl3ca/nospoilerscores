@@ -836,6 +836,12 @@ export default function SettingsPanel({
               checked={!prefs.hideTeamStars}
               onChange={(v) => updatePrefs({ hideTeamStars: !v })}
             />
+            <ToggleRow
+              label="Team records on game cards"
+              hint="Off by default — a record moves with last night's result, so it can spoil a game you haven't watched"
+              checked={!!prefs.showTeamRecords}
+              onChange={(v) => updatePrefs({ showTeamRecords: v })}
+            />
             <TeamPicker
               sports={thirdLeagueOptions}
               favorites={prefs.favoriteTeams}
