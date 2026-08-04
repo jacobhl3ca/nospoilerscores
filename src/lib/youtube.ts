@@ -133,7 +133,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // euro: verified 0/1 — UEFA's own channel does not post per-match EURO
 // highlights (the unscoped winner was a TSN re-upload). Gated to 2028 in
 // ALL_LEAGUES anyway, so re-verify at the next tournament rather than now.
-const NO_HIGHLIGHT_FALLBACK = new Set(["cricket", "euro"]);
+// esports: the official league channels (LCK, LPL, LEC, Riot's own) DO post
+// per-series recaps, so unlike cricket this is a "not verified yet", not a
+// "does not exist". It sits here until each channel's exact author_name has
+// been proven with a strict=1 hit on a real completed series, because the
+// unscoped search for an esports match is a minefield — the whole scene runs on
+// fan re-uploads and the titles routinely carry the result outright
+// ("INSANE 3-0 SWEEP"). Better no button than that.
+const NO_HIGHLIGHT_FALLBACK = new Set(["cricket", "euro", "esports"]);
 
 // True when a league has no acceptable highlight source at all — neither an
 // official channel nor a trustworthy unscoped search. Callers must render no
