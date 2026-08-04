@@ -109,6 +109,37 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // F1 + UFC official channels
   f1: "FORMULA 1",
   ufc: "UFC",
+  // Esports — keyed per LEAGUE, not per sport, because the "esports" sport key
+  // covers LCK/LPL/LEC/Dota/CS at once and they have nothing in common as
+  // uploaders. The key is `esports_${league.toLowerCase()}` where league is
+  // PandaScore's league name, carried on Game.esportsLeague (see
+  // getOfficialChannelName + fetchEsportsGames).
+  //
+  // LEC only. Verified 2026-08-04 via each channel's <link rel="canonical">
+  // → RSS <author><name>. Do NOT verify by grepping the first "channelId" out
+  // of a channel page: that returns a RECOMMENDED channel, not the page owner,
+  // and it gave a wrong name for every handle tried (@LCK → "LCK Global",
+  // @lolesports → "LCS").
+  //
+  // LEC posts a clean per-series cut:
+  //   "TH vs KC | HIGHLIGHTS | 2026 #LEC Summer - Week 2 Day 4 | Team Heretics
+  //    vs Karmine Corp" — one video per series, no score in the title.
+  esports_lec: "LEC",
+  // Deliberately ABSENT, both verified and rejected rather than unchecked:
+  //
+  // - LCK (author_name "LCK Global", handle @LCKGlobal) posts per-GAME VODs
+  //   — "KT vs HLE | Match 100 Game 3 | 2026 LCK" — three per series, full
+  //   length, not highlights. Worse, it is a SPOILER: a "Game 3" video existing
+  //   proves a Bo3 went the distance, so the video list leaks the series shape
+  //   before anything is clicked. Same class of leak as a score in a title.
+  //   (@LCK is a DIFFERENT channel, author_name "LCK" — the Korean-language
+  //   variety/content channel. Do not use it.)
+  // - LPL (author_name "LPL", handle @LPLOfficial) is posting Asia Masters
+  //   day-VODs, no per-series LPL highlight cut at all.
+  // - "LoL Esports" (@lolesports) is Shorts and clips only.
+  //
+  // Re-check LCK if it ever switches to a per-series cut; re-check LPL at the
+  // start of a domestic split.
 };
 
 // Leagues where NO trustworthy uploader exists on YouTube, so the unscoped
@@ -133,20 +164,34 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // euro: verified 0/1 — UEFA's own channel does not post per-match EURO
 // highlights (the unscoped winner was a TSN re-upload). Gated to 2028 in
 // ALL_LEAGUES anyway, so re-verify at the next tournament rather than now.
-// esports: the official league channels (LCK, LPL, LEC, Riot's own) DO post
-// per-series recaps, so unlike cricket this is a "not verified yet", not a
-// "does not exist". It sits here until each channel's exact author_name has
-// been proven with a strict=1 hit on a real completed series, because the
-// unscoped search for an esports match is a minefield — the whole scene runs on
-// fan re-uploads and the titles routinely carry the result outright
-// ("INSANE 3-0 SWEEP"). Better no button than that.
+// esports: unlike cricket, this is per-LEAGUE rather than all-or-nothing. The
+// unscoped search for an esports match is a minefield — the scene runs on fan
+// re-uploads and the titles routinely carry the result outright ("INSANE 3-0
+// SWEEP") — so esports NEVER gets the search fallback. But a league with a
+// verified official channel (currently LEC only, see OFFICIAL_CHANNELS) can
+// still resolve strictly against that channel. A league with no verified entry
+// stays fully dark. See hasNoTrustedHighlightSource below.
 const NO_HIGHLIGHT_FALLBACK = new Set(["cricket", "euro", "esports"]);
 
 // True when a league has no acceptable highlight source at all — neither an
 // official channel nor a trustworthy unscoped search. Callers must render no
 // highlight button (not a search-page link) for these.
-export function hasNoTrustedHighlightSource(sport: string): boolean {
+//
+// `label` is the sub-league (esports: PandaScore's league name — "LCK", "LEC").
+// Esports is one sport key spanning many unrelated uploaders, so the answer is
+// per-league: dark unless that league has a verified official channel. Every
+// other sport ignores `label` and behaves exactly as before.
+export function hasNoTrustedHighlightSource(sport: string, label?: string): boolean {
+  if (sport === "esports") return !getOfficialChannelName(sport, label);
   return NO_HIGHLIGHT_FALLBACK.has(sport);
+}
+
+// True when a sport must never fall back to an unscoped YouTube search, even
+// though it does have a verified official channel to resolve against. Esports
+// titles routinely spoil the result, so a failed strict resolve must surface
+// the "open on YouTube" fallback rather than silently re-searching.
+export function requiresStrictChannelOnly(sport: string): boolean {
+  return sport === "esports";
 }
 
 // Curated channel chain for golf highlight buttons — used directly

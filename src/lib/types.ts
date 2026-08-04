@@ -19,6 +19,13 @@ export interface Game {
   rating: number | null;
   // Series info (e.g. "Game 2") for playoff games — used in YouTube search
   seriesNote: string | null;
+  // Esports only: PandaScore's league name ("LCK", "LPL", "LEC"). The "esports"
+  // sport key spans leagues with completely unrelated YouTube uploaders, so the
+  // highlight lookup has to key on the league, not the sport — this is what
+  // carries it there (see getOfficialChannelName). `venue` also contains the
+  // league but glued to the serie ("LCK Summer"), which is display text, not a
+  // lookup key. Undefined for every other sport.
+  esportsLeague?: string | null;
   // Whether this is a playoff/postseason/tournament game
   isPlayoff: boolean;
   // Full playoff round label (e.g. "Sweet 16", "ALWC - Game 2", "Conference Finals")

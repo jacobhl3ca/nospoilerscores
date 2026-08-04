@@ -2367,6 +2367,9 @@ export async function fetchEsportsGames(date?: string): Promise<Game[]> {
         // it's what tells you the stakes, which is what a neutral-site bracket
         // has instead of a home ground.
         venue: [g.league, g.serie].filter(Boolean).join(" "),
+        // The bare league, kept separate from `venue` — `venue` is display text
+        // ("LCK Summer"), this is the highlight-channel lookup key ("LCK").
+        esportsLeague: g.league || null,
         rating: esportsRating(g),
         seriesNote: g.bestOf && g.bestOf > 1 ? `Bo${g.bestOf}` : null,
         // Tier s is a major (Worlds, MSI, an EWC final); tier a is a top

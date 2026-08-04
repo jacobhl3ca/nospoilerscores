@@ -6,7 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, hasNoTrustedHighlightSource, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, hasNoTrustedHighlightSource, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
@@ -58,7 +58,12 @@ export default function GameHighlights({
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   wrapMargin?: string;
 }) {
-  const officialChannel = getOfficialChannelName(game.sport, leagueLabel);
+  // Esports keys its highlight channel on the LEAGUE ("LCK", "LEC"), not the
+  // sport — one "esports" key spans leagues with unrelated uploaders. Callers
+  // pass the column label ("Esports") as leagueLabel, which is useless here, so
+  // swap in the league PandaScore reported. Every other sport is unchanged.
+  const highlightLabel = game.sport === "esports" ? (game.esportsLeague ?? undefined) : leagueLabel;
+  const officialChannel = getOfficialChannelName(game.sport, highlightLabel);
   // MLB: keep the official MLB channel in the first slot so unscoped/team or
   // unofficial uploads never occupy the primary button. The secondary slot can
   // still surface a shorter team recap when one is available.
@@ -150,7 +155,7 @@ export default function GameHighlights({
   // it here is the single point that keeps both highlight buttons off the card:
   // without it the no-official-channel branch would run an unscoped search and
   // hand the user a fan re-upload.
-  const noTrustedSource = hasNoTrustedHighlightSource(game.sport);
+  const noTrustedSource = hasNoTrustedHighlightSource(game.sport, highlightLabel);
   const highlightUrl = highlightsReady && !noTrustedSource
     ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, competition)
     : null;
@@ -164,7 +169,12 @@ export default function GameHighlights({
   const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : primaryChannel);
   const strictPrimaryChannel = !!primaryChannel;
   const strictSecondaryChannel = !!secondaryChannel;
-  const modalFallbackUrl = isFifa && highlightUrl
+  // Esports joins FIFA on the no-alternate-re-search path: a failed strict
+  // resolve must surface the "open on YouTube" fallback rather than quietly
+  // re-searching, because an unscoped esports search returns fan re-uploads
+  // whose titles give away the result ("INSANE 3-0 SWEEP").
+  const noSearchFallback = isFifa || requiresStrictChannelOnly(game.sport);
+  const modalFallbackUrl = noSearchFallback && highlightUrl
     ? `${highlightUrl}${highlightUrl.includes("?") ? "&" : "?"}nss_no_fallback=1`
     : highlightUrl;
   useEffect(() => {
