@@ -284,6 +284,7 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   // so these fall back to its generic sport glyphs rather than 404ing.
   boxing: "https://a.espncdn.com/i/espn/networks_shows/500/boxing.png&w=40&h=40&transparent=true",
   chess: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
+  esports: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
 };
 
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds

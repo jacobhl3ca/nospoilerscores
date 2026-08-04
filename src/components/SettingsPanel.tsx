@@ -148,6 +148,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   ufc: "UFC",
   boxing: "Boxing",
   chess: "Chess",
+  esports: "Esports",
 };
 
 function teamSportFromId(id: string): Sport | null {

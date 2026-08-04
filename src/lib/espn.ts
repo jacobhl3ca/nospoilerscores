@@ -12,6 +12,7 @@ const SPORT_PATHS: Record<Sport, string> = {
   // considered here at all.
   chess: "",
   boxing: "",
+  esports: "",
   mlb: "/baseball/mlb/scoreboard",
   nba: "/basketball/nba/scoreboard",
   wnba: "/basketball/wnba/scoreboard",
@@ -251,6 +252,10 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Chess is the same argument in a purer form: an elite game is genuinely
   // worth watching move by move and is destroyed completely by one number.
   { sport: "chess", label: "Chess", excludeFromAuto: true },
+  // Esports (PandaScore). Year-round, opt-in. Worlds and the LCK/LPL play in
+  // Asian timezones, so the Western audience watches almost entirely on VOD —
+  // the purest spoiler case in the app after cricket.
+  { sport: "esports", label: "Esports", excludeFromAuto: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -386,6 +391,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   ufc: 31,
   boxing: 32,
   chess: 33,
+  esports: 34,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -619,6 +625,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // the shared scorer for an eventCard league — but the Record must be total.
   boxing: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   chess:  { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  // Esports is scored as a SERIES (Bo3/Bo5), not a running total, so the
+  // shared scorer does not apply — esportsRating() handles it, the same way
+  // cricketRating() branches out before the shared path.
+  esports:{ multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
 };
 
 // Regulation period length in seconds, for count-down sports where ESPN's
@@ -1732,6 +1742,9 @@ export function espnGameUrl(game: Game): string {
     // a sport-section landing beats falling through to a wrong league page.
     case "boxing": return `https://www.espn.com/boxing/`;
     case "chess": return `https://lichess.org/broadcast`;
+    // PandaScore supplies no public per-match page, so there is no gamecast
+    // to link to; this only satisfies the exhaustive switch.
+    case "esports": return `https://www.pandascore.co/`;
   }
 }
 
@@ -1798,6 +1811,9 @@ export function sportStreamFallback(sport: Sport): string {
     // streamer that is wrong most nights. Chess streams free on Lichess.
     case "boxing": return "https://www.espn.com/boxing/schedule/";
     case "chess": return "https://lichess.org/broadcast";
+    // Every tier-s/a match streams free on Twitch; the channel varies per
+    // league, so the directory is the only destination right for all of them.
+    case "esports": return "https://www.twitch.tv/directory/category/league-of-legends";
   }
 }
 
@@ -2332,6 +2348,93 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
     };
   } catch {
     return null;
+  }
+}
+
+interface EsportsApiGame {
+  id: string; date: string | null; state: "pre" | "in" | "post";
+  bestOf: number | null; league: string; serie: string; tier: string; title: string;
+  away: { id: string; name: string; acronym: string; image: string; score: string };
+  home: { id: string; name: string; acronym: string; image: string; score: string };
+  winnerId: string | null;
+}
+
+// Esports rating. The shared scorer cannot be used: an esports "score" is a
+// SERIES tally (2-1 in a Bo3), not points, so a 1-point margin is the widest
+// possible gap in a Bo3 and the narrowest in a Bo5 — the exact inversion that
+// broke cricket. What makes a series worth watching is whether it went the
+// distance: a Bo5 that reached game five is the best thing in the sport, a 3-0
+// sweep is not. So rate on games played against games needed, never on who won.
+function esportsRating(g: EsportsApiGame): number | null {
+  if (g.state !== "post") return null;
+  const a = parseInt(g.away.score, 10);
+  const h = parseInt(g.home.score, 10);
+  if (!Number.isFinite(a) || !Number.isFinite(h)) return null;
+  const needed = Math.ceil((g.bestOf ?? 1) / 2);   // Bo3 → 2, Bo5 → 3, Bo1 → 1
+  const loserGames = Math.min(a, h);
+  // A Bo1 has no series shape at all — rate it mid rather than pretending.
+  if (needed <= 1) return 55;
+  // 0 → sweep, needed-1 → full distance. Maps 40..95.
+  return Math.round(40 + (loserGames / (needed - 1)) * 55);
+}
+
+export async function fetchEsportsGames(date?: string): Promise<Game[]> {
+  try {
+    const url = `${getApiBase()}/api/esports${date ? `?date=${encodeURIComponent(date)}` : ""}`;
+    const res = await fetchWithRetry(url);
+    if (!res.ok) return [];
+    const { games } = (await res.json()) as { games: EsportsApiGame[] };
+    if (!games?.length) return [];
+    const toTeam = (t: EsportsApiGame["away"], winnerId: string | null): Team => ({
+      id: t.id,
+      abbreviation: t.acronym || t.name.slice(0, 4).toUpperCase(),
+      displayName: t.name,
+      shortDisplayName: t.acronym || t.name,
+      logo: t.image || "",
+      color: "",
+      score: t.score,
+      winner: !!winnerId && winnerId === t.id,
+      record: "",
+      rank: null,
+    });
+    return games.map((g): Game => {
+      const away = toTeam(g.away, g.winnerId);
+      const home = toTeam(g.home, g.winnerId);
+      return {
+        id: g.id,
+        sport: "esports",
+        date: g.date ?? new Date().toISOString(),
+        name: `${away.displayName} vs ${home.displayName}`,
+        shortName: `${away.abbreviation} vs ${home.abbreviation}`,
+        state: g.state,
+        statusDetail: g.state === "post" ? "Final" : g.state === "in" ? "Live" : "Scheduled",
+        clock: "",
+        period: 0,
+        completed: g.state === "post",
+        homeTeam: home,
+        awayTeam: away,
+        broadcasts: [],
+        // The league is the venue-equivalent here ("LCK", "LPL", "Worlds") —
+        // it's what tells you the stakes, which is what a neutral-site bracket
+        // has instead of a home ground.
+        venue: [g.league, g.serie].filter(Boolean).join(" "),
+        rating: esportsRating(g),
+        seriesNote: g.bestOf && g.bestOf > 1 ? `Bo${g.bestOf}` : null,
+        // Tier s is a major (Worlds, MSI, an EWC final); tier a is a top
+        // domestic league. Both read as "this one matters".
+        isPlayoff: g.tier === "s",
+        playoffLabel: null,
+        seriesStatus: null,
+        highlightUrl: null,
+        recapUrl: null,
+        // Twitch is where every tier-s/a match actually streams, free. Sent
+        // through the shared per-sport fallback so the link stays in one place.
+        streamUrl: sportStreamFallback("esports"),
+        primeStreamUrl: null,
+      };
+    });
+  } catch {
+    return [];
   }
 }
 
@@ -3711,6 +3814,13 @@ export async function fetchAllLeagues(
     // Chess + boxing come from worker routes, not ESPN — see fetchChessEvent /
     // fetchBoxingEvent. Both return null on any failure, which drops the column
     // rather than showing a broken one.
+    // Esports comes from PandaScore via the worker and produces real two-team
+    // GAMES (not an event tile), so it returns through the normal games path.
+    if (cfg.sport === "esports") {
+      const games = await fetchEsportsGames(date);
+      if (!games.length) return null;
+      return { sport: cfg.sport, label, games };
+    }
     if (cfg.sport === "chess" || cfg.sport === "boxing") {
       const eventCard = cfg.sport === "chess"
         ? await fetchChessEvent(date)

@@ -1817,6 +1817,99 @@ export default {
       }
     }
 
+    // ── Esports: elite matches across the big four titles (PandaScore) ──────
+    // PANDASCORE_TOKEN is a Pages secret — must never reach the client.
+    //
+    // Two filters do all the work, and without them the column is unusable.
+    // `tournament.tier` is PandaScore's own grading: measured 2026-08-04 over
+    // 100 upcoming matches, tiers c+d were 78 of them (ESEA Advanced, Prime
+    // League, LFL, "Road Of Legends") while s+a were the LCK, LPL and Esports
+    // World Cup. And the title filter keeps this to the four games a
+    // Western spoiler-avoiding audience actually follows on VOD — the raw feed
+    // is heavy with Honor of Kings and KoG, which are China-market and were
+    // outnumbering LoL in the tier-s rows.
+    //
+    // ?date=YYYY-MM-DD returns that day's matches (the board is date-driven);
+    // omitted → upcoming. Matches are two-team with scores, so these map onto
+    // the normal game card rather than an event tile.
+    if (url.pathname === "/api/esports") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const corsJson = (body, status = 200, maxAge = 300) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      if (!env.PANDASCORE_TOKEN) return corsJson({ games: [], disabled: true }, 200, 300);
+      const TITLES = ["league-of-legends", "cs-go", "cs2", "dota-2", "valorant"];
+      const ALLOWED_TIERS = ["s", "a"];
+      const date = url.searchParams.get("date");
+      try {
+        const qs = new URLSearchParams({ per_page: "100", sort: "begin_at" });
+        const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(date || "");
+        if (hasDate) qs.set("range[begin_at]", `${date}T00:00:00Z,${date}T23:59:59Z`);
+        // ⚠️ `/matches` with NO range is every match PandaScore has ever
+        // recorded, and `sort=begin_at` is ascending — so the dateless call
+        // returned the 2014 World Championship group stage. Only the dated form
+        // may use /matches; without a date ask for /upcoming explicitly.
+        // (Caught in testing 2026-08-04, before deploy.)
+        const path = hasDate ? "matches" : "matches/upcoming";
+        const res = await fetch(`https://api.pandascore.co/${path}?${qs}`, {
+          headers: { Authorization: `Bearer ${env.PANDASCORE_TOKEN}`, Accept: "application/json" },
+        });
+        if (!res.ok) return corsJson({ games: [] }, 200, 120);
+        const data = await res.json();
+        const games = [];
+        for (const m of Array.isArray(data) ? data : []) {
+          const tier = (m?.tournament?.tier || "").toLowerCase();
+          const slug = m?.videogame?.slug || "";
+          if (!ALLOWED_TIERS.includes(tier) || !TITLES.includes(slug)) continue;
+          const ops = (m.opponents || []).map((o) => o?.opponent).filter(Boolean);
+          // Bracket placeholders ("TBD vs TBD") carry no opponents yet — a card
+          // with no teams tells the user nothing, so drop rather than render it.
+          if (ops.length < 2) continue;
+          const results = m.results || [];
+          const scoreFor = (id) => {
+            const r = results.find((x) => x?.team_id === id);
+            return r && r.score != null ? String(r.score) : "";
+          };
+          // PandaScore has no home/away for esports — it is a neutral-site
+          // bracket. Slot 0 is treated as away purely so the card's existing
+          // "A @ B" layout renders; nothing depends on the distinction.
+          const [away, home] = ops;
+          const status = m.status; // not_started | running | finished | canceled
+          if (status === "canceled") continue;
+          games.push({
+            id: String(m.id),
+            date: m.begin_at || m.scheduled_at || null,
+            state: status === "finished" ? "post" : status === "running" ? "in" : "pre",
+            bestOf: m.number_of_games || null,
+            league: m?.league?.name || "",
+            serie: m?.serie?.full_name || "",
+            tier,
+            title: slug,
+            away: { id: String(away.id), name: away.name || "", acronym: away.acronym || "", image: away.image_url || "", score: scoreFor(away.id) },
+            home: { id: String(home.id), name: home.name || "", acronym: home.acronym || "", image: home.image_url || "", score: scoreFor(home.id) },
+            winnerId: m.winner_id != null ? String(m.winner_id) : null,
+          });
+        }
+        return corsJson({ games });
+      } catch {
+        return corsJson({ games: [] }, 200, 120);
+      }
+    }
+
     // ── Boxing: fight-card schedule (boxing-data.com via RapidAPI) ──────────
     // ESPN has NO boxing endpoint — its core API rejects the sport outright
     // ("Invalid sport (boxing)"), so this is the only structured source.
