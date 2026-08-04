@@ -1719,9 +1719,17 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
     if (!videoUrl && !imageFullUrl && !imageUrl) {
       const mi = block.indexOf('<div class="md">');
       if (mi >= 0) {
-        const fi = block.indexOf('class="post_footer"', mi);
+        // indexOf lands on the ATTRIBUTE, not the tag, so slicing there kept
+        // the footer div's half-written opening tag ("<div ") on the end of the
+        // segment. The tag regex below needs a closing ">" to match, so that
+        // fragment survived and every text post rendered a literal "<div" after
+        // its body (Jacob 8/4). Back up to the tag's "<" so the segment always
+        // ends on a tag boundary, and strip any dangling partial tag as a
+        // backstop for the 4000-char fallback slice, which can cut anywhere.
+        const fiAttr = block.indexOf('class="post_footer"', mi);
+        const fi = fiAttr > mi ? block.lastIndexOf("<", fiAttr) : -1;
         const seg = block.slice(mi, fi > mi ? fi : mi + 4000);
-        const text = decodeEntities(seg.replace(/<[^>]+>/g, " ")).trim();
+        const text = decodeEntities(seg.replace(/<[^>]+>/g, " ").replace(/<[^>]*$/, " ")).trim();
         if (text) body = text.length > 1500 ? text.slice(0, 1500) + "…" : text;
       }
     }
