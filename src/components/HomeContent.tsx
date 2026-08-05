@@ -1154,6 +1154,15 @@ export default function HomeContent({
     return options;
   }, [selectedDate]);
 
+  const teamLeagueOptions = useMemo(() => {
+    const seen = new Set<Sport>();
+    return ALL_LEAGUES.flatMap((league) => {
+      if (league.hidden || seen.has(league.sport)) return [];
+      seen.add(league.sport);
+      return [{ sport: league.sport, label: league.label }];
+    });
+  }, []);
+
   // Open the first-run league picker once we know which leagues are in season
   // (thirdLeagueOptions populates after selectedDate resolves). firstRunRef was
   // armed at mount for new installs only; clearing it here opens exactly once.
@@ -2996,25 +3005,11 @@ export default function HomeContent({
           return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
 
-        {/* Standing announcement line (added 2026-08-03). Doubles as the reply
-            to the footer-feedback note that asked for the big-five soccer
-            leagues — the sender left no email, so this is the only channel
-            back to them. It also carries the discoverability point that note
-            revealed: they assumed NBA/NHL/Prem were missing when all three
-            were already there, just not in the default three columns. Say
-            plainly that leagues live in Settings and only surface in season. */}
-        <p className="italic max-w-[46rem] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-          New: La Liga, Serie A, Bundesliga and Ligue 1 — thank you to whoever asked for them
-          through this feedback box. Every league we cover is in Settings, and each one appears
-          in the column switcher only while its season is running, so the soccer leagues arrive
-          in mid-to-late August.
-        </p>
-
         {/* ONE footer row (Jacob 7/14): About is the first inline item, then
             Feedback / Settings / Privacy / App Store — no second row. `relative`
             anchors the About panel, which drops BELOW the row (absolute) so
             opening it never wraps the row. */}
-        <div className="relative flex flex-nowrap items-center justify-center gap-x-2.5">
+        <div className="relative flex flex-nowrap items-center justify-center gap-x-2">
           {/* About = the SEO copy + internal-link graph, rolled up behind a
               disclosure. Google renders and indexes content inside collapsed
               <details>, and plain <a href> (not next/link) is what the crawler
@@ -3055,6 +3050,7 @@ export default function HomeContent({
             </p>
           </div>
         </details>
+          <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
           <FeedbackBox />
           <button
             type="button"
@@ -3306,6 +3302,7 @@ export default function HomeContent({
         updatePrefs={updatePrefs}
         resolvedTheme={resolvedTheme}
         thirdLeagueOptions={thirdLeagueOptions}
+        teamLeagueOptions={teamLeagueOptions}
         displayedLeagues={sortedLeagues}
         knownTeams={knownTeams}
         onShareFavorites={shareFavorites}
