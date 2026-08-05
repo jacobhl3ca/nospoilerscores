@@ -20,8 +20,10 @@ interface SettingsPanelProps {
   prefs: Preferences;
   updatePrefs: (update: Partial<Preferences>) => void;
   resolvedTheme: "dark" | "light";
-  // Currently-active leagues plus deliberate manual exceptions (NBA offseason).
-  thirdLeagueOptions: LeagueOption[];
+  // Every supported league, split into in-season/offseason in the UI. Saved
+  // offseason picks stay visible here even while the score board falls back to
+  // its active automatic columns.
+  leagueOptions: LeagueOption[];
   // Every supported team league, including out-of-season leagues. Team
   // favorites are durable; the picker must not hide La Liga in July merely
   // because its score column is not active yet.
@@ -172,7 +174,7 @@ export default function SettingsPanel({
   prefs,
   updatePrefs,
   resolvedTheme,
-  thirdLeagueOptions,
+  leagueOptions,
   teamLeagueOptions,
   displayedLeagues,
   knownTeams,
@@ -345,7 +347,8 @@ export default function SettingsPanel({
     [displayedLeagues],
   );
 
-  // Each slot dropdown offers every in-season league. Duplicates are allowed —
+  // Each slot dropdown offers every supported league year-round. Duplicates
+  // are allowed —
   // picking a league already in another slot just sets this slot to it too;
   // unset slots lock to their on-screen league so the auto-picker doesn't
   // reshuffle columns the user didn't touch. Walks the displayed-league queue
@@ -376,6 +379,42 @@ export default function SettingsPanel({
     prefs.fourthLeague,
     prefs.fifthLeague,
   ];
+
+  const inSeasonLeagueOptions = useMemo(
+    () => leagueOptions.filter((option) => !option.offseason),
+    [leagueOptions],
+  );
+  const offseasonLeagueOptions = useMemo(
+    () => leagueOptions.filter((option) => option.offseason),
+    [leagueOptions],
+  );
+
+  const optionText = (option: LeagueOption) =>
+    `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : ""}`;
+
+  const renderSwitcherToggle = (option: LeagueOption) => {
+    const hidden = prefs.hiddenLeagues?.includes(option.sport) ?? false;
+    return (
+      <label key={option.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
+        <input
+          type="checkbox"
+          checked={!hidden}
+          onChange={(event) => {
+            const current = prefs.hiddenLeagues ?? [];
+            const next = event.target.checked
+              ? current.filter((sport) => sport !== option.sport)
+              : [...current, option.sport];
+            updatePrefs({ hiddenLeagues: next.length ? next : undefined });
+          }}
+          className="cursor-pointer accent-[var(--accent)]"
+        />
+        <span>
+          {SPORT_LABEL[option.sport] ?? option.label}
+          {option.offseason && <em style={{ color: "var(--text-muted)" }}> · offseason</em>}
+        </span>
+      </label>
+    );
+  };
 
   // Group favorited teams by sport, attaching display name + logo from
   // (a) currently-loaded games (knownTeams) and (b) the picker's per-sport
@@ -500,9 +539,9 @@ export default function SettingsPanel({
     });
   };
 
-  // Available news col-3 leagues mirror the slot-3 picker but we let it overlap
-  // with the scores layout since the news view is independent.
-  const newsCol3Options = thirdLeagueOptions;
+  // News is useful between seasons, so its optional third column uses the same
+  // year-round catalog as Settings' score-slot pickers.
+  const newsCol3Options = leagueOptions;
 
   if (!open) return null;
 
@@ -755,12 +794,22 @@ export default function SettingsPanel({
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
               Pick a league for each slot. <em>Auto</em> uses the in-season default.
               You can also tap a column&rsquo;s header on the main screen to switch its league.
+              Offseason picks stay saved and return automatically.
               Slots 4&ndash;5 only appear when the window is wide enough for five columns.
             </p>
             {[0, 1, 2, 3, 4].map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
               const value = slotValues[idx];
-              const hint = value === "empty" ? "Hidden" : value ? undefined : `Auto · currently ${fallbackLabel}`;
+              const selectedOption = value && value !== "empty"
+                ? leagueOptions.find((option) => option.sport === value)
+                : undefined;
+              const hint = value === "empty"
+                ? "Hidden"
+                : selectedOption?.offseason
+                  ? `Offseason · saved for its return${fallbackLabel !== "—" ? `; showing ${fallbackLabel}` : ""}`
+                  : value
+                    ? undefined
+                    : `Auto · currently ${fallbackLabel}`;
               return (
                 <Field
                   key={idx}
@@ -778,9 +827,18 @@ export default function SettingsPanel({
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
                     <option value="">Auto</option>
-                    {thirdLeagueOptions.map((o) => (
-                      <option key={o.sport} value={o.sport}>{o.label}{o.offseason ? " · offseason" : ""}</option>
-                    ))}
+                    <optgroup label="In season">
+                      {inSeasonLeagueOptions.map((option) => (
+                        <option key={option.sport} value={option.sport}>{optionText(option)}</option>
+                      ))}
+                    </optgroup>
+                    {offseasonLeagueOptions.length > 0 && (
+                      <optgroup label="Offseason">
+                        {offseasonLeagueOptions.map((option) => (
+                          <option key={option.sport} value={option.sport}>{optionText(option)}</option>
+                        ))}
+                      </optgroup>
+                    )}
                     <option value="empty">Remove col</option>
                   </select>
                 </Field>
@@ -802,31 +860,22 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ hideLeagueChevrons: !v })}
               />
             )}
-            <Field label="Leagues in the switcher" hint="Unchecked leagues stay out of the header switcher">
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                {thirdLeagueOptions.map((o) => {
-                  const hidden = prefs.hiddenLeagues?.includes(o.sport) ?? false;
-                  return (
-                    <label key={o.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
-                      <input
-                        type="checkbox"
-                        checked={!hidden}
-                        onChange={(e) => {
-                          const cur = prefs.hiddenLeagues ?? [];
-                          const next = e.target.checked
-                            ? cur.filter((s) => s !== o.sport)
-                            : [...cur, o.sport];
-                          updatePrefs({ hiddenLeagues: next.length ? next : undefined });
-                        }}
-                        className="cursor-pointer accent-[var(--accent)]"
-                      />
-                      <span>
-                        {o.label}
-                        {o.offseason && <em style={{ color: "var(--text-muted)" }}> · offseason</em>}
-                      </span>
-                    </label>
-                  );
-                })}
+            <Field label="Leagues in the switcher" hint="Checked leagues appear in the header switcher when active; NBA remains available offseason">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>In season</p>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    {inSeasonLeagueOptions.map(renderSwitcherToggle)}
+                  </div>
+                </div>
+                {offseasonLeagueOptions.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Offseason</p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                      {offseasonLeagueOptions.map(renderSwitcherToggle)}
+                    </div>
+                  </div>
+                )}
               </div>
             </Field>
           </Section>
