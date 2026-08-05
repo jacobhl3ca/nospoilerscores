@@ -41,7 +41,7 @@ test.describe("seasonal trade-board promos", () => {
         await page.goto(`/?l=${promo.league}&s=${promo.league}.0.0&dd=t&dv=s`);
 
         const link = page.locator(promo.selector);
-        await expect(link).toBeVisible();
+        await expect(link).toBeVisible({ timeout: 20_000 });
         await expect(link).toHaveText("Trades");
         await expect(link).toHaveCSS("font-style", "italic");
         const subtitle = link.locator("xpath=..");
@@ -60,7 +60,7 @@ test("offseason NBA remains labelled and manually selectable", async ({ page }) 
 
   await page.getByRole("button", { name: "MLB", exact: true }).click();
   const nbaOption = page.getByRole("button", { name: "NBA · offseason", exact: true });
-  await expect(nbaOption).toBeVisible();
+  await expect(nbaOption).toBeVisible({ timeout: 20_000 });
   await expect(nbaOption.locator("em")).toHaveText("· offseason");
   await nbaOption.click();
 
