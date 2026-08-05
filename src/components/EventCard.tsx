@@ -555,6 +555,16 @@ export default function EventCard({
   // layout would drift out of alignment the first time either was touched.
   const isRace = event.kind === "f1";
   const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : "🏁";
+  // Spoken name for the sport-type glyph below. When the tile ISN'T a clickable
+  // button (boxing has no detail page; a finished race/chess event drops its
+  // link too — see `clickable`), the root carries no aria-label, so this emoji
+  // is the only cue to the event TYPE. It was aria-hidden, leaving a screen
+  // reader to infer boxing/racing/chess from the title alone. Give it a spoken
+  // name (role="img" + aria-label) in that case — the same role="img"+aria-label
+  // pattern the rating badge and the game cards' weather glyphs use — while
+  // keeping it hidden on clickable tiles, whose button aria-label already names
+  // the event ("<title> — Race details on ESPN" / "… Follow live on Lichess").
+  const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : "Race";
   // What the tile body links to, and what to call it. Chess points at the
   // Lichess broadcast (a live BOARD, not a results table); boxing has no
   // per-event page worth linking, so its tile is inert.
@@ -610,7 +620,7 @@ export default function EventCard({
             these rows' 16px mobile logo slot + leading-none text would collapse
             shorter, drifting the column heights apart as cards stack. */}
         <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
-          <span aria-hidden className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
+          <span {...(clickable ? { "aria-hidden": true } : { role: "img", "aria-label": glyphLabel })} className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
           <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={event.title}>{event.title}</span>
         </div>
         {event.subtitle && (
