@@ -19,14 +19,81 @@ export interface AuthState {
   // Which sign-in methods are live (secrets configured). Undefined when the
   // request failed — callers should treat Apple as available by default.
   providers?: { apple: boolean; google: boolean };
+  /** Pseudonymous, stable account id (HMAC of the provider sub) — safe to send
+   *  to analytics; never the raw Apple/Google sub or the email. */
+  uid?: string | null;
+  /** "apple" | "google" — which identity is linked to this account. */
+  provider?: string | null;
+  /** The client this request came from. */
+  platform?: "ios" | "android" | "web";
+  /** Last time this account was seen on each client, ISO strings. */
+  platforms?: Partial<Record<"ios" | "android" | "web", string>>;
+  firstSeen?: string | null;
+  lastSeen?: string | null;
+}
+
+// The Capacitor WebView loads hidescore.com over https and its User-Agent is
+// indistinguishable from mobile Safari, so the SERVER cannot tell an app user
+// from a browser user on its own. Every authed request carries this header and
+// the worker records it on the account (see _hsTouchUser in public/_worker.js).
+function hsPlatform(): "ios" | "android" | "web" {
+  if (typeof window === "undefined") return "web";
+  const cap = (window as unknown as {
+    Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string };
+  }).Capacitor;
+  if (!cap?.isNativePlatform?.()) return "web";
+  return cap.getPlatform?.() === "android" ? "android" : "ios";
+}
+
+function hsClientHeaders(extra?: Record<string, string>): Record<string, string> {
+  return { "X-HS-Client": hsPlatform(), ...(extra || {}) };
+}
+
+// Attach the signed-in account to the Umami session so analytics can answer
+// "how many real accounts use the iPhone app" instead of just counting devices.
+// Sends the pseudonymous uid + platform only — no email, no provider sub. Umami
+// respects localStorage["umami.disabled"], so the site's no-track toggle still
+// wins. Fails silently when the script is blocked or hasn't loaded yet.
+let identified = "";
+function identifyToUmami(a: AuthState): void {
+  if (typeof window === "undefined") return;
+  if (!a.signedIn || !a.uid) return;
+  const key = `${a.uid}:${a.platform}`;
+  if (identified === key) return;
+  const umami = (window as unknown as {
+    umami?: { identify?: (data: Record<string, unknown>) => void };
+  }).umami;
+  if (!umami?.identify) return;
+  identified = key;
+  try {
+    umami.identify({
+      id: a.uid,
+      signedIn: true,
+      provider: a.provider || "unknown",
+      platform: a.platform || "web",
+      nativeApp: a.platform === "ios" || a.platform === "android",
+    });
+  } catch { /* analytics must never break the app */ }
 }
 
 export async function getAuthState(): Promise<AuthState> {
   try {
-    const r = await fetch("/api/me", { credentials: "include" });
+    const r = await fetch("/api/me", { credentials: "include", headers: hsClientHeaders() });
     if (!r.ok) return { signedIn: false, email: null };
     const j = await r.json();
-    return { signedIn: !!j.signedIn, email: j.email ?? null, providers: j.providers };
+    const state: AuthState = {
+      signedIn: !!j.signedIn,
+      email: j.email ?? null,
+      providers: j.providers,
+      uid: j.uid ?? null,
+      provider: j.provider ?? null,
+      platform: j.platform ?? hsPlatform(),
+      platforms: j.platforms || {},
+      firstSeen: j.firstSeen ?? null,
+      lastSeen: j.lastSeen ?? null,
+    };
+    identifyToUmami(state);
+    return state;
   } catch {
     return { signedIn: false, email: null };
   }
@@ -36,7 +103,7 @@ export async function getAuthState(): Promise<AuthState> {
 // user has none yet / the request failed.
 export async function fetchRemotePrefs(): Promise<Partial<Preferences> | null> {
   try {
-    const r = await fetch("/api/prefs", { credentials: "include" });
+    const r = await fetch("/api/prefs", { credentials: "include", headers: hsClientHeaders() });
     if (!r.ok) return null;
     const { prefs } = await r.json();
     return prefs || null;
@@ -56,7 +123,7 @@ function putPrefs(body: string, keepalive: boolean): void {
   fetch("/api/prefs", {
     method: "PUT",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: hsClientHeaders({ "Content-Type": "application/json" }),
     body,
     // keepalive lets the request outlive a page teardown — see flushPendingPrefs.
     keepalive,

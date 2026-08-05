@@ -132,7 +132,7 @@ function raceTitleMatches(tokens, titleLower) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
    try {
     const url = new URL(request.url);
 
@@ -146,10 +146,10 @@ export default {
     if (url.pathname === "/auth/google/login")    return googleLogin(request, env, url);
     if (url.pathname === "/auth/google/callback") return googleCallback(request, env, url);
     if (url.pathname === "/auth/logout")         return siwaLogout();
-    if (url.pathname === "/api/me")              return siwaMe(request, env);
+    if (url.pathname === "/api/me")              return siwaMe(request, env, ctx);
     if (url.pathname === "/api/prefs") {
-      if (request.method === "PUT") return prefsPut(request, env);
-      return prefsGet(request, env);
+      if (request.method === "PUT") return prefsPut(request, env, ctx);
+      return prefsGet(request, env, ctx);
     }
     if (url.pathname === "/api/account" && request.method === "DELETE") return accountDelete(request, env);
 
@@ -2464,28 +2464,111 @@ function siwaLogout() {
   });
 }
 
-// GET /api/me -> { signedIn, email, providers } — providers reflects which
-// sign-in methods have their secrets set, so the UI only shows live buttons.
-async function siwaMe(request, env) {
+// ===========================================================================
+// Per-account usage record — R2 `users/<sub>.json`. Sessions are stateless HMAC
+// cookies, so before this the ONLY thing we knew about an account was that a
+// `prefs/<sub>.json` blob existed: no email, no signup date, no way to tell a
+// browser user from an iPhone-app user. This record answers "does this account
+// use the app?" and "which account is which?" without adding a database.
+//
+//   { sub, uid, email, provider, firstSeen, lastSeen,
+//     platforms: { ios: <iso>, web: <iso> }, counts: { ios, web } }
+//
+// `uid` is HMAC(SESSION_SECRET, sub) truncated — a stable pseudonymous id the
+// client can hand to Umami so a signed-in session is attributable in analytics
+// WITHOUT ever sending Apple/Google subs or emails off-box.
+//
+// Writes are throttled: we re-PUT only when the platform is new for this user
+// or the last write is older than USER_TOUCH_MS, so a chatty client can't turn
+// every /api/me poll into an R2 write. Deleted by /api/account (5.1.1(v)).
+// ===========================================================================
+const USER_TOUCH_MS = 6 * 60 * 60 * 1000;
+
+// Which client made this request. The Capacitor WebView's User-Agent is
+// indistinguishable from mobile Safari, so we trust an explicit header the app
+// bundle sets (see hsClientHeaders in src/lib/prefsSync.ts) and default to web.
+function _hsPlatform(request) {
+  const h = (request.headers.get("X-HS-Client") || "").trim().toLowerCase();
+  return h === "ios" || h === "android" ? h : "web";
+}
+
+async function _hsUid(env, sub) {
+  if (!env.SESSION_SECRET) return null;
+  const sig = await _siwaHmacSign(env.SESSION_SECRET, `uid:${sub}`);
+  return sig.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
+}
+
+// Read (and lazily upgrade) the record. Returns null when there's no store.
+async function _hsTouchUser(env, request, u) {
+  if (!env.DATA || !u || !u.sub) return null;
+  const key = `users/${u.sub}.json`;
+  let rec = null;
+  try {
+    const obj = await env.DATA.get(key);
+    if (obj) rec = await obj.json();
+  } catch { /* unreadable record — treat as new and overwrite below */ }
+  const now = new Date().toISOString();
+  const platform = _hsPlatform(request);
+  if (!rec || typeof rec !== "object") {
+    rec = { sub: u.sub, firstSeen: now, platforms: {}, counts: {} };
+  }
+  if (!rec.platforms || typeof rec.platforms !== "object") rec.platforms = {};
+  if (!rec.counts || typeof rec.counts !== "object") rec.counts = {};
+  const stale = !rec.lastSeen || (Date.now() - Date.parse(rec.lastSeen) > USER_TOUCH_MS);
+  const newPlatform = !rec.platforms[platform];
+  const emailChanged = !!u.email && rec.email !== u.email;
+  rec.uid = rec.uid || (await _hsUid(env, u.sub));
+  rec.provider = String(u.sub).split(":")[0] || null;
+  if (u.email) rec.email = u.email;
+  if (stale || newPlatform || emailChanged) {
+    rec.lastSeen = now;
+    rec.platforms[platform] = now;
+    rec.counts[platform] = (rec.counts[platform] || 0) + 1;
+    try {
+      await env.DATA.put(key, JSON.stringify(rec),
+        { httpMetadata: { contentType: "application/json" } });
+    } catch { /* analytics only — never fail the request over it */ }
+  }
+  return rec;
+}
+
+// GET /api/me -> { signedIn, email, providers, uid, provider, platforms, ... }
+// providers reflects which sign-in methods have their secrets set, so the UI
+// only shows live buttons; `platforms`/`nativeApp` drive the Settings > Account
+// summary ("used in the iPhone app and the web").
+async function siwaMe(request, env, ctx) {
   const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
-  return _siwaJson({
+  const base = {
     signedIn: !!u,
     email: (u && u.email) || null,
     providers: { apple: _siwaConfigured(env), google: _googleConfigured(env) },
+  };
+  if (!u) return _siwaJson(base);
+  let rec = null;
+  try { rec = await _hsTouchUser(env, request, u); } catch { /* best effort */ }
+  return _siwaJson({
+    ...base,
+    uid: (rec && rec.uid) || (await _hsUid(env, u.sub)),
+    provider: String(u.sub).split(":")[0] || null,
+    platform: _hsPlatform(request),
+    platforms: (rec && rec.platforms) || {},
+    firstSeen: (rec && rec.firstSeen) || null,
+    lastSeen: (rec && rec.lastSeen) || null,
   });
 }
 
 // GET /api/prefs -> { prefs } (the user's stored prefs JSON, or null)
-async function prefsGet(request, env) {
+async function prefsGet(request, env, ctx) {
   const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
   if (!u) return _siwaJson({ error: "unauthorized" }, 401);
   if (!env.DATA) return _siwaJson({ prefs: null });
+  if (ctx) ctx.waitUntil(_hsTouchUser(env, request, u).catch(() => {}));
   const obj = await env.DATA.get(`prefs/${u.sub}.json`);
   return _siwaJson({ prefs: obj ? await obj.json() : null });
 }
 
 // PUT /api/prefs  body = prefs JSON -> { ok: true }
-async function prefsPut(request, env) {
+async function prefsPut(request, env, ctx) {
   const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
   if (!u) return _siwaJson({ error: "unauthorized" }, 401);
   if (!env.DATA) return _siwaJson({ error: "no_store" }, 503);
@@ -2500,13 +2583,16 @@ async function prefsPut(request, env) {
   }
   await env.DATA.put(`prefs/${u.sub}.json`, JSON.stringify(parsed),
     { httpMetadata: { contentType: "application/json" } });
+  if (ctx) ctx.waitUntil(_hsTouchUser(env, request, u).catch(() => {}));
   return _siwaJson({ ok: true });
 }
 
 // DELETE /api/account -> delete the signed-in user's stored data + clear the session.
 // Satisfies Apple's in-app account-deletion requirement (App Store guideline 5.1.1(v)).
-// All data we hold for a user is their prefs object at `prefs/<sub>.json`; sessions are
-// stateless HMAC cookies (no server-side store), so clearing the cookie fully signs out.
+// All data we hold for a user is their prefs object at `prefs/<sub>.json` plus the usage
+// record at `users/<sub>.json` (email / first+last seen / which platforms) — BOTH are
+// erased here; sessions are stateless HMAC cookies (no server-side store), so clearing
+// the cookie fully signs out.
 // The iOS app loads this site in a WebView sharing the same cookie, so this deletes
 // on-device too. We can't unlink their Apple/Google ID (external), only erase our data.
 async function accountDelete(request, env) {
@@ -2514,6 +2600,7 @@ async function accountDelete(request, env) {
   if (!u) return _siwaJson({ error: "unauthorized" }, 401);
   if (env.DATA) {
     try { await env.DATA.delete(`prefs/${u.sub}.json`); } catch { /* already gone */ }
+    try { await env.DATA.delete(`users/${u.sub}.json`); } catch { /* already gone */ }
   }
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,

@@ -451,6 +451,10 @@ export default function HomeContent({
   const [pickerSel, setPickerSel] = useState<Sport[]>([]);
   const firstRunRef = useRef(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  // Px the scroll-to-top button is pushed up so it clears the footer instead of
+  // overlapping its text once you reach the bottom of the page.
+  const [scrollTopLift, setScrollTopLift] = useState(0);
+  const footerRef = useRef<HTMLElement>(null);
   // sortByMatchups removed — monkey toggle now controls both ratings visibility AND sort order
   const [prefs, setPrefs] = useState<Preferences>({
     favoriteLeagues: [],
@@ -1555,10 +1559,27 @@ export default function HomeContent({
   }, []);
 
   useEffect(() => {
-    const onScroll = () => setShowScrollTop(window.scrollY > 400);
+    const onScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+      // Once the footer scrolls into view the fixed button would sit ON TOP of
+      // the footer text (Jacob 8/4). Lift it by however much of the footer is
+      // showing so it always rides just above the footer's top border.
+      const f = footerRef.current;
+      const lift = f ? window.innerHeight - f.getBoundingClientRect().top + 12 : 0;
+      setScrollTopLift(lift > 0 ? Math.round(lift) : 0);
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onScroll);
+    // Content loading in (news cards, score rows) moves the footer WITHOUT a
+    // scroll event, which would leave the lift stale — watch the page height.
+    const ro = new ResizeObserver(onScroll);
+    ro.observe(document.body);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      ro.disconnect();
+    };
   }, []);
 
   // ── Pull-to-refresh ────────────────────────────────────────────────
@@ -3019,7 +3040,7 @@ export default function HomeContent({
         )}
       </main>
 
-      <footer className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-4 text-center text-xs flex flex-col items-center gap-2" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
+      <footer ref={footerRef} className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)_+_5rem)] sm:pb-4 text-center text-xs flex flex-col items-center gap-2" style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}>
         {/* Keep the homepage keyword H1 without making the app footer read like a
             landing page. /worldcup already has a visible H1, so this demotes
             there to avoid duplicate top-level headings. */}
@@ -3101,19 +3122,33 @@ export default function HomeContent({
             <span>Settings</span>
           </button>
           <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
-          {!isNativeApp && (
-            <a
-              href="https://apps.apple.com/app/hidescore/id6766885311"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
-              data-umami-event="install-appstore"
-            >
-              App Store
-            </a>
-          )}
         </div>
+
+        {/* Official "Download on the App Store" badge. Was a plain underlined
+            text link sitting in the row above, where it read as one more footer
+            nav item; the real badge is the thing people recognise as "this has
+            an app". Hidden inside the native app — nothing to install there.
+            The asset is Apple's own black badge; its #a6a6a6 border is what
+            keeps it legible on the dark theme's near-black background. */}
+        {!isNativeApp && (
+          <a
+            href="https://apps.apple.com/app/hidescore/id6766885311"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-block transition-opacity hover:opacity-80"
+            aria-label="Download HideScore on the App Store"
+            data-umami-event="install-appstore"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/app-store-badge.svg"
+              alt="Download on the App Store"
+              width={134}
+              height={45}
+              className="block h-[45px] w-auto"
+            />
+          </a>
+        )}
 
         {/* Compact custom Apple-logo pill — replaced by the footer text link
                 above. Kept commented in case we want the smaller text version back.
@@ -3360,8 +3395,10 @@ export default function HomeContent({
         style={{
           right: "2rem",
           // Lifted clear of the fixed bottom tab bar (h-14 + safe-area) so
-          // the two don't overlap in the corner.
-          bottom: "calc(env(safe-area-inset-bottom) + 4.75rem)",
+          // the two don't overlap in the corner. Once the footer comes into
+          // view, scrollTopLift raises it further so it rides above the footer
+          // border rather than sitting on the footer text.
+          bottom: `max(calc(env(safe-area-inset-bottom) + 4.75rem), ${scrollTopLift}px)`,
           // var(--bg) instead of --bg-card so the button stays opaque over
           // arbitrary scrolled content — bg-card is rgba(.., .05) in dark mode
           // and would make the button nearly invisible over a Reddit thumbnail.
