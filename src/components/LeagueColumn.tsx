@@ -137,7 +137,9 @@ interface SubtitleResult {
 //
 // Expires on its own — delete this constant, tradeBoardActive() and the
 // suffix wiring in PlayoffSubtitleInner once it lapses.
-const TRADE_BOARD_URL = "https://trades.hidescore.com";
+// HideScore promotes this from the MLB column, so force MLB even when the
+// visitor last left the standalone board on its NBA tab.
+const TRADE_BOARD_URL = "https://trades.hidescore.com/?sport=mlb";
 const TRADE_BOARD_LABEL = "Trades";
 const TRADE_BOARD_UNTIL_YMD = 20260807; // added 2026-08-04, runs 4th-6th
 
