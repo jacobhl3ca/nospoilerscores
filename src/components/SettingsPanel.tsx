@@ -12,7 +12,7 @@ import {
 } from "@/lib/preferences";
 import { getAuthState, signInWithApple, signInWithGoogle, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
-interface LeagueOption { sport: Sport; label: string }
+interface LeagueOption { sport: Sport; label: string; offseason?: boolean }
 
 interface SettingsPanelProps {
   open: boolean;
@@ -20,7 +20,7 @@ interface SettingsPanelProps {
   prefs: Preferences;
   updatePrefs: (update: Partial<Preferences>) => void;
   resolvedTheme: "dark" | "light";
-  // All currently-active leagues (so each slot dropdown can offer the full set).
+  // Currently-active leagues plus deliberate manual exceptions (NBA offseason).
   thirdLeagueOptions: LeagueOption[];
   // Every supported team league, including out-of-season leagues. Team
   // favorites are durable; the picker must not hide La Liga in July merely
@@ -779,7 +779,7 @@ export default function SettingsPanel({
                   >
                     <option value="">Auto</option>
                     {thirdLeagueOptions.map((o) => (
-                      <option key={o.sport} value={o.sport}>{o.label}</option>
+                      <option key={o.sport} value={o.sport}>{o.label}{o.offseason ? " · offseason" : ""}</option>
                     ))}
                     <option value="empty">Remove col</option>
                   </select>
@@ -820,7 +820,10 @@ export default function SettingsPanel({
                         }}
                         className="cursor-pointer accent-[var(--accent)]"
                       />
-                      {o.label}
+                      <span>
+                        {o.label}
+                        {o.offseason && <em style={{ color: "var(--text-muted)" }}> · offseason</em>}
+                      </span>
                     </label>
                   );
                 })}

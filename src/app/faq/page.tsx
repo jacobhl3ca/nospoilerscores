@@ -54,7 +54,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Why don't I see a league on the main screen?",
-    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Seasonal leagues appear in the main switcher while they are playing, but you can choose favorite teams from supported leagues year-round.",
+    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Seasonal leagues generally appear in the main switcher while they are playing. NBA stays selectable year-round with an offseason label, but it only appears automatically during its season. You can choose favorite teams from supported leagues year-round.",
   },
   {
     q: "How do the separate soccer leagues work?",

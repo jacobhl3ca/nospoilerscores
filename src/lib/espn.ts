@@ -3664,7 +3664,13 @@ export async function fetchAllLeagues(
   const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
-    return ALL_LEAGUES.find((l) => l.sport === sport && isLeagueActive(l, viewDate)) ?? null;
+    const config = ALL_LEAGUES.find((l) => l.sport === sport);
+    if (!config) return null;
+    // NBA is the deliberate offseason exception: it stays manually pinnable
+    // for league news and the trade board, but the auto-picker above still
+    // uses isLeagueActive() and therefore never forces an empty NBA column on
+    // people between the Finals and opening night.
+    return isLeagueActive(config, viewDate) || sport === "nba" ? config : null;
   };
   const slot1Cfg = resolveSlot(slotOverrides?.first);
   const slot2Cfg = resolveSlot(slotOverrides?.second);

@@ -91,7 +91,7 @@ interface NewsColumnProps {
   // League swap selector — click the title to pick a different league.
   // Callback receives undefined for Auto (revert to default) and "empty" to
   // hide the column entirely.
-  swappableOptions?: { sport: Sport; label: string }[];
+  swappableOptions?: { sport: Sport; label: string; offseason?: boolean }[];
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
@@ -137,7 +137,7 @@ export function NewsColumnTitle({
   removable,
 }: {
   title: string;
-  swappableOptions?: { sport: Sport; label: string }[];
+  swappableOptions?: { sport: Sport; label: string; offseason?: boolean }[];
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
@@ -237,7 +237,7 @@ export function NewsColumnTitle({
                       aria-current={isCurrent ? "true" : undefined}
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{
-                        color: isCurrent ? "var(--accent)" : isElsewhere ? "var(--text-muted)" : "var(--text)",
+                        color: isCurrent ? "var(--accent)" : isElsewhere || opt.offseason ? "var(--text-muted)" : "var(--text)",
                         fontWeight: isCurrent ? 600 : 400,
                       }}
                       title={isElsewhere ? "Already shown in another column" : undefined}
@@ -245,6 +245,7 @@ export function NewsColumnTitle({
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       {opt.label}
+                      {opt.offseason && <em className="font-normal"> · offseason</em>}
                     </button>
                   );
                 })}
