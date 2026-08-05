@@ -1,6 +1,7 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, FightBout } from "./types";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
+import { raceDetailsUrl } from "./raceDetails";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -2504,10 +2505,12 @@ async function fetchLeagueEvent(
       officialChannel: series.channel,
       officialLabel: series.label,
       raceTokens: buildRaceTokens(sport, event.name || event.shortName || ""),
-      // F1's own event links point at espn.com. NASCAR's and IndyCar's point at
-      // VividSeats — a ticket reseller, not a race page — so only pass through a
-      // link that's actually on ESPN and leave the tile un-linked otherwise.
-      eventUrl: sport === "f1" || (eventUrl && /(^|\.)espn\.(com|in)\//.test(eventUrl)) ? eventUrl : undefined,
+      // ESPN's NASCAR/IndyCar event links often point only at VividSeats. Never
+      // send a details click to a ticket reseller: use an ESPN event link when
+      // available, otherwise the verified ESPN series schedule. This keeps
+      // every upcoming race tile informative and clickable without exposing a
+      // finished-race result page.
+      eventUrl: raceDetailsUrl(sport, eventUrl),
     };
   }
 
