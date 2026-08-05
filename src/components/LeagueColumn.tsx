@@ -36,7 +36,7 @@ interface LeagueColumnProps {
   section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
   // 3rd league slot swapping
-  swappableOptions?: { sport: Sport; label: string }[];
+  swappableOptions?: { sport: Sport; label: string; offseason?: boolean }[];
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
@@ -126,7 +126,7 @@ interface SubtitleResult {
   live?: boolean;
 }
 
-// Promo link to the trade board, appended to the MLB column's subtitle.
+// Promo link to the trade board, appended to the MLB/NBA column subtitle.
 //
 // It rides the SAME line as Big Inning rather than adding a row: this slot is a
 // single line whose height is reserved even when empty (see the eventCard
@@ -135,18 +135,35 @@ interface SubtitleResult {
 // width of the existing label and only then falls back to the bare label, so a
 // narrow column drops the promo instead of truncating Big Inning.
 //
-// Expires on its own — delete this constant, tradeBoardActive() and the
-// suffix wiring in PlayoffSubtitleInner once it lapses.
-// HideScore promotes this from the MLB column, so force MLB even when the
-// visitor last left the standalone board on its NBA tab.
-const TRADE_BOARD_URL = "https://trades.hidescore.com/?sport=mlb";
+// MLB's deadline promo is a short one-off. NBA comes back during the deadline
+// lead-up and the main draft/free-agency window; its manually selectable
+// offseason column keeps that second window reachable. Explicit sport params
+// override the board's remembered tab.
+const TRADE_BOARD_BASE_URL = "https://trades.hidescore.com/";
 const TRADE_BOARD_LABEL = "Trades";
 const TRADE_BOARD_UNTIL_YMD = 20260807; // added 2026-08-04, runs 4th-6th
 
-function tradeBoardActive(sport: Sport): boolean {
-  if (sport !== "mlb") return false;
+interface TradeBoardPromo {
+  href: string;
+  label: string;
+}
+
+function tradeBoardPromo(sport: Sport): TradeBoardPromo | null {
   const now = nowInEt();
-  return now.y * 10000 + now.mo * 100 + now.d < TRADE_BOARD_UNTIL_YMD;
+  if (sport === "mlb") {
+    const ymd = now.y * 10000 + now.mo * 100 + now.d;
+    return ymd < TRADE_BOARD_UNTIL_YMD
+      ? { href: `${TRADE_BOARD_BASE_URL}?sport=mlb`, label: TRADE_BOARD_LABEL }
+      : null;
+  }
+  if (sport !== "nba") return null;
+  const deadlineWindow =
+    (now.mo === 1 && now.d >= 15) || (now.mo === 2 && now.d <= 8);
+  const offseasonWindow =
+    (now.mo === 6 && now.d >= 15) || now.mo === 7 || now.mo === 8;
+  return deadlineWindow || offseasonWindow
+    ? { href: `${TRADE_BOARD_BASE_URL}?sport=nba`, label: TRADE_BOARD_LABEL }
+    : null;
 }
 
 // Tennis round wording for the italic header subtitle (parallels golf's
@@ -410,13 +427,14 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
 
   const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
   const baseTiers = result?.tiers ?? [];
+  const tradePromo = tradeBoardPromo(sport);
   // Widest-first: every "<label> · Trades" pairing, then the bare labels. The
   // probe takes the first that fits, so the promo is preferred but is the first
   // thing dropped when the column is too narrow.
-  const suffixTiers = tradeBoardActive(sport)
+  const suffixTiers = tradePromo
     ? baseTiers.length
-      ? baseTiers.map((t) => `${t} · ${TRADE_BOARD_LABEL}`)
-      : [TRADE_BOARD_LABEL]
+      ? baseTiers.map((t) => `${t} · ${tradePromo.label}`)
+      : [tradePromo.label]
     : [];
   const tiers = [...suffixTiers, ...baseTiers];
   const href = result?.href;
@@ -486,7 +504,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
   const chosen = tiers.length ? tiers[tierIdx] : "\u00A0";
   const text = showsTradeBoard
     ? baseTiers.length
-      ? chosen.slice(0, -(TRADE_BOARD_LABEL.length + 3))
+      ? chosen.slice(0, -((tradePromo?.label.length ?? 0) + 3))
       : ""
     : chosen;
   // When live, peel the leading "\u25CF" off so we can animate just the dot.
@@ -507,16 +525,16 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
   // the measured/styled element becomes a wrapper span and the pieces sit
   // inside it; layout is identical because the wrapper carries the same classes
   // the single element used to.
-  if (showsTradeBoard) {
+  if (showsTradeBoard && tradePromo) {
     const tradeLink = (
       <a
-        href={TRADE_BOARD_URL}
+        href={tradePromo.href}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={handleExternalClick(TRADE_BOARD_URL)}
+        onClick={handleExternalClick(tradePromo.href)}
         className="hover:underline transition-colors"
       >
-        {TRADE_BOARD_LABEL}
+        {tradePromo.label}
       </a>
     );
     let label: React.ReactNode = null;
@@ -1418,7 +1436,7 @@ export default function LeagueColumn({
                           aria-current={isCurrent ? "true" : undefined}
                           className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                           style={{
-                            color: isCurrent ? "var(--accent)" : isElsewhere ? "var(--text-muted)" : "var(--text)",
+                            color: isCurrent ? "var(--accent)" : isElsewhere || opt.offseason ? "var(--text-muted)" : "var(--text)",
                             fontWeight: isCurrent ? 600 : 400,
                           }}
                           title={isElsewhere ? "Already shown in another column — pick to add a second" : undefined}
@@ -1426,6 +1444,7 @@ export default function LeagueColumn({
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           {opt.label}
+                          {opt.offseason && <em className="font-normal"> · offseason</em>}
                         </button>
                       );
                     })}

@@ -1137,19 +1137,23 @@ export default function HomeContent({
     return fifa ? isLeagueActive(fifa, viewDate) : false;
   }, [selectedDate]);
 
-  // Compute which leagues are available for the 3rd slot dropdown
+  // Compute which leagues are available for manual selection. Most seasonal
+  // leagues disappear outside their season; NBA deliberately remains as a
+  // muted "offseason" option so its news + trade board stay reachable early.
+  // This does not affect the automatic columns, which still use active leagues.
   const thirdLeagueOptions = useMemo(() => {
     if (!selectedDate) return [];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    // Get all active leagues for this date, deduplicated by sport
+    // Get active leagues plus the NBA exception, deduplicated by sport.
     const seen = new Set<Sport>();
-    const options: { sport: Sport; label: string }[] = [];
+    const options: { sport: Sport; label: string; offseason?: boolean }[] = [];
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       if (seen.has(league.sport)) continue;
-      if (!isLeagueActive(league, viewDate)) continue;
+      const active = isLeagueActive(league, viewDate);
+      if (!active && league.sport !== "nba") continue;
       seen.add(league.sport);
-      options.push({ sport: league.sport, label: league.label });
+      options.push({ sport: league.sport, label: league.label, offseason: !active });
     }
     return options;
   }, [selectedDate]);
@@ -2740,9 +2744,10 @@ export default function HomeContent({
               namesCompact,
             };
             // Per-slot swap dropdowns: every column lists every in-season
-            // league. Leagues already shown in another column come through
-            // greyed (via shownElsewhere) but stay selectable — picking one
-            // gives you a second column of that league.
+            // league plus the explicitly-labelled offseason NBA option.
+            // Leagues already shown in another column come through greyed (via
+            // shownElsewhere) but stay selectable — picking one gives you a
+            // second column of that league.
             const displayedSports = sortedLeagues.map((l) => l.sport);
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
@@ -3217,6 +3222,7 @@ export default function HomeContent({
                       : { background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
                   >
                     {on ? `${idx + 1}. ` : ""}{o.label}
+                    {o.offseason && <em className="font-normal" style={{ color: on ? "inherit" : "var(--text-muted)" }}> · offseason</em>}
                   </button>
                 );
               })}
