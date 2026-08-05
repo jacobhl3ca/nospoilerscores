@@ -447,6 +447,10 @@ export default function HomeContent({
     skipNewsExplainer: false,
     showNews: false,
   });
+  // A signed-in account that has already used the iPhone app does not need an
+  // install prompt on the web. This is account history from /api/me, not a
+  // guess based on the current browser's user agent.
+  const [hasIosAccountUse, setHasIosAccountUse] = useState(false);
 
   useEffect(() => {
     const loaded = loadPreferences();
@@ -586,6 +590,7 @@ export default function HomeContent({
     (async () => {
       try {
         const auth = await getAuthState();
+        setHasIosAccountUse(Boolean(auth.signedIn && auth.platforms?.ios));
         if (!auth.signedIn) return;
         setRemoteSync(pushRemotePrefs);
         const remote = await fetchRemotePrefs();
@@ -617,6 +622,7 @@ export default function HomeContent({
       if (document.visibilityState !== "visible") return;
       try {
         const auth = await getAuthState();
+        setHasIosAccountUse(Boolean(auth.signedIn && auth.platforms?.ios));
         if (!auth.signedIn || !alive) return;
         const remote = await fetchRemotePrefs();
         if (!remote || !alive || Object.keys(remote).length === 0) return;
@@ -3063,33 +3069,19 @@ export default function HomeContent({
             <span>Settings</span>
           </button>
           <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          {!isNativeApp && !hasIosAccountUse && (
+            <a
+              href="https://apps.apple.com/app/hidescore/id6766885311"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+              data-umami-event="install-appstore"
+            >
+              App Store
+            </a>
+          )}
         </div>
-
-        {/* Official "Download on the App Store" badge. Was a plain underlined
-            text link sitting in the row above, where it read as one more footer
-            nav item; the real badge is the thing people recognise as "this has
-            an app". Hidden inside the native app — nothing to install there.
-            The asset is Apple's own black badge; its #a6a6a6 border is what
-            keeps it legible on the dark theme's near-black background. */}
-        {!isNativeApp && (
-          <a
-            href="https://apps.apple.com/app/hidescore/id6766885311"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 inline-block transition-opacity hover:opacity-80"
-            aria-label="Download HideScore on the App Store"
-            data-umami-event="install-appstore"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/app-store-badge.svg"
-              alt="Download on the App Store"
-              width={134}
-              height={45}
-              className="block h-[45px] w-auto"
-            />
-          </a>
-        )}
 
         {/* Compact custom Apple-logo pill — replaced by the footer text link
                 above. Kept commented in case we want the smaller text version back.
