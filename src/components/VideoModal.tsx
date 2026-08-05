@@ -1607,7 +1607,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // of it (Jacob 7/11–13). The bottom Prev/Next buttons need a bottom
         // reserve so the footer clears them — image posts included, now that
         // they get the buttons too.
-        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "sm:px-24 sm:py-8" : "sm:p-8"}${hasPager ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)]" : ""}`}
+        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "pt-[calc(env(safe-area-inset-top)+4.5rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] sm:px-24 sm:py-8" : "sm:p-8"}`}
       >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC

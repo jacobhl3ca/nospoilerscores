@@ -22,6 +22,10 @@ interface SettingsPanelProps {
   resolvedTheme: "dark" | "light";
   // All currently-active leagues (so each slot dropdown can offer the full set).
   thirdLeagueOptions: LeagueOption[];
+  // Every supported team league, including out-of-season leagues. Team
+  // favorites are durable; the picker must not hide La Liga in July merely
+  // because its score column is not active yet.
+  teamLeagueOptions: LeagueOption[];
   // Currently-displayed leagues for default-fallback labels in the slot dropdowns.
   displayedLeagues: LeagueData[];
   // Used to map favorited team IDs → display names when the team is in view.
@@ -35,7 +39,7 @@ interface SettingsPanelProps {
 }
 
 const DATE_MODE_OPTIONS: { value: DefaultDateMode; label: string; hint: string }[] = [
-  { value: "smart", label: "Smart", hint: "Yesterday before 1 PM ET, today after" },
+  { value: "smart", label: "Automatic", hint: "Yesterday before the switch time, today after" },
   { value: "yesterday", label: "Yesterday", hint: "Always start on yesterday" },
   { value: "today", label: "Today", hint: "Always start on today" },
 ];
@@ -114,6 +118,11 @@ const SEEK_FILL_OPTIONS: { value: "off" | "grey" | "white"; label: string; hint:
   { value: "white", label: "White", hint: "Bright position fill" },
 ];
 
+const PLAYER_OPTIONS: { value: "safe" | "youtube"; label: string; hint: string }[] = [
+  { value: "safe", label: "Spoiler-safe", hint: "Hide progress and the ending with HideScore controls" },
+  { value: "youtube", label: "YouTube", hint: "Use the familiar YouTube controls; progress may reveal how far you are" },
+];
+
 const SPORT_LABEL: Record<Sport, string> = {
   mlb: "MLB",
   nba: "NBA",
@@ -164,6 +173,7 @@ export default function SettingsPanel({
   updatePrefs,
   resolvedTheme,
   thirdLeagueOptions,
+  teamLeagueOptions,
   displayedLeagues,
   knownTeams,
   onShareFavorites,
@@ -660,11 +670,11 @@ export default function SettingsPanel({
               />
             </Field>
             {(prefs.defaultDateMode ?? "smart") === "smart" && (
-              <Field label="Smart switch time" hint="Hour (your local time) when Smart flips from yesterday to today">
+            <Field label="Automatic switch time" hint="Hour (your local time) when the landing date flips from yesterday to today">
                 <select
                   value={prefs.smartCutoffHour ?? 13}
                   onChange={(e) => updatePrefs({ smartCutoffHour: Number(e.target.value) })}
-                  aria-label="Smart switch time"
+                  aria-label="Automatic switch time"
                   className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 >
@@ -844,12 +854,13 @@ export default function SettingsPanel({
               onChange={(v) => updatePrefs({ showTeamRecords: v })}
             />
             <TeamPicker
-              sports={thirdLeagueOptions}
+              sports={teamLeagueOptions}
               favorites={prefs.favoriteTeams}
               onToggle={toggleTeamFavorite}
               teamsBySport={teamsBySportCache}
               loadingSports={loadingTeamSports}
               loadSport={loadTeamSport}
+              knownTeams={knownTeams}
             />
             {prefs.favoriteTeams.length === 0 ? (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -921,7 +932,7 @@ export default function SettingsPanel({
           <Section title="News">
             <ToggleRow
               label="Single column"
-              hint="Stack all news columns into one wide column, instead of side-by-side. Works on large screens too."
+              hint="Stack all news columns into one wide column instead of side-by-side."
               checked={prefs.newsSingleColumn ?? false}
               onChange={(v) => updatePrefs({ newsSingleColumn: v })}
             />
@@ -941,48 +952,54 @@ export default function SettingsPanel({
             </Field>
           </Section>
 
-          {/* Highlight-video spoiler masks (the black bars over the player) */}
-          <Section title="Highlight video">
+          {/* Player choice leads; the custom-only controls below stay visible
+              but disabled in YouTube mode so the relationship is obvious. */}
+          <Section title="Highlight video player">
+            <Field label="Player" hint="Spoiler-safe is the default; YouTube trades protection for familiar controls">
+              <RadioGroup
+                label="Highlight video player"
+                value={(prefs.youtubeNativeControls ?? false) ? "youtube" : "safe"}
+                options={PLAYER_OPTIONS}
+                onChange={(v) => updatePrefs({ youtubeNativeControls: v === "youtube" })}
+              />
+            </Field>
             <ToggleRow
               label="Cover video title"
               hint="Black bar over YouTube's title so the headline can't spoil"
               checked={prefs.maskVideoTitle ?? true}
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
-            <ToggleRow
-              label="Show YouTube's controls"
-              hint="Use YouTube's own bar (progress + time) instead of the spoiler-safe one — reveals how far you are, but handy in fullscreen"
-              checked={prefs.youtubeNativeControls ?? false}
-              onChange={(v) => updatePrefs({ youtubeNativeControls: v })}
-            />
-            <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
-              <RadioGroup
-                label="Skip controls"
-                value={prefs.videoSeekControl ?? "both"}
-                options={SEEK_CONTROL_OPTIONS}
-                onChange={(v) => updatePrefs({ videoSeekControl: v })}
+            <fieldset disabled={prefs.youtubeNativeControls ?? false} className={(prefs.youtubeNativeControls ?? false) ? "space-y-3 opacity-40" : "space-y-3"}>
+              <legend className="sr-only">Spoiler-safe player controls</legend>
+              <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
+                <RadioGroup
+                  label="Skip controls"
+                  value={prefs.videoSeekControl ?? "both"}
+                  options={SEEK_CONTROL_OPTIONS}
+                  onChange={(v) => updatePrefs({ videoSeekControl: v })}
+                />
+              </Field>
+              <Field label="Seek bar fill" hint="The bar shows no position by default so it can't spoil how far in you are">
+                <RadioGroup
+                  label="Seek bar fill"
+                  value={prefs.videoSeekFill ?? "off"}
+                  options={SEEK_FILL_OPTIONS}
+                  onChange={(v) => updatePrefs({ videoSeekFill: v })}
+                />
+              </Field>
+              <ToggleRow
+                label="Allow seeking to the end"
+                hint="Off keeps the last 10% unreachable so the ending stays hidden"
+                checked={prefs.videoAllowEnd ?? false}
+                onChange={(v) => updatePrefs({ videoAllowEnd: v })}
               />
-            </Field>
-            <Field label="Seek bar fill" hint="The bar shows no position by default so it can't spoil how far in you are">
-              <RadioGroup
-                label="Seek bar fill"
-                value={prefs.videoSeekFill ?? "off"}
-                options={SEEK_FILL_OPTIONS}
-                onChange={(v) => updatePrefs({ videoSeekFill: v })}
+              <ToggleRow
+                label="Warn before skipping past halfway"
+                hint="Asks to confirm a click/jump that lands in the second half"
+                checked={prefs.videoWarnHalfway ?? false}
+                onChange={(v) => updatePrefs({ videoWarnHalfway: v })}
               />
-            </Field>
-            <ToggleRow
-              label="Allow seeking to the end"
-              hint="Off keeps the last 10% unreachable so the ending stays hidden"
-              checked={prefs.videoAllowEnd ?? false}
-              onChange={(v) => updatePrefs({ videoAllowEnd: v })}
-            />
-            <ToggleRow
-              label="Warn before skipping past halfway"
-              hint="Asks to confirm a click/jump that lands in the second half"
-              checked={prefs.videoWarnHalfway ?? false}
-              onChange={(v) => updatePrefs({ videoWarnHalfway: v })}
-            />
+            </fieldset>
           </Section>
 
           {/* Onboarding hints */}
@@ -1014,7 +1031,7 @@ export default function SettingsPanel({
                       className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       style={{ background: "var(--accent)", color: "white" }}
                     >
-                      {shareCopied ? "Copied!" : "Save settings link"}
+                      {shareCopied ? "Copied!" : "Copy settings link"}
                     </button>
                     {nothingToShare && (
                       <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
@@ -1040,7 +1057,7 @@ export default function SettingsPanel({
                           e.dataTransfer.setData("text/x-moz-url", `${shareUrl}\nHideScore`);
                           e.dataTransfer.setData("text/html", `<a href="${shareUrl}">HideScore</a>`);
                         }}
-                        className="w-full py-2 rounded-lg text-sm cursor-grab transition-colors flex items-center justify-center gap-1.5"
+                        className="hidden w-full py-2 rounded-lg text-sm cursor-grab transition-colors sm:flex items-center justify-center gap-1.5"
                         style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -1058,7 +1075,7 @@ export default function SettingsPanel({
                       </a>
                     )}
                     {!nothingToShare && (
-                      <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
+                      <p className="hidden text-[11px] -mt-1 sm:block" style={{ color: "var(--text-muted)" }}>
                         {isSafari
                           ? "Drag this onto your bookmarks bar to save this setup. Clicking copies the link instead."
                           : "The bookmark restores this exact setup. Clicking copies the link instead."}
@@ -1221,6 +1238,7 @@ function TeamPicker({
   teamsBySport,
   loadingSports,
   loadSport,
+  knownTeams,
 }: {
   sports: LeagueOption[];
   favorites: string[];
@@ -1228,6 +1246,7 @@ function TeamPicker({
   teamsBySport: Map<Sport, SportTeam[]>;
   loadingSports: Set<Sport>;
   loadSport: (sport: Sport) => void;
+  knownTeams: { id: string; sport: Sport; displayName: string; logo?: string }[];
 }) {
   const tabSports = useMemo(
     () => sports.filter((s) => !TEAM_PICKER_SKIP.includes(s.sport)),
@@ -1272,7 +1291,21 @@ function TeamPicker({
   const currentTeams = useMemo<(SportTeam & { sport: Sport })[]>(() => {
     if (activeSport) {
       const list = teamsBySport.get(activeSport) ?? [];
-      return list.map((t) => ({ ...t, sport: activeSport }));
+      const merged = new Map<string, SportTeam & { sport: Sport }>();
+      for (const t of list) merged.set(t.id, { ...t, sport: activeSport });
+      for (const t of knownTeams) {
+        if (t.sport !== activeSport || merged.has(t.id)) continue;
+        merged.set(t.id, {
+          id: t.id,
+          rawId: t.id.slice(t.id.indexOf("-") + 1),
+          displayName: t.displayName,
+          shortDisplayName: t.displayName,
+          abbreviation: "",
+          logo: t.logo,
+          sport: activeSport,
+        });
+      }
+      return [...merged.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
     }
     const out: (SportTeam & { sport: Sport })[] = [];
     for (const s of tabSports) {
@@ -1281,7 +1314,7 @@ function TeamPicker({
       for (const t of list) out.push({ ...t, sport: s.sport });
     }
     return out;
-  }, [activeSport, teamsBySport, tabSports]);
+  }, [activeSport, teamsBySport, tabSports, knownTeams]);
 
   const filtered = useMemo(() => {
     if (!trimmedQuery) return currentTeams;
