@@ -1158,6 +1158,27 @@ export default function HomeContent({
     return options;
   }, [selectedDate]);
 
+  // Settings is the durable league catalog, so it must not hide a saved pick
+  // merely because that league is between seasons. A sport can have several
+  // seasonal configs (golf majors, tennis Slams); mark it in-season when ANY
+  // config for that sport is active on the viewed date.
+  const settingsLeagueOptions = useMemo(() => {
+    if (!selectedDate) return [];
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean }>();
+    for (const league of ALL_LEAGUES) {
+      if (league.hidden) continue;
+      const active = isLeagueActive(league, viewDate);
+      const existing = options.get(league.sport);
+      if (!existing) {
+        options.set(league.sport, { sport: league.sport, label: league.label, offseason: !active });
+      } else if (active && existing.offseason) {
+        options.set(league.sport, { sport: league.sport, label: league.label });
+      }
+    }
+    return [...options.values()];
+  }, [selectedDate]);
+
   const teamLeagueOptions = useMemo(() => {
     const seen = new Set<Sport>();
     return ALL_LEAGUES.flatMap((league) => {
@@ -3307,7 +3328,7 @@ export default function HomeContent({
         prefs={prefs}
         updatePrefs={updatePrefs}
         resolvedTheme={resolvedTheme}
-        thirdLeagueOptions={thirdLeagueOptions}
+        leagueOptions={settingsLeagueOptions}
         teamLeagueOptions={teamLeagueOptions}
         displayedLeagues={sortedLeagues}
         knownTeams={knownTeams}
