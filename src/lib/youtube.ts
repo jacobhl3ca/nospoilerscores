@@ -210,6 +210,10 @@ export function requiresStrictChannelOnly(sport: string): boolean {
 // every chain: that channel explicitly excludes major highlights, so it never
 // hit. Sky Sports Golf kept for The Open (UK R&A licensee). (Verified 2026-07-11.)
 const SECONDARY_CHANNELS: Record<string, string[]> = {
+  // CBS's women's-sports channel now posts the per-match extended NWSL recap.
+  // The league channel skipped Courage–Summit on 2026-08-05 while W Golazo
+  // published an official, embeddable cut, so keep it as the strict 2nd slot.
+  nwsl: ["CBS Sports W Golazo"],
   golf_masters: ["Golf Channel", "ESPN"],
   golf_pgachamp: ["Golf Channel", "ESPN"],
   golf_usopen: ["Golf Channel"],
@@ -288,6 +292,10 @@ export function getSecondaryChannels(sport: string, label?: string): string[] {
 // button falls back to a YouTube search page.
 const TEAM_NAME_ALIASES: Record<string, string> = {
   "Red Bull NY": "New York Red Bulls",
+  // ESPN uses compact expansion-team names while WNBA titles spell out the
+  // clubs. The strict resolver requires both teams, so query the title form.
+  "Tempo": "Toronto Tempo",
+  "Valkyries": "Golden State Valkyries",
 };
 
 function aliasTeam(name: string): string {

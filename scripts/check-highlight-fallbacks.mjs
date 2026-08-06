@@ -50,6 +50,8 @@ const ESPN_PATHS = {
   nba:   "/basketball/nba/scoreboard",
   wnba:  "/basketball/wnba/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
+  ncaaw: "/basketball/womens-college-basketball/scoreboard",
+  ncaaf: "/football/college-football/scoreboard",
   nhl:   "/hockey/nhl/scoreboard",
   nfl:   "/football/nfl/scoreboard",
   epl:   "/soccer/eng.1/scoreboard",
@@ -84,6 +86,7 @@ const ESPN_PATHS = {
 // official channel by design.
 const OFFICIAL_CHANNELS = {
   nba: "NBA", wnba: "WNBA", mlb: "MLB", nhl: "NHL", nfl: "NFL", ncaam: "March Madness",
+  ncaaw: "March Madness", ncaaf: "ESPN College Football",
   fifa: "FIFA", epl: "NBC Sports", mls: "Major League Soccer",
   ucl: "CBS Sports Golazo", uel: "CBS Sports Golazo", seriea: "CBS Sports Golazo",
   bundesliga: "Bundesliga",
@@ -92,6 +95,12 @@ const OFFICIAL_CHANNELS = {
   efl: "EFL",
   libertadores: "CONMEBOL Libertadores",
   saudi: "الدوري السعودي للمحترفين - Saudi Pro League",
+};
+
+// Matches SECONDARY_CHANNELS in src/lib/youtube.ts for team-game leagues.
+// Every entry remains strict to that exact uploader.
+const SECONDARY_CHANNELS = {
+  nwsl: "CBS Sports W Golazo",
 };
 
 // Mirrors GameHighlights.tsx. A same-day final does not promise highlight
@@ -112,6 +121,8 @@ const REGULATION_PERIODS = {
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.
 const TEAM_NAME_ALIASES = {
   "Red Bull NY": "New York Red Bulls",
+  "Tempo": "Toronto Tempo",
+  "Valkyries": "Golden State Valkyries",
 };
 const aliasTeam = (n) => TEAM_NAME_ALIASES[n] ?? n;
 
@@ -137,21 +148,35 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // /api/youtube fetch and falsely flagged all games — see issue #7). The
 // timeout still bounds any transient stall so a run can't drag on for an hour.
 const FETCH_TIMEOUT_MS = 8000;
-const UA = "nospoilerscores-staleness-check/1.0 (+https://hidescore.com)";
+// Do not send the old custom bot-like User-Agent. ESPN returns 403 to that
+// identity while accepting Node's default fetch identity and normal browsers;
+// the old checker silently converted every 403 into an empty scoreboard.
 const tfetch = (url) =>
-  fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers: { "user-agent": UA } });
+  fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+
+let scoreboardRequests = 0;
+let scoreboardSuccesses = 0;
+const scoreboardFailures = [];
 
 async function fetchScoreboard(sport, date) {
   const url = `${ESPN_BASE}${ESPN_PATHS[sport]}?dates=${fmtESPN(date)}`;
+  scoreboardRequests++;
+  let lastFailure = "unknown failure";
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await tfetch(url);
-      if (res.ok) return (await res.json()).events ?? [];
-    } catch {
+      if (res.ok) {
+        scoreboardSuccesses++;
+        return (await res.json()).events ?? [];
+      }
+      lastFailure = `HTTP ${res.status}`;
+    } catch (error) {
+      lastFailure = error instanceof Error ? error.message : String(error);
       // fall through and retry
     }
     await sleep(1000);
   }
+  scoreboardFailures.push({ sport, date: fmtESPN(date), error: lastFailure });
   return [];
 }
 
@@ -302,7 +327,7 @@ for (const sport of Object.keys(ESPN_PATHS)) {
         ? null
         : sport === "fifa"
           ? "FOX Sports"
-          : channel;
+          : (SECONDARY_CHANNELS[sport] ?? channel);
       const official = primaryChannel
         ? await resolve(teams.away, teams.home, dateStr, primaryChannel, FIRST_PASS_GAP_MS)
         : { videoId: "n/a", via: "no-official-channel" };
@@ -409,6 +434,16 @@ console.log(`prebaked:    ${baked} (visible without a live lookup)`);
 console.log(`exhausted:   ${confirmedExhausted.length}   (no visible YouTube button after confirmation)`);
 console.log(`recovered:   ${recovered.length}  (first pass missed, retry caught it — transient throttle, no email)`);
 console.log(`alias-needed: ${aliasNeeded.length}  (official-channel filter missed — broader retry caught it)\n`);
+
+if (scoreboardFailures.length) {
+  console.log("--- INCOMPLETE: ESPN SCOREBOARD SOURCE FAILURE ---");
+  console.log(`successful: ${scoreboardSuccesses}/${scoreboardRequests}`);
+  scoreboardFailures.forEach((failure) => {
+    console.log(`[${failure.sport.toUpperCase()} ${failure.date}] ${failure.error}`);
+  });
+  console.log("Source failures are not zero-game slates; refusing to report this audit clean.");
+  process.exit(1);
+}
 
 if (aliasNeeded.length) {
   console.log("--- ALIAS NEEDED (warning only, no email) ---");

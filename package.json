@@ -9,6 +9,7 @@
     "lint": "eslint",
     "visual": "playwright test",
     "visual:update": "playwright test --update-snapshots",
+    "highlights:check": "node scripts/check-highlight-regressions.mjs",
     "poker:check": "node scripts/check-poker-events.mjs",
     "boxing:check": "node scripts/check-boxing-events.mjs"
   },

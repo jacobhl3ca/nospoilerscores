@@ -6,7 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getCompetitionName, hasNoTrustedHighlightSource, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, hasNoTrustedHighlightSource, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
@@ -166,7 +166,11 @@ export default function GameHighlights({
   const shareCard = useMemo(() => buildShareCard(game, leagueLabel), [game, leagueLabel]);
 
   const primaryChannel = isMlb ? (officialChannel ?? undefined) : (isFifa ? "FIFA" : (officialChannel ?? undefined));
-  const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : primaryChannel);
+  // Most leagues reuse their primary channel for slot 2. A league-specific
+  // verified rightsholder can override that slot (currently NWSL → W Golazo)
+  // without widening the primary button or affecting any other sport.
+  const verifiedSecondaryChannel = getSecondaryChannels(game.sport, highlightLabel)[0];
+  const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : (verifiedSecondaryChannel ?? primaryChannel));
   const strictPrimaryChannel = !!primaryChannel;
   const strictSecondaryChannel = !!secondaryChannel;
   // Esports joins FIFA on the no-alternate-re-search path: a failed strict
