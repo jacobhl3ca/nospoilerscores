@@ -2853,8 +2853,12 @@ async function emailCodeRequest(request, env) {
   const delivered = await _hsSendLoginCode(env, email, code);
   if (!delivered) await env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE email_key = ? AND code_hash = ?")
     .bind(emailKey, codeHash).run();
-  env.AUTH_DB.prepare("DELETE FROM email_login_rate_events WHERE created_at < ?")
-    .bind(now - 24 * 60 * 60 * 1000).run().catch(() => {});
+  await Promise.all([
+    env.AUTH_DB.prepare("DELETE FROM email_login_rate_events WHERE created_at < ?")
+      .bind(now - 24 * 60 * 60 * 1000).run().catch(() => {}),
+    env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE expires_at < ?")
+      .bind(now - 24 * 60 * 60 * 1000).run().catch(() => {}),
+  ]);
   return _siwaJson({ ok: true });
 }
 

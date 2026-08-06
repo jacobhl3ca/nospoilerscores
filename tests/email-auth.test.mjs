@@ -17,6 +17,7 @@ test("worker enforces the Islander email-code security boundaries", async () => 
   assert.match(worker, /attempts >= 5/);
   assert.match(worker, /now \+ 10 \* 60 \* 1000/);
   assert.match(worker, /DELETE FROM email_login_codes[\s\S]*code_hash = \?[\s\S]*expires_at >= \?/);
+  assert.match(worker, /DELETE FROM email_login_codes WHERE expires_at < \?/);
   assert.match(worker, /providers: \{ apple:.*google:.*email:/);
 });
 
