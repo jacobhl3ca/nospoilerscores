@@ -151,6 +151,8 @@ export default {
     if (url.pathname === "/auth/google/login")    return googleLogin(request, env, url);
     if (url.pathname === "/auth/google/callback") return googleCallback(request, env, url);
     if (url.pathname === "/auth/google/native" && request.method === "POST") return googleNativeComplete(request, env);
+    if (url.pathname === "/auth/email/request" && request.method === "POST") return emailCodeRequest(request, env);
+    if (url.pathname === "/auth/email/verify" && request.method === "POST") return emailCodeVerify(request, env);
     if (url.pathname === "/auth/logout")         return siwaLogout();
     if (url.pathname === "/api/me")              return siwaMe(request, env, ctx);
     if (url.pathname === "/api/prefs") {
@@ -2654,7 +2656,7 @@ async function siwaMe(request, env, ctx) {
   const base = {
     signedIn: !!sessionUser,
     email: (sessionUser && sessionUser.email) || null,
-    providers: { apple: _siwaConfigured(env), google: _googleConfigured(env) },
+    providers: { apple: _siwaConfigured(env), google: _googleConfigured(env), email: _emailConfigured(env) },
   };
   if (!sessionUser) return _siwaJson(base);
   const u = await _hsResolveAccount(env, sessionUser).catch(() => ({ ...sessionUser, uid: sessionUser.uid || null }));
@@ -2735,6 +2737,181 @@ async function accountDelete(request, env) {
     headers: {
       "Content-Type": "application/json",
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, "", 0),
+    },
+  });
+}
+
+// ===========================================================================
+// Six-digit email sign-in. This mirrors Islander's security surface: uniform
+// CSPRNG codes, SHA-256 at rest, one live code per address, ten-minute expiry,
+// five guesses, atomic single-use claim, per-address and per-IP rate limits.
+// A typed code is deliberate: mail scanners prefetch links and mail apps often
+// open them in a different cookie jar than the app the person started in.
+// ===========================================================================
+function _emailConfigured(env) {
+  return !!(env.RESEND_API_KEY && env.SESSION_SECRET && env.AUTH_DB && env.DATA);
+}
+
+function _hsNormalizeEmail(value) {
+  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+function _hsNewLoginCode() {
+  const ceiling = Math.floor(0x1_0000_0000 / 1_000_000) * 1_000_000;
+  const value = new Uint32Array(1);
+  do { crypto.getRandomValues(value); } while (value[0] >= ceiling);
+  return String(value[0] % 1_000_000).padStart(6, "0");
+}
+
+async function _hsSha256Hex(value) {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", _siwaEnc.encode(value)));
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function _hsConstantTimeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let difference = 0;
+  for (let index = 0; index < a.length; index += 1) difference |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  return difference === 0;
+}
+
+function _hsMutationAllowed(request) {
+  if ((request.headers.get("Sec-Fetch-Site") || "").toLowerCase() === "cross-site") return false;
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  try {
+    return ["hidescore.com", "www.hidescore.com", "localhost", "127.0.0.1"].includes(new URL(origin).hostname);
+  } catch { return false; }
+}
+
+function _hsRequestIp(request) {
+  return (request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "unknown")
+    .split(",")[0].trim().slice(0, 64) || "unknown";
+}
+
+async function _hsSendLoginCode(env, email, code) {
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM || "HideScore <login@hidescore.com>",
+        to: [email],
+        subject: `${code} is your HideScore sign-in code`,
+        text: `Your HideScore sign-in code is ${code}\n\nType it back into the app. It works once and expires in 10 minutes.\n\nIf you didn't ask to sign in, ignore this email. We will never ask you for this code by phone, text or reply.`,
+        html: `<!doctype html><html><body style="margin:0;background:#0b0f16;padding:28px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#f8fafc"><div style="max-width:520px;margin:0 auto;background:#121826;border:1px solid #293244;border-radius:14px;overflow:hidden"><div style="height:5px;background:#22c55e"></div><div style="padding:26px 28px 30px"><p style="margin:0 0 14px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#22c55e;font-weight:700">HideScore</p><h1 style="margin:0 0 14px;font-size:22px">Your sign-in code</h1><p style="margin:0 0 18px;font-size:15px;line-height:1.6">Type this back into the app:</p><p style="margin:0 0 18px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:38px;font-weight:700;letter-spacing:.18em">${code}</p><p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#94a3b8">It works once and expires in 10 minutes.</p><p style="margin:0;font-size:14px;line-height:1.6;color:#94a3b8">If you didn't ask to sign in, ignore this email. We'll never ask you for this code by phone, text or reply.</p></div></div></body></html>`,
+      }),
+    });
+    if (!response.ok) console.error("[login-code] Resend rejected", response.status);
+    return response.ok;
+  } catch {
+    console.error("[login-code] delivery failed");
+    return false;
+  }
+}
+
+async function _hsEmailJsonBody(request) {
+  const declared = Number(request.headers.get("Content-Length") || 0);
+  if (declared > 4096) throw new Error("too_large");
+  const raw = await request.text();
+  if (raw.length > 4096) throw new Error("too_large");
+  return JSON.parse(raw || "{}");
+}
+
+async function emailCodeRequest(request, env) {
+  if (!_hsMutationAllowed(request)) return _siwaJson({ error: "cross_site" }, 403);
+  if (!_emailConfigured(env)) return _siwaJson({ error: "not_configured" }, 503);
+  let body;
+  try { body = await _hsEmailJsonBody(request); } catch { return _siwaJson({ error: "bad_request" }, 400); }
+  const email = _hsNormalizeEmail(body && body.email);
+  if (!email) return _siwaJson({ error: "bad_email" }, 400);
+  const now = Date.now();
+  const cutoff = now - 60 * 60 * 1000;
+  const emailKey = await _hsPrivateId(env, "login-code-email", email);
+  const ipKey = await _hsPrivateId(env, "login-code-ip", _hsRequestIp(request));
+  const emailCount = await env.AUTH_DB.prepare(`SELECT COUNT(*) AS count FROM email_login_rate_events
+    WHERE kind = 'email' AND key_hash = ? AND created_at > ?`).bind(emailKey, cutoff).first();
+  const ipCount = await env.AUTH_DB.prepare(`SELECT COUNT(*) AS count FROM email_login_rate_events
+    WHERE kind = 'request_ip' AND key_hash = ? AND created_at > ?`).bind(ipKey, cutoff).first();
+  if ((emailCount?.count || 0) >= 5 || (ipCount?.count || 0) >= 10) {
+    return _siwaJson({ error: "throttled" }, 429);
+  }
+
+  const code = _hsNewLoginCode();
+  const eventBase = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(18)));
+  await env.AUTH_DB.prepare("INSERT INTO email_login_rate_events (id, kind, key_hash, created_at) VALUES (?, 'email', ?, ?)")
+    .bind(`${eventBase}:e`, emailKey, now).run();
+  await env.AUTH_DB.prepare("INSERT INTO email_login_rate_events (id, kind, key_hash, created_at) VALUES (?, 'request_ip', ?, ?)")
+    .bind(`${eventBase}:i`, ipKey, now).run();
+  const codeHash = await _hsSha256Hex(code);
+  await env.AUTH_DB.prepare(`INSERT INTO email_login_codes (email_key, email, code_hash, expires_at, attempts, created_at)
+    VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT(email_key) DO UPDATE SET email = excluded.email,
+    code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0, created_at = excluded.created_at`)
+    .bind(emailKey, email, codeHash, now + 10 * 60 * 1000, now).run();
+  const delivered = await _hsSendLoginCode(env, email, code);
+  if (!delivered) await env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE email_key = ? AND code_hash = ?")
+    .bind(emailKey, codeHash).run();
+  env.AUTH_DB.prepare("DELETE FROM email_login_rate_events WHERE created_at < ?")
+    .bind(now - 24 * 60 * 60 * 1000).run().catch(() => {});
+  return _siwaJson({ ok: true });
+}
+
+async function emailCodeVerify(request, env) {
+  if (!_hsMutationAllowed(request)) return _siwaJson({ error: "cross_site" }, 403);
+  if (!_emailConfigured(env)) return _siwaJson({ error: "not_configured" }, 503);
+  let body;
+  try { body = await _hsEmailJsonBody(request); } catch { return _siwaJson({ error: "bad_request" }, 400); }
+  const email = _hsNormalizeEmail(body && body.email);
+  const code = String((body && body.code) || "").replace(/\D/g, "");
+  const now = Date.now();
+  const ipKey = await _hsPrivateId(env, "login-code-verify-ip", _hsRequestIp(request));
+  const verifyCount = await env.AUTH_DB.prepare(`SELECT COUNT(*) AS count FROM email_login_rate_events
+    WHERE kind = 'verify_ip' AND key_hash = ? AND created_at > ?`)
+    .bind(ipKey, now - 60 * 60 * 1000).first();
+  if ((verifyCount?.count || 0) >= 20) return _siwaJson({ error: "throttled" }, 429);
+  await env.AUTH_DB.prepare("INSERT INTO email_login_rate_events (id, kind, key_hash, created_at) VALUES (?, 'verify_ip', ?, ?)")
+    .bind(_b64urlFromBytes(crypto.getRandomValues(new Uint8Array(18))), ipKey, now).run();
+  if (!email || code.length !== 6) return _siwaJson({ error: "bad_code" }, 401);
+
+  const emailKey = await _hsPrivateId(env, "login-code-email", email);
+  const record = await env.AUTH_DB.prepare("SELECT code_hash, expires_at, attempts FROM email_login_codes WHERE email_key = ?")
+    .bind(emailKey).first();
+  if (!record || record.expires_at < now || record.attempts >= 5) {
+    if (record) await env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE email_key = ?").bind(emailKey).run();
+    return _siwaJson({ error: "bad_code" }, 401);
+  }
+  const submittedHash = await _hsSha256Hex(code);
+  if (!_hsConstantTimeEqual(submittedHash, record.code_hash)) {
+    await env.AUTH_DB.prepare(`UPDATE email_login_codes SET attempts = attempts + 1
+      WHERE email_key = ? AND code_hash = ? AND attempts < 5`).bind(emailKey, record.code_hash).run();
+    await env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE email_key = ? AND attempts >= 5").bind(emailKey).run();
+    return _siwaJson({ error: "bad_code" }, 401);
+  }
+  const claimed = await env.AUTH_DB.prepare(`DELETE FROM email_login_codes
+    WHERE email_key = ? AND code_hash = ? AND expires_at >= ?`).bind(emailKey, record.code_hash, now).run();
+  if ((claimed.meta?.changes || 0) !== 1) return _siwaJson({ error: "bad_code" }, 401);
+
+  let linkUid = null;
+  const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (current) linkUid = (await _hsResolveAccount(env, current)).uid;
+  const identity = {
+    sub: `email:${await _hsPrivateId(env, "email-identity", email)}`,
+    email,
+    emailVerified: true,
+  };
+  let account;
+  try { account = await _hsResolveAccount(env, identity, linkUid); }
+  catch { return _siwaJson({ error: "identity_already_linked" }, 409); }
+  const session = await _siwaMakeSession(env, {
+    sub: identity.sub, uid: account.uid, email, exp: _siwaNow() + SIWA_SESSION_TTL,
+  });
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json", "Cache-Control": "no-store",
+      "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });
 }

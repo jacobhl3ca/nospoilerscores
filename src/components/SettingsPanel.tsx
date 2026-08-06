@@ -10,7 +10,7 @@ import {
   DefaultLandingView,
   DefaultRatings,
 } from "@/lib/preferences";
-import { getAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
+import { getAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
 interface LeagueOption {
   sport: Sport;
@@ -229,6 +229,12 @@ export default function SettingsPanel({
   // time the panel opens so the signed-in email reflects a just-finished login.
   const [auth, setAuth] = useState<AuthState>({ signedIn: false, email: null });
   const [canUseGoogle, setCanUseGoogle] = useState(false);
+  const [emailStep, setEmailStep] = useState<"email" | "code">("email");
+  const [emailAddress, setEmailAddress] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailStatus, setEmailStatus] = useState("");
+  const [emailError, setEmailError] = useState(false);
   useEffect(() => {
     if (!open) return;
     const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
@@ -713,6 +719,87 @@ export default function SettingsPanel({
                   Sign in to sync your teams, layout, and settings across every browser and device.
                 </p>
               </div>
+            )}
+            {auth.providers?.email && !auth.linkedProviders?.includes("email") && (
+              <form
+                className="mt-3 space-y-2"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  setEmailBusy(true);
+                  setEmailError(false);
+                  if (emailStep === "email") {
+                    const result = await requestEmailCode(emailAddress);
+                    setEmailBusy(false);
+                    if (result.ok) {
+                      setEmailStep("code");
+                      setEmailStatus("Check your email for a six-digit code.");
+                    } else {
+                      setEmailError(true);
+                      setEmailStatus(result.status === 429 ? "Too many tries. Wait a little and try again." : "Couldn’t send a code. Please try again.");
+                    }
+                    return;
+                  }
+                  const result = await verifyEmailCode(emailAddress, emailCode);
+                  if (result.ok) { window.location.reload(); return; }
+                  setEmailBusy(false);
+                  setEmailError(true);
+                  setEmailStatus(result.status === 429 ? "Too many tries. Wait a little and try again." : result.status === 401 ? "That code is wrong or expired." : "Couldn’t verify that code.");
+                }}
+              >
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  required
+                  readOnly={emailStep === "code"}
+                  value={emailAddress}
+                  onChange={(event) => setEmailAddress(event.target.value)}
+                  placeholder="Email address"
+                  aria-label="Email address"
+                  className="w-full min-h-11 rounded-lg px-3 text-sm"
+                  style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                />
+                {emailStep === "code" && (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    required
+                    autoFocus
+                    value={emailCode}
+                    onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="6-digit code"
+                    aria-label="Six-digit sign-in code"
+                    className="w-full min-h-11 rounded-lg px-3 text-sm tracking-[0.18em]"
+                    style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                  />
+                )}
+                <button
+                  type="submit"
+                  disabled={emailBusy}
+                  className="w-full min-h-11 rounded-lg text-sm font-semibold disabled:opacity-50"
+                  style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
+                >
+                  {emailStep === "email" ? (auth.signedIn ? "Link email" : "Email me a code") : "Verify code"}
+                </button>
+                {emailStep === "code" && (
+                  <button
+                    type="button"
+                    className="w-full text-xs underline"
+                    style={{ color: "var(--text-muted)" }}
+                    onClick={() => { setEmailStep("email"); setEmailCode(""); setEmailStatus(""); }}
+                  >
+                    Use a different email
+                  </button>
+                )}
+                {emailStatus && (
+                  <p role={emailError ? "alert" : "status"} className="text-[11px]" style={{ color: emailError ? "#ef4444" : "var(--text-muted)" }}>
+                    {emailStatus}
+                  </p>
+                )}
+              </form>
             )}
           </Section>
 
@@ -1213,7 +1300,7 @@ function shortDate(iso?: string | null): string | null {
 
 function AccountFacts({ auth }: { auth: AuthState }) {
   const providers = (auth.linkedProviders?.length ? auth.linkedProviders : auth.provider ? [auth.provider] : [])
-    .map((provider) => provider === "google" ? "Google" : provider === "apple" ? "Apple" : provider)
+    .map((provider) => provider === "google" ? "Google" : provider === "apple" ? "Apple" : provider === "email" ? "Email" : provider)
     .filter(Boolean);
   // Newest-first so the client they actually use leads.
   const used = Object.entries(auth.platforms || {})

@@ -5,3 +5,9 @@ pages_build_output_dir = "out"
 [[r2_buckets]]
 binding = "DATA"
 bucket_name = "hidescore-data"
+
+[[d1_databases]]
+binding = "AUTH_DB"
+database_name = "hidescore-auth"
+database_id = "473a94af-899e-45d4-ba65-3832888c6ab0"
+migrations_dir = "migrations"
