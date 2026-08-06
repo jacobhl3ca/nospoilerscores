@@ -1146,14 +1146,19 @@ export default function HomeContent({
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
     // Get active leagues plus the NBA exception, deduplicated by sport.
     const seen = new Set<Sport>();
-    const options: { sport: Sport; label: string; offseason?: boolean }[] = [];
+    const options: { sport: Sport; label: string; offseason?: boolean; defaultInSwitcher: boolean }[] = [];
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       if (seen.has(league.sport)) continue;
       const active = isLeagueActive(league, viewDate);
       if (!active && league.sport !== "nba") continue;
       seen.add(league.sport);
-      options.push({ sport: league.sport, label: league.label, offseason: !active });
+      options.push({
+        sport: league.sport,
+        label: league.label,
+        offseason: !active,
+        defaultInSwitcher: !league.excludeFromAuto,
+      });
     }
     return options;
   }, [selectedDate]);
@@ -1165,15 +1170,26 @@ export default function HomeContent({
   const settingsLeagueOptions = useMemo(() => {
     if (!selectedDate) return [];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean }>();
+    const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean; defaultInSwitcher: boolean }>();
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue;
       const active = isLeagueActive(league, viewDate);
       const existing = options.get(league.sport);
       if (!existing) {
-        options.set(league.sport, { sport: league.sport, label: league.label, offseason: !active });
+        options.set(league.sport, {
+          sport: league.sport,
+          label: league.label,
+          offseason: !active,
+          defaultInSwitcher: !league.excludeFromAuto,
+        });
       } else if (active && existing.offseason) {
-        options.set(league.sport, { sport: league.sport, label: league.label });
+        options.set(league.sport, {
+          sport: league.sport,
+          label: league.label,
+          defaultInSwitcher: !league.excludeFromAuto,
+        });
+      } else if (!active && existing.offseason && !league.excludeFromAuto) {
+        existing.defaultInSwitcher = true;
       }
     }
     return [...options.values()];
@@ -1305,14 +1321,25 @@ export default function HomeContent({
     };
   }, [showLeaguePicker, skipLeaguePicker]);
 
-  // Homepage switcher options = the active leagues minus the ones the user
-  // removed in Settings (hiddenLeagues). Drives the header dropdown/arrow
-  // cycling, the news swap menus, and the + button's picks. Label lookups and
-  // Settings' slot pickers keep the full thirdLeagueOptions list so a hidden
-  // league can still be pinned (or re-enabled) deliberately.
+  // Homepage switcher options = core auto-rotation leagues by default, plus
+  // opt-in leagues the user explicitly enabled, minus explicit hides. This
+  // keeps a large in-season expansion slate from overwhelming the switcher.
+  // Label lookups and Settings' slot pickers keep the full options list so any
+  // league can still be pinned or enabled deliberately.
   const switcherOptions = useMemo(
-    () => thirdLeagueOptions.filter((o) => !prefs.hiddenLeagues?.includes(o.sport)),
-    [thirdLeagueOptions, prefs.hiddenLeagues],
+    () => thirdLeagueOptions.filter((o) => {
+      if (prefs.hiddenLeagues?.includes(o.sport)) return false;
+      if (prefs.shownLeagues?.includes(o.sport)) return true;
+      const pinned = [
+        prefs.firstLeague,
+        prefs.secondLeague,
+        prefs.thirdLeague,
+        prefs.fourthLeague,
+        prefs.fifthLeague,
+      ].includes(o.sport);
+      return o.defaultInSwitcher || pinned || prefs.favoriteLeagues.includes(o.sport);
+    }),
+    [thirdLeagueOptions, prefs],
   );
 
   // Switcher sports in RELEVANCE order — the auto-picker's own ranking

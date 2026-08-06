@@ -12,7 +12,12 @@ import {
 } from "@/lib/preferences";
 import { getAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
-interface LeagueOption { sport: Sport; label: string; offseason?: boolean }
+interface LeagueOption {
+  sport: Sport;
+  label: string;
+  offseason?: boolean;
+  defaultInSwitcher?: boolean;
+}
 
 interface SettingsPanelProps {
   open: boolean;
@@ -398,17 +403,29 @@ export default function SettingsPanel({
 
   const renderSwitcherToggle = (option: LeagueOption) => {
     const hidden = prefs.hiddenLeagues?.includes(option.sport) ?? false;
+    const shown = prefs.shownLeagues?.includes(option.sport) ?? false;
+    const pinned = slotValues.includes(option.sport);
+    const preferred = option.defaultInSwitcher !== false || pinned || prefs.favoriteLeagues.includes(option.sport);
+    const checked = !hidden && (shown || preferred);
     return (
       <label key={option.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
         <input
           type="checkbox"
-          checked={!hidden}
+          checked={checked}
           onChange={(event) => {
-            const current = prefs.hiddenLeagues ?? [];
-            const next = event.target.checked
-              ? current.filter((sport) => sport !== option.sport)
-              : [...current, option.sport];
-            updatePrefs({ hiddenLeagues: next.length ? next : undefined });
+            const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
+            const shownLeagues = new Set(prefs.shownLeagues ?? []);
+            hiddenLeagues.delete(option.sport);
+            shownLeagues.delete(option.sport);
+            if (event.target.checked && !preferred) {
+              shownLeagues.add(option.sport);
+            } else if (!event.target.checked && preferred) {
+              hiddenLeagues.add(option.sport);
+            }
+            updatePrefs({
+              hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
+              shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
+            });
           }}
           className="cursor-pointer accent-[var(--accent)]"
         />
@@ -513,6 +530,7 @@ export default function SettingsPanel({
       wcBannerDismissed: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
+      shownLeagues: undefined,
       // The spoiler-protection + layout controls the panel also exposes were
       // omitted here, so "Reset all settings to defaults" left them at whatever
       // the user had set — a reset could keep the video title strip revealed,
@@ -882,7 +900,7 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ hideLeagueChevrons: !v })}
               />
             )}
-            <Field label="Leagues in the switcher" hint="Checked leagues appear in the header switcher when active; NBA remains available offseason">
+            <Field label="Leagues in the switcher" hint="Core leagues start checked; choose any others you want in the header switcher">
               <div className="space-y-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>In season</p>
