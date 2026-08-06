@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-08-06",
+  "events": [
+    {
+      "id": "roach-zepeda-2026-08-01",
+      "title": "Roach vs. Zepeda",
+      "startDate": "2026-08-01",
+      "endDate": "2026-08-01",
+      "location": "The Theater at Virgin Hotels · Las Vegas",
+      "broadcasts": ["DAZN", "TNT", "truTV"],
+      "eventUrl": "https://www.youtube.com/watch?v=iuofPvxZKtQ",
+      "officialChannel": "DAZN Boxing",
+      "officialLabel": "DAZN",
+      "highlightQuery": "Lamont Roach vs William Zepeda fight highlights",
+      "fixtureVideoId": "iuofPvxZKtQ",
+      "priority": 100
+    }
+  ]
+}

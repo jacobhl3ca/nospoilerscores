@@ -3,6 +3,7 @@ import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
+import { fetchCuratedBoxingEvent } from "./boxing";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -2411,12 +2412,18 @@ interface BoxingApiEvent {
 
 export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard | null> {
   try {
-    const res = await fetchWithRetry(`${getApiBase()}/api/boxing`);
-    if (!res.ok) return null;
+    const [curated, res] = await Promise.all([
+      fetchCuratedBoxingEvent(date),
+      fetchWithRetry(`${getApiBase()}/api/boxing`),
+    ]);
+    if (!res.ok) return curated;
     const { events } = (await res.json()) as { events: BoxingApiEvent[] };
-    if (!events?.length) return null;
+    if (!events?.length) return curated;
     const target = date ? new Date(`${date}T12:00:00`).getTime() : Date.now();
     const ts = (e: BoxingApiEvent) => new Date(e.date).getTime();
+    const exactDate = date
+      ? events.filter((event) => event.date.slice(0, 10).replace(/-/g, "") === date)
+      : [];
     // Prefer a card the user can actually WATCH. Nearest-by-date alone picks
     // badly here: the feed carries every sanctioned card worldwide, so on
     // 2026-08-04 it surfaced "Nyika vs. Masson" at a stadium in North Shore, NZ
@@ -2425,11 +2432,12 @@ export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard |
     // the boxing analogue of the chess `tier` filter, which the API gives us
     // for free but boxing-data.com does not.
     const watchable = (e: BoxingApiEvent) => (e.broadcasts?.length ? 0 : 1);
-    const chosen = [...events].sort(
+    const chosen = [...(exactDate.length ? exactDate : events)].sort(
       (a, b) =>
         watchable(a) - watchable(b) ||
         Math.abs(ts(a) - target) - Math.abs(ts(b) - target),
     )[0];
+    if (!exactDate.length && curated) return curated;
     if (!chosen) return null;
     const now = Date.now();
     const t = ts(chosen);
