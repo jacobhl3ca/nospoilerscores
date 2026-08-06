@@ -275,6 +275,7 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   // so these fall back to its generic sport glyphs rather than 404ing.
   boxing: "https://a.espncdn.com/i/espn/networks_shows/500/boxing.png&w=40&h=40&transparent=true",
   chess: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
+  poker: "/poker.svg",
   esports: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
 };
 
@@ -386,6 +387,9 @@ const ESPN_LEAGUE_LABEL: Partial<Record<Sport, string>> = {
 };
 
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
+  // ESPN has no poker desk/league feed. Do not manufacture an "ESPN POKER"
+  // card that can only return empty; the score/event view remains complete.
+  if (sport === "poker") return [];
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
   // Reddit FIRST (Jacob 7/16): the freshest community discussion leads every
@@ -433,7 +437,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   // when they're active they're the biggest story in the sport.
   "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
   "cricket",
-  "ufc", "f1", "nascar", "indycar",
+  "ufc", "f1", "nascar", "indycar", "poker",
 ];
 
 // Col 3's default (no league picked): Reddit-first (Jacob 7/16) — r/sports leads,

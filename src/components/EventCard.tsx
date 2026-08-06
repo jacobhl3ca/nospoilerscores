@@ -158,7 +158,24 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     return null;
   };
 
-  return { loadingId, play, playUfc };
+  // Single-event strict resolver for poker majors. Poker result pages and
+  // unscoped YouTube results routinely put the champion in the headline, so a
+  // miss must return null and hide the button — never open a search page. The
+  // exact tour channel comes from the source-validated major-events record.
+  const playStrictOnly = async (id: string, query: string, channel: string, label: string): Promise<HighlightSource | null> => {
+    if (!onPlayHighlight) return null;
+    setLoadingId(id);
+    try {
+      const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, true);
+      if (!videoId) return null;
+      onPlayHighlight(videoId, `https://www.youtube.com/watch?v=${videoId}`);
+      return { label, official: true, videoId };
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  return { loadingId, play, playUfc, playStrictOnly };
 }
 
 // Play button styled exactly like the game cards' highlight buttons
@@ -357,13 +374,16 @@ export default function EventCard({
   // viewed slate.
   selectedDate?: string;
 }) {
-  const { loadingId, play, playUfc } = useHighlightPlayer(onPlayHighlight);
+  const { loadingId, play, playUfc, playStrictOnly } = useHighlightPlayer(onPlayHighlight);
   // Where each bout's highlight actually came from, once played (bout id →
   // source). Sticky per card so the button keeps reporting its source. A NULL
   // entry means "resolved, and no rights-holder has it" — FightCard hides that
   // bout's button from then on instead of offering a YouTube search. Absent
   // (undefined) = not attempted yet, so the button still shows as plain "UFC".
   const [sources, setSources] = useState<Record<string, HighlightSource | null>>({});
+  // The single poker tile has one tour-gated replay. undefined = untried,
+  // object = resolved, null = no official upload (button hides).
+  const [pokerSource, setPokerSource] = useState<HighlightSource | null | undefined>(undefined);
   const playBout = async (id: string, query: string) => {
     // Already resolved this bout — replay the same video instead of walking the
     // channel chain again. The resolver scrapes YouTube's results page and
@@ -376,6 +396,20 @@ export default function EventCard({
     }
     const src = await playUfc(id, query);
     setSources((prev) => ({ ...prev, [id]: src }));
+  };
+  const playPoker = async () => {
+    if (!event.officialChannel) return;
+    if (pokerSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(pokerSource.videoId, `https://www.youtube.com/watch?v=${pokerSource.videoId}`);
+      return;
+    }
+    const src = await playStrictOnly(
+      "poker-official",
+      event.highlightQuery ?? `${event.title} highlights`,
+      event.officialChannel,
+      event.officialLabel ?? "Poker",
+    );
+    setPokerSource(src);
   };
 
   // Fighter-name size follows namesCompact — the game columns' REAL
@@ -527,23 +561,33 @@ export default function EventCard({
     );
   }
 
-  // ── Single-event tile — races (F1/NASCAR/IndyCar), boxing cards, chess ──
-  // One layout, three glyphs. Boxing and chess reuse the race tile because the
+  // ── Single-event tile — races, boxing, chess, and poker majors ──
+  // One layout, four glyphs. Boxing/chess/poker reuse the race tile because the
   // shape is identical (one headline event, a venue subtitle, a status) and it
   // is already height-matched to an MLB card at every breakpoint; a bespoke
   // layout would drift out of alignment the first time either was touched.
   const isRace = event.kind === "f1";
-  const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : "🏁";
+  const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : event.kind === "poker" ? "♠️" : "🏁";
   // What the tile body links to, and what to call it. Chess points at the
   // Lichess broadcast (a live BOARD, not a results table); boxing has no
   // per-event page worth linking, so its tile is inert.
-  const detailNoun = event.kind === "chess" ? "Follow live on Lichess" : "Race details on ESPN";
+  const detailNoun = event.kind === "chess"
+    ? "Follow live on Lichess"
+    : event.kind === "poker"
+      ? "Official tournament details"
+      : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
   // whenLabel ("Sat 9:00AM" for another day, bare "9:00AM" when the race is on
   // the viewed date — selectedDate — same rule as the game cards' time).
-  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(event.date, selectedDate) || event.statusDetail;
+  const status = isPost
+    ? "Final"
+    : isLive
+      ? "Live"
+      : event.kind === "poker" && event.scheduleLabel
+        ? event.scheduleLabel
+        : whenLabel(event.date, selectedDate) || event.statusDetail;
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
   // Clicking the tile body opens the ESPN race page — the game cards' "click
   // for more details" affordance (there's no F1 GameDetailModal; ESPN's race
@@ -619,6 +663,18 @@ export default function EventCard({
               renders NASCAR and IndyCar, which would otherwise both offer an
               "F1" highlight button. Falls back to "F1" for older cards. */}
           <PlayBtn label={event.officialLabel ?? "F1"} loading={loadingId === "f1-official"} onClick={() => play("f1-official", f1Query, event.officialChannel, true, event.raceTokens)} />
+        </div>
+      )}
+      {/* Poker replays are stricter than racing: exact tour channel or no
+          button. A failed lookup never opens YouTube search because result
+          titles commonly contain the champion. */}
+      {isPost && event.kind === "poker" && event.officialChannel && pokerSource !== null && (
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          <PlayBtn
+            label={pokerSource?.label ?? event.officialLabel ?? "Poker"}
+            loading={loadingId === "poker-official"}
+            onClick={playPoker}
+          />
         </div>
       )}
     </div>

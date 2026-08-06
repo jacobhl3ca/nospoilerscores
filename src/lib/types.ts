@@ -1,4 +1,4 @@
-export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "cricket" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess" | "esports";
+export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "nhl" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "cricket" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess" | "poker" | "esports";
 
 export interface Game {
   id: string;
@@ -189,9 +189,9 @@ export interface FightBout {
 
 export interface LeagueEventCard {
   // "f1" is the single-event RACE layout (shared by F1/NASCAR/IndyCar), "ufc"
-  // the fight-card layout. "boxing" reuses the fight-card shape; "chess" is a
-  // multi-day tournament, closer to the golf tile than to either.
-  kind: "f1" | "ufc" | "boxing" | "chess";
+  // the fight-card layout. Boxing, chess, and poker reuse the single-event
+  // shape; poker is a curated multi-day major or a dated TV final table.
+  kind: "f1" | "ufc" | "boxing" | "chess" | "poker";
   title: string;            // "Spanish Grand Prix" / "UFC Fight Night: Kape vs. Horiguchi"
   subtitle?: string;        // circuit + city (F1) / venue city (UFC)
   headline?: string;        // UFC main event "Kape vs. Horiguchi"; F1 leaves null
@@ -215,6 +215,11 @@ export interface LeagueEventCard {
   // "F1" highlight button. Defaults to "F1" when unset.
   officialLabel?: string;
   eventUrl?: string;        // ESPN event page (external fallback)
+  // Multi-day events with no trustworthy exact start time (currently poker
+  // festivals) show this source-backed date window instead of inventing a
+  // kickoff clock. Exact broadcasts such as the WSOP final table omit it and
+  // use `date` normally.
+  scheduleLabel?: string;
   // Boxing: fight-card poster from boxing-data.com. Boxing sells cards on the
   // poster, and unlike a score graphic it gives nothing away.
   posterUrl?: string;

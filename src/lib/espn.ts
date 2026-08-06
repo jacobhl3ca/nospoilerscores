@@ -2,17 +2,20 @@ import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventC
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
+import { fetchPokerEvent } from "./poker";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
 const SPORT_PATHS: Record<Sport, string> = {
   // Chess + boxing have NO ESPN path — they are served by worker routes
-  // (/api/chess, /api/boxing). The empty string is never fetched: both are
+  // (/api/chess, /api/boxing). Poker comes from the curated major-events file.
+  // The empty string is never fetched: all three are
   // dispatched before fetchGames in fetchLeague. Present only so this stays a
   // total Record<Sport,string>, which is what forces a new sport to be
   // considered here at all.
   chess: "",
   boxing: "",
+  poker: "",
   esports: "",
   mlb: "/baseball/mlb/scoreboard",
   nba: "/basketball/nba/scoreboard",
@@ -236,6 +239,10 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Chess is the same argument in a purer form: an elite game is genuinely
   // worth watching move by move and is destroyed completely by one number.
   { sport: "chess", label: "Chess", excludeFromAuto: true },
+  // Poker is a one-card major-event column, not a fake score league. It covers
+  // WSOP/WPT/EPT/Triton only, remains opt-in, and disappears cleanly when the
+  // curated official calendar has no nearby confirmed event.
+  { sport: "poker", label: "Poker", excludeFromAuto: true },
   // Esports (PandaScore). Year-round, opt-in. Worlds and the LCK/LPL play in
   // Asian timezones, so the Western audience watches almost entirely on VOD —
   // the purest spoiler case in the app after cricket.
@@ -375,7 +382,8 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   ufc: 31,
   boxing: 32,
   chess: 33,
-  esports: 34,
+  poker: 34,
+  esports: 35,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -609,6 +617,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // the shared scorer for an eventCard league — but the Record must be total.
   boxing: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   chess:  { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  poker:  { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   // Esports is scored as a SERIES (Bo3/Bo5), not a running total, so the
   // shared scorer does not apply — esportsRating() handles it, the same way
   // cricketRating() branches out before the shared path.
@@ -1711,6 +1720,7 @@ export function espnGameUrl(game: Game): string {
     // a sport-section landing beats falling through to a wrong league page.
     case "boxing": return `https://www.espn.com/boxing/`;
     case "chess": return `https://lichess.org/broadcast`;
+    case "poker": return `https://www.wsop.com/schedule/`;
     // PandaScore supplies no public per-match page, so there is no gamecast
     // to link to; this only satisfies the exhaustive switch.
     case "esports": return `https://www.pandascore.co/`;
@@ -1780,6 +1790,9 @@ export function sportStreamFallback(sport: Sport): string {
     // streamer that is wrong most nights. Chess streams free on Lichess.
     case "boxing": return "https://www.espn.com/boxing/schedule/";
     case "chess": return "https://lichess.org/broadcast";
+    // Poker cards carry a per-event official URL. This is only the exhaustive
+    // last-resort landing and intentionally avoids a result/standings page.
+    case "poker": return "https://www.wsop.com/schedule/";
     // Every tier-s/a match streams free on Twitch; the channel varies per
     // league, so the directory is the only destination right for all of them.
     case "esports": return "https://www.twitch.tv/directory/category/league-of-legends";
@@ -3755,7 +3768,8 @@ export async function fetchAllLeagues(
       return { sport: cfg.sport, label, games: [], eventCard };
     }
     // Chess + boxing come from worker routes, not ESPN — see fetchChessEvent /
-    // fetchBoxingEvent. Both return null on any failure, which drops the column
+    // fetchBoxingEvent. Poker reads the curated official major calendar. All
+    // return null on any failure, which drops the column
     // rather than showing a broken one.
     // Esports comes from PandaScore via the worker and produces real two-team
     // GAMES (not an event tile), so it returns through the normal games path.
@@ -3764,10 +3778,12 @@ export async function fetchAllLeagues(
       if (!games.length) return null;
       return { sport: cfg.sport, label, games };
     }
-    if (cfg.sport === "chess" || cfg.sport === "boxing") {
+    if (cfg.sport === "chess" || cfg.sport === "boxing" || cfg.sport === "poker") {
       const eventCard = cfg.sport === "chess"
         ? await fetchChessEvent(date)
-        : await fetchBoxingEvent(date);
+        : cfg.sport === "boxing"
+          ? await fetchBoxingEvent(date)
+          : await fetchPokerEvent(date);
       if (!eventCard) return null;
       return { sport: cfg.sport, label, games: [], eventCard };
     }
