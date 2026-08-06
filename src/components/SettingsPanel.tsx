@@ -10,7 +10,7 @@ import {
   DefaultLandingView,
   DefaultRatings,
 } from "@/lib/preferences";
-import { getAuthState, signInWithApple, signInWithGoogle, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
+import { getAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
 interface LeagueOption { sport: Sport; label: string; offseason?: boolean }
 
@@ -222,8 +222,11 @@ export default function SettingsPanel({
   // Account / cross-device sync state (Sign in with Apple). Re-checked each
   // time the panel opens so the signed-in email reflects a just-finished login.
   const [auth, setAuth] = useState<AuthState>({ signedIn: false, email: null });
+  const [canUseGoogle, setCanUseGoogle] = useState(false);
   useEffect(() => {
     if (!open) return;
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuth(a); });
     return () => { alive = false; };
@@ -603,6 +606,24 @@ export default function SettingsPanel({
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                   Your teams, layout, and settings sync automatically across all your browsers and devices.
                 </p>
+                {auth.providers?.google && canUseGoogle && !auth.linkedProviders?.includes("google") && (
+                  <button type="button"
+                    onClick={() => signInWithGoogle(undefined, true)}
+                    className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                    style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                  >
+                    Link Google to this account
+                  </button>
+                )}
+                {auth.providers?.apple && !auth.linkedProviders?.includes("apple") && (
+                  <button type="button"
+                    onClick={() => signInWithApple(undefined, true)}
+                    className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                    style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                  >
+                    Link Apple to this account
+                  </button>
+                )}
                 <button type="button"
                   onClick={() => signOut()}
                   className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
@@ -654,7 +675,7 @@ export default function SettingsPanel({
                   Sign in with Apple
                 </button>
                 )}
-                {auth.providers?.google && (
+                {auth.providers?.google && canUseGoogle && (
                 <button type="button"
                   onClick={() => signInWithGoogle()}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
@@ -1156,7 +1177,8 @@ export default function SettingsPanel({
 // What we actually know about the signed-in account: which identity is linked,
 // which HideScore clients it has been used on (the iPhone app is invisible to the
 // server without the X-HS-Client header — see hsPlatform in lib/prefsSync.ts), and
-// how long it has existed. All of it comes from users/<sub>.json in R2 via /api/me.
+// how long it has existed. All of it comes from the canonical users/<uid>.json
+// record in R2 via /api/me.
 const PLATFORM_LABEL: Record<string, string> = {
   ios: "iPhone app",
   android: "Android app",
@@ -1171,18 +1193,20 @@ function shortDate(iso?: string | null): string | null {
 }
 
 function AccountFacts({ auth }: { auth: AuthState }) {
-  const provider = auth.provider === "google" ? "Google" : auth.provider === "apple" ? "Apple" : null;
+  const providers = (auth.linkedProviders?.length ? auth.linkedProviders : auth.provider ? [auth.provider] : [])
+    .map((provider) => provider === "google" ? "Google" : provider === "apple" ? "Apple" : provider)
+    .filter(Boolean);
   // Newest-first so the client they actually use leads.
   const used = Object.entries(auth.platforms || {})
     .filter(([, seen]) => !!seen)
     .sort((a, b) => Date.parse(b[1] as string) - Date.parse(a[1] as string));
   const since = shortDate(auth.firstSeen);
-  if (!provider && used.length === 0 && !since) return null;
+  if (providers.length === 0 && used.length === 0 && !since) return null;
   return (
     <div className="rounded-lg px-3 py-2 space-y-1" style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)" }}>
-      {provider && (
+      {providers.length > 0 && (
         <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Linked with <span className="font-medium" style={{ color: "var(--text)" }}>{provider}</span>
+          Linked with <span className="font-medium" style={{ color: "var(--text)" }}>{providers.join(" + ")}</span>
           {since ? <> · account created {since}</> : null}
         </p>
       )}
