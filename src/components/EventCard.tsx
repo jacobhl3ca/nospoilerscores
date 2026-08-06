@@ -362,6 +362,7 @@ export default function EventCard({
   onPlayHighlight,
   namesCompact,
   selectedDate,
+  isPastDate,
 }: {
   event: LeagueEventCard;
   leagueLabel?: string;
@@ -373,6 +374,7 @@ export default function EventCard({
   // event ON this date, matching how game cards show a bare time for the
   // viewed slate.
   selectedDate?: string;
+  isPastDate?: boolean;
 }) {
   const { loadingId, play, playUfc, playStrictOnly } = useHighlightPlayer(onPlayHighlight);
   // Where each bout's highlight actually came from, once played (bout id →
@@ -384,6 +386,9 @@ export default function EventCard({
   // The single poker tile has one tour-gated replay. undefined = untried,
   // object = resolved, null = no official upload (button hides).
   const [pokerSource, setPokerSource] = useState<HighlightSource | null | undefined>(undefined);
+  // Boxing majors use the same strict, fail-closed source contract as Poker,
+  // but stay separate so a promoter mapping cannot affect another event type.
+  const [boxingSource, setBoxingSource] = useState<HighlightSource | null | undefined>(undefined);
   const playBout = async (id: string, query: string) => {
     // Already resolved this bout — replay the same video instead of walking the
     // channel chain again. The resolver scrapes YouTube's results page and
@@ -410,6 +415,20 @@ export default function EventCard({
       event.officialLabel ?? "Poker",
     );
     setPokerSource(src);
+  };
+  const playBoxing = async () => {
+    if (!event.officialChannel) return;
+    if (boxingSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(boxingSource.videoId, `https://www.youtube.com/watch?v=${boxingSource.videoId}`);
+      return;
+    }
+    const src = await playStrictOnly(
+      "boxing-official",
+      event.highlightQuery ?? `${event.title} highlights`,
+      event.officialChannel,
+      event.officialLabel ?? "Boxing",
+    );
+    setBoxingSource(src);
   };
 
   // Fighter-name size follows namesCompact — the game columns' REAL
@@ -578,6 +597,9 @@ export default function EventCard({
       : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
+  // A past-date MLB card omits its FINAL meta row; do the same for Boxing so
+  // adding a replay button does not make this tile 26px taller than its peers.
+  const hidePastBoxingMeta = event.kind === "boxing" && isPost && !!isPastDate;
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
   // whenLabel ("Sat 9:00AM" for another day, bare "9:00AM" when the race is on
   // the viewed date — selectedDate — same rule as the game cards' time).
@@ -614,7 +636,7 @@ export default function EventCard({
           upcoming time renders at text-[11px] muted — the exact classes
           GameCard's future-time span uses — while Final/Live keep the row's
           text-xs like GameCard's FINAL/clock. */}
-      <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
+      {!hidePastBoxingMeta && <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {isPost || isLive ? status : <span className="text-[11px] whitespace-nowrap">{status}</span>}
@@ -622,7 +644,7 @@ export default function EventCard({
         {!metaCompact && event.broadcasts.length > 0 && (
           <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{event.broadcasts[0]}</span>
         )}
-      </div>
+      </div>}
       {/* Body — the game cards' EXACT two-row team skeleton (logo slot + name,
           gap-y-0.5, leading-none, truncate), with 🏁 in the away-logo slot and
           the circuit in the home row, so the tile's height and fonts track an
@@ -649,11 +671,12 @@ export default function EventCard({
           most of its uploads, so when nothing strict/playable matches, the
           fallback opens a YouTube search externally rather than playing some
           random reupload in the masked player. */}
-      {/* Racing ONLY. Boxing and chess deliberately ship with no highlight
+      {/* Racing ONLY. Chess deliberately ships with no highlight
           button, on the same rule the new soccer leagues were just held to: a
           button goes in once its official channel has been verified end-to-end,
-          not before. Boxing highlights are split across DAZN / Top Rank /
-          Matchroom / PBC with no single reliable uploader, and chess has no
+          not before. Boxing is handled below through a per-card promoter
+          mapping because DAZN / Top Rank / Matchroom / PBC have no shared
+          uploader. Chess has no
           highlight reel at all — its "highlight" is the live board, which the
           tile already links to. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts for
           the same call on cricket. */}
@@ -674,6 +697,18 @@ export default function EventCard({
             label={pokerSource?.label ?? event.officialLabel ?? "Poker"}
             loading={loadingId === "poker-official"}
             onClick={playPoker}
+          />
+        </div>
+      )}
+      {/* Boxing has no league-wide uploader. Curated major records supply the
+          exact promoter/rightsholder channel; a miss hides this button and
+          never opens a spoiler-heavy search page. */}
+      {isPost && event.kind === "boxing" && event.officialChannel && boxingSource !== null && (
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          <PlayBtn
+            label={boxingSource?.label ?? event.officialLabel ?? "Boxing"}
+            loading={loadingId === "boxing-official"}
+            onClick={playBoxing}
           />
         </div>
       )}

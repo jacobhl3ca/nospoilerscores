@@ -1512,7 +1512,7 @@ export default function LeagueColumn({
           onPlayHighlight={onPlayHighlight}
         />
       ) : league.eventCard && section !== "finished" ? (
-        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} namesCompact={namesCompact} selectedDate={selectedDate} />
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (
