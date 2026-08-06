@@ -60,6 +60,11 @@ function deRedlibMedia(u) {
 // and the CDN fetch a fresh URL instead of a stale cached image.
 const CARD_REV = 4;
 
+// Strict official combat clips are safe in HideScore even when the YouTube
+// title names the finish: the masked player never renders YouTube title chrome.
+// Keep this narrow. An unscoped result-bearing upload must still be rejected.
+const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
+
 // Wrap an arbitrary news image (Reddit photo, preview thumb, league poster, or
 // YouTube still) for use as the social-card image. Routed through weserv — the
 // SAME proxy the app already uses for every redd.it thumbnail (see proxyImage in
@@ -404,6 +409,9 @@ export default {
           "trail blazers": ["blazers", "trail blazers", "portland"],
           "timberwolves": ["timberwolves", "wolves", "minnesota"],
           "76ers": ["76ers", "sixers", "philadelphia"],
+          // WNBA expansion clubs — ESPN's compact names vs official titles.
+          "tempo": ["tempo", "toronto tempo", "toronto"],
+          "valkyries": ["valkyries", "golden state valkyries", "golden state"],
           "uconn": ["uconn", "connecticut", "huskies"],
           "blue jays": ["blue jays", "jays", "toronto"],
           "white sox": ["white sox", "chi sox", "chicago white"],
@@ -507,20 +515,26 @@ export default {
         // ["diamondbacks"], hasTeams was always false, and the only
         // tier that fired was yearMatchedId (team-agnostic, recently
         // gated behind queryHasSpecificTeams). Build once per request.
+        const normalizeTeamMatch = (value) => String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[‘’]/g, "'")
+          .toLowerCase();
         const TEAM_VARIANT_INDEX = {};
         for (const variants of Object.values(TEAM_ALIASES)) {
           for (const v of variants) {
-            TEAM_VARIANT_INDEX[v.toLowerCase()] = variants;
+            TEAM_VARIANT_INDEX[normalizeTeamMatch(v)] = variants;
           }
         }
         function getTeamVariants(teamName) {
-          const lower = teamName.toLowerCase();
+          const lower = normalizeTeamMatch(teamName);
           return TEAM_VARIANT_INDEX[lower] || TEAM_ALIASES[lower] || [lower];
         }
 
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
-          return variants.some((v) => titleLower.includes(v));
+          const normalizedTitle = normalizeTeamMatch(titleLower);
+          return variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)));
         }
 
         // Split HTML into videoRenderer blocks and parse each one individually
@@ -614,11 +628,18 @@ export default {
               titleLower.includes(`day ${queryGolfRound}`) ||
               (queryRoundOrdinal &&
                 titleLower.includes(`${queryRoundOrdinal} round`)));
+          // WNBA sometimes publishes its normal 10-minute recap as only
+          // "Team A vs. Team B | Month D, YYYY". It is still a highlight when
+          // (and only when) the caller requested the strict WNBA channel; the
+          // team/date gates below still have to match exactly.
+          const isStrictBareWnbaRecap =
+            strictChannelParam && isFromChannel && preferChannelLower === "wnba" && queryHasSpecificTeams;
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
-            roundOnlyTitleOk;
+            roundOnlyTitleOk ||
+            isStrictBareWnbaRecap;
           if (!isHighlight) continue;
 
           // Racing race gate (see the `race` param above). The official channel
@@ -1318,7 +1339,9 @@ export default {
           // The app never displays YouTube titles in the card, and the modal masks
           // the title chrome, so allow these only for official WC uploaders.
           const isOfficialWorldCupUpload = isWorldCupQuery && WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase());
-          if (!isOfficialWorldCupUpload && (SCORE_RX.test(title) || SPOILER_RX.test(title))) continue;
+          const isMaskedOfficialCombatUpload =
+            strictChannelParam && isFromChannel && MASKED_COMBAT_CHANNELS.has(preferChannelLower);
+          if (!isOfficialWorldCupUpload && !isMaskedOfficialCombatUpload && (SCORE_RX.test(title) || SPOILER_RX.test(title))) continue;
 
           // Simulation/videogame hard-skip — NBA 2K, MLB The Show, FIFA,
           // Madden, NHL 2K sim channels autopost "highlights" of games
