@@ -33,14 +33,13 @@ test("Poker yesterday renders the Aug 5 WSOP final table without a result", asyn
   await expect(page.getByRole("heading", { name: "Poker" })).toBeVisible();
   const title = page.getByText("WSOP Main Event Final Table · Day 3", { exact: true });
   await expect(title).toBeVisible();
-  await expect(page.getByText("ESPN", { exact: true })).toBeVisible();
-  await expect(page.getByText("Final", { exact: true })).toBeVisible();
+  const card = title.locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]");
+  await expect(card.getByText("Final", { exact: true })).toHaveCount(0);
   const replay = page.getByRole("button", { name: "WSOP highlights" });
   await expect(replay).toBeVisible();
 
   // The curated record carries no winner, payout, chip count, or result field;
   // this catches an accidental future leak into the visible tile.
-  const card = title.locator("xpath=ancestor::div[contains(@class,'rounded-lg')][1]");
   await expect(card).not.toContainText(/winner|champion|1st place|payout/i);
 
   // A miss is fail-closed: strict exact-channel request, then no button and no

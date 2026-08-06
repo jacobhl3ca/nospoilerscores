@@ -268,7 +268,7 @@ function FighterRow({ f, compact, nameTier, showRecord }: { f: FightBout["red"];
 }
 
 function FightCard({
-  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate,
+  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate, hideMeta,
 }: {
   fight: FightBout;
   label?: string;
@@ -291,6 +291,7 @@ function FightCard({
   nameTier: FighterNameTier;
   showRecords: boolean;
   selectedDate?: string;
+  hideMeta: boolean;
 }) {
   const isLive = fight.state === "in";
   const isPost = fight.state === "post";
@@ -312,7 +313,7 @@ function FightCard({
           beside the time, never overlapping it; the weight-class slot keeps
           min-w-0 + truncate (shrinks in place) and drops entirely on columns too
           narrow to show a useful amount of it. */}
-      <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5">
+      {!hideMeta && <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {status}
@@ -332,7 +333,7 @@ function FightCard({
         {broadcasts.length > 0 && showBroadcast && (
           <span className="shrink-0 ml-auto" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
         )}
-      </div>
+      </div>}
       <div className="flex flex-col gap-y-0.5">
         <FighterRow f={fight.red} compact={compact} nameTier={nameTier} showRecord={showRecords} />
         <FighterRow f={fight.blue} compact={compact} nameTier={nameTier} showRecord={showRecords} />
@@ -389,6 +390,21 @@ export default function EventCard({
   // Boxing majors use the same strict, fail-closed source contract as Poker,
   // but stay separate so a promoter mapping cannot affect another event type.
   const [boxingSource, setBoxingSource] = useState<HighlightSource | null | undefined>(undefined);
+  // A replay carried onto a later slate should not retain a redundant FINAL
+  // row above its watch button. Normal finished GameCards also drop that row
+  // on past dates. Apply the same rule to every event-card family (UFC,
+  // racing, boxing, chess, poker), including a recent event shown on Today.
+  const historicalPost = (state: LeagueEventCard["state"], date: string) => {
+    if (state !== "post") return false;
+    if (isPastDate) return true;
+    if (!selectedDate) return false;
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const eventYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(parsed).replace(/-/g, "");
+    return eventYmd < selectedDate;
+  };
   const playBout = async (id: string, query: string) => {
     // Already resolved this bout — replay the same video instead of walking the
     // channel chain again. The resolver scrapes YouTube's results page and
@@ -574,6 +590,7 @@ export default function EventCard({
             nameTier={nameFit.tier}
             showRecords={nameFit.records}
             selectedDate={selectedDate}
+            hideMeta={historicalPost(f.state, f.date)}
           />
         ))}
       </div>
@@ -597,9 +614,7 @@ export default function EventCard({
       : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
-  // A past-date MLB card omits its FINAL meta row; do the same for Boxing so
-  // adding a replay button does not make this tile 26px taller than its peers.
-  const hidePastBoxingMeta = event.kind === "boxing" && isPost && !!isPastDate;
+  const hideHistoricalMeta = historicalPost(event.state, event.date);
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
   // whenLabel ("Sat 9:00AM" for another day, bare "9:00AM" when the race is on
   // the viewed date — selectedDate — same rule as the game cards' time).
@@ -636,7 +651,7 @@ export default function EventCard({
           upcoming time renders at text-[11px] muted — the exact classes
           GameCard's future-time span uses — while Final/Live keep the row's
           text-xs like GameCard's FINAL/clock. */}
-      {!hidePastBoxingMeta && <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
+      {!hideHistoricalMeta && <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {isPost || isLive ? status : <span className="text-[11px] whitespace-nowrap">{status}</span>}
