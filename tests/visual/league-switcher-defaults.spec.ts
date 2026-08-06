@@ -62,3 +62,115 @@ test("a pinned expansion league is included unless manually hidden", async ({ pa
   await ligaMx.uncheck();
   await expect(ligaMx).not.toBeChecked();
 });
+
+test("legacy anonymous installs keep their old checked leagues", async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.setItem("nss-preferences", JSON.stringify({
+      favoriteLeagues: [],
+      favoriteTeams: [],
+      theme: "system",
+      showRatings: false,
+      skipExplainer: true,
+      skipNewsExplainer: true,
+      showNews: false,
+      leaguesOnboarded: true,
+    }));
+  });
+  await page.reload();
+  await openSwitcherSettings(page);
+
+  await expect(page.getByRole("checkbox", { name: "Liga MX", exact: true })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "NWSL", exact: true })).toBeChecked();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("nss-preferences") || "{}"));
+  expect(saved.switcherDefaultsVersion).toBe(2);
+  expect(saved.shownLeagues).toEqual(expect.arrayContaining(["ligamx", "nwsl"]));
+});
+
+test("legacy anonymous installs keep old unchecks too", async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.setItem("nss-preferences", JSON.stringify({
+      favoriteLeagues: [],
+      favoriteTeams: [],
+      theme: "system",
+      showRatings: false,
+      skipExplainer: true,
+      skipNewsExplainer: true,
+      showNews: false,
+      leaguesOnboarded: true,
+      hiddenLeagues: ["mlb", "nwsl"],
+    }));
+  });
+  await page.reload();
+  await openSwitcherSettings(page);
+
+  await expect(page.getByRole("checkbox", { name: "MLB", exact: true })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "NWSL", exact: true })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Liga MX", exact: true })).toBeChecked();
+});
+
+test("legacy signed-in account prefs migrate and sync from a new device", async ({ page }) => {
+  let uploaded: Record<string, unknown> | null = null;
+  await page.route("**/api/me", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ signedIn: true, uid: "migration-test", platforms: { web: true } }),
+  }));
+  await page.route("**/api/prefs", async (route) => {
+    if (route.request().method() === "PUT") {
+      uploaded = JSON.parse(route.request().postData() || "{}");
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        prefs: {
+          favoriteLeagues: [],
+          favoriteTeams: [],
+          hiddenLeagues: ["nwsl"],
+        },
+      }),
+    });
+  });
+
+  await page.reload();
+  await openSwitcherSettings(page);
+  await expect(page.getByRole("checkbox", { name: "Liga MX", exact: true })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "NWSL", exact: true })).not.toBeChecked();
+  await expect.poll(() => uploaded?.switcherDefaultsVersion).toBe(2);
+  expect(uploaded?.shownLeagues).toEqual(expect.arrayContaining(["ligamx"]));
+});
+
+test("v2 account defaults clear device-only switcher overrides", async ({ page }) => {
+  await page.evaluate(() => {
+    const current = JSON.parse(localStorage.getItem("nss-preferences") || "{}");
+    localStorage.setItem("nss-preferences", JSON.stringify({
+      ...current,
+      hiddenLeagues: ["mlb"],
+      shownLeagues: ["ligamx"],
+      switcherDefaultsVersion: 2,
+    }));
+  });
+  await page.route("**/api/me", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ signedIn: true, uid: "v2-test", platforms: { web: true } }),
+  }));
+  await page.route("**/api/prefs", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      prefs: {
+        favoriteLeagues: [],
+        favoriteTeams: [],
+        switcherDefaultsVersion: 2,
+      },
+    }),
+  }));
+
+  await page.reload();
+  await openSwitcherSettings(page);
+  await expect(page.getByRole("checkbox", { name: "MLB", exact: true })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Liga MX", exact: true })).not.toBeChecked();
+});
