@@ -18,7 +18,7 @@ export interface AuthState {
   email: string | null;
   // Which sign-in methods are live (secrets configured). Undefined when the
   // request failed — callers should treat Apple as available by default.
-  providers?: { apple: boolean; google: boolean };
+  providers?: { apple: boolean; google: boolean; email: boolean };
   /** Pseudonymous, stable account id (HMAC of the provider sub) — safe to send
    *  to analytics; never the raw Apple/Google sub or the email. */
   uid?: string | null;
@@ -318,6 +318,30 @@ export function signInWithGoogle(returnTo?: string, link = false): void {
 
 export function hasNativeGoogleBridge(): boolean {
   return typeof window !== "undefined" && !!nativeGooglePlugin();
+}
+
+export async function requestEmailCode(email: string): Promise<{ ok: boolean; status: number }> {
+  try {
+    const response = await fetch("/auth/email/request", {
+      method: "POST",
+      credentials: "include",
+      headers: hsClientHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ email }),
+    });
+    return { ok: response.ok, status: response.status };
+  } catch { return { ok: false, status: 0 }; }
+}
+
+export async function verifyEmailCode(email: string, code: string): Promise<{ ok: boolean; status: number }> {
+  try {
+    const response = await fetch("/auth/email/verify", {
+      method: "POST",
+      credentials: "include",
+      headers: hsClientHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ email, code }),
+    });
+    return { ok: response.ok, status: response.status };
+  } catch { return { ok: false, status: 0 }; }
 }
 
 export function signOut(): void {
