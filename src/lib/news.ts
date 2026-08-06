@@ -6,6 +6,9 @@ import { getTimeZone } from "./etDay";
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 // ESPN "now" feed — homepage headlines across all sports.
 const HOME_NEWS_URL = "https://now.core.api.espn.com/v1/sports/news";
+// ESPN's JSON sports API has no Boxing league path (the obvious candidates
+// return 400/404), but ESPN publishes this official CORS-open RSS feed.
+const BOXING_RSS_URL = "https://www.espn.com/espn/rss/boxing/news";
 
 const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   mlb: "/baseball/mlb",
@@ -157,6 +160,30 @@ function parseArticle(raw: RawArticle): NewsItem {
 }
 
 export async function fetchLeagueNews(sport: Sport, limit = 20): Promise<NewsItem[]> {
+  if (sport === "boxing") {
+    try {
+      const res = await fetch(BOXING_RSS_URL);
+      if (!res.ok) return [];
+      const doc = new DOMParser().parseFromString(await res.text(), "text/xml");
+      if (doc.querySelector("parsererror")) return [];
+      return [...doc.querySelectorAll("item")].slice(0, limit).map((item) => {
+        const value = (tag: string) => item.getElementsByTagName(tag)[0]?.textContent?.trim() ?? "";
+        const articleUrl = value("link");
+        return {
+          id: value("guid") || articleUrl,
+          headline: value("title"),
+          description: value("description"),
+          published: value("pubDate"),
+          imageUrl: null,
+          articleUrl,
+          byline: value("dc:creator"),
+          section: "Boxing",
+        };
+      }).filter((item) => item.headline && item.articleUrl);
+    } catch {
+      return [];
+    }
+  }
   const path = SPORT_NEWS_PATHS[sport];
   if (!path) return [];
   try {
@@ -335,6 +362,7 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   cricket: { key: "reddit-cricket", label: "r/Cricket" },
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
+  boxing: { key: "reddit-boxing", label: "r/Boxing" },
   f1: { key: "reddit-f1", label: "r/formula1" },
   // NWSL + the two US racing series added 2026-08-04, same 45s-per-feed cost
   // as cricket. NWSL gets its own sub rather than the r/soccer firehose for
@@ -437,7 +465,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   // when they're active they're the biggest story in the sport.
   "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
   "cricket",
-  "ufc", "f1", "nascar", "indycar", "poker",
+  "ufc", "boxing", "f1", "nascar", "indycar", "poker",
 ];
 
 // Col 3's default (no league picked): Reddit-first (Jacob 7/16) — r/sports leads,

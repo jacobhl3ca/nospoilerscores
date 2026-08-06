@@ -2964,6 +2964,7 @@ const jobs = [
   ["reddit-cricket", () => fetchReddit("Cricket", "r/Cricket")],
   ["reddit-ncaaw", () => fetchReddit("ncaaw", "r/ncaaw")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
+  ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],
 
   // theScore — golf and tennis have no dedicated per-league path (API 404s).
