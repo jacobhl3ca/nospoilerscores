@@ -177,6 +177,10 @@ export interface Preferences {
   // arrow cycling / news swap / + button picks). Settings' slot pickers stay
   // unfiltered so a hidden league can still be pinned deliberately.
   hiddenLeagues?: Sport[];
+  // Opt-in leagues the user explicitly added to the homepage switcher. Leagues
+  // marked excludeFromAuto start unchecked, so this separate allowlist lets a
+  // user enable one durably without making every future opt-in league visible.
+  shownLeagues?: Sport[];
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
   hideTeamStars?: boolean;
