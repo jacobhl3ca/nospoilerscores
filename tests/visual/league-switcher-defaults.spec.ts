@@ -38,6 +38,22 @@ test("core leagues default on and expansion leagues default off", async ({ page 
   }
 });
 
+test("clicking NFL Preseason opens NFL instead of falling through to MLS", async ({ page }) => {
+  await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: '{"events":[]}',
+  }));
+  await page.getByRole("button", { name: "Close settings" }).click();
+  await page.getByRole("button", { name: "MLB", exact: true }).click();
+  const switcher = page.getByRole("dialog", { name: "Switch league" });
+  await switcher.getByRole("button", { name: "NFL Preseason", exact: true }).click();
+
+  // The narrow score column intentionally abbreviates this heading.
+  await expect(page.getByRole("heading", { name: "NFL Pre", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "MLS", exact: true })).toHaveCount(0);
+});
+
 test("manual opt-in and core-hide choices persist after reload", async ({ page }) => {
   const ligaMx = page.getByRole("checkbox", { name: "Liga MX", exact: true });
   const mlb = page.getByRole("checkbox", { name: "MLB", exact: true });
