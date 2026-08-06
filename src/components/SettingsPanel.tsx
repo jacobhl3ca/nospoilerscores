@@ -159,6 +159,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   ufc: "UFC",
   boxing: "Boxing",
   chess: "Chess",
+  poker: "Poker",
   esports: "Esports",
 };
 
@@ -1306,7 +1307,7 @@ function RadioGroup<T extends string>({
 // Cache + loader are hoisted to SettingsPanel so the favorites display can
 // also read team names from them (otherwise favorited teams that aren't in
 // today's loaded games would show "nba-8" instead of "Atlanta Hawks").
-const TEAM_PICKER_SKIP: Sport[] = ["golf", "tennis"];
+const TEAM_PICKER_SKIP: Sport[] = ["golf", "tennis", "poker"];
 function TeamPicker({
   sports,
   favorites,

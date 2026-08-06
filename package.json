@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "visual": "playwright test",
-    "visual:update": "playwright test --update-snapshots"
+    "visual:update": "playwright test --update-snapshots",
+    "poker:check": "node scripts/check-poker-events.mjs"
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",
