@@ -181,6 +181,10 @@ export interface Preferences {
   // marked excludeFromAuto start unchecked, so this separate allowlist lets a
   // user enable one durably without making every future opt-in league visible.
   shownLeagues?: Sport[];
+  // v2 changed opt-in leagues from implicitly checked to default-off. A saved
+  // version means this prefs blob has either received the one-time legacy
+  // preservation migration or was created after the new defaults launched.
+  switcherDefaultsVersion?: 2;
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
   hideTeamStars?: boolean;
@@ -317,6 +321,7 @@ const defaults: Preferences = {
   defaultRatings: "auto",
   newsColCount: 3,
   smartCutoffHour: 13,
+  switcherDefaultsVersion: 2,
   // Reddit-only by default (2026-08-03, ahead of the Product Hunt launch).
   // Reddit is where the game-worth-watching discussion actually lives, and it
   // is the feed a first-time visitor should land on; ESPN/homepage/top-videos
@@ -330,7 +335,14 @@ export function loadPreferences(): Preferences {
   if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    const prefs = raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    const stored = raw ? JSON.parse(raw) : null;
+    const prefs = stored ? { ...defaults, ...stored } : { ...defaults };
+    // Do not let the v2 value from defaults disguise a legacy stored blob.
+    // HomeContent needs this missing marker to preserve every old checkmark
+    // before the first post-deploy save overwrites the blob.
+    if (stored && !Object.prototype.hasOwnProperty.call(stored, "switcherDefaultsVersion")) {
+      delete prefs.switcherDefaultsVersion;
+    }
     // Push the chosen zone into the shared module so the data layer + UI agree
     // before the first fetch/render after a load.
     setServiceTimeZone(prefs.timezone);

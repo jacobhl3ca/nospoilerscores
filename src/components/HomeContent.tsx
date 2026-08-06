@@ -30,6 +30,42 @@ function getResolvedTheme(theme: Theme): "dark" | "light" {
   return theme;
 }
 
+// Before v2, every league absent from hiddenLeagues rendered checked; there was
+// no positive allowlist. Preserve that exact legacy state once, then stamp the
+// blob so new accounts/installations keep the slimmer defaults. This covers
+// both localStorage and signed-in R2 prefs through the merge helper below.
+function migrateLegacySwitcherPreferences(prefs: Preferences): Preferences {
+  if (prefs.switcherDefaultsVersion === 2) return prefs;
+  const hidden = new Set(prefs.hiddenLeagues ?? []);
+  const shown = new Set(prefs.shownLeagues ?? []);
+  for (const league of ALL_LEAGUES) {
+    if (league.excludeFromAuto && !hidden.has(league.sport)) shown.add(league.sport);
+  }
+  return {
+    ...prefs,
+    shownLeagues: shown.size ? [...shown] : undefined,
+    switcherDefaultsVersion: 2,
+  };
+}
+
+function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>): Preferences {
+  const merged = {
+    ...local,
+    ...remote,
+    // These arrays use omission to mean the default. Because the account copy
+    // is canonical, an omitted remote array must clear a device-only override
+    // instead of accidentally inheriting it through the object spread.
+    hiddenLeagues: remote.hiddenLeagues,
+    shownLeagues: remote.shownLeagues,
+    switcherDefaultsVersion: remote.switcherDefaultsVersion,
+  };
+  // The remote copy is canonical for a signed-in account. Its missing marker,
+  // not the new device's local marker, decides whether the account is legacy.
+  return remote.switcherDefaultsVersion === 2
+    ? merged
+    : migrateLegacySwitcherPreferences({ ...merged, switcherDefaultsVersion: undefined });
+}
+
 function getSmartDefaultOffset(cutoffHour = 13): number {
   // The base date this offset applies to (getDateString → getNowET) is shifted:
   // between midnight and 1 AM ET it has ALREADY rolled back to the prior
@@ -453,7 +489,7 @@ export default function HomeContent({
   const [hasIosAccountUse, setHasIosAccountUse] = useState(false);
 
   useEffect(() => {
-    const loaded = loadPreferences();
+    const loaded = migrateLegacySwitcherPreferences(loadPreferences());
     // First-run detection for the league picker: a brand-new install has no
     // stored prefs blob yet. Capture this BEFORE the share-link path below can
     // call savePreferences() (which would write the blob and hide the signal).
@@ -595,7 +631,7 @@ export default function HomeContent({
         setRemoteSync(pushRemotePrefs);
         const remote = await fetchRemotePrefs();
         if (remote && Object.keys(remote).length > 0) {
-          const merged = { ...loadPreferences(), ...remote };
+          const merged = mergeRemotePreferences(loadPreferences(), remote);
           savePreferences(merged); // persist locally (and re-affirm to server via the hook)
           applyLaunchState(merged);
         } else {
@@ -627,7 +663,7 @@ export default function HomeContent({
         const remote = await fetchRemotePrefs();
         if (!remote || !alive || Object.keys(remote).length === 0) return;
         const local = loadPreferences();
-        const merged = { ...local, ...remote };
+        const merged = mergeRemotePreferences(local, remote);
         if (JSON.stringify(merged) === JSON.stringify(local)) return; // no change → don't disturb
         savePreferences(merged);
         setPrefs(merged);
