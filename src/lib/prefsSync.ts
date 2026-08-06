@@ -24,6 +24,8 @@ export interface AuthState {
   uid?: string | null;
   /** "apple" | "google" — which identity is linked to this account. */
   provider?: string | null;
+  /** Every provider attached to the same canonical preferences account. */
+  linkedProviders?: string[];
   /** The client this request came from. */
   platform?: "ios" | "android" | "web";
   /** Last time this account was seen on each client, ISO strings. */
@@ -87,6 +89,7 @@ export async function getAuthState(): Promise<AuthState> {
       providers: j.providers,
       uid: j.uid ?? null,
       provider: j.provider ?? null,
+      linkedProviders: Array.isArray(j.linkedProviders) ? j.linkedProviders : [],
       platform: j.platform ?? hsPlatform(),
       platforms: j.platforms || {},
       firstSeen: j.firstSeen ?? null,
@@ -173,21 +176,21 @@ export function pushRemotePrefs(prefs: Preferences): void {
   }
 }
 
-export function signInWithApple(returnTo?: string): void {
+export function signInWithApple(returnTo?: string, link = false): void {
   if (typeof window === "undefined") return;
   const rt = returnTo || window.location.pathname || "/";
   const cap = (window as unknown as {
     Capacitor?: { isNativePlatform?: () => boolean };
   }).Capacitor;
   if (cap?.isNativePlatform?.()) {
-    void nativeAppleSignIn(rt);
+    void nativeAppleSignIn(rt, link);
     return;
   }
-  appleWebSignIn(rt);
+  appleWebSignIn(rt, link);
 }
 
-function appleWebSignIn(rt: string): void {
-  window.location.href = `/auth/apple/login?returnTo=${encodeURIComponent(rt)}`;
+function appleWebSignIn(rt: string, link = false): void {
+  window.location.href = `/auth/apple/login?returnTo=${encodeURIComponent(rt)}${link ? "&link=1" : ""}`;
 }
 
 // In the iOS app the web OAuth redirect logs in inside Safari — not the app's
@@ -198,7 +201,7 @@ function appleWebSignIn(rt: string): void {
 // dynamically so the web bundle never runs native-only code. If the plugin isn't
 // present (an older app build without it) or the native call fails, fall back to
 // the web flow so nothing regresses versus today.
-async function nativeAppleSignIn(rt: string): Promise<void> {
+async function nativeAppleSignIn(rt: string, link = false): Promise<void> {
   try {
     const nonce =
       typeof crypto !== "undefined" && crypto.randomUUID
@@ -223,20 +226,98 @@ async function nativeAppleSignIn(rt: string): Promise<void> {
         identityToken: idToken,
         nonce,
         email: res.response.email ?? null,
+        link,
       }),
     });
     if (!r.ok) throw new Error(`native auth failed: ${r.status}`);
     window.location.reload();
   } catch (e) {
     console.error("[siwa native] sign-in failed, falling back to web flow", e);
-    appleWebSignIn(rt);
+    appleWebSignIn(rt, link);
   }
 }
 
-export function signInWithGoogle(returnTo?: string): void {
+type NativeGooglePlugin = {
+  authorize(options: { url: string; callbackScheme: string }): Promise<{ callbackUrl?: string; launched?: boolean }>;
+  consumeCallback?(): Promise<{ callbackUrl?: string }>;
+};
+
+function nativeGooglePlugin(): NativeGooglePlugin | null {
+  const cap = (window as unknown as {
+    Capacitor?: { isNativePlatform?: () => boolean; Plugins?: { HideScoreGoogleAuth?: NativeGooglePlugin } };
+  }).Capacitor;
+  return cap?.isNativePlatform?.() ? cap.Plugins?.HideScoreGoogleAuth || null : null;
+}
+
+function base64url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function googleVerifier() {
+  const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return { verifier, challenge: base64url(new Uint8Array(digest)) };
+}
+
+async function waitForGoogleCallback(plugin: NativeGooglePlugin) {
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    const result = await plugin.consumeCallback?.();
+    if (result?.callbackUrl) return result.callbackUrl;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("Google sign-in timed out");
+}
+
+async function nativeGoogleSignIn(rt: string, link: boolean) {
+  const plugin = nativeGooglePlugin();
+  if (!plugin) return;
+  const { verifier, challenge } = await googleVerifier();
+  const start = new URL("/auth/google/login", window.location.origin);
+  start.searchParams.set("returnTo", rt);
+  start.searchParams.set("nativeChallenge", challenge);
+  if (link) {
+    const proofResponse = await fetch("/auth/google/native", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "link_token" }),
+    });
+    if (!proofResponse.ok) throw new Error("could not authorize account linking");
+    const proof = await proofResponse.json() as { linkToken?: string };
+    if (!proof.linkToken) throw new Error("server returned no link token");
+    start.searchParams.set("nativeLinkToken", proof.linkToken);
+  }
+  const launched = await plugin.authorize({ url: start.toString(), callbackScheme: "hidescore-auth" });
+  const callbackUrl = launched.callbackUrl || await waitForGoogleCallback(plugin);
+  const callback = new URL(callbackUrl);
+  const code = callback.searchParams.get("code");
+  const returnTo = callback.searchParams.get("returnTo") || rt;
+  if (!code) throw new Error("Google returned no handoff code");
+  const response = await fetch("/auth/google/native", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, verifier, returnTo }),
+  });
+  if (!response.ok) throw new Error(`native Google sign-in failed: ${response.status}`);
+  window.location.href = returnTo;
+}
+
+export function signInWithGoogle(returnTo?: string, link = false): void {
   if (typeof window === "undefined") return;
   const rt = returnTo || window.location.pathname || "/";
-  window.location.href = `/auth/google/login?returnTo=${encodeURIComponent(rt)}`;
+  const plugin = nativeGooglePlugin();
+  if (plugin) {
+    void nativeGoogleSignIn(rt, link).catch((error) => console.error("[google native] sign-in failed", error));
+    return;
+  }
+  window.location.href = `/auth/google/login?returnTo=${encodeURIComponent(rt)}${link ? "&link=1" : ""}`;
+}
+
+export function hasNativeGoogleBridge(): boolean {
+  return typeof window !== "undefined" && !!nativeGooglePlugin();
 }
 
 export function signOut(): void {

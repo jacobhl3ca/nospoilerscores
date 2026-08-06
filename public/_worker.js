@@ -145,6 +145,7 @@ export default {
     if (url.pathname === "/auth/apple/native" && request.method === "POST") return siwaNative(request, env);
     if (url.pathname === "/auth/google/login")    return googleLogin(request, env, url);
     if (url.pathname === "/auth/google/callback") return googleCallback(request, env, url);
+    if (url.pathname === "/auth/google/native" && request.method === "POST") return googleNativeComplete(request, env);
     if (url.pathname === "/auth/logout")         return siwaLogout();
     if (url.pathname === "/api/me")              return siwaMe(request, env, ctx);
     if (url.pathname === "/api/prefs") {
@@ -2350,7 +2351,12 @@ async function siwaLogin(request, env, url) {
   const returnToRaw = url.searchParams.get("returnTo") || "/";
   const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
   const nonce = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
-  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow() });
+  let linkUid = null;
+  if (url.searchParams.get("link") === "1") {
+    const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (current) linkUid = (await _hsResolveAccount(env, current)).uid;
+  }
+  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow(), l: linkUid });
   const state = `${stateBody}.${await _siwaHmacSign(env.SESSION_SECRET, stateBody)}`;
   const auth = new URL(APPLE_AUTHORIZE);
   auth.searchParams.set("response_type", "code");
@@ -2401,8 +2407,14 @@ async function siwaCallback(request, env, url) {
   if (!claims) return _siwaErrRedirect("bad_id_token");
   if (claims.nonce && claims.nonce !== st.n) return _siwaErrRedirect("bad_nonce");
 
+  let u;
+  try {
+    u = await _hsResolveAccount(env, {
+      sub: `apple:${claims.sub}`, email: claims.email || null, emailVerified: true,
+    }, st.l || null);
+  } catch { return _siwaErrRedirect("identity_already_linked"); }
   const session = await _siwaMakeSession(env, {
-    sub: `apple:${claims.sub}`, email: claims.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+    sub: u.sub, uid: u.uid, email: u.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
   return new Response(null, {
     status: 303,
@@ -2433,10 +2445,21 @@ async function siwaNative(request, env) {
   if (body.nonce && claims.nonce && claims.nonce !== body.nonce) {
     return _siwaJson({ error: "bad_nonce" }, 401);
   }
+  let linkUid = null;
+  if (body.link) {
+    const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (current) linkUid = (await _hsResolveAccount(env, current)).uid;
+  }
+  let u;
+  try {
+    u = await _hsResolveAccount(env, {
+      sub: `apple:${claims.sub}`,
+      email: claims.email || body.email || null,
+      emailVerified: true,
+    }, linkUid);
+  } catch { return _siwaJson({ error: "identity_already_linked" }, 409); }
   const session = await _siwaMakeSession(env, {
-    sub: `apple:${claims.sub}`,
-    email: claims.email || body.email || null,
-    exp: _siwaNow() + SIWA_SESSION_TTL,
+    sub: u.sub, uid: u.uid, email: u.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
@@ -2490,10 +2513,84 @@ async function _hsUid(env, sub) {
   return sig.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
 }
 
+async function _hsPrivateId(env, kind, value) {
+  const sig = await _siwaHmacSign(env.SESSION_SECRET, `${kind}:${value}`);
+  return sig.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+}
+
+async function _hsReadJson(env, key) {
+  if (!env.DATA) return null;
+  try {
+    const obj = await env.DATA.get(key);
+    return obj ? await obj.json() : null;
+  } catch { return null; }
+}
+
+// Resolve an Apple or Google identity onto one canonical account. Identity and
+// verified-email indexes are HMAC-keyed, so the private R2 namespace cannot be
+// enumerated by guessing emails. Existing provider-keyed prefs are copied
+// lazily on first sign-in; the legacy object is retained as a recovery copy.
+async function _hsResolveAccount(env, u, linkUid = null) {
+  const fallbackUid = await _hsUid(env, u.sub);
+  if (!env.DATA || !env.SESSION_SECRET) return { ...u, uid: fallbackUid, linkedProviders: [String(u.sub).split(":")[0]] };
+
+  const identityId = await _hsPrivateId(env, "identity", u.sub);
+  const identityKey = `accounts/identity/${identityId}.json`;
+  const existingIdentity = await _hsReadJson(env, identityKey);
+  if (linkUid && existingIdentity?.uid && existingIdentity.uid !== linkUid) {
+    throw new Error("identity_already_linked");
+  }
+
+  let uid = linkUid || existingIdentity?.uid || null;
+  let emailKey = null;
+  if (!uid && u.email && u.emailVerified !== false) {
+    const emailId = await _hsPrivateId(env, "email", String(u.email).trim().toLowerCase());
+    emailKey = `accounts/email/${emailId}.json`;
+    uid = (await _hsReadJson(env, emailKey))?.uid || null;
+  }
+  uid = uid || fallbackUid;
+
+  const accountKey = `accounts/${uid}.json`;
+  const prior = (await _hsReadJson(env, accountKey)) || {};
+  const identities = Array.isArray(prior.identities) ? prior.identities.filter((v) => typeof v === "string") : [];
+  if (!identities.includes(u.sub)) identities.push(u.sub);
+  const linkedProviders = [...new Set(identities.map((sub) => String(sub).split(":")[0]).filter(Boolean))];
+  const account = {
+    ...prior,
+    uid,
+    identities,
+    linkedProviders,
+    email: u.email || prior.email || null,
+    updatedAt: new Date().toISOString(),
+    createdAt: prior.createdAt || new Date().toISOString(),
+  };
+  await env.DATA.put(identityKey, JSON.stringify({ uid }), { httpMetadata: { contentType: "application/json" } });
+  if (u.email && u.emailVerified !== false) {
+    if (!emailKey) {
+      const emailId = await _hsPrivateId(env, "email", String(u.email).trim().toLowerCase());
+      emailKey = `accounts/email/${emailId}.json`;
+    }
+    const mapped = await _hsReadJson(env, emailKey);
+    // Explicit linking may adopt an otherwise-unmapped email. Never silently
+    // repoint an email already owned by a different canonical account.
+    if (!mapped?.uid || mapped.uid === uid) {
+      await env.DATA.put(emailKey, JSON.stringify({ uid }), { httpMetadata: { contentType: "application/json" } });
+    }
+  }
+  await env.DATA.put(accountKey, JSON.stringify(account), { httpMetadata: { contentType: "application/json" } });
+
+  const canonicalPrefs = `prefs/${uid}.json`;
+  if (!(await env.DATA.head(canonicalPrefs))) {
+    const legacy = await env.DATA.get(`prefs/${u.sub}.json`);
+    if (legacy) await env.DATA.put(canonicalPrefs, legacy.body, { httpMetadata: { contentType: "application/json" } });
+  }
+  return { ...u, uid, linkedProviders };
+}
+
 // Read (and lazily upgrade) the record. Returns null when there's no store.
 async function _hsTouchUser(env, request, u) {
   if (!env.DATA || !u || !u.sub) return null;
-  const key = `users/${u.sub}.json`;
+  const key = `users/${u.uid || u.sub}.json`;
   let rec = null;
   try {
     const obj = await env.DATA.get(key);
@@ -2502,15 +2599,16 @@ async function _hsTouchUser(env, request, u) {
   const now = new Date().toISOString();
   const platform = _hsPlatform(request);
   if (!rec || typeof rec !== "object") {
-    rec = { sub: u.sub, firstSeen: now, platforms: {}, counts: {} };
+    rec = { uid: u.uid || null, firstSeen: now, platforms: {}, counts: {} };
   }
   if (!rec.platforms || typeof rec.platforms !== "object") rec.platforms = {};
   if (!rec.counts || typeof rec.counts !== "object") rec.counts = {};
   const stale = !rec.lastSeen || (Date.now() - Date.parse(rec.lastSeen) > USER_TOUCH_MS);
   const newPlatform = !rec.platforms[platform];
   const emailChanged = !!u.email && rec.email !== u.email;
-  rec.uid = rec.uid || (await _hsUid(env, u.sub));
+  rec.uid = rec.uid || u.uid || (await _hsUid(env, u.sub));
   rec.provider = String(u.sub).split(":")[0] || null;
+  rec.linkedProviders = u.linkedProviders || rec.linkedProviders || [rec.provider];
   if (u.email) rec.email = u.email;
   if (stale || newPlatform || emailChanged) {
     rec.lastSeen = now;
@@ -2529,19 +2627,21 @@ async function _hsTouchUser(env, request, u) {
 // only shows live buttons; `platforms`/`nativeApp` drive the Settings > Account
 // summary ("used in the iPhone app and the web").
 async function siwaMe(request, env, ctx) {
-  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
   const base = {
-    signedIn: !!u,
-    email: (u && u.email) || null,
+    signedIn: !!sessionUser,
+    email: (sessionUser && sessionUser.email) || null,
     providers: { apple: _siwaConfigured(env), google: _googleConfigured(env) },
   };
-  if (!u) return _siwaJson(base);
+  if (!sessionUser) return _siwaJson(base);
+  const u = await _hsResolveAccount(env, sessionUser).catch(() => ({ ...sessionUser, uid: sessionUser.uid || null }));
   let rec = null;
   try { rec = await _hsTouchUser(env, request, u); } catch { /* best effort */ }
   return _siwaJson({
     ...base,
     uid: (rec && rec.uid) || (await _hsUid(env, u.sub)),
     provider: String(u.sub).split(":")[0] || null,
+    linkedProviders: u.linkedProviders || [],
     platform: _hsPlatform(request),
     platforms: (rec && rec.platforms) || {},
     firstSeen: (rec && rec.firstSeen) || null,
@@ -2551,19 +2651,21 @@ async function siwaMe(request, env, ctx) {
 
 // GET /api/prefs -> { prefs } (the user's stored prefs JSON, or null)
 async function prefsGet(request, env, ctx) {
-  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
-  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
   if (!env.DATA) return _siwaJson({ prefs: null });
+  const u = await _hsResolveAccount(env, sessionUser);
   if (ctx) ctx.waitUntil(_hsTouchUser(env, request, u).catch(() => {}));
-  const obj = await env.DATA.get(`prefs/${u.sub}.json`);
+  const obj = await env.DATA.get(`prefs/${u.uid}.json`);
   return _siwaJson({ prefs: obj ? await obj.json() : null });
 }
 
 // PUT /api/prefs  body = prefs JSON -> { ok: true }
 async function prefsPut(request, env, ctx) {
-  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
-  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
   if (!env.DATA) return _siwaJson({ error: "no_store" }, 503);
+  const u = await _hsResolveAccount(env, sessionUser);
   const text = await request.text();
   if (text.length > 64 * 1024) return _siwaJson({ error: "too_large" }, 413);
   let parsed;
@@ -2573,7 +2675,7 @@ async function prefsPut(request, env, ctx) {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return _siwaJson({ error: "bad_shape" }, 400);
   }
-  await env.DATA.put(`prefs/${u.sub}.json`, JSON.stringify(parsed),
+  await env.DATA.put(`prefs/${u.uid}.json`, JSON.stringify(parsed),
     { httpMetadata: { contentType: "application/json" } });
   if (ctx) ctx.waitUntil(_hsTouchUser(env, request, u).catch(() => {}));
   return _siwaJson({ ok: true });
@@ -2588,11 +2690,22 @@ async function prefsPut(request, env, ctx) {
 // The iOS app loads this site in a WebView sharing the same cookie, so this deletes
 // on-device too. We can't unlink their Apple/Google ID (external), only erase our data.
 async function accountDelete(request, env) {
-  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
-  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
+  const u = await _hsResolveAccount(env, sessionUser);
   if (env.DATA) {
-    try { await env.DATA.delete(`prefs/${u.sub}.json`); } catch { /* already gone */ }
-    try { await env.DATA.delete(`users/${u.sub}.json`); } catch { /* already gone */ }
+    try { await env.DATA.delete(`prefs/${u.uid}.json`); } catch { /* already gone */ }
+    try { await env.DATA.delete(`users/${u.uid}.json`); } catch { /* already gone */ }
+    const account = await _hsReadJson(env, `accounts/${u.uid}.json`);
+    for (const sub of account?.identities || []) {
+      try { await env.DATA.delete(`accounts/identity/${await _hsPrivateId(env, "identity", sub)}.json`); } catch { /* already gone */ }
+      try { await env.DATA.delete(`prefs/${sub}.json`); } catch { /* legacy recovery copy */ }
+      try { await env.DATA.delete(`users/${sub}.json`); } catch { /* legacy usage record */ }
+    }
+    if (account?.email) {
+      try { await env.DATA.delete(`accounts/email/${await _hsPrivateId(env, "email", String(account.email).trim().toLowerCase())}.json`); } catch { /* already gone */ }
+    }
+    try { await env.DATA.delete(`accounts/${u.uid}.json`); } catch { /* already gone */ }
   }
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
@@ -2654,12 +2767,36 @@ async function googleLogin(request, env, url) {
   if (!_googleConfigured(env)) return new Response("Sign in is not configured yet", { status: 503 });
   const returnToRaw = url.searchParams.get("returnTo") || "/";
   const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
+  const nativeChallengeRaw = url.searchParams.get("nativeChallenge") || "";
+  const nativeChallenge = /^[A-Za-z0-9_-]{43}$/.test(nativeChallengeRaw) ? nativeChallengeRaw : null;
+  if (url.searchParams.has("nativeChallenge") && !nativeChallenge) {
+    return _siwaErrRedirect("bad_native_challenge");
+  }
+  let linkUid = null;
+  const nativeLinkToken = url.searchParams.get("nativeLinkToken");
+  if (nativeChallenge && nativeLinkToken) {
+    const dot = nativeLinkToken.lastIndexOf(".");
+    if (dot < 1 || !(await _siwaHmacVerify(env.SESSION_SECRET, nativeLinkToken.slice(0, dot), nativeLinkToken.slice(dot + 1)))) {
+      return _siwaErrRedirect("bad_link_token");
+    }
+    let linkProof;
+    try { linkProof = _jsonFromB64url(nativeLinkToken.slice(0, dot)); }
+    catch { return _siwaErrRedirect("bad_link_token"); }
+    if (linkProof.p !== "google_link" || typeof linkProof.u !== "string" || linkProof.e < _siwaNow()) {
+      return _siwaErrRedirect("bad_link_token");
+    }
+    linkUid = linkProof.u;
+  } else if (url.searchParams.get("link") === "1") {
+    const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (current) linkUid = (await _hsResolveAccount(env, current)).uid;
+  }
   const nonce = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
-  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow() });
+  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow(), c: nativeChallenge, l: linkUid });
   const state = `${stateBody}.${await _siwaHmacSign(env.SESSION_SECRET, stateBody)}`;
   const auth = new URL(GOOGLE_AUTHORIZE);
+  const origin = String(env.APP_ORIGIN || "https://hidescore.com").replace(/\/$/, "");
   auth.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
-  auth.searchParams.set("redirect_uri", `${url.origin}/auth/google/callback`);
+  auth.searchParams.set("redirect_uri", `${origin}/auth/google/callback`);
   auth.searchParams.set("response_type", "code");
   auth.searchParams.set("scope", "openid email");
   auth.searchParams.set("state", state);
@@ -2682,6 +2819,7 @@ async function googleCallback(request, env, url) {
   if (!st.t || st.t < _siwaNow() - SIWA_STATE_TTL) return _siwaErrRedirect("expired");
 
   let tokens;
+  const origin = String(env.APP_ORIGIN || "https://hidescore.com").replace(/\/$/, "");
   try {
     const res = await fetch(GOOGLE_TOKEN_URL, {
       method: "POST",
@@ -2691,7 +2829,7 @@ async function googleCallback(request, env, url) {
         client_secret: env.GOOGLE_CLIENT_SECRET,
         code,
         grant_type: "authorization_code",
-        redirect_uri: `${url.origin}/auth/google/callback`,
+        redirect_uri: `${origin}/auth/google/callback`,
       }),
     });
     if (!res.ok) return _siwaErrRedirect("token_exchange");
@@ -2702,13 +2840,82 @@ async function googleCallback(request, env, url) {
   if (!claims) return _siwaErrRedirect("bad_id_token");
   if (claims.nonce && claims.nonce !== st.n) return _siwaErrRedirect("bad_nonce");
 
+  let u;
+  try {
+    u = await _hsResolveAccount(env, {
+      sub: `google:${claims.sub}`,
+      email: claims.email || null,
+      emailVerified: claims.email_verified === true || claims.email_verified === "true",
+    }, st.l || null);
+  } catch { return _siwaErrRedirect("identity_already_linked"); }
+
+  if (st.c) {
+    if (!env.DATA) return _siwaErrRedirect("no_store");
+    const handoffCode = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
+    await env.DATA.put(`auth/handoff/${handoffCode}.json`, JSON.stringify({
+      sub: u.sub,
+      uid: u.uid,
+      email: u.email || null,
+      challenge: st.c,
+      exp: _siwaNow() + 300,
+    }), { httpMetadata: { contentType: "application/json" } });
+    const callback = new URL("hidescore-auth://google");
+    callback.searchParams.set("code", handoffCode);
+    callback.searchParams.set("returnTo", st.r && st.r.startsWith("/") ? st.r : "/");
+    return new Response(null, { status: 303, headers: { Location: callback.toString() } });
+  }
+
   const session = await _siwaMakeSession(env, {
-    sub: `google:${claims.sub}`, email: claims.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+    sub: u.sub, uid: u.uid, email: u.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
   return new Response(null, {
     status: 303,
     headers: {
       Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
+    },
+  });
+}
+
+// POST /auth/google/native { code, verifier } — finish the system-browser flow
+// from inside the Capacitor WebView. The handoff is one-use and bound to the
+// app-generated PKCE verifier, so another app claiming the same custom scheme
+// cannot redeem an intercepted callback URL.
+async function googleNativeComplete(request, env) {
+  if (!env.DATA || !env.SESSION_SECRET) return _siwaJson({ error: "not_configured" }, 503);
+  let body;
+  try { body = await request.json(); } catch { return _siwaJson({ error: "bad_request" }, 400); }
+  if (body && body.action === "link_token") {
+    if (request.headers.get("Sec-Fetch-Site")?.toLowerCase() === "cross-site") {
+      return _siwaJson({ error: "cross_site" }, 403);
+    }
+    const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (!current) return _siwaJson({ error: "unauthorized" }, 401);
+    const account = await _hsResolveAccount(env, current);
+    const tokenBody = _b64urlFromJSON({ p: "google_link", u: account.uid, e: _siwaNow() + 300 });
+    const token = `${tokenBody}.${await _siwaHmacSign(env.SESSION_SECRET, tokenBody)}`;
+    return _siwaJson({ linkToken: token });
+  }
+  const code = body && body.code;
+  const verifier = body && body.verifier;
+  if (!/^[A-Za-z0-9_-]{43}$/.test(code || "") || !/^[A-Za-z0-9_-]{43}$/.test(verifier || "")) {
+    return _siwaJson({ error: "bad_handoff" }, 400);
+  }
+  const key = `auth/handoff/${code}.json`;
+  const handoff = await _hsReadJson(env, key);
+  // Claim before checking so even a malformed/replayed attempt burns the code.
+  try { await env.DATA.delete(key); } catch { /* absent/replayed */ }
+  if (!handoff || handoff.exp < _siwaNow()) return _siwaJson({ error: "bad_handoff" }, 401);
+  const digest = await crypto.subtle.digest("SHA-256", _siwaEnc.encode(verifier));
+  if (_b64urlFromBytes(digest) !== handoff.challenge) return _siwaJson({ error: "bad_handoff" }, 401);
+  const session = await _siwaMakeSession(env, {
+    sub: handoff.sub, uid: handoff.uid, email: handoff.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+  });
+  return new Response(JSON.stringify({ ok: true, returnTo: body.returnTo || "/" }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });
