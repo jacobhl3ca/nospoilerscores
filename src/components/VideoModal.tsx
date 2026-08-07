@@ -140,6 +140,7 @@ declare global {
   interface Window {
     YT?: YTNamespace;
     onYouTubeIframeAPIReady?: () => void;
+    umami?: { track: (event: string, data?: Record<string, string>) => void };
   }
 }
 
@@ -578,6 +579,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (Jacob 7/19). Keying each PeekBlur by postKey remounts it fresh per post,
   // resetting the reveal, while leaving the video player + modal chrome mounted.
   const postKey = String(currentId ?? playbackUrl ?? embedUrl ?? imageUrl ?? fallbackUrl ?? headline ?? "");
+  const trackedPlayRef = useRef<string | null>(null);
+  const trackVideoPlay = useCallback(() => {
+    if (!postKey || trackedPlayRef.current === postKey) return;
+    trackedPlayRef.current = postKey;
+    window.umami?.track("video-play", {
+      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
+      source: (sourceLabel || "unknown").slice(0, 40),
+    });
+  }, [postKey, ytMode, hlsMode, sourceLabel]);
   // Same reuse trap as PeekBlur: page to another post and the gallery cursor
   // must go back to picture 1 (post B would otherwise open on post A's 4th).
   useEffect(() => { setGalIdx(0); }, [postKey]);
@@ -1419,6 +1429,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               }
             }
             if (event.data === 1) {
+              trackVideoPlay();
               forceBest(event.target);
               // By PLAYING the title metadata is reliably populated — re-run the
               // spoiler check in case getVideoData() was empty at onReady.
@@ -1471,7 +1482,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // during a fallback swap before the replacement player is built.
       playerRef.current = null;
     };
-  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked]);
+  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay]);
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
@@ -2338,6 +2349,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
+                onPlaying={trackVideoPlay}
                 aria-label={headline || "Video player"}
                 poster={proxyImage(poster) ?? undefined}
               />
