@@ -11,6 +11,7 @@ import { getApiBase } from "@/lib/youtube";
 // on. `official` = 1st button (channel recap), `extended` = 2nd button (already
 // deduped against `official` at bake time).
 export type BakedHighlight = {
+  t?: number;
   matchup?: string;
   teams?: [string, string];
   eventDate?: string;
@@ -25,6 +26,8 @@ export type BakedHighlight = {
   mlbOrder?: "official-first";
   sourcePolicy?: "official-channel";
 };
+
+const BAKED_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;
 
 const BAKED_CHANNEL_KEY = {
   official: "officialChannel",
@@ -45,6 +48,7 @@ export function getChannelVerifiedBakedId(
   expectedHome: string,
 ): string | null {
   if (!baked || baked.sourcePolicy !== "official-channel" || !expectedChannel) return null;
+  if (!Number.isFinite(baked.t) || Date.now() - Number(baked.t) >= BAKED_MAX_AGE_MS) return null;
   const normalizeTeam = (name: string) => name
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
