@@ -564,6 +564,7 @@ export default function SettingsPanel({
       smartCutoffHour: 13,
       newsColCount: 3,
       newsTypeFilter: "reddit",
+      newsTypeFilters: undefined,
     });
   };
 

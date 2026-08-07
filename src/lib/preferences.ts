@@ -223,8 +223,14 @@ export interface Preferences {
   // appended to the end. Absence of an entry = use Smart (default) order.
   newsSourceOrder?: Record<string, string[]>;
   // Source-type pill filter for the news view. "all" shows every source;
-  // others restrict to one type globally across all visible leagues.
+  // others restrict to one type globally across all visible leagues. Retained
+  // as the legacy/single-select fallback for preferences saved before the
+  // multi-select source controls shipped.
   newsTypeFilter?: "all" | "topvideos" | "espn" | "reddit" | "homepage";
+  // Independently enabled news source types. Once present this is authoritative
+  // over newsTypeFilter, so a user can combine (for example) Reddit + ESPN while
+  // leaving homepage feeds unchecked. At least one stays enabled in the UI.
+  newsTypeFilters?: ("topvideos" | "espn" | "reddit" | "homepage")[];
   // User-chosen ordering of the source-type filter options (the values above).
   // Drag-to-reorder in the funnel popover persists here. Unknown/new values
   // fall through to the tail in default order, so added sources still show.
