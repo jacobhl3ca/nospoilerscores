@@ -240,7 +240,7 @@ export function NewsColumnTitle({
                         color: isCurrent ? "var(--accent)" : isElsewhere || opt.offseason ? "var(--text-muted)" : "var(--text)",
                         fontWeight: isCurrent ? 600 : 400,
                       }}
-                      title={isElsewhere ? "Already shown in another column" : undefined}
+                      title={isElsewhere ? "Already shown in another column — pick to add a second" : undefined}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >

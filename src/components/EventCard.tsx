@@ -66,9 +66,8 @@ function whenLabel(iso?: string, refYmd?: string): string {
 // beats "here's a page that spoils it". This makes UFC honour the contract
 // every other league already had — GameHighlights' "missing" state and
 // GolfLeaderboard's visibleHighlightSlots both hide a highlight button whose
-// chain came up empty instead of dropping the user on a search page. F1 is now
-// the only tile that still falls back to a search (its strict FORMULA 1 gate
-// means a miss is usually just FOM blocking the embed, not an unknown clip).
+// chain came up empty instead of dropping the user on a search page. Racing now
+// follows the same fail-closed contract.
 // NOTE even the official clips' TITLES carry a partial spoiler ("ROUND 1 SUB",
 // "UNANIMOUS DEC"), which the masked player never shows — one more reason the
 // native-YouTube-controls option stays off (it would surface the title).
@@ -77,7 +76,7 @@ const UFC_HIGHLIGHT_CHANNELS = ["UFC on Paramount+", "UFC", "ESPN MMA"] as const
 // What the play button reports once a bout has been resolved: the channel it
 // actually came from. Keyed by bout id so each card says where ITS video came
 // from; a null entry (not this type) means no rights-holder had the clip.
-export type HighlightSource = { label: string; official: boolean; videoId?: string };
+export type HighlightSource = { label: string; official: boolean; videoId?: string; fallbackUrl?: string };
 
 // "A vs B highlights" — deliberately WITHOUT the "UFC" token that espn.ts's
 // generic highlightQuery adds. Measured against the live resolver 2026-07-19:
@@ -92,40 +91,33 @@ function boutHighlightQuery(fight: FightBout): string {
 
 function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: string) => void) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  // strict → the worker oembed-verifies the result's uploader equals `channel`
-  // (drops title-only reuploads from random channels). Used by F1, whose
-  // official FORMULA 1 channel is the only acceptable in-app source; when
-  // nothing strict matches, the openExternal fallback below sends the user to
-  // a YouTube search OUTSIDE the app instead of playing an unvetted upload in
-  // the masked player.
-  const play = async (id: string, query: string, channel?: string, strict?: boolean, raceTokens?: string[]) => {
+  // Racing is strict and fail-closed: the worker verifies the uploader and race,
+  // and a miss returns null so the caller hides the button. The fallback URL is
+  // retained only as private retry metadata for VideoModal; it carries the same
+  // channel/race gates and is never opened as a generic search result.
+  const playRace = async (id: string, query: string, channel: string, label: string, raceTokens?: string[]): Promise<HighlightSource | null> => {
     // nss_channels/nss_strict ride along so VideoModal's embed-failure retry
     // keeps THIS call's channel gate. FOM blocks the FORMULA 1 embed often, and
     // an ungated retry is what put a fan reupload in the masked player (7/19);
-    // YouTube ignores the extra params, so the string is still a valid search
-    // URL for the external hand-off below.
-    const gate = (strict && channel
-      ? `&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`
-      : "")
+    // YouTube ignores the extra params; inside HideScore they are private retry
+    // metadata, while the modal's external handoff uses the resolved watch URL.
+    const gate = `&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`
       // nss_race rides along for the same reason nss_channels does: VideoModal's
       // embed-failure retry must keep THIS call's race gate, or an FOM embed
       // block on the F1 reel would retry ungated and put a different round's
       // race in the masked player.
       + (raceTokens?.length ? `&nss_race=${encodeURIComponent(raceTokens.join("|"))}` : "");
     const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${gate}`;
-    // Route the YouTube-search fallback through openExternal (not raw
-    // window.open) so it behaves like every other external YouTube open in the
-    // app: on the website it's byte-identical (openExternal does the same
-    // window.open there), but inside the Capacitor native wrapper it hands the
-    // /results URL off to the YouTube app via the youtube:// scheme (falling
-    // back to the in-app browser) instead of shelling out to mobile Safari and
-    // missing the handoff — matching GameHighlights' openExternal fallbacks.
-    if (!onPlayHighlight) { openExternal(fallback); return; }
+    if (!onPlayHighlight) return null;
     setLoadingId(id);
-    const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, strict, raceTokens);
-    setLoadingId(null);
-    if (videoId) onPlayHighlight(videoId, fallback);
-    else openExternal(fallback);
+    try {
+      const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, true, raceTokens);
+      if (!videoId) return null;
+      onPlayHighlight(videoId, fallback);
+      return { label, official: true, videoId, fallbackUrl: fallback };
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   // UFC: walk the rights-holder channels in coverage order, each strict
@@ -175,7 +167,7 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     }
   };
 
-  return { loadingId, play, playUfc, playStrictOnly };
+  return { loadingId, playRace, playUfc, playStrictOnly };
 }
 
 // Play button styled exactly like the game cards' highlight buttons
@@ -377,7 +369,7 @@ export default function EventCard({
   selectedDate?: string;
   isPastDate?: boolean;
 }) {
-  const { loadingId, play, playUfc, playStrictOnly } = useHighlightPlayer(onPlayHighlight);
+  const { loadingId, playRace, playUfc, playStrictOnly } = useHighlightPlayer(onPlayHighlight);
   // Where each bout's highlight actually came from, once played (bout id →
   // source). Sticky per card so the button keeps reporting its source. A NULL
   // entry means "resolved, and no rights-holder has it" — FightCard hides that
@@ -390,6 +382,9 @@ export default function EventCard({
   // Boxing majors use the same strict, fail-closed source contract as Poker,
   // but stay separate so a promoter mapping cannot affect another event type.
   const [boxingSource, setBoxingSource] = useState<HighlightSource | null | undefined>(undefined);
+  // Racing mirrors Poker/Boxing: undefined = untried, object = verified source,
+  // null = strict miss (button hidden; no YouTube-search handoff).
+  const [raceSource, setRaceSource] = useState<HighlightSource | null | undefined>(undefined);
   // A replay carried onto a later slate should not retain a redundant FINAL
   // row above its watch button. Normal finished GameCards also drop that row
   // on past dates. Apply the same rule to every event-card family (UFC,
@@ -445,6 +440,27 @@ export default function EventCard({
       event.officialLabel ?? "Boxing",
     );
     setBoxingSource(src);
+  };
+  const playRaceHighlight = async () => {
+    if (!event.officialChannel) {
+      setRaceSource(null);
+      return;
+    }
+    if (raceSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(
+        raceSource.videoId,
+        raceSource.fallbackUrl ?? `https://www.youtube.com/watch?v=${raceSource.videoId}`,
+      );
+      return;
+    }
+    const src = await playRace(
+      "race-official",
+      f1Query,
+      event.officialChannel,
+      event.officialLabel ?? "Racing",
+      event.raceTokens,
+    );
+    setRaceSource(src);
   };
 
   // Fighter-name size follows namesCompact — the game columns' REAL
@@ -680,12 +696,8 @@ export default function EventCard({
           </div>
         )}
       </div>
-      {/* One official-channel button, like UFC's — the unscoped "Search" test
-          button is gone. strict=true hard-gates the in-app result to the real
-          FORMULA 1 channel (oembed-verified uploader); FOM blocks embedding on
-          most of its uploads, so when nothing strict/playable matches, the
-          fallback opens a YouTube search externally rather than playing some
-          random reupload in the masked player. */}
+      {/* One official-channel button, like UFC's. A strict miss hides it; no
+          racing path opens a generic YouTube results page. */}
       {/* Racing ONLY. Chess deliberately ships with no highlight
           button, on the same rule the new soccer leagues were just held to: a
           button goes in once its official channel has been verified end-to-end,
@@ -695,12 +707,12 @@ export default function EventCard({
           highlight reel at all — its "highlight" is the live board, which the
           tile already links to. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts for
           the same call on cricket. */}
-      {isPost && isRace && (
+      {isPost && isRace && event.officialChannel && raceSource !== null && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
               renders NASCAR and IndyCar, which would otherwise both offer an
               "F1" highlight button. Falls back to "F1" for older cards. */}
-          <PlayBtn label={event.officialLabel ?? "F1"} loading={loadingId === "f1-official"} onClick={() => play("f1-official", f1Query, event.officialChannel, true, event.raceTokens)} />
+          <PlayBtn label={raceSource?.label ?? event.officialLabel ?? "F1"} loading={loadingId === "race-official"} onClick={playRaceHighlight} />
         </div>
       )}
       {/* Poker replays are stricter than racing: exact tour channel or no

@@ -7,7 +7,7 @@ import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, hasNoTrustedHighlightSource, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
-import { getBakedHighlight, getCachedBakedHighlight } from "@/lib/highlights";
+import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
 // Per-league buffer (hrs from game start) before showing the highlight button,
@@ -64,9 +64,7 @@ export default function GameHighlights({
   // swap in the league PandaScore reported. Every other sport is unchanged.
   const highlightLabel = game.sport === "esports" ? (game.esportsLeague ?? undefined) : leagueLabel;
   const officialChannel = getOfficialChannelName(game.sport, highlightLabel);
-  // MLB: keep the official MLB channel in the first slot so unscoped/team or
-  // unofficial uploads never occupy the primary button. The secondary slot can
-  // still surface a shorter team recap when one is available.
+  // MLB's visible highlight row is MLB.com-native; no YouTube slot renders.
   const isMlb = game.sport === "mlb";
   const isFifa = game.sport === "fifa";
   // FIFA's short 2m clips frequently hit YouTube embed restrictions AND the live
@@ -77,29 +75,45 @@ export default function GameHighlights({
   const fifaShortEnabled = false;
   const fifaTelemundoEnabled = true;
   const hasOfficialButton = !!officialChannel && !(isFifa && !fifaShortEnabled);
+  const primaryChannel = isMlb ? (officialChannel ?? undefined) : (isFifa ? "FIFA" : (officialChannel ?? undefined));
+  // Most leagues reuse their primary channel for slot 2. A league-specific
+  // verified rightsholder can override that slot (currently NWSL → W Golazo)
+  // without widening the primary button or affecting any other sport.
+  const verifiedSecondaryChannel = getSecondaryChannels(game.sport, highlightLabel)[0];
+  const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : (verifiedSecondaryChannel ?? primaryChannel));
   const initialBaked = getCachedBakedHighlight(game.sport, game.id);
-  const initialTrustedBaked = initialBaked ?? null;
-  const initialOldMlbBake = isMlb && initialTrustedBaked?.mlbOrder !== "official-first";
-  const initialOfficialId = isFifa && !fifaShortEnabled ? null : isFifa ? initialTrustedBaked?.official : initialOldMlbBake ? initialTrustedBaked?.extended : initialTrustedBaked?.official;
-  const initialSecondaryId = isFifa ? (initialTrustedBaked?.extended ?? initialTrustedBaked?.official) : initialOldMlbBake ? initialTrustedBaked?.official : initialTrustedBaked?.extended;
+  // MLB's visible row is MLB.com-native; never hydrate its removed YouTube row.
+  // Every other prebaked ID must carry the exact expected uploader marker.
+  const initialOfficialId = !isMlb && hasOfficialButton
+    ? getChannelVerifiedBakedId(initialBaked, "official", primaryChannel, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
+    : null;
+  const initialSecondaryId = !isMlb
+    ? getChannelVerifiedBakedId(initialBaked, "extended", secondaryChannel, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
+    : null;
+  const initialTelemundoShortId = fifaTelemundoEnabled && isFifa
+    ? getChannelVerifiedBakedId(initialBaked, "telemundo", "Telemundo Deportes", game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
+    : null;
+  const initialTelemundoLongId = fifaTelemundoEnabled && isFifa
+    ? getChannelVerifiedBakedId(initialBaked, "telemundoExtended", "Telemundo Deportes", game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
+    : null;
   const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
   const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
-  const prefetchedTelemundoShortId = useRef<string | null>(fifaTelemundoEnabled ? (initialTrustedBaked?.telemundo ?? null) : null);
-  const prefetchedTelemundoLongId = useRef<string | null>(fifaTelemundoEnabled ? (initialTrustedBaked?.telemundoExtended ?? null) : null);
+  const prefetchedTelemundoShortId = useRef<string | null>(initialTelemundoShortId);
+  const prefetchedTelemundoLongId = useRef<string | null>(initialTelemundoLongId);
   const prefetchStarted = useRef(false);
   const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | "telemundoLong" | null>(null);
   // "loading" while prefetch (or click-time chain) is running. "found" once
   // resolveHighlightVideo returns an id. "missing" once the full retry chain
-  // has been exhausted — the button is hidden in that state so the user
+  // strict channel lookup has been exhausted — the button is hidden so the user
   // never gets dropped onto a YouTube search page.
   type HighlightStatus = "loading" | "found" | "missing";
   const [officialStatus, setOfficialStatus] = useState<HighlightStatus>(initialOfficialId ? "found" : "loading");
   const [searchStatus, setSearchStatus] = useState<HighlightStatus>(initialSecondaryId ? "found" : "loading");
   const [telemundoShortStatus, setTelemundoShortStatus] = useState<HighlightStatus>(
-    fifaTelemundoEnabled && isFifa ? (initialTrustedBaked?.telemundo ? "found" : "loading") : "missing",
+    fifaTelemundoEnabled && isFifa ? (initialTelemundoShortId ? "found" : "loading") : "missing",
   );
   const [telemundoLongStatus, setTelemundoLongStatus] = useState<HighlightStatus>(
-    fifaTelemundoEnabled && isFifa ? (initialTrustedBaked?.telemundoExtended ? "found" : "loading") : "missing",
+    fifaTelemundoEnabled && isFifa ? (initialTelemundoLongId ? "found" : "loading") : "missing",
   );
   // "now" for the highlights-ready gate below. Read via useState (not Date.now()
   // during render, which react-hooks/purity flags) and advanced by a slow tick in
@@ -153,8 +167,7 @@ export default function GameHighlights({
   // hasNoTrustedHighlightSource) get NO highlight URL at all. highlightUrl is
   // what gates the prefetch effect AND is the modal's fallback link, so nulling
   // it here is the single point that keeps both highlight buttons off the card:
-  // without it the no-official-channel branch would run an unscoped search and
-  // hand the user a fan re-upload.
+  // without it a league lacking an approved uploader could reach resolution.
   const noTrustedSource = hasNoTrustedHighlightSource(game.sport, highlightLabel);
   const highlightUrl = highlightsReady && !noTrustedSource
     ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, competition)
@@ -165,22 +178,21 @@ export default function GameHighlights({
   // hidescore.com link that unfurls cleanly in iMessage. See lib/shareCard.
   const shareCard = useMemo(() => buildShareCard(game, leagueLabel), [game, leagueLabel]);
 
-  const primaryChannel = isMlb ? (officialChannel ?? undefined) : (isFifa ? "FIFA" : (officialChannel ?? undefined));
-  // Most leagues reuse their primary channel for slot 2. A league-specific
-  // verified rightsholder can override that slot (currently NWSL → W Golazo)
-  // without widening the primary button or affecting any other sport.
-  const verifiedSecondaryChannel = getSecondaryChannels(game.sport, highlightLabel)[0];
-  const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : (verifiedSecondaryChannel ?? primaryChannel));
-  const strictPrimaryChannel = !!primaryChannel;
-  const strictSecondaryChannel = !!secondaryChannel;
   // Esports joins FIFA on the no-alternate-re-search path: a failed strict
   // resolve must surface the "open on YouTube" fallback rather than quietly
   // re-searching, because an unscoped esports search returns fan re-uploads
   // whose titles give away the result ("INSANE 3-0 SWEEP").
   const noSearchFallback = isFifa || requiresStrictChannelOnly(game.sport);
-  const modalFallbackUrl = noSearchFallback && highlightUrl
-    ? `${highlightUrl}${highlightUrl.includes("?") ? "&" : "?"}nss_no_fallback=1`
-    : highlightUrl;
+  const modalFallbackUrl = (channels: (string | null | undefined)[]) => {
+    if (!highlightUrl) return null;
+    if (noSearchFallback) return `${highlightUrl}&nss_no_fallback=1`;
+    const allowed = [...new Set(channels.filter((channel): channel is string => !!channel))];
+    if (!allowed.length) return highlightUrl;
+    return `${highlightUrl}&nss_strict=1&nss_channels=${encodeURIComponent(allowed.join("|"))}`;
+  };
+  const officialModalFallbackUrl = modalFallbackUrl([primaryChannel]);
+  const secondaryModalFallbackUrl = modalFallbackUrl([secondaryChannel]);
+  const telemundoModalFallbackUrl = isFifa && highlightUrl ? `${highlightUrl}&nss_no_fallback=1` : highlightUrl;
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
@@ -195,7 +207,7 @@ export default function GameHighlights({
         // 2nd id is already deduped against the 1st at bake time. Whichever id the
         // bake doesn't have yet falls back to the exact same live resolution below.
         //
-        // Resolve BOTH buttons CONCURRENTLY. Each resolveHighlightVideo is a live
+        // Resolve BOTH channel-gated buttons CONCURRENTLY. Each resolve is a live
         // YouTube scrape; running them in series made the 2nd link pop in seconds
         // after the 1st (Jacob 7/7 — "started with 1, then added the 2nd"). The 2nd
         // can't exclude the 1st's id until that resolves, so it runs WITHOUT exclude
@@ -208,17 +220,13 @@ export default function GameHighlights({
         // competition is null for every other league.)
         const preferExtended = !!competition;
         const baked = await getBakedHighlight(game.sport, game.id);
-        // Older World Cup prebakes stored the FOX full recap in `official` before
-        // we split FIFA into short FIFA recap + full FOX recap. Treat that older
-        // lone value as the secondary/full slot until the next prebake refreshes.
-        const oldMlbBake = isMlb && baked?.mlbOrder !== "official-first";
-        const bakedOfficial = isFifa ? baked?.official : oldMlbBake ? baked?.extended : baked?.official;
-        const bakedSecondary = isFifa ? (baked?.extended ?? baked?.official) : oldMlbBake ? baked?.official : baked?.extended;
+        const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel, away, home);
+        const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
         const officialP = !hasOfficialButton
           ? Promise.resolve(null)
           : bakedOfficial
           ? Promise.resolve(bakedOfficial)
-          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition, false, strictPrimaryChannel);
+          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition, false);
         // If the server prebake already found the primary clip but no secondary,
         // trust that miss for this page load instead of making every browser do
         // another slow live YouTube scrape. The 30-min prebake will fill
@@ -228,9 +236,9 @@ export default function GameHighlights({
           ? Promise.resolve(bakedSecondary)
           : skipLiveSecondary
             ? Promise.resolve(null)
-          : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, strictSecondaryChannel);
-        const bakedTelemundoShort = baked?.telemundo ?? null;
-        const bakedTelemundoLong = baked?.telemundoExtended ?? null;
+          : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+        const bakedTelemundoShort = getChannelVerifiedBakedId(baked, "telemundo", "Telemundo Deportes", away, home);
+        const bakedTelemundoLong = getChannelVerifiedBakedId(baked, "telemundoExtended", "Telemundo Deportes", away, home);
         const telemundoShortP = isFifa && fifaTelemundoEnabled
           ? bakedTelemundoShort
             ? Promise.resolve(bakedTelemundoShort)
@@ -271,30 +279,18 @@ export default function GameHighlights({
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
         let secondId = await secondP;
-        if (!baked?.extended && secondId && officialId && secondId === officialId) {
+        if (!bakedSecondary && secondId && officialId && secondId === officialId) {
           // Collision — the parallel (unexcluded) 2nd landed the same clip as the
           // official. Re-resolve once, this time excluding it, so the two buttons
           // never play the same video. (Only for a freshly live-resolved 2nd — a
           // baked 2nd is already deduped at bake time.)
-          secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended, strictSecondaryChannel);
+          secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended);
         }
         prefetchedVideoId.current = secondId;
         setSearchStatus(secondId ? "found" : "missing");
       })();
-    } else {
-      // No official channel for this league — only the search button is rendered.
-      // officialStatus is derived to "missing" below (effectiveOfficialStatus)
-      // rather than set synchronously here, which would trigger a cascading
-      // render (react-hooks/set-state-in-effect).
-      (async () => {
-        const baked = await getBakedHighlight(game.sport, game.id);
-        const id = baked?.extended ?? baked?.official
-          ?? await resolveHighlightVideo(away, home, dateStr, series, undefined, undefined, competition);
-        prefetchedVideoId.current = id;
-        setSearchStatus(id ? "found" : "missing");
-      })();
     }
-  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, strictPrimaryChannel, strictSecondaryChannel]);
+  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled]);
 
   // See resolvedMlb above. Fires only when the board enrich did NOT already
   // attach a recap (game.mlbRecapPlaybackUrl absent) and the highlight window
@@ -379,16 +375,16 @@ export default function GameHighlights({
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedOfficialId.current) {
-                  playHl(prefetchedOfficialId.current, modalFallbackUrl!, shareCard);
+                  playHl(prefetchedOfficialId.current, officialModalFallbackUrl!, shareCard);
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, strictPrimaryChannel);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
                   setOfficialStatus("found");
-                  playHl(id, modalFallbackUrl!, shareCard);
+                  playHl(id, officialModalFallbackUrl!, shareCard);
                 } else {
                   setOfficialStatus("missing");
                 }
@@ -421,18 +417,18 @@ export default function GameHighlights({
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedVideoId.current) {
-                  playHl(prefetchedVideoId.current, modalFallbackUrl!, shareCard);
+                  playHl(prefetchedVideoId.current, secondaryModalFallbackUrl!, shareCard);
                   return;
                 }
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
                 // World Cup prefers the extended cut (see prefetch note above).
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition, strictSecondaryChannel);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;
                   setSearchStatus("found");
-                  playHl(id, modalFallbackUrl!, shareCard);
+                  playHl(id, secondaryModalFallbackUrl!, shareCard);
                 } else {
                   setSearchStatus("missing");
                 }
@@ -528,7 +524,7 @@ export default function GameHighlights({
                 e.stopPropagation();
                 if (!onPlayHighlight) return;
                 if (prefetchedTelemundoShortId.current) {
-                  playHl(prefetchedTelemundoShortId.current, modalFallbackUrl!, shareCard);
+                  playHl(prefetchedTelemundoShortId.current, telemundoModalFallbackUrl!, shareCard);
                   return;
                 }
                 setFetchingOnClick("telemundoShort");
@@ -537,7 +533,7 @@ export default function GameHighlights({
                 if (id) {
                   prefetchedTelemundoShortId.current = id;
                   setTelemundoShortStatus("found");
-                  playHl(id, modalFallbackUrl!, shareCard);
+                  playHl(id, telemundoModalFallbackUrl!, shareCard);
                 } else {
                   setTelemundoShortStatus("missing");
                 }
@@ -570,7 +566,7 @@ export default function GameHighlights({
                 // renders only when the ref is already set. Play it directly; the
                 // old no-op/self-hide fallback below was unreachable dead code.
                 if (prefetchedTelemundoLongId.current) {
-                  playHl(prefetchedTelemundoLongId.current, modalFallbackUrl!, shareCard);
+                  playHl(prefetchedTelemundoLongId.current, telemundoModalFallbackUrl!, shareCard);
                 }
               }}
               disabled={fetchingOnClick !== null}
