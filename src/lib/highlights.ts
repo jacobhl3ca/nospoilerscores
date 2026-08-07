@@ -12,6 +12,8 @@ import { getApiBase } from "@/lib/youtube";
 // deduped against `official` at bake time).
 export type BakedHighlight = {
   matchup?: string;
+  teams?: [string, string];
+  eventDate?: string;
   official?: string;
   officialChannel?: string;
   extended?: string;
@@ -39,12 +41,28 @@ export function getChannelVerifiedBakedId(
   baked: BakedHighlight | null | undefined,
   slot: keyof typeof BAKED_CHANNEL_KEY,
   expectedChannel: string | null | undefined,
+  expectedAway: string,
+  expectedHome: string,
 ): string | null {
   if (!baked || baked.sourcePolicy !== "official-channel" || !expectedChannel) return null;
+  const normalizeTeam = (name: string) => name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const expectedMatchup = [normalizeTeam(expectedAway), normalizeTeam(expectedHome)].sort().join("|");
+  if (!baked.matchup || baked.matchup !== expectedMatchup) return null;
   const actualChannel = baked[BAKED_CHANNEL_KEY[slot]];
-  return actualChannel?.toLowerCase() === expectedChannel.toLowerCase()
-    ? (baked[slot] ?? null)
-    : null;
+  const videoId = baked[slot];
+  if (!videoId || actualChannel?.toLowerCase() !== expectedChannel.toLowerCase()) return null;
+  // Even two slots from the same approved uploader must never render the same
+  // clip under two labels. Reject the duplicate at the client trust boundary;
+  // the strict live resolver can refill a distinct slot.
+  const duplicated = (Object.keys(BAKED_CHANNEL_KEY) as (keyof typeof BAKED_CHANNEL_KEY)[])
+    .some((otherSlot) => otherSlot !== slot && baked[otherSlot] === videoId);
+  return duplicated ? null : videoId;
 }
 
 // Fetched once per session and shared across every card (one small static

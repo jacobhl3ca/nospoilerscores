@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 // Highlight-button fallback check.
 //
 // For every finished game from the past ~36h across the in-season leagues,
@@ -214,18 +215,24 @@ async function fetchBakedHighlights() {
   if (process.env.HIGHLIGHT_MANIFEST_FILE) {
     try {
       const data = JSON.parse(fs.readFileSync(process.env.HIGHLIGHT_MANIFEST_FILE, "utf8"));
-      return data?.games ?? {};
-    } catch {
-      return {};
+      if (!data?.games || typeof data.games !== "object") {
+        return { games: {}, failure: "local manifest has no games object" };
+      }
+      return { games: data.games, failure: null };
+    } catch (error) {
+      return { games: {}, failure: error instanceof Error ? error.message : String(error) };
     }
   }
   try {
     const res = await tfetch(`${BASE}/news/highlights.json`);
-    if (!res.ok) return {};
+    if (!res.ok) return { games: {}, failure: `HTTP ${res.status}` };
     const data = await res.json();
-    return data?.games ?? {};
-  } catch {
-    return {};
+    if (!data?.games || typeof data.games !== "object") {
+      return { games: {}, failure: "response has no games object" };
+    }
+    return { games: data.games, failure: null };
+  } catch (error) {
+    return { games: {}, failure: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -292,6 +299,58 @@ async function youtubeOembedMeta(videoId) {
 }
 
 const normChannel = (value) => String(value ?? "").trim().toLowerCase();
+const normalizeMatchText = (value) => String(value ?? "")
+  .normalize("NFKD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .replace(/[‘’]/g, "'")
+  .toLowerCase()
+  .replace(/&/g, " and ")
+  .replace(/[^a-z0-9']+/g, " ")
+  .trim();
+
+const TITLE_TEAM_ALIASES = {
+  tempo: ["tempo", "toronto tempo", "toronto"],
+  valkyries: ["valkyries", "golden state valkyries", "golden state"],
+  "red bull ny": ["red bull ny", "new york red bulls", "red bulls"],
+  "nottm forest": ["nottm forest", "nottingham forest", "nottingham"],
+  "man united": ["man united", "manchester united", "man utd"],
+  "man city": ["man city", "manchester city"],
+  "c palace": ["c palace", "crystal palace", "palace"],
+  spurs: ["spurs", "tottenham", "tottenham hotspur"],
+  nycfc: ["nycfc", "new york city fc", "new york city"],
+  lafc: ["lafc", "los angeles fc", "los angeles football club"],
+  psg: ["psg", "paris saint germain", "paris sg", "paris"],
+  bayern: ["bayern", "bayern munich", "fc bayern", "fc bayern munchen"],
+  "real madrid": ["real madrid", "madrid"],
+  barcelona: ["barcelona", "barca", "fc barcelona"],
+  usa: ["usa", "united states", "usmnt", "estados unidos"],
+  "bosnia herz": ["bosnia herz", "bosnia herzegovina", "bosnia and herzegovina"],
+  "south korea": ["south korea", "korea republic", "korea"],
+  "ivory coast": ["ivory coast", "cote d ivoire"],
+  turkiye: ["turkiye", "turkey"],
+  "congo dr": ["congo dr", "dr congo", "democratic republic of congo"],
+  czechia: ["czechia", "czech republic"],
+  "cape verde": ["cape verde", "cabo verde"],
+  egypt: ["egypt", "egipto"],
+  france: ["france", "francia"],
+  germany: ["germany", "alemania"],
+  morocco: ["morocco", "marruecos"],
+  netherlands: ["netherlands", "holland", "paises bajos"],
+  belgium: ["belgium", "belgica"],
+  switzerland: ["switzerland", "swiss", "suiza"],
+  spain: ["spain", "espana"],
+};
+
+function titleHasTeam(title, team) {
+  const normalizedTitle = normalizeMatchText(title);
+  const normalizedTeam = normalizeMatchText(team);
+  const variants = TITLE_TEAM_ALIASES[normalizedTeam] ?? [normalizedTeam, normalizeMatchText(aliasTeam(team))];
+  return variants.some((variant) => normalizedTitle.includes(normalizeMatchText(variant)));
+}
+
+function matchupFingerprint(away, home) {
+  return [normalizeMatchText(away), normalizeMatchText(home)].sort().join("|");
+}
 
 function expectedBakedSlots(sport, bakedHighlight) {
   const primary = OFFICIAL_CHANNELS[sport];
@@ -314,8 +373,14 @@ function expectedBakedSlots(sport, bakedHighlight) {
 }
 
 async function validateBakedHighlight(sport, bakedHighlight) {
-  const result = { trustedVisible: false, rejected: [], invalid: [] };
+  const result = { trustedVisible: false, rejected: [], invalid: [], matchup: null };
   if (!bakedHighlight || bakedHighlight.sourcePolicy !== "official-channel") return result;
+  const teams = Array.isArray(bakedHighlight.teams) ? bakedHighlight.teams : [];
+  if (teams.length !== 2 || bakedHighlight.matchup !== matchupFingerprint(teams[0], teams[1])) {
+    result.rejected.push("missing or inconsistent matchup provenance");
+    return result;
+  }
+  result.matchup = bakedHighlight.matchup;
   const expected = expectedBakedSlots(sport, bakedHighlight);
   const seen = new Map();
   for (const spec of expected) {
@@ -327,8 +392,8 @@ async function validateBakedHighlight(sport, bakedHighlight) {
       continue;
     }
     const prior = seen.get(videoId);
-    if (prior && normChannel(prior.channel) !== normChannel(spec.channel)) {
-      result.invalid.push(`${spec.slot}=${videoId}: duplicates ${prior.slot} but claims a different channel`);
+    if (prior) {
+      result.invalid.push(`${spec.slot}=${videoId}: duplicates ${prior.slot}`);
       continue;
     }
     seen.set(videoId, spec);
@@ -339,6 +404,14 @@ async function validateBakedHighlight(sport, bakedHighlight) {
     }
     if (normChannel(meta.author) !== normChannel(spec.channel)) {
       result.invalid.push(`${spec.slot}=${videoId}: uploader ${JSON.stringify(meta.author)} != ${JSON.stringify(spec.channel)}`);
+      continue;
+    }
+    if (!titleHasTeam(meta.title, teams[0]) || !titleHasTeam(meta.title, teams[1])) {
+      result.invalid.push(`${spec.slot}=${videoId}: title does not match ${teams[0]} vs ${teams[1]}`);
+      continue;
+    }
+    if (sport === "fifa" && !/\b(world cup|copa mundial)\b/i.test(meta.title)) {
+      result.invalid.push(`${spec.slot}=${videoId}: title does not identify the World Cup`);
       continue;
     }
     if (spec.visible) result.trustedVisible = true;
@@ -380,8 +453,12 @@ const dates = [0, 1, 2].map((daysAgo) => {
 
 const exhausted = []; // chain returned null — UI hides the button → email
 const rejectedBaked = []; // missing/wrong marker; fixed client ignores and live-resolves
-const invalidBaked = []; // marker claims approved channel but oEmbed disproves it
-const bakedGames = await fetchBakedHighlights();
+const invalidBaked = []; // channel, duplicate, or matchup proof disproved
+const bakedManifest = await fetchBakedHighlights();
+const bakedGames = bakedManifest.games;
+const manifestFailures = bakedManifest.failure
+  ? [{ source: "highlight-manifest", error: bakedManifest.failure }]
+  : [];
 const bakedValidationByKey = new Map();
 for (const [key, bakedHighlight] of SPECIAL_ONLY ? [] : Object.entries(bakedGames)) {
   const split = key.indexOf(":");
@@ -399,6 +476,16 @@ for (const [key, bakedHighlight] of SPECIAL_ONLY ? [] : Object.entries(bakedGame
   if (validation.invalid.length) {
     invalidBaked.push({ sport: sport.toUpperCase(), eventId, problems: validation.invalid });
   }
+}
+function bindBakedToCurrentMatch(key, sport, eventId, away, home, validation) {
+  if (!validation?.trustedVisible || validation.matchup === matchupFingerprint(away, home)) return;
+  const problem = `manifest matchup ${JSON.stringify(validation.matchup)} != current ${away} vs ${home}`;
+  validation.trustedVisible = false;
+  validation.invalid.push(problem);
+  const existing = invalidBaked.find((row) => row.sport === sport.toUpperCase() && row.eventId === String(eventId));
+  if (existing) existing.problems.push(problem);
+  else invalidBaked.push({ sport: sport.toUpperCase(), eventId: String(eventId), problems: [problem] });
+  bakedValidationByKey.set(key, validation);
 }
 let scanned = 0;
 let deferred = 0;
@@ -660,6 +747,7 @@ async function scanTennis() {
           scanned++;
           specialScanned++;
           const validation = bakedValidationByKey.get(`tennis:${match.id}`);
+          bindBakedToCurrentMatch(`tennis:${match.id}`, "tennis", match.id, awayName, homeName, validation);
           if (validation?.trustedVisible) {
             baked++;
             continue;
@@ -698,7 +786,8 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
       }
       scanned++;
       const bakedValidation = bakedValidationByKey.get(`${sport}:${ev.id}`)
-        ?? { trustedVisible: false, rejected: [], invalid: [] };
+        ?? { trustedVisible: false, rejected: [], invalid: [], matchup: null };
+      bindBakedToCurrentMatch(`${sport}:${ev.id}`, sport, ev.id, teams.away, teams.home, bakedValidation);
       if (bakedValidation.trustedVisible) {
         baked++;
         continue;
@@ -832,18 +921,21 @@ console.log(`special:     ${specialScanned} non-team/special candidate(s), ${spe
 console.log(`deferred:    ${deferred} (inside the UI's upload buffer; not promised yet)`);
 console.log(`prebaked:    ${baked} (visible without a live lookup)`);
 console.log(`bake-reject: ${rejectedBaked.length}   (legacy/wrong marker; ignored and live-resolved)`);
-console.log(`bake-invalid:${invalidBaked.length}   (channel marker disproved by oEmbed)`);
+console.log(`bake-invalid:${invalidBaked.length}   (channel/duplicate/matchup proof disproved)`);
 console.log(`exhausted:   ${confirmedExhausted.length}   (no visible YouTube button after confirmation)`);
 console.log(`recovered:   ${recovered.length}  (first pass missed, retry caught it — transient throttle, no email)`);
 console.log("");
 
-if (scoreboardFailures.length || specialSourceFailures.length) {
+if (scoreboardFailures.length || specialSourceFailures.length || manifestFailures.length) {
   console.log("--- INCOMPLETE: HIGHLIGHT SOURCE FAILURE ---");
   console.log(`successful: ${scoreboardSuccesses}/${scoreboardRequests}`);
   scoreboardFailures.forEach((failure) => {
     console.log(`[${failure.sport.toUpperCase()} ${failure.date}] ${failure.error}`);
   });
   specialSourceFailures.forEach((failure) => {
+    console.log(`[${failure.source}] ${failure.error}`);
+  });
+  manifestFailures.forEach((failure) => {
     console.log(`[${failure.source}] ${failure.error}`);
   });
   console.log("Source failures are not zero-game slates; refusing to report this audit clean.");
@@ -909,7 +1001,10 @@ if (confirmedExhausted.length || invalidBaked.length) {
 
   const activeIncidents = [
     ...confirmedWithHealthyEndpoint.map((row) => ({ kind: "missing", key: `${row.sport.toLowerCase()}:${row.eventId}`, row })),
-    ...invalidBaked.map((row) => ({ kind: "bake", key: `bake:${row.sport.toLowerCase()}:${row.eventId}`, row })),
+    ...invalidBaked.map((row) => {
+      const signature = createHash("sha256").update(row.problems.join("\n")).digest("hex").slice(0, 12);
+      return { kind: "bake", key: `bake:${row.sport.toLowerCase()}:${row.eventId}:${signature}`, row };
+    }),
   ];
   for (const current of activeIncidents) {
     const { key, row } = current;

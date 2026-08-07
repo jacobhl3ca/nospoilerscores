@@ -88,24 +88,43 @@ unlinkSync(tempHighlightsModule);
 check(
   "prebaked IDs require the exact expected channel marker",
   highlights.getChannelVerifiedBakedId(
-    { official: "good", officialChannel: "NFL", sourcePolicy: "official-channel" },
+    { matchup: "cowboys|giants", official: "good", officialChannel: "NFL", sourcePolicy: "official-channel" },
     "official",
     "NFL",
+    "Giants",
+    "Cowboys",
   ) === "good" &&
     highlights.getChannelVerifiedBakedId(
-      { official: "bad", officialChannel: "NBA", sourcePolicy: "official-channel" },
+      { matchup: "cowboys|giants", official: "bad", officialChannel: "NBA", sourcePolicy: "official-channel" },
       "official",
       "NFL",
+      "Giants",
+      "Cowboys",
     ) === null &&
     highlights.getChannelVerifiedBakedId(
       { official: "legacy", sourcePolicy: "official-channel" },
       "official",
       "NFL",
+      "Giants",
+      "Cowboys",
     ) === null &&
     highlights.getChannelVerifiedBakedId(
       { official: "unproven", officialChannel: "NFL" },
       "official",
       "NFL",
+      "Giants",
+      "Cowboys",
+    ) === null,
+);
+check(
+  "prebaked IDs require the current matchup and reject duplicate slots",
+  highlights.getChannelVerifiedBakedId(
+    { matchup: "cowboys|giants", official: "wrong-game", officialChannel: "NFL", sourcePolicy: "official-channel" },
+    "official", "NFL", "Bills", "Jets",
+  ) === null &&
+    highlights.getChannelVerifiedBakedId(
+      { matchup: "cowboys|giants", official: "same", officialChannel: "NFL", extended: "same", extendedChannel: "NFL", sourcePolicy: "official-channel" },
+      "official", "NFL", "Giants", "Cowboys",
     ) === null,
 );
 
@@ -132,6 +151,18 @@ check("rejected custom ESPN User-Agent is gone", !monitor.includes("nospoilersco
 check(
   "monitor verifies strict API requests and live oEmbed authors",
   monitor.includes('url += "&strict=1"') && monitor.includes("youtubeOembedMeta") && monitor.includes("author_name"),
+);
+check(
+  "monitor fails closed on manifest I/O and verifies matchup plus all duplicates",
+  monitor.includes('source: "highlight-manifest"') &&
+    monitor.includes("missing or inconsistent matchup provenance") &&
+    monitor.includes("title does not match") &&
+    monitor.includes("duplicates ${prior.slot}") &&
+    !monitor.includes("duplicates ${prior.slot} but claims a different channel"),
+);
+check(
+  "distinct invalid prebakes receive distinct persistent incident keys",
+  monitor.includes('createHash("sha256")') && monitor.includes("eventId}:${signature}"),
 );
 check(
   "monitor excludes non-YouTube MLB and unapproved La Liga/Ligue 1 paths",
@@ -205,6 +236,12 @@ check(
   prebake.includes("HIGHLIGHT-SEED-REJECT") &&
     prebake.includes("hlVideoMatchesChannel(id, channel)") &&
     prebake.includes("hlVideoMatchesTeams(id, teams[0], teams[1])"),
+);
+check(
+  "prebaker stamps every game identity and fails a broken highlights-only run",
+  prebake.includes("teams: [away, home], matchup, eventDate: item.date") &&
+    prebake.includes("all highlight scoreboard requests failed") &&
+    prebake.includes('highlightsFailed && ONLY_LIST.includes("highlights")'),
 );
 
 console.log(failures ? `\n${failures} regression check(s) failed` : "\nall highlight regression checks passed");

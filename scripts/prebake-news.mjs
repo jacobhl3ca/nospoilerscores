@@ -2415,7 +2415,11 @@ const HL_WORLD_CUP_SEEDS = {
   "fifa:760510": { t: Date.parse("2026-07-10T10:45:00.000Z"), teams: ["Morocco", "France"], matchup: hlMatchupFingerprint("Morocco", "France"), official: "2zz8FDiKeX4", extended: "J_1iFnRsHG0", telemundo: "7mx7L_IgBfY", telemundoExtended: "x3zlfmji_CU" },
 };
 // Mirror of TEAM_NAME_ALIASES / buildQuery in src/lib/youtube.ts.
-const HL_TEAM_ALIASES = { "Red Bull NY": "New York Red Bulls" };
+const HL_TEAM_ALIASES = {
+  "Red Bull NY": "New York Red Bulls",
+  Tempo: "Toronto Tempo",
+  Valkyries: "Golden State Valkyries",
+};
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 const HL_TELEMUNDO_WORLD_CUP_ALIASES = {
   Argentina: "Argentina",
@@ -2629,6 +2633,7 @@ async function loadPriorHighlights() {
 
 async function bakeGameHighlights() {
   const now = Date.now();
+  let scoreboardResponses = 0;
   // Carry forward recent channel-marked entries only. No sport gets an immortal
   // cache record: old cards can strict-resolve live, while a stale or repurposed
   // video ID cannot survive forever just because it once looked valid.
@@ -2642,12 +2647,14 @@ async function bakeGameHighlights() {
     if (sportKey === "mlb") continue;
     const populatedSlots = ["official", "extended", "telemundo", "telemundoExtended"].filter((slot) => v[slot]);
     const everySlotNamesItsChannel = populatedSlots.every((slot) => v[`${slot}Channel`]);
-    if (v.sourcePolicy !== "official-channel" || !populatedSlots.length || !everySlotNamesItsChannel) continue;
+    const hasMatchupProvenance = Array.isArray(v.teams) && v.teams.length === 2
+      && v.matchup === hlMatchupFingerprint(v.teams[0], v.teams[1]);
+    if (v.sourcePolicy !== "official-channel" || !populatedSlots.length || !everySlotNamesItsChannel || !hasMatchupProvenance) continue;
     if ((now - (v.t ?? 0)) < HL_ENTRY_TTL_MS) games[k] = v;
   }
   for (const [k, seed] of Object.entries(HL_WORLD_CUP_SEEDS)) {
     const teams = seed.teams ?? String(seed.matchup ?? "").split("|").filter(Boolean);
-    const verified = { matchup: seed.matchup, sourcePolicy: "official-channel", t: now };
+    const verified = { teams, matchup: seed.matchup, sourcePolicy: "official-channel", t: now };
     const slots = [
       ["official", "FIFA", "officialChannel"],
       ["extended", "FOX Sports", "extendedChannel"],
@@ -2687,6 +2694,7 @@ async function bakeGameHighlights() {
         const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports${lg.path}?dates=${ymd}`, { headers: { "User-Agent": UA } });
         if (!res.ok) continue;
         data = await res.json();
+        scoreboardResponses++;
       } catch { continue; }
       const items = lg.sport === "tennis"
         ? hlTennisMatches(data?.events, ymd)
@@ -2708,13 +2716,13 @@ async function bakeGameHighlights() {
         const key = `${lg.sport}:${item.id}`;
         const { away, home, series } = item;
         const isFifa = lg.sport === "fifa";
-        const matchup = isFifa ? hlMatchupFingerprint(away, home) : null;
+        const matchup = hlMatchupFingerprint(away, home);
         const rawPrev = games[key] ?? {};
         let prev = rawPrev;
         // ESPN event IDs are usually stable, but if one is ever repointed to a
         // different matchup, no cached YouTube ID may survive that identity
         // change. Delete first so a failed re-resolve cannot leave stale IDs.
-        if (isFifa && prev.matchup && prev.matchup !== matchup) {
+        if (prev.matchup && prev.matchup !== matchup) {
           console.warn(`HIGHLIGHT-MATCHUP-CHANGED ${key}: ${prev.matchup} -> ${matchup}; discarding cached IDs`);
           delete games[key];
           prev = {};
@@ -2727,8 +2735,6 @@ async function bakeGameHighlights() {
         const sameChannel = (actual, expected) => !!actual && !!expected && actual.toLowerCase() === expected.toLowerCase();
         const carriedOfficial = sameChannel(prev.officialChannel, primaryChannel) ? prev.official : null;
         const carriedExtended = sameChannel(prev.extendedChannel, secondaryChannel) ? prev.extended : null;
-        if (!isFifa && carriedOfficial && carriedExtended) continue; // both channel-marked slots baked already
-
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
         // concurrent resolve + collision re-resolve in GameHighlights.tsx.
@@ -2739,23 +2745,21 @@ async function bakeGameHighlights() {
           prevExtended = null;
         }
 
-        // FIFA records live beyond the normal TTL, so revalidate every carried
-        // slot's uploader and matchup each time it enters the active bake window.
-        if (isFifa) {
-          if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, primaryChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)))) {
-            console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home})`);
-            prevOfficial = null;
-          }
-          if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)))) {
-            console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home})`);
-            prevExtended = null;
-          }
+        // Revalidate every carried slot against both its uploader and matchup.
+        // A channel marker proves provenance, not that the clip is for this game.
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, primaryChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)))) {
+          console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home})`);
+          prevOfficial = null;
+        }
+        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)))) {
+          console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home})`);
+          prevExtended = null;
         }
 
         let official = prevOfficial ?? null;
         if (!official) {
           official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false);
-          if (isFifa && official && !(await hlVideoMatchesTeams(official, away, home))) {
+          if (official && !(await hlVideoMatchesTeams(official, away, home))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
@@ -2766,7 +2770,7 @@ async function bakeGameHighlights() {
           if (extended && official && extended === official) {
             extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended);
           }
-          if (isFifa && extended && !(await hlVideoMatchesTeams(extended, away, home))) {
+          if (extended && !(await hlVideoMatchesTeams(extended, away, home))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
             extended = null;
           }
@@ -2791,8 +2795,7 @@ async function bakeGameHighlights() {
         if (telemundoExtended && !(await hlIsTelemundoVideo(telemundoExtended))) telemundoExtended = null;
         if (telemundoExtended && !(await hlVideoMatchesTeams(telemundoExtended, away, home))) telemundoExtended = null;
 
-        const entry = { t: now };
-        if (matchup) entry.matchup = matchup;
+        const entry = { t: now, teams: [away, home], matchup, eventDate: item.date };
         if (official) {
           entry.official = official;
           entry.officialChannel = primaryChannel;
@@ -2823,6 +2826,10 @@ async function bakeGameHighlights() {
         }
       }
     }
+  }
+
+  if (scoreboardResponses === 0) {
+    throw new Error("all highlight scoreboard requests failed; preserving the prior manifest");
   }
 
   await mkdir(dirname(HL_OUT_PATH), { recursive: true });
@@ -3060,11 +3067,13 @@ await saveGalleryCache();
 const runHighlights = !ONLY_REDDIT
   && (ONLY_LIST.length === 0 || ONLY_LIST.includes("highlights"))
   && !SKIP_LIST.some((s) => (s.endsWith("*") ? "highlights".startsWith(s.slice(0, -1)) : s === "highlights"));
+let highlightsFailed = false;
 if (runHighlights) {
   try {
     await bakeGameHighlights();
   } catch (e) {
     console.error("highlights bake FAILED:", e?.message || e);
+    highlightsFailed = true;
   }
 }
 
@@ -3079,3 +3088,4 @@ results.forEach((r, i) => {
 // Exit non-zero only if EVERY job failed — partial success still commits useful
 // feeds and prevents one flaky origin from wedging the whole cron.
 if (activeJobs.length > 0 && failed === activeJobs.length) process.exit(1);
+if (highlightsFailed && ONLY_LIST.includes("highlights")) process.exit(1);

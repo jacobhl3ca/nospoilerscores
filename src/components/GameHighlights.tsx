@@ -85,16 +85,16 @@ export default function GameHighlights({
   // MLB's visible row is MLB.com-native; never hydrate its removed YouTube row.
   // Every other prebaked ID must carry the exact expected uploader marker.
   const initialOfficialId = !isMlb && hasOfficialButton
-    ? getChannelVerifiedBakedId(initialBaked, "official", primaryChannel)
+    ? getChannelVerifiedBakedId(initialBaked, "official", primaryChannel, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
     : null;
   const initialSecondaryId = !isMlb
-    ? getChannelVerifiedBakedId(initialBaked, "extended", secondaryChannel)
+    ? getChannelVerifiedBakedId(initialBaked, "extended", secondaryChannel, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
     : null;
   const initialTelemundoShortId = fifaTelemundoEnabled && isFifa
-    ? getChannelVerifiedBakedId(initialBaked, "telemundo", "Telemundo Deportes")
+    ? getChannelVerifiedBakedId(initialBaked, "telemundo", "Telemundo Deportes", game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
     : null;
   const initialTelemundoLongId = fifaTelemundoEnabled && isFifa
-    ? getChannelVerifiedBakedId(initialBaked, "telemundoExtended", "Telemundo Deportes")
+    ? getChannelVerifiedBakedId(initialBaked, "telemundoExtended", "Telemundo Deportes", game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
     : null;
   const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
   const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
@@ -220,8 +220,8 @@ export default function GameHighlights({
         // competition is null for every other league.)
         const preferExtended = !!competition;
         const baked = await getBakedHighlight(game.sport, game.id);
-        const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel);
-        const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel);
+        const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel, away, home);
+        const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
         const officialP = !hasOfficialButton
           ? Promise.resolve(null)
           : bakedOfficial
@@ -237,8 +237,8 @@ export default function GameHighlights({
           : skipLiveSecondary
             ? Promise.resolve(null)
           : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
-        const bakedTelemundoShort = getChannelVerifiedBakedId(baked, "telemundo", "Telemundo Deportes");
-        const bakedTelemundoLong = getChannelVerifiedBakedId(baked, "telemundoExtended", "Telemundo Deportes");
+        const bakedTelemundoShort = getChannelVerifiedBakedId(baked, "telemundo", "Telemundo Deportes", away, home);
+        const bakedTelemundoLong = getChannelVerifiedBakedId(baked, "telemundoExtended", "Telemundo Deportes", away, home);
         const telemundoShortP = isFifa && fifaTelemundoEnabled
           ? bakedTelemundoShort
             ? Promise.resolve(bakedTelemundoShort)
