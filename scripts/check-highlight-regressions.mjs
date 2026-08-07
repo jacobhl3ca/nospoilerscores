@@ -85,17 +85,18 @@ const tempHighlightsModule = join(tmpdir(), `hidescore-highlights-${process.pid}
 writeFileSync(tempHighlightsModule, transformedHighlights.code);
 const highlights = await import(pathToFileURL(tempHighlightsModule).href);
 unlinkSync(tempHighlightsModule);
+const freshBake = Date.now();
 check(
   "prebaked IDs require the exact expected channel marker",
   highlights.getChannelVerifiedBakedId(
-    { matchup: "cowboys|giants", official: "good", officialChannel: "NFL", sourcePolicy: "official-channel" },
+    { t: freshBake, matchup: "cowboys|giants", official: "good", officialChannel: "NFL", sourcePolicy: "official-channel" },
     "official",
     "NFL",
     "Giants",
     "Cowboys",
   ) === "good" &&
     highlights.getChannelVerifiedBakedId(
-      { matchup: "cowboys|giants", official: "bad", officialChannel: "NBA", sourcePolicy: "official-channel" },
+      { t: freshBake, matchup: "cowboys|giants", official: "bad", officialChannel: "NBA", sourcePolicy: "official-channel" },
       "official",
       "NFL",
       "Giants",
@@ -119,13 +120,20 @@ check(
 check(
   "prebaked IDs require the current matchup and reject duplicate slots",
   highlights.getChannelVerifiedBakedId(
-    { matchup: "cowboys|giants", official: "wrong-game", officialChannel: "NFL", sourcePolicy: "official-channel" },
+    { t: freshBake, matchup: "cowboys|giants", official: "wrong-game", officialChannel: "NFL", sourcePolicy: "official-channel" },
     "official", "NFL", "Bills", "Jets",
   ) === null &&
     highlights.getChannelVerifiedBakedId(
-      { matchup: "cowboys|giants", official: "same", officialChannel: "NFL", extended: "same", extendedChannel: "NFL", sourcePolicy: "official-channel" },
+      { t: freshBake, matchup: "cowboys|giants", official: "same", officialChannel: "NFL", extended: "same", extendedChannel: "NFL", sourcePolicy: "official-channel" },
       "official", "NFL", "Giants", "Cowboys",
     ) === null,
+);
+check(
+  "prebaked IDs expire at the client trust boundary",
+  highlights.getChannelVerifiedBakedId(
+    { t: freshBake - 11 * 24 * 60 * 60 * 1000, matchup: "cowboys|giants", official: "stale", officialChannel: "NFL", sourcePolicy: "official-channel" },
+    "official", "NFL", "Giants", "Cowboys",
+  ) === null,
 );
 
 const worker = readFileSync("public/_worker.js", "utf8");
@@ -159,6 +167,13 @@ check(
     monitor.includes("title does not match") &&
     monitor.includes("duplicates ${prior.slot}") &&
     !monitor.includes("duplicates ${prior.slot} but claims a different channel"),
+);
+check(
+  "monitor separates incomplete sources and enforces prebake age",
+  monitor.includes("youtube-oembed") &&
+    monitor.includes("missing or expired bake timestamp") &&
+    monitor.includes("process.exit(2)") &&
+    monitor.includes("BAKED_MAX_AGE_MS"),
 );
 check(
   "distinct invalid prebakes receive distinct persistent incident keys",

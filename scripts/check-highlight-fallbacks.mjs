@@ -14,7 +14,9 @@ import { createHash } from "node:crypto";
 // Prebaked IDs are accepted only after their slot marker and live oEmbed author
 // both match the exact channel the UI promises.
 //
-// Exit 1 only after the same incident survives a 1h grace period. Persisted
+// Exit 1 only after the same incident survives a 1h grace period; incomplete
+// source audits exit 2 so the mini wrapper cannot mislabel infra as a real gap.
+// Persisted
 // incident state also makes each outage alert once rather than every run.
 //
 // Run locally:   node scripts/check-highlight-fallbacks.mjs
@@ -23,6 +25,7 @@ import { createHash } from "node:crypto";
 const BASE = process.env.HIDESCORE_BASE || "https://hidescore.com";
 const LOOKBACK_HOURS = 36;
 const ALERT_GRACE_MS = 60 * 60 * 1000;
+const BAKED_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;
 const STATE_FILE = process.env.HIGHLIGHT_STATE_FILE
   || path.join(process.env.HOME || ".", "Library", "Application Support", "hidescore-highlight-fallback-state.json");
 
@@ -279,21 +282,29 @@ async function youtubeLookup(query, channel, strict = !!channel, { raceTokens = 
 }
 
 const oembedCache = new Map();
+let oembedAttempts = 0;
+let oembedSuccesses = 0;
+let oembedTransportFailures = 0;
 async function youtubeOembedMeta(videoId) {
   if (oembedCache.has(videoId)) return oembedCache.get(videoId);
   const url = `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`;
+  oembedAttempts++;
+  let receivedResponse = false;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await tfetch(url);
+      receivedResponse = true;
       if (res.ok) {
         const data = await res.json();
         const meta = { title: String(data.title ?? ""), author: String(data.author_name ?? "") };
         oembedCache.set(videoId, meta);
+        oembedSuccesses++;
         return meta;
       }
     } catch { /* retry below */ }
     if (attempt < 2) await sleep(750);
   }
+  if (!receivedResponse) oembedTransportFailures++;
   oembedCache.set(videoId, null);
   return null;
 }
@@ -375,6 +386,10 @@ function expectedBakedSlots(sport, bakedHighlight) {
 async function validateBakedHighlight(sport, bakedHighlight) {
   const result = { trustedVisible: false, rejected: [], invalid: [], matchup: null };
   if (!bakedHighlight || bakedHighlight.sourcePolicy !== "official-channel") return result;
+  if (!Number.isFinite(bakedHighlight.t) || Date.now() - Number(bakedHighlight.t) >= BAKED_MAX_AGE_MS) {
+    result.rejected.push("missing or expired bake timestamp");
+    return result;
+  }
   const teams = Array.isArray(bakedHighlight.teams) ? bakedHighlight.teams : [];
   if (teams.length !== 2 || bakedHighlight.matchup !== matchupFingerprint(teams[0], teams[1])) {
     result.rejected.push("missing or inconsistent matchup provenance");
@@ -911,6 +926,10 @@ const printRow = (r) => {
   console.log("");
 };
 
+const oembedSourceFailures = oembedAttempts > 0 && oembedSuccesses === 0 && oembedTransportFailures === oembedAttempts
+  ? [{ source: "youtube-oembed", error: `all ${oembedAttempts} requests failed before an HTTP response` }]
+  : [];
+
 console.log(`hidescore highlight fallback check`);
 console.log(`base:        ${BASE}`);
 console.log(`window:      past ${LOOKBACK_HOURS}h (≈${dates.length} ET days)`);
@@ -922,11 +941,12 @@ console.log(`deferred:    ${deferred} (inside the UI's upload buffer; not promis
 console.log(`prebaked:    ${baked} (visible without a live lookup)`);
 console.log(`bake-reject: ${rejectedBaked.length}   (legacy/wrong marker; ignored and live-resolved)`);
 console.log(`bake-invalid:${invalidBaked.length}   (channel/duplicate/matchup proof disproved)`);
+console.log(`oembed:      ${oembedSuccesses}/${oembedAttempts} successful metadata check(s)`);
 console.log(`exhausted:   ${confirmedExhausted.length}   (no visible YouTube button after confirmation)`);
 console.log(`recovered:   ${recovered.length}  (first pass missed, retry caught it — transient throttle, no email)`);
 console.log("");
 
-if (scoreboardFailures.length || specialSourceFailures.length || manifestFailures.length) {
+if (scoreboardFailures.length || specialSourceFailures.length || manifestFailures.length || oembedSourceFailures.length) {
   console.log("--- INCOMPLETE: HIGHLIGHT SOURCE FAILURE ---");
   console.log(`successful: ${scoreboardSuccesses}/${scoreboardRequests}`);
   scoreboardFailures.forEach((failure) => {
@@ -938,8 +958,11 @@ if (scoreboardFailures.length || specialSourceFailures.length || manifestFailure
   manifestFailures.forEach((failure) => {
     console.log(`[${failure.source}] ${failure.error}`);
   });
+  oembedSourceFailures.forEach((failure) => {
+    console.log(`[${failure.source}] ${failure.error}`);
+  });
   console.log("Source failures are not zero-game slates; refusing to report this audit clean.");
-  process.exit(1);
+  process.exit(2);
 }
 
 if (rejectedBaked.length) {
