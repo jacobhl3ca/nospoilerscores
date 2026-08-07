@@ -169,23 +169,25 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
   );
 }
 
+type NewsSourceType = "topvideos" | "espn" | "reddit" | "homepage";
+
 // Vertical, one-per-row source-type filter used inside the funnel popover.
-// Each row is tappable to select that filter; a drag handle reorders the
+// Each source is independently checkable; a drag handle reorders the
 // rows (order persisted in prefs). Pointer-based drag (not HTML5) so it
 // works on iOS. `dropIdx` is the insertion
 // slot drawn as a thin accent bar between rows.
-function NewsFilterList({ options, value, onSelect, onReorder }: {
-  options: { value: string; label: string }[];
-  value: string;
-  onSelect: (v: string) => void;
+function NewsFilterList({ options, selected, onToggle, onReorder }: {
+  options: { value: NewsSourceType; label: string }[];
+  selected: NewsSourceType[];
+  onToggle: (v: NewsSourceType) => void;
   onReorder: (order: string[]) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [dragVal, setDragVal] = useState<string | null>(null);
+  const [dragVal, setDragVal] = useState<NewsSourceType | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const order = options.map((o) => o.value);
 
-  const startDrag = (e: React.PointerEvent, val: string) => {
+  const startDrag = (e: React.PointerEvent, val: NewsSourceType) => {
     e.preventDefault();
     e.stopPropagation();
     setDragVal(val);
@@ -227,7 +229,7 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
   return (
     <div ref={listRef} className="select-none">
       {options.map((opt, i) => {
-        const active = opt.value === value;
+        const active = selected.includes(opt.value);
         const isDragging = dragVal === opt.value;
         return (
           <div key={opt.value} className="relative">
@@ -249,16 +251,22 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
                   <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" />
                 </svg>
               </span>
-              <button
-                type="button"
-                onClick={() => onSelect(opt.value)}
-                className="flex-1 min-w-0 text-left px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors cursor-pointer"
+              <label
+                className="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors cursor-pointer"
                 style={active
                   ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
                   : { color: "var(--text-muted)", background: "transparent" }}
               >
-                {opt.label}
-              </button>
+                <input
+                  type="checkbox"
+                  checked={active}
+                  disabled={active && selected.length === 1}
+                  onChange={() => onToggle(opt.value)}
+                  className="cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed"
+                  title={active && selected.length === 1 ? "Keep at least one source selected" : undefined}
+                />
+                <span>{opt.label}</span>
+              </label>
             </div>
           </div>
         );
@@ -1486,8 +1494,28 @@ export default function HomeContent({
   // Source cards use the current deterministic smart cascade. Ignore stale
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
   // local preference can silently bury a newly added source forever.
-  const newsTypeFilter = prefs.newsTypeFilter ?? "reddit";
-  const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
+  const ALL_NEWS_SOURCE_TYPES: NewsSourceType[] = ["topvideos", "reddit", "espn", "homepage"];
+  const legacyNewsTypeFilter = prefs.newsTypeFilter ?? "reddit";
+  const savedNewsTypeFilters = prefs.newsTypeFilters?.filter(
+    (value): value is NewsSourceType => ALL_NEWS_SOURCE_TYPES.includes(value as NewsSourceType),
+  );
+  const newsTypeFilters: NewsSourceType[] = savedNewsTypeFilters?.length
+    ? savedNewsTypeFilters
+    : legacyNewsTypeFilter === "all"
+      ? ALL_NEWS_SOURCE_TYPES
+      : [legacyNewsTypeFilter];
+  const setNewsTypeFilters = (types: NewsSourceType[]) => updatePrefs({
+    newsTypeFilters: types,
+    // Older app versions cannot express a multi-select. "all" is the safest
+    // fallback because it never silently hides a source the user enabled here.
+    newsTypeFilter: types.length === 1 ? types[0] : "all",
+  });
+  const toggleNewsTypeFilter = (type: NewsSourceType) => {
+    const next = newsTypeFilters.includes(type)
+      ? newsTypeFilters.filter((value) => value !== type)
+      : [...newsTypeFilters, type];
+    if (next.length > 0) setNewsTypeFilters(next);
+  };
   // The 🎥 Videos quick-filter is ITEM-level (not source-level) so it includes
   // Reddit video posts (v.redd.it clips), not just the "Top Videos" highlight
   // sources: Cards filters each source's items to those with a clip (NewsColumn
@@ -1495,8 +1523,7 @@ export default function HomeContent({
   // Source-filter options + the user's drag-reordered order. Unknown labels in
   // the saved order are ignored; new options not yet in the saved order fall
   // through to the tail in default order.
-  const NEWS_FILTER_OPTIONS: { value: string; label: string }[] = [
-    { value: "all", label: "All" },
+  const NEWS_FILTER_OPTIONS: { value: NewsSourceType; label: string }[] = [
     { value: "topvideos", label: "Top videos" },
     { value: "reddit", label: "Reddit" },
     { value: "espn", label: "ESPN" },
@@ -2032,18 +2059,18 @@ export default function HomeContent({
                     {/* One per row + drag-to-reorder (order saved to prefs). */}
                     <NewsFilterList
                       options={orderedNewsFilterOptions}
-                      value={newsTypeFilter}
-                      onSelect={(v) => setNewsTypeFilter(v as "all" | "topvideos" | "espn" | "reddit" | "homepage")}
+                      selected={newsTypeFilters}
+                      onToggle={toggleNewsTypeFilter}
                       onReorder={setNewsTypeFilterOrder}
                     />
-                    {newsTypeFilter !== "all" && (
+                    {newsTypeFilters.length !== ALL_NEWS_SOURCE_TYPES.length && (
                       <button
                         type="button"
-                        onClick={() => setNewsTypeFilter("all")}
+                        onClick={() => setNewsTypeFilters(ALL_NEWS_SOURCE_TYPES)}
                         className="mt-3 text-xs underline cursor-pointer"
                         style={{ color: "var(--text-muted)" }}
                       >
-                        Clear filter
+                        Select all
                       </button>
                     )}
                   </div>
@@ -2437,31 +2464,35 @@ export default function HomeContent({
             ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
             : [...firstTwoEntries, ...(thirdColEntry ? [thirdColEntry] : [])];
 
-          // Apply Focus league (drops other entries) then per-entry filter
-          // by type + hidden labels. Type "all" is a no-op; hidden labels
-          // are removed via Array.filter so they vanish from view but stay
-          // togglable in the dropdown.
+          // Apply Focus league (drops other entries) then per-entry filter by
+          // the independently checked source types + hidden labels. Hidden
+          // labels vanish from view but stay togglable in the dropdown.
           const focusedEntries = newsFocusLeague
             ? visibleNewsEntries.filter((e) => e.id === newsFocusLeague)
             : visibleNewsEntries;
           const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
             const visible = entry.orderedCascade.filter((s) => !newsHiddenSources.includes(s.label));
-            const typeMatched = visible.filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter);
+            const typeMatched = visible.filter((s) => newsTypeFilters.includes(classifySource(s) as NewsSourceType));
             // Not every league has a source of every type — NWSL and cricket
             // have no Reddit card at all (r/soccer is men's club football, so
             // it is deliberately kept out of the NWSL column). Since the
-            // default filter is now "reddit", a strict filter would render
+            // legacy default filter is "reddit", a strict filter would render
             // those columns completely blank on first visit with nothing to
             // explain why. Fall back to the league's full cascade whenever the
             // type filter would empty the column, so the filter narrows a
             // column that has the type and is a no-op for one that doesn't.
-            const filtered = typeMatched.length > 0 ? typeMatched : visible;
+            // Preserve that legacy fallback until the user touches the new
+            // checkboxes. Once newsTypeFilters exists, unchecked types stay
+            // unchecked even for a league that has none of the selected type.
+            const filtered = typeMatched.length > 0 || prefs.newsTypeFilters
+              ? typeMatched
+              : visible;
             // When viewing "All", honor the user's source-type order from the
             // funnel popover (Jacob 6/1) — dragging a source higher makes its
             // items lead in every column. Stable within a type so the per-sport
             // cascade order is preserved among same-type sources.
             const typeOrder = prefs.newsTypeFilterOrder;
-            return (newsTypeFilter === "all" && typeOrder && typeOrder.length)
+            return (newsTypeFilters.length > 1 && typeOrder && typeOrder.length)
               ? filtered
                   .map((s, i) => [s, i] as const)
                   .sort(([a, ai], [bz, bi]) => {
@@ -2652,7 +2683,7 @@ export default function HomeContent({
                       // setNewsThirdLeague — matches hidescore.com's "News ▾".
                       const isEspn = entry.id === "espn";
                       return (
-                        <div key={`title-${entry.id}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                        <div key={`title-${entry.id}-${entry.slotIdx}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                           <NewsColumnTitle
                             title={entry.label}
                             swappableOptions={switcherOptions}
@@ -2707,7 +2738,7 @@ export default function HomeContent({
                   const isEspn = entry.id === "espn";
                   return (
                     <NewsColumn
-                      key={`nc-${entry.id}-${newsRefreshKey}`}
+                      key={`nc-${entry.id}-${entry.slotIdx}-${newsRefreshKey}`}
                       title={entry.label}
                       sources={sourcesForEntry(entry, idx)}
                       swappableOptions={switcherOptions}

@@ -1092,10 +1092,10 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const state = (match.status?.type?.state ?? "pre") as "pre" | "in" | "post";
   const homeTeam = mkTeam(home);
   const awayTeam = mkTeam(away);
-  // Tournament + year context for the highlight search. Without it the
-  // unscoped fallback query ("A vs B highlights") can land on the same
-  // players' match from a DIFFERENT event/year (e.g. a French Open match
-  // resolving to "Rome Open 2025"). Threaded through the Game's seriesNote,
+  // Tournament + year context for the strict highlight query. Without it the
+  // tournament's own channel can still return the same players' match from a
+  // DIFFERENT event/year (e.g. a French Open match resolving to "Rome Open
+  // 2025"). Threaded through the Game's seriesNote,
   // which is only ever used to build the YouTube query (never rendered).
   const matchYear = (match.date ?? event.date ?? "").slice(0, 4);
   const tourneyTag = [event.name, matchYear].filter(Boolean).join(" ");
@@ -2209,9 +2209,8 @@ const RACING_SERIES: Record<"f1" | "nascar" | "indycar", {
   nascar: { label: "NASCAR", queryPrefix: "NASCAR Cup Series", channel: "NASCAR" },
   // ⚠️ Sponsor-prefixed, the exact hazard the Ligue 1 note in youtube.ts calls
   // out: title sponsors rotate and the channel renames with them. A stale
-  // string doesn't break anything — the official slot just goes unfilled and
-  // the tile falls back to the unscoped search — but re-verify if the IndyCar
-  // highlight button ever stops resolving.
+  // string doesn't serve the wrong uploader: the strict lookup misses and the
+  // tile hides its button. Re-verify if the IndyCar highlight stops resolving.
   indycar: { label: "IndyCar", queryPrefix: "INDYCAR", channel: "NTT INDYCAR SERIES" },
 };
 
@@ -3715,11 +3714,9 @@ export async function fetchAllLeagues(
     // each set slot uses its override; each unset slot falls back to its position
     // default in auto.
     // Auto = the slot's position default, always (each unset slot falls back to
-    // its position default in auto). This can transiently put a league in two
-    // slots — e.g. World Cup pinned to the left column while the center slot's
-    // auto default is ALSO World Cup — which rendered two identical "World Cup"
-    // columns (Jacob 6/15). The dedupe-by-sport pass below removes that, so a
-    // league never appears in more than one column.
+    // its position default in auto). Explicit duplicates are intentional: the
+    // switcher greys an already-shown league but promises that selecting it adds
+    // a second column.
     const nextAutoForSlot = (slotIdx: number): LeagueConfig | null => auto[slotIdx] ?? null;
     // Each slot resolves to one of: explicit league (incl. "empty" → skip),
     // unset (null) → fall back to that slot's auto pick.
@@ -3737,38 +3734,9 @@ export async function fetchAllLeagues(
     final = auto;
   }
 
-  // Never render the same league in two columns. The date nav is global, so two
-  // columns of the same league show identical games — always redundant. A league
-  // pinned to a non-default slot can collide with another slot's auto default
-  // (World Cup pinned left + center auto-defaulting to World Cup → two "World
-  // Cup" columns, Jacob 6/15). Dedupe by sport keeping the first (left-most)
-  // occurrence, so the pinned position wins and the board shrinks to the
-  // distinct leagues. Then BACKFILL each freed slot with the next distinct
-  // active league (by priority) so removing the duplicate doesn't shrink the
-  // board — the user keeps a full set of columns, just without the repeat
-  // (Jacob 6/15 #2: a deduped board collapsed to one column → "should show all").
-  const targetCount = final.length;
-  const seenSport = new Set<Sport>();
-  final = final.filter((cfg) => {
-    if (seenSport.has(cfg.sport)) return false;
-    seenSport.add(cfg.sport);
-    return true;
-  });
-  if (final.length < targetCount) {
-    // Draw the backfill pool at slotCount, NOT MAX_LEAGUES: on a wide (5-column)
-    // board pickAndAssignLeagues only builds a candidate pool up to `count`, so
-    // MAX_LEAGUES (3) yielded just the top-3 leagues — all already placed and in
-    // seenSport — leaving slots 4-5 un-backfillable. The board then rendered 4
-    // columns instead of 5 after a dedupe, the very shrink this block prevents.
-    const backfill = pickAndAssignLeagues(viewDate, slotCount).filter(
-      (l) => !seenSport.has(l.sport),
-    );
-    for (const l of backfill) {
-      if (final.length >= targetCount) break;
-      seenSport.add(l.sport);
-      final.push(l);
-    }
-  }
+  // Keep duplicate manual slots. Replacing one of them with an unrelated auto
+  // league made the grey "already shown" option misleading: the UI said a
+  // second column would be added, then rendered a different default instead.
 
   const fetchLeague = async (cfg: LeagueConfig): Promise<LeagueData | null> => {
     const label = effectiveLeagueLabel(cfg, viewDate);
