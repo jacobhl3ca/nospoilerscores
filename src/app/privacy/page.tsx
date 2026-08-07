@@ -53,6 +53,9 @@ export default function PrivacyPage() {
           For basic usage statistics we use privacy-friendly, cookieless analytics (GoatCounter and a self-hosted Umami instance). These record only aggregate page views &mdash; which pages are visited and rough totals. They do not set cookies, do not build a profile of you, and do not track you across other sites.
         </p>
         <p>
+          You can also <Link href="/notrack" className="underline underline-offset-2">turn off self-hosted analytics in this browser</Link>. The choice stays on this device until you clear HideScore&rsquo;s browser data.
+        </p>
+        <p>
           If you are signed in, we also tag your analytics session with a random, scrambled account code and whether you are using the website or mobile app, so we can tell how many real accounts &mdash; rather than how many devices &mdash; use each one. That code is derived from your account with a one-way key we keep private: it cannot be turned back into your email or sign-in identifier, and it is only ever sent to our own self-hosted Umami, never to a third party.
         </p>
         <p>
