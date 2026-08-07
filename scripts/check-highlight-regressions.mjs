@@ -36,6 +36,78 @@ check(
   "Unrelated league secondary channels stay empty",
   youtube.getSecondaryChannels("wnba").length === 0,
 );
+check(
+  "NFL resolves only against the NFL uploader",
+  youtube.getOfficialChannelName("nfl") === "NFL",
+);
+check(
+  "La Liga and Ligue 1 fail closed without approved uploaders",
+  youtube.hasNoTrustedHighlightSource("laliga") && youtube.hasNoTrustedHighlightSource("ligue1"),
+);
+check(
+  "golf and tennis majors retain exact verified uploader names",
+  youtube.getOfficialChannelName("golf", "PGA Champ") === "PGA Championships" &&
+    youtube.getOfficialChannelName("tennis", "Australian Open") === "Australian Open",
+);
+check(
+  "unsupported esports leagues stay dark while LEC is exact-channel only",
+  youtube.hasNoTrustedHighlightSource("esports", "LCK") &&
+    !youtube.hasNoTrustedHighlightSource("esports", "LEC") &&
+    youtube.getOfficialChannelName("esports", "LEC") === "LEC",
+);
+
+const originalFetch = globalThis.fetch;
+const youtubeRequests = [];
+globalThis.fetch = async (url) => {
+  youtubeRequests.push(String(url));
+  return { ok: true, json: async () => ({ videoId: "verified-id" }) };
+};
+await youtube.resolveHighlightVideo("Giants", "Cowboys", "Aug 7, 2026", null, "NFL", undefined, null, false);
+check(
+  "NFL live resolve sends strict=1 and never runs an unscoped tier",
+  youtubeRequests.length === 1 && youtubeRequests[0].includes("channel=NFL") && youtubeRequests[0].includes("strict=1"),
+);
+youtubeRequests.length = 0;
+await youtube.resolveTelemundoWorldCupVideo("France", "Spain", "Jul 14, 2026", null);
+check(
+  "Telemundo World Cup resolve is exact-channel strict",
+  youtubeRequests.length === 1 && youtubeRequests[0].includes("channel=Telemundo%20Deportes") && youtubeRequests[0].includes("strict=1"),
+);
+globalThis.fetch = originalFetch;
+
+const highlightsSource = readFileSync("src/lib/highlights.ts", "utf8")
+  .replace('import { getApiBase } from "@/lib/youtube";', 'const getApiBase = () => "";');
+const transformedHighlights = await transform(highlightsSource, {
+  jsc: { parser: { syntax: "typescript" }, target: "es2022" },
+  module: { type: "es6" },
+});
+const tempHighlightsModule = join(tmpdir(), `hidescore-highlights-${process.pid}.mjs`);
+writeFileSync(tempHighlightsModule, transformedHighlights.code);
+const highlights = await import(pathToFileURL(tempHighlightsModule).href);
+unlinkSync(tempHighlightsModule);
+check(
+  "prebaked IDs require the exact expected channel marker",
+  highlights.getChannelVerifiedBakedId(
+    { official: "good", officialChannel: "NFL", sourcePolicy: "official-channel" },
+    "official",
+    "NFL",
+  ) === "good" &&
+    highlights.getChannelVerifiedBakedId(
+      { official: "bad", officialChannel: "NBA", sourcePolicy: "official-channel" },
+      "official",
+      "NFL",
+    ) === null &&
+    highlights.getChannelVerifiedBakedId(
+      { official: "legacy", sourcePolicy: "official-channel" },
+      "official",
+      "NFL",
+    ) === null &&
+    highlights.getChannelVerifiedBakedId(
+      { official: "unproven", officialChannel: "NFL" },
+      "official",
+      "NFL",
+    ) === null,
+);
 
 const worker = readFileSync("public/_worker.js", "utf8");
 check(
@@ -57,6 +129,83 @@ check("monitor covers NCAAF", monitor.includes('ncaaf: "/football/college-footba
 check("monitor covers NCAAW", monitor.includes('ncaaw: "/basketball/womens-college-basketball/scoreboard"'));
 check("monitor rejects incomplete ESPN audits", monitor.includes("Source failures are not zero-game slates"));
 check("rejected custom ESPN User-Agent is gone", !monitor.includes("nospoilerscores-staleness-check/1.0"));
+check(
+  "monitor verifies strict API requests and live oEmbed authors",
+  monitor.includes('url += "&strict=1"') && monitor.includes("youtubeOembedMeta") && monitor.includes("author_name"),
+);
+check(
+  "monitor excludes non-YouTube MLB and unapproved La Liga/Ligue 1 paths",
+  !monitor.includes('mlb:   "/baseball/mlb/scoreboard"') &&
+    !monitor.includes('laliga:       "/soccer/esp.1/scoreboard"') &&
+    !monitor.includes('ligue1:       "/soccer/fra.1/scoreboard"'),
+);
+check(
+  "runtime monitor covers every shipped highlight family",
+  ["scanRacingAndUfc", "scanCuratedEvents", "scanEsports", "scanGolf", "scanTennis"]
+    .every((name) => monitor.includes(`await ${name}()`)) &&
+    monitor.includes("team games, tennis, golf, racing, UFC, poker, boxing, esports"),
+);
+
+const gameHighlights = readFileSync("src/components/GameHighlights.tsx", "utf8");
+check(
+  "every per-game modal retry carries its slot's strict channel",
+  gameHighlights.includes("officialModalFallbackUrl") &&
+    gameHighlights.includes("secondaryModalFallbackUrl") &&
+    gameHighlights.includes("nss_strict=1&nss_channels="),
+);
+check(
+  "per-game prebakes are read only through channel-marker validation",
+  gameHighlights.includes("getChannelVerifiedBakedId") &&
+    !gameHighlights.includes("baked?.extended ?? baked?.official"),
+);
+
+const videoModal = readFileSync("src/components/VideoModal.tsx", "utf8");
+check(
+  "modal fails closed when a YouTube retry has no strict channel contract",
+  videoModal.includes("if (!strictChannels.length)") &&
+    !videoModal.includes("/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}${raceParam}`"),
+);
+
+const eventCard = readFileSync("src/components/EventCard.tsx", "utf8");
+check(
+  "racing, UFC, poker, and boxing all use strict lookups with no search handoff",
+  eventCard.includes("fetchFirstVideoId(query, channel, undefined, undefined, true, raceTokens)") &&
+    eventCard.includes("for (const channel of UFC_HIGHLIGHT_CHANNELS)") &&
+    eventCard.includes("playStrictOnly") &&
+    !eventCard.includes("openExternal(fallback)"),
+);
+check(
+  "racing strict misses hide the button",
+  eventCard.includes("setRaceSource(src)") && eventCard.includes("raceSource !== null"),
+);
+
+const golf = readFileSync("src/components/GolfLeaderboard.tsx", "utf8");
+check(
+  "every golf resolver is strict and missing slots stay hidden",
+  golf.includes("fetchFirstVideoId(highlightQuery, mainChannel, undefined, undefined, true)") &&
+    golf.includes("fetchFirstVideoId(q, channel, undefined, undefined, true)") &&
+    golf.includes("visibleHighlightSlots"),
+);
+
+const prebake = readFileSync("scripts/prebake-news.mjs", "utf8");
+check(
+  "prebaker requests strict channels and records per-slot channel provenance",
+  prebake.includes("strict: true") &&
+    prebake.includes("officialChannel") && prebake.includes("extendedChannel") &&
+    prebake.includes("HIGHLIGHT-DUPLICATE-REJECT"),
+);
+check(
+  "prebaker excludes MLB YouTube and unapproved soccer searches",
+  !prebake.includes('{ sport: "mlb",') &&
+    !prebake.includes('{ sport: "laliga",') &&
+    !prebake.includes('{ sport: "ligue1",'),
+);
+check(
+  "prebaker revalidates persistent World Cup seed uploader and matchup",
+  prebake.includes("HIGHLIGHT-SEED-REJECT") &&
+    prebake.includes("hlVideoMatchesChannel(id, channel)") &&
+    prebake.includes("hlVideoMatchesTeams(id, teams[0], teams[1])"),
+);
 
 console.log(failures ? `\n${failures} regression check(s) failed` : "\nall highlight regression checks passed");
 process.exit(failures ? 1 : 0);

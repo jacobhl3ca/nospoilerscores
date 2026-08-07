@@ -159,8 +159,8 @@ function extractSearchQuery(fallbackUrl: string): string | null {
 // that resolved their video under a strict channel gate (F1, golf). YouTube
 // ignores the extra params on a /results URL, so the same string still works
 // verbatim as the external "Watch on YouTube" hand-off — same trick as the
-// existing `nss_no_fallback=1`. Empty list = ungated caller (news, per-game
-// league highlights): retry behavior there is unchanged.
+// existing `nss_no_fallback=1`. A YouTube search retry with no strict channel
+// list is rejected below; non-highlight media use direct source URLs instead.
 function strictFallbackChannels(fallbackUrl: string): string[] {
   try {
     const u = new URL(fallbackUrl);
@@ -1297,24 +1297,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // the "Watch on YouTube" card rather than playing an unvetted upload.
       const strictChannels = strictFallbackChannels(fallbackUrl);
       const raceParam = raceFallbackParam(fallbackUrl);
+      // Fail closed if a highlight caller ever forgets to carry its channel
+      // contract. The old unscoped branch was how NFL (and every other league)
+      // could resolve correctly, hit an embed error, then silently swap to a
+      // video from a different uploader.
+      if (!strictChannels.length) {
+        retryingRef.current = false;
+        setYtFailed(true);
+        return;
+      }
       try {
         const excl = encodeURIComponent(failed.join(","));
         let nextId: string | null = null;
-        if (strictChannels.length) {
-          // Sequential, not parallel: the worker scrapes YouTube's results page
-          // and rate-limits into empty responses under bursts (same reason
-          // EventCard's UFC chain is sequential).
-          for (const channel of strictChannels) {
-            const res = await fetch(
-              `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}`
-            );
-            const data = res.ok ? await res.json() : null;
-            if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
-          }
-        } else {
-          const res = await fetch(`${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}${raceParam}`);
+        // Sequential, not parallel: the worker scrapes YouTube's results page
+        // and rate-limits into empty responses under bursts (same reason
+        // EventCard's UFC chain is sequential).
+        for (const channel of strictChannels) {
+          const res = await fetch(
+            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}`
+          );
           const data = res.ok ? await res.json() : null;
-          if (data?.videoId && data.videoId !== currentId) nextId = data.videoId;
+          if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
         }
         if (nextId) {
           setCurrentId(nextId); // an untried alternate — the effect resets ytFailed
