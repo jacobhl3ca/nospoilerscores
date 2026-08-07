@@ -13,12 +13,39 @@ import { getApiBase } from "@/lib/youtube";
 export type BakedHighlight = {
   matchup?: string;
   official?: string;
+  officialChannel?: string;
   extended?: string;
+  extendedChannel?: string;
   telemundo?: string;
+  telemundoChannel?: string;
   telemundoExtended?: string;
+  telemundoExtendedChannel?: string;
   mlbOrder?: "official-first";
   sourcePolicy?: "official-channel";
 };
+
+const BAKED_CHANNEL_KEY = {
+  official: "officialChannel",
+  extended: "extendedChannel",
+  telemundo: "telemundoChannel",
+  telemundoExtended: "telemundoExtendedChannel",
+} as const;
+
+// A policy label alone is not proof: older manifests carried stale or unscoped
+// IDs while still saying "official-channel". Trust a prebaked slot only when it
+// names the exact channel the current caller expects. Legacy records safely fall
+// back to the same strict live resolver until the next bake adds these markers.
+export function getChannelVerifiedBakedId(
+  baked: BakedHighlight | null | undefined,
+  slot: keyof typeof BAKED_CHANNEL_KEY,
+  expectedChannel: string | null | undefined,
+): string | null {
+  if (!baked || baked.sourcePolicy !== "official-channel" || !expectedChannel) return null;
+  const actualChannel = baked[BAKED_CHANNEL_KEY[slot]];
+  return actualChannel?.toLowerCase() === expectedChannel.toLowerCase()
+    ? (baked[slot] ?? null)
+    : null;
+}
 
 // Fetched once per session and shared across every card (one small static
 // request vs. N live scrapes). On any miss the promise is cleared so the next

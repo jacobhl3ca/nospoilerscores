@@ -1092,10 +1092,10 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const state = (match.status?.type?.state ?? "pre") as "pre" | "in" | "post";
   const homeTeam = mkTeam(home);
   const awayTeam = mkTeam(away);
-  // Tournament + year context for the highlight search. Without it the
-  // unscoped fallback query ("A vs B highlights") can land on the same
-  // players' match from a DIFFERENT event/year (e.g. a French Open match
-  // resolving to "Rome Open 2025"). Threaded through the Game's seriesNote,
+  // Tournament + year context for the strict highlight query. Without it the
+  // tournament's own channel can still return the same players' match from a
+  // DIFFERENT event/year (e.g. a French Open match resolving to "Rome Open
+  // 2025"). Threaded through the Game's seriesNote,
   // which is only ever used to build the YouTube query (never rendered).
   const matchYear = (match.date ?? event.date ?? "").slice(0, 4);
   const tourneyTag = [event.name, matchYear].filter(Boolean).join(" ");
@@ -2209,9 +2209,8 @@ const RACING_SERIES: Record<"f1" | "nascar" | "indycar", {
   nascar: { label: "NASCAR", queryPrefix: "NASCAR Cup Series", channel: "NASCAR" },
   // ⚠️ Sponsor-prefixed, the exact hazard the Ligue 1 note in youtube.ts calls
   // out: title sponsors rotate and the channel renames with them. A stale
-  // string doesn't break anything — the official slot just goes unfilled and
-  // the tile falls back to the unscoped search — but re-verify if the IndyCar
-  // highlight button ever stops resolving.
+  // string doesn't serve the wrong uploader: the strict lookup misses and the
+  // tile hides its button. Re-verify if the IndyCar highlight stops resolving.
   indycar: { label: "IndyCar", queryPrefix: "INDYCAR", channel: "NTT INDYCAR SERIES" },
 };
 
