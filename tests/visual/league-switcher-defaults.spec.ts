@@ -155,7 +155,13 @@ test("legacy signed-in account prefs migrate and sync from a new device", async 
   await expect(page.getByRole("checkbox", { name: "Liga MX", exact: true })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "NWSL", exact: true })).not.toBeChecked();
   await expect.poll(() => uploaded?.switcherDefaultsVersion).toBe(2);
-  expect(uploaded?.shownLeagues).toEqual(expect.arrayContaining(["ligamx"]));
+  // `uploaded` is only ever assigned inside the page.route closure above, so
+  // same-scope control-flow analysis narrows this direct read back to its
+  // `null` initializer — making `null?.shownLeagues` resolve to `never` (TS2339).
+  // (Line 157 escapes this only because it reads inside an arrow callback, which
+  // uses the declared type.) Cast back to the declared type; type-only, no
+  // runtime change — the poll above already asserted the upload landed.
+  expect((uploaded as Record<string, unknown> | null)?.shownLeagues).toEqual(expect.arrayContaining(["ligamx"]));
 });
 
 test("v2 account defaults clear device-only switcher overrides", async ({ page }) => {
