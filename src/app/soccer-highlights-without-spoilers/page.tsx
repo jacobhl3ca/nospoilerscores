@@ -101,6 +101,7 @@ export default function SoccerHighlightsWithoutSpoilersPage() {
         { href: "/worldcup", label: "World Cup" },
         { href: "/worldcup/tomorrow", label: "Tomorrow" },
         { href: "/worldcup/highlights", label: "World Cup highlights" },
+        { href: "/premier-league-without-spoilers", label: "Premier League" },
         { href: "/liga-mx-scores-without-spoilers", label: "Liga MX" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
       ]}
