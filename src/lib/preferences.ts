@@ -205,6 +205,11 @@ export interface Preferences {
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
+  // Season-kickoff banners the user dismissed, keyed by sport + kickoff day
+  // ("epl-2026-08-21"). Per-season rather than a boolean so dismissing this
+  // August's Premier League banner doesn't silence next August's, and capped to
+  // the last dozen keys so this can't grow without bound in a synced prefs blob.
+  kickoffBannersDismissed?: string[];
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
   // The generic "News" column is independent of scores slot 3. It appears by
   // default; true means the user explicitly removed it from the news board.

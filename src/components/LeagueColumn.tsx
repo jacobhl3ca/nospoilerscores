@@ -36,7 +36,7 @@ interface LeagueColumnProps {
   section?: "upcoming" | "finished"; // split rendering for cross-column Final separator
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
   // 3rd league slot swapping
-  swappableOptions?: { sport: Sport; label: string; offseason?: boolean }[];
+  swappableOptions?: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string }[];
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
@@ -1501,6 +1501,7 @@ export default function LeagueColumn({
                         >
                           {opt.label}
                           {opt.offseason && <em className="font-normal"> · offseason</em>}
+                          {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
                         </button>
                       );
                     })}

@@ -108,6 +108,11 @@ export interface LeagueConfig {
   startDate?: string;        // MM-DD
   endDate?: string;          // MM-DD (last day league is shown)
   championshipDate?: string; // MM-DD — day the championship game is played
+  // MM-DD of the season's actual first match, when that is LATER than startDate
+  // (startDate can open a few days early so the column carries the fixture
+  // lookahead into the build-up). Drives the kickoff banner's copy and its
+  // "starts soon" → "is underway" flip. Falls back to startDate when unset.
+  kickoffDate?: string;
   firstPref?: boolean;       // Tier 1: always gets a slot when active (bumps lower leagues)
   mustInclude?: boolean;     // NBA/MLB/NHL/NFL — always picked when active
   excludeFromAuto?: boolean; // Skipped from auto-pick; still selectable via slot-3 dropdown
@@ -156,7 +161,15 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // NBA/NHL end (06-19).
   { sport: "fifa", label: "World Cup", startDate: "06-04", endDate: "07-19", championshipDate: "07-19", firstPref: true, displaySlot: "center", slotPrecedence: 2, yearCycle: { mod: 4, anchor: 2026 } },
   // ── Premier League (Aug–May) ──
-  { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
+  // 2026-27 dates verified against ESPN's eng.1 scoreboard on 2026-08-08: the
+  // World Cup pushed kickoff a week later than a normal year — matchweek 1 is
+  // Fri Aug 21 (Coventry at Arsenal) through Mon Aug 24, and the final round is
+  // Sun May 30 2027. The old 08-16/05-25 window opened five days before any
+  // fixture existed (bumping NFL Preseason, which DID have games, out of slot 3)
+  // and closed with a full matchweek still to play. kickoffDate carries the real
+  // first-match day for the countdown banner; startDate stays two days earlier so
+  // the column is there with the fixture lookahead when the week's build-up starts.
+  { sport: "epl", label: "Prem", startDate: "08-19", endDate: "05-31", kickoffDate: "08-21", championshipDate: "05-30" },
   // ── UEFA Champions League (Sep League phase → Jun Final) ──
   // Active across Sep 14 → Jun 5 but only ~17 matchdays in window; on
   // non-matchday days the column shows news only.
@@ -347,6 +360,155 @@ export function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
   } else {
     return mmdd >= league.startDate || mmdd <= league.endDate;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEASON KICKOFF — "starting soon" leagues
+// ═══════════════════════════════════════════════════════════════
+// A league that hasn't started yet is invisible everywhere: not in the auto
+// columns (correct — it has no games), but also not in the switcher, so a user
+// who already knows the season is coming has no way to add it and no way to
+// learn the date. Two consequences we hit for the 2026-27 Premier League: people
+// were asking for the column while it was still hidden, and the start date
+// itself (Aug 21, a week later than a normal year because of the World Cup) is
+// not something a casual fan knows.
+//
+// So a league becomes SELECTABLE — never auto-picked — this many days before it
+// starts, and the same window drives the one-line kickoff banner. The column it
+// opens is not empty: LeagueColumn's next-game-day lookahead shows the opening
+// fixtures, and the league's news feed is already baking year-round.
+// 14 days: long enough that the Premier League's Aug 21 opener is addable from
+// the first week of August (people were already asking), short enough that the
+// window doesn't sit open for a month and stop reading as news.
+export const KICKOFF_SOON_DAYS = 14;
+// How long after the first match the banner keeps offering the add, for anyone
+// who only opens the app on weekends.
+export const KICKOFF_UNDERWAY_DAYS = 4;
+
+const DAY_MS = 86_400_000;
+
+// Local-noon Date for the next occurrence of an MM-DD on or after viewDate.
+// Noon avoids the DST edges where a midnight date arithmetic lands on the wrong
+// calendar day. Returns null for a malformed MM-DD.
+function nextOccurrence(mmdd: string, viewDate: Date): Date | null {
+  const m = /^(\d{2})-(\d{2})$/.exec(mmdd);
+  if (!m) return null;
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+  let d = new Date(viewDate.getFullYear(), month - 1, day, 12, 0, 0, 0);
+  if (d.getTime() < view.getTime()) d = new Date(viewDate.getFullYear() + 1, month - 1, day, 12, 0, 0, 0);
+  return d;
+}
+
+export type LeagueKickoff = {
+  config: LeagueConfig;
+  kickoff: Date;       // local noon on the season's first match day
+  daysUntil: number;   // 0 = kicks off today; negative = already started
+  phase: "soon" | "today" | "underway";
+  // Stable per-season dismissal key ("epl-2026") so dismissing this year's
+  // banner doesn't dismiss the league forever.
+  seasonKey: string;
+};
+
+// Whether `league` is inside its pre-season selectable window for viewDate.
+// Deliberately excludes hidden/backfill entries and anything gated out by
+// yearCycle (a World Cup three years away must not surface as "starting soon").
+export function isLeagueUpcoming(league: LeagueConfig, viewDate: Date, withinDays = KICKOFF_SOON_DAYS): boolean {
+  // A league already in its window is "active", never "upcoming" — startDate can
+  // sit a couple of days before kickoffDate, and both being true at once would
+  // let a caller label a live column "starts Friday".
+  if (isLeagueActive(league, viewDate)) return false;
+  const k = kickoffFor(league, viewDate);
+  return k !== null && k.daysUntil > 0 && k.daysUntil <= withinDays;
+}
+
+function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null {
+  if (league.hidden || league.backfillOnly) return null;
+  if (!league.startDate || !league.endDate) return null;
+  const kickoff = nextOccurrence(league.kickoffDate ?? league.startDate, viewDate);
+  if (!kickoff) return null;
+  if (league.yearCycle) {
+    const { mod, anchor } = league.yearCycle;
+    if ((kickoff.getFullYear() - anchor) % mod !== 0) return null;
+  }
+  const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+  const daysUntil = Math.round((kickoff.getTime() - view.getTime()) / DAY_MS);
+  // nextOccurrence never looks backwards, so "underway" is detected by asking
+  // whether THIS year's kickoff has just passed rather than by a negative diff.
+  let phase: LeagueKickoff["phase"];
+  let effective = kickoff;
+  let effectiveDays = daysUntil;
+  if (daysUntil > 0) {
+    const lastYear = new Date(kickoff.getFullYear() - 1, kickoff.getMonth(), kickoff.getDate(), 12, 0, 0, 0);
+    const sinceLast = Math.round((view.getTime() - lastYear.getTime()) / DAY_MS);
+    if (sinceLast > 0 && sinceLast <= KICKOFF_UNDERWAY_DAYS && isLeagueActive(league, viewDate)) {
+      effective = lastYear;
+      effectiveDays = -sinceLast;
+      phase = "underway";
+    } else {
+      phase = "soon";
+    }
+  } else {
+    phase = "today";
+  }
+  // Keyed by the exact kickoff day, not just the year: golf and tennis run
+  // several separate events per sport per year, and dismissing the Masters
+  // banner must not silently dismiss the US Open's.
+  const stamp = `${effective.getFullYear()}-${String(effective.getMonth() + 1).padStart(2, "0")}-${String(effective.getDate()).padStart(2, "0")}`;
+  return { config: league, kickoff: effective, daysUntil: effectiveDays, phase, seasonKey: `${league.sport}-${stamp}` };
+}
+
+// One glyph per sport for the kickoff banner. Partial by design — anything not
+// listed falls back to a neutral marker rather than getting a wrong icon.
+const SPORT_GLYPH: Partial<Record<Sport, string>> = {
+  mlb: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
+  nfl: "🏈", ncaaf: "🏈", nhl: "🏒", golf: "⛳", tennis: "🎾",
+  fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
+  laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
+  nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
+  cricket: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
+  ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮",
+};
+
+export function sportGlyph(sport: Sport): string {
+  return SPORT_GLYPH[sport] ?? "🏟️";
+}
+
+// "Aug 21" — the compact form used in the league switcher's "· starts Aug 21".
+export function formatKickoffShort(mmdd: string | undefined, viewDate: Date): string {
+  const d = mmdd ? nextOccurrence(mmdd, viewDate) : null;
+  if (!d) return "soon";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// "Friday, Aug 21" — the banner form. Weekday included because for a league
+// people already follow, the day of the week is the part that makes it land.
+export function formatKickoffLong(d: Date): string {
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+}
+
+// The single most imminent league worth announcing for viewDate, or null.
+// One banner at a time by design — two stacked announcements is an ad unit.
+export function getLeagueKickoff(viewDate: Date): LeagueKickoff | null {
+  const candidates: LeagueKickoff[] = [];
+  for (const league of ALL_LEAGUES) {
+    // Opt-in leagues never take the banner. Mid-August alone opens La Liga,
+    // Serie A, Ligue 1 and the Saudi Pro League within nine days of each other,
+    // and announcing a league the user hasn't asked for — in the one slot above
+    // the board — turns a useful heads-up into an ad. They're still addable
+    // early from the switcher via isLeagueUpcoming.
+    if (league.excludeFromAuto) continue;
+    const k = kickoffFor(league, viewDate);
+    if (!k) continue;
+    if (k.phase === "soon" && k.daysUntil > KICKOFF_SOON_DAYS) continue;
+    candidates.push(k);
+  }
+  if (!candidates.length) return null;
+  // Nearest to now wins: today, then the closest upcoming, then the most
+  // recently started.
+  candidates.sort((a, b) => Math.abs(a.daysUntil) - Math.abs(b.daysUntil));
+  return candidates[0];
 }
 
 const MAX_LEAGUES = 3;
@@ -3765,6 +3927,13 @@ export async function fetchAllLeagues(
     // Resolve the active config for the viewed date instead.
     const activeConfig = configs.find((l) => isLeagueActive(l, viewDate));
     if (activeConfig) return activeConfig;
+    // A league inside its pre-season window is pinnable too — otherwise the
+    // switcher offers "Prem · starts Aug 21", the click writes the preference,
+    // and this resolver rejects it and silently auto-fills the slot with
+    // whatever was there before. (Same failure the NFL-preseason note above
+    // describes; the fix has to be here as well as in the options list.)
+    const upcomingConfig = configs.find((l) => isLeagueUpcoming(l, viewDate));
+    if (upcomingConfig) return upcomingConfig;
     // NBA is the deliberate offseason exception: it stays manually pinnable
     // for league news and the trade board, but the auto-picker above still
     // uses isLeagueActive() and therefore never forces an empty NBA column on

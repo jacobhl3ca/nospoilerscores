@@ -16,6 +16,8 @@ interface LeagueOption {
   sport: Sport;
   label: string;
   offseason?: boolean;
+  // "starts Aug 21" for a league inside its pre-season selectable window.
+  upcomingLabel?: string;
   defaultInSwitcher?: boolean;
 }
 
