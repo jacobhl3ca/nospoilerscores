@@ -1347,7 +1347,6 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
     awayTeam,
     broadcasts,
     venue: "",
-    highlightUrl: null,
     // Not a playoff "Game N" — repurposed to carry tournament+year into the
     // highlight search so it can't drift to the wrong event (see above).
     seriesNote: tourneyTag || null,
@@ -1547,19 +1546,6 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   // Tag sport for rating calculation
   event._sport = sport;
 
-  // Extract highlight video URL from headlines
-  let highlightUrl: string | null = null;
-  for (const headline of competition?.headlines ?? []) {
-    for (const video of headline?.video ?? []) {
-      const webHref = video?.links?.web?.href;
-      if (webHref) {
-        highlightUrl = webHref;
-        break;
-      }
-    }
-    if (highlightUrl) break;
-  }
-
   // Extract series game number and playoff round from notes
   let seriesNote: string | null = null;
   let playoffLabel: string | null = null;
@@ -1692,7 +1678,6 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     isPlayoff,
     playoffLabel,
     seriesStatus,
-    highlightUrl,
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports
     primeStreamUrl: null, // populated from /prime-asins.json when matchup matches
@@ -2609,7 +2594,6 @@ export async function fetchEsportsGames(date?: string): Promise<Game[]> {
         isPlayoff: g.tier === "s",
         playoffLabel: null,
         seriesStatus: null,
-        highlightUrl: null,
         recapUrl: null,
         // Twitch is where every tier-s/a match actually streams, free. Sent
         // through the shared per-sport fallback so the link stays in one place.

@@ -33,8 +33,7 @@ export interface Game {
   // ESPN playoff-series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
   // Only set when competition.series.type === "playoff".
   seriesStatus: string | null;
-  // Highlight/recap links
-  highlightUrl: string | null; // ESPN video clip URL
+  // Recap link
   recapUrl: string | null; // ESPN gamecast URL
   // NHL.com condensed-game + recap videos (finished NHL games only). Sourced
   // from the NHL API via the /api/nhl-videos worker proxy. Each has a *Url
