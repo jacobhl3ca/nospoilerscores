@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Minimal inline feedback line that lives inside the footer. Submits on Enter
 // or via the send button straight to the same Formspree endpoint the
@@ -19,6 +19,11 @@ export default function FeedbackBox() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [open, setOpen] = useState(false);
+
+  // The collapsed "Feedback" trigger, so focus can return to it when the modal
+  // is dismissed (see the focus-return effect below).
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef(false);
 
   const trimmedEmail = email.trim();
   // Only warn once it looks like the user has finished typing something that
@@ -45,6 +50,18 @@ export default function FeedbackBox() {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // Return focus to the trigger when the modal is DISMISSED (Escape, backdrop,
+  // the × / "Feedback" toggle) rather than leaving it stranded on <body> — the
+  // WCAG 2.4.3 dialog-close behavior every other modal in the app already gets
+  // for its opener. Scoped to cancel-closes: submit() sets `sent` (never calls
+  // close()), so the effect skips it and doesn't steal focus into the now-hidden
+  // trigger while the "Thanks" state renders. autoFocus already handles focus-IN
+  // on open; this closes the round trip.
+  useEffect(() => {
+    if (wasOpenRef.current && !open && !sent) triggerRef.current?.focus();
+    wasOpenRef.current = open;
+  }, [open, sent]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,6 +95,7 @@ export default function FeedbackBox() {
   if (!open && !sent) {
     return (
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-expanded="false"
