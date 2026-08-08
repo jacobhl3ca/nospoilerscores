@@ -414,11 +414,18 @@ export default function EventCard({
     if (state !== "post") return false;
     if (isPastDate) return true;
     if (!selectedDate) return false;
-    const parsed = new Date(date);
-    if (Number.isNaN(parsed.getTime())) return false;
-    const eventYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(parsed).replace(/-/g, "");
+    // Bucket the finished event to its SLATE day (etSlateYmd's 1 AM rollover),
+    // not a raw effective-tz calendar day, so "is this a replay carried onto a
+    // later slate?" uses the SAME boundary the board, whenLabel above, and the
+    // data layer all use. A UFC main event at 12:30 AM ET is filed on (and the
+    // board shows it under) the PREVIOUS day's slate; the old calendar-day bucket
+    // counted it as the NEXT day, so on that following slate eventYmd === selectedDate
+    // and the redundant FINAL row wrongly stayed. etSlateYmd returns "" for an
+    // unparseable date — treat that as "not historical" (keep the row) rather than
+    // letting "" sort before selectedDate. Daytime events (>= 1 AM local) are
+    // unaffected: etSlateYmd and the calendar day agree there.
+    const eventYmd = etSlateYmd(date);
+    if (!eventYmd) return false;
     return eventYmd < selectedDate;
   };
   const playBout = async (id: string, query: string) => {
