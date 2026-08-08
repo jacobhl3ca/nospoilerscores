@@ -88,13 +88,17 @@ interface LeagueColumnProps {
 const FORCE_BIG_INNING_LIVE_PREVIEW = false;
 
 // 2025-26 season playoff start dates (update each season)
-const PLAYOFF_START_DATES: Record<string, { date: string; label: string; preDate?: string; preEndDate?: string; preLabel?: string }> = {
+// singularLabel flags a grammatically SINGULAR label so the countdown subtitle
+// below agrees in number ("Postseason starts", "March Madness starts") instead
+// of the plural "Playoffs start" default. Without it the hard-coded "start"
+// verb rendered "Postseason start Oct 6" / "March Madness start tomorrow".
+const PLAYOFF_START_DATES: Record<string, { date: string; label: string; singularLabel?: boolean; preDate?: string; preEndDate?: string; preLabel?: string }> = {
   nba: { date: "2026-04-18", label: "Playoffs", preDate: "2026-04-14", preEndDate: "2026-04-17", preLabel: "Play-in" },
   wnba: { date: "2026-09-14", label: "Playoffs" },
   nhl: { date: "2026-04-18", label: "Playoffs" },
-  mlb: { date: "2026-10-06", label: "Postseason" },
+  mlb: { date: "2026-10-06", label: "Postseason", singularLabel: true },
   nfl: { date: "2027-01-09", label: "Playoffs" },
-  ncaam: { date: "2026-03-17", label: "March Madness" },
+  ncaam: { date: "2026-03-17", label: "March Madness", singularLabel: true },
 };
 
 // Strip generic "Stanley Cup Playoffs" / "NBA Playoffs" / "NCAA … Championship"
@@ -364,10 +368,13 @@ function getPlayoffSubtitle(
   if (days > 30) return null; // only show within 1 month
   const dd = playoffDate.getDate();
   const monthName = playoffDate.toLocaleDateString("en-US", { month: "short" });
+  // Plural "Playoffs start" vs singular "Postseason/March Madness starts" — the
+  // subject's number comes from the per-entry singularLabel flag above.
+  const startsVerb = config.singularLabel ? "starts" : "start";
   if (days === 1) {
-    return { tiers: [`${config.label} start tomorrow`] };
+    return { tiers: [`${config.label} ${startsVerb} tomorrow`] };
   }
-  const base = `${config.label} start ${monthName} ${dd}`;
+  const base = `${config.label} ${startsVerb} ${monthName} ${dd}`;
   const baseShort = `${config.label} ${monthName} ${dd}`;
   return { tiers: [`${base} (${days} days)`, `${baseShort} (${days}d)`, baseShort] };
 }
