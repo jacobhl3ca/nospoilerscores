@@ -641,6 +641,12 @@ export default function EventCard({
   // layout would drift out of alignment the first time either was touched.
   const isRace = event.kind === "f1";
   const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : event.kind === "poker" ? "♠️" : "🏁";
+  // Spoken name for the sport-type glyph, announced via role="img"/aria-label on
+  // a NON-clickable tile (boxing has no detail page; a finished race/chess/poker
+  // event drops its link), where the tile root carries no aria-label and the
+  // emoji is otherwise the only cue to the event type. Mirrors `glyph`'s
+  // boxing/chess/poker/race branches so poker reads "Poker", not "Race".
+  const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : event.kind === "poker" ? "Poker" : "Race";
   // What the tile body links to, and what to call it. Chess points at the
   // Lichess broadcast (a live BOARD, not a results table); boxing has no
   // per-event page worth linking, so its tile is inert.
