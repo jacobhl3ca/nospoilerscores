@@ -23,6 +23,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/mlb-highlights-without-spoilers",
     "/nfl-highlights-without-spoilers",
     "/soccer-highlights-without-spoilers",
+    "/premier-league-without-spoilers",
     "/liga-mx-scores-without-spoilers",
     "/cricket-highlights-without-spoilers",
     "/watch-world-cup-without-spoilers",
@@ -50,6 +51,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // NOT get routes; thin near-duplicate pages read as doorway content.
     "/liga-mx-scores-without-spoilers",
     "/cricket-highlights-without-spoilers",
+    // Added 2026-08-08 for the 2026-27 season. Same standalone-demand test the
+    // Liga MX and cricket routes had to pass: "premier league without spoilers"
+    // is searched on its own, and the World-Cup-shifted August 21 start date is
+    // a question the soccer page cannot answer without becoming about one league.
+    "/premier-league-without-spoilers",
   ]);
 
   // Build timestamp. This file is statically emitted on every Cloudflare deploy,

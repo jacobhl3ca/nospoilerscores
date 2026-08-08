@@ -91,7 +91,7 @@ interface NewsColumnProps {
   // League swap selector — click the title to pick a different league.
   // Callback receives undefined for Auto (revert to default) and "empty" to
   // hide the column entirely.
-  swappableOptions?: { sport: Sport; label: string; offseason?: boolean }[];
+  swappableOptions?: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string }[];
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
@@ -137,7 +137,7 @@ export function NewsColumnTitle({
   removable,
 }: {
   title: string;
-  swappableOptions?: { sport: Sport; label: string; offseason?: boolean }[];
+  swappableOptions?: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string }[];
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
@@ -246,6 +246,7 @@ export function NewsColumnTitle({
                     >
                       {opt.label}
                       {opt.offseason && <em className="font-normal"> · offseason</em>}
+                      {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
                     </button>
                   );
                 })}

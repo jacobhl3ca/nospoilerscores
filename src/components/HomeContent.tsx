@@ -5,7 +5,7 @@ import { LeagueData, Sport, Game } from "@/lib/types";
 import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
-import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, getActiveLeagueCandidates } from "@/lib/espn";
+import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn from "@/components/LeagueColumn";
@@ -335,6 +335,20 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
 // 5-column board breakpoint: at ≥1280px the max-w-7xl board fits five columns
 // at ~236px each (above the 225px desktop column cap) — "room for all
 // naturally". Below it the board stays at the classic 3 columns.
+// Copy for the season-kickoff banner. Kept apart from the markup because the
+// wording is the whole point of the banner: for a league someone already
+// follows, the useful fact is WHEN, and "Friday, Aug 21" carries that better
+// than a countdown ("in 13 days" makes a reader do arithmetic). The 2026-27
+// Premier League is the case that prompted this — a World Cup summer pushed
+// kickoff a week later than usual, so even regular viewers have the wrong date.
+function kickoffMessage(k: LeagueKickoff): string {
+  const name = k.config.label === "Prem" ? "The Premier League" : k.config.label;
+  if (k.phase === "underway") return `${name} is underway — every match, spoiler-free.`;
+  if (k.phase === "today" || k.daysUntil === 0) return `${name} kicks off today — spoiler-free from the first whistle.`;
+  if (k.daysUntil === 1) return `${name} kicks off tomorrow — spoiler-free from day one.`;
+  return `${name} kicks off ${formatKickoffLong(k.kickoff)} — spoiler-free from day one.`;
+}
+
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
@@ -438,6 +452,7 @@ export default function HomeContent({
   // World Cup banner: "Add" expands into a replace-which-column picker when
   // there's no emptied slot to fill (Jacob 6/11).
   const [wcReplaceOpen, setWcReplaceOpen] = useState(false);
+  const [kickoffReplaceOpen, setKickoffReplaceOpen] = useState(false);
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
@@ -1181,26 +1196,43 @@ export default function HomeContent({
     return fifa ? isLeagueActive(fifa, viewDate) : false;
   }, [selectedDate]);
 
+  // The one league whose season is about to start (or just did) on the viewed
+  // date, if any — drives the kickoff banner below the date nav.
+  const kickoff = useMemo(() => {
+    if (!selectedDate) return null;
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    return getLeagueKickoff(viewDate);
+  }, [selectedDate]);
+
   // Compute which leagues are available for manual selection. Most seasonal
   // leagues disappear outside their season; NBA deliberately remains as a
   // muted "offseason" option so its news + trade board stay reachable early.
   // This does not affect the automatic columns, which still use active leagues.
+  //
+  // A league inside its KICKOFF_SOON_DAYS window is offered too, labelled with
+  // its start date ("Prem · starts Aug 21"). People ask for a column before the
+  // season opens and previously had no way to add it — and the column is not
+  // blank, since the next-game-day lookahead shows the opening fixtures and the
+  // league's news feed bakes year-round. Still manual only: getActiveLeagueCandidates
+  // (the auto-picker) is untouched, so nothing reshuffles on its own.
   const thirdLeagueOptions = useMemo(() => {
     if (!selectedDate) return [];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
     // Get active leagues plus the NBA exception, deduplicated by sport.
     const seen = new Set<Sport>();
-    const options: { sport: Sport; label: string; offseason?: boolean; defaultInSwitcher: boolean }[] = [];
+    const options: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string; defaultInSwitcher: boolean }[] = [];
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       if (seen.has(league.sport)) continue;
       const active = isLeagueActive(league, viewDate);
-      if (!active && league.sport !== "nba") continue;
+      const upcoming = !active && isLeagueUpcoming(league, viewDate);
+      if (!active && !upcoming && league.sport !== "nba") continue;
       seen.add(league.sport);
       options.push({
         sport: league.sport,
         label: league.label,
-        offseason: !active,
+        offseason: !active && !upcoming,
+        upcomingLabel: upcoming ? `starts ${formatKickoffShort(league.kickoffDate ?? league.startDate, viewDate)}` : undefined,
         defaultInSwitcher: !league.excludeFromAuto,
       });
     }
@@ -3013,6 +3045,99 @@ export default function HomeContent({
               </div>
             ) : null;
 
+            // Season-kickoff banner (Jacob 8/8): the same slim one-line shape as
+            // the World Cup banner, but driven by league config instead of a
+            // hard-coded sport, so every future season opener gets it for free.
+            // Shows in the days before a league starts, on the day itself, and
+            // for a few days after (weekend-only users). Dismissal is keyed to
+            // the exact kickoff, so next season's banner still appears.
+            // Never renders alongside the World Cup banner — one announcement.
+            const showKickoffBanner = !showWcBanner
+              && kickoff !== null
+              && !displayedSports.includes(kickoff.config.sport)
+              && !(prefs.kickoffBannersDismissed ?? []).includes(kickoff.seasonKey);
+            const kickoffAddLabel = kickoff ? `Add the ${kickoff.config.label} column` : "";
+            const kickoffBanner = showKickoffBanner && kickoff ? (
+              <div
+                className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10 flex items-center justify-center gap-x-3 gap-y-1.5 flex-wrap"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
+                role="status"
+              >
+                <span className="text-sm" style={{ color: "var(--text)" }}>
+                  <span aria-hidden="true">{sportGlyph(kickoff.config.sport)} </span>
+                  {kickoffMessage(kickoff)}
+                </span>
+                {firstEmptySlot !== undefined ? (
+                  <button
+                    type="button"
+                    onClick={() => setSlotLeague(firstEmptySlot, kickoff.config.sport)}
+                    data-umami-event={`kickoff-banner-add-empty-slot-${kickoff.config.sport}`}
+                    className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
+                    style={{ background: "var(--accent)", color: "white" }}
+                  >
+                    {kickoffAddLabel}
+                  </button>
+                ) : !kickoffReplaceOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setKickoffReplaceOpen(true)}
+                    data-umami-event={`kickoff-banner-open-replace-picker-${kickoff.config.sport}`}
+                    className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
+                    style={{ background: "var(--accent)", color: "white" }}
+                  >
+                    {kickoffAddLabel}
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm" style={{ color: "var(--text-muted)" }}>Replace:</span>
+                    {slotEntries.map((entry) => (
+                      <button
+                        type="button"
+                        key={entry.slotIdx}
+                        onClick={() => { setSlotLeague(entry.slotIdx, kickoff.config.sport); setKickoffReplaceOpen(false); }}
+                        data-umami-event={`kickoff-banner-replace-${entry.league.sport}`}
+                        className="text-sm font-medium px-2.5 py-1 rounded-md cursor-pointer transition-colors"
+                        style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        title={`Show ${kickoff.config.label} instead of ${entry.league.label}`}
+                      >
+                        {entry.league.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setKickoffReplaceOpen(false)}
+                      data-umami-event="kickoff-banner-cancel-replace"
+                      className="text-sm px-1.5 py-1 cursor-pointer"
+                      style={{ color: "var(--text-muted)" }}
+                      title="Cancel"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => updatePrefs({
+                    kickoffBannersDismissed: [...(prefs.kickoffBannersDismissed ?? []), kickoff.seasonKey].slice(-12),
+                  })}
+                  data-umami-event={`kickoff-banner-dismiss-${kickoff.config.sport}`}
+                  aria-label={`Dismiss ${kickoff.config.label} banner`}
+                  title="Dismiss"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
+                  style={{ color: "var(--text-muted)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null;
+
+            // At most one banner occupies the strip above the board.
+            const topBanner = wcBanner ?? kickoffBanner;
+
             // Single-column board (Settings → Board layout): stack every league
             // in one centered, wider column with bigger cards. The .ns-cards-lg
             // class scales up logos + team names (see globals.css); colWidthClass
@@ -3059,7 +3184,7 @@ export default function HomeContent({
             if (showFinalSplit) {
               return (
                 <>
-                {wcBanner}
+                {topBanner}
                 <div className={boardRowCls}>
                   {/* Invisible leading spacer balances the trailing + button so
                       the columns stay centered when a slot has been emptied
@@ -3088,7 +3213,7 @@ export default function HomeContent({
 
             return (
               <>
-              {wcBanner}
+              {topBanner}
               <div className={boardRowCls}>
                 {/* Invisible leading spacer balances the trailing + button so
                     the columns stay centered when a slot has been emptied
@@ -3338,6 +3463,7 @@ export default function HomeContent({
                   >
                     {on ? `${idx + 1}. ` : ""}{o.label}
                     {o.offseason && <em className="font-normal" style={{ color: on ? "inherit" : "var(--text-muted)" }}> · offseason</em>}
+                    {o.upcomingLabel && <em className="font-normal" style={{ color: on ? "inherit" : "var(--text-muted)" }}> · {o.upcomingLabel}</em>}
                   </button>
                 );
               })}
