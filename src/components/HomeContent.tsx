@@ -30,6 +30,42 @@ function getResolvedTheme(theme: Theme): "dark" | "light" {
   return theme;
 }
 
+// Before v2, every league absent from hiddenLeagues rendered checked; there was
+// no positive allowlist. Preserve that exact legacy state once, then stamp the
+// blob so new accounts/installations keep the slimmer defaults. This covers
+// both localStorage and signed-in R2 prefs through the merge helper below.
+function migrateLegacySwitcherPreferences(prefs: Preferences): Preferences {
+  if (prefs.switcherDefaultsVersion === 2) return prefs;
+  const hidden = new Set(prefs.hiddenLeagues ?? []);
+  const shown = new Set(prefs.shownLeagues ?? []);
+  for (const league of ALL_LEAGUES) {
+    if (league.excludeFromAuto && !hidden.has(league.sport)) shown.add(league.sport);
+  }
+  return {
+    ...prefs,
+    shownLeagues: shown.size ? [...shown] : undefined,
+    switcherDefaultsVersion: 2,
+  };
+}
+
+function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>): Preferences {
+  const merged = {
+    ...local,
+    ...remote,
+    // These arrays use omission to mean the default. Because the account copy
+    // is canonical, an omitted remote array must clear a device-only override
+    // instead of accidentally inheriting it through the object spread.
+    hiddenLeagues: remote.hiddenLeagues,
+    shownLeagues: remote.shownLeagues,
+    switcherDefaultsVersion: remote.switcherDefaultsVersion,
+  };
+  // The remote copy is canonical for a signed-in account. Its missing marker,
+  // not the new device's local marker, decides whether the account is legacy.
+  return remote.switcherDefaultsVersion === 2
+    ? merged
+    : migrateLegacySwitcherPreferences({ ...merged, switcherDefaultsVersion: undefined });
+}
+
 function getSmartDefaultOffset(cutoffHour = 13): number {
   // The base date this offset applies to (getDateString → getNowET) is shifted:
   // between midnight and 1 AM ET it has ALREADY rolled back to the prior
@@ -133,23 +169,25 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
   );
 }
 
+type NewsSourceType = "topvideos" | "espn" | "reddit" | "homepage";
+
 // Vertical, one-per-row source-type filter used inside the funnel popover.
-// Each row is tappable to select that filter; a drag handle reorders the
+// Each source is independently checkable; a drag handle reorders the
 // rows (order persisted in prefs). Pointer-based drag (not HTML5) so it
 // works on iOS. `dropIdx` is the insertion
 // slot drawn as a thin accent bar between rows.
-function NewsFilterList({ options, value, onSelect, onReorder }: {
-  options: { value: string; label: string }[];
-  value: string;
-  onSelect: (v: string) => void;
+function NewsFilterList({ options, selected, onToggle, onReorder }: {
+  options: { value: NewsSourceType; label: string }[];
+  selected: NewsSourceType[];
+  onToggle: (v: NewsSourceType) => void;
   onReorder: (order: string[]) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [dragVal, setDragVal] = useState<string | null>(null);
+  const [dragVal, setDragVal] = useState<NewsSourceType | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const order = options.map((o) => o.value);
 
-  const startDrag = (e: React.PointerEvent, val: string) => {
+  const startDrag = (e: React.PointerEvent, val: NewsSourceType) => {
     e.preventDefault();
     e.stopPropagation();
     setDragVal(val);
@@ -191,7 +229,7 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
   return (
     <div ref={listRef} className="select-none">
       {options.map((opt, i) => {
-        const active = opt.value === value;
+        const active = selected.includes(opt.value);
         const isDragging = dragVal === opt.value;
         return (
           <div key={opt.value} className="relative">
@@ -224,16 +262,22 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
                   <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" />
                 </svg>
               </span>
-              <button
-                type="button"
-                onClick={() => onSelect(opt.value)}
-                className="flex-1 min-w-0 text-left px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors cursor-pointer"
+              <label
+                className="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors cursor-pointer"
                 style={active
                   ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
                   : { color: "var(--text-muted)", background: "transparent" }}
               >
-                {opt.label}
-              </button>
+                <input
+                  type="checkbox"
+                  checked={active}
+                  disabled={active && selected.length === 1}
+                  onChange={() => onToggle(opt.value)}
+                  className="cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed"
+                  title={active && selected.length === 1 ? "Keep at least one source selected" : undefined}
+                />
+                <span>{opt.label}</span>
+              </label>
             </div>
           </div>
         );
@@ -465,9 +509,13 @@ export default function HomeContent({
     skipNewsExplainer: false,
     showNews: false,
   });
+  // A signed-in account that has already used the iPhone app does not need an
+  // install prompt on the web. This is account history from /api/me, not a
+  // guess based on the current browser's user agent.
+  const [hasIosAccountUse, setHasIosAccountUse] = useState(false);
 
   useEffect(() => {
-    const loaded = loadPreferences();
+    const loaded = migrateLegacySwitcherPreferences(loadPreferences());
     // First-run detection for the league picker: a brand-new install has no
     // stored prefs blob yet. Capture this BEFORE the share-link path below can
     // call savePreferences() (which would write the blob and hide the signal).
@@ -604,11 +652,12 @@ export default function HomeContent({
     (async () => {
       try {
         const auth = await getAuthState();
+        setHasIosAccountUse(Boolean(auth.signedIn && auth.platforms?.ios));
         if (!auth.signedIn) return;
         setRemoteSync(pushRemotePrefs);
         const remote = await fetchRemotePrefs();
         if (remote && Object.keys(remote).length > 0) {
-          const merged = { ...loadPreferences(), ...remote };
+          const merged = mergeRemotePreferences(loadPreferences(), remote);
           savePreferences(merged); // persist locally (and re-affirm to server via the hook)
           applyLaunchState(merged);
         } else {
@@ -635,11 +684,12 @@ export default function HomeContent({
       if (document.visibilityState !== "visible") return;
       try {
         const auth = await getAuthState();
+        setHasIosAccountUse(Boolean(auth.signedIn && auth.platforms?.ios));
         if (!auth.signedIn || !alive) return;
         const remote = await fetchRemotePrefs();
         if (!remote || !alive || Object.keys(remote).length === 0) return;
         const local = loadPreferences();
-        const merged = { ...local, ...remote };
+        const merged = mergeRemotePreferences(local, remote);
         if (JSON.stringify(merged) === JSON.stringify(local)) return; // no change → don't disturb
         savePreferences(merged);
         setPrefs(merged);
@@ -1174,22 +1224,72 @@ export default function HomeContent({
     return fifa ? isLeagueActive(fifa, viewDate) : false;
   }, [selectedDate]);
 
-  // Compute which leagues are available for the 3rd slot dropdown
+  // Compute which leagues are available for manual selection. Most seasonal
+  // leagues disappear outside their season; NBA deliberately remains as a
+  // muted "offseason" option so its news + trade board stay reachable early.
+  // This does not affect the automatic columns, which still use active leagues.
   const thirdLeagueOptions = useMemo(() => {
     if (!selectedDate) return [];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    // Get all active leagues for this date, deduplicated by sport
+    // Get active leagues plus the NBA exception, deduplicated by sport.
     const seen = new Set<Sport>();
-    const options: { sport: Sport; label: string }[] = [];
+    const options: { sport: Sport; label: string; offseason?: boolean; defaultInSwitcher: boolean }[] = [];
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       if (seen.has(league.sport)) continue;
-      if (!isLeagueActive(league, viewDate)) continue;
+      const active = isLeagueActive(league, viewDate);
+      if (!active && league.sport !== "nba") continue;
       seen.add(league.sport);
-      options.push({ sport: league.sport, label: league.label });
+      options.push({
+        sport: league.sport,
+        label: league.label,
+        offseason: !active,
+        defaultInSwitcher: !league.excludeFromAuto,
+      });
     }
     return options;
   }, [selectedDate]);
+
+  // Settings is the durable league catalog, so it must not hide a saved pick
+  // merely because that league is between seasons. A sport can have several
+  // seasonal configs (golf majors, tennis Slams); mark it in-season when ANY
+  // config for that sport is active on the viewed date.
+  const settingsLeagueOptions = useMemo(() => {
+    if (!selectedDate) return [];
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean; defaultInSwitcher: boolean }>();
+    for (const league of ALL_LEAGUES) {
+      if (league.hidden) continue;
+      const active = isLeagueActive(league, viewDate);
+      const existing = options.get(league.sport);
+      if (!existing) {
+        options.set(league.sport, {
+          sport: league.sport,
+          label: league.label,
+          offseason: !active,
+          defaultInSwitcher: !league.excludeFromAuto,
+        });
+      } else if (active && existing.offseason) {
+        options.set(league.sport, {
+          sport: league.sport,
+          label: league.label,
+          defaultInSwitcher: !league.excludeFromAuto,
+        });
+      } else if (!active && existing.offseason && !league.excludeFromAuto) {
+        existing.defaultInSwitcher = true;
+      }
+    }
+    return [...options.values()];
+  }, [selectedDate]);
+
+  const teamLeagueOptions = useMemo(() => {
+    const seen = new Set<Sport>();
+    return ALL_LEAGUES.flatMap((league) => {
+      if (league.hidden || seen.has(league.sport)) return [];
+      seen.add(league.sport);
+      return [{ sport: league.sport, label: league.label }];
+    });
+  }, []);
 
   // Open the first-run league picker once we know which leagues are in season
   // (thirdLeagueOptions populates after selectedDate resolves). firstRunRef was
@@ -1308,14 +1408,25 @@ export default function HomeContent({
     };
   }, [showLeaguePicker, skipLeaguePicker]);
 
-  // Homepage switcher options = the active leagues minus the ones the user
-  // removed in Settings (hiddenLeagues). Drives the header dropdown/arrow
-  // cycling, the news swap menus, and the + button's picks. Label lookups and
-  // Settings' slot pickers keep the full thirdLeagueOptions list so a hidden
-  // league can still be pinned (or re-enabled) deliberately.
+  // Homepage switcher options = core auto-rotation leagues by default, plus
+  // opt-in leagues the user explicitly enabled, minus explicit hides. This
+  // keeps a large in-season expansion slate from overwhelming the switcher.
+  // Label lookups and Settings' slot pickers keep the full options list so any
+  // league can still be pinned or enabled deliberately.
   const switcherOptions = useMemo(
-    () => thirdLeagueOptions.filter((o) => !prefs.hiddenLeagues?.includes(o.sport)),
-    [thirdLeagueOptions, prefs.hiddenLeagues],
+    () => thirdLeagueOptions.filter((o) => {
+      if (prefs.hiddenLeagues?.includes(o.sport)) return false;
+      if (prefs.shownLeagues?.includes(o.sport)) return true;
+      const pinned = [
+        prefs.firstLeague,
+        prefs.secondLeague,
+        prefs.thirdLeague,
+        prefs.fourthLeague,
+        prefs.fifthLeague,
+      ].includes(o.sport);
+      return o.defaultInSwitcher || pinned || prefs.favoriteLeagues.includes(o.sport);
+    }),
+    [thirdLeagueOptions, prefs],
   );
 
   // Switcher sports in RELEVANCE order — the auto-picker's own ranking
@@ -1426,8 +1537,28 @@ export default function HomeContent({
   // Source cards use the current deterministic smart cascade. Ignore stale
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
   // local preference can silently bury a newly added source forever.
-  const newsTypeFilter = prefs.newsTypeFilter ?? "reddit";
-  const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
+  const ALL_NEWS_SOURCE_TYPES: NewsSourceType[] = ["topvideos", "reddit", "espn", "homepage"];
+  const legacyNewsTypeFilter = prefs.newsTypeFilter ?? "reddit";
+  const savedNewsTypeFilters = prefs.newsTypeFilters?.filter(
+    (value): value is NewsSourceType => ALL_NEWS_SOURCE_TYPES.includes(value as NewsSourceType),
+  );
+  const newsTypeFilters: NewsSourceType[] = savedNewsTypeFilters?.length
+    ? savedNewsTypeFilters
+    : legacyNewsTypeFilter === "all"
+      ? ALL_NEWS_SOURCE_TYPES
+      : [legacyNewsTypeFilter];
+  const setNewsTypeFilters = (types: NewsSourceType[]) => updatePrefs({
+    newsTypeFilters: types,
+    // Older app versions cannot express a multi-select. "all" is the safest
+    // fallback because it never silently hides a source the user enabled here.
+    newsTypeFilter: types.length === 1 ? types[0] : "all",
+  });
+  const toggleNewsTypeFilter = (type: NewsSourceType) => {
+    const next = newsTypeFilters.includes(type)
+      ? newsTypeFilters.filter((value) => value !== type)
+      : [...newsTypeFilters, type];
+    if (next.length > 0) setNewsTypeFilters(next);
+  };
   // The 🎥 Videos quick-filter is ITEM-level (not source-level) so it includes
   // Reddit video posts (v.redd.it clips), not just the "Top Videos" highlight
   // sources: Cards filters each source's items to those with a clip (NewsColumn
@@ -1435,8 +1566,7 @@ export default function HomeContent({
   // Source-filter options + the user's drag-reordered order. Unknown labels in
   // the saved order are ignored; new options not yet in the saved order fall
   // through to the tail in default order.
-  const NEWS_FILTER_OPTIONS: { value: string; label: string }[] = [
-    { value: "all", label: "All" },
+  const NEWS_FILTER_OPTIONS: { value: NewsSourceType; label: string }[] = [
     { value: "topvideos", label: "Top videos" },
     { value: "reddit", label: "Reddit" },
     { value: "espn", label: "ESPN" },
@@ -1984,18 +2114,18 @@ export default function HomeContent({
                     {/* One per row + drag-to-reorder (order saved to prefs). */}
                     <NewsFilterList
                       options={orderedNewsFilterOptions}
-                      value={newsTypeFilter}
-                      onSelect={(v) => setNewsTypeFilter(v as "all" | "topvideos" | "espn" | "reddit" | "homepage")}
+                      selected={newsTypeFilters}
+                      onToggle={toggleNewsTypeFilter}
                       onReorder={setNewsTypeFilterOrder}
                     />
-                    {newsTypeFilter !== "all" && (
+                    {newsTypeFilters.length !== ALL_NEWS_SOURCE_TYPES.length && (
                       <button
                         type="button"
-                        onClick={() => setNewsTypeFilter("all")}
+                        onClick={() => setNewsTypeFilters(ALL_NEWS_SOURCE_TYPES)}
                         className="mt-3 text-xs underline cursor-pointer"
                         style={{ color: "var(--text-muted)" }}
                       >
-                        Clear filter
+                        Select all
                       </button>
                     )}
                   </div>
@@ -2393,31 +2523,35 @@ export default function HomeContent({
             ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
             : [...firstTwoEntries, ...(thirdColEntry ? [thirdColEntry] : [])];
 
-          // Apply Focus league (drops other entries) then per-entry filter
-          // by type + hidden labels. Type "all" is a no-op; hidden labels
-          // are removed via Array.filter so they vanish from view but stay
-          // togglable in the dropdown.
+          // Apply Focus league (drops other entries) then per-entry filter by
+          // the independently checked source types + hidden labels. Hidden
+          // labels vanish from view but stay togglable in the dropdown.
           const focusedEntries = newsFocusLeague
             ? visibleNewsEntries.filter((e) => e.id === newsFocusLeague)
             : visibleNewsEntries;
           const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
             const visible = entry.orderedCascade.filter((s) => !newsHiddenSources.includes(s.label));
-            const typeMatched = visible.filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter);
+            const typeMatched = visible.filter((s) => newsTypeFilters.includes(classifySource(s) as NewsSourceType));
             // Not every league has a source of every type — NWSL and cricket
             // have no Reddit card at all (r/soccer is men's club football, so
             // it is deliberately kept out of the NWSL column). Since the
-            // default filter is now "reddit", a strict filter would render
+            // legacy default filter is "reddit", a strict filter would render
             // those columns completely blank on first visit with nothing to
             // explain why. Fall back to the league's full cascade whenever the
             // type filter would empty the column, so the filter narrows a
             // column that has the type and is a no-op for one that doesn't.
-            const filtered = typeMatched.length > 0 ? typeMatched : visible;
+            // Preserve that legacy fallback until the user touches the new
+            // checkboxes. Once newsTypeFilters exists, unchecked types stay
+            // unchecked even for a league that has none of the selected type.
+            const filtered = typeMatched.length > 0 || prefs.newsTypeFilters
+              ? typeMatched
+              : visible;
             // When viewing "All", honor the user's source-type order from the
             // funnel popover (Jacob 6/1) — dragging a source higher makes its
             // items lead in every column. Stable within a type so the per-sport
             // cascade order is preserved among same-type sources.
             const typeOrder = prefs.newsTypeFilterOrder;
-            return (newsTypeFilter === "all" && typeOrder && typeOrder.length)
+            return (newsTypeFilters.length > 1 && typeOrder && typeOrder.length)
               ? filtered
                   .map((s, i) => [s, i] as const)
                   .sort(([a, ai], [bz, bi]) => {
@@ -2608,7 +2742,7 @@ export default function HomeContent({
                       // setNewsThirdLeague — matches hidescore.com's "News ▾".
                       const isEspn = entry.id === "espn";
                       return (
-                        <div key={`title-${entry.slotIdx}-${entry.id}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                        <div key={`title-${entry.id}-${entry.slotIdx}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                           <NewsColumnTitle
                             title={entry.label}
                             swappableOptions={switcherOptions}
@@ -2663,7 +2797,7 @@ export default function HomeContent({
                   const isEspn = entry.id === "espn";
                   return (
                     <NewsColumn
-                      key={`nc-${entry.slotIdx}-${entry.id}-${newsRefreshKey}`}
+                      key={`nc-${entry.id}-${entry.slotIdx}-${newsRefreshKey}`}
                       title={entry.label}
                       sources={sourcesForEntry(entry, idx)}
                       swappableOptions={switcherOptions}
@@ -2784,9 +2918,10 @@ export default function HomeContent({
               namesCompact,
             };
             // Per-slot swap dropdowns: every column lists every in-season
-            // league. Leagues already shown in another column come through
-            // greyed (via shownElsewhere) but stay selectable — picking one
-            // gives you a second column of that league.
+            // league plus the explicitly-labelled offseason NBA option.
+            // Leagues already shown in another column come through greyed (via
+            // shownElsewhere) but stay selectable — picking one gives you a
+            // second column of that league.
             const displayedSports = sortedLeagues.map((l) => l.sport);
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
@@ -3049,25 +3184,11 @@ export default function HomeContent({
           return <Heading className="sr-only">Catch up on games without spoilers. Spoiler-free sports scores and highlights.</Heading>;
         })()}
 
-        {/* Standing announcement line (added 2026-08-03). Doubles as the reply
-            to the footer-feedback note that asked for the big-five soccer
-            leagues — the sender left no email, so this is the only channel
-            back to them. It also carries the discoverability point that note
-            revealed: they assumed NBA/NHL/Prem were missing when all three
-            were already there, just not in the default three columns. Say
-            plainly that leagues live in Settings and only surface in season. */}
-        <p className="italic max-w-[46rem] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-          New: La Liga, Serie A, Bundesliga and Ligue 1 — thank you to whoever asked for them
-          through this feedback box. Every league we cover is in Settings, and each one appears
-          in the column switcher only while its season is running, so the soccer leagues arrive
-          in mid-to-late August.
-        </p>
-
         {/* ONE footer row (Jacob 7/14): About is the first inline item, then
             Feedback / Settings / Privacy / App Store — no second row. `relative`
             anchors the About panel, which drops BELOW the row (absolute) so
             opening it never wraps the row. */}
-        <div className="relative flex flex-nowrap items-center justify-center gap-x-2.5">
+        <div className="relative flex flex-nowrap items-center justify-center gap-x-2">
           {/* About = the SEO copy + internal-link graph, rolled up behind a
               disclosure. Google renders and indexes content inside collapsed
               <details>, and plain <a href> (not next/link) is what the crawler
@@ -3108,6 +3229,7 @@ export default function HomeContent({
             </p>
           </div>
         </details>
+          <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
           <FeedbackBox />
           <button
             type="button"
@@ -3122,33 +3244,19 @@ export default function HomeContent({
             <span>Settings</span>
           </button>
           <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
+          {!isNativeApp && !hasIosAccountUse && (
+            <a
+              href="https://apps.apple.com/app/hidescore/id6766885311"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+              data-umami-event="install-appstore"
+            >
+              App Store
+            </a>
+          )}
         </div>
-
-        {/* Official "Download on the App Store" badge. Was a plain underlined
-            text link sitting in the row above, where it read as one more footer
-            nav item; the real badge is the thing people recognise as "this has
-            an app". Hidden inside the native app — nothing to install there.
-            The asset is Apple's own black badge; its #a6a6a6 border is what
-            keeps it legible on the dark theme's near-black background. */}
-        {!isNativeApp && (
-          <a
-            href="https://apps.apple.com/app/hidescore/id6766885311"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 inline-block transition-opacity hover:opacity-80"
-            aria-label="Download HideScore on the App Store"
-            data-umami-event="install-appstore"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/app-store-badge.svg"
-              alt="Download on the App Store"
-              width={134}
-              height={45}
-              className="block h-[45px] w-auto"
-            />
-          </a>
-        )}
 
         {/* Compact custom Apple-logo pill — replaced by the footer text link
                 above. Kept commented in case we want the smaller text version back.
@@ -3288,6 +3396,7 @@ export default function HomeContent({
                       : { background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
                   >
                     {on ? `${idx + 1}. ` : ""}{o.label}
+                    {o.offseason && <em className="font-normal" style={{ color: on ? "inherit" : "var(--text-muted)" }}> · offseason</em>}
                   </button>
                 );
               })}
@@ -3372,7 +3481,8 @@ export default function HomeContent({
         prefs={prefs}
         updatePrefs={updatePrefs}
         resolvedTheme={resolvedTheme}
-        thirdLeagueOptions={thirdLeagueOptions}
+        leagueOptions={settingsLeagueOptions}
+        teamLeagueOptions={teamLeagueOptions}
         displayedLeagues={sortedLeagues}
         knownTeams={knownTeams}
         onShareFavorites={shareFavorites}

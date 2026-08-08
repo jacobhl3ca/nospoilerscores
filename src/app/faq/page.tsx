@@ -50,7 +50,15 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Which sports and leagues does HideScore cover?",
-    a: "HideScore covers the NBA, MLB, NHL, NFL, and golf, plus soccer and college basketball, with spoiler-free scores, schedules, highlights, and news.",
+    a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, chess, esports, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, and major international tournaments.",
+  },
+  {
+    q: "Why don't I see a league on the main screen?",
+    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in In season and Offseason groups, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
+  },
+  {
+    q: "How do the separate soccer leagues work?",
+    a: "Each competition is its own league in HideScore, so La Liga, Serie A, Bundesliga, Ligue 1, the Premier League, Champions League, and the others can each have their own score column, news, teams, and highlights. Pick the competitions you follow in Settings.",
   },
   {
     q: "Is HideScore free?",

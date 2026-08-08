@@ -1,17 +1,22 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, FightBout } from "./types";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
+import { raceDetailsUrl } from "./raceDetails";
+import { fetchPokerEvent } from "./poker";
+import { fetchCuratedBoxingEvent } from "./boxing";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
 const SPORT_PATHS: Record<Sport, string> = {
   // Chess + boxing have NO ESPN path — they are served by worker routes
-  // (/api/chess, /api/boxing). The empty string is never fetched: both are
+  // (/api/chess, /api/boxing). Poker comes from the curated major-events file.
+  // The empty string is never fetched: all three are
   // dispatched before fetchGames in fetchLeague. Present only so this stays a
   // total Record<Sport,string>, which is what forces a new sport to be
   // considered here at all.
   chess: "",
   boxing: "",
+  poker: "",
   esports: "",
   mlb: "/baseball/mlb/scoreboard",
   nba: "/basketball/nba/scoreboard",
@@ -257,6 +262,10 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Chess is the same argument in a purer form: an elite game is genuinely
   // worth watching move by move and is destroyed completely by one number.
   { sport: "chess", label: "Chess", excludeFromAuto: true },
+  // Poker is a one-card major-event column, not a fake score league. It covers
+  // WSOP/WPT/EPT/Triton only, remains opt-in, and disappears cleanly when the
+  // curated official calendar has no nearby confirmed event.
+  { sport: "poker", label: "Poker", excludeFromAuto: true },
   // Esports (PandaScore). Year-round, opt-in. Worlds and the LCK/LPL play in
   // Asian timezones, so the Western audience watches almost entirely on VOD —
   // the purest spoiler case in the app after cricket.
@@ -396,7 +405,8 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   ufc: 31,
   boxing: 32,
   chess: 33,
-  esports: 34,
+  poker: 34,
+  esports: 35,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -630,6 +640,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // the shared scorer for an eventCard league — but the Record must be total.
   boxing: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   chess:  { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
+  poker:  { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 1 },
   // Esports is scored as a SERIES (Bo3/Bo5), not a running total, so the
   // shared scorer does not apply — esportsRating() handles it, the same way
   // cricketRating() branches out before the shared path.
@@ -1103,10 +1114,10 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const state = (match.status?.type?.state ?? "pre") as "pre" | "in" | "post";
   const homeTeam = mkTeam(home);
   const awayTeam = mkTeam(away);
-  // Tournament + year context for the highlight search. Without it the
-  // unscoped fallback query ("A vs B highlights") can land on the same
-  // players' match from a DIFFERENT event/year (e.g. a French Open match
-  // resolving to "Rome Open 2025"). Threaded through the Game's seriesNote,
+  // Tournament + year context for the strict highlight query. Without it the
+  // tournament's own channel can still return the same players' match from a
+  // DIFFERENT event/year (e.g. a French Open match resolving to "Rome Open
+  // 2025"). Threaded through the Game's seriesNote,
   // which is only ever used to build the YouTube query (never rendered).
   const matchYear = (match.date ?? event.date ?? "").slice(0, 4);
   const tourneyTag = [event.name, matchYear].filter(Boolean).join(" ");
@@ -1747,6 +1758,7 @@ export function espnGameUrl(game: Game): string {
     // a sport-section landing beats falling through to a wrong league page.
     case "boxing": return `https://www.espn.com/boxing/`;
     case "chess": return `https://lichess.org/broadcast`;
+    case "poker": return `https://www.wsop.com/schedule/`;
     // PandaScore supplies no public per-match page, so there is no gamecast
     // to link to; this only satisfies the exhaustive switch.
     case "esports": return `https://www.pandascore.co/`;
@@ -1816,6 +1828,9 @@ export function sportStreamFallback(sport: Sport): string {
     // streamer that is wrong most nights. Chess streams free on Lichess.
     case "boxing": return "https://www.espn.com/boxing/schedule/";
     case "chess": return "https://lichess.org/broadcast";
+    // Poker cards carry a per-event official URL. This is only the exhaustive
+    // last-resort landing and intentionally avoids a result/standings page.
+    case "poker": return "https://www.wsop.com/schedule/";
     // Every tier-s/a match streams free on Twitch; the channel varies per
     // league, so the directory is the only destination right for all of them.
     case "esports": return "https://www.twitch.tv/directory/category/league-of-legends";
@@ -2250,9 +2265,8 @@ const RACING_SERIES: Record<"f1" | "nascar" | "indycar", {
   nascar: { label: "NASCAR", queryPrefix: "NASCAR Cup Series", channel: "NASCAR" },
   // ⚠️ Sponsor-prefixed, the exact hazard the Ligue 1 note in youtube.ts calls
   // out: title sponsors rotate and the channel renames with them. A stale
-  // string doesn't break anything — the official slot just goes unfilled and
-  // the tile falls back to the unscoped search — but re-verify if the IndyCar
-  // highlight button ever stops resolving.
+  // string doesn't serve the wrong uploader: the strict lookup misses and the
+  // tile hides its button. Re-verify if the IndyCar highlight stops resolving.
   indycar: { label: "IndyCar", queryPrefix: "INDYCAR", channel: "NTT INDYCAR SERIES" },
 };
 
@@ -2453,12 +2467,18 @@ interface BoxingApiEvent {
 
 export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard | null> {
   try {
-    const res = await fetchWithRetry(`${getApiBase()}/api/boxing`);
-    if (!res.ok) return null;
+    const [curated, res] = await Promise.all([
+      fetchCuratedBoxingEvent(date),
+      fetchWithRetry(`${getApiBase()}/api/boxing`),
+    ]);
+    if (!res.ok) return curated;
     const { events } = (await res.json()) as { events: BoxingApiEvent[] };
-    if (!events?.length) return null;
+    if (!events?.length) return curated;
     const target = date ? new Date(`${date}T12:00:00`).getTime() : Date.now();
     const ts = (e: BoxingApiEvent) => new Date(e.date).getTime();
+    const exactDate = date
+      ? events.filter((event) => event.date.slice(0, 10).replace(/-/g, "") === date)
+      : [];
     // Prefer a card the user can actually WATCH. Nearest-by-date alone picks
     // badly here: the feed carries every sanctioned card worldwide, so on
     // 2026-08-04 it surfaced "Nyika vs. Masson" at a stadium in North Shore, NZ
@@ -2467,11 +2487,12 @@ export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard |
     // the boxing analogue of the chess `tier` filter, which the API gives us
     // for free but boxing-data.com does not.
     const watchable = (e: BoxingApiEvent) => (e.broadcasts?.length ? 0 : 1);
-    const chosen = [...events].sort(
+    const chosen = [...(exactDate.length ? exactDate : events)].sort(
       (a, b) =>
         watchable(a) - watchable(b) ||
         Math.abs(ts(a) - target) - Math.abs(ts(b) - target),
     )[0];
+    if (!exactDate.length && curated) return curated;
     if (!chosen) return null;
     const now = Date.now();
     const t = ts(chosen);
@@ -2560,10 +2581,12 @@ async function fetchLeagueEvent(
       officialChannel: series.channel,
       officialLabel: series.label,
       raceTokens: buildRaceTokens(sport, event.name || event.shortName || ""),
-      // F1's own event links point at espn.com. NASCAR's and IndyCar's point at
-      // VividSeats — a ticket reseller, not a race page — so only pass through a
-      // link that's actually on ESPN and leave the tile un-linked otherwise.
-      eventUrl: sport === "f1" || (eventUrl && /(^|\.)espn\.(com|in)\//.test(eventUrl)) ? eventUrl : undefined,
+      // ESPN's NASCAR/IndyCar event links often point only at VividSeats. Never
+      // send a details click to a ticket reseller: use an ESPN event link when
+      // available, otherwise the verified ESPN series schedule. This keeps
+      // every upcoming race tile informative and clickable without exposing a
+      // finished-race result page.
+      eventUrl: raceDetailsUrl(sport, eventUrl),
     };
   }
 
@@ -3733,7 +3756,20 @@ export async function fetchAllLeagues(
   const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
-    return ALL_LEAGUES.find((l) => l.sport === sport && isLeagueActive(l, viewDate)) ?? null;
+    const configs = ALL_LEAGUES.filter((l) => l.sport === sport);
+    if (!configs.length) return null;
+    // Several sports have more than one seasonal config (NFL regular season +
+    // preseason, four golf majors, four tennis Slams). Looking up only the
+    // first config made an August `nfl` selection inspect the inactive regular
+    // season entry, reject the click, and silently auto-fill the slot with MLS.
+    // Resolve the active config for the viewed date instead.
+    const activeConfig = configs.find((l) => isLeagueActive(l, viewDate));
+    if (activeConfig) return activeConfig;
+    // NBA is the deliberate offseason exception: it stays manually pinnable
+    // for league news and the trade board, but the auto-picker above still
+    // uses isLeagueActive() and therefore never forces an empty NBA column on
+    // people between the Finals and opening night.
+    return sport === "nba" ? configs[0] : null;
   };
   const slot1Cfg = resolveSlot(slotOverrides?.first);
   const slot2Cfg = resolveSlot(slotOverrides?.second);
@@ -3747,11 +3783,9 @@ export async function fetchAllLeagues(
     // each set slot uses its override; each unset slot falls back to its position
     // default in auto.
     // Auto = the slot's position default, always (each unset slot falls back to
-    // its position default in auto). This can transiently put a league in two
-    // slots — e.g. World Cup pinned to the left column while the center slot's
-    // auto default is ALSO World Cup — which rendered two identical "World Cup"
-    // columns (Jacob 6/15). The dedupe-by-sport pass below removes that, so a
-    // league never appears in more than one column.
+    // its position default in auto). Explicit duplicates are intentional: the
+    // switcher greys an already-shown league but promises that selecting it adds
+    // a second column.
     const nextAutoForSlot = (slotIdx: number): LeagueConfig | null => auto[slotIdx] ?? null;
     // Each slot resolves to one of: explicit league (incl. "empty" → skip),
     // unset (null) → fall back to that slot's auto pick.
@@ -3774,38 +3808,9 @@ export async function fetchAllLeagues(
     final = auto;
   }
 
-  // Never render the same league in two columns. The date nav is global, so two
-  // columns of the same league show identical games — always redundant. A league
-  // pinned to a non-default slot can collide with another slot's auto default
-  // (World Cup pinned left + center auto-defaulting to World Cup → two "World
-  // Cup" columns, Jacob 6/15). Dedupe by sport keeping the first (left-most)
-  // occurrence, so the pinned position wins and the board shrinks to the
-  // distinct leagues. Then BACKFILL each freed slot with the next distinct
-  // active league (by priority) so removing the duplicate doesn't shrink the
-  // board — the user keeps a full set of columns, just without the repeat
-  // (Jacob 6/15 #2: a deduped board collapsed to one column → "should show all").
-  const targetCount = final.length;
-  const seenSport = new Set<Sport>();
-  final = final.filter((cfg) => {
-    if (seenSport.has(cfg.sport)) return false;
-    seenSport.add(cfg.sport);
-    return true;
-  });
-  if (final.length < targetCount) {
-    // Draw the backfill pool at slotCount, NOT MAX_LEAGUES: on a wide (5-column)
-    // board pickAndAssignLeagues only builds a candidate pool up to `count`, so
-    // MAX_LEAGUES (3) yielded just the top-3 leagues — all already placed and in
-    // seenSport — leaving slots 4-5 un-backfillable. The board then rendered 4
-    // columns instead of 5 after a dedupe, the very shrink this block prevents.
-    const backfill = pickAndAssignLeagues(viewDate, slotCount).filter(
-      (l) => !seenSport.has(l.sport),
-    );
-    for (const l of backfill) {
-      if (final.length >= targetCount) break;
-      seenSport.add(l.sport);
-      final.push(l);
-    }
-  }
+  // Keep duplicate manual slots. Replacing one of them with an unrelated auto
+  // league made the grey "already shown" option misleading: the UI said a
+  // second column would be added, then rendered a different default instead.
 
   const fetchLeague = async (cfg: LeagueConfig): Promise<LeagueData | null> => {
     const label = effectiveLeagueLabel(cfg, viewDate);
@@ -3820,7 +3825,8 @@ export async function fetchAllLeagues(
       return { sport: cfg.sport, label, games: [], eventCard };
     }
     // Chess + boxing come from worker routes, not ESPN — see fetchChessEvent /
-    // fetchBoxingEvent. Both return null on any failure, which drops the column
+    // fetchBoxingEvent. Poker reads the curated official major calendar. All
+    // return null on any failure, which drops the column
     // rather than showing a broken one.
     // Esports comes from PandaScore via the worker and produces real two-team
     // GAMES (not an event tile), so it returns through the normal games path.
@@ -3829,10 +3835,12 @@ export async function fetchAllLeagues(
       if (!games.length) return null;
       return { sport: cfg.sport, label, games };
     }
-    if (cfg.sport === "chess" || cfg.sport === "boxing") {
+    if (cfg.sport === "chess" || cfg.sport === "boxing" || cfg.sport === "poker") {
       const eventCard = cfg.sport === "chess"
         ? await fetchChessEvent(date)
-        : await fetchBoxingEvent(date);
+        : cfg.sport === "boxing"
+          ? await fetchBoxingEvent(date)
+          : await fetchPokerEvent(date);
       if (!eventCard) return null;
       return { sport: cfg.sport, label, games: [], eventCard };
     }

@@ -10,9 +10,14 @@ import {
   DefaultLandingView,
   DefaultRatings,
 } from "@/lib/preferences";
-import { getAuthState, signInWithApple, signInWithGoogle, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
+import { getAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
-interface LeagueOption { sport: Sport; label: string }
+interface LeagueOption {
+  sport: Sport;
+  label: string;
+  offseason?: boolean;
+  defaultInSwitcher?: boolean;
+}
 
 interface SettingsPanelProps {
   open: boolean;
@@ -20,8 +25,14 @@ interface SettingsPanelProps {
   prefs: Preferences;
   updatePrefs: (update: Partial<Preferences>) => void;
   resolvedTheme: "dark" | "light";
-  // All currently-active leagues (so each slot dropdown can offer the full set).
-  thirdLeagueOptions: LeagueOption[];
+  // Every supported league, split into in-season/offseason in the UI. Saved
+  // offseason picks stay visible here even while the score board falls back to
+  // its active automatic columns.
+  leagueOptions: LeagueOption[];
+  // Every supported team league, including out-of-season leagues. Team
+  // favorites are durable; the picker must not hide La Liga in July merely
+  // because its score column is not active yet.
+  teamLeagueOptions: LeagueOption[];
   // Currently-displayed leagues for default-fallback labels in the slot dropdowns.
   displayedLeagues: LeagueData[];
   // Used to map favorited team IDs → display names when the team is in view.
@@ -35,7 +46,7 @@ interface SettingsPanelProps {
 }
 
 const DATE_MODE_OPTIONS: { value: DefaultDateMode; label: string; hint: string }[] = [
-  { value: "smart", label: "Smart", hint: "Yesterday before 1 PM local, today after" },
+  { value: "smart", label: "Automatic", hint: "Yesterday before the switch time, today after" },
   { value: "yesterday", label: "Yesterday", hint: "Always start on yesterday" },
   { value: "today", label: "Today", hint: "Always start on today" },
 ];
@@ -114,6 +125,11 @@ const SEEK_FILL_OPTIONS: { value: "off" | "grey" | "white"; label: string; hint:
   { value: "white", label: "White", hint: "Bright position fill" },
 ];
 
+const PLAYER_OPTIONS: { value: "safe" | "youtube"; label: string; hint: string }[] = [
+  { value: "safe", label: "Spoiler-safe", hint: "Hide progress and the ending with HideScore controls" },
+  { value: "youtube", label: "YouTube", hint: "Use the familiar YouTube controls; progress may reveal how far you are" },
+];
+
 const SPORT_LABEL: Record<Sport, string> = {
   mlb: "MLB",
   nba: "NBA",
@@ -148,6 +164,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   ufc: "UFC",
   boxing: "Boxing",
   chess: "Chess",
+  poker: "Poker",
   esports: "Esports",
 };
 
@@ -163,7 +180,8 @@ export default function SettingsPanel({
   prefs,
   updatePrefs,
   resolvedTheme,
-  thirdLeagueOptions,
+  leagueOptions,
+  teamLeagueOptions,
   displayedLeagues,
   knownTeams,
   onShareFavorites,
@@ -210,8 +228,17 @@ export default function SettingsPanel({
   // Account / cross-device sync state (Sign in with Apple). Re-checked each
   // time the panel opens so the signed-in email reflects a just-finished login.
   const [auth, setAuth] = useState<AuthState>({ signedIn: false, email: null });
+  const [canUseGoogle, setCanUseGoogle] = useState(false);
+  const [emailStep, setEmailStep] = useState<"email" | "code">("email");
+  const [emailAddress, setEmailAddress] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailStatus, setEmailStatus] = useState("");
+  const [emailError, setEmailError] = useState(false);
   useEffect(() => {
     if (!open) return;
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuth(a); });
     return () => { alive = false; };
@@ -335,7 +362,8 @@ export default function SettingsPanel({
     [displayedLeagues],
   );
 
-  // Each slot dropdown offers every in-season league. Duplicates are allowed —
+  // Each slot dropdown offers every supported league year-round. Duplicates
+  // are allowed —
   // picking a league already in another slot just sets this slot to it too;
   // unset slots lock to their on-screen league so the auto-picker doesn't
   // reshuffle columns the user didn't touch. Walks the displayed-league queue
@@ -366,6 +394,54 @@ export default function SettingsPanel({
     prefs.fourthLeague,
     prefs.fifthLeague,
   ];
+
+  const inSeasonLeagueOptions = useMemo(
+    () => leagueOptions.filter((option) => !option.offseason),
+    [leagueOptions],
+  );
+  const offseasonLeagueOptions = useMemo(
+    () => leagueOptions.filter((option) => option.offseason),
+    [leagueOptions],
+  );
+
+  const optionText = (option: LeagueOption) =>
+    `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : ""}`;
+
+  const renderSwitcherToggle = (option: LeagueOption) => {
+    const hidden = prefs.hiddenLeagues?.includes(option.sport) ?? false;
+    const shown = prefs.shownLeagues?.includes(option.sport) ?? false;
+    const pinned = slotValues.includes(option.sport);
+    const preferred = option.defaultInSwitcher !== false || pinned || prefs.favoriteLeagues.includes(option.sport);
+    const checked = !hidden && (shown || preferred);
+    return (
+      <label key={option.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => {
+            const hiddenLeagues = new Set(prefs.hiddenLeagues ?? []);
+            const shownLeagues = new Set(prefs.shownLeagues ?? []);
+            hiddenLeagues.delete(option.sport);
+            shownLeagues.delete(option.sport);
+            if (event.target.checked && !preferred) {
+              shownLeagues.add(option.sport);
+            } else if (!event.target.checked && preferred) {
+              hiddenLeagues.add(option.sport);
+            }
+            updatePrefs({
+              hiddenLeagues: hiddenLeagues.size ? [...hiddenLeagues] : undefined,
+              shownLeagues: shownLeagues.size ? [...shownLeagues] : undefined,
+            });
+          }}
+          className="cursor-pointer accent-[var(--accent)]"
+        />
+        <span>
+          {SPORT_LABEL[option.sport] ?? option.label}
+          {option.offseason && <em style={{ color: "var(--text-muted)" }}> · offseason</em>}
+        </span>
+      </label>
+    );
+  };
 
   // Group favorited teams by sport, attaching display name + logo from
   // (a) currently-loaded games (knownTeams) and (b) the picker's per-sport
@@ -460,6 +536,7 @@ export default function SettingsPanel({
       wcBannerDismissed: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
+      shownLeagues: undefined,
       // The spoiler-protection + layout controls the panel also exposes were
       // omitted here, so "Reset all settings to defaults" left them at whatever
       // the user had set — a reset could keep the video title strip revealed,
@@ -499,12 +576,13 @@ export default function SettingsPanel({
       smartCutoffHour: 13,
       newsColCount: 3,
       newsTypeFilter: "reddit",
+      newsTypeFilters: undefined,
     });
   };
 
-  // Available news col-3 leagues mirror the slot-3 picker but we let it overlap
-  // with the scores layout since the news view is independent.
-  const newsCol3Options = thirdLeagueOptions;
+  // News is useful between seasons, so its optional third column uses the same
+  // year-round catalog as Settings' score-slot pickers.
+  const newsCol3Options = leagueOptions;
 
   if (!open) return null;
 
@@ -566,6 +644,24 @@ export default function SettingsPanel({
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                   Your teams, layout, and settings sync automatically across all your browsers and devices.
                 </p>
+                {auth.providers?.google && canUseGoogle && !auth.linkedProviders?.includes("google") && (
+                  <button type="button"
+                    onClick={() => signInWithGoogle(undefined, true)}
+                    className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                    style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                  >
+                    Link Google to this account
+                  </button>
+                )}
+                {auth.providers?.apple && !auth.linkedProviders?.includes("apple") && (
+                  <button type="button"
+                    onClick={() => signInWithApple(undefined, true)}
+                    className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                    style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                  >
+                    Link Apple to this account
+                  </button>
+                )}
                 <button type="button"
                   onClick={() => signOut()}
                   className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
@@ -617,7 +713,7 @@ export default function SettingsPanel({
                   Sign in with Apple
                 </button>
                 )}
-                {auth.providers?.google && (
+                {auth.providers?.google && canUseGoogle && (
                 <button type="button"
                   onClick={() => signInWithGoogle()}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
@@ -636,6 +732,87 @@ export default function SettingsPanel({
                   Sign in to sync your teams, layout, and settings across every browser and device.
                 </p>
               </div>
+            )}
+            {auth.providers?.email && !auth.linkedProviders?.includes("email") && (
+              <form
+                className="mt-3 space-y-2"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  setEmailBusy(true);
+                  setEmailError(false);
+                  if (emailStep === "email") {
+                    const result = await requestEmailCode(emailAddress);
+                    setEmailBusy(false);
+                    if (result.ok) {
+                      setEmailStep("code");
+                      setEmailStatus("Check your email for a six-digit code.");
+                    } else {
+                      setEmailError(true);
+                      setEmailStatus(result.status === 429 ? "Too many tries. Wait a little and try again." : "Couldn’t send a code. Please try again.");
+                    }
+                    return;
+                  }
+                  const result = await verifyEmailCode(emailAddress, emailCode);
+                  if (result.ok) { window.location.reload(); return; }
+                  setEmailBusy(false);
+                  setEmailError(true);
+                  setEmailStatus(result.status === 429 ? "Too many tries. Wait a little and try again." : result.status === 401 ? "That code is wrong or expired." : "Couldn’t verify that code.");
+                }}
+              >
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  required
+                  readOnly={emailStep === "code"}
+                  value={emailAddress}
+                  onChange={(event) => setEmailAddress(event.target.value)}
+                  placeholder="Email address"
+                  aria-label="Email address"
+                  className="w-full min-h-11 rounded-lg px-3 text-sm"
+                  style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                />
+                {emailStep === "code" && (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    required
+                    autoFocus
+                    value={emailCode}
+                    onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="6-digit code"
+                    aria-label="Six-digit sign-in code"
+                    className="w-full min-h-11 rounded-lg px-3 text-sm tracking-[0.18em]"
+                    style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                  />
+                )}
+                <button
+                  type="submit"
+                  disabled={emailBusy}
+                  className="w-full min-h-11 rounded-lg text-sm font-semibold disabled:opacity-50"
+                  style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border)" }}
+                >
+                  {emailStep === "email" ? (auth.signedIn ? "Link email" : "Email me a code") : "Verify code"}
+                </button>
+                {emailStep === "code" && (
+                  <button
+                    type="button"
+                    className="w-full text-xs underline"
+                    style={{ color: "var(--text-muted)" }}
+                    onClick={() => { setEmailStep("email"); setEmailCode(""); setEmailStatus(""); }}
+                  >
+                    Use a different email
+                  </button>
+                )}
+                {emailStatus && (
+                  <p role={emailError ? "alert" : "status"} className="text-[11px]" style={{ color: emailError ? "#ef4444" : "var(--text-muted)" }}>
+                    {emailStatus}
+                  </p>
+                )}
+              </form>
             )}
           </Section>
 
@@ -672,11 +849,11 @@ export default function SettingsPanel({
               />
             </Field>
             {(prefs.defaultDateMode ?? "smart") === "smart" && (
-              <Field label="Smart switch time" hint="Hour (your local time) when Smart flips from yesterday to today">
+            <Field label="Automatic switch time" hint="Hour (your local time) when the landing date flips from yesterday to today">
                 <select
                   value={prefs.smartCutoffHour ?? 13}
                   onChange={(e) => updatePrefs({ smartCutoffHour: Number(e.target.value) })}
-                  aria-label="Smart switch time"
+                  aria-label="Automatic switch time"
                   className="w-full px-3 py-2 rounded-lg text-sm cursor-pointer"
                   style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                 >
@@ -766,12 +943,22 @@ export default function SettingsPanel({
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
               Pick a league for each slot. <em>Auto</em> uses the in-season default.
               You can also tap a column&rsquo;s header on the main screen to switch its league.
+              Offseason picks stay saved and return automatically.
               Slots 4&ndash;5 only appear when the window is wide enough for five columns.
             </p>
             {[0, 1, 2, 3, 4].map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
               const value = slotValues[idx];
-              const hint = value === "empty" ? "Hidden" : value ? undefined : `Auto · currently ${fallbackLabel}`;
+              const selectedOption = value && value !== "empty"
+                ? leagueOptions.find((option) => option.sport === value)
+                : undefined;
+              const hint = value === "empty"
+                ? "Hidden"
+                : selectedOption?.offseason
+                  ? `Offseason · saved for its return${fallbackLabel !== "—" ? `; showing ${fallbackLabel}` : ""}`
+                  : value
+                    ? undefined
+                    : `Auto · currently ${fallbackLabel}`;
               return (
                 <Field
                   key={idx}
@@ -789,9 +976,18 @@ export default function SettingsPanel({
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
                     <option value="">Auto</option>
-                    {thirdLeagueOptions.map((o) => (
-                      <option key={o.sport} value={o.sport}>{o.label}</option>
-                    ))}
+                    <optgroup label="In season">
+                      {inSeasonLeagueOptions.map((option) => (
+                        <option key={option.sport} value={option.sport}>{optionText(option)}</option>
+                      ))}
+                    </optgroup>
+                    {offseasonLeagueOptions.length > 0 && (
+                      <optgroup label="Offseason">
+                        {offseasonLeagueOptions.map((option) => (
+                          <option key={option.sport} value={option.sport}>{optionText(option)}</option>
+                        ))}
+                      </optgroup>
+                    )}
                     <option value="empty">Remove col</option>
                   </select>
                 </Field>
@@ -813,35 +1009,22 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ hideLeagueChevrons: !v })}
               />
             )}
-            <Field label="Leagues in the switcher" hint="Unchecked leagues stay out of the header switcher">
-              {/* Name the checkbox group for assistive tech, mirroring RadioGroup
-                  below: the visual <Field> label above is a bare, unassociated
-                  <label>, so without this a screen reader read these as
-                  free-floating checkboxes ("NBA, checked") with no hint at what
-                  they configure. role="group" + aria-label ties them together and
-                  voices the setting — the same additive fix the option groups get.
-                  Purely additive: tab order, layout, and behavior are unchanged. */}
-              <div role="group" aria-label="Leagues in the switcher" className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                {thirdLeagueOptions.map((o) => {
-                  const hidden = prefs.hiddenLeagues?.includes(o.sport) ?? false;
-                  return (
-                    <label key={o.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
-                      <input
-                        type="checkbox"
-                        checked={!hidden}
-                        onChange={(e) => {
-                          const cur = prefs.hiddenLeagues ?? [];
-                          const next = e.target.checked
-                            ? cur.filter((s) => s !== o.sport)
-                            : [...cur, o.sport];
-                          updatePrefs({ hiddenLeagues: next.length ? next : undefined });
-                        }}
-                        className="cursor-pointer accent-[var(--accent)]"
-                      />
-                      {o.label}
-                    </label>
-                  );
-                })}
+            <Field label="Leagues in the switcher" hint="Core leagues start checked; choose any others you want in the header switcher">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>In season</p>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    {inSeasonLeagueOptions.map(renderSwitcherToggle)}
+                  </div>
+                </div>
+                {offseasonLeagueOptions.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Offseason</p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                      {offseasonLeagueOptions.map(renderSwitcherToggle)}
+                    </div>
+                  </div>
+                )}
               </div>
             </Field>
           </Section>
@@ -872,12 +1055,13 @@ export default function SettingsPanel({
               onChange={(v) => updatePrefs({ showTeamRecords: v })}
             />
             <TeamPicker
-              sports={thirdLeagueOptions}
+              sports={teamLeagueOptions}
               favorites={prefs.favoriteTeams}
               onToggle={toggleTeamFavorite}
               teamsBySport={teamsBySportCache}
               loadingSports={loadingTeamSports}
               loadSport={loadTeamSport}
+              knownTeams={knownTeams}
             />
             {prefs.favoriteTeams.length === 0 ? (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -949,7 +1133,7 @@ export default function SettingsPanel({
           <Section title="News">
             <ToggleRow
               label="Single column"
-              hint="Stack all news columns into one wide column, instead of side-by-side. Works on large screens too."
+              hint="Stack all news columns into one wide column instead of side-by-side."
               checked={prefs.newsSingleColumn ?? false}
               onChange={(v) => updatePrefs({ newsSingleColumn: v })}
             />
@@ -969,48 +1153,54 @@ export default function SettingsPanel({
             </Field>
           </Section>
 
-          {/* Highlight-video spoiler masks (the black bars over the player) */}
-          <Section title="Highlight video">
+          {/* Player choice leads; the custom-only controls below stay visible
+              but disabled in YouTube mode so the relationship is obvious. */}
+          <Section title="Highlight video player">
+            <Field label="Player" hint="Spoiler-safe is the default; YouTube trades protection for familiar controls">
+              <RadioGroup
+                label="Highlight video player"
+                value={(prefs.youtubeNativeControls ?? false) ? "youtube" : "safe"}
+                options={PLAYER_OPTIONS}
+                onChange={(v) => updatePrefs({ youtubeNativeControls: v === "youtube" })}
+              />
+            </Field>
             <ToggleRow
               label="Cover video title"
               hint="Black bar over YouTube's title so the headline can't spoil"
               checked={prefs.maskVideoTitle ?? true}
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
-            <ToggleRow
-              label="Show YouTube's controls"
-              hint="Use YouTube's own bar (progress + time) instead of the spoiler-safe one — reveals how far you are, but handy in fullscreen"
-              checked={prefs.youtubeNativeControls ?? false}
-              onChange={(v) => updatePrefs({ youtubeNativeControls: v })}
-            />
-            <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
-              <RadioGroup
-                label="Skip controls"
-                value={prefs.videoSeekControl ?? "both"}
-                options={SEEK_CONTROL_OPTIONS}
-                onChange={(v) => updatePrefs({ videoSeekControl: v })}
+            <fieldset disabled={prefs.youtubeNativeControls ?? false} className={(prefs.youtubeNativeControls ?? false) ? "space-y-3 opacity-40" : "space-y-3"}>
+              <legend className="sr-only">Spoiler-safe player controls</legend>
+              <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
+                <RadioGroup
+                  label="Skip controls"
+                  value={prefs.videoSeekControl ?? "both"}
+                  options={SEEK_CONTROL_OPTIONS}
+                  onChange={(v) => updatePrefs({ videoSeekControl: v })}
+                />
+              </Field>
+              <Field label="Seek bar fill" hint="The bar shows no position by default so it can't spoil how far in you are">
+                <RadioGroup
+                  label="Seek bar fill"
+                  value={prefs.videoSeekFill ?? "off"}
+                  options={SEEK_FILL_OPTIONS}
+                  onChange={(v) => updatePrefs({ videoSeekFill: v })}
+                />
+              </Field>
+              <ToggleRow
+                label="Allow seeking to the end"
+                hint="Off keeps the last 10% unreachable so the ending stays hidden"
+                checked={prefs.videoAllowEnd ?? false}
+                onChange={(v) => updatePrefs({ videoAllowEnd: v })}
               />
-            </Field>
-            <Field label="Seek bar fill" hint="The bar shows no position by default so it can't spoil how far in you are">
-              <RadioGroup
-                label="Seek bar fill"
-                value={prefs.videoSeekFill ?? "off"}
-                options={SEEK_FILL_OPTIONS}
-                onChange={(v) => updatePrefs({ videoSeekFill: v })}
+              <ToggleRow
+                label="Warn before skipping past halfway"
+                hint="Asks to confirm a click/jump that lands in the second half"
+                checked={prefs.videoWarnHalfway ?? false}
+                onChange={(v) => updatePrefs({ videoWarnHalfway: v })}
               />
-            </Field>
-            <ToggleRow
-              label="Allow seeking to the end"
-              hint="Off keeps the last 10% unreachable so the ending stays hidden"
-              checked={prefs.videoAllowEnd ?? false}
-              onChange={(v) => updatePrefs({ videoAllowEnd: v })}
-            />
-            <ToggleRow
-              label="Warn before skipping past halfway"
-              hint="Asks to confirm a click/jump that lands in the second half"
-              checked={prefs.videoWarnHalfway ?? false}
-              onChange={(v) => updatePrefs({ videoWarnHalfway: v })}
-            />
+            </fieldset>
           </Section>
 
           {/* Onboarding hints */}
@@ -1042,7 +1232,7 @@ export default function SettingsPanel({
                       className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       style={{ background: "var(--accent)", color: "white" }}
                     >
-                      {shareCopied ? "Copied!" : "Save settings link"}
+                      {shareCopied ? "Copied!" : "Copy settings link"}
                     </button>
                     {nothingToShare && (
                       <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
@@ -1068,7 +1258,7 @@ export default function SettingsPanel({
                           e.dataTransfer.setData("text/x-moz-url", `${shareUrl}\nHideScore`);
                           e.dataTransfer.setData("text/html", `<a href="${shareUrl}">HideScore</a>`);
                         }}
-                        className="w-full py-2 rounded-lg text-sm cursor-grab transition-colors flex items-center justify-center gap-1.5"
+                        className="hidden w-full py-2 rounded-lg text-sm cursor-grab transition-colors sm:flex items-center justify-center gap-1.5"
                         style={{ background: "var(--bg-card)", border: "1px dashed var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
@@ -1086,7 +1276,7 @@ export default function SettingsPanel({
                       </a>
                     )}
                     {!nothingToShare && (
-                      <p className="text-[11px] -mt-1" style={{ color: "var(--text-muted)" }}>
+                      <p className="hidden text-[11px] -mt-1 sm:block" style={{ color: "var(--text-muted)" }}>
                         {isSafari
                           ? "Drag this onto your bookmarks bar to save this setup. Clicking copies the link instead."
                           : "The bookmark restores this exact setup. Clicking copies the link instead."}
@@ -1115,7 +1305,8 @@ export default function SettingsPanel({
 // What we actually know about the signed-in account: which identity is linked,
 // which HideScore clients it has been used on (the iPhone app is invisible to the
 // server without the X-HS-Client header — see hsPlatform in lib/prefsSync.ts), and
-// how long it has existed. All of it comes from users/<sub>.json in R2 via /api/me.
+// how long it has existed. All of it comes from the canonical users/<uid>.json
+// record in R2 via /api/me.
 const PLATFORM_LABEL: Record<string, string> = {
   ios: "iPhone app",
   android: "Android app",
@@ -1130,18 +1321,20 @@ function shortDate(iso?: string | null): string | null {
 }
 
 function AccountFacts({ auth }: { auth: AuthState }) {
-  const provider = auth.provider === "google" ? "Google" : auth.provider === "apple" ? "Apple" : null;
+  const providers = (auth.linkedProviders?.length ? auth.linkedProviders : auth.provider ? [auth.provider] : [])
+    .map((provider) => provider === "google" ? "Google" : provider === "apple" ? "Apple" : provider === "email" ? "Email" : provider)
+    .filter(Boolean);
   // Newest-first so the client they actually use leads.
   const used = Object.entries(auth.platforms || {})
     .filter(([, seen]) => !!seen)
     .sort((a, b) => Date.parse(b[1] as string) - Date.parse(a[1] as string));
   const since = shortDate(auth.firstSeen);
-  if (!provider && used.length === 0 && !since) return null;
+  if (providers.length === 0 && used.length === 0 && !since) return null;
   return (
     <div className="rounded-lg px-3 py-2 space-y-1" style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)" }}>
-      {provider && (
+      {providers.length > 0 && (
         <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Linked with <span className="font-medium" style={{ color: "var(--text)" }}>{provider}</span>
+          Linked with <span className="font-medium" style={{ color: "var(--text)" }}>{providers.join(" + ")}</span>
           {since ? <> · account created {since}</> : null}
         </p>
       )}
@@ -1253,7 +1446,7 @@ function RadioGroup<T extends string>({
 // Cache + loader are hoisted to SettingsPanel so the favorites display can
 // also read team names from them (otherwise favorited teams that aren't in
 // today's loaded games would show "nba-8" instead of "Atlanta Hawks").
-const TEAM_PICKER_SKIP: Sport[] = ["golf", "tennis"];
+const TEAM_PICKER_SKIP: Sport[] = ["golf", "tennis", "poker"];
 function TeamPicker({
   sports,
   favorites,
@@ -1261,6 +1454,7 @@ function TeamPicker({
   teamsBySport,
   loadingSports,
   loadSport,
+  knownTeams,
 }: {
   sports: LeagueOption[];
   favorites: string[];
@@ -1268,6 +1462,7 @@ function TeamPicker({
   teamsBySport: Map<Sport, SportTeam[]>;
   loadingSports: Set<Sport>;
   loadSport: (sport: Sport) => void;
+  knownTeams: { id: string; sport: Sport; displayName: string; logo?: string }[];
 }) {
   const tabSports = useMemo(
     () => sports.filter((s) => !TEAM_PICKER_SKIP.includes(s.sport)),
@@ -1312,7 +1507,21 @@ function TeamPicker({
   const currentTeams = useMemo<(SportTeam & { sport: Sport })[]>(() => {
     if (activeSport) {
       const list = teamsBySport.get(activeSport) ?? [];
-      return list.map((t) => ({ ...t, sport: activeSport }));
+      const merged = new Map<string, SportTeam & { sport: Sport }>();
+      for (const t of list) merged.set(t.id, { ...t, sport: activeSport });
+      for (const t of knownTeams) {
+        if (t.sport !== activeSport || merged.has(t.id)) continue;
+        merged.set(t.id, {
+          id: t.id,
+          rawId: t.id.slice(t.id.indexOf("-") + 1),
+          displayName: t.displayName,
+          shortDisplayName: t.displayName,
+          abbreviation: "",
+          logo: t.logo,
+          sport: activeSport,
+        });
+      }
+      return [...merged.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
     }
     const out: (SportTeam & { sport: Sport })[] = [];
     for (const s of tabSports) {
@@ -1321,7 +1530,7 @@ function TeamPicker({
       for (const t of list) out.push({ ...t, sport: s.sport });
     }
     return out;
-  }, [activeSport, teamsBySport, tabSports]);
+  }, [activeSport, teamsBySport, tabSports, knownTeams]);
 
   const filtered = useMemo(() => {
     if (!trimmedQuery) return currentTeams;

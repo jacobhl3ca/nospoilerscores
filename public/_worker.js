@@ -60,6 +60,11 @@ function deRedlibMedia(u) {
 // and the CDN fetch a fresh URL instead of a stale cached image.
 const CARD_REV = 4;
 
+// Strict official combat clips are safe in HideScore even when the YouTube
+// title names the finish: the masked player never renders YouTube title chrome.
+// Keep this narrow. An unscoped result-bearing upload must still be rejected.
+const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
+
 // Wrap an arbitrary news image (Reddit photo, preview thumb, league poster, or
 // YouTube still) for use as the social-card image. Routed through weserv — the
 // SAME proxy the app already uses for every redd.it thumbnail (see proxyImage in
@@ -145,6 +150,9 @@ export default {
     if (url.pathname === "/auth/apple/native" && request.method === "POST") return siwaNative(request, env);
     if (url.pathname === "/auth/google/login")    return googleLogin(request, env, url);
     if (url.pathname === "/auth/google/callback") return googleCallback(request, env, url);
+    if (url.pathname === "/auth/google/native" && request.method === "POST") return googleNativeComplete(request, env);
+    if (url.pathname === "/auth/email/request" && request.method === "POST") return emailCodeRequest(request, env);
+    if (url.pathname === "/auth/email/verify" && request.method === "POST") return emailCodeVerify(request, env);
     if (url.pathname === "/auth/logout")         return siwaLogout();
     if (url.pathname === "/api/me")              return siwaMe(request, env, ctx);
     if (url.pathname === "/api/prefs") {
@@ -403,6 +411,9 @@ export default {
           "trail blazers": ["blazers", "trail blazers", "portland"],
           "timberwolves": ["timberwolves", "wolves", "minnesota"],
           "76ers": ["76ers", "sixers", "philadelphia"],
+          // WNBA expansion clubs — ESPN's compact names vs official titles.
+          "tempo": ["tempo", "toronto tempo", "toronto"],
+          "valkyries": ["valkyries", "golden state valkyries", "golden state"],
           "uconn": ["uconn", "connecticut", "huskies"],
           "blue jays": ["blue jays", "jays", "toronto"],
           "white sox": ["white sox", "chi sox", "chicago white"],
@@ -506,20 +517,26 @@ export default {
         // ["diamondbacks"], hasTeams was always false, and the only
         // tier that fired was yearMatchedId (team-agnostic, recently
         // gated behind queryHasSpecificTeams). Build once per request.
+        const normalizeTeamMatch = (value) => String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[‘’]/g, "'")
+          .toLowerCase();
         const TEAM_VARIANT_INDEX = {};
         for (const variants of Object.values(TEAM_ALIASES)) {
           for (const v of variants) {
-            TEAM_VARIANT_INDEX[v.toLowerCase()] = variants;
+            TEAM_VARIANT_INDEX[normalizeTeamMatch(v)] = variants;
           }
         }
         function getTeamVariants(teamName) {
-          const lower = teamName.toLowerCase();
+          const lower = normalizeTeamMatch(teamName);
           return TEAM_VARIANT_INDEX[lower] || TEAM_ALIASES[lower] || [lower];
         }
 
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
-          return variants.some((v) => titleLower.includes(v));
+          const normalizedTitle = normalizeTeamMatch(titleLower);
+          return variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)));
         }
 
         // Split HTML into videoRenderer blocks and parse each one individually
@@ -613,11 +630,18 @@ export default {
               titleLower.includes(`day ${queryGolfRound}`) ||
               (queryRoundOrdinal &&
                 titleLower.includes(`${queryRoundOrdinal} round`)));
+          // WNBA sometimes publishes its normal 10-minute recap as only
+          // "Team A vs. Team B | Month D, YYYY". It is still a highlight when
+          // (and only when) the caller requested the strict WNBA channel; the
+          // team/date gates below still have to match exactly.
+          const isStrictBareWnbaRecap =
+            strictChannelParam && isFromChannel && preferChannelLower === "wnba" && queryHasSpecificTeams;
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
-            roundOnlyTitleOk;
+            roundOnlyTitleOk ||
+            isStrictBareWnbaRecap;
           if (!isHighlight) continue;
 
           // Racing race gate (see the `race` param above). The official channel
@@ -1325,7 +1349,9 @@ export default {
           // The app never displays YouTube titles in the card, and the modal masks
           // the title chrome, so allow these only for official WC uploaders.
           const isOfficialWorldCupUpload = isWorldCupQuery && WC_OFFICIAL_CHANNELS.includes(channel.toLowerCase());
-          if (!isOfficialWorldCupUpload && (SCORE_RX.test(title) || SPOILER_RX.test(title))) continue;
+          const isMaskedOfficialCombatUpload =
+            strictChannelParam && isFromChannel && MASKED_COMBAT_CHANNELS.has(preferChannelLower);
+          if (!isOfficialWorldCupUpload && !isMaskedOfficialCombatUpload && (SCORE_RX.test(title) || SPOILER_RX.test(title))) continue;
 
           // Simulation/videogame hard-skip — NBA 2K, MLB The Show, FIFA,
           // Madden, NHL 2K sim channels autopost "highlights" of games
@@ -2358,7 +2384,12 @@ async function siwaLogin(request, env, url) {
   const returnToRaw = url.searchParams.get("returnTo") || "/";
   const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
   const nonce = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
-  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow() });
+  let linkUid = null;
+  if (url.searchParams.get("link") === "1") {
+    const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (current) linkUid = (await _hsResolveAccount(env, current)).uid;
+  }
+  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow(), l: linkUid });
   const state = `${stateBody}.${await _siwaHmacSign(env.SESSION_SECRET, stateBody)}`;
   const auth = new URL(APPLE_AUTHORIZE);
   auth.searchParams.set("response_type", "code");
@@ -2409,8 +2440,14 @@ async function siwaCallback(request, env, url) {
   if (!claims) return _siwaErrRedirect("bad_id_token");
   if (claims.nonce && claims.nonce !== st.n) return _siwaErrRedirect("bad_nonce");
 
+  let u;
+  try {
+    u = await _hsResolveAccount(env, {
+      sub: `apple:${claims.sub}`, email: claims.email || null, emailVerified: true,
+    }, st.l || null);
+  } catch { return _siwaErrRedirect("identity_already_linked"); }
   const session = await _siwaMakeSession(env, {
-    sub: `apple:${claims.sub}`, email: claims.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+    sub: u.sub, uid: u.uid, email: u.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
   return new Response(null, {
     status: 303,
@@ -2441,10 +2478,21 @@ async function siwaNative(request, env) {
   if (body.nonce && claims.nonce && claims.nonce !== body.nonce) {
     return _siwaJson({ error: "bad_nonce" }, 401);
   }
+  let linkUid = null;
+  if (body.link) {
+    const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (current) linkUid = (await _hsResolveAccount(env, current)).uid;
+  }
+  let u;
+  try {
+    u = await _hsResolveAccount(env, {
+      sub: `apple:${claims.sub}`,
+      email: claims.email || body.email || null,
+      emailVerified: true,
+    }, linkUid);
+  } catch { return _siwaJson({ error: "identity_already_linked" }, 409); }
   const session = await _siwaMakeSession(env, {
-    sub: `apple:${claims.sub}`,
-    email: claims.email || body.email || null,
-    exp: _siwaNow() + SIWA_SESSION_TTL,
+    sub: u.sub, uid: u.uid, email: u.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
@@ -2498,10 +2546,84 @@ async function _hsUid(env, sub) {
   return sig.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
 }
 
+async function _hsPrivateId(env, kind, value) {
+  const sig = await _siwaHmacSign(env.SESSION_SECRET, `${kind}:${value}`);
+  return sig.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+}
+
+async function _hsReadJson(env, key) {
+  if (!env.DATA) return null;
+  try {
+    const obj = await env.DATA.get(key);
+    return obj ? await obj.json() : null;
+  } catch { return null; }
+}
+
+// Resolve an Apple or Google identity onto one canonical account. Identity and
+// verified-email indexes are HMAC-keyed, so the private R2 namespace cannot be
+// enumerated by guessing emails. Existing provider-keyed prefs are copied
+// lazily on first sign-in; the legacy object is retained as a recovery copy.
+async function _hsResolveAccount(env, u, linkUid = null) {
+  const fallbackUid = await _hsUid(env, u.sub);
+  if (!env.DATA || !env.SESSION_SECRET) return { ...u, uid: fallbackUid, linkedProviders: [String(u.sub).split(":")[0]] };
+
+  const identityId = await _hsPrivateId(env, "identity", u.sub);
+  const identityKey = `accounts/identity/${identityId}.json`;
+  const existingIdentity = await _hsReadJson(env, identityKey);
+  if (linkUid && existingIdentity?.uid && existingIdentity.uid !== linkUid) {
+    throw new Error("identity_already_linked");
+  }
+
+  let uid = linkUid || existingIdentity?.uid || null;
+  let emailKey = null;
+  if (!uid && u.email && u.emailVerified !== false) {
+    const emailId = await _hsPrivateId(env, "email", String(u.email).trim().toLowerCase());
+    emailKey = `accounts/email/${emailId}.json`;
+    uid = (await _hsReadJson(env, emailKey))?.uid || null;
+  }
+  uid = uid || fallbackUid;
+
+  const accountKey = `accounts/${uid}.json`;
+  const prior = (await _hsReadJson(env, accountKey)) || {};
+  const identities = Array.isArray(prior.identities) ? prior.identities.filter((v) => typeof v === "string") : [];
+  if (!identities.includes(u.sub)) identities.push(u.sub);
+  const linkedProviders = [...new Set(identities.map((sub) => String(sub).split(":")[0]).filter(Boolean))];
+  const account = {
+    ...prior,
+    uid,
+    identities,
+    linkedProviders,
+    email: u.email || prior.email || null,
+    updatedAt: new Date().toISOString(),
+    createdAt: prior.createdAt || new Date().toISOString(),
+  };
+  await env.DATA.put(identityKey, JSON.stringify({ uid }), { httpMetadata: { contentType: "application/json" } });
+  if (u.email && u.emailVerified !== false) {
+    if (!emailKey) {
+      const emailId = await _hsPrivateId(env, "email", String(u.email).trim().toLowerCase());
+      emailKey = `accounts/email/${emailId}.json`;
+    }
+    const mapped = await _hsReadJson(env, emailKey);
+    // Explicit linking may adopt an otherwise-unmapped email. Never silently
+    // repoint an email already owned by a different canonical account.
+    if (!mapped?.uid || mapped.uid === uid) {
+      await env.DATA.put(emailKey, JSON.stringify({ uid }), { httpMetadata: { contentType: "application/json" } });
+    }
+  }
+  await env.DATA.put(accountKey, JSON.stringify(account), { httpMetadata: { contentType: "application/json" } });
+
+  const canonicalPrefs = `prefs/${uid}.json`;
+  if (!(await env.DATA.head(canonicalPrefs))) {
+    const legacy = await env.DATA.get(`prefs/${u.sub}.json`);
+    if (legacy) await env.DATA.put(canonicalPrefs, legacy.body, { httpMetadata: { contentType: "application/json" } });
+  }
+  return { ...u, uid, linkedProviders };
+}
+
 // Read (and lazily upgrade) the record. Returns null when there's no store.
 async function _hsTouchUser(env, request, u) {
   if (!env.DATA || !u || !u.sub) return null;
-  const key = `users/${u.sub}.json`;
+  const key = `users/${u.uid || u.sub}.json`;
   let rec = null;
   try {
     const obj = await env.DATA.get(key);
@@ -2510,15 +2632,16 @@ async function _hsTouchUser(env, request, u) {
   const now = new Date().toISOString();
   const platform = _hsPlatform(request);
   if (!rec || typeof rec !== "object") {
-    rec = { sub: u.sub, firstSeen: now, platforms: {}, counts: {} };
+    rec = { uid: u.uid || null, firstSeen: now, platforms: {}, counts: {} };
   }
   if (!rec.platforms || typeof rec.platforms !== "object") rec.platforms = {};
   if (!rec.counts || typeof rec.counts !== "object") rec.counts = {};
   const stale = !rec.lastSeen || (Date.now() - Date.parse(rec.lastSeen) > USER_TOUCH_MS);
   const newPlatform = !rec.platforms[platform];
   const emailChanged = !!u.email && rec.email !== u.email;
-  rec.uid = rec.uid || (await _hsUid(env, u.sub));
+  rec.uid = rec.uid || u.uid || (await _hsUid(env, u.sub));
   rec.provider = String(u.sub).split(":")[0] || null;
+  rec.linkedProviders = u.linkedProviders || rec.linkedProviders || [rec.provider];
   if (u.email) rec.email = u.email;
   if (stale || newPlatform || emailChanged) {
     rec.lastSeen = now;
@@ -2537,19 +2660,21 @@ async function _hsTouchUser(env, request, u) {
 // only shows live buttons; `platforms`/`nativeApp` drive the Settings > Account
 // summary ("used in the iPhone app and the web").
 async function siwaMe(request, env, ctx) {
-  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
   const base = {
-    signedIn: !!u,
-    email: (u && u.email) || null,
-    providers: { apple: _siwaConfigured(env), google: _googleConfigured(env) },
+    signedIn: !!sessionUser,
+    email: (sessionUser && sessionUser.email) || null,
+    providers: { apple: _siwaConfigured(env), google: _googleConfigured(env), email: _emailConfigured(env) },
   };
-  if (!u) return _siwaJson(base);
+  if (!sessionUser) return _siwaJson(base);
+  const u = await _hsResolveAccount(env, sessionUser).catch(() => ({ ...sessionUser, uid: sessionUser.uid || null }));
   let rec = null;
   try { rec = await _hsTouchUser(env, request, u); } catch { /* best effort */ }
   return _siwaJson({
     ...base,
     uid: (rec && rec.uid) || (await _hsUid(env, u.sub)),
     provider: String(u.sub).split(":")[0] || null,
+    linkedProviders: u.linkedProviders || [],
     platform: _hsPlatform(request),
     platforms: (rec && rec.platforms) || {},
     firstSeen: (rec && rec.firstSeen) || null,
@@ -2559,19 +2684,21 @@ async function siwaMe(request, env, ctx) {
 
 // GET /api/prefs -> { prefs } (the user's stored prefs JSON, or null)
 async function prefsGet(request, env, ctx) {
-  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
-  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
   if (!env.DATA) return _siwaJson({ prefs: null });
+  const u = await _hsResolveAccount(env, sessionUser);
   if (ctx) ctx.waitUntil(_hsTouchUser(env, request, u).catch(() => {}));
-  const obj = await env.DATA.get(`prefs/${u.sub}.json`);
+  const obj = await env.DATA.get(`prefs/${u.uid}.json`);
   return _siwaJson({ prefs: obj ? await obj.json() : null });
 }
 
 // PUT /api/prefs  body = prefs JSON -> { ok: true }
 async function prefsPut(request, env, ctx) {
-  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
-  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
   if (!env.DATA) return _siwaJson({ error: "no_store" }, 503);
+  const u = await _hsResolveAccount(env, sessionUser);
   const text = await request.text();
   if (text.length > 64 * 1024) return _siwaJson({ error: "too_large" }, 413);
   let parsed;
@@ -2581,7 +2708,7 @@ async function prefsPut(request, env, ctx) {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return _siwaJson({ error: "bad_shape" }, 400);
   }
-  await env.DATA.put(`prefs/${u.sub}.json`, JSON.stringify(parsed),
+  await env.DATA.put(`prefs/${u.uid}.json`, JSON.stringify(parsed),
     { httpMetadata: { contentType: "application/json" } });
   if (ctx) ctx.waitUntil(_hsTouchUser(env, request, u).catch(() => {}));
   return _siwaJson({ ok: true });
@@ -2596,17 +2723,207 @@ async function prefsPut(request, env, ctx) {
 // The iOS app loads this site in a WebView sharing the same cookie, so this deletes
 // on-device too. We can't unlink their Apple/Google ID (external), only erase our data.
 async function accountDelete(request, env) {
-  const u = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
-  if (!u) return _siwaJson({ error: "unauthorized" }, 401);
+  const sessionUser = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (!sessionUser) return _siwaJson({ error: "unauthorized" }, 401);
+  const u = await _hsResolveAccount(env, sessionUser);
   if (env.DATA) {
-    try { await env.DATA.delete(`prefs/${u.sub}.json`); } catch { /* already gone */ }
-    try { await env.DATA.delete(`users/${u.sub}.json`); } catch { /* already gone */ }
+    try { await env.DATA.delete(`prefs/${u.uid}.json`); } catch { /* already gone */ }
+    try { await env.DATA.delete(`users/${u.uid}.json`); } catch { /* already gone */ }
+    const account = await _hsReadJson(env, `accounts/${u.uid}.json`);
+    for (const sub of account?.identities || []) {
+      try { await env.DATA.delete(`accounts/identity/${await _hsPrivateId(env, "identity", sub)}.json`); } catch { /* already gone */ }
+      try { await env.DATA.delete(`prefs/${sub}.json`); } catch { /* legacy recovery copy */ }
+      try { await env.DATA.delete(`users/${sub}.json`); } catch { /* legacy usage record */ }
+    }
+    if (account?.email) {
+      try { await env.DATA.delete(`accounts/email/${await _hsPrivateId(env, "email", String(account.email).trim().toLowerCase())}.json`); } catch { /* already gone */ }
+    }
+    try { await env.DATA.delete(`accounts/${u.uid}.json`); } catch { /* already gone */ }
   }
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: {
       "Content-Type": "application/json",
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, "", 0),
+    },
+  });
+}
+
+// ===========================================================================
+// Six-digit email sign-in. This mirrors Islander's security surface: uniform
+// CSPRNG codes, SHA-256 at rest, one live code per address, ten-minute expiry,
+// five guesses, atomic single-use claim, per-address and per-IP rate limits.
+// A typed code is deliberate: mail scanners prefetch links and mail apps often
+// open them in a different cookie jar than the app the person started in.
+// ===========================================================================
+function _emailConfigured(env) {
+  return !!(env.RESEND_API_KEY && env.SESSION_SECRET && env.AUTH_DB && env.DATA);
+}
+
+function _hsNormalizeEmail(value) {
+  const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+function _hsNewLoginCode() {
+  const ceiling = Math.floor(0x1_0000_0000 / 1_000_000) * 1_000_000;
+  const value = new Uint32Array(1);
+  do { crypto.getRandomValues(value); } while (value[0] >= ceiling);
+  return String(value[0] % 1_000_000).padStart(6, "0");
+}
+
+async function _hsSha256Hex(value) {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", _siwaEnc.encode(value)));
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function _hsConstantTimeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let difference = 0;
+  for (let index = 0; index < a.length; index += 1) difference |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  return difference === 0;
+}
+
+function _hsMutationAllowed(request) {
+  if ((request.headers.get("Sec-Fetch-Site") || "").toLowerCase() === "cross-site") return false;
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  try {
+    return ["hidescore.com", "www.hidescore.com", "localhost", "127.0.0.1"].includes(new URL(origin).hostname);
+  } catch { return false; }
+}
+
+function _hsRequestIp(request) {
+  return (request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "unknown")
+    .split(",")[0].trim().slice(0, 64) || "unknown";
+}
+
+async function _hsSendLoginCode(env, email, code) {
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM || "HideScore <login@hidescore.com>",
+        to: [email],
+        subject: `${code} is your HideScore sign-in code`,
+        text: `Your HideScore sign-in code is ${code}\n\nType it back into the app. It works once and expires in 10 minutes.\n\nIf you didn't ask to sign in, ignore this email. We will never ask you for this code by phone, text or reply.`,
+        html: `<!doctype html><html><body style="margin:0;background:#0b0f16;padding:28px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#f8fafc"><div style="max-width:520px;margin:0 auto;background:#121826;border:1px solid #293244;border-radius:14px;overflow:hidden"><div style="height:5px;background:#22c55e"></div><div style="padding:26px 28px 30px"><p style="margin:0 0 14px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#22c55e;font-weight:700">HideScore</p><h1 style="margin:0 0 14px;font-size:22px">Your sign-in code</h1><p style="margin:0 0 18px;font-size:15px;line-height:1.6">Type this back into the app:</p><p style="margin:0 0 18px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:38px;font-weight:700;letter-spacing:.18em">${code}</p><p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#94a3b8">It works once and expires in 10 minutes.</p><p style="margin:0;font-size:14px;line-height:1.6;color:#94a3b8">If you didn't ask to sign in, ignore this email. We'll never ask you for this code by phone, text or reply.</p></div></div></body></html>`,
+      }),
+    });
+    if (!response.ok) console.error("[login-code] Resend rejected", response.status);
+    return response.ok;
+  } catch {
+    console.error("[login-code] delivery failed");
+    return false;
+  }
+}
+
+async function _hsEmailJsonBody(request) {
+  const declared = Number(request.headers.get("Content-Length") || 0);
+  if (declared > 4096) throw new Error("too_large");
+  const raw = await request.text();
+  if (raw.length > 4096) throw new Error("too_large");
+  return JSON.parse(raw || "{}");
+}
+
+async function emailCodeRequest(request, env) {
+  if (!_hsMutationAllowed(request)) return _siwaJson({ error: "cross_site" }, 403);
+  if (!_emailConfigured(env)) return _siwaJson({ error: "not_configured" }, 503);
+  let body;
+  try { body = await _hsEmailJsonBody(request); } catch { return _siwaJson({ error: "bad_request" }, 400); }
+  const email = _hsNormalizeEmail(body && body.email);
+  if (!email) return _siwaJson({ error: "bad_email" }, 400);
+  const now = Date.now();
+  const cutoff = now - 60 * 60 * 1000;
+  const emailKey = await _hsPrivateId(env, "login-code-email", email);
+  const ipKey = await _hsPrivateId(env, "login-code-ip", _hsRequestIp(request));
+  const emailCount = await env.AUTH_DB.prepare(`SELECT COUNT(*) AS count FROM email_login_rate_events
+    WHERE kind = 'email' AND key_hash = ? AND created_at > ?`).bind(emailKey, cutoff).first();
+  const ipCount = await env.AUTH_DB.prepare(`SELECT COUNT(*) AS count FROM email_login_rate_events
+    WHERE kind = 'request_ip' AND key_hash = ? AND created_at > ?`).bind(ipKey, cutoff).first();
+  if ((emailCount?.count || 0) >= 5 || (ipCount?.count || 0) >= 10) {
+    return _siwaJson({ error: "throttled" }, 429);
+  }
+
+  const code = _hsNewLoginCode();
+  const eventBase = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(18)));
+  await env.AUTH_DB.prepare("INSERT INTO email_login_rate_events (id, kind, key_hash, created_at) VALUES (?, 'email', ?, ?)")
+    .bind(`${eventBase}:e`, emailKey, now).run();
+  await env.AUTH_DB.prepare("INSERT INTO email_login_rate_events (id, kind, key_hash, created_at) VALUES (?, 'request_ip', ?, ?)")
+    .bind(`${eventBase}:i`, ipKey, now).run();
+  const codeHash = await _hsSha256Hex(code);
+  await env.AUTH_DB.prepare(`INSERT INTO email_login_codes (email_key, email, code_hash, expires_at, attempts, created_at)
+    VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT(email_key) DO UPDATE SET email = excluded.email,
+    code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0, created_at = excluded.created_at`)
+    .bind(emailKey, email, codeHash, now + 10 * 60 * 1000, now).run();
+  const delivered = await _hsSendLoginCode(env, email, code);
+  if (!delivered) await env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE email_key = ? AND code_hash = ?")
+    .bind(emailKey, codeHash).run();
+  await Promise.all([
+    env.AUTH_DB.prepare("DELETE FROM email_login_rate_events WHERE created_at < ?")
+      .bind(now - 24 * 60 * 60 * 1000).run().catch(() => {}),
+    env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE expires_at < ?")
+      .bind(now - 24 * 60 * 60 * 1000).run().catch(() => {}),
+  ]);
+  return _siwaJson({ ok: true });
+}
+
+async function emailCodeVerify(request, env) {
+  if (!_hsMutationAllowed(request)) return _siwaJson({ error: "cross_site" }, 403);
+  if (!_emailConfigured(env)) return _siwaJson({ error: "not_configured" }, 503);
+  let body;
+  try { body = await _hsEmailJsonBody(request); } catch { return _siwaJson({ error: "bad_request" }, 400); }
+  const email = _hsNormalizeEmail(body && body.email);
+  const code = String((body && body.code) || "").replace(/\D/g, "");
+  const now = Date.now();
+  const ipKey = await _hsPrivateId(env, "login-code-verify-ip", _hsRequestIp(request));
+  const verifyCount = await env.AUTH_DB.prepare(`SELECT COUNT(*) AS count FROM email_login_rate_events
+    WHERE kind = 'verify_ip' AND key_hash = ? AND created_at > ?`)
+    .bind(ipKey, now - 60 * 60 * 1000).first();
+  if ((verifyCount?.count || 0) >= 20) return _siwaJson({ error: "throttled" }, 429);
+  await env.AUTH_DB.prepare("INSERT INTO email_login_rate_events (id, kind, key_hash, created_at) VALUES (?, 'verify_ip', ?, ?)")
+    .bind(_b64urlFromBytes(crypto.getRandomValues(new Uint8Array(18))), ipKey, now).run();
+  if (!email || code.length !== 6) return _siwaJson({ error: "bad_code" }, 401);
+
+  const emailKey = await _hsPrivateId(env, "login-code-email", email);
+  const record = await env.AUTH_DB.prepare("SELECT code_hash, expires_at, attempts FROM email_login_codes WHERE email_key = ?")
+    .bind(emailKey).first();
+  if (!record || record.expires_at < now || record.attempts >= 5) {
+    if (record) await env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE email_key = ?").bind(emailKey).run();
+    return _siwaJson({ error: "bad_code" }, 401);
+  }
+  const submittedHash = await _hsSha256Hex(code);
+  if (!_hsConstantTimeEqual(submittedHash, record.code_hash)) {
+    await env.AUTH_DB.prepare(`UPDATE email_login_codes SET attempts = attempts + 1
+      WHERE email_key = ? AND code_hash = ? AND attempts < 5`).bind(emailKey, record.code_hash).run();
+    await env.AUTH_DB.prepare("DELETE FROM email_login_codes WHERE email_key = ? AND attempts >= 5").bind(emailKey).run();
+    return _siwaJson({ error: "bad_code" }, 401);
+  }
+  const claimed = await env.AUTH_DB.prepare(`DELETE FROM email_login_codes
+    WHERE email_key = ? AND code_hash = ? AND expires_at >= ?`).bind(emailKey, record.code_hash, now).run();
+  if ((claimed.meta?.changes || 0) !== 1) return _siwaJson({ error: "bad_code" }, 401);
+
+  let linkUid = null;
+  const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+  if (current) linkUid = (await _hsResolveAccount(env, current)).uid;
+  const identity = {
+    sub: `email:${await _hsPrivateId(env, "email-identity", email)}`,
+    email,
+    emailVerified: true,
+  };
+  let account;
+  try { account = await _hsResolveAccount(env, identity, linkUid); }
+  catch { return _siwaJson({ error: "identity_already_linked" }, 409); }
+  const session = await _siwaMakeSession(env, {
+    sub: identity.sub, uid: account.uid, email, exp: _siwaNow() + SIWA_SESSION_TTL,
+  });
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json", "Cache-Control": "no-store",
+      "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });
 }
@@ -2662,12 +2979,36 @@ async function googleLogin(request, env, url) {
   if (!_googleConfigured(env)) return new Response("Sign in is not configured yet", { status: 503 });
   const returnToRaw = url.searchParams.get("returnTo") || "/";
   const returnTo = returnToRaw.startsWith("/") ? returnToRaw : "/";
+  const nativeChallengeRaw = url.searchParams.get("nativeChallenge") || "";
+  const nativeChallenge = /^[A-Za-z0-9_-]{43}$/.test(nativeChallengeRaw) ? nativeChallengeRaw : null;
+  if (url.searchParams.has("nativeChallenge") && !nativeChallenge) {
+    return _siwaErrRedirect("bad_native_challenge");
+  }
+  let linkUid = null;
+  const nativeLinkToken = url.searchParams.get("nativeLinkToken");
+  if (nativeChallenge && nativeLinkToken) {
+    const dot = nativeLinkToken.lastIndexOf(".");
+    if (dot < 1 || !(await _siwaHmacVerify(env.SESSION_SECRET, nativeLinkToken.slice(0, dot), nativeLinkToken.slice(dot + 1)))) {
+      return _siwaErrRedirect("bad_link_token");
+    }
+    let linkProof;
+    try { linkProof = _jsonFromB64url(nativeLinkToken.slice(0, dot)); }
+    catch { return _siwaErrRedirect("bad_link_token"); }
+    if (linkProof.p !== "google_link" || typeof linkProof.u !== "string" || linkProof.e < _siwaNow()) {
+      return _siwaErrRedirect("bad_link_token");
+    }
+    linkUid = linkProof.u;
+  } else if (url.searchParams.get("link") === "1") {
+    const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (current) linkUid = (await _hsResolveAccount(env, current)).uid;
+  }
   const nonce = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(16)));
-  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow() });
+  const stateBody = _b64urlFromJSON({ n: nonce, r: returnTo, t: _siwaNow(), c: nativeChallenge, l: linkUid });
   const state = `${stateBody}.${await _siwaHmacSign(env.SESSION_SECRET, stateBody)}`;
   const auth = new URL(GOOGLE_AUTHORIZE);
+  const origin = String(env.APP_ORIGIN || "https://hidescore.com").replace(/\/$/, "");
   auth.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
-  auth.searchParams.set("redirect_uri", `${url.origin}/auth/google/callback`);
+  auth.searchParams.set("redirect_uri", `${origin}/auth/google/callback`);
   auth.searchParams.set("response_type", "code");
   auth.searchParams.set("scope", "openid email");
   auth.searchParams.set("state", state);
@@ -2690,6 +3031,7 @@ async function googleCallback(request, env, url) {
   if (!st.t || st.t < _siwaNow() - SIWA_STATE_TTL) return _siwaErrRedirect("expired");
 
   let tokens;
+  const origin = String(env.APP_ORIGIN || "https://hidescore.com").replace(/\/$/, "");
   try {
     const res = await fetch(GOOGLE_TOKEN_URL, {
       method: "POST",
@@ -2699,7 +3041,7 @@ async function googleCallback(request, env, url) {
         client_secret: env.GOOGLE_CLIENT_SECRET,
         code,
         grant_type: "authorization_code",
-        redirect_uri: `${url.origin}/auth/google/callback`,
+        redirect_uri: `${origin}/auth/google/callback`,
       }),
     });
     if (!res.ok) return _siwaErrRedirect("token_exchange");
@@ -2710,13 +3052,82 @@ async function googleCallback(request, env, url) {
   if (!claims) return _siwaErrRedirect("bad_id_token");
   if (claims.nonce && claims.nonce !== st.n) return _siwaErrRedirect("bad_nonce");
 
+  let u;
+  try {
+    u = await _hsResolveAccount(env, {
+      sub: `google:${claims.sub}`,
+      email: claims.email || null,
+      emailVerified: claims.email_verified === true || claims.email_verified === "true",
+    }, st.l || null);
+  } catch { return _siwaErrRedirect("identity_already_linked"); }
+
+  if (st.c) {
+    if (!env.DATA) return _siwaErrRedirect("no_store");
+    const handoffCode = _b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
+    await env.DATA.put(`auth/handoff/${handoffCode}.json`, JSON.stringify({
+      sub: u.sub,
+      uid: u.uid,
+      email: u.email || null,
+      challenge: st.c,
+      exp: _siwaNow() + 300,
+    }), { httpMetadata: { contentType: "application/json" } });
+    const callback = new URL("hidescore-auth://google");
+    callback.searchParams.set("code", handoffCode);
+    callback.searchParams.set("returnTo", st.r && st.r.startsWith("/") ? st.r : "/");
+    return new Response(null, { status: 303, headers: { Location: callback.toString() } });
+  }
+
   const session = await _siwaMakeSession(env, {
-    sub: `google:${claims.sub}`, email: claims.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+    sub: u.sub, uid: u.uid, email: u.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
   });
   return new Response(null, {
     status: 303,
     headers: {
       Location: st.r && st.r.startsWith("/") ? st.r : "/",
+      "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
+    },
+  });
+}
+
+// POST /auth/google/native { code, verifier } — finish the system-browser flow
+// from inside the Capacitor WebView. The handoff is one-use and bound to the
+// app-generated PKCE verifier, so another app claiming the same custom scheme
+// cannot redeem an intercepted callback URL.
+async function googleNativeComplete(request, env) {
+  if (!env.DATA || !env.SESSION_SECRET) return _siwaJson({ error: "not_configured" }, 503);
+  let body;
+  try { body = await request.json(); } catch { return _siwaJson({ error: "bad_request" }, 400); }
+  if (body && body.action === "link_token") {
+    if (request.headers.get("Sec-Fetch-Site")?.toLowerCase() === "cross-site") {
+      return _siwaJson({ error: "cross_site" }, 403);
+    }
+    const current = await _siwaReadSession(env, _siwaGetCookie(request, SIWA_SESSION_COOKIE));
+    if (!current) return _siwaJson({ error: "unauthorized" }, 401);
+    const account = await _hsResolveAccount(env, current);
+    const tokenBody = _b64urlFromJSON({ p: "google_link", u: account.uid, e: _siwaNow() + 300 });
+    const token = `${tokenBody}.${await _siwaHmacSign(env.SESSION_SECRET, tokenBody)}`;
+    return _siwaJson({ linkToken: token });
+  }
+  const code = body && body.code;
+  const verifier = body && body.verifier;
+  if (!/^[A-Za-z0-9_-]{43}$/.test(code || "") || !/^[A-Za-z0-9_-]{43}$/.test(verifier || "")) {
+    return _siwaJson({ error: "bad_handoff" }, 400);
+  }
+  const key = `auth/handoff/${code}.json`;
+  const handoff = await _hsReadJson(env, key);
+  // Claim before checking so even a malformed/replayed attempt burns the code.
+  try { await env.DATA.delete(key); } catch { /* absent/replayed */ }
+  if (!handoff || handoff.exp < _siwaNow()) return _siwaJson({ error: "bad_handoff" }, 401);
+  const digest = await crypto.subtle.digest("SHA-256", _siwaEnc.encode(verifier));
+  if (_b64urlFromBytes(digest) !== handoff.challenge) return _siwaJson({ error: "bad_handoff" }, 401);
+  const session = await _siwaMakeSession(env, {
+    sub: handoff.sub, uid: handoff.uid, email: handoff.email || null, exp: _siwaNow() + SIWA_SESSION_TTL,
+  });
+  return new Response(JSON.stringify({ ok: true, returnTo: body.returnTo || "/" }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
       "Set-Cookie": _siwaSetCookie(SIWA_SESSION_COOKIE, session, SIWA_SESSION_TTL),
     },
   });

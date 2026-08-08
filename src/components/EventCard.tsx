@@ -87,9 +87,8 @@ function whenLabel(iso?: string, refYmd?: string): string {
 // beats "here's a page that spoils it". This makes UFC honour the contract
 // every other league already had — GameHighlights' "missing" state and
 // GolfLeaderboard's visibleHighlightSlots both hide a highlight button whose
-// chain came up empty instead of dropping the user on a search page. F1 is now
-// the only tile that still falls back to a search (its strict FORMULA 1 gate
-// means a miss is usually just FOM blocking the embed, not an unknown clip).
+// chain came up empty instead of dropping the user on a search page. Racing now
+// follows the same fail-closed contract.
 // NOTE even the official clips' TITLES carry a partial spoiler ("ROUND 1 SUB",
 // "UNANIMOUS DEC"), which the masked player never shows — one more reason the
 // native-YouTube-controls option stays off (it would surface the title).
@@ -98,7 +97,7 @@ const UFC_HIGHLIGHT_CHANNELS = ["UFC on Paramount+", "UFC", "ESPN MMA"] as const
 // What the play button reports once a bout has been resolved: the channel it
 // actually came from. Keyed by bout id so each card says where ITS video came
 // from; a null entry (not this type) means no rights-holder had the clip.
-export type HighlightSource = { label: string; official: boolean; videoId?: string };
+export type HighlightSource = { label: string; official: boolean; videoId?: string; fallbackUrl?: string };
 
 // "A vs B highlights" — deliberately WITHOUT the "UFC" token that espn.ts's
 // generic highlightQuery adds. Measured against the live resolver 2026-07-19:
@@ -113,40 +112,33 @@ function boutHighlightQuery(fight: FightBout): string {
 
 function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: string) => void) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  // strict → the worker oembed-verifies the result's uploader equals `channel`
-  // (drops title-only reuploads from random channels). Used by F1, whose
-  // official FORMULA 1 channel is the only acceptable in-app source; when
-  // nothing strict matches, the openExternal fallback below sends the user to
-  // a YouTube search OUTSIDE the app instead of playing an unvetted upload in
-  // the masked player.
-  const play = async (id: string, query: string, channel?: string, strict?: boolean, raceTokens?: string[]) => {
+  // Racing is strict and fail-closed: the worker verifies the uploader and race,
+  // and a miss returns null so the caller hides the button. The fallback URL is
+  // retained only as private retry metadata for VideoModal; it carries the same
+  // channel/race gates and is never opened as a generic search result.
+  const playRace = async (id: string, query: string, channel: string, label: string, raceTokens?: string[]): Promise<HighlightSource | null> => {
     // nss_channels/nss_strict ride along so VideoModal's embed-failure retry
     // keeps THIS call's channel gate. FOM blocks the FORMULA 1 embed often, and
     // an ungated retry is what put a fan reupload in the masked player (7/19);
-    // YouTube ignores the extra params, so the string is still a valid search
-    // URL for the external hand-off below.
-    const gate = (strict && channel
-      ? `&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`
-      : "")
+    // YouTube ignores the extra params; inside HideScore they are private retry
+    // metadata, while the modal's external handoff uses the resolved watch URL.
+    const gate = `&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`
       // nss_race rides along for the same reason nss_channels does: VideoModal's
       // embed-failure retry must keep THIS call's race gate, or an FOM embed
       // block on the F1 reel would retry ungated and put a different round's
       // race in the masked player.
       + (raceTokens?.length ? `&nss_race=${encodeURIComponent(raceTokens.join("|"))}` : "");
     const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${gate}`;
-    // Route the YouTube-search fallback through openExternal (not raw
-    // window.open) so it behaves like every other external YouTube open in the
-    // app: on the website it's byte-identical (openExternal does the same
-    // window.open there), but inside the Capacitor native wrapper it hands the
-    // /results URL off to the YouTube app via the youtube:// scheme (falling
-    // back to the in-app browser) instead of shelling out to mobile Safari and
-    // missing the handoff — matching GameHighlights' openExternal fallbacks.
-    if (!onPlayHighlight) { openExternal(fallback); return; }
+    if (!onPlayHighlight) return null;
     setLoadingId(id);
-    const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, strict, raceTokens);
-    setLoadingId(null);
-    if (videoId) onPlayHighlight(videoId, fallback);
-    else openExternal(fallback);
+    try {
+      const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, true, raceTokens);
+      if (!videoId) return null;
+      onPlayHighlight(videoId, fallback);
+      return { label, official: true, videoId, fallbackUrl: fallback };
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   // UFC: walk the rights-holder channels in coverage order, each strict
@@ -179,7 +171,24 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     return null;
   };
 
-  return { loadingId, play, playUfc };
+  // Single-event strict resolver for poker majors. Poker result pages and
+  // unscoped YouTube results routinely put the champion in the headline, so a
+  // miss must return null and hide the button — never open a search page. The
+  // exact tour channel comes from the source-validated major-events record.
+  const playStrictOnly = async (id: string, query: string, channel: string, label: string): Promise<HighlightSource | null> => {
+    if (!onPlayHighlight) return null;
+    setLoadingId(id);
+    try {
+      const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, true);
+      if (!videoId) return null;
+      onPlayHighlight(videoId, `https://www.youtube.com/watch?v=${videoId}`);
+      return { label, official: true, videoId };
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  return { loadingId, playRace, playUfc, playStrictOnly };
 }
 
 // Play button styled exactly like the game cards' highlight buttons
@@ -272,7 +281,7 @@ function FighterRow({ f, compact, nameTier, showRecord }: { f: FightBout["red"];
 }
 
 function FightCard({
-  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate,
+  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate, hideMeta,
 }: {
   fight: FightBout;
   label?: string;
@@ -295,6 +304,7 @@ function FightCard({
   nameTier: FighterNameTier;
   showRecords: boolean;
   selectedDate?: string;
+  hideMeta: boolean;
 }) {
   const isLive = fight.state === "in";
   const isPost = fight.state === "post";
@@ -316,7 +326,7 @@ function FightCard({
           beside the time, never overlapping it; the weight-class slot keeps
           min-w-0 + truncate (shrinks in place) and drops entirely on columns too
           narrow to show a useful amount of it. */}
-      <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5">
+      {!hideMeta && <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {status}
@@ -336,7 +346,7 @@ function FightCard({
         {broadcasts.length > 0 && showBroadcast && (
           <span className="shrink-0 ml-auto" style={{ color: "var(--text-muted)" }}>{broadcasts[0]}</span>
         )}
-      </div>
+      </div>}
       <div className="flex flex-col gap-y-0.5">
         <FighterRow f={fight.red} compact={compact} nameTier={nameTier} showRecord={showRecords} />
         <FighterRow f={fight.blue} compact={compact} nameTier={nameTier} showRecord={showRecords} />
@@ -366,6 +376,7 @@ export default function EventCard({
   onPlayHighlight,
   namesCompact,
   selectedDate,
+  isPastDate,
 }: {
   event: LeagueEventCard;
   leagueLabel?: string;
@@ -377,14 +388,39 @@ export default function EventCard({
   // event ON this date, matching how game cards show a bare time for the
   // viewed slate.
   selectedDate?: string;
+  isPastDate?: boolean;
 }) {
-  const { loadingId, play, playUfc } = useHighlightPlayer(onPlayHighlight);
+  const { loadingId, playRace, playUfc, playStrictOnly } = useHighlightPlayer(onPlayHighlight);
   // Where each bout's highlight actually came from, once played (bout id →
   // source). Sticky per card so the button keeps reporting its source. A NULL
   // entry means "resolved, and no rights-holder has it" — FightCard hides that
   // bout's button from then on instead of offering a YouTube search. Absent
   // (undefined) = not attempted yet, so the button still shows as plain "UFC".
   const [sources, setSources] = useState<Record<string, HighlightSource | null>>({});
+  // The single poker tile has one tour-gated replay. undefined = untried,
+  // object = resolved, null = no official upload (button hides).
+  const [pokerSource, setPokerSource] = useState<HighlightSource | null | undefined>(undefined);
+  // Boxing majors use the same strict, fail-closed source contract as Poker,
+  // but stay separate so a promoter mapping cannot affect another event type.
+  const [boxingSource, setBoxingSource] = useState<HighlightSource | null | undefined>(undefined);
+  // Racing mirrors Poker/Boxing: undefined = untried, object = verified source,
+  // null = strict miss (button hidden; no YouTube-search handoff).
+  const [raceSource, setRaceSource] = useState<HighlightSource | null | undefined>(undefined);
+  // A replay carried onto a later slate should not retain a redundant FINAL
+  // row above its watch button. Normal finished GameCards also drop that row
+  // on past dates. Apply the same rule to every event-card family (UFC,
+  // racing, boxing, chess, poker), including a recent event shown on Today.
+  const historicalPost = (state: LeagueEventCard["state"], date: string) => {
+    if (state !== "post") return false;
+    if (isPastDate) return true;
+    if (!selectedDate) return false;
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const eventYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(parsed).replace(/-/g, "");
+    return eventYmd < selectedDate;
+  };
   const playBout = async (id: string, query: string) => {
     // Already resolved this bout — replay the same video instead of walking the
     // channel chain again. The resolver scrapes YouTube's results page and
@@ -397,6 +433,55 @@ export default function EventCard({
     }
     const src = await playUfc(id, query);
     setSources((prev) => ({ ...prev, [id]: src }));
+  };
+  const playPoker = async () => {
+    if (!event.officialChannel) return;
+    if (pokerSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(pokerSource.videoId, `https://www.youtube.com/watch?v=${pokerSource.videoId}`);
+      return;
+    }
+    const src = await playStrictOnly(
+      "poker-official",
+      event.highlightQuery ?? `${event.title} highlights`,
+      event.officialChannel,
+      event.officialLabel ?? "Poker",
+    );
+    setPokerSource(src);
+  };
+  const playBoxing = async () => {
+    if (!event.officialChannel) return;
+    if (boxingSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(boxingSource.videoId, `https://www.youtube.com/watch?v=${boxingSource.videoId}`);
+      return;
+    }
+    const src = await playStrictOnly(
+      "boxing-official",
+      event.highlightQuery ?? `${event.title} highlights`,
+      event.officialChannel,
+      event.officialLabel ?? "Boxing",
+    );
+    setBoxingSource(src);
+  };
+  const playRaceHighlight = async () => {
+    if (!event.officialChannel) {
+      setRaceSource(null);
+      return;
+    }
+    if (raceSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(
+        raceSource.videoId,
+        raceSource.fallbackUrl ?? `https://www.youtube.com/watch?v=${raceSource.videoId}`,
+      );
+      return;
+    }
+    const src = await playRace(
+      "race-official",
+      f1Query,
+      event.officialChannel,
+      event.officialLabel ?? "Racing",
+      event.raceTokens,
+    );
+    setRaceSource(src);
   };
 
   // Fighter-name size follows namesCompact — the game columns' REAL
@@ -542,39 +627,41 @@ export default function EventCard({
             nameTier={nameFit.tier}
             showRecords={nameFit.records}
             selectedDate={selectedDate}
+            hideMeta={historicalPost(f.state, f.date)}
           />
         ))}
       </div>
     );
   }
 
-  // ── Single-event tile — races (F1/NASCAR/IndyCar), boxing cards, chess ──
-  // One layout, three glyphs. Boxing and chess reuse the race tile because the
+  // ── Single-event tile — races, boxing, chess, and poker majors ──
+  // One layout, four glyphs. Boxing/chess/poker reuse the race tile because the
   // shape is identical (one headline event, a venue subtitle, a status) and it
   // is already height-matched to an MLB card at every breakpoint; a bespoke
   // layout would drift out of alignment the first time either was touched.
   const isRace = event.kind === "f1";
-  const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : "🏁";
-  // Spoken name for the sport-type glyph below. When the tile ISN'T a clickable
-  // button (boxing has no detail page; a finished race/chess event drops its
-  // link too — see `clickable`), the root carries no aria-label, so this emoji
-  // is the only cue to the event TYPE. It was aria-hidden, leaving a screen
-  // reader to infer boxing/racing/chess from the title alone. Give it a spoken
-  // name (role="img" + aria-label) in that case — the same role="img"+aria-label
-  // pattern the rating badge and the game cards' weather glyphs use — while
-  // keeping it hidden on clickable tiles, whose button aria-label already names
-  // the event ("<title> — Race details on ESPN" / "… Follow live on Lichess").
-  const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : "Race";
+  const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : event.kind === "poker" ? "♠️" : "🏁";
   // What the tile body links to, and what to call it. Chess points at the
   // Lichess broadcast (a live BOARD, not a results table); boxing has no
   // per-event page worth linking, so its tile is inert.
-  const detailNoun = event.kind === "chess" ? "Follow live on Lichess" : "Race details on ESPN";
+  const detailNoun = event.kind === "chess"
+    ? "Follow live on Lichess"
+    : event.kind === "poker"
+      ? "Official tournament details"
+      : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
+  const hideHistoricalMeta = historicalPost(event.state, event.date);
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
   // whenLabel ("Sat 9:00AM" for another day, bare "9:00AM" when the race is on
   // the viewed date — selectedDate — same rule as the game cards' time).
-  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(event.date, selectedDate) || event.statusDetail;
+  const status = isPost
+    ? "Final"
+    : isLive
+      ? "Live"
+      : event.kind === "poker" && event.scheduleLabel
+        ? event.scheduleLabel
+        : whenLabel(event.date, selectedDate) || event.statusDetail;
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
   // Clicking the tile body opens the ESPN race page — the game cards' "click
   // for more details" affordance (there's no F1 GameDetailModal; ESPN's race
@@ -601,7 +688,7 @@ export default function EventCard({
           upcoming time renders at text-[11px] muted — the exact classes
           GameCard's future-time span uses — while Final/Live keep the row's
           text-xs like GameCard's FINAL/clock. */}
-      <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
+      {!hideHistoricalMeta && <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {isPost || isLive ? status : <span className="text-[11px] whitespace-nowrap">{status}</span>}
@@ -609,7 +696,7 @@ export default function EventCard({
         {!metaCompact && event.broadcasts.length > 0 && (
           <span className="shrink-0 ml-auto truncate" style={{ color: "var(--text-muted)" }}>{event.broadcasts[0]}</span>
         )}
-      </div>
+      </div>}
       {/* Body — the game cards' EXACT two-row team skeleton (logo slot + name,
           gap-y-0.5, leading-none, truncate), with 🏁 in the away-logo slot and
           the circuit in the home row, so the tile's height and fonts track an
@@ -630,26 +717,47 @@ export default function EventCard({
           </div>
         )}
       </div>
-      {/* One official-channel button, like UFC's — the unscoped "Search" test
-          button is gone. strict=true hard-gates the in-app result to the real
-          FORMULA 1 channel (oembed-verified uploader); FOM blocks embedding on
-          most of its uploads, so when nothing strict/playable matches, the
-          fallback opens a YouTube search externally rather than playing some
-          random reupload in the masked player. */}
-      {/* Racing ONLY. Boxing and chess deliberately ship with no highlight
+      {/* One official-channel button, like UFC's. A strict miss hides it; no
+          racing path opens a generic YouTube results page. */}
+      {/* Racing ONLY. Chess deliberately ships with no highlight
           button, on the same rule the new soccer leagues were just held to: a
           button goes in once its official channel has been verified end-to-end,
-          not before. Boxing highlights are split across DAZN / Top Rank /
-          Matchroom / PBC with no single reliable uploader, and chess has no
+          not before. Boxing is handled below through a per-card promoter
+          mapping because DAZN / Top Rank / Matchroom / PBC have no shared
+          uploader. Chess has no
           highlight reel at all — its "highlight" is the live board, which the
           tile already links to. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts for
           the same call on cricket. */}
-      {isPost && isRace && (
+      {isPost && isRace && event.officialChannel && raceSource !== null && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
               renders NASCAR and IndyCar, which would otherwise both offer an
               "F1" highlight button. Falls back to "F1" for older cards. */}
-          <PlayBtn label={event.officialLabel ?? "F1"} loading={loadingId === "f1-official"} onClick={() => play("f1-official", f1Query, event.officialChannel, true, event.raceTokens)} />
+          <PlayBtn label={raceSource?.label ?? event.officialLabel ?? "F1"} loading={loadingId === "race-official"} onClick={playRaceHighlight} />
+        </div>
+      )}
+      {/* Poker replays are stricter than racing: exact tour channel or no
+          button. A failed lookup never opens YouTube search because result
+          titles commonly contain the champion. */}
+      {isPost && event.kind === "poker" && event.officialChannel && pokerSource !== null && (
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          <PlayBtn
+            label={pokerSource?.label ?? event.officialLabel ?? "Poker"}
+            loading={loadingId === "poker-official"}
+            onClick={playPoker}
+          />
+        </div>
+      )}
+      {/* Boxing has no league-wide uploader. Curated major records supply the
+          exact promoter/rightsholder channel; a miss hides this button and
+          never opens a spoiler-heavy search page. */}
+      {isPost && event.kind === "boxing" && event.officialChannel && boxingSource !== null && (
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          <PlayBtn
+            label={boxingSource?.label ?? event.officialLabel ?? "Boxing"}
+            loading={loadingId === "boxing-official"}
+            onClick={playBoxing}
+          />
         </div>
       )}
     </div>

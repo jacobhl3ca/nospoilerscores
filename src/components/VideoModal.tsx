@@ -140,6 +140,7 @@ declare global {
   interface Window {
     YT?: YTNamespace;
     onYouTubeIframeAPIReady?: () => void;
+    umami?: { track: (event: string, data?: Record<string, string>) => void };
   }
 }
 
@@ -159,8 +160,8 @@ function extractSearchQuery(fallbackUrl: string): string | null {
 // that resolved their video under a strict channel gate (F1, golf). YouTube
 // ignores the extra params on a /results URL, so the same string still works
 // verbatim as the external "Watch on YouTube" hand-off — same trick as the
-// existing `nss_no_fallback=1`. Empty list = ungated caller (news, per-game
-// league highlights): retry behavior there is unchanged.
+// existing `nss_no_fallback=1`. A YouTube search retry with no strict channel
+// list is rejected below; non-highlight media use direct source URLs instead.
 function strictFallbackChannels(fallbackUrl: string): string[] {
   try {
     const u = new URL(fallbackUrl);
@@ -578,6 +579,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (Jacob 7/19). Keying each PeekBlur by postKey remounts it fresh per post,
   // resetting the reveal, while leaving the video player + modal chrome mounted.
   const postKey = String(currentId ?? playbackUrl ?? embedUrl ?? imageUrl ?? fallbackUrl ?? headline ?? "");
+  const trackedPlayRef = useRef<string | null>(null);
+  const trackVideoPlay = useCallback(() => {
+    if (!postKey || trackedPlayRef.current === postKey) return;
+    trackedPlayRef.current = postKey;
+    window.umami?.track("video-play", {
+      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
+      source: (sourceLabel || "unknown").slice(0, 40),
+    });
+  }, [postKey, ytMode, hlsMode, sourceLabel]);
   // Same reuse trap as PeekBlur: page to another post and the gallery cursor
   // must go back to picture 1 (post B would otherwise open on post A's 4th).
   useEffect(() => { setGalIdx(0); }, [postKey]);
@@ -1311,24 +1321,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // the "Watch on YouTube" card rather than playing an unvetted upload.
       const strictChannels = strictFallbackChannels(fallbackUrl);
       const raceParam = raceFallbackParam(fallbackUrl);
+      // Fail closed if a highlight caller ever forgets to carry its channel
+      // contract. The old unscoped branch was how NFL (and every other league)
+      // could resolve correctly, hit an embed error, then silently swap to a
+      // video from a different uploader.
+      if (!strictChannels.length) {
+        retryingRef.current = false;
+        setYtFailed(true);
+        return;
+      }
       try {
         const excl = encodeURIComponent(failed.join(","));
         let nextId: string | null = null;
-        if (strictChannels.length) {
-          // Sequential, not parallel: the worker scrapes YouTube's results page
-          // and rate-limits into empty responses under bursts (same reason
-          // EventCard's UFC chain is sequential).
-          for (const channel of strictChannels) {
-            const res = await fetch(
-              `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}`
-            );
-            const data = res.ok ? await res.json() : null;
-            if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
-          }
-        } else {
-          const res = await fetch(`${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}${raceParam}`);
+        // Sequential, not parallel: the worker scrapes YouTube's results page
+        // and rate-limits into empty responses under bursts (same reason
+        // EventCard's UFC chain is sequential).
+        for (const channel of strictChannels) {
+          const res = await fetch(
+            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}`
+          );
           const data = res.ok ? await res.json() : null;
-          if (data?.videoId && data.videoId !== currentId) nextId = data.videoId;
+          if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
         }
         if (nextId) {
           setCurrentId(nextId); // an untried alternate — the effect resets ytFailed
@@ -1433,6 +1446,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               }
             }
             if (event.data === 1) {
+              trackVideoPlay();
               forceBest(event.target);
               // By PLAYING the title metadata is reliably populated — re-run the
               // spoiler check in case getVideoData() was empty at onReady.
@@ -1485,7 +1499,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // during a fallback swap before the replacement player is built.
       playerRef.current = null;
     };
-  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked]);
+  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay]);
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
@@ -1621,7 +1635,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // of it (Jacob 7/11–13). The bottom Prev/Next buttons need a bottom
         // reserve so the footer clears them — image posts included, now that
         // they get the buttons too.
-        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "sm:px-24 sm:py-8" : "sm:p-8"}${hasPager ? " pb-[calc(env(safe-area-inset-bottom)+4.5rem)]" : ""}`}
+        className={`relative flex min-h-full items-center justify-center p-4 ${hasPager ? "pt-[calc(env(safe-area-inset-top)+4.5rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] sm:px-24 sm:py-8" : "sm:p-8"}`}
       >
       {/* Content — clicks bubble to onClose so tapping the image, headline,
           or any whitespace around them dismisses. The video player and CC
@@ -2367,13 +2381,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
-                // Spoiler-safe accessible name. The parent dialog deliberately
-                // does NOT surface `headline` (see its aria-label above): the
-                // headline is PeekBlur'd because it can carry a score, so naming
-                // this element with it would read the spoiler aloud unblurred to
-                // screen readers — defeating the whole visual blur. Match the
-                // dialog's generic video-mode label instead of the headline.
-                aria-label="Video player"
+                onPlaying={trackVideoPlay}
+                aria-label={headline || "Video player"}
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (

@@ -22,12 +22,12 @@ const NEWS_HOURLY = [
   "cbs-nba", "cbs-ncaam", "cbs-nfl", "cbs-nhl", "cbs-tennis",
   "espn-top", "espn-videos",
   "mlb", "mlb-videos", "nba", "nba-videos", "wnba", "wnba-videos", "nhl",
-  // All 17 reddit subs the site bakes — the soccer/World-Cup + college tail
+  // Every Reddit feed the site renders — the soccer/World-Cup + college tail
   // (ucl/uel/fifa/soccer/ncaaf/ncaaw) was previously unmonitored, which is
   // exactly the family the hourly bake rate-limits first (see the batching fix).
-  "reddit-epl", "reddit-fifa", "reddit-general", "reddit-golf", "reddit-mlb",
+  "reddit-boxing", "reddit-cricket", "reddit-epl", "reddit-fifa", "reddit-general", "reddit-golf", "reddit-mlb",
   "reddit-mls", "reddit-nba", "reddit-ncaaf", "reddit-ncaam", "reddit-ncaaw",
-  "reddit-f1", "reddit-nfl", "reddit-nhl", "reddit-soccer", "reddit-tennis",
+  "reddit-f1", "reddit-indycar", "reddit-nascar", "reddit-nfl", "reddit-nhl", "reddit-nwsl", "reddit-soccer", "reddit-tennis",
   "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-wnba",
   "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",

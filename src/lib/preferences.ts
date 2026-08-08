@@ -19,7 +19,7 @@ const STORAGE_KEY = "nss-preferences";
 // collision-free against every code already in this map (note nwsl is "nw", NOT
 // a reversal risk with wnba's existing "wn"; they are distinct keys and both
 // must stay, since changing either would break already-shared URLs).
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", cricket: "ck", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", esports: "es" };
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", cricket: "ck", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;
@@ -186,6 +186,14 @@ export interface Preferences {
   // arrow cycling / news swap / + button picks). Settings' slot pickers stay
   // unfiltered so a hidden league can still be pinned deliberately.
   hiddenLeagues?: Sport[];
+  // Opt-in leagues the user explicitly added to the homepage switcher. Leagues
+  // marked excludeFromAuto start unchecked, so this separate allowlist lets a
+  // user enable one durably without making every future opt-in league visible.
+  shownLeagues?: Sport[];
+  // v2 changed opt-in leagues from implicitly checked to default-off. A saved
+  // version means this prefs blob has either received the one-time legacy
+  // preservation migration or was created after the new defaults launched.
+  switcherDefaultsVersion?: 2;
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
   hideTeamStars?: boolean;
@@ -224,8 +232,14 @@ export interface Preferences {
   // appended to the end. Absence of an entry = use Smart (default) order.
   newsSourceOrder?: Record<string, string[]>;
   // Source-type pill filter for the news view. "all" shows every source;
-  // others restrict to one type globally across all visible leagues.
+  // others restrict to one type globally across all visible leagues. Retained
+  // as the legacy/single-select fallback for preferences saved before the
+  // multi-select source controls shipped.
   newsTypeFilter?: "all" | "topvideos" | "espn" | "reddit" | "homepage";
+  // Independently enabled news source types. Once present this is authoritative
+  // over newsTypeFilter, so a user can combine (for example) Reddit + ESPN while
+  // leaving homepage feeds unchecked. At least one stays enabled in the UI.
+  newsTypeFilters?: ("topvideos" | "espn" | "reddit" | "homepage")[];
   // User-chosen ordering of the source-type filter options (the values above).
   // Drag-to-reorder in the funnel popover persists here. Unknown/new values
   // fall through to the tail in default order, so added sources still show.
@@ -322,6 +336,7 @@ const defaults: Preferences = {
   defaultRatings: "auto",
   newsColCount: 3,
   smartCutoffHour: 13,
+  switcherDefaultsVersion: 2,
   // Reddit-only by default (2026-08-03, ahead of the Product Hunt launch).
   // Reddit is where the game-worth-watching discussion actually lives, and it
   // is the feed a first-time visitor should land on; ESPN/homepage/top-videos
@@ -335,7 +350,14 @@ export function loadPreferences(): Preferences {
   if (typeof window === "undefined") return defaults;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    const prefs = raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    const stored = raw ? JSON.parse(raw) : null;
+    const prefs = stored ? { ...defaults, ...stored } : { ...defaults };
+    // Do not let the v2 value from defaults disguise a legacy stored blob.
+    // HomeContent needs this missing marker to preserve every old checkmark
+    // before the first post-deploy save overwrites the blob.
+    if (stored && !Object.prototype.hasOwnProperty.call(stored, "switcherDefaultsVersion")) {
+      delete prefs.switcherDefaultsVersion;
+    }
     // Push the chosen zone into the shared module so the data layer + UI agree
     // before the first fetch/render after a load.
     setServiceTimeZone(prefs.timezone);
