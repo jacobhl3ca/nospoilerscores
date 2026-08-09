@@ -183,6 +183,7 @@ function NewsFilterList({ options, selected, onToggle, onReorder }: {
   onReorder: (order: string[]) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const dragListenersRef = useRef<(() => void) | null>(null);
   const [dragVal, setDragVal] = useState<NewsSourceType | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const order = options.map((o) => o.value);
@@ -203,10 +204,14 @@ function NewsFilterList({ options, selected, onToggle, onReorder }: {
       }
       setDropIdx(next);
     };
-    const onUp = () => {
+    const removeListeners = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      dragListenersRef.current = null;
+    };
+    const onUp = () => {
+      removeListeners();
       setDragVal((curVal) => {
         setDropIdx((curDrop) => {
           if (curVal != null && curDrop != null) {
@@ -224,7 +229,19 @@ function NewsFilterList({ options, selected, onToggle, onReorder }: {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
+    // If the funnel popover unmounts mid-drag (pointer still down when the
+    // popover closes or HomeContent re-renders it away), onUp/onCancel never
+    // fire — so hand the teardown to the unmount effect below, which removes
+    // these window listeners without leaking the closures over order/onReorder.
+    // Mirrors LeagueColumn's dragListenersRef guard for its header drag.
+    dragListenersRef.current = removeListeners;
   };
+
+  // Remove any in-flight drag's window listeners if this list unmounts mid-drag
+  // (see startDrag). No DOM side-effects to revert here — unlike LeagueColumn's
+  // drag, this one appends no body cursor or ghost node — so it only detaches
+  // the listeners; it intentionally does NOT fire the reorder/setState onUp runs.
+  useEffect(() => () => { dragListenersRef.current?.(); }, []);
 
   return (
     <div ref={listRef} className="select-none">
