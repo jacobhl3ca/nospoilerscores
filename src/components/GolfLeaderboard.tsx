@@ -105,15 +105,16 @@ export default function GolfLeaderboard({
       document.removeEventListener("keydown", onKey);
     };
   }, [broadcastExpanded]);
-  // Four highlight slots, in Jacob's preferred order:
-  //   0: official channel video (the "main recap" — labeled "ESPN"
-  //      since that's the brand he trusts for the full recap)
-  //   1: walked curated-channel result (PGA TOUR → Golf Channel → ESPN),
-  //      stopping at the first video distinct from slot 0. This matches the
-  //      pre-session-N 2-button behavior without accepting generic reuploads.
-  //   2–3: two more "top videos" pulled from the remaining channels in
-  //      the fallback chain + a generic search, deduped against the
-  //      earlier slots. Only populate if a distinct video exists.
+  // Four highlight slots. Slot 0 is the main round recap, resolved from the
+  // FIRST curated channel in the tournament's chain (secondaryChannels[0] —
+  // Golf Channel across all four majors; see SECONDARY_CHANNELS in youtube.ts)
+  // and labeled after that channel, not a hardcoded "ESPN" (see mainChannelName
+  // below). The tournament-run "official" channel (The Masters, USGA, …) is
+  // appended LAST, since during tournament week it posts Par 3 / player clips
+  // that drown out the round recap. Slots 1-3 fill progressively from the
+  // remaining curated channels plus curated backfill queries (never an
+  // unscoped/generic search), deduped against the earlier slots. Only populate
+  // if a distinct video exists.
   const [highlightSlots, setHighlightSlots] = useState<(string | null)[]>([
     null,
     null,
@@ -355,12 +356,12 @@ export default function GolfLeaderboard({
     // Same cancelled-flag pattern as GameHighlights.tsx / TeamView.tsx.
     let cancelled = false;
     (async () => {
-      // Drive the slot list from the curated secondary chain (ESPN
-      // first — the reliable full-day recap source Jacob flagged).
-      // The tournament-run "official" channel (The Masters, USGA,
-      // etc.) goes LAST because during tournament week those channels
-      // post Par 3 clips and player top-shot reels that were drowning
-      // out the actual round recap in slot 0.
+      // Drive the slot list from the curated secondary chain (Golf
+      // Channel first — the reliable per-round recap source across the
+      // majors). The tournament-run "official" channel (The Masters,
+      // USGA, etc.) goes LAST because during tournament week those
+      // channels post Par 3 clips and player top-shot reels that were
+      // drowning out the actual round recap in slot 0.
       const channelsInOrder: string[] = [...secondaryChannels];
       if (officialChannel && !channelsInOrder.includes(officialChannel)) {
         channelsInOrder.push(officialChannel);
@@ -394,9 +395,10 @@ export default function GolfLeaderboard({
         });
       };
 
-      // Slot 0 keeps using the first curated channel (ESPN for golf
-      // majors) so the labeled "ESPN" main-recap button gets the
-      // right videoId once it resolves.
+      // Slot 0 keeps using the first curated channel (Golf Channel for
+      // the majors) so the main-recap button — labeled after that same
+      // channel (see mainChannelName below) — gets the right videoId
+      // once it resolves.
       const mainChannel = channelsInOrder[0];
       if (mainChannel) {
         // strict=1: oembed-verify the uploader is this curated channel, so a
