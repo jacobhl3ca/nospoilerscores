@@ -2066,6 +2066,44 @@ export default function HomeContent({
                 onClick={() => updatePrefs({ newsSingleColumn: !prefs.newsSingleColumn })}
               />
             )}
+            {/* Read order, immediately LEFT of the funnel (Jacob 8/9). This is a
+                reading choice you change mid-scroll — "let me work up from the
+                bottom of r/nba" — so it belongs on the news header next to the
+                other list controls, not buried in Settings. Same round shape and
+                filled-accent = on treatment as the funnel beside it. */}
+            {showNews && (
+              <button
+                type="button"
+                onClick={() => updatePrefs({ newsOldestFirst: !prefs.newsOldestFirst })}
+                className="monkey-toggle relative w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                style={{
+                  background: prefs.newsOldestFirst ? "var(--accent)" : "var(--bg-card)",
+                  border: `1px solid ${prefs.newsOldestFirst ? "var(--accent)" : "var(--border)"}`,
+                  color: prefs.newsOldestFirst ? "white" : "var(--text-muted)",
+                }}
+                title={prefs.newsOldestFirst ? "Oldest first — tap for newest first" : "Newest first — tap for oldest first"}
+                aria-label={prefs.newsOldestFirst ? "Sort oldest first (on)" : "Sort newest first"}
+                aria-pressed={!!prefs.newsOldestFirst}
+              >
+                {prefs.newsOldestFirst ? (
+                  // Ascending: arrow up + short-to-tall bars.
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 20V6" /><path d="m3 9 3-3 3 3" />
+                    <line x1="12" y1="17" x2="15" y2="17" />
+                    <line x1="12" y1="12" x2="18" y2="12" />
+                    <line x1="12" y1="7" x2="21" y2="7" />
+                  </svg>
+                ) : (
+                  // Descending: arrow down + tall-to-short bars.
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 4v14" /><path d="m3 15 3 3 3-3" />
+                    <line x1="12" y1="7" x2="15" y2="7" />
+                    <line x1="12" y1="12" x2="18" y2="12" />
+                    <line x1="12" y1="17" x2="21" y2="17" />
+                  </svg>
+                )}
+              </button>
+            )}
             {showNews && (
               <div ref={newsFilterRef} className="relative">
                 <button
@@ -2705,6 +2743,7 @@ export default function HomeContent({
                 onPlay={playNewsVideo}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
+                oldestFirst={!!prefs.newsOldestFirst}
               />
             );
           }
@@ -2753,6 +2792,7 @@ export default function HomeContent({
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
+                    oldestFirst={!!prefs.newsOldestFirst}
                   />
                 </>
               )}
@@ -2777,6 +2817,7 @@ export default function HomeContent({
                     widthClassName={widthClassFor()}
                     videosOnly={!!prefs.newsVideosOnly}
                     showTextPosts={!!prefs.showTextPosts}
+                    oldestFirst={!!prefs.newsOldestFirst}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -2800,6 +2841,7 @@ export default function HomeContent({
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
+                      oldestFirst={!!prefs.newsOldestFirst}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}
@@ -3534,7 +3576,7 @@ export default function HomeContent({
           body={videoModal.body}
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? true}
-          youtubeNativeControls={prefs.youtubeNativeControls ?? false}
+          youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
           allowEnd={prefs.videoAllowEnd ?? false}

@@ -56,6 +56,10 @@ function hsClientHeaders(extra?: Record<string, string>): Record<string, string>
 // Sends the pseudonymous uid + platform only — no email, no provider sub. Umami
 // respects localStorage["umami.disabled"], so the site's no-track toggle still
 // wins. Fails silently when the script is blocked or hasn't loaded yet.
+// /api/me has been observed returning a raw Apple `sub` in `provider`, which put a real
+// account identifier into analytics. Only ever forward a known label.
+const PROVIDER_LABELS = new Set(["apple", "google", "email"]);
+
 let identified = "";
 function identifyToUmami(a: AuthState): void {
   if (typeof window === "undefined") return;
@@ -71,7 +75,7 @@ function identifyToUmami(a: AuthState): void {
     umami.identify({
       id: a.uid,
       signedIn: true,
-      provider: a.provider || "unknown",
+      provider: PROVIDER_LABELS.has(a.provider ?? "") ? a.provider : "unknown",
       platform: a.platform || "web",
       nativeApp: a.platform === "ios" || a.platform === "android",
     });
