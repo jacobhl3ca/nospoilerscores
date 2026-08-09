@@ -327,9 +327,25 @@ const defaults: Preferences = {
   skipExplainer: false,
   skipNewsExplainer: false,
   showNews: false,
-  defaultDateMode: "smart",
+  // Yesterday, not "smart" (2026-08-09, Jacob). A brand-new visitor — most of
+  // them arriving from the no-spoiler-scores landing pages — is here to catch
+  // up on games that are already OVER. "smart" flipped them to Today after
+  // 1 PM local, which on a weekday afternoon is a board of games that have not
+  // started: no highlights, nothing to reveal, and a first impression of an
+  // empty product. Yesterday always has a full, finished slate.
+  // Existing users are unaffected — a saved defaultDateMode always wins, and
+  // Settings → "Automatic" restores the old behaviour.
+  defaultDateMode: "yesterday",
   defaultLandingView: "remember",
   defaultRatings: "auto",
+  // Text posts ON by default (2026-08-09, Jacob). The news board is Reddit-first
+  // (see newsTypeFilter below) and most of what a subreddit produces IS a text
+  // post — hiding them by default emptied out whole columns for a brand-new
+  // user with no hint that a toolbar chip was responsible. Headlines stay
+  // blurred either way, so showing them leaks nothing. There is a matching
+  // pre-paint script in layout.tsx (the CSS hides them until <html> gets
+  // .show-text-posts) — change both together.
+  showTextPosts: true,
   newsColCount: 3,
   smartCutoffHour: 13,
   switcherDefaultsVersion: 2,
