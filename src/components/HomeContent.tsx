@@ -1258,7 +1258,10 @@ export default function HomeContent({
   // Soccer is grouped as one block at the very bottom rather than interleaved,
   // so the domestic leagues read as a set you scroll past or into.
   const PICKER_RANK: Sport[] = [
-    "nfl", "nba", "mlb", "nhl", "ncaaf", "ncaam", "wnba", "ncaaw",
+    // MLB leads: it is the league actually playing games today, and a picker
+    // whose first pill is an offseason/preseason league reads as stale (Jacob
+    // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
+    "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
     "chess", "poker", "esports",
     // ── soccer block, bottom ──
