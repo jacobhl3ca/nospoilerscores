@@ -167,7 +167,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // and closed with a full matchweek still to play. kickoffDate carries the real
   // first-match day for the countdown banner; startDate stays two days earlier so
   // the column is there with the fixture lookahead when the week's build-up starts.
-  { sport: "epl", label: "Prem", startDate: "08-19", endDate: "05-31", kickoffDate: "08-21", championshipDate: "05-30" },
+  { sport: "epl", label: "EPL", startDate: "08-19", endDate: "05-31", kickoffDate: "08-21", championshipDate: "05-30" },
   // ── UEFA Champions League (Sep League phase → Jun Final) ──
   // Active across Sep 14 → Jun 5 but only ~17 matchdays in window; on
   // non-matchday days the column shows news only.
