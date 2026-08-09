@@ -506,6 +506,13 @@ export default function HomeContent({
     skipNewsExplainer: false,
     showNews: false,
   });
+  // `prefs` above starts as hardcoded defaults and is replaced from
+  // localStorage in an effect, so the first paint of every reload runs against
+  // a blob with no saved columns and no dismissals. Anything conditioned on a
+  // stored preference therefore flashes on and off — which is exactly what the
+  // kickoff banner did after being dismissed, or after the league was added
+  // (Jacob 8/9). This flips true once the stored blob is in state.
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
   // A signed-in account that has already used the iPhone app does not need an
   // install prompt on the web. This is account history from /api/me, not a
   // guess based on the current browser's user agent.
@@ -611,6 +618,10 @@ export default function HomeContent({
       // the first render already has it.
       if (landing === "ratings") p.showRatings = true;
       setPrefs(p);
+      // Stored prefs are now in state. Anything that would otherwise render
+      // once against the hardcoded defaults above — and then vanish a frame
+      // later — must wait on this. See prefsHydrated's declaration.
+      setPrefsHydrated(true);
       // Landing view: "remember" restores the last view EXCEPT across a day
       // boundary — a new calendar day (ET) since the last open drops a remembered
       // News view to Scores so the user never lands on yesterday's spoilers
@@ -2968,7 +2979,8 @@ export default function HomeContent({
             // which column?" picker so the user chooses what the WC bumps
             // (Jacob 6/11 #2). Dismiss persists.
             const wcActive = thirdLeagueOptions.some((o) => o.sport === "fifa");
-            const showWcBanner = wcActive
+            const showWcBanner = prefsHydrated
+              && wcActive
               && !displayedSports.includes("fifa")
               && !prefs.wcBannerDismissed;
             const wcBanner = showWcBanner ? (
@@ -3052,9 +3064,16 @@ export default function HomeContent({
             // for a few days after (weekend-only users). Dismissal is keyed to
             // the exact kickoff, so next season's banner still appears.
             // Never renders alongside the World Cup banner — one announcement.
-            const showKickoffBanner = !showWcBanner
+            const showKickoffBanner = prefsHydrated
+              && !showWcBanner
               && kickoff !== null
               && !displayedSports.includes(kickoff.config.sport)
+              // displayedSports comes from the FETCHED board, which lands a few
+              // frames after prefs do — so a user who already pinned the league
+              // still saw a brief flash of "add it" on reload. The slot prefs
+              // are synchronous, so check those too and the flash has no window
+              // to happen in.
+              && !selectedSlotLeagues.includes(kickoff.config.sport)
               && !(prefs.kickoffBannersDismissed ?? []).includes(kickoff.seasonKey);
             const kickoffAddLabel = kickoff ? `Add the ${kickoff.config.label} column` : "";
             const kickoffBanner = showKickoffBanner && kickoff ? (
