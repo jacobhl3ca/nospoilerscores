@@ -27,6 +27,8 @@ interface NewsFeedProps {
   sources: NewsSource[];
   onPlay: PlayHandler;
   showTextPosts: boolean;
+  // Reverse the merged feed so the oldest post is first (⇅ in the news header).
+  oldestFirst?: boolean;
   videosOnly: boolean;
 }
 
@@ -95,21 +97,25 @@ function useAggregatedFeed(sources: NewsSource[]) {
   return items;
 }
 
-export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly }: NewsFeedProps) {
+export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
 
   // Visible posts: in Videos mode keep only posts with a clip; otherwise hide
   // headline-only text posts unless explicitly opted in (matches the
   // .news-textpost / .show-text-posts rule the Cards view uses).
   const visible = useMemo(
-    () =>
-      (items ?? []).filter((it) =>
+    () => {
+      const kept = (items ?? []).filter((it) =>
         // Videos + Text posts are independent toggles: Videos keeps clip-bearing
         // posts, and Text posts ALSO on adds the headline-only ones (which carry
         // no clip, so videosOnly alone hid them — Jacob 7/16).
         videosOnly ? (hasVideo(it) || (showTextPosts && itemIsTextPost(it))) : (!itemIsTextPost(it) || showTextPosts)
-      ),
-    [items, showTextPosts, videosOnly]
+      );
+      // ⇅ Oldest first: the Feed is already time-sorted newest-first, so a plain
+      // reverse IS chronological order here. Reverse a copy — `items` is shared.
+      return oldestFirst ? [...kept].reverse() : kept;
+    },
+    [items, showTextPosts, videosOnly, oldestFirst]
   );
 
   // Prebuild the paging payloads once so tapping any post opens the lightbox

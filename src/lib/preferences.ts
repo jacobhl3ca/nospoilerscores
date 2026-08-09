@@ -263,6 +263,13 @@ export interface Preferences {
   // (controls:1) on highlight clips instead of the stripped spoiler-safe player.
   // Gives back YT's own progress/seek bar + time — a spoiler the user accepts,
   // handy in fullscreen. When on, the bottom spoiler mask steps aside.
+  // YouTube's OWN control bar instead of the spoiler-safe one. Default TRUE as
+  // of 2026-08-09 (Jacob: "our player is good but a little overkill and not
+  // worth the trade off of usage"). The safe player still exists behind this
+  // toggle; what it buys — a blank seek track, no elapsed/duration readout — is
+  // real, but it costs the familiarity of the player everyone already knows,
+  // and its click-catcher was the thing swallowing the first tap. The headline
+  // spoiler mask over YouTube's title bar stays on in BOTH modes.
   youtubeNativeControls?: boolean;
   // Highlight-player seek control: the progress bar + the 10% jump buttons
   // ("both", default), just the bar, or just the jumps. The bar is custom and
@@ -326,6 +333,14 @@ export interface Preferences {
   // video. Toggled by the 🎥 Videos pill in the news header. Overrides the funnel
   // type filter while on.
   newsVideosOnly?: boolean;
+  // Read a source bottom-to-top: true reverses every news list so the OLDEST
+  // item in the feed sits first (Jacob 8/9). Deliberately a reversal of the
+  // rendered order, not a re-sort on `published` — plenty of Reddit/prebaked
+  // items carry no timestamp, and a sort would scatter those to one end while
+  // the feed's own ordering (which is what the eye is following) is exactly
+  // what "start from the bottom" means. Lives next to the funnel in the news
+  // header rather than in Settings, since it's a per-session reading choice.
+  newsOldestFirst?: boolean;
 }
 
 const defaults: Preferences = {
@@ -336,9 +351,27 @@ const defaults: Preferences = {
   skipExplainer: false,
   skipNewsExplainer: false,
   showNews: false,
-  defaultDateMode: "smart",
+  // Yesterday, not "smart" (2026-08-09, Jacob). A brand-new visitor — most of
+  // them arriving from the no-spoiler-scores landing pages — is here to catch
+  // up on games that are already OVER. "smart" flipped them to Today after
+  // 1 PM local, which on a weekday afternoon is a board of games that have not
+  // started: no highlights, nothing to reveal, and a first impression of an
+  // empty product. Yesterday always has a full, finished slate.
+  // Existing users are unaffected — a saved defaultDateMode always wins, and
+  // Settings → "Automatic" restores the old behaviour.
+  defaultDateMode: "yesterday",
   defaultLandingView: "remember",
   defaultRatings: "auto",
+  // YouTube's own player controls by default (2026-08-09) — see the field doc.
+  youtubeNativeControls: true,
+  // Text posts ON by default (2026-08-09, Jacob). The news board is Reddit-first
+  // (see newsTypeFilter below) and most of what a subreddit produces IS a text
+  // post — hiding them by default emptied out whole columns for a brand-new
+  // user with no hint that a toolbar chip was responsible. Headlines stay
+  // blurred either way, so showing them leaks nothing. There is a matching
+  // pre-paint script in layout.tsx (the CSS hides them until <html> gets
+  // .show-text-posts) — change both together.
+  showTextPosts: true,
   newsColCount: 3,
   smartCutoffHour: 13,
   switcherDefaultsVersion: 2,

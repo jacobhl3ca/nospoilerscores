@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sport } from "@/lib/types";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -117,6 +117,9 @@ interface NewsColumnProps {
   videosOnly?: boolean;
   // Headline-only rows are independently hidden unless this is true.
   showTextPosts?: boolean;
+  // Reverse each source's rendered order (oldest first) — the ⇅ news-header
+  // control, so a feed can be read bottom-to-top.
+  oldestFirst?: boolean;
   // Show the subtle × remove-column control on this column's title (see
   // NewsColumnTitle.removable) — set only when more than one column is visible.
   removable?: boolean;
@@ -458,6 +461,13 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
 // clean text instead of showing an empty grey placeholder box.
 function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number }) {
   const [imgFailed, setImgFailed] = useState(false);
+  // Per-headline reveal, same gesture the Feed view has had all along (Jacob
+  // 8/9: "I should be able to click a headline to hide/show it — works on
+  // mobile but not web"). Cards view is the desktop default, and here the whole
+  // row was one big open-the-post button, so there was no way to peek at a
+  // single blurred headline without either opening the post or un-blurring the
+  // entire board with the Headlines chip.
+  const [peek, setPeek] = useState(false);
   // sm:min-h-[7rem] forces a uniform row height across every text source card
   // — Reddit, MLB.com, NBA.com, ESPN-league. With identical row heights AND
   // identical item counts (each prebake caps at 12), card N ends at the same
@@ -479,7 +489,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // until the global reveal toggle un-blurs it or the row is tapped open.
   const isTextPost = itemIsTextPost(item);
   const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]${isTextPost ? " news-textpost" : ""}`;
-  const titleCls = `news-title min-w-0 line-clamp-5`;
+  const titleCls = `news-title min-w-0 line-clamp-5${peek ? " peek" : ""}`;
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Every news item opens the same modal; its source link remains available
   // inside, and modifier-click still opens that source directly in a new tab.
@@ -572,50 +582,151 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       onError={(e) => { e.currentTarget.style.display = "none"; }}
     />
   ) : null;
+  // Only the 48/56px media tiles are a real tap target. The leagueLogo branch
+  // renders an 18px mark, which is decoration, not a button — rows that fall
+  // back to it get the chevron instead.
+  const thumbIsTile = showThumb || hasInlineMedia;
+  // Clicking a blurred headline should reveal it, not navigate — but once it IS
+  // revealed there is nothing left to reveal, so the same click opens the post
+  // (which is what the whole row used to do). The global Headlines chip wins
+  // over the per-row peek, so read it live from <html> rather than threading a
+  // prop down: with everything already un-blurred, headline clicks go straight
+  // back to opening. That keeps ONE rule the user can learn — "blurred: click
+  // shows it; shown: click opens it" — and click-again-to-hide still works for
+  // the row you peeked.
+  const headlineClick = (open: () => void) => (e: ReactMouseEvent) => {
+    if (typeof document !== "undefined" && document.documentElement.classList.contains("reveal-news-titles")) {
+      open();
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    setPeek((v) => !v);
+  };
+  // A revealed headline is a plain "open the post" target again, so drop the
+  // toggle semantics from assistive tech at the same moment the visual changes.
+  const headlineA11y = peek
+    ? { "aria-pressed": true as const, "aria-label": "Hide headline" }
+    : { "aria-pressed": false as const, "aria-label": "Reveal headline (spoiler)" };
   if (shouldPopModal) {
+    const open = () => onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
     return (
-      <button
-        type="button"
-        onClick={(e) => {
-          // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
-          // later" — never blow away the currently-open modal. Without this
-          // the button just re-pops the modal with new content and the user
-          // loses the video/image they were watching.
-          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
-            return;
-          }
-          // Same payload via the shared helper, plus the column's siblings so the
-          // modal can page prev/next across the full rendered column.
-          onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
-        }}
-        onAuxClick={(e) => {
-          // Middle-click fires onAuxClick, not onClick. Mirror the modifier
-          // path so wheel-click also opens in a background tab.
-          if (e.button === 1 && item.articleUrl) {
-            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
-          }
-        }}
-        className={`${rowCls} w-full text-left cursor-pointer`}
+      <div
+        className={`${rowCls} w-full text-left`}
         style={rowStyle}
       >
-        {thumb}
-        <span className={titleCls}>{item.headline}</span>
-      </button>
+        {/* The thumbnail always opens the post — that's the escape hatch for a
+            row whose headline is still blurred (and the same split the Feed
+            view uses: headline peeks, media opens). */}
+        {thumbIsTile ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
+              // later" — never blow away the currently-open modal. Without this
+              // the button just re-pops the modal with new content and the user
+              // loses the video/image they were watching.
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+                if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+                return;
+              }
+              // Same payload via the shared helper, plus the column's siblings so the
+              // modal can page prev/next across the full rendered column.
+              open();
+            }}
+            onAuxClick={(e) => {
+              // Middle-click fires onAuxClick, not onClick. Mirror the modifier
+              // path so wheel-click also opens in a background tab.
+              if (e.button === 1 && item.articleUrl) {
+                window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+              }
+            }}
+            className="shrink-0 cursor-pointer"
+            aria-label="Open post"
+            title="Open post"
+          >
+            {thumb}
+          </button>
+        ) : thumb}
+        <button
+          type="button"
+          onClick={headlineClick(open)}
+          onAuxClick={(e) => {
+            if (e.button === 1 && item.articleUrl) {
+              window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            }
+          }}
+          className="min-w-0 flex-1 text-left cursor-pointer"
+          title="Tap to reveal or hide this headline"
+          {...headlineA11y}
+        >
+          <span className={titleCls}>{item.headline}</span>
+        </button>
+        {/* Rows with no thumbnail (plain text posts — now shown by default)
+            would otherwise have no way left to open the post once the headline
+            click is spent on revealing it. A small chevron at the row's right
+            edge keeps opening one tap away without touching the row height the
+            column alignment depends on. */}
+        {!thumbIsTile && (
+          <button
+            type="button"
+            onClick={open}
+            className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--bg-card-hover)]"
+            style={{ color: "var(--text-muted)" }}
+            aria-label="Open post"
+            title="Open post"
+          >
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        )}
+      </div>
     );
   }
   return (
-    <a
-      href={item.articleUrl || undefined}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={handleExternalClick(item.articleUrl)}
-      className={rowCls}
-      style={rowStyle}
-    >
-      {thumb}
-      <span className={titleCls}>{item.headline}</span>
-    </a>
+    <div className={rowCls} style={rowStyle}>
+      {thumbIsTile ? (
+        <a
+          href={item.articleUrl || undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
+          className="shrink-0"
+          aria-label="Open post"
+        >
+          {thumb}
+        </a>
+      ) : thumb}
+      <a
+        href={item.articleUrl || undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => {
+          if (typeof document !== "undefined" && document.documentElement.classList.contains("reveal-news-titles")) {
+            handleExternalClick(item.articleUrl)(e);
+            return;
+          }
+          e.preventDefault();
+          setPeek((v) => !v);
+        }}
+        className="min-w-0 flex-1"
+        title="Tap to reveal or hide this headline"
+      >
+        <span className={titleCls}>{item.headline}</span>
+      </a>
+      {!thumbIsTile && (
+        <a
+          href={item.articleUrl || undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
+          className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded"
+          style={{ color: "var(--text-muted)" }}
+          aria-label="Open post"
+        >
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -765,7 +876,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -803,8 +914,14 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
     // clip-bearing posts, and with Text posts ALSO on you additionally get the
     // headline-only text posts (they carry no clip, so plain videosOnly hid them
     // and the Text posts toggle was a no-op — Jacob 7/16).
-    () => items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item))),
-    [items, videosOnly, showTextPosts],
+    () => {
+      const kept = items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item)));
+      // Bottom-to-top reading order (the ⇅ control next to the funnel). Reverse
+      // AFTER filtering so the flip is over what's actually on screen, and copy
+      // first — items is the fetched array other memos also read.
+      return oldestFirst ? [...kept].reverse() : kept;
+    },
+    [items, videosOnly, showTextPosts, oldestFirst],
   );
   // Publish exactly what is rendered so modal prev/next never pages into a row
   // that the active Videos filter hid.
@@ -852,6 +969,7 @@ export default function NewsColumn({
   titleMeasureRef,
   videosOnly,
   showTextPosts,
+  oldestFirst,
   removable,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
@@ -916,6 +1034,7 @@ export default function NewsColumn({
             baseIndex={baseIndexBySource[source.label] ?? null}
             videosOnly={videosOnly}
             showTextPosts={showTextPosts}
+            oldestFirst={oldestFirst}
           />
         ))}
         {allFiltered && (

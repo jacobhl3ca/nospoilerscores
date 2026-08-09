@@ -2121,6 +2121,44 @@ export default function HomeContent({
                 onClick={() => updatePrefs({ newsSingleColumn: !prefs.newsSingleColumn })}
               />
             )}
+            {/* Read order, immediately LEFT of the funnel (Jacob 8/9). This is a
+                reading choice you change mid-scroll — "let me work up from the
+                bottom of r/nba" — so it belongs on the news header next to the
+                other list controls, not buried in Settings. Same round shape and
+                filled-accent = on treatment as the funnel beside it. */}
+            {showNews && (
+              <button
+                type="button"
+                onClick={() => updatePrefs({ newsOldestFirst: !prefs.newsOldestFirst })}
+                className="monkey-toggle relative w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                style={{
+                  background: prefs.newsOldestFirst ? "var(--accent)" : "var(--bg-card)",
+                  border: `1px solid ${prefs.newsOldestFirst ? "var(--accent)" : "var(--border)"}`,
+                  color: prefs.newsOldestFirst ? "white" : "var(--text-muted)",
+                }}
+                title={prefs.newsOldestFirst ? "Oldest first — tap for newest first" : "Newest first — tap for oldest first"}
+                aria-label={prefs.newsOldestFirst ? "Sort oldest first (on)" : "Sort newest first"}
+                aria-pressed={!!prefs.newsOldestFirst}
+              >
+                {prefs.newsOldestFirst ? (
+                  // Ascending: arrow up + short-to-tall bars.
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 20V6" /><path d="m3 9 3-3 3 3" />
+                    <line x1="12" y1="17" x2="15" y2="17" />
+                    <line x1="12" y1="12" x2="18" y2="12" />
+                    <line x1="12" y1="7" x2="21" y2="7" />
+                  </svg>
+                ) : (
+                  // Descending: arrow down + tall-to-short bars.
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 4v14" /><path d="m3 15 3 3 3-3" />
+                    <line x1="12" y1="7" x2="15" y2="7" />
+                    <line x1="12" y1="12" x2="18" y2="12" />
+                    <line x1="12" y1="17" x2="21" y2="17" />
+                  </svg>
+                )}
+              </button>
+            )}
             {showNews && (
               <div ref={newsFilterRef} className="relative">
                 <button
@@ -2306,7 +2344,20 @@ export default function HomeContent({
               ) : (
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
               )}
-              <span className="hidden sm:inline">Headlines</span>
+              <span>Headlines</span>
+            </NewsToggleChip>
+            {/* Media sits directly after Headlines (Jacob 8/9): the two
+                spoiler-reveal toggles belong next to each other — they do the
+                same job to the two halves of a post — while Videos/Text posts
+                are content FILTERS. Grouping them by what they do is most of
+                what makes this row readable. */}
+            <NewsToggleChip
+              active={prefs.revealNewsMedia === true}
+              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
+              title="Show or spoiler-blur news image and video previews"
+            >
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
+              <span>Media</span>
             </NewsToggleChip>
             <NewsToggleChip
               active={!!prefs.newsVideosOnly}
@@ -2315,16 +2366,7 @@ export default function HomeContent({
               ariaLabel="Toggle videos-only filter"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
-              <span className="hidden sm:inline">Videos</span>
-            </NewsToggleChip>
-            <NewsToggleChip
-              active={prefs.revealNewsMedia === true}
-              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
-              title="Show or spoiler-blur news image and video previews"
-              ariaLabel="Toggle media previews"
-            >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
-              <span className="hidden sm:inline">Media</span>
+              <span>Videos only</span>
             </NewsToggleChip>
             <NewsToggleChip
               active={!!prefs.showTextPosts}
@@ -2333,7 +2375,7 @@ export default function HomeContent({
               ariaLabel="Toggle text posts"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
-              <span className="hidden sm:inline">Text posts</span>
+              <span>Text posts</span>
             </NewsToggleChip>
           </div>
         </div>
@@ -2759,6 +2801,7 @@ export default function HomeContent({
                 onPlay={playNewsVideo}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
+                oldestFirst={!!prefs.newsOldestFirst}
               />
             );
           }
@@ -2807,6 +2850,7 @@ export default function HomeContent({
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
+                    oldestFirst={!!prefs.newsOldestFirst}
                   />
                 </>
               )}
@@ -2831,6 +2875,7 @@ export default function HomeContent({
                     widthClassName={widthClassFor()}
                     videosOnly={!!prefs.newsVideosOnly}
                     showTextPosts={!!prefs.showTextPosts}
+                    oldestFirst={!!prefs.newsOldestFirst}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -2854,6 +2899,7 @@ export default function HomeContent({
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
+                      oldestFirst={!!prefs.newsOldestFirst}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}
@@ -3605,7 +3651,7 @@ export default function HomeContent({
           body={videoModal.body}
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? true}
-          youtubeNativeControls={prefs.youtubeNativeControls ?? false}
+          youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
           allowEnd={prefs.videoAllowEnd ?? false}

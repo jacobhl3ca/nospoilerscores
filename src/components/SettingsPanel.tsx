@@ -1178,7 +1178,7 @@ export default function SettingsPanel({
             <Field label="Player" hint="Spoiler-safe is the default; YouTube trades protection for familiar controls">
               <RadioGroup
                 label="Highlight video player"
-                value={(prefs.youtubeNativeControls ?? false) ? "youtube" : "safe"}
+                value={(prefs.youtubeNativeControls ?? true) ? "youtube" : "safe"}
                 options={PLAYER_OPTIONS}
                 onChange={(v) => updatePrefs({ youtubeNativeControls: v === "youtube" })}
               />
@@ -1189,7 +1189,7 @@ export default function SettingsPanel({
               checked={prefs.maskVideoTitle ?? true}
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
-            <fieldset disabled={prefs.youtubeNativeControls ?? false} className={(prefs.youtubeNativeControls ?? false) ? "space-y-3 opacity-40" : "space-y-3"}>
+            <fieldset disabled={prefs.youtubeNativeControls ?? true} className={(prefs.youtubeNativeControls ?? true) ? "space-y-3 opacity-40" : "space-y-3"}>
               <legend className="sr-only">Spoiler-safe player controls</legend>
               <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
                 <RadioGroup
