@@ -14,7 +14,7 @@ import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -342,7 +342,7 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
 // Premier League is the case that prompted this — a World Cup summer pushed
 // kickoff a week later than usual, so even regular viewers have the wrong date.
 function kickoffMessage(k: LeagueKickoff): string {
-  const name = k.config.label === "Prem" ? "The Premier League" : k.config.label;
+  const name = k.config.label === "EPL" ? "The Premier League" : k.config.label;
   if (k.phase === "underway") return `${name} is underway — every match, spoiler-free.`;
   if (k.phase === "today" || k.daysUntil === 0) return `${name} kicks off today — spoiler-free from the first whistle.`;
   if (k.daysUntil === 1) return `${name} kicks off tomorrow — spoiler-free from day one.`;
@@ -1250,6 +1250,34 @@ export default function HomeContent({
     return options;
   }, [selectedDate]);
 
+  // First-run picker order (Jacob 8/9). ALL_LEAGUES is ordered for the *season
+  // calendar*, which put "Prem · starts Aug 21" and three more soccer leagues
+  // above WNBA and the NFL — the opposite of what a US first-timer scans for.
+  // This is a deliberate popularity ranking for the signup screen ONLY: the
+  // column switcher and Settings keep the calendar order they've always had.
+  // Soccer is grouped as one block at the very bottom rather than interleaved,
+  // so the domestic leagues read as a set you scroll past or into.
+  const PICKER_RANK: Sport[] = [
+    "nfl", "nba", "mlb", "nhl", "ncaaf", "ncaam", "wnba", "ncaaw",
+    "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
+    "chess", "poker", "esports",
+    // ── soccer block, bottom ──
+    "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
+    "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",
+    "fifa", "euro", "afcon",
+  ];
+  const pickerOptions = useMemo(() => {
+    const rank = (s: Sport) => {
+      const i = PICKER_RANK.indexOf(s);
+      // A league missing from the ranking sorts just before the soccer block
+      // rather than vanishing or jumping to the front — adding a new league to
+      // ALL_LEAGUES must never silently reorder the top of this screen.
+      return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
+    };
+    return [...thirdLeagueOptions].sort((a, b) => rank(a.sport) - rank(b.sport));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
+  }, [thirdLeagueOptions]);
+
   // Settings is the durable league catalog, so it must not hide a saved pick
   // merely because that league is between seasons. A sport can have several
   // seasonal configs (golf majors, tennis Slams); mark it in-season when ANY
@@ -1301,11 +1329,15 @@ export default function HomeContent({
     }
   }, [thirdLeagueOptions, prefs.leaguesOnboarded]);
 
+  // How many leagues the picker lets you take = how many columns this viewport
+  // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
+  // has been showing five columns all along (Jacob 8/9).
+  const pickerMax = slotCount;
   const togglePick = (sport: Sport) => {
     setPickerSel((sel) =>
       sel.includes(sport)
         ? sel.filter((s) => s !== sport)
-        : sel.length >= 3
+        : sel.length >= pickerMax
           ? sel
           : [...sel, sport],
     );
@@ -1322,14 +1354,16 @@ export default function HomeContent({
   // columns (the 2 chosen + 2 auto-filled). The picker only offers 3, so the
   // extra columns should stay hidden until the user adds them in Settings.
   const confirmLeaguePicker = () => {
-    const picks = pickerSel.slice(0, 3);
+    const picks = pickerSel.slice(0, pickerMax);
     const chose = picks.length > 0;
     updatePrefs({
       firstLeague: picks[0] ?? undefined,
       secondLeague: picks[1] ?? (chose ? "empty" : undefined),
       thirdLeague: picks[2] ?? (chose ? "empty" : undefined),
-      fourthLeague: chose ? "empty" : undefined,
-      fifthLeague: chose ? "empty" : undefined,
+      // Slots 4-5 now take real picks on a wide viewport instead of always
+      // being pinned "empty" — that pin was what capped the picker at 3.
+      fourthLeague: picks[3] ?? (chose ? "empty" : undefined),
+      fifthLeague: picks[4] ?? (chose ? "empty" : undefined),
       leaguesOnboarded: true,
     });
     setShowLeaguePicker(false);
@@ -3501,13 +3535,19 @@ export default function HomeContent({
             </div>
             <h3 id="league-picker-title" className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
             <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
-              Choose up to <strong>3 leagues</strong> for your score columns.<br />You can change these anytime in Settings.
+              Choose up to <strong>{pickerMax} leagues</strong> for your score columns.<br />You can change these anytime in Settings.
             </p>
+            {/* Popularity-ordered, soccer grouped at the bottom (pickerOptions).
+                Two rules keep this list STILL while you tap through it, which is
+                the whole complaint (Jacob 8/9): nothing re-sorts on selection,
+                and the order badge lives in a fixed-width slot that is present
+                (blank) on every pill — the old `1. ` prefix grew the pill on
+                click, which reflowed the wrap and made unrelated pills jump. */}
             <div className="flex flex-wrap justify-center gap-2 mb-4">
-              {thirdLeagueOptions.map((o) => {
+              {pickerOptions.map((o) => {
                 const idx = pickerSel.indexOf(o.sport);
                 const on = idx >= 0;
-                const full = pickerSel.length >= 3 && !on;
+                const full = pickerSel.length >= pickerMax && !on;
                 return (
                   <button
                     key={o.sport}
@@ -3522,14 +3562,46 @@ export default function HomeContent({
                     // the World Cup groups band/day pills) — this picker was the
                     // lone group missing it.
                     aria-pressed={on}
-                    className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     style={on
                       ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
                       : { background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
                   >
-                    {on ? `${idx + 1}. ` : ""}{o.label}
-                    {o.offseason && <em className="font-normal" style={{ color: on ? "inherit" : "var(--text-muted)" }}> · offseason</em>}
-                    {o.upcomingLabel && <em className="font-normal" style={{ color: on ? "inherit" : "var(--text-muted)" }}> · {o.upcomingLabel}</em>}
+                    {/* Fixed 1rem slot, reserved whether or not this pill is
+                        picked, so selecting one never changes any pill's width. */}
+                    <span aria-hidden className="inline-block w-4 shrink-0 text-center text-xs font-bold tabular-nums">
+                      {on ? idx + 1 : ""}
+                    </span>
+                    {/* The mark always sits on a white chip. Most of these are
+                        dark-on-transparent, so on the accent-blue selected fill
+                        they'd disappear; knocking them to solid white instead
+                        turned filled marks (MLB) into a featureless blob. The
+                        chip keeps every logo legible and identical in both
+                        states, so selecting a pill changes only its background. */}
+                    <span className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-full shrink-0 bg-white">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={LEAGUE_LOGO[o.sport]}
+                        alt=""
+                        width={16}
+                        height={16}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-[16px] h-[16px] object-contain"
+                        draggable={false}
+                        // Remote ESPN/Wikimedia mark: a blocked hotlink would leave
+                        // the browser's broken-image glyph. Collapse it and let the
+                        // pill read as text, matching every other logo in the app.
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                    </span>
+                    <span>{o.label}</span>
+                    {/* Start dates dropped here on purpose (Jacob 8/9): six
+                        "· starts Aug 21" tails made the grid unreadable and are
+                        noise at signup. The kickoff banner still announces them
+                        and the column switcher still shows them. "offseason"
+                        stays — that one changes whether the column has games. */}
+                    {o.offseason && <em className="font-normal text-xs" style={{ color: on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
                   </button>
                 );
               })}

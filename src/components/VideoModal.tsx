@@ -784,6 +784,21 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // 90% cap that still gates the jumps and the bar. Back floors at 0. No
   // warn-halfway prompt — a small relative nudge isn't a "click past 50%".
   const seekBy = useCallback((delta: number) => {
+    // Direct-stream clips (MLB .m3u8, v.redd.it, streamff) play through an
+    // in-document <video>, not the YouTube player — playerRef is null for them,
+    // so every seek path (← →, double-tap, the ⟲5/⟳5 buttons) silently did
+    // nothing on an MLB highlight (Jacob 8/9). It reads like a Safari/HLS quirk
+    // but it's ours: the handler was written YouTube-only. Same clamping rules.
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const dur = v.duration;
+      if (!dur || !isFinite(dur) || dur <= 0) return;
+      const target = delta >= 0 ? Math.min(v.currentTime + delta, dur) : Math.max(0, v.currentTime + delta);
+      v.currentTime = target;
+      void v.play().catch(() => { /* autoplay prompt already covers this */ });
+      setProgress(Math.min(1, target / dur));
+      return;
+    }
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
     const d = p.getDuration();
@@ -793,7 +808,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     p.seekTo(target, true);
     p.playVideo?.();
     setProgress(Math.min(1, target / d));
-  }, []);
+  }, [hlsMode]);
 
   // Toggle play/pause on the YouTube player — drives both the Space/k keys and a
   // click anywhere on the video (via the click-catcher overlay). We do it through
@@ -1001,7 +1016,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         if (stepGallery(e.key === "ArrowLeft" ? -1 : 1)) { e.preventDefault(); return; }
         if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
         else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
-        else if (ytMode) { e.preventDefault(); seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP); }
+        // hlsMode included: MLB/Reddit direct streams seek through the <video>
+        // element now (see seekBy), so ← → skip on them like they do on YouTube.
+        else if (ytMode || hlsMode) { e.preventDefault(); seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP); }
       }
       // Space (or "k", YouTube's own key) toggles play/pause on the YT clip.
       // preventDefault stops Space from scrolling the page. Skip text entry and
@@ -1015,7 +1032,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay, onPrev, onNext, stepGallery]);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, hlsMode, seekBy, togglePlay, onPrev, onNext, stepGallery]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
