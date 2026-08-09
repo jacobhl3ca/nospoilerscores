@@ -131,13 +131,27 @@ export interface LeagueConfig {
   // World Cup is every 4 years. yearCycle.anchor matches the championship year.
   yearCycle?: { mod: number; anchor: number };
   marchMadnessLabel?: boolean; // NCAAM swaps to "March Madness" during the tourney window
+  // MM-DD the league drops its full schedule, when that is a real annual event
+  // (NFL's May reveal show, the NBA's mid-August drop). Only used by the
+  // offseason empty state, and only while the release still falls BEFORE the
+  // next opener — once the schedule is out, saying when it dropped is noise.
+  scheduleReleaseDate?: string;
+  // Calendar year of the opener that was last checked against a real source
+  // (league site / ESPN), NOT the year the line was edited. Windows are MM-DD
+  // and recur forever, but the real dates drift a few days a year and sometimes
+  // move wholesale (see MLS 2027), so anything past its verified year is shown
+  // as approximate rather than stated as fact. Bump it when you re-check.
+  verifiedFor?: number;
+  // NCAAF: hold the pinned slot outright during the College Football Playoff
+  // window (firstPref + precedence 0), the way marchMadnessLabel does for NCAAM.
+  playoffPin?: boolean;
 }
 
 export const ALL_LEAGUES: LeagueConfig[] = [
   // ── Major team sports ──
-  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", marchMadnessLabel: true },
-  { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
-  { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", championshipDate: "11-01", mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
+  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-05", verifiedFor: 2026, marchMadnessLabel: true },
+  { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-22", kickoffDate: "10-20", championshipDate: "06-20", scheduleReleaseDate: "08-14", verifiedFor: 2026, mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
+  { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", kickoffDate: "03-24", championshipDate: "10-31", scheduleReleaseDate: "07-16", verifiedFor: 2027, mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
   // NHL runs Sep 29 → mid-June (verified against ESPN 2026-08-09: first
   // 2026-27 regular-season game Tue Sep 29 2026; the 2026 Stanley Cup finished
   // Jun 15). It used to be configured as 04-07 → 06-19 — the PLAYOFF window —
@@ -145,29 +159,29 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // selectability too, so that also made NHL impossible to pick at all from
   // October to April (Jacob 8/9). Now the window is the real season and
   // autoStartDate keeps the auto-picker's behaviour exactly as it was.
-  { sport: "nhl",   label: "NHL",   startDate: "09-27", endDate: "06-19", kickoffDate: "09-29", autoStartDate: "04-07", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
+  { sport: "nhl",   label: "NHL",   startDate: "09-27", endDate: "06-24", kickoffDate: "09-29", autoStartDate: "04-07", championshipDate: "06-19", scheduleReleaseDate: "07-16", verifiedFor: 2026, mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
   // NFL 2026-27 verified against ESPN 2026-08-09: Week 1 opens Thu Sep 10 2026,
   // and Super Bowl LXI is Sun Feb 14 2027. The old 02-09 endDate hid the NFL
   // column five days BEFORE the Super Bowl — the one game of the year a
   // spoiler-free app must not be missing. Old 09-04 start was six days before
   // any regular-season game.
-  { sport: "nfl",   label: "NFL",   startDate: "09-08", endDate: "02-16", kickoffDate: "09-10", championshipDate: "02-14", mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
+  { sport: "nfl",   label: "NFL",   startDate: "09-07", endDate: "02-16", kickoffDate: "09-09", championshipDate: "02-14", scheduleReleaseDate: "05-14", verifiedFor: 2026, mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
   // NFL Preseason backfills the Jul 21 – Aug 15 thin window where only MLB + MLS are active.
   // Window ends Sep 3 (regular NFL takes over Sep 8) — but EPL kickoff Aug 16 already fills
   // the third slot, so backfillOnly ensures preseason only shows when slot 3 would be empty.
   { sport: "nfl",   label: "NFL Preseason", startDate: "07-21", endDate: "09-03", backfillOnly: true, displaySlot: "center", slotPrecedence: 7 },
   // ── Golf majors ──
   // Masters takes the right slot when active (Jacob's pref) — bumps NHL during Apr 9-13.
-  { sport: "golf",  label: "Masters",  startDate: "04-09", endDate: "04-13", championshipDate: "04-13", firstPref: true, displaySlot: "right",  slotPrecedence: 1 },
+  { sport: "golf",  label: "Masters",  startDate: "04-06", endDate: "04-13", kickoffDate: "04-08", championshipDate: "04-11", verifiedFor: 2027, firstPref: true, displaySlot: "right",  slotPrecedence: 1 },
   // PGA Champ + French Open never auto-pick (still selectable via slot-3 swap dropdown).
-  { sport: "golf",  label: "PGA Champ", startDate: "05-14", endDate: "05-18", championshipDate: "05-18", excludeFromAuto: true },
-  { sport: "golf",  label: "US Open",   startDate: "06-18", endDate: "06-22", championshipDate: "06-22", firstPref: true, displaySlot: "center", slotPrecedence: 5 },
-  { sport: "golf",  label: "The Open",  startDate: "07-16", endDate: "07-20", championshipDate: "07-20", displaySlot: "center", slotPrecedence: 6 },
+  { sport: "golf",  label: "PGA Champ", startDate: "05-13", endDate: "05-24", kickoffDate: "05-20", championshipDate: "05-23", verifiedFor: 2027, excludeFromAuto: true },
+  { sport: "golf",  label: "US Open",   startDate: "06-15", endDate: "06-22", kickoffDate: "06-17", championshipDate: "06-20", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 5 },
+  { sport: "golf",  label: "The Open",  startDate: "07-13", endDate: "07-20", kickoffDate: "07-15", championshipDate: "07-18", verifiedFor: 2027, displaySlot: "center", slotPrecedence: 6 },
   // ── Tennis Grand Slams ──
-  { sport: "tennis", label: "Aus Open",     startDate: "01-12", endDate: "01-26", championshipDate: "01-26" },
-  { sport: "tennis", label: "French Open",  startDate: "05-24", endDate: "06-08", championshipDate: "06-08", excludeFromAuto: true },
-  { sport: "tennis", label: "Wimbledon",    startDate: "06-29", endDate: "07-13", championshipDate: "07-13", firstPref: true, displaySlot: "center", slotPrecedence: 4 },
-  { sport: "tennis", label: "US Open",      startDate: "08-25", endDate: "09-14", championshipDate: "09-14", firstPref: true, displaySlot: "center", slotPrecedence: 3 },
+  { sport: "tennis", label: "Aus Open",     startDate: "01-11", endDate: "02-01", kickoffDate: "01-17", championshipDate: "01-31", verifiedFor: 2027 },
+  { sport: "tennis", label: "French Open",  startDate: "05-20", endDate: "06-09", kickoffDate: "05-23", championshipDate: "06-06", verifiedFor: 2027, excludeFromAuto: true },
+  { sport: "tennis", label: "Wimbledon",    startDate: "06-26", endDate: "07-14", kickoffDate: "06-28", championshipDate: "07-11", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 4 },
+  { sport: "tennis", label: "US Open",      startDate: "08-24", endDate: "09-15", kickoffDate: "08-29", championshipDate: "09-12", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 3 },
   // ── FIFA World Cup (every 4 years; 2026 was the most recent anchor) ──
   // startDate opened to 06-04 (tournament opens 06-11) so the column previews
   // live NOW with the opener via the next-game-day lookahead. Revert to 06-11
@@ -184,13 +198,13 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // and closed with a full matchweek still to play. kickoffDate carries the real
   // first-match day for the countdown banner; startDate stays two days earlier so
   // the column is there with the fixture lookahead when the week's build-up starts.
-  { sport: "epl", label: "EPL", startDate: "08-19", endDate: "05-31", kickoffDate: "08-21", championshipDate: "05-30" },
+  { sport: "epl", label: "EPL", startDate: "08-19", endDate: "05-31", kickoffDate: "08-21", championshipDate: "05-30", scheduleReleaseDate: "06-19", verifiedFor: 2026 },
   // ── UEFA Champions League (Sep League phase → Jun Final) ──
   // Active across Sep 14 → Jun 5 but only ~17 matchdays in window; on
   // non-matchday days the column shows news only.
-  { sport: "ucl", label: "UCL", startDate: "09-14", endDate: "06-05", championshipDate: "06-05" },
+  { sport: "ucl", label: "UCL", startDate: "09-06", endDate: "06-06", kickoffDate: "09-08", championshipDate: "06-05", verifiedFor: 2026 },
   // ── UEFA Europa League (Sep group → late May Final) ──
-  { sport: "uel", label: "UEL", startDate: "09-24", endDate: "05-22", championshipDate: "05-22" },
+  { sport: "uel", label: "UEL", startDate: "09-14", endDate: "05-28", kickoffDate: "09-16", championshipDate: "05-26", verifiedFor: 2026 },
   // ── The other four big-five domestic leagues (Aug–May) ──
   // All excludeFromAuto: the 3-column default layout is already tuned around
   // NBA/MLB/NHL/NFL + EPL/UCL, and four more Aug–May soccer leagues competing
@@ -241,7 +255,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // as of 2026-08-03, and the 2025 edition was itself moved to Dec–Jan for
   // weather. Re-check these dates before the 2027 cycle opens; being wrong here
   // only costs a hidden column, never a wrong score.
-  { sport: "afcon", label: "AFCON", startDate: "06-15", endDate: "07-20", championshipDate: "07-20", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
+  { sport: "afcon", label: "AFCON", startDate: "06-17", endDate: "07-19", kickoffDate: "06-19", championshipDate: "07-17", verifiedFor: 2027, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
   // Saudi Pro League: ESPN calendar 08-13 → 05-28.
   { sport: "saudi", label: "Saudi PL", startDate: "08-13", endDate: "05-28", championshipDate: "05-28", excludeFromAuto: true },
   // ── Cricket (IPL) ──
@@ -249,14 +263,21 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // 2026-03-28 → 2026-05-31. Opt-in like the rest of the second wave.
   { sport: "cricket", label: "IPL", startDate: "03-28", endDate: "05-31", championshipDate: "05-31", excludeFromAuto: true },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
-  { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
+  { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-20", championshipDate: "12-18", verifiedFor: 2026 },
   // ── NCAAF (College Football, late Aug – late Jan) ──
   // Verified against ESPN 2026-08-09. The expanded playoff moved the calendar:
   // quarterfinals Jan 1, semifinals Jan 15-16, and the National Championship on
   // Jan 26 2027 — the old 01-12 endDate hid the entire playoff from the
   // semifinals onward, title game included. Week 0 is Aug 29 2026, so the old
   // 08-22 start opened a week of empty column.
-  { sport: "ncaaf", label: "NCAAF", startDate: "08-27", endDate: "01-28", kickoffDate: "08-29", championshipDate: "01-26" },
+  // Jacob 2026-08-09: NCAAF outranks the NHL for the right slot for its whole
+  // season, and takes it outright during the playoff (playoffPin). Restoring the
+  // NHL's real October start put a mustInclude league on the right pin from Sep
+  // 29 on, which would otherwise have pushed college football — bowls and the
+  // CFP included — off the default board for the back half of its season. The
+  // NHL stays one tap away in the switcher and returns to the default board on
+  // Jan 29, when NCAAF ends.
+  { sport: "ncaaf", label: "NCAAF", startDate: "08-27", endDate: "01-28", kickoffDate: "08-29", championshipDate: "01-26", verifiedFor: 2026, displaySlot: "right", slotPrecedence: 1, playoffPin: true },
   // ── NCAAW (Women's College Basketball, Nov–early Apr) ──
   // Swap-only (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot
   // rotation — selectable from the slot-3 dropdown when in season.
@@ -264,7 +285,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
   // in season, but low priority so it only fills open summer/fall slots after
   // the core leagues and major tournament windows.
-  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19" },
+  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", scheduleReleaseDate: "12-01", verifiedFor: 2026 },
   // ── F1 + UFC (single-event tiles) ──
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
@@ -495,17 +516,126 @@ export function sportGlyph(sport: Sport): string {
   return SPORT_GLYPH[sport] ?? "🏟️";
 }
 
-// "Aug 21" — the compact form used in the league switcher's "· starts Aug 21".
+// "8/21" — the compact form used in the league switcher's "EPL · 8/21" tail.
 export function formatKickoffShort(mmdd: string | undefined, viewDate: Date): string {
   const d = mmdd ? nextOccurrence(mmdd, viewDate) : null;
   if (!d) return "soon";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // Numeric "8/21", not "Aug 21": this rides inside a switcher row already
+  // carrying a league name ("EPL · starts Aug 21"), and the spelled month
+  // pushed it onto a second line in the dropdown (Jacob 8/9).
+  return d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
 }
 
 // "Friday, Aug 21" — the banner form. Weekday included because for a league
 // people already follow, the day of the week is the part that makes it land.
 export function formatKickoffLong(d: Date): string {
   return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEASON OPENER — what an offseason column says instead of nothing
+// ═══════════════════════════════════════════════════════════════
+// A column with no games today, no fixture lookahead and no recent game used to
+// bottom out at a bare "Upcoming Schedule TBD" — true, but useless: the one
+// thing someone looking at an offseason column wants is when it comes back.
+// ALL_LEAGUES already carries that date, so surface it.
+//
+// APPROXIMATE BY CONSTRUCTION. These are MM-DD windows re-verified against the
+// leagues' own schedules once a season, and startDate can open a few days before
+// the first real fixture. Only a kickoffDate inside its verifiedFor year is a
+// confirmed opening day; everything else is hedged with a "~" in the UI.
+export type SeasonOpener = {
+  date: Date;          // local noon on the opener
+  daysUntil: number;   // always >= 1
+  approximate: boolean;
+  // Tournaments (golf majors, Slams, World Cup/Euro/AFCON) don't have a
+  // "season" — the column returns for one event — so the UI says "Returns"
+  // for them and "Season starts" for the league sports.
+  kind: "season" | "event";
+  label: string;       // "Oct 20", or "Jun 2030" when more than a year out
+  awayLabel: string;   // "9 days away" / "6 weeks away" / "3 months" / "4 years"
+  // "May 14" when the full schedule is still unpublished on viewDate — the one
+  // fact an offseason column can add past the start date. Undefined once the
+  // schedule is out (or for leagues with no fixed release date), because
+  // "schedule dropped in July" is noise in October.
+  scheduleOut?: string;
+};
+
+// Sports whose columns are a single dated event rather than a season.
+const EVENT_SPORTS: Partial<Record<Sport, true>> = {
+  golf: true, tennis: true, fifa: true, euro: true, afcon: true,
+};
+
+// Next opener for `sport` on or after viewDate, or null when there is nothing to
+// name: event-driven sports with no season window (UFC, boxing, chess), or a
+// league already inside its window (an in-season gap is a schedule hole, not an
+// offseason — announcing next year's opener there would be flatly wrong).
+export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): SeasonOpener | null {
+  const candidates = ALL_LEAGUES.filter(
+    (l) => l.sport === sport && !l.hidden && !l.backfillOnly && l.startDate && l.endDate,
+  );
+  if (candidates.length === 0) return null;
+  // A sport can hold several configs (golf majors, tennis Slams, NFL + its
+  // preseason). Prefer the one this column is actually labelled with; otherwise
+  // take whichever comes back soonest.
+  const exact = candidates.find((l) => l.label === label);
+  const pool = exact ? [exact] : candidates;
+  // Bail while the relevant config is in its own window — an empty column there
+  // is a schedule gap, not an offseason. Scoped to the matched config so that a
+  // column parked on Wimbledon during the Australian Open still answers with
+  // Wimbledon's date instead of going silent.
+  if (pool.some((l) => isLeagueActive(l, viewDate))) return null;
+
+  let best: { config: LeagueConfig; kickoff: Date; daysUntil: number } | null = null;
+  for (const config of pool) {
+    // World Cup / Euro / AFCON are gated to their cycle year, so the next
+    // occurrence of their MM-DD is usually the wrong year and kickoffFor returns
+    // null. Walk forward a cycle at a time instead of giving up — "starts Jun
+    // 2030" is still the answer someone opening the column wants.
+    const maxYears = config.yearCycle ? config.yearCycle.mod : 1;
+    for (let i = 0; i < maxYears; i++) {
+      const probe = new Date(viewDate.getFullYear() + i, viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+      const k = kickoffFor(config, probe);
+      if (!k) continue;
+      const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+      const daysUntil = Math.round((k.kickoff.getTime() - view.getTime()) / DAY_MS);
+      if (daysUntil < 1) continue;
+      if (!best || daysUntil < best.daysUntil) best = { config, kickoff: k.kickoff, daysUntil };
+      break;
+    }
+  }
+  if (!best) return null;
+
+  const { config, kickoff, daysUntil } = best;
+  // The schedule is "not out yet" when its release lands between today and the
+  // opener. Past that the next occurrence rolls into the following season, which
+  // is how a released schedule detects itself without any extra state.
+  const release = config.scheduleReleaseDate ? nextOccurrence(config.scheduleReleaseDate, viewDate) : null;
+  const scheduleOut = release && release.getTime() < kickoff.getTime()
+    ? release.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : undefined;
+  return {
+    date: kickoff,
+    daysUntil,
+    // A confirmed opening-day date only stays confirmed for the season someone
+    // actually checked — past that, kickoffDate is last year's date recurring,
+    // so the copy goes back to hedging. See LeagueConfig.verifiedFor.
+    approximate: !config.kickoffDate || (config.verifiedFor ?? 0) < kickoff.getFullYear(),
+    scheduleOut,
+    kind: EVENT_SPORTS[sport] ? "event" : "season",
+    // Past a year out the day-of-month is noise (and unknowable) — month + year
+    // carries all the signal a 2030 World Cup column can honestly give.
+    label: daysUntil > 365
+      ? kickoff.toLocaleDateString("en-US", { month: "short", year: "numeric" })
+      : kickoff.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    awayLabel: daysUntil <= 21
+      ? `${daysUntil} day${daysUntil === 1 ? "" : "s"} away`
+      : daysUntil <= 70
+        ? `${Math.round(daysUntil / 7)} weeks away`
+        : daysUntil <= 365
+          ? `${Math.round(daysUntil / 30.4)} months away`
+          : `${Math.round(daysUntil / 365.25)} years away`,
+  };
 }
 
 // The single most imminent league worth announcing for viewDate, or null.
@@ -549,6 +679,14 @@ const MAX_LEAGUES = 3;
 // March Madness date range — NCAAM dynamically becomes a firstPref / center pin.
 const MARCH_MADNESS_START = "03-17";
 const MARCH_MADNESS_END = "04-06";
+
+// College Football Playoff — the same treatment NCAAM gets in March, for the
+// same reason: the biggest games of the sport's year must not be bumped off the
+// default board. Wraps New Year, so the check is an OR, not a range.
+// 2026-27: bowls open mid-Dec, CFP first round Dec 18-19 (on campus),
+// quarterfinals Jan 1, semifinals Jan 15-16, National Championship Jan 26.
+const CFP_START = "12-15";
+const CFP_END = "01-28";
 
 // Tiebreak when a regular (non-pinned, non-firstPref) league fills a leftover slot.
 // Lower number = picked first. Used only after pin assignment has consumed mustIncludes
@@ -609,10 +747,18 @@ function isMarchMadness(viewDate: Date): boolean {
   return mmdd >= MARCH_MADNESS_START && mmdd <= MARCH_MADNESS_END;
 }
 
-// During March Madness, NCAAM acts as a firstPref center pin.
+function isCollegeFootballPlayoff(league: LeagueConfig, viewDate: Date): boolean {
+  if (league.sport !== "ncaaf" || !league.playoffPin) return false;
+  const mmdd = toMMDD(viewDate);
+  return mmdd >= CFP_START || mmdd <= CFP_END;
+}
+
+// During March Madness, NCAAM acts as a firstPref center pin; during the CFP,
+// NCAAF does the same on the right.
 function effectiveFirstPref(league: LeagueConfig, viewDate: Date): boolean {
   if (league.firstPref) return true;
   if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) return true;
+  if (isCollegeFootballPlayoff(league, viewDate)) return true;
   return false;
 }
 function effectiveDisplaySlot(league: LeagueConfig, viewDate: Date): "left" | "center" | "right" | undefined {
@@ -621,6 +767,7 @@ function effectiveDisplaySlot(league: LeagueConfig, viewDate: Date): "left" | "c
 }
 function effectiveSlotPrecedence(league: LeagueConfig, viewDate: Date): number {
   if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) return 0; // beats NFL for center during MM
+  if (isCollegeFootballPlayoff(league, viewDate)) return 0;                                      // beats NHL for right during the CFP
   return league.slotPrecedence ?? 99;
 }
 

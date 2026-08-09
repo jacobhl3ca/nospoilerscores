@@ -214,6 +214,13 @@ export interface Preferences {
   // The generic "News" column is independent of scores slot 3. It appears by
   // default; true means the user explicitly removed it from the news board.
   newsGenericHidden?: boolean;
+  // Which POSITION the generic "Top news" column occupies on the news board
+  // (0-2, default 2 = last). Picking "Top news (ESPN)" from any column's
+  // switcher moves the column here rather than doing nothing — before this,
+  // the action only ever targeted col 3, so choosing it from a league column
+  // silently no-op'd (Jacob 8/9). The two league columns close ranks around
+  // it, so the board still shows the same three feeds.
+  newsGenericSlot?: 0 | 1 | 2;
   // Default date on launch: smart (yesterday before 1 PM ET, today after),
   // always today, or always yesterday.
   defaultDateMode?: DefaultDateMode;

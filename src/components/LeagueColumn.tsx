@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import { Game, LeagueData, Sport, Team } from "@/lib/types";
 import type { ShareCardMeta } from "@/lib/shareCard";
-import { displayShortName, loadBigInningSchedule, BigInningSchedule } from "@/lib/espn";
+import { displayShortName, loadBigInningSchedule, getSeasonOpener, BigInningSchedule } from "@/lib/espn";
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
@@ -37,6 +37,9 @@ interface LeagueColumnProps {
   showFinalSeparator?: boolean; // inline "Final" divider between live/pre and post games
   // 3rd league slot swapping
   swappableOptions?: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string }[];
+  // The league this slot falls back to on Auto. Bolded + tagged "· default" in
+  // the switcher so Auto isn't an opaque choice (Jacob 8/9).
+  autoSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // ▾ discoverability arrow on the swappable header (Settings can hide it;
   // tapping the header still opens the league switcher either way).
@@ -756,6 +759,7 @@ export default function LeagueColumn({
   section,
   showFinalSeparator,
   swappableOptions,
+  autoSport,
   onSwapLeague,
   showSwapChevron,
   switcherMode,
@@ -1357,6 +1361,19 @@ export default function LeagueColumn({
     ? formatDateCompact(league.nextGameDay.date)
     : null;
 
+  // When the column bottoms out with nothing at all — no slate, no lookahead, no
+  // recent game — name the return date instead of shrugging ("Upcoming Schedule
+  // TBD"). Null for event-driven sports with no season window (UFC/boxing/chess)
+  // and for a league still inside its window, where an empty column is a
+  // schedule gap and next season's date would be a lie. See getSeasonOpener.
+  const seasonOpener = selectedDate
+    ? getSeasonOpener(
+        league.sport,
+        league.label,
+        new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`),
+      )
+    : null;
+
   return (
     <div
       ref={columnRef}
@@ -1500,6 +1517,7 @@ export default function LeagueColumn({
                     }).map((opt) => {
                       const isCurrent = opt.sport === league.sport;
                       const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
+                      const isAutoDefault = opt.sport === autoSport;
                       return (
                         <button
                           key={opt.sport}
@@ -1512,15 +1530,16 @@ export default function LeagueColumn({
                           className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                           style={{
                             color: isCurrent ? "var(--accent)" : isElsewhere || opt.offseason ? "var(--text-muted)" : "var(--text)",
-                            fontWeight: isCurrent ? 600 : 400,
+                            fontWeight: isCurrent || isAutoDefault ? 600 : 400,
                           }}
-                          title={isElsewhere ? "Already shown in another column — pick to add a second" : undefined}
+                          title={isElsewhere ? "Already shown in another column — pick to add a second" : opt.upcomingLabel ? `Season starts ${opt.upcomingLabel}` : isAutoDefault ? "What Auto picks for this column" : undefined}
                           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
                           {opt.label}
                           {opt.offseason && <em className="font-normal"> · offseason</em>}
                           {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
+                          {isAutoDefault && !isCurrent && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                         </button>
                       );
                     })}
@@ -1641,6 +1660,26 @@ export default function LeagueColumn({
             // the past tab uses — so the column stays useful instead of announcing
             // the season ended with a bare "Upcoming Schedule TBD".
             renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
+          ) : seasonOpener ? (
+            // Offseason with nothing to show: the return date is the only thing
+            // worth saying. "~" whenever the date came from the column's opening
+            // window rather than a verified opening-day fixture — see SeasonOpener.
+            <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">
+              <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
+                {seasonOpener.kind === "event" ? "Returns" : "Season starts"} {seasonOpener.approximate ? "~" : ""}{seasonOpener.label}
+              </p>
+              <p className="text-center text-[10px] sm:text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+                {seasonOpener.awayLabel}
+              </p>
+              {seasonOpener.scheduleOut && (
+                // Only while the fixtures are genuinely unpublished — see
+                // SeasonOpener.scheduleOut. Answers the follow-up question the
+                // start date creates ("so when can I see the games?").
+                <p className="text-center text-[10px] sm:text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+                  Full schedule ~{seasonOpener.scheduleOut}
+                </p>
+              )}
+            </div>
           ) : (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Upcoming Schedule TBD</p>
           )

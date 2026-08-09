@@ -530,6 +530,7 @@ export default function SettingsPanel({
       fifthLeague: undefined,
       newsThirdLeague: undefined,
       newsGenericHidden: undefined,
+      newsGenericSlot: undefined,
       defaultDateMode: "smart",
       defaultLandingView: "remember",
       defaultRatings: "auto",

@@ -98,6 +98,10 @@ interface NewsColumnProps {
   // Switch this column to the ESPN "Top news" headlines feed (see NewsColumnTitle).
   onPickEspn?: () => void;
   espnActive?: boolean;
+  // What "Auto" resolves to for this column, so the switcher can mark it
+  // "· default" instead of leaving Auto an opaque choice (Jacob 8/9).
+  autoSport?: Sport;
+  autoIsEspn?: boolean;
   // When true, the column renders only its source cards — the title row is
   // rendered separately above (e.g. as part of the page-level TitleStrip
   // that sits above AlignedVideoStrip). Keeps the league title above the
@@ -136,6 +140,8 @@ export function NewsColumnTitle({
   onSwapLeague,
   onPickEspn,
   espnActive,
+  autoSport,
+  autoIsEspn,
   measureRef,
   removable,
 }: {
@@ -153,6 +159,9 @@ export function NewsColumnTitle({
   // was emptied (it reappears as the last column).
   onPickEspn?: () => void;
   espnActive?: boolean;
+  // See NewsColumnProps — marks the option "Auto" would land on.
+  autoSport?: Sport;
+  autoIsEspn?: boolean;
   // Callback ref on the title's root so the parent can measure its height into
   // --news-titlebar-h. In the strip layout HomeContent measures a shared title
   // row; here the same ref rides one per-column title so the measurement also
@@ -237,6 +246,9 @@ export function NewsColumnTitle({
                 {swappableOptions!.map((opt) => {
                   const isCurrent = opt.sport === selectedSport;
                   const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
+                  // The league this column falls back to on Auto — bolded and
+                  // tagged so the fallback is visible before you commit to it.
+                  const isAutoDefault = !autoIsEspn && opt.sport === autoSport;
                   return (
                     <button
                       type="button"
@@ -249,15 +261,16 @@ export function NewsColumnTitle({
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{
                         color: isCurrent ? "var(--accent)" : isElsewhere || opt.offseason ? "var(--text-muted)" : "var(--text)",
-                        fontWeight: isCurrent ? 600 : 400,
+                        fontWeight: isCurrent || isAutoDefault ? 600 : 400,
                       }}
-                      title={isElsewhere ? "Already shown in another column — pick to add a second" : undefined}
+                      title={isElsewhere ? "Already shown in another column — pick to add a second" : opt.upcomingLabel ? `Season starts ${opt.upcomingLabel}` : isAutoDefault ? "What Auto picks for this column" : undefined}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       {opt.label}
                       {opt.offseason && <em className="font-normal"> · offseason</em>}
                       {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
+                      {isAutoDefault && !isCurrent && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                     </button>
                   );
                 })}
@@ -272,13 +285,15 @@ export function NewsColumnTitle({
                     className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                     style={{
                       color: espnActive ? "var(--accent)" : "var(--text)",
-                      fontWeight: espnActive ? 600 : 400,
+                      fontWeight: espnActive || autoIsEspn ? 600 : 400,
                       borderTop: "1px solid var(--border)",
                     }}
+                    title={autoIsEspn ? "What Auto picks for this column" : "Show ESPN's top headlines in this column"}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                   >
                     Top news (ESPN)
+                    {autoIsEspn && !espnActive && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                   </button>
                 )}
                 {/* Remove col hides the column entirely (matches the scores-view
@@ -970,6 +985,8 @@ export default function NewsColumn({
   onSwapLeague,
   onPickEspn,
   espnActive,
+  autoSport,
+  autoIsEspn,
   hideTitle,
   widthClassName,
   onPlayVideo,
@@ -1025,6 +1042,8 @@ export default function NewsColumn({
           onSwapLeague={onSwapLeague}
           onPickEspn={onPickEspn}
           espnActive={espnActive}
+          autoSport={autoSport}
+          autoIsEspn={autoIsEspn}
           measureRef={titleMeasureRef}
           removable={removable}
         />

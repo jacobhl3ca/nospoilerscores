@@ -5,7 +5,7 @@ import { LeagueData, Sport, Game } from "@/lib/types";
 import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
-import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
+import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn from "@/components/LeagueColumn";
@@ -1286,7 +1286,11 @@ export default function HomeContent({
         sport: league.sport,
         label: league.label,
         offseason: !active && !upcoming,
-        upcomingLabel: upcoming ? `starts ${formatKickoffShort(league.kickoffDate ?? league.startDate, viewDate)}` : undefined,
+        // Bare "8/21", not "starts Aug 21": inside a switcher row that already
+        // reads "EPL · …" the words were the part that wrapped it onto a
+        // second line, and a date tail on an unstarted league can only mean
+        // its opener. The row's tooltip still spells it out (Jacob 8/9).
+        upcomingLabel: upcoming ? formatKickoffShort(league.kickoffDate ?? league.startDate, viewDate) : undefined,
         defaultInSwitcher: !league.excludeFromAuto,
       });
     }
@@ -1528,6 +1532,16 @@ export default function HomeContent({
     }
     return ordered;
   }, [selectedDate, switcherOptions]);
+
+  // What "Auto" actually resolves to, per slot — the same assignment
+  // fetchAllLeagues runs before per-slot overrides are applied. The switcher
+  // marks this option "· default" so "Auto" isn't an opaque choice: you can
+  // see which league the column falls back to (Jacob 8/9).
+  const autoSlotSports = useMemo(() => {
+    if (!selectedDate) return [] as Sport[];
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    return pickAndAssignLeagues(viewDate, slotCount).map((l) => l.sport);
+  }, [selectedDate, slotCount]);
 
   // ‹ › cycling cursor, per slot. Lives up here (in a ref) because the column
   // component remounts whenever its league changes — per-column state would
@@ -2647,9 +2661,17 @@ export default function HomeContent({
           // Mobile (single stacked column): lead with News, then the two score
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
+          // Desktop position of the generic column: last by default, but the
+          // user can pull it left by picking "Top news (ESPN)" from any
+          // column's switcher (newsGenericSlot). The league columns shift
+          // right around it — nothing is dropped. Mobile keeps its fixed
+          // news-first stack (Jacob 5/30) regardless.
+          const genericPos = Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
           const visibleNewsEntries = isMobile
             ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
-            : [...firstTwoEntries, ...(thirdColEntry ? [thirdColEntry] : [])];
+            : thirdColEntry
+              ? [...firstTwoEntries.slice(0, genericPos), thirdColEntry, ...firstTwoEntries.slice(genericPos)]
+              : [...firstTwoEntries];
 
           // Apply Focus league (drops other entries) then per-entry filter by
           // the independently checked source types + hidden labels. Hidden
@@ -2712,10 +2734,17 @@ export default function HomeContent({
             };
           // Force the ESPN "Top news" feed back as a column: clear any 3rd-league
           // override and explicitly show the independent generic column.
-          const pickEspn = () => {
+          // When called from a column's switcher, `position` is that column's
+          // index so the feed lands where the user asked for it instead of
+          // always in col 3 (which read as "the menu item does nothing" from
+          // columns 1-2).
+          const pickEspn = (position?: number) => {
             updatePrefs({
               newsThirdLeague: undefined,
               newsGenericHidden: false,
+              newsGenericSlot: position === undefined
+                ? prefs.newsGenericSlot
+                : (Math.max(0, Math.min(2, position)) as 0 | 1 | 2),
               newsFocusLeague: prefs.newsFocusLeague ? "espn" : undefined,
             });
           };
@@ -2878,8 +2907,10 @@ export default function HomeContent({
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
-                            onPickEspn={pickEspn}
+                            onPickEspn={() => pickEspn(idx)}
                             espnActive={isEspn}
+                            autoSport={entry.slotIdx === 2 ? undefined : autoSlotSports[entry.slotIdx]}
+                            autoIsEspn={entry.slotIdx === 2}
                             removable={renderedEntries.length > 1}
                           />
                         </div>
@@ -2935,8 +2966,10 @@ export default function HomeContent({
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
-                      onPickEspn={pickEspn}
+                      onPickEspn={() => pickEspn(idx)}
                       espnActive={isEspn}
+                      autoSport={entry.slotIdx === 2 ? undefined : autoSlotSports[entry.slotIdx]}
+                      autoIsEspn={entry.slotIdx === 2}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}
@@ -3059,6 +3092,7 @@ export default function HomeContent({
               swappableOptions: switcherOptions,
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
+              autoSport: autoSlotSports[idx],
               showSwapChevron: !prefs.hideLeagueChevrons,
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
             });
