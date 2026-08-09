@@ -1972,6 +1972,11 @@ export default function HomeContent({
           </div>
         </div>
       )}
+      {/* Opaque strip from the viewport top down to wherever the sticky league
+          titles pin. Sits under the header, over the cards — see
+          .sticky-seam-cover in globals.css for why this exists rather than
+          another round of offset arithmetic. */}
+      <div className="sticky-seam-cover" aria-hidden="true" data-testid="sticky-seam-cover" />
       <header ref={headerRef} className="px-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
         // In the native iOS app the WKWebView reports env(safe-area-inset-top)
         // unreliably — sometimes ~0 (header collides with the status bar),
