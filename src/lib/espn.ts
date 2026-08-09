@@ -114,9 +114,14 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
   { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", championshipDate: "11-01", mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
   { sport: "nhl",   label: "NHL",   startDate: "04-07", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
-  { sport: "nfl",   label: "NFL",   startDate: "09-04", endDate: "02-09", championshipDate: "02-09", mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
+  // NFL 2026-27 verified against ESPN 2026-08-09: Week 1 opens Thu Sep 10 2026,
+  // and Super Bowl LXI is Sun Feb 14 2027. The old 02-09 endDate hid the NFL
+  // column five days BEFORE the Super Bowl — the one game of the year a
+  // spoiler-free app must not be missing. Old 09-04 start was six days before
+  // any regular-season game.
+  { sport: "nfl",   label: "NFL",   startDate: "09-08", endDate: "02-16", kickoffDate: "09-10", championshipDate: "02-14", mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
   // NFL Preseason backfills the Jul 21 – Aug 15 thin window where only MLB + MLS are active.
-  // Window ends Sep 3 (regular NFL takes over Sep 4) — but EPL kickoff Aug 16 already fills
+  // Window ends Sep 3 (regular NFL takes over Sep 8) — but EPL kickoff Aug 16 already fills
   // the third slot, so backfillOnly ensures preseason only shows when slot 3 would be empty.
   { sport: "nfl",   label: "NFL Preseason", startDate: "07-21", endDate: "09-03", backfillOnly: true, displaySlot: "center", slotPrecedence: 7 },
   // ── Golf majors ──
@@ -213,9 +218,13 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "cricket", label: "IPL", startDate: "03-28", endDate: "05-31", championshipDate: "05-31", excludeFromAuto: true },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
   { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
-  // ── NCAAF (College Football, Aug–early Jan, CFB Championship ~Jan 11) ──
-  // Starts 08-22 to catch Week 0 (late-August opener weekend).
-  { sport: "ncaaf", label: "NCAAF", startDate: "08-22", endDate: "01-12", championshipDate: "01-12" },
+  // ── NCAAF (College Football, late Aug – late Jan) ──
+  // Verified against ESPN 2026-08-09. The expanded playoff moved the calendar:
+  // quarterfinals Jan 1, semifinals Jan 15-16, and the National Championship on
+  // Jan 26 2027 — the old 01-12 endDate hid the entire playoff from the
+  // semifinals onward, title game included. Week 0 is Aug 29 2026, so the old
+  // 08-22 start opened a week of empty column.
+  { sport: "ncaaf", label: "NCAAF", startDate: "08-27", endDate: "01-28", kickoffDate: "08-29", championshipDate: "01-26" },
   // ── NCAAW (Women's College Basketball, Nov–early Apr) ──
   // Swap-only (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot
   // rotation — selectable from the slot-3 dropdown when in season.
@@ -282,7 +291,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 // Jan 1 – Jan 11:   NBA/NFL/NCAAM/MLS/EPL          → [NBA, NFL, NCAAM]
 // Jan 12 – Jan 26:  + Aus Open                     → [NBA, NFL, Aus Open]
 // Jan 27 – Feb 9:   Aus Open ends                  → [NBA, NFL, NCAAM]
-// Feb 10 – Mar 16:  NFL ends                       → [NBA, NCAAM, EPL]
+// Feb 17 – Mar 16:  NFL ends                       → [NBA, NCAAM, EPL]
 // Mar 17 – Mar 19:  NCAAM → March Madness          → [NBA, March Madness, EPL]
 // Mar 20 – Apr 6:   + MLB                           → [NBA, March Madness, MLB]
 // Apr 7 – Apr 8:    NCAAM done; + NHL              → [NBA, MLB, NHL]
@@ -300,15 +309,15 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 // Jul 16 – Jul 19:  + The Open                     → [MLB, World Cup, The Open]
 // Jul 20:           World Cup ends                 → [MLB, The Open, MLS]
 // Jul 21 – Aug 15:  NFL Preseason backfill         → [MLB, NFL Preseason, MLS]
-// Aug 16 – Aug 24:  + EPL (Preseason bumped)       → [MLB, EPL, MLS]
+// Aug 19 – Aug 24:  + EPL (Preseason bumped)       → [MLB, EPL, MLS]
 // Aug 25 – Sep 3:   + US Open Tennis               → [MLB, US Open Tennis, EPL]
-// Sep 4 – Sep 14:   + NFL                           → [MLB, NFL, US Open Tennis]
+// Sep 8 – Sep 14:   + NFL                           → [MLB, NFL, US Open Tennis]
 // Sep 15 – Oct 19:  US Open Tennis ends            → [MLB, NFL, EPL]
 // Oct 20 – Nov 1:   + NBA                           → [NBA, NFL, MLB]
 // Nov 2 – Dec 31:   MLB ends; + NCAAM              → [NBA, NFL, NCAAM]
 // ═══════════════════════════════════════════════════════════════
 // Added 2026-05-27 — not unrolled into the day-by-day grid above:
-//   • NCAAF (Aug 29 – Jan 12, priority 4) joins between NFL and tennis;
+//   • NCAAF (Aug 27 – Jan 28, priority 4) joins between NFL and tennis;
 //     overlaps NFL Sundays and NCAAM/NBA in fall.
 //   • UCL (Sep 14 – Jun 5, priority 10) and UEL (Sep 24 – May 22, priority 11)
 //     compete for the soccer slot — UCL > UEL > MLS, EPL still beats both.
