@@ -17,6 +17,8 @@ interface Props {
   tailFetch?: () => Promise<NewsItem[]>;
   tailColIdx?: number;
   showTextPosts?: boolean;
+  // Reverse the tail list (oldest first) — the ⇅ news-header control.
+  oldestFirst?: boolean;
 }
 
 // 3-column video strip — CSS subgrid so video N is the same height in every
@@ -24,7 +26,7 @@ interface Props {
 // gridTemplateRows: subgrid. Per-row height = tallest headline at that row,
 // shorter cells anchor align-self: start so blank space sits at the bottom.
 // Headlines stay un-clamped so long titles wrap fully (Jacob 2026-05-02).
-export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, oldestFirst }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
@@ -71,7 +73,8 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   }, [tailFetch ? "set" : "unset"]);
 
   const allLoaded = colItems.every(Boolean);
-  const visibleTailItems = (tailItems ?? []).filter((item) => showTextPosts || !itemIsTextPost(item));
+  const keptTailItems = (tailItems ?? []).filter((item) => showTextPosts || !itemIsTextPost(item));
+  const visibleTailItems = oldestFirst ? [...keptTailItems].reverse() : keptTailItems;
   const tailHasItems = tailColIdx !== undefined && visibleTailItems.length > 0;
   // Reserve 2 pad rows in the tail col so the ESPN-top tail always has somewhere
   // to span — otherwise when the tail col's video count ties the others (e.g.

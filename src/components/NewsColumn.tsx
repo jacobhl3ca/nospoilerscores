@@ -117,6 +117,9 @@ interface NewsColumnProps {
   videosOnly?: boolean;
   // Headline-only rows are independently hidden unless this is true.
   showTextPosts?: boolean;
+  // Reverse each source's rendered order (oldest first) — the ⇅ news-header
+  // control, so a feed can be read bottom-to-top.
+  oldestFirst?: boolean;
   // Show the subtle × remove-column control on this column's title (see
   // NewsColumnTitle.removable) — set only when more than one column is visible.
   removable?: boolean;
@@ -841,7 +844,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -868,8 +871,14 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
     // clip-bearing posts, and with Text posts ALSO on you additionally get the
     // headline-only text posts (they carry no clip, so plain videosOnly hid them
     // and the Text posts toggle was a no-op — Jacob 7/16).
-    () => items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item))),
-    [items, videosOnly, showTextPosts],
+    () => {
+      const kept = items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item)));
+      // Bottom-to-top reading order (the ⇅ control next to the funnel). Reverse
+      // AFTER filtering so the flip is over what's actually on screen, and copy
+      // first — items is the fetched array other memos also read.
+      return oldestFirst ? [...kept].reverse() : kept;
+    },
+    [items, videosOnly, showTextPosts, oldestFirst],
   );
   // Publish exactly what is rendered so modal prev/next never pages into a row
   // that the active Videos filter hid.
@@ -917,6 +926,7 @@ export default function NewsColumn({
   titleMeasureRef,
   videosOnly,
   showTextPosts,
+  oldestFirst,
   removable,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
@@ -981,6 +991,7 @@ export default function NewsColumn({
             baseIndex={baseIndexBySource[source.label] ?? null}
             videosOnly={videosOnly}
             showTextPosts={showTextPosts}
+            oldestFirst={oldestFirst}
           />
         ))}
         {allFiltered && (
