@@ -212,6 +212,25 @@ function tennisRoundTiers(label: string): string[] {
   return short !== label ? [label, short] : [label];
 }
 
+// Compact companion tier for a World Cup knockout round, mirroring
+// tennisRoundTiers: pickTier() can only shrink the italic subtitle when it has
+// a narrower tier to fall back to. Without one, a wide label ("Quarterfinals",
+// "Round of 32") renders whitespace-nowrap + overflow-hidden and simply CLIPS
+// (no ellipsis) in the narrowest mobile columns — every sibling subtitle branch
+// (group stage, tennis, the playoff countdown) already ships a compact tier;
+// the knockout branch was the lone one returning a single width. The replaces
+// are case-insensitive and tolerate ESPN's singular/hyphenated wording
+// ("Quarterfinal", "Semi-Final", "Third Place Match") so the short form still
+// forms even when game.stage carries a non-canonical variant.
+function fifaRoundTiers(label: string): string[] {
+  const short = label
+    .replace(/Round of (\d+)/i, "R$1")
+    .replace(/Quarter-?finals?/i, "QF")
+    .replace(/Semi-?finals?/i, "SF")
+    .replace(/Third Place(?: Match)?/i, "3rd Place");
+  return short !== label ? [label, short] : [label];
+}
+
 // Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
 function parseEtTime(s: string): { h: number; m: number } | null {
   const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -272,7 +291,7 @@ function getPlayoffSubtitle(
     if (rounds.length) {
       const order = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Third Place", "Final"];
       const deepest = rounds.reduce((best, r) => (order.indexOf(r) > order.indexOf(best) ? r : best), rounds[0]);
-      return { tiers: [deepest] };
+      return { tiers: fifaRoundTiers(deepest) };
     }
     return { tiers: ["Group Stage", "Groups"] };
   }
