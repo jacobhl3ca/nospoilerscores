@@ -432,7 +432,7 @@ export default function RootLayout({
       <body className="antialiased">
         <BootBeacon />
         {children}
-        {/* GoatCounter analytics — create hidescore site at goatcounter.com and update the URL */}
+        {/* GoatCounter analytics — live at hidescore.goatcounter.com, privacy-first */}
         {/* Explicit https (not protocol-relative //) so the loader still resolves
             inside the Capacitor native WebView, where the page origin is
             capacitor://localhost — a // URL would resolve to capacitor://gc.zgo.at
