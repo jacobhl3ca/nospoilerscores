@@ -56,13 +56,19 @@ export const metadata: Metadata = {
     // LinkedIn/Slack/iMessage).
     locale: "en_US",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: TITLE }],
+    // Brand card (og-image.png), not og-worldcup.png: the World Cup card reads
+    // "Watch the World Cup" and points at hidescore.com/worldcup — a mismatched
+    // unfurl for a general soccer page (which spans the EPL, MLS, La Liga and
+    // more, not just the World Cup), and stale now the 2026 World Cup is over
+    // (ended Jul 19). og-image.png is the generic HideScore card, matching the
+    // same fix applied to the Premier League, Liga MX and cricket pages.
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESC,
-    images: [{ url: "https://hidescore.com/og-worldcup.png", alt: TITLE }],
+    images: [{ url: "https://hidescore.com/og-image.png", alt: TITLE }],
   },
 };
 
