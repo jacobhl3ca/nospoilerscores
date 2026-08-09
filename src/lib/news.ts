@@ -168,6 +168,21 @@ function parseArticle(raw: RawArticle): NewsItem {
   };
 }
 
+// RSS feeds (the boxing source below) emit <pubDate> in RFC-822 form
+// ("Mon, 02 Jun 2025 14:30:00 +0000"), but the rest of the app treats
+// NewsItem.published as an ISO-8601 instant: NewsFeed and VideoModal render it
+// straight into <time dateTime={published}>, whose HTML datetime attribute is
+// only valid as an ISO datetime — an RFC-822 value there is unparseable by
+// assistive tech and crawlers, defeating the semantic-time markup those
+// components deliberately add. ESPN's JSON feed already returns ISO, so normalize
+// the RSS instant here too so both sources land in one format. An unparseable or
+// absent date collapses to "" — the same empty sentinel parseArticle uses, which
+// formatPublished already renders as blank (so the <time> simply doesn't paint).
+function toIsoInstant(raw: string): string {
+  const ms = Date.parse(raw);
+  return Number.isNaN(ms) ? "" : new Date(ms).toISOString();
+}
+
 export async function fetchLeagueNews(sport: Sport, limit = 20): Promise<NewsItem[]> {
   if (sport === "boxing") {
     try {
@@ -182,7 +197,7 @@ export async function fetchLeagueNews(sport: Sport, limit = 20): Promise<NewsIte
           id: value("guid") || articleUrl,
           headline: value("title"),
           description: value("description"),
-          published: value("pubDate"),
+          published: toIsoInstant(value("pubDate")),
           imageUrl: null,
           articleUrl,
           byline: value("dc:creator"),
