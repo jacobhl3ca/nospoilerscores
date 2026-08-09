@@ -3034,6 +3034,15 @@ export default function HomeContent({
               <div
                 className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10 flex items-center justify-center gap-x-3 gap-y-1.5 flex-wrap"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
+                // role="status" so this dismissible in-flow banner announces itself
+                // to screen readers without stealing focus — matching its structural
+                // twin the kickoff banner below, the ratings/news notices above, and
+                // the "same shape as the World Cup banner … role=status" convention
+                // spelled out where those notices render. This banner (the pattern's
+                // namesake) was the one that never carried the attribute; inert at
+                // load like every live region, it only speaks if the banner appears
+                // dynamically — the exact behavior the kickoff twin already has.
+                role="status"
               >
                 <span className="text-sm" style={{ color: "var(--text)" }}>
                   <span aria-hidden="true">⚽ </span>The 2026 World Cup is on — every match, spoiler-free.
