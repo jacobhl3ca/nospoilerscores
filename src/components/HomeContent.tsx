@@ -1301,7 +1301,10 @@ export default function HomeContent({
   // Soccer is grouped as one block at the very bottom rather than interleaved,
   // so the domestic leagues read as a set you scroll past or into.
   const PICKER_RANK: Sport[] = [
-    "nfl", "nba", "mlb", "nhl", "ncaaf", "ncaam", "wnba", "ncaaw",
+    // MLB leads: it is the league actually playing games today, and a picker
+    // whose first pill is an offseason/preseason league reads as stale (Jacob
+    // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
+    "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
     "chess", "poker", "esports",
     // ── soccer block, bottom ──
@@ -2027,6 +2030,11 @@ export default function HomeContent({
           </div>
         </div>
       )}
+      {/* Opaque strip from the viewport top down to wherever the sticky league
+          titles pin. Sits under the header, over the cards — see
+          .sticky-seam-cover in globals.css for why this exists rather than
+          another round of offset arithmetic. */}
+      <div className="sticky-seam-cover" aria-hidden="true" data-testid="sticky-seam-cover" />
       <header ref={headerRef} className="px-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
         // In the native iOS app the WKWebView reports env(safe-area-inset-top)
         // unreliably — sometimes ~0 (header collides with the status bar),

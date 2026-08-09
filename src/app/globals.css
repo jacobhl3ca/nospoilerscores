@@ -21,6 +21,43 @@
   }
 }
 
+/* SEAM COVER — the permanent guard against "cards slice under the league title".
+   Every sticky row below the app header pins at an offset built from
+   --header-h, which is *measured* by a ResizeObserver. On the native iOS shell
+   the header's own padding is clamp(50px, env(safe-area-inset-top), 60px), so
+   its real height changes whenever the inset changes (resume, rotation,
+   keyboard). The measurement can lag that change by a frame or more — and when
+   the header ends up SHORTER than the stale --header-h, the league title pins
+   BELOW the header's bottom edge and scrolling game cards show through the band
+   in between. That's the slice Jacob has reported four times (16464D55,
+   436F28A9, 66BBA2B3, A1610FBF); it is a race, which is why fixing the
+   arithmetic never made it stay fixed.
+
+   This element removes the failure mode instead of the symptom: it paints the
+   whole strip from the viewport top down to the exact pin offset, using the
+   SAME expression .league-sticky-top uses for `top`. z-index sits above the
+   scrolling cards (z-30) and below the app header (z-40), so:
+     - stale value too LARGE  -> the cover reaches the title's pin point, gap filled
+     - stale value too SMALL  -> the header itself is taller and paints over it
+   Either way there is no transparent band, for any value of --header-h.
+   Guarded by tests/visual/sticky-seam.spec.ts, which deliberately corrupts
+   --header-h and asserts nothing bleeds through. */
+.sticky-seam-cover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  pointer-events: none;
+  background: var(--bg);
+  height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-h, 0px));
+}
+@media (min-width: 640px) {
+  .sticky-seam-cover {
+    height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-h, 0px));
+  }
+}
+
 /* News view: per-source header (ESPN, MLB Most Popular, r/baseball, etc.)
    pins below the main app header + the league title strip while you scroll
    through that source's items, then scrolls away with its card when the
