@@ -270,7 +270,7 @@ export const PREBAKED_FEEDS: Partial<Record<Sport, { name: string; label: string
 // (MLB / NBA / NHL / etc.), and ESPN's redesign sport-icon set for the rest
 // (NCAAM / golf / tennis / etc.). Every Sport must resolve so a new column
 // never ships logo-less. EPL has its own slug under `leaguelogos/soccer`.
-const LEAGUE_LOGO: Record<Sport, string> = {
+export const LEAGUE_LOGO: Record<Sport, string> = {
   mlb: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
   nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
   wnba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
@@ -322,12 +322,18 @@ const LEAGUE_LOGO: Record<Sport, string> = {
   indycar: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/INDYCAR_textlogo.svg/250px-INDYCAR_textlogo.svg.png",
   f1:"https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/f1.png&w=40&h=40&transparent=true",
   ufc: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
-  // ESPN publishes no league logo for either (it does not carry the sports),
-  // so these fall back to its generic sport glyphs rather than 404ing.
-  boxing: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
-  chess: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
+  // ESPN publishes no league logo for chess/poker/esports (it does not carry
+  // them). Chess and esports pointed at the UFC mark — a copy-paste slip, so
+  // every chess and esports card in the app was flying a UFC logo (spotted in
+  // the league picker, 2026-08-09). Locally-served glyphs instead, matching the
+  // poker one that was already done this way: no hotlink to 404 or mislabel.
+  // Was networks_shows/500/boxing.png — a 404 (verified 2026-08-09), so every
+  // boxing card shipped logo-less. ESPN's redesign icon set has a real one,
+  // same path family NASCAR already uses.
+  boxing: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-boxing.png",
+  chess: "/chess.svg",
   poker: "/poker.svg",
-  esports: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufc.png&w=40&h=40&transparent=true",
+  esports: "/esports.svg",
 };
 
 // ESPN brand mark — used as the source-card logo for ESPN-branded feeds

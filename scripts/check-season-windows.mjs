@@ -32,6 +32,14 @@ const API = "https://site.api.espn.com/apis/site/v2/sports";
 // window costs far less, and several have no ESPN fixtures published yet.
 const POPULAR = new Set(["nfl", "nba", "mlb", "nhl", "ncaaf", "ncaam", "epl", "ucl", "mls", "wnba"]);
 
+// Golf and tennis cannot be checked this way and must not be guessed at. Their
+// ESPN endpoint is the whole TOUR (/golf/pga, /tennis/atp), not the individual
+// event, so the "last game near the window" is simply the next tournament on
+// the calendar — every Slam and major reports as closing 40 days early. Their
+// windows are four-day majors and two-week Slams that move a little each year;
+// checking them needs a per-event feed we do not have.
+const TOUR_SPORTS = new Set(["golf", "tennis"]);
+
 // Slack around each edge. A window is ALLOWED to open a few days early (the
 // build-up is the point) but must never close before the last game.
 const EARLY_OPEN_TOLERANCE_DAYS = 7;
@@ -85,6 +93,7 @@ const diffDays = (a, b) => Math.round((a - b) / 86400000);
 async function checkLeague(cfg, paths, now) {
   const path = paths[cfg.sport];
   if (!path || !cfg.startDate || !cfg.endDate) return null;
+  if (TOUR_SPORTS.has(cfg.sport)) return { cfg, issues: [], notes: [], skipped: true };
 
   const year = now.getUTCFullYear();
   const wraps = cfg.startDate > cfg.endDate;
@@ -145,11 +154,15 @@ const leagues = parseLeagues().filter((l) => {
 
 let flagged = 0;
 let unverified = 0;
+let skipped = 0;
 for (const cfg of leagues) {
   const r = await checkLeague(cfg, paths, now);
   if (!r) continue;
   const window = `${cfg.startDate}→${cfg.endDate}${cfg.kickoffDate ? ` (kickoff ${cfg.kickoffDate})` : ""}`;
-  if (r.issues.length) {
+  if (r.skipped) {
+    skipped++;
+    console.log(`- ${cfg.label.padEnd(14)} ${window}  (per-event window, tour-wide feed — not checkable here)`);
+  } else if (r.issues.length) {
     flagged++;
     console.log(`✗ ${cfg.label.padEnd(14)} ${window}`);
     for (const i of r.issues) console.log(`    ${i}`);
@@ -166,7 +179,7 @@ for (const cfg of leagues) {
 
 console.log(
   flagged
-    ? `\n${flagged} league window(s) need updating.${unverified ? ` ${unverified} unverifiable — recheck when ESPN publishes.` : ""}`
-    : `\nAll verifiable league windows cover their fixtures.${unverified ? ` ${unverified} unverifiable — recheck when ESPN publishes.` : ""}`,
+    ? `\n${flagged} league window(s) need updating.${unverified ? ` ${unverified} unverifiable — recheck when ESPN publishes.` : ""}${skipped ? ` ${skipped} skipped.` : ""}`
+    : `\nAll verifiable league windows cover their fixtures.${unverified ? ` ${unverified} unverifiable — recheck when ESPN publishes.` : ""}${skipped ? ` ${skipped} skipped.` : ""}`,
 );
 process.exit(flagged ? 1 : 0);

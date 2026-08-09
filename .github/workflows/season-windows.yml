@@ -1,0 +1,57 @@
+name: Check season windows
+
+# Every ALL_LEAGUES window in src/lib/espn.ts is a hand-written MM-DD pair, and
+# a stale one fails SILENTLY — the league column just disappears, at the worst
+# possible moment, because the end of a window is where the championship is.
+# Two live examples were found by hand on 2026-08-09: the NFL window closed five
+# days before Super Bowl LXI, and the NCAAF window closed before the playoff
+# semifinals, hiding the National Championship. This is that check, automated.
+#
+# Monthly, not daily: these are annual schedules, and ESPN publishes a season's
+# fixtures in one go. The 3rd of the month is deliberate — leagues announce
+# schedules in the first days of a month, so this lands just after.
+#
+# Runs plain node against ESPN's public API. No credentials, no Claude, no
+# Mac mini — it costs nothing but a free-tier Actions minute.
+
+on:
+  schedule:
+    - cron: "0 15 3 * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Same convention as staleness-check.yml: pre-script infra flakes are
+      # skips, not failures — only the script's own exit code should alert.
+      - uses: actions/checkout@v6
+        id: checkout
+        continue-on-error: true
+      - uses: actions/setup-node@v6
+        id: setup
+        if: steps.checkout.outcome == 'success'
+        with:
+          node-version: 22
+        continue-on-error: true
+      - id: check
+        if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
+        run: node scripts/check-season-windows.mjs --all
+      # DOWN-only, no grace period. Unlike the feed check this cannot flap: a
+      # league window is either right or wrong, and it stays wrong until someone
+      # edits espn.ts. No "recovered" ping by design — silence is the signal.
+      - name: Alert on a bad window (ntfy)
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::warning::NTFY_TOPIC secret unset — cannot alert."
+            exit 0
+          fi
+          curl -s -H "Title: HideScore league window is wrong" -H "Priority: high" -H "Tags: calendar" \
+            -d "A season window in espn.ts no longer matches ESPN's fixtures — a league column will vanish early or open late. $run_url" \
+            "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
