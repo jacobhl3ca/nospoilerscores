@@ -2348,7 +2348,7 @@ export default function HomeContent({
           >
             <p className="text-sm" style={{ color: "var(--text)" }}>
               <span aria-hidden="true">🙉 </span>
-              <strong>Ratings are on.</strong>{" "}They show how competitive a game is — based on score closeness, not who&apos;s winning — so they can hint at the outcome. Games are also reordered by top records and best matchups.
+              <strong>Ratings are on.</strong>{" "}They show how competitive a game is — based on score closeness, not who&apos;s winning — so they can hint at the outcome. Games are also reordered — live and finished by rating, upcoming by best matchups.
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
               <span className="font-medium" style={{ color: "var(--text-muted)" }}>SCALE</span>
