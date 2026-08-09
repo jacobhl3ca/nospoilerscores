@@ -614,6 +614,10 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
   const scheduleOut = release && release.getTime() < kickoff.getTime()
     ? release.toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : undefined;
+  // Rounded whole years, hoisted so the awayLabel years branch can pluralize
+  // like the days branch does — a World Cup column viewed ~1–1.5 years out
+  // (daysUntil 366–547) rounds to 1 and otherwise read "1 years away".
+  const years = Math.round(daysUntil / 365.25);
   return {
     date: kickoff,
     daysUntil,
@@ -634,7 +638,7 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
         ? `${Math.round(daysUntil / 7)} weeks away`
         : daysUntil <= 365
           ? `${Math.round(daysUntil / 30.4)} months away`
-          : `${Math.round(daysUntil / 365.25)} years away`,
+          : `${years} year${years === 1 ? "" : "s"} away`,
   };
 }
 
