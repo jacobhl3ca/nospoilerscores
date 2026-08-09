@@ -771,6 +771,13 @@ export default function SettingsPanel({
                   onChange={(event) => setEmailAddress(event.target.value)}
                   placeholder="Email address"
                   aria-label="Email address"
+                  // On the email step a failed request (bad address, send error)
+                  // is voiced only by the red role="alert" status below — mark the
+                  // field itself invalid and point it at that message so a screen
+                  // reader announces the error state on the input too, matching the
+                  // FeedbackBox email field's aria-invalid/describedby pattern.
+                  aria-invalid={emailStep === "email" && emailError ? true : undefined}
+                  aria-describedby={emailStatus ? "hs-email-auth-status" : undefined}
                   className="w-full min-h-11 rounded-lg px-3 text-sm"
                   style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
                 />
@@ -787,6 +794,12 @@ export default function SettingsPanel({
                     onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="6-digit code"
                     aria-label="Six-digit sign-in code"
+                    // On the code step a wrong/expired code is voiced only by the
+                    // red role="alert" status below — mark the code field invalid
+                    // and describe it by that message so the error state reaches
+                    // the input for assistive tech (same pattern as the email field).
+                    aria-invalid={emailStep === "code" && emailError ? true : undefined}
+                    aria-describedby={emailStatus ? "hs-email-auth-status" : undefined}
                     className="w-full min-h-11 rounded-lg px-3 text-sm tracking-[0.18em]"
                     style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
                   />
@@ -810,7 +823,7 @@ export default function SettingsPanel({
                   </button>
                 )}
                 {emailStatus && (
-                  <p role={emailError ? "alert" : "status"} className="text-[11px]" style={{ color: emailError ? "#ef4444" : "var(--text-muted)" }}>
+                  <p id="hs-email-auth-status" role={emailError ? "alert" : "status"} className="text-[11px]" style={{ color: emailError ? "#ef4444" : "var(--text-muted)" }}>
                     {emailStatus}
                   </p>
                 )}
