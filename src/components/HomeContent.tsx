@@ -3080,6 +3080,10 @@ export default function HomeContent({
                         style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        // aria-label mirrors the title so the button's action reaches
+                        // screen readers too — in focus mode a user lands on a bare
+                        // "NBA"/"MLB" with no cue that activating it replaces that column.
+                        aria-label={`Show the World Cup instead of ${entry.league.label}`}
                         title={`Show the World Cup instead of ${entry.league.label}`}
                       >
                         {entry.league.label}
@@ -3168,6 +3172,10 @@ export default function HomeContent({
                         style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        // aria-label mirrors the title so the button's action reaches
+                        // screen readers too — in focus mode a user lands on a bare
+                        // league label with no cue that activating it replaces that column.
+                        aria-label={`Show ${kickoff.config.label} instead of ${entry.league.label}`}
                         title={`Show ${kickoff.config.label} instead of ${entry.league.label}`}
                       >
                         {entry.league.label}
