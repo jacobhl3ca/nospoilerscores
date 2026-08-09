@@ -96,6 +96,14 @@ export interface LeagueConfig {
   // lookahead into the build-up). Drives the kickoff banner's copy and its
   // "starts soon" → "is underway" flip. Falls back to startDate when unset.
   kickoffDate?: string;
+  // MM-DD from which this league may be AUTO-PICKED into a column, when that is
+  // later than startDate. Between startDate and autoStartDate the league is in
+  // season and fully selectable — it just doesn't claim a slot on its own.
+  // NHL is the case this exists for: the hand-built three-column schedule only
+  // surfaces it once the playoffs begin, but a hockey fan should still be able
+  // to pick it in November. Without this the only way to make NHL selectable
+  // was to widen its window, which would have reshuffled every winter column.
+  autoStartDate?: string;
   firstPref?: boolean;       // Tier 1: always gets a slot when active (bumps lower leagues)
   mustInclude?: boolean;     // NBA/MLB/NHL/NFL — always picked when active
   excludeFromAuto?: boolean; // Skipped from auto-pick; still selectable via slot-3 dropdown
@@ -113,7 +121,14 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", marchMadnessLabel: true },
   { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
   { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", championshipDate: "11-01", mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
-  { sport: "nhl",   label: "NHL",   startDate: "04-07", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
+  // NHL runs Sep 29 → mid-June (verified against ESPN 2026-08-09: first
+  // 2026-27 regular-season game Tue Sep 29 2026; the 2026 Stanley Cup finished
+  // Jun 15). It used to be configured as 04-07 → 06-19 — the PLAYOFF window —
+  // because that is where the column schedule puts it. But isLeagueActive gates
+  // selectability too, so that also made NHL impossible to pick at all from
+  // October to April (Jacob 8/9). Now the window is the real season and
+  // autoStartDate keeps the auto-picker's behaviour exactly as it was.
+  { sport: "nhl",   label: "NHL",   startDate: "09-27", endDate: "06-19", kickoffDate: "09-29", autoStartDate: "04-07", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
   // NFL 2026-27 verified against ESPN 2026-08-09: Week 1 opens Thu Sep 10 2026,
   // and Super Bowl LXI is Sun Feb 14 2027. The old 02-09 endDate hid the NFL
   // column five days BEFORE the Super Bowl — the one game of the year a
@@ -280,7 +295,8 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 //   center: NFL (1) > World Cup (2) > US Open Tennis (3) > Wimbledon (4)
 //           > US Open Golf (5) > The Open (6) > NFL Preseason (7)
 //           NCAAM dynamically pins to center during March Madness (Mar 17 – Apr 6).
-//   right : Masters (1) > NHL (2)
+//   right : Masters (1) > NHL (2, auto-picked only from Apr 7 — autoStartDate;
+//           selectable from the switcher all season, Sep 29 onward)
 //
 // Picks: mustInclude (NBA/MLB/NHL/NFL) + firstPref always picked when active;
 // regular leagues fill remaining slots by LEAGUE_PRIORITY; backfillOnly
@@ -498,6 +514,19 @@ export function getLeagueKickoff(viewDate: Date): LeagueKickoff | null {
   return candidates[0];
 }
 
+// Whether a league may claim a column ON ITS OWN for viewDate. Identical to
+// isLeagueActive unless the config carries an autoStartDate, which narrows the
+// auto-pick window to [autoStartDate, endDate] while leaving the full season
+// selectable. Every auto-pick path must use this; selectability paths must not.
+export function isLeagueAutoEligible(league: LeagueConfig, viewDate: Date): boolean {
+  if (!isLeagueActive(league, viewDate)) return false;
+  if (!league.autoStartDate || !league.endDate) return true;
+  const mmdd = toMMDD(viewDate);
+  return league.autoStartDate <= league.endDate
+    ? mmdd >= league.autoStartDate && mmdd <= league.endDate
+    : mmdd >= league.autoStartDate || mmdd <= league.endDate;
+}
+
 const MAX_LEAGUES = 3;
 
 // March Madness date range — NCAAM dynamically becomes a firstPref / center pin.
@@ -585,7 +614,7 @@ export function getActiveLeagueCandidates(viewDate?: Date): {
   rest: LeagueConfig[];
 } {
   const d = viewDate ?? new Date();
-  const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d) && !l.excludeFromAuto && !l.backfillOnly);
+  const active = ALL_LEAGUES.filter((l) => isLeagueAutoEligible(l, d) && !l.excludeFromAuto && !l.backfillOnly);
   const firstPref = active.filter((l) => effectiveFirstPref(l, d));
   const rest = active
     .filter((l) => !effectiveFirstPref(l, d))
@@ -598,7 +627,7 @@ export function getActiveLeagueCandidates(viewDate?: Date): {
 // [left, center, right] pin rules; slots beyond 3 (the wide-viewport 5-column
 // board) fill from the remaining pool by LEAGUE_PRIORITY.
 export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES): LeagueConfig[] {
-  const eligible = ALL_LEAGUES.filter((l) => isLeagueActive(l, viewDate) && !l.excludeFromAuto);
+  const eligible = ALL_LEAGUES.filter((l) => isLeagueAutoEligible(l, viewDate) && !l.excludeFromAuto);
 
   const mustInclude = eligible.filter((l) => l.mustInclude && !l.backfillOnly);
   const firstPref   = eligible.filter((l) => effectiveFirstPref(l, viewDate) && !l.mustInclude && !l.backfillOnly);
