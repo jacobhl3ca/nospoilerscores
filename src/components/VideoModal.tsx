@@ -443,6 +443,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // prompt instead of silently leaving a paused black player.
   const autoplayBlockedRef = useRef(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  // Has THIS YouTube clip ever actually reached PLAYING/BUFFERING?
+  // Everything before the first frame is a different world from everything
+  // after it, because playback can only START from a real user gesture INSIDE
+  // the cross-origin iframe. `playerRef.current.playVideo()` travels as a
+  // postMessage and carries NO user activation with it, so once the browser has
+  // refused autoplay, no amount of tapping our own overlays can start the clip
+  // — which is exactly the "the play button does nothing" bug (Jacob 8/9, WNBA
+  // + NFL). While this is false we deliberately leave YouTube's own big red
+  // play button exposed and un-intercepted: it's the only control in the DOM
+  // that can legally begin playback. Once it's true we go back to the
+  // click-catcher so keyboard shortcuts and double-tap seek behave as before.
+  const hasStartedRef = useRef(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  // Set by the player effect so code outside it (the autoplay-prompt retry
+  // timer) can still trigger the alternate-video search.
+  const tryFallbackRef = useRef<(() => void) | null>(null);
+  const retryConfirmRef = useRef<number | null>(null);
   // imgFailed flips when the lightbox image errors out — at that point we
   // collapse to text-card mode so the user sees the headline + open button
   // instead of an empty modal (Firefox + Reddit external-preview is the
@@ -615,6 +632,19 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       videoRef.current?.play().catch(handleNativePlayError);
     } else if (ytMode) {
       playerRef.current?.playVideo?.();
+      // playVideo() is a postMessage — it can be refused silently (autoplay
+      // policy) OR land on a clip that renders a *silent* error screen inside
+      // the iframe (YT Error 153, which never fires onError). Give it 8s; if
+      // we're still not playing, THEN it's worth burning an alternate video id.
+      // This is the only path that can still reach the "league blocked" card
+      // from a never-started player, so a clip that simply needed a tap never
+      // gets mislabelled as an embed block (Jacob 8/9, NFL).
+      if (retryConfirmRef.current) window.clearTimeout(retryConfirmRef.current);
+      retryConfirmRef.current = window.setTimeout(() => {
+        retryConfirmRef.current = null;
+        const state = playerRef.current?.getPlayerState?.();
+        if (state !== 1 && state !== 3) tryFallbackRef.current?.();
+      }, 8000);
     }
   }, [clearAutoplayBlocked, handleNativePlayError, hlsMode, ytMode]);
 
@@ -623,7 +653,18 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // New post / new stream — clear any prior playback-failure overlay so the
     // fresh clip gets a clean attempt (prev/next paging reuses this modal).
     setMediaFailed(false);
+    // A swapped clip has not started either — re-expose YouTube's own play
+    // button until the new id actually reaches PLAYING.
+    hasStartedRef.current = false;
+    setHasStarted(false);
+    if (retryConfirmRef.current) {
+      window.clearTimeout(retryConfirmRef.current);
+      retryConfirmRef.current = null;
+    }
   }, [currentId, playbackUrl, embedUrl, clearAutoplayBlocked]);
+  useEffect(() => () => {
+    if (retryConfirmRef.current) window.clearTimeout(retryConfirmRef.current);
+  }, []);
   // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
   // text card) — used both for the footer link and the hidescore deep-link.
   const ytId = ytMode ? currentId : null;
@@ -1340,6 +1381,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         retryingRef.current = false;
       }
     };
+    tryFallbackRef.current = () => { void tryFallback(); };
 
     // Highest → lowest. Only request qualities we know YT advertises.
     const QUALITY_PREF = ["highres", "hd2160", "hd1440", "hd1080", "hd720"];
@@ -1403,16 +1445,35 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               const t = event.target.getVideoData?.()?.title ?? "";
               if (t) setTitleSafe(!isScoreSpoiler(t));
             } catch { /* keep covered */ }
-            // Watchdog: if we never reach PLAYING or BUFFERING within
-            // 10s, assume the iframe is stuck on a silent error screen
-            // (e.g. YT Error 153 on MLB content) and try the next
-            // candidate. Bounded by failedIdsRef + the worker's exclude
-            // param, so retries terminate when no more candidates exist.
+            // Watchdog: if we never reach PLAYING or BUFFERING within 10s
+            // something is wrong — but WHAT is wrong decides the treatment,
+            // and the two causes look identical from out here:
+            //   • the browser refused muted autoplay (very common on a cold
+            //     profile / fresh account with no media engagement, and
+            //     YouTube's onAutoplayBlocked does NOT reliably fire), or
+            //   • the iframe is stuck on a silent error screen (YT Error 153).
+            // In BOTH cases the player parks in UNSTARTED (-1) / CUED (5).
+            // Burning fallback ids on the first one is how a perfectly
+            // embeddable NFL clip ended up behind "the league blocked embedded
+            // playback" (Jacob 8/9) — the retry re-searched the same strict
+            // channel, found nothing new, and painted the block card.
+            // So: park state ⇒ treat it as autoplay-blocked and show the
+            // tap-to-play prompt. Only if the user's own tap ALSO fails to
+            // start it (the 8s confirm in resumeBlockedPlayback) do we go
+            // hunting for an alternate id. A player that's missing entirely
+            // (undefined state) is genuinely broken and still falls back now.
             if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
             watchdogRef.current = window.setTimeout(() => {
               if (autoplayBlockedRef.current) return;
               const state = playerRef.current?.getPlayerState?.();
-              if (state !== 1 && state !== 3) tryFallback();
+              if (state === 1 || state === 3) return;
+              // Discriminator between the two: a healthy clip that simply was
+              // not allowed to start has still loaded its metadata, so
+              // getDuration() is non-zero. A player parked on YouTube's silent
+              // error screen never gets that far and reports 0.
+              const loaded = (playerRef.current?.getDuration?.() ?? 0) > 0;
+              if (loaded && (state === -1 || state === 5)) markAutoplayBlocked();
+              else tryFallback();
             }, 10000);
           },
           // PLAYING (1) is the first state where getAvailableQualityLevels()
@@ -1426,6 +1487,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // Playback actually started — kill the watchdog.
             if (event.data === 1 || event.data === 3) {
               clearAutoplayBlocked();
+              if (!hasStartedRef.current) {
+                hasStartedRef.current = true;
+                setHasStarted(true);
+              }
+              if (retryConfirmRef.current) {
+                window.clearTimeout(retryConfirmRef.current);
+                retryConfirmRef.current = null;
+              }
               if (watchdogRef.current) {
                 window.clearTimeout(watchdogRef.current);
                 watchdogRef.current = null;
@@ -1479,6 +1548,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       if (window.onYouTubeIframeAPIReady === initPlayer) {
         window.onYouTubeIframeAPIReady = undefined;
       }
+      tryFallbackRef.current = null;
       if (playerRef.current?.destroy) playerRef.current.destroy();
       // Drop the reference to the just-destroyed instance so the position poll
       // (which re-subscribes on ytMode, not currentId) can't call methods on it
@@ -1526,26 +1596,39 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
 
+  // Before a YouTube clip has ever played, the ONLY thing that can start it is
+  // a real click on YouTube's own play button inside the iframe (see
+  // hasStarted). So in that window we must not put a clickable target of our
+  // own over it — our button would eat the tap and hand it to playVideo(),
+  // which is a postMessage with no user activation, and nothing would happen.
+  // We render hint text only, pushed below centre and fully click-through, so
+  // YouTube's red button stays the tap target.
+  const ytTapThrough = ytMode && !hasStarted;
+
   // LIGHT, non-blocking autoplay hint (Jacob 7/16): when the browser blocks even
   // muted autoplay, show a translucent centered play button + a small pill hint —
   // NOT a full-screen dark cover that swallows the tap. The container is
   // pointer-events-none so tapping ANYWHERE on the video falls through to the
   // click-catcher and starts playback; the "playing" event then clears this
-  // (see clearAutoplayBlocked). Only the play button itself catches a click.
+  // (see clearAutoplayBlocked). Only the play button itself catches a click,
+  // and only once in-document playback is possible (HLS, or a YT clip that has
+  // already played and is merely paused).
   const autoplayPrompt = autoplayBlocked ? (
     <div
       role="alert"
-      className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 px-6 text-center"
+      className={`pointer-events-none absolute inset-0 z-40 flex flex-col items-center px-6 text-center ${ytTapThrough ? "justify-end pb-[18%]" : "justify-center gap-2"}`}
     >
-      <button
-        type="button"
-        onClick={resumeBlockedPlayback}
-        aria-label="Play"
-        className="pointer-events-auto inline-flex items-center justify-center rounded-full w-16 h-16 text-white shadow-lg transition-transform hover:scale-105 cursor-pointer"
-        style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.35)" }}
-      >
-        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20" /></svg>
-      </button>
+      {!ytTapThrough && (
+        <button
+          type="button"
+          onClick={resumeBlockedPlayback}
+          aria-label="Play"
+          className="pointer-events-auto inline-flex items-center justify-center rounded-full w-16 h-16 text-white shadow-lg transition-transform hover:scale-105 cursor-pointer"
+          style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.35)" }}
+        >
+          <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20" /></svg>
+        </button>
+      )}
       <span className="rounded-full px-3 py-1 text-[11px] font-medium text-white/90" style={{ background: "rgba(0,0,0,0.5)" }}>
         Tap to play — enable autoplay for HideScore to skip this
       </span>
@@ -1975,8 +2058,18 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   buttons (z-20) so those still work; the masks are pointer-events:
                   none and pass their clicks down to here. */}
               {/* When YouTube's native controls are on, DON'T catch clicks —
-                  let them reach the iframe so YT's own play/seek/fullscreen work. */}
-              {!youtubeNativeControls && (
+                  let them reach the iframe so YT's own play/seek/fullscreen work.
+                  ALSO don't catch them before the clip has ever played: until
+                  then YouTube's own red play button is the only control that can
+                  legally start playback (a postMessage playVideo() carries no
+                  user gesture across the origin boundary), and swallowing that
+                  first tap is what made WNBA/NFL clips sit on a dead play button
+                  forever — MLB looked fine only because it's an in-document HLS
+                  <video>, not an iframe (Jacob 8/9). The moment PLAYING lands we
+                  mount the catcher and every existing behaviour — pause on tap,
+                  double-tap seek, keyboard shortcuts staying in this document —
+                  is back. */}
+              {!youtubeNativeControls && hasStarted && (
                 <div
                   aria-hidden
                   className={`absolute inset-0 z-10 touch-manipulation ${idleCursor ? "cursor-none" : "cursor-default"}`}

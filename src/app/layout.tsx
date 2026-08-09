@@ -361,6 +361,17 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('nss-preferences');var reveal=false;if(t){var p=JSON.parse(t);reveal=p.revealNewsMedia===true}if(!reveal){document.documentElement.classList.add('blur-news-media')}}catch(e){document.documentElement.classList.add('blur-news-media')}})()`,
           }}
         />
+        {/* Text posts are SHOWN by default (Jacob 8/9) — a Reddit feed with its
+            discussion threads stripped out is mostly empty, and a first-time
+            visitor has no idea a hidden "Text posts" chip is why. The CSS rule
+            hides .news-textpost until <html> carries .show-text-posts, so this
+            has to run pre-paint or the rows pop in after hydration and shove the
+            column down. Only an explicit showTextPosts===false keeps them off. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('nss-preferences');var off=false;if(t){var p=JSON.parse(t);off=p.showTextPosts===false}if(!off){document.documentElement.classList.add('show-text-posts')}}catch(e){document.documentElement.classList.add('show-text-posts')}})()`,
+          }}
+        />
         {/* Replay the last active view tab (scores/ratings/news) before paint so
             the right tab is highlighted on refresh — without this the static HTML
             paints with Scores active and flashes to Ratings once prefs load. */}
