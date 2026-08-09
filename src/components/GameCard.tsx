@@ -52,8 +52,11 @@ interface GameCardProps {
 }
 
 function RatingBadge({ rating }: { rating: number }) {
-  let color = "bg-gray-500";
-  let label = "OK";
+  // The badge only renders for a real numeric rating (see showRating gate below),
+  // and this chain is exhaustive, so the four tiers below are the only outcomes —
+  // GREAT/GOOD/MEH/SKIP, matching the legend and the detail modal's ratingTier.
+  let color: string;
+  let label: string;
   if (rating >= 85) {
     color = "bg-green-600";
     label = "GREAT";
@@ -72,12 +75,11 @@ function RatingBadge({ rating }: { rating: number }) {
     // Screen readers otherwise announce a bare "MEH"/"SKIP" mid-card with no hint
     // it's the game's worth-watching rating. role="img" + a spoken aria-label give
     // the badge a self-describing name; the visible all-caps text is unchanged.
-    // Title case in the label ("Meh"/"Skip") stops some engines spelling the short
-    // all-caps words out letter-by-letter — except "OK", which is an initialism
-    // and stays "OK" so it isn't mangled to "Ok".
+    // Title case in the label ("Great"/"Meh"/"Skip") stops some engines spelling
+    // the short all-caps words out letter-by-letter.
     <span
       role="img"
-      aria-label={`Worth-watching rating: ${label === "OK" ? "OK" : label.charAt(0) + label.slice(1).toLowerCase()}`}
+      aria-label={`Worth-watching rating: ${label.charAt(0) + label.slice(1).toLowerCase()}`}
       className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}
     >
       {label}
