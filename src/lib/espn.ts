@@ -2544,8 +2544,11 @@ function esportsRating(g: EsportsApiGame): number | null {
   const loserGames = Math.min(a, h);
   // A Bo1 has no series shape at all — rate it mid rather than pretending.
   if (needed <= 1) return 55;
-  // 0 → sweep, needed-1 → full distance. Maps 40..95.
-  return Math.round(40 + (loserGames / (needed - 1)) * 55);
+  // 0 → sweep, needed-1 → full distance. Maps 40..95 for a well-formed tally.
+  // Clamp to 0..100 like every sibling rater (cricket/team/tennis): a malformed
+  // PandaScore row where loserGames >= needed (e.g. a "3-3" Bo5) would otherwise
+  // exceed 95 and top 100 (3/2 * 55 + 40 = 122), mis-sorting and mis-badging it.
+  return Math.round(Math.max(0, Math.min(100, 40 + (loserGames / (needed - 1)) * 55)));
 }
 
 export async function fetchEsportsGames(date?: string): Promise<Game[]> {
