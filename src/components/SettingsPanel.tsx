@@ -536,6 +536,10 @@ export default function SettingsPanel({
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
       wcBannerDismissed: undefined,
+      // Sibling of wcBannerDismissed: a full reset should bring back every
+      // season-kickoff banner too, so clear the per-kickoff dismissal list.
+      // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
+      kickoffBannersDismissed: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
       shownLeagues: undefined,
