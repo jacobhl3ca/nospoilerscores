@@ -55,6 +55,20 @@ export function toYmd(d: Date): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// YYYYMMDD → a Date at local noon on that day, the inverse of toYmd. Noon so
+// neither a DST shift nor a ±12h comparison window can push it into a
+// neighbouring day.
+//
+// This exists because `new Date("20260809T12:00:00")` is NOT a parse error you
+// find out about — it silently returns Invalid Date, and every comparison
+// against its NaN getTime() is false. That is exactly what happened to the
+// chess and boxing event tiles: on any past board date the whole column
+// evaluated to "no event" and vanished (Jacob 8/10). Only a DASHED string is
+// valid ISO, so route every YYYYMMDD → Date conversion through here.
+export function fromYmd(ymd: string): Date {
+  return new Date(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8), 12, 0, 0, 0);
+}
+
 // YYYYMMDD → the next calendar day's YYYYMMDD. UTC math so it never trips on a
 // DST transition in the local zone.
 export function nextYmd(ymd: string): string {
