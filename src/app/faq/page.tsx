@@ -135,6 +135,18 @@ export default function FaqPage() {
             // tying it to the page node is Google's recommended pattern for the
             // breadcrumb rich result.
             breadcrumb: { "@id": "https://hidescore.com/faq#breadcrumb" },
+            // Topic entities for this page, matching the `about` array every
+            // SeoLandingPage WebPage node already carries (e.g. the NBA/soccer
+            // routes) — the FAQ page node was the one content page left without
+            // it. `about` is a valid WebPage property (FAQPage is a WebPage
+            // subtype) and gives Google explicit entity signals for what this
+            // page covers, using the site's own spoiler-free vocabulary. Purely
+            // additive JSON-LD; no visual change.
+            about: [
+              "spoiler-free sports scores",
+              "sports highlights without spoilers",
+              "sports game ratings",
+            ].map((name) => ({ "@type": "Thing", name })),
             mainEntity: FAQ.map((item) => ({
               "@type": "Question",
               name: item.q,
