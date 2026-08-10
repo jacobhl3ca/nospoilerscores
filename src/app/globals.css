@@ -111,23 +111,6 @@ html.reveal-news-titles .news-title,
   user-select: auto;
   -webkit-user-select: auto;
 }
-/* Per-row RE-hide. A list headline is a two-way switch (Jacob 8/10: "I don't
-   hide/show headlines from the list, only from the modal"), so a row that was
-   revealed — by its own tap OR by the global Headlines toggle — has to be able
-   to go back to blurred on its own. .rehide must therefore out-specify BOTH
-   rules above: it repeats the selector with the extra class so it wins against
-   html.reveal-news-titles .news-title (0,2,1 vs 0,2,0), and sits after .peek so
-   the two never fight. Opening the post is a separate affordance (the media
-   tile, or the › chevron on rows without one) — that's what keeps this a pure
-   toggle without swallowing the open (the 8/9 complaint). */
-html.reveal-news-titles .news-title.rehide,
-.news-title.rehide {
-  filter: blur(7px);
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
 /* Text-post visibility is independent from headline reveal. .news-textpost
    marks one mixed-source row; .news-card-alltext collapses an all-text source
    card so hiding its rows never leaves a bare header behind. */
