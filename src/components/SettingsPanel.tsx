@@ -822,7 +822,7 @@ export default function SettingsPanel({
                     type="button"
                     className="w-full text-xs underline"
                     style={{ color: "var(--text-muted)" }}
-                    onClick={() => { setEmailStep("email"); setEmailCode(""); setEmailStatus(""); }}
+                    onClick={() => { setEmailStep("email"); setEmailCode(""); setEmailStatus(""); setEmailError(false); }}
                   >
                     Use a different email
                   </button>
