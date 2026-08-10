@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test";
 
 const CORE_SETTINGS_LEAGUES = ["MLB", "NFL", "MLS", "WNBA"];
 const CORE_SWITCHER_LEAGUES = ["MLB", "NFL Preseason", "MLS", "WNBA"];
-const OPT_IN_LEAGUES = ["Liga MX", "NWSL", "Libertadores", "F1", "NASCAR", "IndyCar", "UFC", "Boxing", "Chess", "Esports"];
+// "Esports" dropped 2026-08-09 — hidden in ALL_LEAGUES (only LEC has a trusted
+// highlight source, so most of the column could never show video).
+const OPT_IN_LEAGUES = ["Liga MX", "NWSL", "Libertadores", "F1", "NASCAR", "IndyCar", "UFC", "Boxing", "Chess"];
 
 async function openSwitcherSettings(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
