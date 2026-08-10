@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
