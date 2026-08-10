@@ -470,11 +470,18 @@ export default function EventCard({
       onPlayHighlight(boxingSource.videoId, `https://www.youtube.com/watch?v=${boxingSource.videoId}`);
       return;
     }
-    const src = await playStrictOnly(
+    // playRace, not playStrictOnly, for the same reason chess uses it: one
+    // promoter channel covers every card they run, so the strict channel gate
+    // alone cannot tell two fight nights apart. `raceTokens` carries the
+    // fighters' surnames (buildBoxingTokens) — undefined on the curated file's
+    // entries, where the hand-written full-name query already does the work, and
+    // playRace with no tokens is playStrictOnly.
+    const src = await playRace(
       "boxing-official",
       event.highlightQuery ?? `${event.title} highlights`,
       event.officialChannel,
       event.officialLabel ?? "Boxing",
+      event.raceTokens,
     );
     setBoxingSource(src);
   };
