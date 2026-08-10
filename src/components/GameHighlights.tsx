@@ -38,6 +38,14 @@ const highlightBufferHours: Record<string, number> = {
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
 const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 4 };
 
+// The highlight-button badge uppercases the sport KEY (nba → "NBA"), which reads
+// right for the leagues whose key IS the abbreviation. A couple of later
+// additions use two-word descriptive keys, so the bare uppercase jams the words
+// together ("SERIEA", "LIGAMX") on their official-highlight button. Restore the
+// space here — same all-caps badge style, just the correct wording. Any key not
+// listed keeps game.sport.toUpperCase() untouched (tennis Slams, NBA, etc.).
+const highlightBadgeLabel: Record<string, string> = { seriea: "SERIE A", ligamx: "LIGA MX" };
+
 
 // Shared highlight buttons for a finished game — the official-channel + top-
 // search YouTube clips, plus official league-site recap / condensed videos
@@ -458,7 +466,7 @@ export default function GameHighlights({
               ) : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{demoActive ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
+                  <span className="text-[10px] font-medium">{demoActive ? "Watch" : isFifa ? "2m" : (highlightBadgeLabel[game.sport] ?? game.sport.toUpperCase())}</span>
                 </>
               )}
             </button>
