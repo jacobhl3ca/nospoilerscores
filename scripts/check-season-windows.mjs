@@ -41,13 +41,30 @@ const API = "https://site.api.espn.com/apis/site/v2/sports";
 // window costs far less, and several have no ESPN fixtures published yet.
 const POPULAR = new Set(["nfl", "nba", "mlb", "nhl", "ncaaf", "ncaam", "epl", "ucl", "mls", "wnba"]);
 
-// Golf and tennis cannot be checked this way and must not be guessed at. Their
-// ESPN endpoint is the whole TOUR (/golf/pga, /tennis/atp), not the individual
-// event, so the "last game near the window" is simply the next tournament on
-// the calendar — every Slam and major reports as closing 40 days early. Their
-// windows are four-day majors and two-week Slams that move a little each year;
-// checking them needs a per-event feed we do not have.
+// Golf and tennis can't be checked the same way as a league: their ESPN endpoint
+// is the whole TOUR (/golf/pga, /tennis/atp), so "the last game near the window"
+// is just the next tournament on the calendar and every major reports as closing
+// 40 days early. That got them skipped entirely — which left the four golf majors
+// and four Slams, the windows that MOVE a few days every single year, as the only
+// leagues here with no guard at all.
+//
+// They are checkable after all: each event in the tour feed carries its own
+// `name`, `date` and `endDate`, so matching on the name gives the real span of
+// that one tournament. These are ESPN's exact names — verified against the feed,
+// not guessed, and they do not match our labels ("Masters" is "Masters
+// Tournament", the French Open is "Roland Garros"). A name that stops matching
+// reads as unverified, never as a pass.
 const TOUR_SPORTS = new Set(["golf", "tennis"]);
+const TOUR_EVENT_NAMES = {
+  "golf:Masters": "Masters Tournament",
+  "golf:PGA Champ": "PGA Championship",
+  "golf:US Open": "U.S. Open",
+  "golf:The Open": "The Open",
+  "tennis:Aus Open": "Australian Open",
+  "tennis:French Open": "Roland Garros",
+  "tennis:Wimbledon": "Wimbledon",
+  "tennis:US Open": "US Open",
+};
 
 // Slack around each edge. A window is ALLOWED to open a few days early (the
 // build-up is the point) but must never close before the last game.
@@ -165,10 +182,80 @@ const shift = (d, days) => new Date(d.getTime() + days * 86400000);
 const ymd = (d) => d.toISOString().slice(0, 10).replace(/-/g, "");
 const diffDays = (a, b) => Math.round((a - b) / 86400000);
 
+const dayOf = (iso) => new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+
+// ESPN's tour envelope is padded. The 2026 Australian Open reports endDate
+// 2026-02-02, but the per-day feed only carries it through Feb 1 — the day of
+// the final. Taking the envelope literally flagged a window that was correct as
+// closing a day early, which is the expensive kind of false positive: it trains
+// you to ignore the alert. Walk the per-day feed inward from each edge to find
+// the days the tournament is actually played.
+async function trueEdge(path, name, from, dir, maxSteps = 5) {
+  for (let i = 0; i < maxSteps; i++) {
+    const d = shift(from, i * dir);
+    const r = await fetchRange(path, ymd(d));
+    if (!r.error && (r.events ?? []).some((e) => e.name === name)) return d;
+  }
+  return null;
+}
+
+async function checkTourEvent(cfg, path, now) {
+  const name = TOUR_EVENT_NAMES[`${cfg.sport}:${cfg.label}`];
+  if (!name) return { cfg, issues: [], notes: [], skipped: true };
+
+  const wraps = cfg.startDate > cfg.endDate;
+  const windowFor = (y) => [mmddToDate(cfg.startDate, y), mmddToDate(cfg.endDate, wraps ? y + 1 : y)];
+  const issues = [];
+  const notes = [];
+
+  // Check this year's running and next year's, and judge the LATEST one ESPN
+  // has published. Next year is the one that matters — but it is only in the
+  // feed for part of the year, and this year's running still catches a window
+  // that is grossly wrong.
+  const year = now.getUTCFullYear();
+  const found = [];
+  for (const y of [year, year + 1]) {
+    const [from, to] = windowFor(y);
+    const r = await fetchRange(path, `${ymd(shift(from, -30))}-${ymd(shift(to, 30))}`);
+    if (r.error) {
+      notes.push(`${y} probe: ${r.error}`);
+      continue;
+    }
+    const ev = (r.events ?? []).find((e) => e.name === name);
+    if (ev?.date && ev?.endDate) found.push({ y, start: dayOf(ev.date), end: dayOf(ev.endDate) });
+  }
+
+  if (!found.length) {
+    notes.push(`ESPN has no "${name}" scheduled near this window yet`);
+    return { cfg, issues, notes };
+  }
+
+  const { y, start: envStart, end: envEnd } = found.at(-1);
+  const [winOpen, winClose] = windowFor(y);
+  const [start, end] = await Promise.all([
+    trueEdge(path, name, envStart, +1).then((d) => d ?? envStart),
+    trueEdge(path, name, envEnd, -1).then((d) => d ?? envEnd),
+  ]);
+  const late = diffDays(end, winClose);
+  if (late > 0) {
+    issues.push(`CLOSES ${late}d BEFORE ${name} ENDS (${y} runs ${start.toISOString().slice(0, 10)} → ${end.toISOString().slice(0, 10)}) — the final would be hidden`);
+  }
+  const early = diffDays(start, winOpen);
+  if (early > EARLY_OPEN_TOLERANCE_DAYS) {
+    issues.push(`opens ${early}d before ${name} starts (${y} starts ${start.toISOString().slice(0, 10)})`);
+  }
+  if (!issues.length && y === year) {
+    // Passing against a running that has already happened is worth having, but
+    // it is not the same as confirming the window the app will actually use next.
+    notes.push(`checked against the ${y} running; ${y + 1} not published yet`);
+  }
+  return { cfg, issues, notes };
+}
+
 async function checkLeague(cfg, paths, now) {
   const path = paths[cfg.sport];
   if (!path || !cfg.startDate || !cfg.endDate) return null;
-  if (TOUR_SPORTS.has(cfg.sport)) return { cfg, issues: [], notes: [], skipped: true };
+  if (TOUR_SPORTS.has(cfg.sport)) return checkTourEvent(cfg, path, now);
 
   const year = now.getUTCFullYear();
   const wraps = cfg.startDate > cfg.endDate;
