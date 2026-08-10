@@ -1994,7 +1994,31 @@ export default function HomeContent({
           .sticky-seam-cover in globals.css for why this exists rather than
           another round of offset arithmetic. */}
       <div className="sticky-seam-cover" aria-hidden="true" data-testid="sticky-seam-cover" />
-      <header ref={headerRef} className="px-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
+      {/* FIXED, not sticky — and the flow space it vacates is given back by
+          <div className="header-flow-spacer"> right below </header>, whose
+          height is var(--header-h): the SAME variable every sticky row below
+          pins at.
+
+          Why this matters (the "first card has no top outline" bug, reported
+          repeatedly and 'fixed' three times with padding tweaks): while the
+          header was in flow, page content started at the header's REAL height
+          but .league-sticky-top pinned at the MEASURED --header-h. Those two
+          numbers disagree by exactly the ResizeObserver's lag, and when the
+          measurement runs large, `position: sticky` shoves the league title
+          DOWN to its pin point — past its natural spot, on top of the first
+          game card — where its opaque var(--bg) at z-30 eats the card's 1px
+          top border. The seam cover hides the tell-tale gap above the title,
+          so it reads as a clipped card rather than a displaced title. Single
+          column shows it first because condense mode has only 0.5rem of top
+          padding to absorb the drift (row layout has 1.75rem).
+
+          Fixed header + a spacer sized by the same variable makes the two
+          numbers the same number: content now starts AT --header-h, so the
+          title's natural position is never above its pin point and sticky has
+          nothing to shove. The overlap is zero by construction, for any value
+          of --header-h, however stale. Guarded by tests/visual/sticky-seam.spec.ts
+          ("the first card's top edge survives a stale --header-h"). */}
+      <header ref={headerRef} className="px-4 fixed top-0 left-0 right-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
         // In the native iOS app the WKWebView reports env(safe-area-inset-top)
         // unreliably — sometimes ~0 (header collides with the status bar),
         // sometimes an inflated stale value from a rotation/resume transition
@@ -2274,6 +2298,12 @@ export default function HomeContent({
         </div>
 
       </header>
+      {/* Gives back the flow space the now-fixed header vacated — sized by
+          var(--header-h), the same variable .league-sticky-top pins at, which
+          is the whole point (see the header comment above). Its CSS fallbacks
+          match .league-sticky-top's byte for byte so the pre-measurement first
+          paint agrees too. */}
+      <div className="header-flow-spacer" aria-hidden="true" data-testid="header-flow-spacer" />
       {/* sm+ only: date nav sits BELOW the header divider line (desktop has the
           view tabs in the top-row middle, so the date nav drops here). On mobile
           it's inline in the header middle instead (above). Scores/rated only;
