@@ -351,13 +351,17 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[]): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[], weekNumber?: number | null): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
     // Motorsport race gate — the channel gate can't tell two races apart when
     // one channel uploads every round. See buildRaceTokens in lib/espn.ts.
     if (raceTokens?.length) url += `&race=${encodeURIComponent(raceTokens.join("|"))}`;
+    // Gridiron week gate — the NFL analogue of the race gate. NFL recap titles
+    // carry a week, never a date, so two meetings of the same teams in one
+    // season are identical to the date and year gates. See Game.weekNumber.
+    if (weekNumber) url += `&week=${weekNumber}`;
     const excludeIds = (exclude ?? []).filter((id): id is string => !!id);
     if (excludeIds.length) url += `&exclude=${encodeURIComponent(excludeIds.join(","))}`;
     if (preferExtended) url += `&prefer=extended`;
@@ -502,8 +506,9 @@ export async function resolveHighlightVideo(
   exclude?: (string | null | undefined)[],
   competition?: string | null,
   preferExtended?: boolean,
+  weekNumber?: number | null,
 ): Promise<string | null> {
   const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   if (!channel) return null;
-  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true);
+  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true, undefined, weekNumber);
 }
