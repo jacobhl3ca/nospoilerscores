@@ -12,7 +12,9 @@
     "highlights:check": "node scripts/check-highlight-regressions.mjs",
     "news:check": "node scripts/check-news-feed-coverage.mjs",
     "poker:check": "node scripts/check-poker-events.mjs",
-    "boxing:check": "node scripts/check-boxing-events.mjs"
+    "boxing:check": "node scripts/check-boxing-events.mjs",
+    "test:unit": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
+    "indycar:check": "node scripts/check-indycar-tracks.mjs"
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",

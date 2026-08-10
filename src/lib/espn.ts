@@ -4,6 +4,13 @@ import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } fr
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { fetchCuratedBoxingEvent } from "./boxing";
+import {
+  chessEventState,
+  boxingChannelFor,
+  buildBoxingTokens,
+  boxingHighlightQuery,
+  indycarTrackSubtitle,
+} from "./eventTiles";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -2719,12 +2726,13 @@ export async function fetchChessEvent(date?: string): Promise<EventFetchResult> 
     // opened a countdown instead of chess (Jacob 8/10). No start time (older
     // Lichess entries) is treated as started — the previous behaviour.
     const hasStarted = chosen.startsAt == null || chosen.startsAt <= Date.now();
+    const state = chessEventState(chosen.state, chosen.endsAt);
     const card: LeagueEventCard = {
       kind: "chess",
       title: name || chosen.name,
       subtitle: [chosen.location, rest.join(" · ")].filter(Boolean).join(" · ") || undefined,
-      state: chosen.state,
-      statusDetail: chosen.state === "in" ? "Live" : chosen.state === "post" ? "Final" : "Upcoming",
+      state,
+      statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : "Upcoming",
       date: new Date(chosen.startsAt ?? Date.now()).toISOString(),
       broadcasts: [],
       chessRound: chosen.round || undefined,
@@ -2883,8 +2891,21 @@ export async function fetchBoxingEvent(date?: string): Promise<EventFetchResult>
   try {
     const target = date ? fromYmd(date).getTime() : Date.now();
     const ts = (e: BoxingApiEvent) => new Date(e.date).getTime();
+    // The API behind /api/boxing is boxing-data.com's `/v2/events/schedule` —
+    // UPCOMING cards only, never a finished one. So the nearest-by-|date diff|
+    // sort below always had a FUTURE fight within reach and every past tab
+    // rendered a card that hadn't happened yet, in state "pre", with no replay.
+    // Same rule fetchLeagueEvent walks back for and fetchChessEvent applies to
+    // Lichess: on a past board date an event is only eligible if it had already
+    // taken place by then. Nothing left ⇒ fall through to the curated file,
+    // which is the only source here that carries finished cards at all.
+    const isPastDate = !!date && date < toYmd(getEtServiceDate());
+    const pool = isPastDate
+      ? events.filter((event) => ts(event) <= target + 24 * 60 * 60 * 1000)
+      : events;
+    if (!pool.length) return nothing();
     const exactDate = date
-      ? events.filter((event) => event.date.slice(0, 10).replace(/-/g, "") === date)
+      ? pool.filter((event) => event.date.slice(0, 10).replace(/-/g, "") === date)
       : [];
     // Prefer a card the user can actually WATCH. Nearest-by-date alone picks
     // badly here: the feed carries every sanctioned card worldwide, so on
@@ -2894,7 +2915,7 @@ export async function fetchBoxingEvent(date?: string): Promise<EventFetchResult>
     // the boxing analogue of the chess `tier` filter, which the API gives us
     // for free but boxing-data.com does not.
     const watchable = (e: BoxingApiEvent) => (e.broadcasts?.length ? 0 : 1);
-    const chosen = [...(exactDate.length ? exactDate : events)].sort(
+    const chosen = [...(exactDate.length ? exactDate : pool)].sort(
       (a, b) =>
         watchable(a) - watchable(b) ||
         Math.abs(ts(a) - target) - Math.abs(ts(b) - target),
@@ -2907,6 +2928,19 @@ export async function fetchBoxingEvent(date?: string): Promise<EventFetchResult>
     // derive it from the clock rather than claiming a status we cannot know.
     const state: "pre" | "in" | "post" =
       now < t ? "pre" : now < t + 4 * 60 * 60 * 1000 ? "in" : "post";
+    // Until now the ONLY boxing card that could ever show a highlight button was
+    // one hand-written into public/boxing-events.json — `officialChannel` is what
+    // gates the button (showBoxingBtn in EventCard) and the API branch never set
+    // it. That file holds a single entry, from Aug 1, so in practice a finished
+    // API card rendered with a permanently blank highlight row: no replay, and
+    // the oversized tile that blank row leaves behind (see the Liga MX note in
+    // the deploy memo — a dead channel reads as "the box is huge", not as a
+    // missing button). Derive the promoter's channel from the broadcasters
+    // instead; curation still wins when the file covers the date, because a
+    // hand-written query with both fighters' FULL names resolves better than
+    // surnames.
+    const promoter = boxingChannelFor(chosen.broadcasts);
+    const names = buildBoxingTokens(chosen.title);
     return {
       card: {
         kind: "boxing",
@@ -2917,6 +2951,10 @@ export async function fetchBoxingEvent(date?: string): Promise<EventFetchResult>
         date: new Date(t).toISOString(),
         broadcasts: chosen.broadcasts ?? [],
         posterUrl: chosen.poster ?? undefined,
+        officialChannel: promoter?.channel,
+        officialLabel: promoter?.label,
+        highlightQuery: boxingHighlightQuery(chosen.title),
+        raceTokens: names,
       },
       failed: false,
     };
@@ -3004,13 +3042,18 @@ async function fetchLeagueEvent(
     const race = comps.find((c) => String(c?.type?.id) === "3") ?? comps[comps.length - 1] ?? null;
     const state = (race?.status?.type?.state ?? event.status?.type?.state ?? "pre") as "pre" | "in" | "post";
     // Location: F1 carries a `circuit`; the US series don't. NASCAR puts the
-    // track on competition.venue instead, and IndyCar supplies neither — it
-    // just renders without a subtitle rather than with a wrong one.
+    // track on competition.venue instead, and IndyCar supplies neither — see
+    // INDYCAR_TRACKS, which fills that in from the series' own schedule.
+    const mappedTrack = sport === "indycar"
+      ? indycarTrackSubtitle(event.name || event.shortName || "")
+      : undefined;
     let subtitle: string | undefined;
     if (sport === "f1") {
       const circuit: LeagueEventCircuit = event.circuit ?? {};
       const loc = [circuit.address?.city, circuit.address?.country].filter(Boolean).join(", ");
       subtitle = [circuit.fullName, loc].filter(Boolean).join(" · ") || undefined;
+    } else if (mappedTrack) {
+      subtitle = mappedTrack;
     } else {
       const venue: LeagueEventVenue = race?.venue ?? event.venue ?? {};
       // ESPN pads some track cities with a trailing space ("Newton ").
