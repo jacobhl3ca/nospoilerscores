@@ -187,9 +187,9 @@ check(
 );
 check(
   "runtime monitor covers every shipped highlight family",
-  ["scanRacingAndUfc", "scanCuratedEvents", "scanEsports", "scanGolf", "scanTennis"]
+  ["scanRacingAndUfc", "scanCuratedEvents", "scanChess", "scanEsports", "scanGolf", "scanTennis"]
     .every((name) => monitor.includes(`await ${name}()`)) &&
-    monitor.includes("team games, tennis, golf, racing, UFC, poker, boxing, esports"),
+    monitor.includes("team games, tennis, golf, racing, UFC, poker, boxing, chess, esports"),
 );
 
 const gameHighlights = readFileSync("src/components/GameHighlights.tsx", "utf8");
