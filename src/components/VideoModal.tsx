@@ -189,6 +189,21 @@ function raceFallbackParam(fallbackUrl: string): string {
   }
 }
 
+// Gridiron week gate carried the same way (`nss_week=` — see GameHighlights).
+// Identical failure mode to the race gate one league over: the NFL channel
+// uploads every week of the season, and its recap titles carry a week rather
+// than a date, so an ungated retry after an embed block can serve the SAME two
+// teams' OTHER meeting from the very same (correct) channel — which neither the
+// channel gate nor the worker's date/year gates can catch.
+function weekFallbackParam(fallbackUrl: string): string {
+  try {
+    const week = new URL(fallbackUrl).searchParams.get("nss_week");
+    return week && /^\d{1,2}$/.test(week) ? `&week=${week}` : "";
+  } catch {
+    return "";
+  }
+}
+
 // Minimal Reddit selftext renderer. Reddit selftext is markdown but we only
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
@@ -1374,6 +1389,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // the "Watch on YouTube" card rather than playing an unvetted upload.
       const strictChannels = strictFallbackChannels(fallbackUrl);
       const raceParam = raceFallbackParam(fallbackUrl);
+      const weekParam = weekFallbackParam(fallbackUrl);
       // Fail closed if a highlight caller ever forgets to carry its channel
       // contract. The old unscoped branch was how NFL (and every other league)
       // could resolve correctly, hit an embed error, then silently swap to a
@@ -1391,7 +1407,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // EventCard's UFC chain is sequential).
         for (const channel of strictChannels) {
           const res = await fetch(
-            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}`
+            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}`
           );
           const data = res.ok ? await res.json() : null;
           if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
