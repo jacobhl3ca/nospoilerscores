@@ -5,6 +5,7 @@ import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
 import { getTimeZone } from "@/lib/etDay";
 import { openExternal } from "@/lib/openExternal";
+import HighlightRowPlaceholder from "@/components/HighlightRowPlaceholder";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
 // bout). Never shows results (finishing order / fight outcome). Highlights
@@ -346,6 +347,10 @@ function FightCard({
           <PlayBtn label={source?.label ?? "UFC"} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
         </div>
       )}
+      {/* Bout resolved to nothing — keep the row's height so a card with no
+          clip doesn't sit short beside the bouts on the same fight card that
+          did resolve. Same rule as the single-event tile below. */}
+      {isPost && source === null && <HighlightRowPlaceholder />}
     </div>
   );
 }
@@ -650,6 +655,13 @@ export default function EventCard({
   // PlayBtn stopPropagations so highlights don't also fire this.
   const clickable = !!event.eventUrl && !isPost;
   const openDetails = () => { if (event.eventUrl) openExternal(event.eventUrl); };
+  // Which (if any) highlight button this finished tile ends up showing. Hoisted
+  // out of the JSX so the placeholder below can ask "did none of them render?"
+  // without restating all three conditions — the version that restated them is
+  // exactly how a fourth kind of tile would end up double-spaced.
+  const showRaceBtn = isPost && isRace && !!event.officialChannel && raceSource !== null;
+  const showPokerBtn = isPost && event.kind === "poker" && !!event.officialChannel && pokerSource !== null;
+  const showBoxingBtn = isPost && event.kind === "boxing" && !!event.officialChannel && boxingSource !== null;
 
   return (
     <div ref={rootRef} className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
@@ -689,12 +701,16 @@ export default function EventCard({
           <span aria-hidden className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
           <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={event.title}>{event.title}</span>
         </div>
-        {event.subtitle && (
-          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
-            <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
-            <span className="text-[10px] sm:text-xs leading-none truncate min-w-0" style={{ color: "var(--text-muted)" }} title={event.subtitle}>{event.subtitle}</span>
-          </div>
-        )}
+        {/* Second row ALWAYS renders, even with no subtitle. This is the tile's
+            stand-in for a game card's second team row, so dropping it when the
+            feed carries no venue made the tile 24px shorter than every card
+            around it — IndyCar (no subtitle in ESPN's payload) sat visibly
+            short next to NASCAR and MLB (Jacob 8/9). Empty and aria-hidden when
+            there's nothing to say, so screen readers hear a one-line tile. */}
+        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6" aria-hidden={event.subtitle ? undefined : true}>
+          <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
+          <span className="text-[10px] sm:text-xs leading-none truncate min-w-0" style={{ color: "var(--text-muted)" }} title={event.subtitle || undefined}>{event.subtitle || " "}</span>
+        </div>
       </div>
       {/* One official-channel button, like UFC's. A strict miss hides it; no
           racing path opens a generic YouTube results page. */}
@@ -707,7 +723,7 @@ export default function EventCard({
           highlight reel at all — its "highlight" is the live board, which the
           tile already links to. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts for
           the same call on cricket. */}
-      {isPost && isRace && event.officialChannel && raceSource !== null && (
+      {showRaceBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
               renders NASCAR and IndyCar, which would otherwise both offer an
@@ -718,7 +734,7 @@ export default function EventCard({
       {/* Poker replays are stricter than racing: exact tour channel or no
           button. A failed lookup never opens YouTube search because result
           titles commonly contain the champion. */}
-      {isPost && event.kind === "poker" && event.officialChannel && pokerSource !== null && (
+      {showPokerBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           <PlayBtn
             label={pokerSource?.label ?? event.officialLabel ?? "Poker"}
@@ -730,7 +746,7 @@ export default function EventCard({
       {/* Boxing has no league-wide uploader. Curated major records supply the
           exact promoter/rightsholder channel; a miss hides this button and
           never opens a spoiler-heavy search page. */}
-      {isPost && event.kind === "boxing" && event.officialChannel && boxingSource !== null && (
+      {showBoxingBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           <PlayBtn
             label={boxingSource?.label ?? event.officialLabel ?? "Boxing"}
@@ -739,6 +755,11 @@ export default function EventCard({
           />
         </div>
       )}
+      {/* No button on a FINISHED tile — chess (which has no highlight reel at
+          all), or a race/poker/boxing event whose strict lookup came up empty.
+          Reserve the row anyway so the tile stays the same height as the ones
+          that did resolve, and as the game cards in the next column over. */}
+      {isPost && !showRaceBtn && !showPokerBtn && !showBoxingBtn && <HighlightRowPlaceholder />}
     </div>
   );
 }
