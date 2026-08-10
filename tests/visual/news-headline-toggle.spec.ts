@@ -7,8 +7,11 @@ import { expect, test } from "@playwright/test";
 //      A visibility assertion alone would NOT have caught this: the element was
 //      laid out, sized, and "visible" to the DOM — it was painted over. So the
 //      check here is a hit-test, which is the only thing that fails on z-order.
-//   2. The list headline could only ever reveal, never re-blur, so the modal was
-//      the sole place to hide a spoiler again.
+//   2. The list headline had been rebound to a show/hide spoiler toggle, which
+//      swallowed the open: clicking a headline on the news homepage un-blurred
+//      it instead of opening the article/video. Jacob's rule (8/10) is that
+//      show/hide-in-place belongs to the MODAL only — in the list, a headline
+//      click opens the post like any other link.
 
 const BASE_PREFS = {
   favoriteLeagues: [],
@@ -62,7 +65,9 @@ test("news toolbar pills are on top of the sticky seam cover, not under it", asy
   expect(afterScroll).toBe(true);
 });
 
-const HEADLINE = 'button[aria-label="Show or hide this headline (spoiler)"]';
+// The thumbnail, the headline, and the › chevron all say "Open post" now, so
+// pin to the one that actually wraps the headline text.
+const HEADLINE = 'button[aria-label="Open post"]:has(.news-title)';
 
 // Each source card fetches on its own, so the column keeps growing for a second
 // or two and a bare `.first()` silently re-points at whatever row landed on top
@@ -86,17 +91,14 @@ async function pinnedHeadline(page: import("@playwright/test").Page) {
 }
 
 // Assert the COMPUTED filter, not just the class, so a CSS specificity mistake
-// in .rehide/.peek can't pass silently. Poll rather than read once: .news-title
-// animates filter over 150ms, so a bare read lands mid-transition on
-// "blur(6.7px)", which is neither "none" nor a settled blur.
+// in .peek can't pass silently. Poll rather than read once: .news-title animates
+// filter over 150ms, so a bare read lands mid-transition on "blur(6.7px)", which
+// is neither "none" nor a settled blur.
 const expectBlurred = (title: import("@playwright/test").Locator) =>
   expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter), { timeout: 3_000 })
     .toMatch(/blur\(([6-9]|\d\d)/);
-const expectClear = (title: import("@playwright/test").Locator) =>
-  expect.poll(() => title.evaluate((el) => getComputedStyle(el).filter), { timeout: 3_000 })
-    .toBe("none");
 
-test("a list headline shows AND hides on click, without opening the post", async ({ page }) => {
+test("a list headline click opens the post — it never un-blurs in place", async ({ page }) => {
   await gotoNews(page);
 
   const headline = await pinnedHeadline(page);
@@ -105,25 +107,16 @@ test("a list headline shows AND hides on click, without opening the post", async
   await expectBlurred(title);
 
   await headline.click();
-  await expectClear(title);
-
-  // The whole point of the fix: a second click hides it again rather than
-  // opening the modal.
-  await headline.click();
-  await expectBlurred(title);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(1);
 });
 
-test("a row headline can be re-hidden even while the global Headlines toggle is on", async ({ page }) => {
+test("a globally revealed headline still opens on click rather than re-blurring", async ({ page }) => {
   await gotoNews(page, { revealNewsTitles: true });
 
   const headline = await pinnedHeadline(page);
-  const title = headline.locator(".news-title");
 
-  // Globally revealed, so the first click must BLUR (not no-op into "reveal" a
-  // thing that is already revealed) — that's why row state is tri-state and the
-  // click folds in the html.reveal-news-titles class.
-  await expectClear(title);
+  // The regression this guards: reading html.reveal-news-titles at click time
+  // and flipping the row back to blurred instead of opening it.
   await headline.click();
-  await expectBlurred(title);
+  await expect(page.getByRole("dialog")).toHaveCount(1);
 });
