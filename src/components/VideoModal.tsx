@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds } from "@/lib/youtube";
-import { openExternal } from "@/lib/openExternal";
+import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
