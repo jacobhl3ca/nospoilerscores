@@ -52,12 +52,16 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // → club/aggregator uploads, NWSL → single-club channels, EFL → "Wrexham
   // AFC", Saudi PL → "Santos El Creador", Libertadores → nothing at all.
   //
-  // Liga MX: TUDN is the Univision rightsholder. The MX feed posts the
-  // per-match "RESUMEN Y GOLES I A vs B | Liga MX - Jornada N" recap and is
-  // what the search consistently ranks; the sibling "TUDN USA" posts an
-  // English "HIGHLIGHTS -" cut but ranks inconsistently, so it is NOT used —
-  // a second channel here would only widen the strict gate, not deepen it.
-  ligamx: "TUDN México",
+  // Liga MX: TUDN is the Univision rightsholder, and the channel that actually
+  // carries the per-match recap is "TUDN USA" — it posts
+  // "HIGHLIGHTS - A vs B | Liga MX - Jornada N Apertura YYYY | TUDN".
+  // ⚠️ This was "TUDN México" through 2026-08-09 and resolved NOTHING: a strict
+  // (and even a non-strict) channel-scoped lookup returned "No results" for
+  // every Liga MX fixture tried, so the column rendered a finished card with an
+  // empty reserved highlight row (Jacob 8/10 — "box size is huge and don't see
+  // highlights"). Re-verified 2026-08-10 against the live worker with strict=1:
+  // TUDN USA 3/3, TUDN México 0/3, bare "TUDN" 0/3.
+  ligamx: "TUDN USA",
   // NWSL: the league channel's author_name is the FULL name, not the
   // abbreviation — "NWSL" never matched. Club channels (Seattle Reign FC,
   // San Diego Wave FC) also post per-match highlights and were winning the
@@ -217,6 +221,31 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   f1: ["FORMULA 1", "ESPN", "Sky Sports F1"],
   ufc: ["UFC", "ESPN"],
 };
+
+// Official channels that disable embedded playback on EVERY upload, so the
+// in-app player can only ever render YouTube's own "Video unavailable" screen.
+// Verified 2026-08-10 in a real browser from the hidescore.com origin via the
+// IFrame API: FORMULA 1's 2026 Hungarian and 2026 British race-highlight
+// uploads both fire onError with code 150 ("embedding disabled by request of
+// the owner"). Not a geo/bot artifact — the same videos play fine on
+// youtube.com.
+//
+// Being on this list means the modal skips the player entirely and opens on the
+// "Watch on YouTube" card instead of black-screening for several seconds first
+// (player init → error 150 → a walk down SECONDARY_CHANNELS that, for F1,
+// cannot succeed: ESPN and Sky Sports F1 both return "No results" for a race
+// highlight — checked the same day against the live /api/youtube worker).
+//
+// Deleting a name here restores the normal try-then-fall-back path, which is
+// all it takes if a rights holder ever turns embedding back on.
+const EMBED_BLOCKED_CHANNELS = new Set(["FORMULA 1"]);
+
+// True when the FIRST channel a highlight is gated to refuses embeds. The lead
+// channel is the only one guaranteed to hold the clip (the rest of the chain is
+// opportunistic), so a blocked lead means the attempt is already lost.
+export function leadChannelBlocksEmbeds(channels: string[]): boolean {
+  return channels.length > 0 && EMBED_BLOCKED_CHANNELS.has(channels[0]);
+}
 
 export function getYouTubeSearchUrl(
   awayTeam: string,
