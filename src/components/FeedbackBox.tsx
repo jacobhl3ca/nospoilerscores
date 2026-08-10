@@ -24,6 +24,8 @@ export default function FeedbackBox() {
   // is dismissed (see the focus-return effect below).
   const triggerRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
+  // The dialog <form>, so Tab can be trapped inside it (see the trap effect).
+  const formRef = useRef<HTMLFormElement>(null);
 
   const trimmedEmail = email.trim();
   // Only warn once it looks like the user has finished typing something that
@@ -49,6 +51,42 @@ export default function FeedbackBox() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  // Trap Tab within the open dialog (WCAG 2.4.3) — the same pattern
+  // GameDetailModal / WorldCupGroupsModal use. aria-modal="true" only marks the
+  // page behind inert for ASSISTIVE TECH; it does NOT stop a sighted keyboard
+  // user from Tabbing out of the overlay into the footer/board behind it. Wrap
+  // focus at the first/last focusable control so Tab / Shift+Tab cycle inside
+  // the form. autoFocus on the message field still handles focus-IN and the
+  // existing effect below handles focus-return; this only contains the cycle
+  // while open. Focusables are queried live per keypress so the send button's
+  // disabled state (empty message) is honored via :not([disabled]), and
+  // offsetParent-filtered so focus never lands on a hidden control.
+  useEffect(() => {
+    if (!open) return;
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const form = formRef.current;
+      if (!form) return;
+      const focusable = Array.from(
+        form.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === form) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onTab);
+    return () => document.removeEventListener("keydown", onTab);
   }, [open]);
 
   // Return focus to the trigger when the modal is DISMISSED (Escape, backdrop,
@@ -155,6 +193,7 @@ export default function FeedbackBox() {
           >
           <form
             id="hs-feedback-form"
+            ref={formRef}
             onSubmit={submit}
             role="dialog"
             aria-modal="true"
