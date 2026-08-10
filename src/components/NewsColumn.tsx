@@ -468,7 +468,14 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // row was one big open-the-post button, so there was no way to peek at a
   // single blurred headline without either opening the post or un-blurring the
   // entire board with the Headlines chip.
-  const [peek, setPeek] = useState(false);
+  //
+  // Tri-state, NOT a boolean: null = follow the global Headlines toggle, true =
+  // this row is forced open, false = this row is forced back to blurred. The
+  // boolean version could only ever reveal, so the headline was a one-way
+  // switch and the ONLY place a spoiler could be re-hidden was the modal
+  // (Jacob 8/10). Deriving the class from this state alone — never from a live
+  // read of <html> — also keeps the server and first client render identical.
+  const [reveal, setReveal] = useState<boolean | null>(null);
   // sm:min-h-[7rem] forces a uniform row height across every text source card
   // — Reddit, MLB.com, NBA.com, ESPN-league. With identical row heights AND
   // identical item counts (each prebake caps at 12), card N ends at the same
@@ -490,7 +497,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // until the global reveal toggle un-blurs it or the row is tapped open.
   const isTextPost = itemIsTextPost(item);
   const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]${isTextPost ? " news-textpost" : ""}`;
-  const titleCls = `news-title min-w-0 line-clamp-5${peek ? " peek" : ""}`;
+  const titleCls = `news-title min-w-0 line-clamp-5${reveal === true ? " peek" : reveal === false ? " rehide" : ""}`;
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Every news item opens the same modal; its source link remains available
   // inside, and modifier-click still opens that source directly in a new tab.
@@ -581,33 +588,30 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // renders an 18px mark, which is decoration, not a button — rows that fall
   // back to it get the chevron instead.
   const thumbIsTile = showThumb || hasInlineMedia;
-  // Clicking a blurred headline should reveal it, not navigate — but once it IS
-  // revealed there is nothing left to reveal, so the NEXT click opens the post
-  // (which is what the whole row used to do). ONE rule: "blurred: click shows
-  // it; shown: click opens it." The global Headlines chip wins over the per-row
-  // peek, so read it live from <html> rather than threading a prop down: with
-  // everything already un-blurred, headline clicks go straight to opening.
-  // Re-hiding one row is deliberately NOT bound to this click — a second click
-  // used to toggle it back and swallowed the open (Jacob 8/9); the Headlines
-  // chip is the way back to blurred.
-  const headlineRevealed = () =>
-    peek ||
-    (typeof document !== "undefined" && document.documentElement.classList.contains("reveal-news-titles"));
-  const headlineClick = (open: () => void) => (e: ReactMouseEvent) => {
-    if (headlineRevealed()) {
-      open();
-      return;
-    }
+  // ONE rule now: the headline is a spoiler switch, nothing else. Click blurred
+  // → shows it; click shown → blurs it again. Opening the post is never bound
+  // to this element, so the toggle can't swallow an open (the 8/9 regression) —
+  // every row already carries a dedicated open target: the media tile when
+  // there is one, the › chevron when there isn't.
+  //
+  // Effective state has to fold in the global Headlines chip, which is a class
+  // on <html> rather than a prop, so read it at click time: an untouched row
+  // (reveal === null) sitting under a global reveal is *shown*, and one click
+  // must therefore blur it — not "reveal" it a second time into a no-op.
+  const globallyRevealed = () =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("reveal-news-titles");
+  const headlineClick = (e: ReactMouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setPeek(true);
+    setReveal((prev) => !(prev ?? globallyRevealed()));
   };
-  // A revealed headline is a plain "open the post" target again — it is no
-  // longer a toggle, so drop aria-pressed along with the visual change (Jacob
-  // 8/9: the second click was re-hiding instead of opening the modal).
-  const headlineA11y = peek
-    ? { "aria-label": "Open post" }
-    : { "aria-label": "Reveal headline (spoiler)" };
+  // It's a two-way toggle again, so aria-pressed is meaningful. Only the forced
+  // states can be voiced without reading <html> during render (which would
+  // desync SSR); an untouched row describes the gesture instead of the state.
+  const headlineA11y =
+    reveal === null
+      ? { "aria-label": "Show or hide this headline (spoiler)" }
+      : { "aria-label": "Show or hide this headline (spoiler)", "aria-pressed": reveal };
   if (shouldPopModal) {
     const open = () => onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
     return (
@@ -650,14 +654,14 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         ) : thumb}
         <button
           type="button"
-          onClick={headlineClick(open)}
+          onClick={headlineClick}
           onAuxClick={(e) => {
             if (e.button === 1 && item.articleUrl) {
               window.open(item.articleUrl, "_blank", "noopener,noreferrer");
             }
           }}
           className="min-w-0 flex-1 text-left cursor-pointer"
-          title={peek ? "Open post" : "Tap to reveal this headline"}
+          title="Tap to show or hide this headline"
           {...headlineA11y}
         >
           <span className={titleCls}>{item.headline}</span>
@@ -696,25 +700,20 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
           {thumb}
         </a>
       ) : thumb}
-      <a
-        href={item.articleUrl || undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(e) => {
-          // Same one rule as the modal row above: blurred → reveal, already
-          // shown → follow the link.
-          if (headlineRevealed()) {
-            handleExternalClick(item.articleUrl)(e);
-            return;
-          }
-          e.preventDefault();
-          setPeek(true);
-        }}
-        className="min-w-0 flex-1"
-        title={peek ? "Open post" : "Tap to reveal this headline"}
+      <button
+        type="button"
+        // Same one rule as the modal row above: the headline only shows/hides.
+        // It used to be an <a> that followed the link once revealed — but with
+        // the toggle now two-way there is no click left to navigate on, and a
+        // link that never navigates is a lie to the keyboard and to middle-
+        // click. The thumbnail/chevron beside it are the real <a>s.
+        onClick={headlineClick}
+        className="min-w-0 flex-1 text-left cursor-pointer"
+        title="Tap to show or hide this headline"
+        {...headlineA11y}
       >
         <span className={titleCls}>{item.headline}</span>
-      </a>
+      </button>
       {!thumbIsTile && (
         <a
           href={item.articleUrl || undefined}
