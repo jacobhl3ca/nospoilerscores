@@ -50,7 +50,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Which sports and leagues does HideScore cover?",
-    a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, chess, esports, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, and major international tournaments.",
+    a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, chess, poker, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, and major international tournaments.",
   },
   {
     q: "Why don't I see a league on the main screen?",

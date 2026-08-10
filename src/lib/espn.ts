@@ -305,7 +305,20 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Esports (PandaScore). Year-round, opt-in. Worlds and the LCK/LPL play in
   // Asian timezones, so the Western audience watches almost entirely on VOD —
   // the purest spoiler case in the app after cricket.
-  { sport: "esports", label: "Esports", excludeFromAuto: true },
+  //
+  // HIDDEN 2026-08-09 (Jacob). One "Esports" pill spans six unrelated circuits
+  // (VCT / LPL / LCK / LEC / CBLOL / LCS) and only ONE of them — LEC — has a
+  // verified official uploader, so ~87% of the column's cards can never show a
+  // highlight button at all (see OFFICIAL_CHANNELS + hasNoTrustedHighlightSource
+  // in lib/youtube.ts: LCK leaks the series length through its per-GAME VOD
+  // list, LPL and @lolesports post nothing usable, and esports is barred from
+  // the unscoped search fallback because fan re-upload titles spoil the result).
+  // A column that is mostly score-only cards under a label most users can't
+  // decode is worse than no column. Everything below stays live and inert — the
+  // PandaScore fetcher, /api/esports, the rating, the LEC channel entry — so
+  // deleting this one flag brings it back if LCK/LPL ever ship a per-series cut.
+  // Already-pinned slots are untouched: resolveSlot() does not check `hidden`.
+  { sport: "esports", label: "Esports", excludeFromAuto: true, hidden: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
