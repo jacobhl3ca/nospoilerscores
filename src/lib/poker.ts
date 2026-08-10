@@ -1,5 +1,10 @@
-import { LeagueEventCard } from "./types";
+import { EventFetchResult, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
+
+// See EventFetchResult: the curated file being unreachable is not the same
+// thing as it having no major on this date.
+const EMPTY: EventFetchResult = { card: null, failed: false };
+const FAILED: EventFetchResult = { card: null, failed: true };
 
 type PokerTour = "WSOP" | "WPT" | "EPT" | "Triton";
 
@@ -119,12 +124,13 @@ export function selectPokerEvent(
   return ordered.find(Boolean) ?? null;
 }
 
-export async function fetchPokerEvent(date?: string): Promise<LeagueEventCard | null> {
+export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> {
   try {
     const res = await fetch(`${getApiBase()}/poker-events.json`, { cache: "no-store" });
-    if (!res.ok) return null;
+    if (!res.ok) return FAILED;
     const data = (await res.json()) as PokerEventsFile;
-    if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return null;
+    // A schema we don't recognise is a broken deploy, not an empty calendar.
+    if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return FAILED;
     const todayYmd = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
     }).format(new Date());
@@ -132,14 +138,15 @@ export async function fetchPokerEvent(date?: string): Promise<LeagueEventCard | 
       ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
       : todayYmd;
     const chosen = selectPokerEvent(data.events, targetYmd, targetYmd < todayYmd);
-    if (!chosen) return null;
+    // The file loaded and simply has no major in range — an empty stretch.
+    if (!chosen) return EMPTY;
 
     const now = Date.now();
     const starts = chosen.startTime ? new Date(chosen.startTime).getTime() : dateMs(chosen.startDate) - DAY_MS / 2;
     const ends = chosen.endTime ? new Date(chosen.endTime).getTime() : dateMs(chosen.endDate) + DAY_MS / 2;
     const state: "pre" | "in" | "post" = now < starts ? "pre" : now <= ends ? "in" : "post";
     const exactBroadcast = !!chosen.startTime;
-    return {
+    const card: LeagueEventCard = {
       kind: "poker",
       title: `${chosen.tour} ${chosen.title}`.replace(new RegExp(`^${chosen.tour} ${chosen.tour}\\b`), chosen.tour),
       subtitle: [chosen.location, displayWindow(chosen.startDate, chosen.endDate)].filter(Boolean).join(" · "),
@@ -153,7 +160,8 @@ export async function fetchPokerEvent(date?: string): Promise<LeagueEventCard | 
       eventUrl: chosen.eventUrl,
       scheduleLabel: exactBroadcast ? undefined : displayWindow(chosen.startDate, chosen.endDate),
     };
+    return { card, failed: false };
   } catch {
-    return null;
+    return FAILED;
   }
 }

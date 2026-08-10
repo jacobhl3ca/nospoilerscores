@@ -1,4 +1,4 @@
-import { LeagueEventCard } from "./types";
+import { EventFetchResult, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
 
 interface CuratedBoxingEvent {
@@ -46,20 +46,12 @@ function displayDate(ymd: string): string {
   });
 }
 
-// A source can come back three ways, and two of them are NOT the same thing:
-// a card, an honestly empty calendar, or a broken feed. Collapsing the last two
-// into `null` made a dead API look identical to a quiet Tuesday (Jacob 8/10).
-// `failed` is set ONLY when a source errored — non-OK, unparseable, or a
-// payload that doesn't match the schema we curate.
-export interface BoxingEventResult {
-  card: LeagueEventCard | null;
-  failed: boolean;
-}
+// See EventFetchResult for why a broken feed and an empty calendar are kept
+// apart rather than both collapsing to null.
+const EMPTY: EventFetchResult = { card: null, failed: false };
+const FAILED: EventFetchResult = { card: null, failed: true };
 
-const EMPTY: BoxingEventResult = { card: null, failed: false };
-const FAILED: BoxingEventResult = { card: null, failed: true };
-
-export async function fetchCuratedBoxingEvent(date?: string): Promise<BoxingEventResult> {
+export async function fetchCuratedBoxingEvent(date?: string): Promise<EventFetchResult> {
   try {
     const res = await fetch(`${getApiBase()}/boxing-events.json`, { cache: "no-store" });
     if (!res.ok) return FAILED;

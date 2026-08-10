@@ -1,11 +1,15 @@
-import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, FightBout } from "./types";
+import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout } from "./types";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
-import { fetchCuratedBoxingEvent, type BoxingEventResult } from "./boxing";
+import { fetchCuratedBoxingEvent } from "./boxing";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
+
+// See EventFetchResult — a feed that broke is not a day with nothing on it.
+const EVENT_FETCH_EMPTY: EventFetchResult = { card: null, failed: false };
+const EVENT_FETCH_FAILED: EventFetchResult = { card: null, failed: true };
 
 const SPORT_PATHS: Record<Sport, string> = {
   // Chess + boxing have NO ESPN path — they are served by worker routes
@@ -2712,12 +2716,15 @@ export function buildChessTokens(name: string): string[] {
 // Pick the event to show for `date`: prefer one actually running, then the next
 // one due, then the most recent finished. Mirrors how the F1/UFC tile behaves
 // on a day with no session — an empty column is worse than a nearby event.
-export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | null> {
+export async function fetchChessEvent(date?: string): Promise<EventFetchResult> {
   try {
     const res = await fetchWithRetry(`${getApiBase()}/api/chess`);
-    if (!res.ok) return null;
+    if (!res.ok) return EVENT_FETCH_FAILED;
     const { events } = (await res.json()) as { events: ChessApiEvent[] };
-    if (!events?.length) return null;
+    // Lichess answering with an empty list is a real (if rare) quiet day, not a
+    // failure — see EventFetchResult.
+    if (!Array.isArray(events)) return EVENT_FETCH_FAILED;
+    if (!events.length) return EVENT_FETCH_EMPTY;
     const target = date ? fromYmd(date).getTime() : Date.now();
     const onDate = (e: ChessApiEvent) =>
       e.startsAt != null && Math.abs(e.startsAt - target) < 24 * 60 * 60 * 1000;
@@ -2740,7 +2747,7 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
         events.filter((e) => e.state === "in").sort(byTier)[0] ??
         events.filter((e) => e.state === "pre").sort((a, b) => (a.startsAt ?? 0) - (b.startsAt ?? 0))[0] ??
         events.filter((e) => e.state === "post").sort(newestFirst)[0];
-    if (!chosen) return null;
+    if (!chosen) return EVENT_FETCH_EMPTY;
     // Lichess names read "GCT: Saint Louis Rapid & Blitz 2026 | Rapid" — the
     // segment after "|" duplicates what chessFormat/timeControl already say.
     const [name, ...rest] = chosen.name.split("|").map((s) => s.trim());
@@ -2752,7 +2759,7 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
     // opened a countdown instead of chess (Jacob 8/10). No start time (older
     // Lichess entries) is treated as started — the previous behaviour.
     const hasStarted = chosen.startsAt == null || chosen.startsAt <= Date.now();
-    return {
+    const card: LeagueEventCard = {
       kind: "chess",
       title: name || chosen.name,
       subtitle: [chosen.location, rest.join(" · ")].filter(Boolean).join(" · ") || undefined,
@@ -2785,8 +2792,9 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
       // (unlike a results page) shows the game rather than the outcome.
       eventUrl: chosen.url ?? chosen.website ?? undefined,
     };
+    return { card, failed: false };
   } catch {
-    return null;
+    return EVENT_FETCH_FAILED;
   }
 }
 
@@ -2901,7 +2909,7 @@ async function fetchBoxingApiEvents(): Promise<BoxingApiEvent[] | null> {
   }
 }
 
-export async function fetchBoxingEvent(date?: string): Promise<BoxingEventResult> {
+export async function fetchBoxingEvent(date?: string): Promise<EventFetchResult> {
   const [curated, events] = await Promise.all([
     fetchCuratedBoxingEvent(date),
     fetchBoxingApiEvents(),
@@ -2909,7 +2917,7 @@ export async function fetchBoxingEvent(date?: string): Promise<BoxingEventResult
   // No card to show. Only call it a failure if a source actually broke —
   // otherwise both feeds are healthy and the day is genuinely empty, and the
   // column should say "No event" rather than cry wolf.
-  const nothing = (): BoxingEventResult => ({
+  const nothing = (): EventFetchResult => ({
     card: curated.card,
     failed: !curated.card && (curated.failed || events === null),
   });
@@ -4325,9 +4333,7 @@ export async function fetchAllLeagues(
       return { sport: cfg.sport, label, games: [], eventCard };
     }
     // Chess + boxing come from worker routes, not ESPN — see fetchChessEvent /
-    // fetchBoxingEvent. Poker reads the curated official major calendar. All
-    // return null on any failure, which drops the column
-    // rather than showing a broken one.
+    // fetchBoxingEvent. Poker reads the curated official major calendar.
     // Esports comes from PandaScore via the worker and produces real two-team
     // GAMES (not an event tile), so it returns through the normal games path.
     if (cfg.sport === "esports") {
@@ -4335,26 +4341,22 @@ export async function fetchAllLeagues(
       if (!games.length) return null;
       return { sport: cfg.sport, label, games };
     }
-    if (cfg.sport === "boxing") {
-      // Boxing is the one event tile that can tell a dead feed from a quiet
-      // day, so it carries fetchFailed through and the column offers a retry
-      // instead of asserting "No event" over a 500 (Jacob 8/10). Chess and
-      // poker still conflate the two below.
-      const { card, failed } = await fetchBoxingEvent(date);
-      return { sport: cfg.sport, label, games: [], eventCard: card, fetchFailed: failed };
-    }
-    if (cfg.sport === "chess" || cfg.sport === "poker") {
-      const eventCard = cfg.sport === "chess"
+    if (cfg.sport === "chess" || cfg.sport === "boxing" || cfg.sport === "poker") {
+      const { card, failed } = cfg.sport === "chess"
         ? await fetchChessEvent(date)
-        : await fetchPokerEvent(date);
+        : cfg.sport === "boxing"
+          ? await fetchBoxingEvent(date)
+          : await fetchPokerEvent(date);
       // A day with no card still renders the column. These three are
       // excludeFromAuto, so a column only exists here because the user pinned
       // it or picked it in the switcher — dropping it on a quiet date made the
       // choice look like it never registered (Jacob 8/10: "can't even select
       // the chess column"). Returning null here also silently re-flowed every
       // column to its left. With no eventCard, LeagueColumn falls through to
-      // the same empty state every other league shows.
-      return { sport: cfg.sport, label, games: [], eventCard };
+      // the same empty state every other league shows — or, when `failed` says
+      // the feed itself broke rather than the calendar being quiet, to the
+      // retry state instead of a "No event" the data doesn't support.
+      return { sport: cfg.sport, label, games: [], eventCard: card, fetchFailed: failed };
     }
     const { games, failed } = await fetchGames(cfg.sport, date);
     // Standings rank (#N next to the team name). Kicked off here so it overlaps

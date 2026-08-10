@@ -233,6 +233,18 @@ export interface LeagueEventCard {
   chessTier?: number;       // Lichess tier; 5 = marquee, 4 = strong international
 }
 
+// What an event-tile feed (boxing / chess / poker) returns. There are THREE
+// outcomes, and the middle two are not the same thing: a card, an honestly
+// empty calendar, and a broken feed. Collapsing the last two into `null` made a
+// dead API look identical to a quiet Tuesday — the column said "No event"
+// either way (Jacob 8/10). `failed` is set ONLY when a source actually broke:
+// a non-OK response, an unparseable body, or a payload whose schema we don't
+// recognise. Nothing scheduled is `{ card: null, failed: false }`.
+export interface EventFetchResult {
+  card: LeagueEventCard | null;
+  failed: boolean;
+}
+
 export interface LeagueData {
   sport: Sport;
   label: string;
