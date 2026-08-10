@@ -3,7 +3,7 @@ import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
-import { fetchCuratedBoxingEvent } from "./boxing";
+import { fetchCuratedBoxingEvent, type BoxingEventResult } from "./boxing";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
 
@@ -2845,15 +2845,34 @@ interface BoxingApiEvent {
   location: string | null; broadcasts: string[]; poster: string | null;
 }
 
-export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard | null> {
+// The live feed, with failure kept distinct from an empty calendar: `null`
+// events means the request errored or returned something we couldn't parse,
+// `[]` means boxing-data.com answered and has no cards.
+async function fetchBoxingApiEvents(): Promise<BoxingApiEvent[] | null> {
   try {
-    const [curated, res] = await Promise.all([
-      fetchCuratedBoxingEvent(date),
-      fetchWithRetry(`${getApiBase()}/api/boxing`),
-    ]);
-    if (!res.ok) return curated;
+    const res = await fetchWithRetry(`${getApiBase()}/api/boxing`);
+    if (!res.ok) return null;
     const { events } = (await res.json()) as { events: BoxingApiEvent[] };
-    if (!events?.length) return curated;
+    return Array.isArray(events) ? events : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchBoxingEvent(date?: string): Promise<BoxingEventResult> {
+  const [curated, events] = await Promise.all([
+    fetchCuratedBoxingEvent(date),
+    fetchBoxingApiEvents(),
+  ]);
+  // No card to show. Only call it a failure if a source actually broke —
+  // otherwise both feeds are healthy and the day is genuinely empty, and the
+  // column should say "No event" rather than cry wolf.
+  const nothing = (): BoxingEventResult => ({
+    card: curated.card,
+    failed: !curated.card && (curated.failed || events === null),
+  });
+  if (events === null || !events.length) return nothing();
+  try {
     const target = date ? fromYmd(date).getTime() : Date.now();
     const ts = (e: BoxingApiEvent) => new Date(e.date).getTime();
     const exactDate = date
@@ -2872,8 +2891,8 @@ export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard |
         watchable(a) - watchable(b) ||
         Math.abs(ts(a) - target) - Math.abs(ts(b) - target),
     )[0];
-    if (!exactDate.length && curated) return curated;
-    if (!chosen) return null;
+    if (!exactDate.length && curated.card) return curated;
+    if (!chosen) return nothing();
     const now = Date.now();
     const t = ts(chosen);
     // Boxing cards run ~4h from first bell. No live API state is available, so
@@ -2881,17 +2900,22 @@ export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard |
     const state: "pre" | "in" | "post" =
       now < t ? "pre" : now < t + 4 * 60 * 60 * 1000 ? "in" : "post";
     return {
-      kind: "boxing",
-      title: chosen.title,
-      subtitle: [chosen.venue, chosen.location].filter(Boolean).join(" · ") || undefined,
-      state,
-      statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : "Fight Night",
-      date: new Date(t).toISOString(),
-      broadcasts: chosen.broadcasts ?? [],
-      posterUrl: chosen.poster ?? undefined,
+      card: {
+        kind: "boxing",
+        title: chosen.title,
+        subtitle: [chosen.venue, chosen.location].filter(Boolean).join(" · ") || undefined,
+        state,
+        statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : "Fight Night",
+        date: new Date(t).toISOString(),
+        broadcasts: chosen.broadcasts ?? [],
+        posterUrl: chosen.poster ?? undefined,
+      },
+      failed: false,
     };
   } catch {
-    return null;
+    // The feed answered but we couldn't make a card out of it — a bad payload,
+    // not an empty day.
+    return { card: curated.card, failed: !curated.card };
   }
 }
 
@@ -4251,12 +4275,18 @@ export async function fetchAllLeagues(
       if (!games.length) return null;
       return { sport: cfg.sport, label, games };
     }
-    if (cfg.sport === "chess" || cfg.sport === "boxing" || cfg.sport === "poker") {
+    if (cfg.sport === "boxing") {
+      // Boxing is the one event tile that can tell a dead feed from a quiet
+      // day, so it carries fetchFailed through and the column offers a retry
+      // instead of asserting "No event" over a 500 (Jacob 8/10). Chess and
+      // poker still conflate the two below.
+      const { card, failed } = await fetchBoxingEvent(date);
+      return { sport: cfg.sport, label, games: [], eventCard: card, fetchFailed: failed };
+    }
+    if (cfg.sport === "chess" || cfg.sport === "poker") {
       const eventCard = cfg.sport === "chess"
         ? await fetchChessEvent(date)
-        : cfg.sport === "boxing"
-          ? await fetchBoxingEvent(date)
-          : await fetchPokerEvent(date);
+        : await fetchPokerEvent(date);
       // A day with no card still renders the column. These three are
       // excludeFromAuto, so a column only exists here because the user pinned
       // it or picked it in the switcher — dropping it on a quiet date made the

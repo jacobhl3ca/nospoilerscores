@@ -1163,6 +1163,9 @@ export default function LeagueColumn({
   const isEventTileSport = league.sport === "chess" || league.sport === "boxing" || league.sport === "poker";
   const emptyLabel = isEventTileSport ? "No event" : "No games";
   const emptyUpcomingLabel = isEventTileSport ? "No event scheduled" : "Upcoming Schedule TBD";
+  // Same reason the empty copy differs: an event-tile column has no "schedule"
+  // to be unavailable, it has one card that didn't load.
+  const failedLabel = isEventTileSport ? "Event info unavailable" : "Schedule unavailable";
 
   // Condensed single-column render: TODAY's games only (no future-day
   // lookahead, no Final separator), best-first via `sorted`. 6+ games collapse
@@ -1587,7 +1590,7 @@ export default function LeagueColumn({
             // safer choice over a full page reload, which can blow away
             // the service worker cache and trigger hydration mismatches.
             <div className="flex flex-col items-center gap-2 py-6 sm:py-8">
-              <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>Schedule unavailable</p>
+              <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>{failedLabel}</p>
               {onRetry && (
                 <button
                   type="button"
