@@ -153,6 +153,137 @@ test("no content bleeds through when --header-h is stale-too-small", async ({ pa
   expect(result.offenders).toEqual([]);
 });
 
+/**
+ * The OTHER half of the same race — and the one that shows up as "the first
+ * game card has no top outline" (Jacob, repeatedly; single-column board).
+ *
+ * The seam tests above cover a stale --header-h opening a GAP above the title.
+ * The mirror failure is the title being shoved DOWN onto the card below it:
+ * `position: sticky` translates an element to its pin offset whenever that
+ * offset sits below where the element naturally lands. While the app header
+ * was in flow, content started at the header's REAL height while the title
+ * pinned at the MEASURED --header-h, so any measurement lag translated the
+ * title downward by the difference — and its opaque var(--bg) at z-30 painted
+ * over the first card's 1px top border. The seam cover hides the gap that
+ * would otherwise give it away, which is why it reads as a clipped card and
+ * why three rounds of padding tweaks never made it stay fixed.
+ *
+ * The fix is structural: the header is `fixed` and .header-flow-spacer gives
+ * back its flow space using the SAME --header-h expression, so content starts
+ * exactly where the sticky rows pin. Displacement is then identically zero for
+ * ANY value of --header-h. That is what this asserts — measured directly, with
+ * no dependence on the live slate having games, by comparing the title's
+ * rendered top against its own natural (static) top.
+ */
+/**
+ * Hide anything in <main> that sits ABOVE the board — first-run notices, the
+ * World Cup banner, the kickoff strip. Every one of them is dismissible and
+ * Jacob's steady state has none showing, but while one IS showing it adds
+ * ~90px of incidental headroom between the header and the league title. That
+ * headroom absorbs the drift and makes the assertions below pass vacuously:
+ * the title only gets shoved onto a card when its natural position is at (or
+ * near) the header's bottom edge, which is the normal, banner-free layout.
+ */
+async function clearHeadroomAboveBoard(page: import("@playwright/test").Page) {
+  await page.evaluate(() => {
+    const board = document.querySelector(".league-sticky-top")?.closest("main > *");
+    let sib = board?.previousElementSibling ?? null;
+    while (sib) {
+      (sib as HTMLElement).style.display = "none";
+      sib = sib.previousElementSibling;
+    }
+  });
+}
+
+async function stickyDisplacement(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    window.scrollTo(0, 0);
+    const title = document.querySelector<HTMLElement>(".league-sticky-top");
+    if (!title) return null;
+    const pinnedTop = title.getBoundingClientRect().top;
+    // A sticky box keeps its flow slot, so flipping it static reveals exactly
+    // where it WOULD sit without the pin — no reflow of anything around it.
+    const prev = title.style.position;
+    title.style.position = "static";
+    const naturalTop = title.getBoundingClientRect().top;
+    title.style.position = prev;
+    return {
+      displacement: +(pinnedTop - naturalTop).toFixed(1),
+      pinnedTop: +pinnedTop.toFixed(1),
+      naturalTop: +naturalTop.toFixed(1),
+    };
+  });
+}
+
+/** Load the board with the single-column ("II") layout already on. */
+async function openSingleColumn(page: import("@playwright/test").Page) {
+  // There is no share-URL param for singleColumn, so seed the prefs blob the
+  // app reads on mount. The ?l=/?s= share params still merge on top of it,
+  // which is what skips the first-run league picker.
+  await page.addInitScript(() => {
+    localStorage.setItem("nss-preferences", JSON.stringify({ singleColumn: true, leaguesOnboarded: true }));
+  });
+  await page.goto("/?l=m&s=m.0.0&dd=t&dv=s", { waitUntil: "networkidle" });
+  await page.locator(".league-sticky-top").first().waitFor({ timeout: 30_000 });
+}
+
+for (const skew of [40, 80]) {
+  test(`single column: the league title is never pushed onto the first card (--header-h +${skew}px)`, async ({ page }) => {
+    await openSingleColumn(page);
+    await clearHeadroomAboveBoard(page);
+    const before = await stickyDisplacement(page);
+    expect(before, "league title must be mounted").not.toBeNull();
+    expect(before!.displacement, "title is displaced before the skew is even applied").toBeLessThan(1);
+    // Guard against the guard going vacuous: with the banners hidden the title
+    // must actually be sitting at the header's bottom edge, where a stale
+    // --header-h can reach it. If layout ever grows new headroom here, this
+    // fails loudly instead of quietly proving nothing.
+    const headerH = await page.evaluate(() => document.querySelector("header")!.getBoundingClientRect().height);
+    expect(
+      before!.naturalTop - headerH,
+      "no headroom left above the board, else a drift can never reach the title and this test proves nothing",
+    ).toBeLessThan(skew);
+
+    await skewHeaderVar(page, skew);
+    const after = await stickyDisplacement(page);
+    // Displacement > 0 means the title now overlaps whatever is under it —
+    // in condense mode that is the first game card, top border first.
+    expect(
+      after!.displacement,
+      `a ${skew}px stale --header-h shoved the league title ${after!.displacement}px down onto the card below it`,
+    ).toBeLessThan(1);
+  });
+}
+
+test("row layout: the league title is never pushed onto the first card", async ({ page }) => {
+  await scrollIntoCards(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await clearHeadroomAboveBoard(page);
+  await skewHeaderVar(page, 40);
+  const after = await stickyDisplacement(page);
+  expect(after!.displacement).toBeLessThan(1);
+});
+
+test("the header flow spacer stands in for the fixed header at exactly --header-h", async ({ page }) => {
+  await scrollIntoCards(page);
+  const geom = await page.evaluate(() => {
+    const spacer = document.querySelector("[data-testid='header-flow-spacer']");
+    const header = document.querySelector("header");
+    if (!spacer || !header) return null;
+    const owner = document.querySelector<HTMLElement>('[style*="--header-h"]');
+    return {
+      spacerH: spacer.getBoundingClientRect().height,
+      headerPosition: getComputedStyle(header).position,
+      headerVar: parseFloat(getComputedStyle(owner!).getPropertyValue("--header-h")),
+    };
+  });
+  expect(geom, "header flow spacer must be rendered").not.toBeNull();
+  // If the header ever goes back to being in flow, the spacer double-counts and
+  // this whole guarantee is off — fail loudly rather than drift.
+  expect(geom!.headerPosition).toBe("fixed");
+  expect(Math.abs(geom!.spacerH - geom!.headerVar)).toBeLessThan(1);
+});
+
 test("the seam cover exists and tracks the league title's pin offset", async ({ page }) => {
   await scrollIntoCards(page);
   const geom = await page.evaluate(() => {

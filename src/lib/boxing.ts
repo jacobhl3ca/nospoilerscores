@@ -46,12 +46,26 @@ function displayDate(ymd: string): string {
   });
 }
 
-export async function fetchCuratedBoxingEvent(date?: string): Promise<LeagueEventCard | null> {
+// A source can come back three ways, and two of them are NOT the same thing:
+// a card, an honestly empty calendar, or a broken feed. Collapsing the last two
+// into `null` made a dead API look identical to a quiet Tuesday (Jacob 8/10).
+// `failed` is set ONLY when a source errored — non-OK, unparseable, or a
+// payload that doesn't match the schema we curate.
+export interface BoxingEventResult {
+  card: LeagueEventCard | null;
+  failed: boolean;
+}
+
+const EMPTY: BoxingEventResult = { card: null, failed: false };
+const FAILED: BoxingEventResult = { card: null, failed: true };
+
+export async function fetchCuratedBoxingEvent(date?: string): Promise<BoxingEventResult> {
   try {
     const res = await fetch(`${getApiBase()}/boxing-events.json`, { cache: "no-store" });
-    if (!res.ok) return null;
+    if (!res.ok) return FAILED;
     const data = (await res.json()) as BoxingEventsFile;
-    if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return null;
+    // A schema we don't recognise is a broken deploy, not an empty calendar.
+    if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return FAILED;
     const valid = data.events.filter(validRecord);
     const targetYmd = date && /^\d{8}$/.test(date)
       ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
@@ -65,13 +79,14 @@ export async function fetchCuratedBoxingEvent(date?: string): Promise<LeagueEven
         Number(b.endDate >= targetYmd) - Number(a.endDate >= targetYmd) ||
         b.endDate.localeCompare(a.endDate) || b.priority - a.priority
       )[0];
-    if (!chosen) return null;
+    // The file loaded and simply has nothing for this date — an empty day.
+    if (!chosen) return EMPTY;
 
     const now = Date.now();
     const starts = dateMs(chosen.startDate) - DAY_MS / 2;
     const ends = dateMs(chosen.endDate) + DAY_MS / 2;
     const state: "pre" | "in" | "post" = now < starts ? "pre" : now <= ends ? "in" : "post";
-    return {
+    const card: LeagueEventCard = {
       kind: "boxing",
       title: chosen.title,
       subtitle: `${chosen.location} · ${displayDate(chosen.startDate)}`,
@@ -84,7 +99,8 @@ export async function fetchCuratedBoxingEvent(date?: string): Promise<LeagueEven
       officialChannel: chosen.officialChannel,
       officialLabel: chosen.officialLabel,
     };
+    return { card, failed: false };
   } catch {
-    return null;
+    return FAILED;
   }
 }
