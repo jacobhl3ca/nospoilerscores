@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, SportTeam } from "@/lib/espn";
 import {
@@ -1388,6 +1388,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  // Associate the visible label with the control it names. The label sits in a
+  // sibling row ABOVE the control (not wrapping it), so without htmlFor it was a
+  // bare, unassociated <label> — a screen reader focusing the <select>/<input>
+  // announced it with no name (WCAG 1.3.1/4.1.2). Only wire up intrinsic form
+  // controls (child.type is a string like "select"/"input"); custom children
+  // like RadioGroup carry their own accessible name (role="group" aria-label),
+  // so leave those untouched — their label stays htmlFor-less exactly as before.
+  const generatedId = useId();
+  const child = isValidElement(children) ? (children as React.ReactElement<{ id?: string }>) : null;
+  const isHostControl = child != null && typeof child.type === "string";
+  const controlId = isHostControl ? (child!.props.id ?? generatedId) : undefined;
+  const control = isHostControl && child!.props.id == null
+    ? cloneElement(child!, { id: controlId })
+    : children;
   return (
     <div>
       {/* Stack the hint UNDER the label on phones — the old side-by-side
@@ -1395,10 +1409,10 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
           clipped and overlapped on mobile (esp. the player rows). sm+ keeps
           them on one row, hint right-aligned, to preserve the dense desktop look. */}
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3 mb-1">
-        <label className="text-sm font-medium shrink-0" style={{ color: "var(--text)" }}>{label}</label>
+        <label htmlFor={controlId} className="text-sm font-medium shrink-0" style={{ color: "var(--text)" }}>{label}</label>
         {hint && <span className="text-[11px] leading-snug sm:text-right" style={{ color: "var(--text-muted)" }}>{hint}</span>}
       </div>
-      {children}
+      {control}
     </div>
   );
 }
