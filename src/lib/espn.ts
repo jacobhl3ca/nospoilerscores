@@ -2679,7 +2679,7 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
     if (!res.ok) return null;
     const { events } = (await res.json()) as { events: ChessApiEvent[] };
     if (!events?.length) return null;
-    const target = date ? new Date(`${date}T12:00:00`).getTime() : Date.now();
+    const target = date ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`).getTime() : Date.now();
     const onDate = (e: ChessApiEvent) =>
       e.startsAt != null && Math.abs(e.startsAt - target) < 24 * 60 * 60 * 1000;
     const byTier = (a: ChessApiEvent, b: ChessApiEvent) => (b.tier || 0) - (a.tier || 0);
@@ -2820,7 +2820,7 @@ export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard |
     if (!res.ok) return curated;
     const { events } = (await res.json()) as { events: BoxingApiEvent[] };
     if (!events?.length) return curated;
-    const target = date ? new Date(`${date}T12:00:00`).getTime() : Date.now();
+    const target = date ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`).getTime() : Date.now();
     const ts = (e: BoxingApiEvent) => new Date(e.date).getTime();
     const exactDate = date
       ? events.filter((event) => event.date.slice(0, 10).replace(/-/g, "") === date)
