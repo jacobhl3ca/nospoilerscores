@@ -65,6 +65,13 @@ const CARD_REV = 4;
 // Keep this narrow. An unscoped result-bearing upload must still be rejected.
 const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
 
+// Chess organizers who post the ROUND itself as a full broadcast VOD, with no
+// "highlights"/"recap" keyword in the title. Lowercased YouTube author_name —
+// mirrors CHESS_ORGANIZER_CHANNELS in src/lib/espn.ts, keep the two in step.
+// Used by isChessRoundBroadcast below; unlike MASKED_COMBAT_CHANNELS this does
+// NOT exempt anything from the spoiler filter.
+const CHESS_BROADCAST_CHANNELS = new Set(["saint louis chess club", "fide chess"]);
+
 // Wrap an arbitrary news image (Reddit photo, preview thumb, league poster, or
 // YouTube still) for use as the social-card image. Routed through weserv — the
 // SAME proxy the app already uses for every redd.it thumbnail (see proxyImage in
@@ -636,12 +643,29 @@ export default {
           // team/date gates below still have to match exactly.
           const isStrictBareWnbaRecap =
             strictChannelParam && isFromChannel && preferChannelLower === "wnba" && queryHasSpecificTeams;
+          // Chess publishes NO highlight package at all — verified 2026-08-10
+          // across every organizer that broadcasts on Lichess. What exists is
+          // the round itself, posted as a full VOD titled "2026 Sinquefield
+          // Cup: Round 1 | #GrandChessTour" or "… Almaty Diary, Day 5" — no
+          // "highlights", no "recap" (Saint Louis last used that word in 2019).
+          // Same shape as roundOnlyTitleOk for golf: accept a bare Round/Day
+          // title, but ONLY on a strict request against a verified organizer
+          // channel, so this can never widen any other sport's candidate pool.
+          // The `race=` token gate still has to match the tournament name, and
+          // SPOILER_RX still drops result-bearing titles ("… Wins Blitz
+          // Playoff!") — this only relaxes the highlight-keyword requirement.
+          const isChessRoundBroadcast =
+            strictChannelParam &&
+            isFromChannel &&
+            CHESS_BROADCAST_CHANNELS.has(preferChannelLower) &&
+            /\b(?:round|day|game|playoff|tiebreaks?)\s*\d/.test(titleLower);
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             roundOnlyTitleOk ||
-            isStrictBareWnbaRecap;
+            isStrictBareWnbaRecap ||
+            isChessRoundBroadcast;
           if (!isHighlight) continue;
 
           // Racing race gate (see the `race` param above). The official channel

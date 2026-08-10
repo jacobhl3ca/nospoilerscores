@@ -666,6 +666,52 @@ async function scanCuratedEvents() {
   }
 }
 
+// Chess plays the ORGANIZER'S ROUND BROADCAST rather than a highlight reel —
+// the sport publishes none anywhere (see CHESS_ORGANIZER_CHANNELS in
+// src/lib/espn.ts). Only an event whose name maps to a verified organizer can
+// resolve at all, so only those are worth arming; everything else is dark by
+// design and an "EXHAUSTED" row for it would be noise, not a regression.
+const CHESS_ORGANIZERS = [
+  { rx: /\b(GCT|Sinquefield|Cairns|Saint Louis|St\.? Louis|American Cup|Champions Showdown)\b/i, channel: "Saint Louis Chess Club" },
+  { rx: /\bFIDE\b/i, channel: "FIDE chess" },
+];
+// Mirrors buildChessTokens in src/lib/espn.ts.
+function chessTokens(name) {
+  const base = String(name || "")
+    .split("|")[0]
+    .replace(/^GCT:\s*/i, "")
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\b(?:19|20)\d{2}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return base ? [base] : [];
+}
+
+async function scanChess() {
+  const data = await fetchSpecialJson("chess", `${BASE}/api/chess`);
+  for (const event of data?.events ?? []) {
+    if (event.state !== "post") continue;
+    // Date off endsAt, not startsAt: a chess tournament runs for a week or
+    // more, so keying the lookback on its START would skip every event whose
+    // final round was actually yesterday — the ones worth checking.
+    const finished = event.endsAt ?? event.startsAt;
+    const iso = finished ? new Date(finished).toISOString() : null;
+    if (!iso || !withinLookback(iso)) continue;
+    const organizer = CHESS_ORGANIZERS.find((o) => o.rx.test(event.name));
+    if (!organizer) continue;
+    const [name] = String(event.name).split("|").map((s) => s.trim());
+    await checkSpecialCandidate({
+      sport: "chess",
+      eventId: event.id,
+      date: iso.slice(0, 10).replace(/-/g, ""),
+      matchup: name || event.name,
+      query: `${name || event.name}${event.round ? ` ${event.round}` : ""}`,
+      channels: [organizer.channel],
+      raceTokens: chessTokens(event.name),
+    });
+  }
+}
+
 async function scanEsports() {
   const seen = new Set();
   for (const date of dates) {
@@ -855,6 +901,7 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
 // every shipped family was actually armed, not just scoreboard game cards.
 await scanRacingAndUfc();
 await scanCuratedEvents();
+await scanChess();
 await scanEsports();
 await scanGolf();
 await scanTennis();
@@ -934,7 +981,7 @@ console.log(`hidescore highlight fallback check`);
 console.log(`base:        ${BASE}`);
 console.log(`window:      past ${LOOKBACK_HOURS}h (≈${dates.length} ET days)`);
 console.log(`leagues:     ${Object.keys(ESPN_PATHS).join(", ")}`);
-console.log("families:    team games, tennis, golf, racing, UFC, poker, boxing, esports");
+console.log("families:    team games, tennis, golf, racing, UFC, poker, boxing, chess, esports");
 console.log(`scanned:     ${scanned} highlight-ready finished game(s)`);
 console.log(`special:     ${specialScanned} non-team/special candidate(s), ${specialResolved} live strict hit(s)`);
 console.log(`deferred:    ${deferred} (inside the UI's upload buffer; not promised yet)`);
