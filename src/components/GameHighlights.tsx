@@ -458,7 +458,7 @@ export default function GameHighlights({
               ) : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
+                  <span className="text-[10px] font-medium">{demoActive ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
                 </>
               )}
             </button>
