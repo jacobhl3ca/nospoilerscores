@@ -2517,7 +2517,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 muted
                 playsInline
                 onPlaying={trackVideoPlay}
-                aria-label={headline || "Video player"}
+                // Spoiler-safe accessible name — matching the sibling <iframe>'s
+                // title and the dialog's aria-label: the PeekBlur'd headline can
+                // carry a score, so setting it as this focusable player's
+                // aria-label announced the spoiler unblurred to screen readers on
+                // the HLS path (MLB statsapi + Reddit clips, whose headlines
+                // routinely state the result). Use the generic label instead.
+                aria-label="Video player"
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (
