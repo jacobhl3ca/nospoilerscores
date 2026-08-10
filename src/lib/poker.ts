@@ -50,6 +50,13 @@ const DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
 function validRecord(event: PokerEventRecord): boolean {
   if (!event.id || !event.title || !DATE_RX.test(event.startDate) || !DATE_RX.test(event.endDate)) return false;
   if (event.startDate > event.endDate || event.officialChannel !== OFFICIAL_CHANNEL[event.tour]) return false;
+  // startTime/endTime are the only optional fields, and they drive the pre/in/post
+  // state and the card's `date`. Hold them to the same "drop, don't weaken" gate as
+  // everything else: an unparseable value slips past the checks above but then makes
+  // the state math go NaN — an upcoming card renders "Final" — and the `date` renders
+  // "Invalid Date". Reject the record instead.
+  if (event.startTime !== undefined && isNaN(new Date(event.startTime).getTime())) return false;
+  if (event.endTime !== undefined && isNaN(new Date(event.endTime).getTime())) return false;
   try {
     return new URL(event.eventUrl).hostname === OFFICIAL_HOST[event.tour];
   } catch {
