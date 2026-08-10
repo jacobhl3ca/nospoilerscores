@@ -2386,9 +2386,18 @@ export default function HomeContent({
           toggles. Sits one row below the header (its original spot), but STICKY:
           it pins to the top while scrolling, like the league titles (Jacob 7/14).
           Its measured height drives --news-toolbar-h so the Cards league titles +
-          per-source headers stack right below it (see globals.css). */}
+          per-source headers stack right below it (see globals.css).
+
+          z-36, NOT z-30. .sticky-seam-cover is a fixed, opaque var(--bg) bar at
+          z-35 whose height is header-h + --news-toolbar-h — i.e. it deliberately
+          spans this toolbar's whole band. At z-30 the toolbar rendered UNDER it
+          and the entire pill row (Headlines / Media / Videos / Text posts) was
+          invisible in news view, at every scroll position (Jacob 8/10: "all our
+          pills above it with toggles for media etc aren't there"). The toolbar
+          paints its own opaque var(--bg), so sitting above the cover — and still
+          below the z-40 app header — keeps the seam sealed either way. */}
       {showNews && (
-        <div ref={newsToolbarRef} className="news-toolbar-sticky sticky z-30" style={{ background: "var(--bg)" }}>
+        <div ref={newsToolbarRef} className="news-toolbar-sticky sticky z-[36]" style={{ background: "var(--bg)" }}>
           <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap items-center gap-2 pt-2 pb-2">
             <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               {([["Cards", false], ["Feed", true]] as const).map(([label, on]) => (
