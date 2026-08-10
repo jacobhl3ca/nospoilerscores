@@ -8,6 +8,7 @@ import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, hasNoTrustedHighlightSource, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
+import HighlightRowPlaceholder from "@/components/HighlightRowPlaceholder";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
 // Per-league buffer (hrs from game start) before showing the highlight button,
@@ -50,6 +51,7 @@ export default function GameHighlights({
   onPlayHighlight,
   onPlayEmbed,
   wrapMargin = "mt-1 sm:mt-2",
+  reserveEmptyRow = true,
 }: {
   game: Game;
   leagueLabel?: string;
@@ -57,6 +59,10 @@ export default function GameHighlights({
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   wrapMargin?: string;
+  // Board cards keep an empty highlight row so neighbouring cards line up. The
+  // details modal sets this false: nothing is beside it to line up with, so the
+  // reserved row would just be a gap under the score.
+  reserveEmptyRow?: boolean;
 }) {
   // Esports keys its highlight channel on the LEAGUE ("LCK", "LEC"), not the
   // sport — one "esports" key spans leagues with unrelated uploaders. Callers
@@ -376,7 +382,16 @@ export default function GameHighlights({
   // the condensed yet, show NO 10m button rather than a possibly-wrong one.
   const showMlbCondensed = isMlb && !!mlbCondensedPlayback;
   const showMlb = !!(isFinished && isMlb && (mlbRecapPlayback || showMlbCondensed));
-  if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
+  // A FINISHED game with no playable highlight still reserves the row's height.
+  // Returning null here made a column ragged: two NWSL finals with no video sat
+  // a button-row shorter than the third that had one, and a race tile with no
+  // highlight sat shorter than the MLB card beside it (Jacob 8/9). Cards that
+  // are not finished keep their natural height — an upcoming or in-progress
+  // card is a different shape everywhere else too, so padding it would only add
+  // dead space nobody is comparing against.
+  if (!showYouTube && !showTelemundo && !showNhl && !showMlb) {
+    return isFinished && reserveEmptyRow ? <HighlightRowPlaceholder wrapMargin={wrapMargin} /> : null;
+  }
 
   // The OTHER resolved highlight versions of this game, minus the one being
   // played — passed to the modal so its embed-blocked overlay can offer a

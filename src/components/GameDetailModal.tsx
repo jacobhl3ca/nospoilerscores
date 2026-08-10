@@ -497,6 +497,7 @@ export default function GameDetailModal({
           onPlayHighlight={onPlayHighlight}
           onPlayEmbed={onPlayEmbed}
           wrapMargin="mt-4"
+          reserveEmptyRow={false}
         />
       </div>
     </div>
