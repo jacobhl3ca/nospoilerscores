@@ -1179,12 +1179,15 @@ export default function HomeContent({
   };
 
   const shareFavorites = () => {
-    // .catch swallows a rejected writeText (document not focused, permission
-    // denied, non-secure context) so it can't surface as an unhandled promise
-    // rejection — which the console flags and @sentry/nextjs captures as noise.
-    // Copy is a throwaway affordance (the link stays visible), matching the
-    // swallow-on-failure pattern in VideoModal's copyLink.
-    navigator.clipboard.writeText(buildShareUrl()).then(() => {
+    // ?. guards the non-secure-context case where navigator.clipboard is
+    // undefined: reading .writeText off it throws synchronously, before any
+    // promise exists, so the trailing .catch can't swallow it — optional
+    // chaining short-circuits the whole chain to undefined instead. The .catch
+    // still swallows a rejected writeText (document not focused, permission
+    // denied) so it can't surface as an unhandled promise rejection — which the
+    // console flags and @sentry/nextjs captures as noise. Copy is a throwaway
+    // affordance (the link stays visible), matching VideoModal's copyLink.
+    navigator.clipboard?.writeText(buildShareUrl()).then(() => {
       setShowShareCopied(true);
       setTimeout(() => setShowShareCopied(false), 2000);
     }).catch(() => {});
@@ -1212,9 +1215,10 @@ export default function HomeContent({
   };
 
   const copyFavLink = () => {
-    // See shareFavorites: .catch keeps a failed clipboard write from becoming an
-    // unhandled promise rejection / Sentry error. Copy is best-effort here too.
-    navigator.clipboard.writeText(buildShareUrl()).then(() => {
+    // See shareFavorites: ?. guards the undefined-clipboard throw and .catch
+    // keeps a failed write from becoming an unhandled rejection / Sentry error.
+    // Copy is best-effort here too.
+    navigator.clipboard?.writeText(buildShareUrl()).then(() => {
       setFavToastCopied(true);
       setTimeout(() => {
         dismissFavToast();
