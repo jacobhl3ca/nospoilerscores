@@ -660,13 +660,19 @@ export default function EventCard({
   // boxing/chess/poker/race branches so poker reads "Poker", not "Race".
   const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : event.kind === "poker" ? "Poker" : "Race";
   // What the tile body links to, and what to call it. Chess points at the
-  // Lichess broadcast (a live BOARD, not a results table); boxing has no
-  // per-event page worth linking, so its tile is inert.
+  // Lichess broadcast (a live BOARD, not a results table); boxing opens the
+  // DAZN Boxing fixture/preview clip on YouTube (boxing.ts sets eventUrl to a
+  // www.youtube.com watch URL), so it needs its own noun — the fall-through
+  // "Race details on ESPN" was wrong on both counts (not a race, not ESPN) and,
+  // since a pre/live boxing tile IS clickable, it leaked into the tile's
+  // aria-label and tooltip. Mirrors glyphLabel's boxing branch above.
   const detailNoun = event.kind === "chess"
     ? "Follow live on Lichess"
     : event.kind === "poker"
       ? "Official tournament details"
-      : "Race details on ESPN";
+      : event.kind === "boxing"
+        ? "Fight preview on YouTube"
+        : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   const hideHistoricalMeta = historicalPost(event.state, event.date);
