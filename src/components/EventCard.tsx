@@ -390,6 +390,10 @@ export default function EventCard({
   // Racing mirrors Poker/Boxing: undefined = untried, object = verified source,
   // null = strict miss (button hidden; no YouTube-search handoff).
   const [raceSource, setRaceSource] = useState<HighlightSource | null | undefined>(undefined);
+  // Chess is the same contract again. What it plays is the organizer's ROUND
+  // BROADCAST, not a highlight package — no chess body publishes one (see
+  // CHESS_ORGANIZER_CHANNELS in lib/espn.ts) — so the button says "Round".
+  const [chessSource, setChessSource] = useState<HighlightSource | null | undefined>(undefined);
   // A replay carried onto a later slate should not retain a redundant FINAL
   // row above its watch button. Normal finished GameCards also drop that row
   // on past dates. Apply the same rule to every event-card family (UFC,
@@ -466,6 +470,32 @@ export default function EventCard({
       event.raceTokens,
     );
     setRaceSource(src);
+  };
+  // Chess reuses playRace verbatim: same strict channel gate, same title-token
+  // gate (`raceTokens` carries the tournament name here — the worker's `race`
+  // param is a generic "title must contain one of these", named for its first
+  // caller). One organizer channel covers a whole season, so without the token
+  // the tile would play whichever event that channel uploaded last.
+  const playChessRound = async () => {
+    if (!event.officialChannel) {
+      setChessSource(null);
+      return;
+    }
+    if (chessSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(
+        chessSource.videoId,
+        chessSource.fallbackUrl ?? `https://www.youtube.com/watch?v=${chessSource.videoId}`,
+      );
+      return;
+    }
+    const src = await playRace(
+      "chess-official",
+      event.highlightQuery ?? event.title,
+      event.officialChannel,
+      event.officialLabel ?? "Round",
+      event.raceTokens,
+    );
+    setChessSource(src);
   };
 
   // Fighter-name size follows namesCompact — the game columns' REAL
@@ -662,6 +692,7 @@ export default function EventCard({
   const showRaceBtn = isPost && isRace && !!event.officialChannel && raceSource !== null;
   const showPokerBtn = isPost && event.kind === "poker" && !!event.officialChannel && pokerSource !== null;
   const showBoxingBtn = isPost && event.kind === "boxing" && !!event.officialChannel && boxingSource !== null;
+  const showChessBtn = isPost && event.kind === "chess" && !!event.officialChannel && chessSource !== null;
 
   return (
     <div ref={rootRef} className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
@@ -714,15 +745,14 @@ export default function EventCard({
       </div>
       {/* One official-channel button, like UFC's. A strict miss hides it; no
           racing path opens a generic YouTube results page. */}
-      {/* Racing ONLY. Chess deliberately ships with no highlight
-          button, on the same rule the new soccer leagues were just held to: a
-          button goes in once its official channel has been verified end-to-end,
-          not before. Boxing is handled below through a per-card promoter
-          mapping because DAZN / Top Rank / Matchroom / PBC have no shared
-          uploader. Chess has no
-          highlight reel at all — its "highlight" is the live board, which the
-          tile already links to. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts for
-          the same call on cricket. */}
+      {/* Racing. Every family here follows the same rule the new soccer leagues
+          were held to: a button goes in once its official channel has been
+          verified end-to-end, not before. Boxing is handled below through a
+          per-card promoter mapping because DAZN / Top Rank / Matchroom / PBC
+          have no shared uploader; chess through an organizer mapping, and what
+          it plays is the round broadcast rather than a highlight reel, because
+          the sport publishes none. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts
+          for the case where the answer is no button at all (cricket). */}
       {showRaceBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
@@ -755,11 +785,25 @@ export default function EventCard({
           />
         </div>
       )}
-      {/* No button on a FINISHED tile — chess (which has no highlight reel at
-          all), or a race/poker/boxing event whose strict lookup came up empty.
+      {/* Chess plays the organizer's ROUND BROADCAST — there is no highlight
+          package in the sport (see CHESS_ORGANIZER_CHANNELS in lib/espn.ts).
+          Strict channel + tournament-token gated like the rest, so an event
+          with no mapped organizer, or a round that is not up, shows nothing
+          rather than a search page. */}
+      {showChessBtn && (
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          <PlayBtn
+            label={chessSource?.label ?? event.officialLabel ?? "Round"}
+            loading={loadingId === "chess-official"}
+            onClick={playChessRound}
+          />
+        </div>
+      )}
+      {/* No button on a FINISHED tile — a chess event with no mapped organizer,
+          or a race/poker/boxing/chess event whose strict lookup came up empty.
           Reserve the row anyway so the tile stays the same height as the ones
           that did resolve, and as the game cards in the next column over. */}
-      {isPost && !showRaceBtn && !showPokerBtn && !showBoxingBtn && <HighlightRowPlaceholder />}
+      {isPost && !showRaceBtn && !showPokerBtn && !showBoxingBtn && !showChessBtn && <HighlightRowPlaceholder />}
     </div>
   );
 }

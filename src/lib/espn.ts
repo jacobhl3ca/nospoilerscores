@@ -2630,6 +2630,45 @@ interface ChessApiEvent {
   url: string | null; website: string | null; tier: number;
 }
 
+// Chess has NO highlight package anywhere — verified 2026-08-10 across every
+// organizer that broadcasts on Lichess. What the organizers do post is the
+// round itself as a full VOD ("2026 Sinquefield Cup: Round 1 | #GrandChessTour",
+// "FIDE World University Team Chess Championship 2026 - Almaty Diary, Day 5").
+// Saint Louis last published a "Recap"-titled cut in 2019. So the chess tile
+// offers a ROUND REPLAY, not highlights, and only from an organizer whose exact
+// YouTube author_name is verified below — read off <link rel="canonical"> on the
+// handle page → the channel RSS <author><name>, never scraped from the channel
+// page body (that returns a RECOMMENDED channel; @SaintLouisChessClub and
+// @FIDE both resolved to unrelated personal accounts that way).
+// Anything without a mapping stays dark rather than falling through to a search.
+const CHESS_ORGANIZER_CHANNELS: { rx: RegExp; channel: string }[] = [
+  // Grand Chess Tour + everything hosted in Saint Louis (Sinquefield Cup,
+  // Cairns Cup, Saint Louis Rapid & Blitz, American Cup, Champions Showdown).
+  { rx: /\b(GCT|Sinquefield|Cairns|Saint Louis|St\.? Louis|American Cup|Champions Showdown)\b/i, channel: "Saint Louis Chess Club" },
+  // FIDE's own channel (@fide_chess). ⚠️ "fidechess" (@FIDEchess) is a
+  // different, unrelated account — keep this string byte-exact.
+  { rx: /\bFIDE\b/i, channel: "FIDE chess" },
+];
+
+// Reduce a Lichess broadcast name to the token that identifies WHICH event it
+// is, for the worker's title gate (`race=` on /api/youtube — a generic
+// "title must contain one of these" filter, named for its first caller).
+// One organizer channel covers a whole season of events, so without a token the
+// tile plays whatever that channel uploaded most recently.
+//   "GCT: Sinquefield Cup 2026 | Classical"          → "Sinquefield Cup"
+//   "FIDE World University Team Chess Championship 2026 (Finals)"
+//                                    → "FIDE World University Team Chess Championship"
+export function buildChessTokens(name: string): string[] {
+  const base = String(name || "")
+    .split("|")[0]
+    .replace(/^GCT:\s*/i, "")
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\b(?:19|20)\d{2}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return base ? [base] : [];
+}
+
 // Pick the event to show for `date`: prefer one actually running, then the next
 // one due, then the most recent finished. Mirrors how the F1/UFC tile behaves
 // on a day with no session — an empty column is worse than a nearby event.
@@ -2643,11 +2682,24 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
     const onDate = (e: ChessApiEvent) =>
       e.startsAt != null && Math.abs(e.startsAt - target) < 24 * 60 * 60 * 1000;
     const byTier = (a: ChessApiEvent, b: ChessApiEvent) => (b.tier || 0) - (a.tier || 0);
-    const chosen =
-      events.filter((e) => e.state === "in" && onDate(e)).sort(byTier)[0] ??
-      events.filter((e) => e.state === "in").sort(byTier)[0] ??
-      events.filter((e) => e.state === "pre").sort((a, b) => (a.startsAt ?? 0) - (b.startsAt ?? 0))[0] ??
-      events.filter((e) => e.state === "post").sort((a, b) => (b.startsAt ?? 0) - (a.startsAt ?? 0))[0];
+    const newestFirst = (a: ChessApiEvent, b: ChessApiEvent) => (b.startsAt ?? 0) - (a.startsAt ?? 0);
+    // Same rule the race/fight tile now follows: on a PAST board date, never
+    // show something that had not happened yet on that day. The live-first
+    // chain below is right for Today (Lichess always has SOMETHING running, so
+    // it would otherwise pin a currently-live tournament onto every past tab
+    // and hide the one that was actually being played then).
+    const isPastDate = !!date && date < toYmd(getEtServiceDate());
+    const dayMs = 24 * 60 * 60 * 1000;
+    const startedBy = (e: ChessApiEvent) => e.startsAt != null && e.startsAt <= target + dayMs / 2;
+    const runningOn = (e: ChessApiEvent) =>
+      startedBy(e) && (e.endsAt == null || e.endsAt >= target - dayMs / 2);
+    const chosen = isPastDate
+      ? events.filter(runningOn).sort(byTier)[0] ??
+        events.filter(startedBy).sort(newestFirst)[0]
+      : events.filter((e) => e.state === "in" && onDate(e)).sort(byTier)[0] ??
+        events.filter((e) => e.state === "in").sort(byTier)[0] ??
+        events.filter((e) => e.state === "pre").sort((a, b) => (a.startsAt ?? 0) - (b.startsAt ?? 0))[0] ??
+        events.filter((e) => e.state === "post").sort(newestFirst)[0];
     if (!chosen) return null;
     // Lichess names read "GCT: Saint Louis Rapid & Blitz 2026 | Rapid" — the
     // segment after "|" duplicates what chessFormat/timeControl already say.
@@ -2665,6 +2717,14 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
       chessTimeControl: chosen.timeControl || undefined,
       chessPlayers: chosen.players?.length ? chosen.players : undefined,
       chessTier: chosen.tier,
+      // Round replay (see CHESS_ORGANIZER_CHANNELS). Undefined for every event
+      // without a verified organizer, which is what keeps the button off the
+      // tile — EventCard hides it when officialChannel is missing, and the
+      // worker's strict + token gates hide it when the round is not up.
+      officialChannel: CHESS_ORGANIZER_CHANNELS.find((o) => o.rx.test(chosen.name))?.channel,
+      officialLabel: "Round",
+      highlightQuery: `${name || chosen.name}${chosen.round ? ` ${chosen.round}` : ""}`,
+      raceTokens: buildChessTokens(chosen.name),
       // Lichess's own board is the watch destination — it is live, free, and
       // (unlike a results page) shows the game rather than the outcome.
       eventUrl: chosen.url ?? chosen.website ?? undefined,
@@ -2819,6 +2879,23 @@ export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard |
   }
 }
 
+// How far back a PAST board date looks for the most recent finished event.
+// Sized for the longest IN-SEASON gap on these calendars: F1's summer break is
+// 26 days (Hungary Jul 26 → Zandvoort Aug 21 in 2026). Deliberately not longer
+// — an out-of-season past date must still fall through to the upcoming event
+// rather than dredging up last season's finale.
+const EVENT_LOOKBACK_DAYS = 45;
+
+// YYYYMMDD ± days, in plain calendar arithmetic. Built and read back in UTC so
+// the host zone can never shift the result by a day; these are date keys for an
+// ESPN query, not instants.
+function shiftYmd(ymd: string, days: number): string {
+  const d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)));
+  d.setUTCDate(d.getUTCDate() + days);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+}
+
 async function fetchLeagueEvent(
   sport: "f1" | "ufc" | "nascar" | "indycar",
   date?: string,
@@ -2836,7 +2913,37 @@ async function fetchLeagueEvent(
     }
   };
 
-  const event: LeagueEvent | null = (date ? await load(date) : null) ?? await load();
+  // Every event in a YYYYMMDD-YYYYMMDD window. ESPN accepts a range on the
+  // scoreboard and returns the events in chronological order (verified
+  // 2026-08-10 against racing/f1 and mma/ufc).
+  const loadRange = async (from: string, to: string): Promise<LeagueEvent[]> => {
+    const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+    url.searchParams.set("dates", `${from}-${to}`);
+    try {
+      const res = await fetchWithRetry(url.toString());
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.events ?? []) as LeagueEvent[];
+    } catch {
+      return [];
+    }
+  };
+
+  let event: LeagueEvent | null = date ? await load(date) : null;
+  // A PAST board date must never surface an event that has not happened yet.
+  // The undated fallback below returns ESPN's CURRENT-OR-NEXT event, so during
+  // any calendar gap — F1's summer break, a UFC off-weekend — every past tab
+  // rendered the UPCOMING race/card in state "pre". The highlight button only
+  // renders on a finished tile (showRaceBtn in EventCard), so the last race's
+  // recap was unreachable from Yesterday or any earlier day, even though the
+  // reel exists. Walk BACK instead: the most recent event at or before the
+  // viewed day. This is the event-tile version of the isPastView rule the game
+  // columns already follow ("on a PAST tab … not surface a future game").
+  if (!event && date && date < toYmd(getEtServiceDate())) {
+    const past = await loadRange(shiftYmd(date, -EVENT_LOOKBACK_DAYS), date);
+    event = past.length ? past[past.length - 1] : null;
+  }
+  event = event ?? (await load());
   if (!event) return null;
   const comps: LeagueEventCompetition[] = event.competitions ?? [];
   const eventUrl: string | undefined = event.links?.find((l) => l?.href)?.href;
