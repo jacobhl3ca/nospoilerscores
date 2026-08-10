@@ -88,7 +88,9 @@ const OFFICIAL_CHANNELS = {
   fifa: "FIFA", epl: "NBC Sports", mls: "Major League Soccer",
   ucl: "CBS Sports Golazo", uel: "CBS Sports Golazo", seriea: "CBS Sports Golazo",
   bundesliga: "Bundesliga",
-  ligamx: "TUDN México",
+  // "TUDN USA", not "TUDN México" — see the note on ligamx in
+  // src/lib/youtube.ts. The México string resolved 0 videos for every fixture.
+  ligamx: "TUDN USA",
   nwsl: "National Women's Soccer League",
   efl: "EFL",
   libertadores: "CONMEBOL Libertadores",

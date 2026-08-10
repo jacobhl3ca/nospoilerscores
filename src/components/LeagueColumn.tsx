@@ -378,12 +378,19 @@ function getPlayoffSubtitle(
 // Module-level cache so every column shares one fetch.
 let cachedBigInningSchedule: BigInningSchedule | null = null;
 
-function PlayoffSubtitle({ sport, selectedDate, games, onClick }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void }) {
+// `fallbackText` fills the subtitle slot ONLY when this column has no subtitle
+// of its own — no playoff round, no Big Inning line, no trade-board promo. It's
+// how the lookback slate's "Last played · Sun 8/2" rides in the header instead
+// of on the first card (Jacob 8/10: the card reads cleaner without that line,
+// and the header slot is otherwise rendering a transparent spacer). By
+// construction it can never displace an existing italic subtitle, because it is
+// only consulted when `tiers` came back empty.
+function PlayoffSubtitle({ sport, selectedDate, games, onClick, fallbackText }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string }) {
   if (isDemoModeActive()) return null;
-  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} />;
+  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} fallbackText={fallbackText} />;
 }
 
-function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void }) {
+function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackText }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string }) {
   const ref = useRef<HTMLElement>(null);
   const [bigInningSchedule, setBigInningSchedule] = useState<BigInningSchedule | null>(cachedBigInningSchedule);
 
@@ -493,18 +500,20 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
   // indicator. Only Big Inning sets `live`; the trade board links from the same
   // slot without borrowing the live styling.
   const isLive = !!result?.live && tiers.length > 0;
+  // No subtitle of our own → the caller's fallback (if any) takes the slot.
+  const usingFallback = !tiers.length && !!fallbackText;
   const baseCls = "text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5";
   const liveCls = `${baseCls} text-green-500 font-medium hover:text-green-400 transition-colors hover:underline`;
   const linkCls = `${baseCls} italic hover:underline transition-colors`;
   const spanCls = `${baseCls} italic`;
   const baseStyle = {
     visibility: ready || !tiers.length ? ("visible" as const) : ("hidden" as const),
-    color: isLive ? undefined : (tiers.length ? "var(--text-muted)" : "transparent"),
+    color: isLive ? undefined : (tiers.length || usingFallback ? "var(--text-muted)" : "transparent"),
   };
   // A chosen tier below suffixTiers.length is a paired one, so the trailing
   // " \u00B7 Trades" is peeled back off and re-rendered as its own link.
   const showsTradeBoard = tierIdx < suffixTiers.length;
-  const chosen = tiers.length ? tiers[tierIdx] : "\u00A0";
+  const chosen = tiers.length ? tiers[tierIdx] : (fallbackText ?? "\u00A0");
   const text = showsTradeBoard
     ? baseTiers.length
       ? chosen.slice(0, -((tradePromo?.label.length ?? 0) + 3))
@@ -1147,6 +1156,14 @@ export default function LeagueColumn({
   const renderUpcoming = section !== "finished";
   const renderFinished = section !== "upcoming";
 
+  // Chess / boxing / poker columns are a single event tile, not a slate, so the
+  // slate wording ("No games", "Upcoming Schedule TBD") is wrong for them on a
+  // date their feed has nothing for. They keep rendering the column either way
+  // — see the eventCard branch of fetchLeague.
+  const isEventTileSport = league.sport === "chess" || league.sport === "boxing" || league.sport === "poker";
+  const emptyLabel = isEventTileSport ? "No event" : "No games";
+  const emptyUpcomingLabel = isEventTileSport ? "No event scheduled" : "Upcoming Schedule TBD";
+
   // Condensed single-column render: TODAY's games only (no future-day
   // lookahead, no Final separator), best-first via `sorted`. 6+ games collapse
   // to the top 3 with a "Show N more" toggle; ≤5 show in full. `pastDate` flows
@@ -1250,21 +1267,29 @@ export default function LeagueColumn({
       );
     });
 
-  // Lookback slate: on an empty PAST tab, render the last game day's finished
-  // games (with highlights) in place of "No games". The "Last played" label
-  // rides centered on the first card's top row (only the first, since they
-  // share the day). Uses the SHORT weekday ("Mon") — the full name ("Wednesday")
-  // overflowed the narrow homepage columns (Jacob 6/12); the numeric date is
-  // appended only when the game is a week+ old, to disambiguate which Mon.
-  const renderPreviousSlate = (games: Game[], date: string) => {
+  // "Last played · Mon" / "Last played · Mon 6/8" for the lookback slate's day.
+  // SHORT weekday ("Mon") — the full name ("Wednesday") overflowed the narrow
+  // homepage columns (Jacob 6/12); the numeric date is appended only when the
+  // game is a week+ old, to disambiguate which Mon.
+  const lastPlayedText = (date: string) => {
     const y = +date.slice(0, 4), mo = +date.slice(4, 6) - 1, d = +date.slice(6, 8);
     const dateObj = new Date(y, mo, d, 12, 0, 0);
     const daysAgo = Math.round((nowMs - dateObj.getTime()) / 86400000);
     const dow = dateObj.toLocaleDateString("en-US", { weekday: "short" });
-    const label = daysAgo < 7 ? `Last played · ${dow}` : `Last played · ${dow} ${mo + 1}/${d}`;
+    return daysAgo < 7 ? `Last played · ${dow}` : `Last played · ${dow} ${mo + 1}/${d}`;
+  };
+
+  // Lookback slate: on an empty PAST tab, render the last game day's finished
+  // games (with highlights) in place of "No games".
+  // ⚠️ The "Last played" label does NOT ride on the cards. It used to sit on the
+  // first card's top row, which made the top card of a Yesterday column taller
+  // and busier than every other card on the board; it now takes the column
+  // HEADER's otherwise-empty italic subtitle slot (Jacob 8/10). See
+  // lastPlayedLabel + PlayoffSubtitle's fallbackText below.
+  const renderPreviousSlate = (games: Game[]) => {
     return (
       <div className="flex flex-col gap-1.5 sm:gap-2">
-        {games.map((game, i) => (
+        {games.map((game) => (
           <GameCard
             key={game.id}
             game={game}
@@ -1274,7 +1299,6 @@ export default function LeagueColumn({
             leagueLabel={league.label}
             onPlayHighlight={onPlayHighlight}
             onPlayEmbed={onPlayEmbed}
-            pastDateLabel={i === 0 ? label : undefined}
             isPastDate
             useAbbreviations={useAbbreviations}
             onSelectTeam={setTeamViewTeam}
@@ -1294,6 +1318,26 @@ export default function LeagueColumn({
     && !(league.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
     ? formatDateCompact(league.nextGameDay.date)
     : null;
+
+  // "Last played · …" for the header, set ONLY on the renders that actually
+  // show the lookback slate. Mirrors the two renderPreviousSlate branches in the
+  // body below: the past tab's empty slate, and the current-view offseason
+  // fallback (nothing today AND nothing ahead). Guarded by the same outer
+  // conditions those branches sit under (no team view, no golf/event tile, an
+  // empty slate, not a fetch failure) so the header can never claim a lookback
+  // the body isn't rendering. `showHeader` is `section !== "finished" &&
+  // !teamViewTeam`, i.e. exactly the cases that reach the slate — so the label
+  // is never computed for a header that doesn't render.
+  const showsPreviousSlate =
+    !teamViewTeam
+    && !league.golfTournament
+    && !league.eventCard
+    && sorted.length === 0
+    && renderUpcoming
+    && !league.fetchFailed
+    && (league.previousGameDay?.games?.length ?? 0) > 0
+    && (isPastDate || !league.nextGameDay);
+  const lastPlayedLabel = showsPreviousSlate ? lastPlayedText(league.previousGameDay!.date) : undefined;
 
   // When the column bottoms out with nothing at all — no slate, no lookahead, no
   // recent game — name the return date instead of shrugging ("Upcoming Schedule
@@ -1502,7 +1546,7 @@ export default function LeagueColumn({
           ) : notStartedDate ? (
             <span className="text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5 italic" style={{ color: "var(--text-muted)" }}>Starts {notStartedDate}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : undefined} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : undefined} fallbackText={lastPlayedLabel} />
           )}
         </div>
       )}
@@ -1563,7 +1607,7 @@ export default function LeagueColumn({
             </div>
           ) : isPastDate ? (
             league.previousGameDay && league.previousGameDay.games.length > 0 ? (
-              renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
+              renderPreviousSlate(league.previousGameDay.games)
             ) : notStartedDate && league.nextGameDay ? (
               // Not-started league: keep the subtitle cue, but still show the
               // known upcoming cards so the date/time lives on the schedule rows.
@@ -1571,7 +1615,7 @@ export default function LeagueColumn({
                 {renderUpcomingSlate(league.nextGameDay.games, true)}
               </div>
             ) : (
-              <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>No games</p>
+              <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>{emptyLabel}</p>
             )
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
@@ -1584,7 +1628,7 @@ export default function LeagueColumn({
             // last game played (score-hidden, with highlights) — the same lookback
             // the past tab uses — so the column stays useful instead of announcing
             // the season ended with a bare "Upcoming Schedule TBD".
-            renderPreviousSlate(league.previousGameDay.games, league.previousGameDay.date)
+            renderPreviousSlate(league.previousGameDay.games)
           ) : seasonOpener ? (
             // Offseason with nothing to show: the return date is the only thing
             // worth saying. "~" whenever the date came from the column's opening
@@ -1606,7 +1650,7 @@ export default function LeagueColumn({
               )}
             </div>
           ) : (
-            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>Upcoming Schedule TBD</p>
+            <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>{emptyUpcomingLabel}</p>
           )
         ) : null
       ) : condense ? (
