@@ -462,20 +462,12 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
 // clean text instead of showing an empty grey placeholder box.
 function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number }) {
   const [imgFailed, setImgFailed] = useState(false);
-  // Per-headline reveal, same gesture the Feed view has had all along (Jacob
-  // 8/9: "I should be able to click a headline to hide/show it — works on
-  // mobile but not web"). Cards view is the desktop default, and here the whole
-  // row was one big open-the-post button, so there was no way to peek at a
-  // single blurred headline without either opening the post or un-blurring the
-  // entire board with the Headlines chip.
-  //
-  // Tri-state, NOT a boolean: null = follow the global Headlines toggle, true =
-  // this row is forced open, false = this row is forced back to blurred. The
-  // boolean version could only ever reveal, so the headline was a one-way
-  // switch and the ONLY place a spoiler could be re-hidden was the modal
-  // (Jacob 8/10). Deriving the class from this state alone — never from a live
-  // read of <html> — also keeps the server and first client render identical.
-  const [reveal, setReveal] = useState<boolean | null>(null);
+  // NO per-row reveal gesture here. The list headline OPENS the post, full stop
+  // (Jacob 8/10, reversing the tri-state toggle added earlier the same day):
+  // "should only have that happen when I'm in a modal — not on the news
+  // homepage, so I can open articles/videos by clicking them normally."
+  // Show/hide-per-item lives in the modal (VideoModal's PeekBlur); the global
+  // Headlines chip is what un-blurs the board in place.
   // sm:min-h-[7rem] forces a uniform row height across every text source card
   // — Reddit, MLB.com, NBA.com, ESPN-league. With identical row heights AND
   // identical item counts (each prebake caps at 12), card N ends at the same
@@ -497,7 +489,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // until the global reveal toggle un-blurs it or the row is tapped open.
   const isTextPost = itemIsTextPost(item);
   const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]${isTextPost ? " news-textpost" : ""}`;
-  const titleCls = `news-title min-w-0 line-clamp-5${reveal === true ? " peek" : reveal === false ? " rehide" : ""}`;
+  const titleCls = "news-title min-w-0 line-clamp-5";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Every news item opens the same modal; its source link remains available
   // inside, and modifier-click still opens that source directly in a new tab.
@@ -588,30 +580,15 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // renders an 18px mark, which is decoration, not a button — rows that fall
   // back to it get the chevron instead.
   const thumbIsTile = showThumb || hasInlineMedia;
-  // ONE rule now: the headline is a spoiler switch, nothing else. Click blurred
-  // → shows it; click shown → blurs it again. Opening the post is never bound
-  // to this element, so the toggle can't swallow an open (the 8/9 regression) —
-  // every row already carries a dedicated open target: the media tile when
-  // there is one, the › chevron when there isn't.
-  //
-  // Effective state has to fold in the global Headlines chip, which is a class
-  // on <html> rather than a prop, so read it at click time: an untouched row
-  // (reveal === null) sitting under a global reveal is *shown*, and one click
-  // must therefore blur it — not "reveal" it a second time into a no-op.
-  const globallyRevealed = () =>
-    typeof document !== "undefined" && document.documentElement.classList.contains("reveal-news-titles");
-  const headlineClick = (e: ReactMouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setReveal((prev) => !(prev ?? globallyRevealed()));
+  // ONE rule now: every clickable part of the row — thumbnail, headline,
+  // chevron — opens the post. Modifier/middle-click still means "open the
+  // source in a background tab" everywhere, so the split is only in the target,
+  // never in what a plain click does.
+  const openInNewTab = (e: ReactMouseEvent) => {
+    if (!(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) return false;
+    if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+    return true;
   };
-  // It's a two-way toggle again, so aria-pressed is meaningful. Only the forced
-  // states can be voiced without reading <html> during render (which would
-  // desync SSR); an untouched row describes the gesture instead of the state.
-  const headlineA11y =
-    reveal === null
-      ? { "aria-label": "Show or hide this headline (spoiler)" }
-      : { "aria-label": "Show or hide this headline (spoiler)", "aria-pressed": reveal };
   if (shouldPopModal) {
     const open = () => onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
     return (
@@ -630,10 +607,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
               // later" — never blow away the currently-open modal. Without this
               // the button just re-pops the modal with new content and the user
               // loses the video/image they were watching.
-              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-                if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
-                return;
-              }
+              if (openInNewTab(e)) return;
               // Same payload via the shared helper, plus the column's siblings so the
               // modal can page prev/next across the full rendered column.
               open();
@@ -654,23 +628,25 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         ) : thumb}
         <button
           type="button"
-          onClick={headlineClick}
+          onClick={(e) => {
+            if (openInNewTab(e)) return;
+            open();
+          }}
           onAuxClick={(e) => {
             if (e.button === 1 && item.articleUrl) {
               window.open(item.articleUrl, "_blank", "noopener,noreferrer");
             }
           }}
           className="min-w-0 flex-1 text-left cursor-pointer"
-          title="Tap to show or hide this headline"
-          {...headlineA11y}
+          title="Open post"
+          aria-label="Open post"
         >
           <span className={titleCls}>{item.headline}</span>
         </button>
         {/* Rows with no thumbnail (plain text posts — now shown by default)
-            would otherwise have no way left to open the post once the headline
-            click is spent on revealing it. A small chevron at the row's right
-            edge keeps opening one tap away without touching the row height the
-            column alignment depends on. */}
+            get a small chevron at the right edge as an explicit open
+            affordance, without touching the row height the column alignment
+            depends on. */}
         {!thumbIsTile && (
           <button
             type="button"
@@ -700,20 +676,19 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
           {thumb}
         </a>
       ) : thumb}
-      <button
-        type="button"
-        // Same one rule as the modal row above: the headline only shows/hides.
-        // It used to be an <a> that followed the link once revealed — but with
-        // the toggle now two-way there is no click left to navigate on, and a
-        // link that never navigates is a lie to the keyboard and to middle-
-        // click. The thumbnail/chevron beside it are the real <a>s.
-        onClick={headlineClick}
+      {/* No modal on this surface, so the headline is a real link to the
+          source — same target as the thumbnail and chevron beside it, which
+          keeps middle-click, keyboard, and "copy link" honest. */}
+      <a
+        href={item.articleUrl || undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleExternalClick(item.articleUrl)}
         className="min-w-0 flex-1 text-left cursor-pointer"
-        title="Tap to show or hide this headline"
-        {...headlineA11y}
+        aria-label="Open post"
       >
         <span className={titleCls}>{item.headline}</span>
-      </button>
+      </a>
       {!thumbIsTile && (
         <a
           href={item.articleUrl || undefined}

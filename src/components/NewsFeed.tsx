@@ -152,7 +152,6 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
 }
 
 function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
-  const [peek, setPeek] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const isReddit = !!item.section?.startsWith("r/");
   // Hero = a real picture (gallery cover / full-res image post). A thumbOnly
@@ -164,15 +163,6 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
   const isVideo = !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
   const hasMedia = !!img || !!tile || isVideo;
   const comments = item.comments ?? [];
-  // The global Headlines chip un-blurs everything at once and outranks the
-  // per-post peek, so read it live off <html> (same as NewsColumn/TextRow)
-  // rather than threading a prop down: with nothing left to reveal, a headline
-  // click goes straight to opening the post.
-  // Read at click time, not render time: flipping that chip changes a class on
-  // <html> and doesn't re-render this post.
-  const isRevealed = () =>
-    peek ||
-    (typeof document !== "undefined" && document.documentElement.classList.contains("reveal-news-titles"));
 
   return (
     <article
@@ -202,24 +192,21 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         )}
       </div>
 
-      {/* ONE rule, shared with the Cards view (NewsColumn/TextRow): a blurred
-          headline click REVEALS it; once shown, the next click opens the paged
-          modal. A second click no longer re-hides — that was swallowing the
-          open (Jacob 8/9); the global Headlines chip is the way back to
-          blurred. Media posts also keep their preview below as a modal target. */}
+      {/* ONE rule, shared with the Cards view (NewsColumn/TextRow): a headline
+          click OPENS the post — never reveals it in place (Jacob 8/10). Peeking
+          a single spoiler belongs to the modal (VideoModal's PeekBlur); the
+          global Headlines chip is what un-blurs the feed where it stands. */}
       <button
         type="button"
-        onClick={() => { if (isRevealed()) onOpen(); else setPeek(true); }}
+        onClick={onOpen}
         className="block w-full text-left px-4 pt-2 pb-3 cursor-pointer"
-        title={peek ? "Open post" : "Tap to reveal this headline"}
-        // While still blurred this is a reveal action, not a toggle (the only
-        // cue is the CSS `.peek` blur, which assistive tech can't perceive), so
-        // name it explicitly (WCAG 4.1.2) — mirroring VideoModal's PeekBlur and
-        // TextRow's headline button. Once revealed it is a plain "open post"
-        // action and gets that name instead.
-        aria-label={peek ? "Open post" : "Reveal headline (spoiler)"}
+        title="Open post"
+        // The only cue that this text is a spoiler is the CSS blur, which
+        // assistive tech can't perceive — but the action is now plainly "open
+        // post", same as the media preview below (WCAG 4.1.2).
+        aria-label="Open post"
       >
-        <h3 className={`news-title text-base sm:text-lg font-semibold leading-snug ${peek ? "peek" : ""}`} style={{ color: "var(--text)" }}>
+        <h3 className="news-title text-base sm:text-lg font-semibold leading-snug" style={{ color: "var(--text)" }}>
           {item.headline}
         </h3>
       </button>
