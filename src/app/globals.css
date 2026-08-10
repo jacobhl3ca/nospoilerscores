@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+/* HEADER FLOW SPACER — the reason the first game card keeps its top border.
+   The app header is position:fixed, so this element stands in for it in flow.
+   Its height uses the SAME --header-h expression (and the same fallbacks) that
+   .news-toolbar-sticky and .league-sticky-top pin at, which makes page content
+   start at exactly the offset those rows pin to. A stale --header-h then moves
+   the content and the pin point together instead of sliding them past each
+   other, so a sticky row can never be pushed below its natural position and
+   onto the card beneath it. See the comment on <header> in HomeContent.tsx.
+   Guarded by tests/visual/sticky-seam.spec.ts. */
+.header-flow-spacer {
+  height: var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem));
+  flex: none;
+}
+@media (min-width: 640px) {
+  .header-flow-spacer {
+    height: var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem));
+  }
+}
+
 /* The news toolbar (Cards/Feed + toggles) pins directly under the app header. */
 .news-toolbar-sticky {
   top: var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem));
