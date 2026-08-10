@@ -35,7 +35,9 @@ export const metadata: Metadata = {
   },
 };
 
-const FAQ: { q: string; a: string }[] = [
+// `link` renders as an inline anchor at the end of the answer (and is folded
+// into the answer text for the FAQPage schema, which takes plain text only).
+const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   {
     q: "What is HideScore?",
     a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, soccer, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
@@ -68,6 +70,11 @@ const FAQ: { q: string; a: string }[] = [
     q: "Is there a HideScore app?",
     a: "Yes. HideScore is a free iOS app on the App Store, and it also works in any web browser at hidescore.com.",
   },
+  {
+    q: "Who makes HideScore?",
+    a: "HideScore is built and maintained by Jacob Heifetz-Licht, an independent developer in New York known online as JacobHL. HideScore is one of several tools he builds and runs, which you can see at",
+    link: { href: "https://jacobhl.com", text: "jacobhl.com" },
+  },
 ];
 
 export default function FaqPage() {
@@ -79,7 +86,21 @@ export default function FaqPage() {
         {FAQ.map((item) => (
           <div key={item.q}>
             <h2 className="text-lg font-semibold mb-1">{item.q}</h2>
-            <p>{item.a}</p>
+            <p>
+              {item.a}
+              {item.link && (
+                <>
+                  {" "}
+                  {/* rel="me" — both sites are the same author, so this is the
+                      identity link Google/IndieWeb consumers read to tie the
+                      HideScore author to the jacobhl.com Person entity. */}
+                  <a href={item.link.href} rel="me" className="underline underline-offset-2">
+                    {item.link.text}
+                  </a>
+                  .
+                </>
+              )}
+            </p>
           </div>
         ))}
       </section>
@@ -127,7 +148,13 @@ export default function FaqPage() {
             mainEntity: FAQ.map((item) => ({
               "@type": "Question",
               name: item.q,
-              acceptedAnswer: { "@type": "Answer", text: item.a },
+              // Answer text is plain text in the schema, so an entry whose
+              // rendered answer ends in a link gets that link's label folded
+              // back in — otherwise the structured answer would end mid-sentence.
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: item.link ? `${item.a} ${item.link.text}.` : item.a,
+              },
             })),
           }).replace(/</g, "\\u003c"),
         }}
