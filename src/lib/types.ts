@@ -26,6 +26,15 @@ export interface Game {
   // league but glued to the serie ("LCK Summer"), which is display text, not a
   // lookup key. Undefined for every other sport.
   esportsLeague?: string | null;
+  // Gridiron REGULAR-SEASON week number (NFL / NCAAF only, ESPN's
+  // event.week.number). Carried purely as a highlight-lookup discriminator:
+  // the NFL channel dates its recaps by week, not by calendar date
+  // ("… | NFL 2025 Season Week 15"), so two meetings between the same teams in
+  // the same season are indistinguishable to the date and year gates. Threaded
+  // to the /api/youtube `week` param (see resolveHighlightVideo). Null/undefined
+  // for the postseason — those titles say "Divisional Round", not "Week N" —
+  // and for every non-gridiron sport.
+  weekNumber?: number | null;
   // Whether this is a playoff/postseason/tournament game
   isPlayoff: boolean;
   // Full playoff round label (e.g. "Sweet 16", "ALWC - Game 2", "Conference Finals")

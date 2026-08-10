@@ -2463,10 +2463,15 @@ function hlTelemundoWorldCupQuery(away, home, dateStr, series) {
 
 // One /api/youtube call mirroring youtube.ts fetchFirstVideoId (q, channel,
 // exclude, prefer=extended). Returns a raw video id or null.
-async function hlFetchId(query, { channel, exclude, preferExtended, strict } = {}) {
+async function hlFetchId(query, { channel, exclude, preferExtended, strict, week } = {}) {
   try {
     let url = `https://hidescore.com/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
+    // Gridiron week gate — mirrors fetchFirstVideoId in src/lib/youtube.ts. The
+    // bake has to send it too: carried entries are revalidated against uploader
+    // + matchup only, and BOTH meetings of a division rival pass that check, so
+    // without the week the bake can cache the wrong week's recap indefinitely.
+    if (week) url += `&week=${week}`;
     const ex = (exclude ?? []).filter(Boolean);
     if (ex.length) url += `&exclude=${encodeURIComponent(ex.join(","))}`;
     if (preferExtended) url += `&prefer=extended`;
@@ -2528,6 +2533,19 @@ async function hlVideoMatchesTeams(id, away, home) {
   return !!meta?.title && hlTitleHasTeam(meta.title, away) && hlTitleHasTeam(meta.title, home);
 }
 
+// Gridiron week check for CARRIED entries. The matchup check above passes for
+// BOTH meetings of a division rival — same two teams, same season — so it is not
+// enough on its own for NFL/NCAAF. Same asymmetry as the worker's gate: a title
+// whose week token disagrees is rejected, a title with no week token is left
+// alone (postseason cuts say "Divisional Round", and the caller sends no week
+// for those anyway).
+async function hlVideoMatchesWeek(id, week) {
+  if (!week) return true;
+  const meta = await hlOembedMeta(id);
+  const tok = String(meta?.title ?? "").match(/\bw(?:ee)?k\.?\s*(\d{1,2})\b/i);
+  return !tok || parseInt(tok[1], 10) === week;
+}
+
 async function hlVideoMatchesChannel(id, channel) {
   const meta = await hlOembedMeta(id);
   return String(meta?.author ?? "").toLowerCase() === String(channel ?? "").toLowerCase();
@@ -2539,10 +2557,10 @@ async function hlIsTelemundoVideo(id) {
 
 // Mirror resolveHighlightVideo: one dated query, one exact uploader, no
 // unscoped retry tier.
-async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended) {
+async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended, week) {
   const dated = hlQuery(away, home, dateStr, series, competition, true);
   if (!channel) return null;
-  return hlFetchId(dated, { channel, exclude, preferExtended, strict: true });
+  return hlFetchId(dated, { channel, exclude, preferExtended, strict: true, week });
 }
 
 async function hlResolveTelemundoWorldCup(away, home, dateStr, series, exclude, preferExtended) {
@@ -2710,11 +2728,18 @@ async function bakeGameHighlights() {
               const m = (note?.headline ?? "").match(/Game \d+/i);
               if (m) { series = m[0]; break; }
             }
-            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel }];
+            // Gridiron REGULAR-season week (see gridironWeekNumber in
+            // src/lib/espn.ts for why the postseason is excluded). Undefined
+            // everywhere else, which leaves every other league's query
+            // byte-identical to before.
+            const week = (lg.sport === "nfl" || lg.sport === "ncaaf") && event.season?.type === 2
+              ? event.week?.number
+              : undefined;
+            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
-        const { away, home, series } = item;
+        const { away, home, series, week } = item;
         const isFifa = lg.sport === "fifa";
         const matchup = hlMatchupFingerprint(away, home);
         const rawPrev = games[key] ?? {};
@@ -2747,30 +2772,30 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
-        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, primaryChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)))) {
-          console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home})`);
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, primaryChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week)))) {
+          console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
-        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)))) {
-          console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home})`);
+        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week)))) {
+          console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevExtended = null;
         }
 
         let official = prevOfficial ?? null;
         if (!official) {
-          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false);
-          if (official && !(await hlVideoMatchesTeams(official, away, home))) {
+          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week);
+          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
         }
         let extended = prevExtended ?? null;
         if (!extended) {
-          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended);
+          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week);
           if (extended && official && extended === official) {
-            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended);
+            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, week);
           }
-          if (extended && !(await hlVideoMatchesTeams(extended, away, home))) {
+          if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
             extended = null;
           }

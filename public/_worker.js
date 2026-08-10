@@ -303,6 +303,19 @@ export default {
       // motorsport analogue of the golf-tournament and World Cup gates.
       const raceTokens = (url.searchParams.get("race") || "")
         .split("|").map((s) => normalizeRaceToken(s)).filter(Boolean);
+      // week=<n> → WEEK GATE for gridiron football (NFL / NCAAF regular season).
+      // Same failure class as the race gate, one league down: the NFL channel
+      // titles every recap "… Game Highlights | NFL 2025 Season Week 15" with
+      // NO calendar date, so for a pair that meets twice in a season BOTH
+      // uploads carry the same two teams and the same year — the date gate
+      // can't fire (no date token) and the year gate agrees (same year). The
+      // earlier upload then wins channelTeamsYearId just by ranking first.
+      // Measured against the LIVE worker 2026-08-10 over the eight-game
+      // Dec 14 2025 slate: 7/8 correct, and Commanders@Giants returned the
+      // WEEK 1 recap of the same fixture. Week is the only discriminator the
+      // title carries, so it has to be the gate.
+      const weekParam = parseInt(url.searchParams.get("week") || "", 10);
+      const queryWeek = Number.isFinite(weekParam) && weekParam >= 1 && weekParam <= 25 ? weekParam : null;
       const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
       const excludeSet = new Set(
         (excludeParam || "").split(",").map((s) => s.trim()).filter(Boolean)
@@ -543,7 +556,30 @@ export default {
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
           const normalizedTitle = normalizeTeamMatch(titleLower);
-          return variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)));
+          if (variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)))) return true;
+          // Singular-nickname tolerance. Not hypothetical: the OFFICIAL NFL
+          // channel's Week 15 recap of Dec 14 2025 is titled "Washington
+          // Commanders vs New York Giant Game Highlights | 2025 NFL Season
+          // Week 15" — singular "Giant", the league's own typo (verified
+          // 2026-08-10). The plural never matched, so the CORRECT clip failed
+          // hasTeams and fell out of every tier, and the Week 1 upload of the
+          // same fixture — spelled correctly — took the slot instead. A title
+          // typo on the one channel we trust must not be able to serve the
+          // wrong game.
+          //
+          // Deliberately narrow: only a trailing "s" is forgiven, only on a
+          // whole word, and only on variants of 5+ characters. The length floor
+          // is what keeps the risky short nicknames out — "Jets"/"Rams"/"Nets"/
+          // "Suns" would each strip to a common English word — while the
+          // boundary check stops "Lions"→"lion" from matching "Lionel". In
+          // practice the variant that fires here is the full "New York Giants",
+          // which is unambiguous.
+          return variants.some((v) => {
+            const n = normalizeTeamMatch(v);
+            if (!n.endsWith("s") || n.length < 5) return false;
+            const singular = n.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            return new RegExp(`(^|[^a-z0-9])${singular}([^a-z0-9]|$)`).test(normalizedTitle);
+          });
         }
 
         // Split HTML into videoRenderer blocks and parse each one individually
@@ -794,6 +830,19 @@ export default {
           if (!titleHasExplicitDate && queryYear) {
             const titleYears = title.match(/\b(20\d{2})\b/g) || [];
             if (titleYears.length > 0 && !titleYears.includes(queryYear)) continue;
+          }
+          // Wrong-week hard-skip (gridiron) — see the queryWeek note up top.
+          // Deliberately shaped like the wrong-year skip above: a title whose
+          // week token DISAGREES is dropped outright, a title carrying NO week
+          // token falls through untouched to the existing date/year tiers. That
+          // asymmetry is what keeps this safe for the uploads that don't use the
+          // house format at all (postseason cuts are titled "Divisional Round",
+          // never "Week N", and the client sends no week for them anyway).
+          // "Week 15" / "Week15" / "Wk 15" are all accepted spellings; the
+          // \b…\b and 1–2 digit cap keep it off "Weeks" recaps and stray digits.
+          if (queryWeek) {
+            const weekTok = title.match(/\bw(?:ee)?k\.?\s*(\d{1,2})\b/i);
+            if (weekTok && parseInt(weekTok[1], 10) !== queryWeek) continue;
           }
           const hasYear = titleHasExplicitDate
             ? titleDateMatches

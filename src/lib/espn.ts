@@ -1664,6 +1664,11 @@ type ScoreboardEvent = {
   shortName?: string;
   _sport?: Sport;
   season?: { type?: number; slug?: string };
+  // ESPN ships the gridiron week on the event itself (and again at the top of
+  // the scoreboard payload). Regular season only in practice — postseason
+  // events reuse the numbering under season.type 3, which is why
+  // gridironWeekNumber refuses to read it there.
+  week?: { number?: number };
   status?: {
     displayClock?: string;
     period?: number;
@@ -1689,6 +1694,26 @@ type ScoreboardEvent = {
     }
   >;
 };
+
+// Gridiron regular-season week, or null. This is the highlight-lookup gate for
+// NFL/NCAAF — see Game.weekNumber and the `week` param in public/_worker.js.
+//
+// Two deliberate refusals:
+//   • Non-gridiron sports return null. Nobody else's official channel titles by
+//     week, and a spurious week token would only ever subtract matches.
+//   • The POSTSEASON returns null even though ESPN keeps numbering weeks there
+//     (season.type 3 restarts at 1). NFL titles the playoff cuts by round
+//     ("Wild Card", "Divisional Round", "Super Bowl LX") and never by week, so
+//     sending week=1 for a Wild Card game would gate against a token the title
+//     doesn't carry — and, worse, would match a REGULAR-season Week 1 upload.
+//     Preseason (type 1) is excluded for the same reason: its own Week 1–3
+//     numbering collides head-on with the regular season's.
+function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null {
+  if (sport !== "nfl" && sport !== "ncaaf") return null;
+  if (event.season?.type !== 2) return null;
+  const week = event.week?.number;
+  return typeof week === "number" && week >= 1 && week <= 25 ? week : null;
+}
 
 function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const competition = event.competitions?.[0];
@@ -1861,6 +1886,7 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     stage,
     rating: calculateRating(event),
     seriesNote,
+    weekNumber: gridironWeekNumber(sport, event),
     isPlayoff,
     playoffLabel,
     seriesStatus,

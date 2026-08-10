@@ -14,7 +14,8 @@
     "poker:check": "node scripts/check-poker-events.mjs",
     "boxing:check": "node scripts/check-boxing-events.mjs",
     "test:unit": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
-    "indycar:check": "node scripts/check-indycar-tracks.mjs"
+    "indycar:check": "node scripts/check-indycar-tracks.mjs",
+    "nfl:check": "node scripts/check-nfl-weeks.mjs"
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",
