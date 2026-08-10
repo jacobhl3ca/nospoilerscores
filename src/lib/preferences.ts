@@ -327,8 +327,12 @@ export interface Preferences {
   // hidden by default. Undefined/false = hidden; true = shown. Headline reveal
   // never changes this filter, so both toolbar controls remain predictable.
   showTextPosts?: boolean;
-  // Image/video previews are visible by default. Set false to spoiler-blur the
-  // preview surfaces while leaving source/league icons alone.
+  // News image/video previews can spoil a result (a thumbnail or embedded clip
+  // gives the game away), so every preview surface is blurred by default, while
+  // leaving source/league icons alone. The "Media" eye toggle in the news header
+  // flips this on to reveal them all at once. Undefined/false = blurred
+  // (default); true = revealed. (Jacob 7/16 — blur on by default; the pre-paint
+  // guard in layout.tsx applies it before hydration to avoid a spoiler flash.)
   revealNewsMedia?: boolean;
   // News layout: false/undefined = the default multi-column "Cards" board (click
   // a post → lightbox); true = a single vertical "Feed" (Reddit-style scroll with
