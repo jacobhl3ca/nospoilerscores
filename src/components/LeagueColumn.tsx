@@ -648,7 +648,13 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
         className={`${linkCls} cursor-pointer`}
         style={baseStyle}
       >
-        {renderText(text)}{" ▸"}
+        {/* The trailing "▸" is a decorative disclosure cue, not part of the
+            button's name — hide it from assistive tech so the accessible name
+            is just the label text, matching the aria-hidden treatment the twin
+            subtitle button above and the live-pulse dot (renderText) already use
+            for purely-visual characters. Without it a screen reader read the
+            label plus a stray triangle (e.g. "Group Stage ▸"). */}
+        {renderText(text)}<span aria-hidden="true">{" ▸"}</span>
       </button>
     );
   }
