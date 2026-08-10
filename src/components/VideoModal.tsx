@@ -659,6 +659,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     // post A left imgFailed stuck true and post B's valid image was suppressed
     // into text-card mode until the modal was closed and reopened.
     setMediaFailed(false);
+    setImgFailed(false);
     // A swapped clip has not started either — re-expose YouTube's own play
     // button until the new id actually reaches PLAYING.
     hasStartedRef.current = false;
@@ -667,7 +668,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       window.clearTimeout(retryConfirmRef.current);
       retryConfirmRef.current = null;
     }
-  }, [currentId, playbackUrl, embedUrl, clearAutoplayBlocked]);
+  }, [currentId, playbackUrl, embedUrl, imageUrl, clearAutoplayBlocked]);
   useEffect(() => () => {
     if (retryConfirmRef.current) window.clearTimeout(retryConfirmRef.current);
   }, []);
