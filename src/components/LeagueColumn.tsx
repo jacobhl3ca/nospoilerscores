@@ -596,7 +596,12 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick }: { sport: 
     } else if (text && onClick) {
       label = (
         <button type="button" onClick={onClick} className="hover:underline transition-colors cursor-pointer">
-          {renderText(text)}{" ▸"}
+          {/* The "▸" is a decorative disclosure cue, not part of the button's
+              name — hide it from assistive tech so the accessible name is just
+              the label text, matching the aria-hidden treatment the live-pulse
+              dot (renderText above) and the weather glyphs in GameDetailModal
+              already use for purely-visual characters. */}
+          {renderText(text)}<span aria-hidden="true">{" ▸"}</span>
         </button>
       );
     } else if (text) {
