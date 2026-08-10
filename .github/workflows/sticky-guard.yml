@@ -1,0 +1,104 @@
+name: Sticky header guard
+
+# Holds ONE invariant: the sticky league title must never be pushed off its
+# natural position onto the game card below it.
+#
+# Why a whole workflow for one file: this bug ("the first game card has no top
+# outline") shipped and was reported four separate times, and was "fixed" three
+# times with padding tweaks, because the real cause is a measurement race, not
+# arithmetic — page content started at the header's REAL height while the
+# sticky rows pinned at the MEASURED --header-h, and position:sticky translates
+# an element DOWN to its pin offset whenever that offset lands below where the
+# element naturally sits. The fix is structural (fixed header +
+# .header-flow-spacer sized by the same --header-h), and it is only structural
+# for as long as those two numbers stay the same number. Nothing else in CI
+# runs Playwright, so without this the guard only fires if someone remembers to
+# run it.
+#
+# Deliberately NOT part of deploy.yml: a regression here is cosmetic, so this
+# must never be able to block a deploy. It runs alongside and alerts.
+
+on:
+  push:
+    branches: [main]
+    # Only the files that can break the invariant. Everything the spec touches:
+    # the header + spacer (HomeContent), every .league-sticky-top owner, the CSS
+    # that defines the pin offsets and the spacer height, and the spec itself.
+    paths:
+      - 'src/components/HomeContent.tsx'
+      - 'src/components/LeagueColumn.tsx'
+      - 'src/components/NewsColumn.tsx'
+      - 'src/components/TeamView.tsx'
+      - 'src/app/globals.css'
+      - 'tests/visual/sticky-seam.spec.ts'
+      - 'playwright.config.ts'
+      - '.github/workflows/sticky-guard.yml'
+  pull_request:
+    paths:
+      - 'src/components/HomeContent.tsx'
+      - 'src/components/LeagueColumn.tsx'
+      - 'src/components/NewsColumn.tsx'
+      - 'src/components/TeamView.tsx'
+      - 'src/app/globals.css'
+      - 'tests/visual/sticky-seam.spec.ts'
+      - 'playwright.config.ts'
+  workflow_dispatch:
+
+concurrency:
+  group: sticky-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sticky-seam:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Chromium only — playwright.config provisions no other browser, and the
+      # repo can't install WebKit via playwright-core anyway.
+      - run: npx playwright install --with-deps chromium
+
+      # playwright.config's webServer starts `npm run dev` on :3000 itself.
+      # --workers=1 because all seven specs drive the same sticky geometry and
+      # the shared dev server compiles routes lazily; serial is ~17s and has
+      # been stable, parallel occasionally races the first compile.
+      - name: Run the sticky-seam invariant suite
+        run: npx playwright test tests/visual/sticky-seam.spec.ts --workers=1 --reporter=line
+
+      - name: Upload trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sticky-guard-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # No grace window here, unlike staleness-check.yml: that monitor watches
+      # flapping external feeds, this one watches deterministic local geometry.
+      # A failure means someone just decoupled the header from --header-h, which
+      # never self-heals — so it pages on the first failure. Playwright's own
+      # CI retry (retries: 1 in playwright.config) absorbs genuine flakes first.
+      - name: Alert on failure
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::warning::NTFY_TOPIC secret unset — cannot alert."
+            exit 0
+          fi
+          curl -s -H "Title: HideScore sticky header regression" -H "Priority: high" -H "Tags: rotating_light" \
+            -d "The league title can be pushed onto the first game card again (the 'no top outline' bug). $run_url" \
+            "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
