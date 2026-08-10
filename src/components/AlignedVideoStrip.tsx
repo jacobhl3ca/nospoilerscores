@@ -437,7 +437,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
             window.open(item.articleUrl, "_blank", "noopener,noreferrer");
           }
         }}
-        // Same inline-play control as VideoStripRow's button (its thumb is
+        // Same inline-play control as VideoRow's button (its thumb is
         // alt=""), so the accessible name would otherwise be just the headline
         // with no cue this PLAYS a highlight vs. the sibling <a> tail rows that
         // open an article. Name the action explicitly; the headline stays in
