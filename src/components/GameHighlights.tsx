@@ -38,6 +38,7 @@ const highlightBufferHours: Record<string, number> = {
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
 const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 4 };
 
+
 // Shared highlight buttons for a finished game — the official-channel + top-
 // search YouTube clips, plus official league-site recap / condensed videos
 // where available.
@@ -456,8 +457,8 @@ export default function GameHighlights({
                 <span className="text-[10px]">Loading...</span>
               ) : (
                 <>
-                  <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{demoActive ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
+                  <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
                 </>
               )}
             </button>
@@ -499,7 +500,7 @@ export default function GameHighlights({
                 <span className="text-[10px]">Loading...</span>
               ) : (
                   <>
-                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                    <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                     {isFifa && (
                       <span className="text-[10px] font-medium">
                         <span>FOX 15m</span>
@@ -529,7 +530,7 @@ export default function GameHighlights({
               aria-label="MLB.com game recap"
               title="MLB.com game recap"
             >
-              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               <span className="text-[10px] font-medium whitespace-nowrap">3m</span>
             </button>
           )}
@@ -558,8 +559,12 @@ export default function GameHighlights({
               // "Loading...".
               title="MLB 10 minute condensed game"
             >
-              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
+              {fetchingOnClick === "official" ? <span className="text-[10px]">Loading...</span> : (
+                <>
+                  <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
+                </>
+              )}
             </button>
           )}
         </div>
@@ -597,7 +602,7 @@ export default function GameHighlights({
             >
               {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading...</span> : (
                 <>
-                  <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                   <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 10m</span>
                 </>
               )}
@@ -628,7 +633,7 @@ export default function GameHighlights({
             >
               {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading...</span> : (
                 <>
-                  <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                  <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                   <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
                 </>
               )}
@@ -659,7 +664,7 @@ export default function GameHighlights({
               aria-label="NHL.com recap (~5 min)"
               title="NHL.com recap (~5 min)"
             >
-              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               <span className="text-[10px] font-medium">5<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}
@@ -678,7 +683,7 @@ export default function GameHighlights({
               aria-label="NHL.com condensed game (~10 min)"
               title="NHL.com condensed game (~10 min)"
             >
-              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               <span className="text-[10px] font-medium">10<span className="sm:hidden">m</span><span className="hidden sm:inline"> min</span></span>
             </button>
           )}

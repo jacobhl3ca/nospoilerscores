@@ -1,6 +1,6 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, FightBout } from "./types";
 import { getApiBase } from "./youtube";
-import { getEtServiceDate, toYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
+import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { fetchCuratedBoxingEvent } from "./boxing";
@@ -2718,7 +2718,7 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
     if (!res.ok) return null;
     const { events } = (await res.json()) as { events: ChessApiEvent[] };
     if (!events?.length) return null;
-    const target = date ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`).getTime() : Date.now();
+    const target = date ? fromYmd(date).getTime() : Date.now();
     const onDate = (e: ChessApiEvent) =>
       e.startsAt != null && Math.abs(e.startsAt - target) < 24 * 60 * 60 * 1000;
     const byTier = (a: ChessApiEvent, b: ChessApiEvent) => (b.tier || 0) - (a.tier || 0);
@@ -2744,6 +2744,14 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
     // Lichess names read "GCT: Saint Louis Rapid & Blitz 2026 | Rapid" — the
     // segment after "|" duplicates what chessFormat/timeControl already say.
     const [name, ...rest] = chosen.name.split("|").map((s) => s.trim());
+    // Has the round's first move actually been played? Lichess flips a tour to
+    // state "in" when its WINDOW opens, which can be hours before play starts —
+    // on 2026-08-10 at 09:51 ET the Sinquefield Cup read "in" while Round 1 was
+    // still a 13:30 start. Ask for a round video in that gap and YouTube's own
+    // search happily returns the organizer's SCHEDULED stream, so the button
+    // opened a countdown instead of chess (Jacob 8/10). No start time (older
+    // Lichess entries) is treated as started — the previous behaviour.
+    const hasStarted = chosen.startsAt == null || chosen.startsAt <= Date.now();
     return {
       kind: "chess",
       title: name || chosen.name,
@@ -2757,12 +2765,20 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
       chessTimeControl: chosen.timeControl || undefined,
       chessPlayers: chosen.players?.length ? chosen.players : undefined,
       chessTier: chosen.tier,
-      // Round replay (see CHESS_ORGANIZER_CHANNELS). Undefined for every event
-      // without a verified organizer, which is what keeps the button off the
-      // tile — EventCard hides it when officialChannel is missing, and the
-      // worker's strict + token gates hide it when the round is not up.
-      officialChannel: CHESS_ORGANIZER_CHANNELS.find((o) => o.rx.test(chosen.name))?.channel,
-      officialLabel: "Round",
+      // The organizer's own broadcast of this round (see
+      // CHESS_ORGANIZER_CHANNELS) — the whole session end to end, because no
+      // chess body cuts a highlight package. Saint Louis DOES post short recaps
+      // ("Important Win for Fabi…", "Champion Praggnanandhaa…") but every one
+      // names the result in its title, which is the one thing this app cannot
+      // show. Undefined for any event without a verified organizer, and until
+      // the round has actually begun — EventCard hides the button when
+      // officialChannel is missing.
+      officialChannel: hasStarted
+        ? CHESS_ORGANIZER_CHANNELS.find((o) => o.rx.test(chosen.name))?.channel
+        : undefined,
+      // "Round" read as a mystery button (Jacob 8/10). Say what it opens: the
+      // full round, not a highlight reel.
+      officialLabel: "Full round",
       highlightQuery: `${name || chosen.name}${chosen.round ? ` ${chosen.round}` : ""}`,
       raceTokens: buildChessTokens(chosen.name),
       // Lichess's own board is the watch destination — it is live, free, and
@@ -2880,7 +2896,7 @@ export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard |
     if (!res.ok) return curated;
     const { events } = (await res.json()) as { events: BoxingApiEvent[] };
     if (!events?.length) return curated;
-    const target = date ? new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T12:00:00`).getTime() : Date.now();
+    const target = date ? fromYmd(date).getTime() : Date.now();
     const ts = (e: BoxingApiEvent) => new Date(e.date).getTime();
     const exactDate = date
       ? events.filter((event) => event.date.slice(0, 10).replace(/-/g, "") === date)
@@ -4301,7 +4317,13 @@ export async function fetchAllLeagues(
         : cfg.sport === "boxing"
           ? await fetchBoxingEvent(date)
           : await fetchPokerEvent(date);
-      if (!eventCard) return null;
+      // A day with no card still renders the column. These three are
+      // excludeFromAuto, so a column only exists here because the user pinned
+      // it or picked it in the switcher — dropping it on a quiet date made the
+      // choice look like it never registered (Jacob 8/10: "can't even select
+      // the chess column"). Returning null here also silently re-flowed every
+      // column to its left. With no eventCard, LeagueColumn falls through to
+      // the same empty state every other league shows.
       return { sport: cfg.sport, label, games: [], eventCard };
     }
     const { games, failed } = await fetchGames(cfg.sport, date);

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getApiBase } from "@/lib/youtube";
-import { openExternal, handleExternalClick } from "@/lib/openExternal";
+import { getApiBase, leadChannelBlocksEmbeds } from "@/lib/youtube";
+import { openExternal } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
@@ -1342,6 +1342,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
     if (hlsMode || embedMode || imageMode || textMode) return; // HLS / iframe / image / text branches handle rendering instead
+    // Channels that refuse embeds on every upload (F1) can only end at the
+    // "Watch on YouTube" card, so go there on the first frame instead of
+    // mounting a player that will black-screen, error 150, and then walk a
+    // fallback chain with nothing in it (Jacob 8/10). See
+    // leadChannelBlocksEmbeds for how the list is verified and unwound.
+    if (leadChannelBlocksEmbeds(strictFallbackChannels(fallbackUrl))) {
+      setYtFailed(true);
+      return;
+    }
     setYtFailed(false); // fresh attempt (initial load or a fallback swap) — clear any prior failure
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";

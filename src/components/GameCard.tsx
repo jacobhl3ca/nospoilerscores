@@ -18,10 +18,11 @@ interface GameCardProps {
   onToggleFavoriteTeam: (teamId: string) => void;
   showRatings: boolean;
   nextGameDate?: string;
-  // Lookback cards (empty past tab → last game played): a date label rendered on
-  // the card's top-left like a normal card date, e.g. "Last played · Mon 6/8" —
-  // so it reads as part of the card, not floating text above it.
-  pastDateLabel?: string;
+  // (Removed 2026-08-10) `pastDateLabel` used to print "Last played · Mon 6/8"
+  // on the first lookback card's top row. It made the top card of a Yesterday
+  // column taller and busier than every other card on the board, so the label
+  // moved up into the league header's italic subtitle slot — see lastPlayedText
+  // + PlayoffSubtitle's fallbackText in LeagueColumn. Don't reintroduce it here.
   isPastDate?: boolean;
   isToday?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => void;
@@ -372,7 +373,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, pastDateLabel, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, showRecords }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, showRecords }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
@@ -586,13 +587,6 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       aria-label={cardClickable ? cardLabel : undefined}
       title={cardClickable ? "Game details" : undefined}
     >
-      {/* Lookback card: "Last played · {date}" centered on the card's top row,
-          normal date font/color (no ESPN link — it would spoil the score). */}
-      {pastDateLabel && (
-        <div className="mb-1 text-[11px] text-center whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-          {pastDateLabel}
-        </div>
-      )}
       {/* Playoff series state ("NY leads 1-0") — DAY-OF-GAME ONLY (Jacob 6/12):
           a lookahead card ("Tomorrow - 8:30PM" on today's board, nextGameDate
           set) already carries another day's game info, so the series line stays

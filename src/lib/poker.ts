@@ -78,7 +78,28 @@ function displayWindow(start: string, end: string): string {
   return `${fmt(start)}–${fmt(end, !sameMonth)}`;
 }
 
-export function selectPokerEvent(events: PokerEventRecord[], targetYmd: string): PokerEventRecord | null {
+// How far back a PAST board date will walk to find the event that had already
+// happened. Matches the 45-day window fetchLeagueEvent uses for F1/UFC/NASCAR
+// (see the past-date lookback in lib/espn.ts) — long enough to bridge the gap
+// between poker majors, short enough that a pre-season date still reads as
+// upcoming rather than dredging up last year's series.
+const PAST_LOOKBACK_DAYS = 45;
+// On today/future dates a just-missed event stays claimable for a week, which
+// is what keeps "Final + replay" on the board the day after a series ends.
+const RECENT_DAYS = 7;
+
+// `preferPast` = the viewed board date is in the past. A past date must walk
+// BACKWARD (overlapping → most recent finished → upcoming) instead of the
+// forward default, or every past tab shows the NEXT major in state "pre" and
+// the replay button — which only renders on a finished tile — is unreachable.
+// Bug seen 2026-08-09 (Jacob 8/10): Yesterday rendered "EPT Barcelona ·
+// Aug 16–29" instead of the WSOP Main Event Final Table that had just wrapped.
+// Same fix, and same reasoning, as the F1/UFC/chess past-date walk-back.
+export function selectPokerEvent(
+  events: PokerEventRecord[],
+  targetYmd: string,
+  preferPast = false,
+): PokerEventRecord | null {
   const valid = events.filter(validRecord);
   const overlapping = valid
     .filter((event) => event.startDate <= targetYmd && event.endDate >= targetYmd)
@@ -86,15 +107,16 @@ export function selectPokerEvent(events: PokerEventRecord[], targetYmd: string):
   if (overlapping.length) return overlapping[0];
 
   const target = dateMs(targetYmd);
+  const windowDays = preferPast ? PAST_LOOKBACK_DAYS : RECENT_DAYS;
   const upcoming = valid
     .filter((event) => event.startDate > targetYmd && dateMs(event.startDate) - target <= 120 * DAY_MS)
     .sort((a, b) => a.startDate.localeCompare(b.startDate) || b.priority - a.priority);
-  if (upcoming.length) return upcoming[0];
-
   const recent = valid
-    .filter((event) => event.endDate < targetYmd && target - dateMs(event.endDate) <= 7 * DAY_MS)
+    .filter((event) => event.endDate < targetYmd && target - dateMs(event.endDate) <= windowDays * DAY_MS)
     .sort((a, b) => b.endDate.localeCompare(a.endDate) || b.priority - a.priority);
-  return recent[0] ?? null;
+
+  const ordered = preferPast ? [recent[0], upcoming[0]] : [upcoming[0], recent[0]];
+  return ordered.find(Boolean) ?? null;
 }
 
 export async function fetchPokerEvent(date?: string): Promise<LeagueEventCard | null> {
@@ -103,12 +125,13 @@ export async function fetchPokerEvent(date?: string): Promise<LeagueEventCard | 
     if (!res.ok) return null;
     const data = (await res.json()) as PokerEventsFile;
     if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return null;
+    const todayYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
     const targetYmd = date && /^\d{8}$/.test(date)
       ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
-      : new Intl.DateTimeFormat("en-CA", {
-          timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-        }).format(new Date());
-    const chosen = selectPokerEvent(data.events, targetYmd);
+      : todayYmd;
+    const chosen = selectPokerEvent(data.events, targetYmd, targetYmd < todayYmd);
     if (!chosen) return null;
 
     const now = Date.now();
