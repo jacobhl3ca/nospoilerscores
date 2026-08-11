@@ -202,6 +202,16 @@ export interface LeagueEventCard {
   kind: "f1" | "ufc" | "boxing" | "chess" | "poker";
   title: string;            // "Spanish Grand Prix" / "UFC Fight Night: Kape vs. Horiguchi"
   subtitle?: string;        // circuit + city (F1) / venue city (UFC)
+  // Progressively shorter renderings of `title` / `subtitle`, longest first and
+  // ALWAYS starting with the full string. The single-event tile picks the
+  // longest one that fits its single line before it will shrink the font, and
+  // shrinks before it will truncate — a race tile's truncated tail is the
+  // identity of the race. Built in lib/eventTiles.ts (eventTitleVariants /
+  // eventSubtitleVariants) so the shortenings are unit-testable data, not
+  // regexes buried in a component. Absent = the tile has only the full string
+  // to work with, which is the pre-existing behaviour.
+  titleVariants?: string[];
+  subtitleVariants?: string[];
   headline?: string;        // UFC main event "Kape vs. Horiguchi"; F1 leaves null
   state: "pre" | "in" | "post";
   statusDetail: string;     // "Race" / "Fight Night" / "Live" / "Final"
