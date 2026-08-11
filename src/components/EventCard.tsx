@@ -941,7 +941,12 @@ export default function EventCard({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
       onClick={clickable ? openDetails : undefined}
-      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(); } } : undefined}
+      // Guard on e.target === e.currentTarget, as the FightCard tile and GameCard
+      // do: without it, Space/Enter on a nested play button (race/poker/boxing/
+      // chess highlight) would ALSO pop the detail sheet on top of the video the
+      // user just started — and preventDefault here would block the button's own
+      // Space activation.
+      onKeyDown={clickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDetails(); } } : undefined}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `${event.title} — event details` : undefined}
