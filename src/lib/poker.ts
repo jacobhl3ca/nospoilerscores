@@ -69,8 +69,16 @@ function validRecord(event: PokerEventRecord): boolean {
   }
 }
 
-function dateMs(ymd: string): number {
-  return new Date(`${ymd}T12:00:00Z`).getTime();
+// `isoDate` MUST be a DASHED calendar date (YYYY-MM-DD) — the format every
+// caller here passes (validRecord gates startDate/endDate on DATE_RX, and
+// fetchPokerEvent dashes the compact selectedDate before it reaches
+// selectPokerEvent). NOT the app's usual compact `ymd` (YYYYMMDD): the param
+// was named `ymd` but `new Date("20260809T12:00:00Z")` silently returns Invalid
+// Date (see the same footgun documented in lib/etDay.ts), which would make an
+// upcoming series read "Final" and its date render "Invalid Date". Renamed to
+// keep the dashed-only contract self-evident at the call site.
+function dateMs(isoDate: string): number {
+  return new Date(`${isoDate}T12:00:00Z`).getTime();
 }
 
 function displayWindow(start: string, end: string): string {
