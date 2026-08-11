@@ -25,8 +25,16 @@ const DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const APPROVED_CHANNELS = new Set(["DAZN Boxing"]);
 
-function dateMs(ymd: string): number {
-  return new Date(`${ymd}T12:00:00Z`).getTime();
+// `isoDate` MUST be a DASHED calendar date (YYYY-MM-DD) — the format every
+// caller here passes (validRecord gates startDate/endDate on DATE_RX, and
+// fetchCuratedBoxingEvent dashes the compact date before it reaches dateMs).
+// NOT the app's usual compact `ymd` (YYYYMMDD): the param was named `ymd` but
+// `new Date("20260809T12:00:00Z")` silently returns Invalid Date (the same
+// footgun documented in lib/etDay.ts — the one that vanished the boxing tile on
+// 8/10), whose NaN getTime() would make every window comparison false and drop
+// the card to "no event". Renamed to keep the dashed-only contract self-evident.
+function dateMs(isoDate: string): number {
+  return new Date(`${isoDate}T12:00:00Z`).getTime();
 }
 
 function validRecord(event: CuratedBoxingEvent): boolean {
@@ -40,8 +48,11 @@ function validRecord(event: CuratedBoxingEvent): boolean {
   }
 }
 
-function displayDate(ymd: string): string {
-  return new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-US", {
+// Same dashed-only (YYYY-MM-DD) contract as dateMs above — never the compact
+// `ymd`, or `new Date("20260809T12:00:00Z")` returns Invalid Date and this
+// renders "Invalid Date" in the subtitle.
+function displayDate(isoDate: string): string {
+  return new Date(`${isoDate}T12:00:00Z`).toLocaleDateString("en-US", {
     month: "short", day: "numeric", timeZone: "UTC",
   });
 }
