@@ -1,0 +1,60 @@
+name: Unit tests
+
+# npm run test:unit already existed, but the ONLY workflow that ran it was
+# tile-text-guard.yml, whose path filter is the event tile and the feed code
+# behind it. So the suite never ran for the files most of its tests are about:
+# a change to src/lib/spoilers.ts, public/_worker.js or src/lib/nflTeamChannels.ts
+# triggered nothing.
+#
+# That gap matters most for the spoiler pattern. SPOILER_RX is duplicated
+# byte-for-byte in src/lib/spoilers.ts (client) and public/_worker.js (edge),
+# and tests/spoilers-combat.test.ts pins the two copies together — a drift
+# leaks a result on exactly one of the two paths, silently. The auto-improve
+# bot edits that pattern on a schedule, which is precisely the change class the
+# guard exists to catch and precisely the one it was blind to.
+#
+# Separate from deploy.yml on purpose, same reasoning as sticky-guard.yml and
+# tile-text-guard.yml: it runs alongside a deploy and alerts, it never blocks
+# one. Node's own runner, no browser — the whole suite is ~1s.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/**'
+      - 'public/_worker.js'
+      - 'tests/*.test.ts'
+      - 'tests/*.test.mjs'
+      - 'package.json'
+      - '.github/workflows/unit-tests.yml'
+  pull_request:
+    paths:
+      - 'src/lib/**'
+      - 'public/_worker.js'
+      - 'tests/*.test.ts'
+      - 'tests/*.test.mjs'
+      - 'package.json'
+  workflow_dispatch:
+
+concurrency:
+  group: unit-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Unit tests (spoiler-pattern parity, NFL channels, race links, tiles)
+        run: npm run test:unit
