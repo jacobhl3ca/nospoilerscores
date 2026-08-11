@@ -177,11 +177,14 @@ export interface Preferences {
   // Hide the ▾ league-switcher arrows in the column headers (tap-to-switch
   // still works — the arrow is just the discoverability hint). Only relevant
   // in "dropdown" switcher mode.
+  /** @deprecated 8/11 — the ▾ is now implied by leagueSwitcherMode
+   *  ("dropdown"/"both" draw it, "arrows"/"off" never did). Kept only so
+   *  stored preferences from before the change still parse. Nothing reads it. */
   hideLeagueChevrons?: boolean;
   // Column-header league switcher style: dropdown (default), arrows (‹ › on
   // either side of the title cycle through the leagues), or off (plain
   // header — switching only via Settings).
-  leagueSwitcherMode?: "dropdown" | "arrows" | "off";
+  leagueSwitcherMode?: "dropdown" | "arrows" | "both" | "off";
   // Leagues the user removed from the homepage switcher (header dropdown /
   // arrow cycling / news swap / + button picks). Settings' slot pickers stay
   // unfiltered so a hidden league can still be pinned deliberately.

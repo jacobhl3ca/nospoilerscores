@@ -14,11 +14,20 @@ const FORMSPREE_ENDPOINT = "https://formspree.io/f/mkgqkgyr";
 // without the email" rather than blocking the message.
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-export default function FeedbackBox() {
+// `openSignal` lets a caller elsewhere in the tree pop this modal open — it is
+// a COUNTER, not a boolean, because the box owns its own open/closed state and
+// a boolean would fight it (close the modal and the parent's `true` would
+// immediately reopen it). Bumping the counter means "open now"; the box closes
+// itself normally afterwards. `prefill` seeds the message so a request that
+// arrived from a specific place in the UI is identifiable in the inbox.
+export default function FeedbackBox({ openSignal, prefill }: { openSignal?: number; prefill?: string } = {}) {
   const [text, setText] = useState("");
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [open, setOpen] = useState(false);
+  // Seeded from the parent's initial value so the FIRST render is never treated
+  // as a request to open — the box would otherwise pop open on page load.
+  const [lastSignal, setLastSignal] = useState(openSignal);
 
   // The collapsed "Feedback" trigger, so focus can return to it when the modal
   // is dismissed (see the focus-return effect below).
@@ -37,6 +46,20 @@ export default function FeedbackBox() {
     setEmail("");
     setOpen(false);
   };
+
+  // Adjusted DURING RENDER, not in an effect: React's documented pattern for
+  // "reset state when a prop changes" (react.dev "You Might Not Need an
+  // Effect"). An effect here would render the closed box, commit, then render
+  // again with it open — a visible extra frame, and the lint rule that bans
+  // setState-in-effect is pointing at exactly that.
+  if (openSignal !== undefined && openSignal !== lastSignal) {
+    setLastSignal(openSignal);
+    // Clear "Thanks" too, so a second request from the same page opens the form
+    // rather than sitting on the previous submission's confirmation.
+    setSent(false);
+    setText(prefill ?? "");
+    setOpen(true);
+  }
 
   // Escape closes from anywhere in the dialog, not just the two inputs — the
   // backdrop and the send button are focusable targets too, and a modal that
@@ -184,7 +207,10 @@ export default function FeedbackBox() {
             Feedback
           </button>
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            // z-[70] clears Settings (z-[60]), the highest overlay in the app:
+            // "Request a league" lives INSIDE Settings, so the form it opens has
+            // to land on top of the panel that launched it rather than behind.
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4"
             style={{ background: "rgba(0,0,0,0.6)" }}
             // Backdrop click closes. The check keeps a click that started
             // inside the form (e.g. a drag-select that ended on the backdrop)
