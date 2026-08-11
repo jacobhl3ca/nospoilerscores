@@ -281,7 +281,14 @@ export default function GameHighlights({
         const baked = await getBakedHighlight(game.sport, game.id);
         const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel, away, home);
         const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
-        const officialP = !hasOfficialButton
+        // MLB's official slot is never rendered (showYouTube requires !isMlb —
+        // its visible row is MLB.com-native, per the initialOfficialId guard
+        // above), so skip its live resolve: without the isMlb guard every
+        // finished MLB card fired one wasted /api/youtube scrape per card whose
+        // id nothing can display. The `secondP` slot was already safe (MLB's
+        // secondaryChannel is undefined → resolveHighlightVideo returns null
+        // before any fetch); this closes the same leak on the official slot.
+        const officialP = !hasOfficialButton || isMlb
           ? Promise.resolve(null)
           : bakedOfficial
           ? Promise.resolve(bakedOfficial)
