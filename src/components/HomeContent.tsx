@@ -183,6 +183,7 @@ function NewsFilterList({ options, selected, onToggle, onReorder }: {
   onReorder: (order: string[]) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const dragListenersRef = useRef<(() => void) | null>(null);
   const [dragVal, setDragVal] = useState<NewsSourceType | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const order = options.map((o) => o.value);
@@ -203,10 +204,14 @@ function NewsFilterList({ options, selected, onToggle, onReorder }: {
       }
       setDropIdx(next);
     };
-    const onUp = () => {
+    const removeListeners = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      dragListenersRef.current = null;
+    };
+    const onUp = () => {
+      removeListeners();
       setDragVal((curVal) => {
         setDropIdx((curDrop) => {
           if (curVal != null && curDrop != null) {
@@ -224,7 +229,19 @@ function NewsFilterList({ options, selected, onToggle, onReorder }: {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
+    // If the funnel popover unmounts mid-drag (pointer still down when the
+    // popover closes or HomeContent re-renders it away), onUp/onCancel never
+    // fire — so hand the teardown to the unmount effect below, which removes
+    // these window listeners without leaking the closures over order/onReorder.
+    // Mirrors LeagueColumn's dragListenersRef guard for its header drag.
+    dragListenersRef.current = removeListeners;
   };
+
+  // Remove any in-flight drag's window listeners if this list unmounts mid-drag
+  // (see startDrag). No DOM side-effects to revert here — unlike LeagueColumn's
+  // drag, this one appends no body cursor or ghost node — so it only detaches
+  // the listeners; it intentionally does NOT fire the reorder/setState onUp runs.
+  useEffect(() => () => { dragListenersRef.current?.(); }, []);
 
   return (
     <div ref={listRef} className="select-none">
@@ -245,7 +262,18 @@ function NewsFilterList({ options, selected, onToggle, onReorder }: {
                 onPointerDown={(e) => startDrag(e, opt.value)}
                 className="shrink-0 px-1 py-2 cursor-grab active:cursor-grabbing"
                 style={{ color: "var(--text-muted)" }}
-                aria-label="Drag to reorder"
+                // Pointer-only reorder handle (onPointerDown drag, no HTML5 DnD so
+                // it works on iOS) with no keyboard/AT equivalent. It used to carry
+                // aria-label="Drag to reorder" on this bare, non-focusable span,
+                // which advertised a "Drag to reorder" control to screen readers
+                // that a keyboard/SR user then had no way to operate. Selecting a
+                // filter is already fully keyboard-accessible via the row's <button>
+                // below; reordering is a pointer-only enhancement whose persisted
+                // order degrades gracefully (applyOrder tolerates any/no custom
+                // order). So hide the handle from assistive tech — the honest state
+                // for an inoperable affordance — matching the aria-hidden the
+                // decorative grip glyph inside already carries.
+                aria-hidden="true"
               >
                 <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" />
@@ -388,14 +416,21 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
 // A labeled on/off chip for the news toolbar (Headlines / Videos / Text posts).
 // Filled accent = ON, outline = OFF — one consistent shape so the row is easy to
 // read and toggle (Jacob 7/14).
-function NewsToggleChip({ active, onClick, title, children }: {
-  active: boolean; onClick: () => void; title: string; children: ReactNode;
+function NewsToggleChip({ active, onClick, title, ariaLabel, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
+      // The visible text label is display:none below 640px (`hidden sm:inline`)
+      // and the icon is aria-hidden, so on phones the only name source left is
+      // `title` — which iOS VoiceOver doesn't reliably announce for buttons,
+      // leaving these chips as unnamed "button, pressed/not pressed". Pin an
+      // explicit aria-label so the name survives on every viewport, matching the
+      // icon-button convention used elsewhere (e.g. SingleColToggle above).
+      aria-label={ariaLabel}
       aria-pressed={active}
       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
       style={{
@@ -926,13 +961,22 @@ export default function HomeContent({
     // new pull resolves, which prevents the "all 3 columns flash gray" effect.
     if (!silent) setLoading(true);
     setError(false);
-    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    // Watchdog lifecycle across fetchData's five concurrent callers, all sharing
+    // one watchdogRef slot. Capture THIS call's timer locally so the finally can
+    // tell whether the shared ref still points at our timer or a newer call's.
+    // Only a non-silent call owns a watchdog: clear the previous one and install
+    // ours here, guarded by !silent so a silent poll can't clear a visible load's
+    // watchdog and then install no replacement (that left the skeleton with no
+    // safety net).
+    let myWatchdog: ReturnType<typeof setTimeout> | null = null;
     if (!silent) {
-      watchdogRef.current = setTimeout(() => {
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+      myWatchdog = setTimeout(() => {
         watchdogRef.current = null;
         setLoading(false);
         setError(true);
       }, 40_000);
+      watchdogRef.current = myWatchdog;
     }
     try {
       // Slot count reads the live viewport so the initial desktop load fetches
@@ -957,7 +1001,11 @@ export default function HomeContent({
       setLeagues([]);
       setError(true);
     } finally {
-      if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+      // Clear the shared watchdog only if it's still OURS. A newer non-silent
+      // fetch may have replaced it while we awaited; cancelling that call's timer
+      // (the old bug) would defeat the very safety net it just installed, so an
+      // earlier call resolving must leave the latest call's watchdog running.
+      if (myWatchdog && watchdogRef.current === myWatchdog) { clearTimeout(myWatchdog); watchdogRef.current = null; }
       if (!silent) setLoading(false);
     }
   }, []);
@@ -998,7 +1046,19 @@ export default function HomeContent({
   // refetch every 10s so the Q4/period and clock keep advancing (matches
   // Google's sports-card behavior — clock jumps every poll, not every second).
   // Pauses when the tab is hidden so background tabs don't burn ESPN calls.
-  const hasLiveGames = leagues.some(l => l.games.some(g => g.state === "in"));
+  // Golf and F1/UFC columns carry no `games` — their live state lives on
+  // `golfTournament`/`eventCard` — so they must be checked too, or a Sunday
+  // final round (or a live race/fight card) that's the only live thing on the
+  // board would never start the poll and freeze at its load-time state. Golf
+  // gates on `roundStatus`, not the tournament-level `state` (which stays "in"
+  // for the whole multi-day event), so we poll only while players are actually
+  // on course — the same "live now" signal isGolfLive uses — not all night
+  // between rounds.
+  const hasLiveGames = leagues.some(l =>
+    l.games.some(g => g.state === "in") ||
+    l.golfTournament?.roundStatus === "in" ||
+    l.eventCard?.state === "in"
+  );
   useEffect(() => {
     if (!hasLiveGames || !selectedDate) return;
     const id = window.setInterval(() => {
@@ -1119,12 +1179,15 @@ export default function HomeContent({
   };
 
   const shareFavorites = () => {
-    // .catch swallows a rejected writeText (document not focused, permission
-    // denied, non-secure context) so it can't surface as an unhandled promise
-    // rejection — which the console flags and @sentry/nextjs captures as noise.
-    // Copy is a throwaway affordance (the link stays visible), matching the
-    // swallow-on-failure pattern in VideoModal's copyLink.
-    navigator.clipboard.writeText(buildShareUrl()).then(() => {
+    // ?. guards the non-secure-context case where navigator.clipboard is
+    // undefined: reading .writeText off it throws synchronously, before any
+    // promise exists, so the trailing .catch can't swallow it — optional
+    // chaining short-circuits the whole chain to undefined instead. The .catch
+    // still swallows a rejected writeText (document not focused, permission
+    // denied) so it can't surface as an unhandled promise rejection — which the
+    // console flags and @sentry/nextjs captures as noise. Copy is a throwaway
+    // affordance (the link stays visible), matching VideoModal's copyLink.
+    navigator.clipboard?.writeText(buildShareUrl()).then(() => {
       setShowShareCopied(true);
       setTimeout(() => setShowShareCopied(false), 2000);
     }).catch(() => {});
@@ -1152,9 +1215,10 @@ export default function HomeContent({
   };
 
   const copyFavLink = () => {
-    // See shareFavorites: .catch keeps a failed clipboard write from becoming an
-    // unhandled promise rejection / Sentry error. Copy is best-effort here too.
-    navigator.clipboard.writeText(buildShareUrl()).then(() => {
+    // See shareFavorites: ?. guards the undefined-clipboard throw and .catch
+    // keeps a failed write from becoming an unhandled rejection / Sentry error.
+    // Copy is best-effort here too.
+    navigator.clipboard?.writeText(buildShareUrl()).then(() => {
       setFavToastCopied(true);
       setTimeout(() => {
         dismissFavToast();
@@ -1869,18 +1933,6 @@ export default function HomeContent({
   }, []);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [newsOrderOpen, setNewsOrderOpen] = useState(false);
-  const newsOrderRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!newsOrderOpen) return;
-    const onClickAway = (e: MouseEvent) => {
-      if (newsOrderRef.current && !newsOrderRef.current.contains(e.target as Node)) {
-        setNewsOrderOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClickAway);
-    return () => document.removeEventListener("mousedown", onClickAway);
-  }, [newsOrderOpen]);
   // News filter popover (source type + focus league) — same click-away pattern.
   const [newsFilterOpen, setNewsFilterOpen] = useState(false);
   const newsFilterRef = useRef<HTMLDivElement>(null);
@@ -1891,8 +1943,21 @@ export default function HomeContent({
         setNewsFilterOpen(false);
       }
     };
+    // Escape closes the source-filter popover too — it's a role="dialog", and
+    // every other overlay in the app dismisses on Escape (the DateNav calendar
+    // popover, GameDetailModal, WorldCupGroupsModal, the ratings/news
+    // explainers). This dialog was the lone outlier: a keyboard user who opened
+    // it had no keyboard way out short of tabbing back to the toggle or picking
+    // an option, so Escape now matches the click-away dismissal already here.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNewsFilterOpen(false);
+    };
     document.addEventListener("mousedown", onClickAway);
-    return () => document.removeEventListener("mousedown", onClickAway);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClickAway);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [newsFilterOpen]);
   // Aggregate teams seen across loaded leagues so the settings panel can map
   // favorite-team IDs to display names + logos. Teams favorited but not
@@ -1957,7 +2022,18 @@ export default function HomeContent({
           style={{
             top: "calc(env(safe-area-inset-top) + var(--header-h, 4rem))",
             transform: `translate3d(-50%, ${ptrTranslateY}px, 0)`,
-            transition: refreshing ? "transform 200ms ease-out" : "none",
+            // Honor prefers-reduced-motion for the puck's settle slide, matching
+            // the .ptr-spinner guard in globals.css — the spinner inside this same
+            // element is already silenced under reduced-motion, so the transform
+            // transition was the lone unguarded piece. Read live (an OS toggle
+            // takes effect without reload) and only when refreshing gates it on,
+            // so matchMedia stays out of the pull-gesture render path.
+            transition:
+              refreshing &&
+              !(typeof window !== "undefined" &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+                ? "transform 200ms ease-out"
+                : "none",
             opacity: refreshing ? 1 : ptrProgress,
           }}
         >
@@ -2377,6 +2453,7 @@ export default function HomeContent({
               active={!!prefs.revealNewsTitles}
               onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
               title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
+              ariaLabel="Toggle headline reveal"
             >
               {prefs.revealNewsTitles ? (
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -2394,6 +2471,7 @@ export default function HomeContent({
               active={prefs.revealNewsMedia === true}
               onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
               title="Show or spoiler-blur news image and video previews"
+              ariaLabel="Toggle media reveal"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
               <span>Media</span>
@@ -2402,6 +2480,7 @@ export default function HomeContent({
               active={!!prefs.newsVideosOnly}
               onClick={() => updatePrefs({ newsVideosOnly: !prefs.newsVideosOnly })}
               title="Show only video posts (highlights + Reddit clips)"
+              ariaLabel="Toggle videos-only filter"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
               <span>Videos only</span>
@@ -2410,6 +2489,7 @@ export default function HomeContent({
               active={!!prefs.showTextPosts}
               onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
               title="Show or hide headline-only text posts"
+              ariaLabel="Toggle text posts"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
               <span>Text posts</span>
@@ -2438,7 +2518,7 @@ export default function HomeContent({
           >
             <p className="text-sm" style={{ color: "var(--text)" }}>
               <span aria-hidden="true">🙉 </span>
-              <strong>Ratings are on.</strong>{" "}They show how competitive a game is — based on score closeness, not who&apos;s winning — so they can hint at the outcome. Games are also reordered by top records and best matchups.
+              <strong>Ratings are on.</strong>{" "}They show how competitive a game is — based on score closeness, not who&apos;s winning — so they can hint at the outcome. Games are also reordered — live and finished by rating, upcoming by best matchups.
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
               <span className="font-medium" style={{ color: "var(--text-muted)" }}>SCALE</span>
@@ -3149,6 +3229,15 @@ export default function HomeContent({
               <div
                 className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10 flex items-center justify-center gap-x-3 gap-y-1.5 flex-wrap"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
+                // role="status" so this dismissible in-flow banner announces itself
+                // to screen readers without stealing focus — matching its structural
+                // twin the kickoff banner below, the ratings/news notices above, and
+                // the "same shape as the World Cup banner … role=status" convention
+                // spelled out where those notices render. This banner (the pattern's
+                // namesake) was the one that never carried the attribute; inert at
+                // load like every live region, it only speaks if the banner appears
+                // dynamically — the exact behavior the kickoff twin already has.
+                role="status"
               >
                 <span className="text-sm" style={{ color: "var(--text)" }}>
                   <span aria-hidden="true">⚽ </span>The 2026 World Cup is on — every match, spoiler-free.
@@ -3186,6 +3275,10 @@ export default function HomeContent({
                         style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        // aria-label mirrors the title so the button's action reaches
+                        // screen readers too — in focus mode a user lands on a bare
+                        // "NBA"/"MLB" with no cue that activating it replaces that column.
+                        aria-label={`Show the World Cup instead of ${entry.league.label}`}
                         title={`Show the World Cup instead of ${entry.league.label}`}
                       >
                         {entry.league.label}
@@ -3281,6 +3374,10 @@ export default function HomeContent({
                         style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        // aria-label mirrors the title so the button's action reaches
+                        // screen readers too — in focus mode a user lands on a bare
+                        // league label with no cue that activating it replaces that column.
+                        aria-label={`Show ${kickoff.config.label} instead of ${entry.league.label}`}
                         title={`Show ${kickoff.config.label} instead of ${entry.league.label}`}
                       >
                         {entry.league.label}
@@ -3745,6 +3842,7 @@ export default function HomeContent({
         <GameDetailModal
           game={detailGame}
           showRatings={prefs.showRatings}
+          showTeamRecords={!!prefs.showTeamRecords}
           onClose={() => setDetailGame(null)}
           leagueLabel={thirdLeagueOptions.find((o) => o.sport === detailGame.sport)?.label ?? detailGame.sport.toUpperCase()}
           onPlayHighlight={openVideoModal}

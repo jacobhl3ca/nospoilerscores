@@ -56,7 +56,7 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   },
   {
     q: "Why don't I see a league on the main screen?",
-    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in In season and Offseason groups, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
+    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in the In season and Offseason groups, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
   },
   {
     q: "How do the separate soccer leagues work?",
@@ -122,6 +122,17 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "FAQPage",
+            // This FAQPage IS the page-level node for /faq (there's no separate
+            // WebPage node here, unlike the SeoLandingPage routes where the
+            // WebPage carries these). Give it the page's name + description so it
+            // matches every other route's page node (the /privacy and date-route
+            // WebPage nodes both carry name + description) — Google lists `name`
+            // as a recommended WebPage property, and FAQPage is a WebPage subtype,
+            // so both are valid here. Reuse the same constants the <title> and
+            // <meta name="description"> emit so the graph node stays in lockstep
+            // with the page metadata. Purely additive JSON-LD; no visual change.
+            name: FAQ_TITLE,
+            description: FAQ_DESC,
             // Anchor this node to the canonical /faq URL and into the shared
             // WebSite entity declared in layout.tsx. FAQPage is a WebPage subtype,
             // so without a `url`/`isPartOf` it floated as a page node describing
@@ -145,6 +156,18 @@ export default function FaqPage() {
             // tying it to the page node is Google's recommended pattern for the
             // breadcrumb rich result.
             breadcrumb: { "@id": "https://hidescore.com/faq#breadcrumb" },
+            // Topic entities for this page, matching the `about` array every
+            // SeoLandingPage WebPage node already carries (e.g. the NBA/soccer
+            // routes) — the FAQ page node was the one content page left without
+            // it. `about` is a valid WebPage property (FAQPage is a WebPage
+            // subtype) and gives Google explicit entity signals for what this
+            // page covers, using the site's own spoiler-free vocabulary. Purely
+            // additive JSON-LD; no visual change.
+            about: [
+              "spoiler-free sports scores",
+              "sports highlights without spoilers",
+              "sports game ratings",
+            ].map((name) => ({ "@type": "Thing", name })),
             mainEntity: FAQ.map((item) => ({
               "@type": "Question",
               name: item.q,

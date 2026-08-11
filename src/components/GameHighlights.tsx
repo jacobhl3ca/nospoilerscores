@@ -36,7 +36,15 @@ const highlightBufferHours: Record<string, number> = {
 // of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
 // 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 3 };
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 4 };
+
+// The highlight-button badge uppercases the sport KEY (nba → "NBA"), which reads
+// right for the leagues whose key IS the abbreviation. A couple of later
+// additions use two-word descriptive keys, so the bare uppercase jams the words
+// together ("SERIEA", "LIGAMX") on their official-highlight button. Restore the
+// space here — same all-caps badge style, just the correct wording. Any key not
+// listed keeps game.sport.toUpperCase() untouched (tennis Slams, NBA, etc.).
+const highlightBadgeLabel: Record<string, string> = { seriea: "SERIE A", ligamx: "LIGA MX" };
 
 
 // Shared highlight buttons for a finished game — the official-channel + top-
@@ -74,6 +82,12 @@ export default function GameHighlights({
   // MLB's visible highlight row is MLB.com-native; no YouTube slot renders.
   const isMlb = game.sport === "mlb";
   const isFifa = game.sport === "fifa";
+  // ?demo=1 is a page-load staging toggle (it never changes without a
+  // navigation that remounts this component), so read it once on mount instead
+  // of re-parsing window.location.search on every render — these buttons
+  // reconcile on each 10s score poll for every finished game on screen. Mirrors
+  // HomeContent, which likewise reads isDemoModeActive() once at fetch time.
+  const demoActive = useMemo(() => isDemoModeActive(), []);
   // FIFA's short 2m clips frequently hit YouTube embed restrictions AND the live
   // resolver often lands the wrong clip for them, so keep the primary row to the
   // FOX full cut; the Spanish Telemundo pair still fills the second row when
@@ -146,7 +160,25 @@ export default function GameHighlights({
   const highlightsReady = isFinished && (() => {
     if (!isToday) return true;
     const gameStart = new Date(game.date).getTime();
-    const otPeriods = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
+    // A completed game is gated on game.state, not the date, so a present-but-
+    // malformed game.date from ESPN reaches here (same note as the dateStr guard
+    // below). An unparseable date makes gameStart NaN, so the `nowMs > gameStart
+    // + bufferMs` check is forever false and this today's-final card would NEVER
+    // reveal its highlight buttons short of a reload. Treat a bad date as ready,
+    // matching the !isToday early-return and the degrade-safely dateStr fallback.
+    if (Number.isNaN(gameStart)) return true;
+    // A regular-season NHL game still tied after its single overtime goes to a
+    // SHOOTOUT, which ESPN reports as period 5 (period 4 = the lone OT). Counting
+    // that as two overtimes — the raw period-minus-3 = 2 math — padded the buffer
+    // by a full extra 30-min "OT" (~1h over regulation) even though a shootout
+    // adds only minutes, so a today's NHL shootout final revealed its highlight
+    // buttons ~30 min later than it should. Multiple OTs (periods 5, 6, …) exist
+    // only in the PLAYOFFS, which never have a shootout — so cap the OT count at 1
+    // for a non-playoff NHL game only, disambiguating period 5 exactly the way
+    // GameCard's live-status labeler already does (shootout = period >= 5 &&
+    // !isPlayoff). Every other sport and playoff NHL are byte-for-byte unchanged.
+    const rawOt = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
+    const otPeriods = game.sport === "nhl" && !game.isPlayoff ? Math.min(rawOt, 1) : rawOt;
     const otExtra = otPeriods * (game.sport === "mlb" ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
     return nowMs > gameStart + bufferMs;
@@ -165,7 +197,20 @@ export default function GameHighlights({
   // title's date strictly, and a UTC-shifted browser would push a late ET
   // game one day forward and 404 every labeled button. (Display time uses the
   // device's local zone; this is only the recap search key.)
-  const dateStr = new Date(game.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: getTimeZone() });
+  //
+  // Guard the parse before formatting: a completed game (state === "post") is
+  // gated on `game.state`, not the date, so a present-but-malformed game.date
+  // from ESPN still reaches here — and toLocaleDateString on an Invalid Date
+  // returns the literal string "Invalid Date", which would get baked into every
+  // highlight query ("Away vs Home highlights Invalid Date") and 404 the labeled
+  // lookups. Fall back to an empty date token so the query degrades to the
+  // undated form the resolvers already retry with, instead of a poisoned one.
+  // (Same isNaN guard etSlateYmd/shareCard/WorldCupBracket already apply; valid
+  // dates are byte-for-byte unchanged.)
+  const gameDate = new Date(game.date);
+  const dateStr = isNaN(gameDate.getTime())
+    ? ""
+    : gameDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: getTimeZone() });
   // Competition token required in highlight titles for sports where the same two
   // teams meet across many competitions (World Cup only — see getCompetitionName).
   // null for every other league, so their query + behaviour are unchanged.
@@ -236,7 +281,14 @@ export default function GameHighlights({
         const baked = await getBakedHighlight(game.sport, game.id);
         const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel, away, home);
         const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
-        const officialP = !hasOfficialButton
+        // MLB's official slot is never rendered (showYouTube requires !isMlb —
+        // its visible row is MLB.com-native, per the initialOfficialId guard
+        // above), so skip its live resolve: without the isMlb guard every
+        // finished MLB card fired one wasted /api/youtube scrape per card whose
+        // id nothing can display. The `secondP` slot was already safe (MLB's
+        // secondaryChannel is undefined → resolveHighlightVideo returns null
+        // before any fetch); this closes the same leak on the official slot.
+        const officialP = !hasOfficialButton || isMlb
           ? Promise.resolve(null)
           : bakedOfficial
           ? Promise.resolve(bakedOfficial)
@@ -428,7 +480,7 @@ export default function GameHighlights({
               ) : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{isDemoModeActive() ? "Watch" : isFifa ? "2m" : game.sport.toUpperCase()}</span>
+                  <span className="text-[10px] font-medium">{demoActive ? "Watch" : isFifa ? "2m" : (highlightBadgeLabel[game.sport] ?? game.sport.toUpperCase())}</span>
                 </>
               )}
             </button>
@@ -517,14 +569,16 @@ export default function GameHighlights({
                 if (onPlayEmbed) onPlayEmbed("", page, "MLB.com", shareCard, mlbCondensedPlayback, mlbCondensedPoster);
                 else openExternal(page);
               }}
-              disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="MLB 10 minute condensed game"
-              // aria-busy conveys the in-flight fetch that the visible "Loading..."
-              // swap shows sighted users; the aria-label stays pinned so the name
-              // never collapses to "Loading...". Matches the YouTube buttons above.
-              aria-busy={fetchingOnClick === "official"}
+              // No loading/disabled/aria-busy state here (unlike the YouTube and
+              // Telemundo buttons): this opens the pre-resolved date-exact clip
+              // synchronously via onPlayEmbed with no click-time fetch, so
+              // `fetchingOnClick` is never set on the MLB path (showYouTube needs
+              // !isMlb, showTelemundo needs FIFA). The old loading swap keyed off
+              // it was therefore dead code — the button never dimmed or showed
+              // "Loading...".
               title="MLB 10 minute condensed game"
             >
               {fetchingOnClick === "official" ? <span className="text-[10px]">Loading...</span> : (

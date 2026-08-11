@@ -123,6 +123,46 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         awayProbable: null,
         noHitterPitchingTeam: null,
         cycleWatch: null,
+        // The NHL recap/condensed clips are pre-attached direct URLs that
+        // GameHighlights plays verbatim — unlike the YouTube path, they aren't
+        // re-resolved off the (scrubbed) team names, so they rode straight
+        // through `...game` and, when tapped on a finished demo card, played the
+        // REAL recap: real team names and the real final score, the exact
+        // spoiler ?demo=1 exists to hide. Null them so `showNhl` is false and
+        // the buttons don't render, matching how golf/eventCard are nulled.
+        nhlRecapUrl: null,
+        nhlRecapEmbed: null,
+        nhlCondensedUrl: null,
+        nhlCondensedEmbed: null,
+        // Same leak as the NHL clips above, for MLB. The board enrich pre-
+        // attaches MLB.com recap/condensed URLs (applyMlbVideos in espn.ts) that
+        // GameHighlights plays verbatim; they rode straight through `...game` and
+        // a tapped "Recap"/"Condensed" button on a finished demo card played the
+        // REAL clip — real team names, real final score — the exact spoiler
+        // ?demo=1 hides. Null them so `showMlb` is false and the buttons don't
+        // render. The self-resolve fallback (GameHighlights, when the playback
+        // URL is absent) matches on the now-scrubbed team displayNames, so it
+        // returns no entry and can't re-leak — same fail-safe as the YouTube path.
+        mlbRecapUrl: null,
+        mlbRecapPlaybackUrl: null,
+        mlbRecapPoster: null,
+        mlbCondensedUrl: null,
+        mlbCondensedPlaybackUrl: null,
+        mlbCondensedPoster: null,
+        // Same leak as the recap clips above, for the live "where to watch"
+        // links. A live game's streamUrl is a pre-resolved real broadcast URL
+        // that GameCard/GameDetailModal reuse verbatim — most concretely the
+        // MLB.tv gamePk deep link (mlb.com/tv/g{gamePk}), which the card's
+        // "Stream" chip serves straight through even though the anonymized
+        // network name never matches ESPN/Prime. It rode through `...game`, so a
+        // tapped stream chip on a live demo card opened the REAL broadcast page —
+        // real team names and the live score, the exact identity ?demo=1 hides.
+        // Null both so the chip falls back to the generic per-sport watch page
+        // (sportStreamFallback — mlb.com/tv, nba.com/watch…), which names no
+        // teams. Every consumer guards on a truthy streamUrl before using it, so
+        // this only drops the real deep link; no card behavior changes otherwise.
+        streamUrl: null,
+        primeStreamUrl: null,
       };
     };
     return {

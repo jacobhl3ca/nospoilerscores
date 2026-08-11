@@ -130,16 +130,42 @@ export default function TeamView({
   const { past, upcoming } = useMemo(() => {
     if (!allGames) return { past: [] as Game[], upcoming: [] as Game[] };
     const now = Date.now();
+    // Parse the kickoff once, coercing an unparseable/missing date to 0 (epoch).
+    // A raw new Date(bad).getTime() is NaN, and every comparison against NaN is
+    // false — so a finished game with a bad date fell out of BOTH the `<= now`
+    // (Recent) and `> now` (Upcoming) filters and vanished from the schedule
+    // entirely, and NaN in the sort comparators left the order undefined. Epoch
+    // keeps such a game in exactly one section (oldest in Recent) and sorts it
+    // stably. Byte-for-byte unchanged for every real, parseable ESPN date — the
+    // same defensive guard the card/bracket date paths already carry.
+    const ms = (g: Game) => {
+      const t = new Date(g.date).getTime();
+      return Number.isNaN(t) ? 0 : t;
+    };
+    // Sort key for the ASCENDING Upcoming sort (soonest first). `ms` coerces a
+    // bad/missing date to epoch (0) — the smallest possible value — which is
+    // correct for Recent (descending → sorts oldest, as the comment above says)
+    // but wrong here: an undated pre/in game (e.g. a TBD tournament fixture ESPN
+    // hasn't dated yet) would sort to the very TOP of Upcoming, ahead of real
+    // soonest games. Map a bad date to MAX_SAFE_INTEGER so it sinks to the end
+    // instead. A finite sentinel (not Infinity) keeps `msUp(a) - msUp(b)` from
+    // going NaN when two undated games meet, so their order stays stable. The
+    // Upcoming FILTER still uses `ms` (a bad-date post game must land in Recent
+    // via `ms(g) <= now`, not here), so only ordering changes.
+    const msUp = (g: Game) => {
+      const t = new Date(g.date).getTime();
+      return Number.isNaN(t) ? Number.MAX_SAFE_INTEGER : t;
+    };
     // Future-dated "post" games (e.g. a suspended/rescheduled fixture ESPN still
     // tags final) belong under Upcoming, per the liveAndPre clause below. Anchor
     // Recent to post games at/before now so such a game lands in exactly one
     // section — otherwise it rendered in BOTH Recent and Upcoming.
     const finished = allGames
-      .filter((g) => g.state === "post" && new Date(g.date).getTime() <= now)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .filter((g) => g.state === "post" && ms(g) <= now)
+      .sort((a, b) => ms(b) - ms(a));
     const liveAndPre = allGames
-      .filter((g) => g.state === "in" || g.state === "pre" || (g.state === "post" && new Date(g.date).getTime() > now))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .filter((g) => g.state === "in" || g.state === "pre" || (g.state === "post" && ms(g) > now))
+      .sort((a, b) => msUp(a) - msUp(b));
     return { past: finished, upcoming: liveAndPre };
   }, [allGames]);
 
@@ -185,9 +211,16 @@ export default function TeamView({
   const doubleheaderIds = useMemo(() => {
     const byDay = new Map<string, string[]>();
     for (const g of past) {
+      // Same bad-date defense as the Recent/Upcoming split above: a `post` game
+      // with an unparseable/missing date is epoch-coerced into `past`, but
+      // Intl.DateTimeFormat.format() THROWS "Invalid time value" on an Invalid
+      // Date — which would crash the whole TeamView render here. Skip it; a game
+      // with no valid date can't be grouped into a calendar-day doubleheader.
+      const d = new Date(g.date);
+      if (Number.isNaN(d.getTime())) continue;
       const ymd = new Intl.DateTimeFormat("en-CA", {
         timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-      }).format(new Date(g.date));
+      }).format(d);
       const arr = byDay.get(ymd) ?? [];
       arr.push(g.id);
       byDay.set(ymd, arr);

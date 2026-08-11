@@ -48,14 +48,14 @@ export default function SeoLandingPage({
       </p>
       <h1 className="text-2xl font-bold mb-4">{h1}</h1>
 
-      {intro.map((paragraph) => (
-        <p key={paragraph} className="mb-4" style={{ color: "var(--text-muted)" }}>
+      {intro.map((paragraph, i) => (
+        <p key={`${paragraph}-${i}`} className="mb-4" style={{ color: "var(--text-muted)" }}>
           {paragraph}
         </p>
       ))}
 
-      {sections.map((section) => (
-        <section key={section.h}>
+      {sections.map((section, i) => (
+        <section key={`${section.h}-${i}`}>
           <h2 className="text-lg font-semibold mt-8 mb-2">{section.h}</h2>
           <p className="mb-4" style={{ color: "var(--text-muted)" }}>
             {section.p}
@@ -65,8 +65,8 @@ export default function SeoLandingPage({
 
       <h2 className="text-lg font-semibold mt-8 mb-3">What HideScore helps with</h2>
       <ul className="mb-4 space-y-1.5 list-disc pl-5" style={{ color: "var(--text-muted)" }}>
-        {bullets.map((bullet) => (
-          <li key={bullet}>{bullet}</li>
+        {bullets.map((bullet, i) => (
+          <li key={`${bullet}-${i}`}>{bullet}</li>
         ))}
       </ul>
 
@@ -96,8 +96,8 @@ export default function SeoLandingPage({
 
       <h2 className="text-lg font-semibold mt-8 mb-3">Frequently asked questions</h2>
       <section className="space-y-5">
-        {faq.map((item) => (
-          <div key={item.q}>
+        {faq.map((item, i) => (
+          <div key={`${item.q}-${i}`}>
             <h3 className="font-semibold mb-1">{item.q}</h3>
             <p style={{ color: "var(--text-muted)" }}>{item.a}</p>
           </div>

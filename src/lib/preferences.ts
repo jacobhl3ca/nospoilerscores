@@ -32,11 +32,20 @@ function encodeTeamId(id: string): string {
   return (SPORT_TO_SHORT[sport] ?? sport) + id.slice(dash + 1);
 }
 
-function decodeTeamId(short: string): string {
+// Returns the full team id ("mlb-1") or null when the token isn't a decodable
+// `<shortcode><digits>` pair whose prefix is a known sport. Previously an
+// unrecognized token (a truncated/hand-edited share URL, e.g. "zz9") fell
+// through both `return short` branches unchanged; because that's a non-empty
+// string it survived the caller's `.filter(Boolean)` and landed a bogus,
+// team-matching-nothing id in `favoriteTeams` — which then persists to
+// localStorage AND (for signed-in users) syncs to the server. Return null so
+// the caller drops it, matching how the sibling thirdLeague/slotLeagues decodes
+// in decodeFavorites already reject unknown codes.
+function decodeTeamId(short: string): string | null {
   const match = short.match(/^([a-z]+)(\d+)$/);
-  if (!match) return short;
+  if (!match) return null;
   const sport = SHORT_TO_SPORT[match[1]];
-  return sport ? `${sport}-${match[2]}` : short;
+  return sport ? `${sport}-${match[2]}` : null;
 }
 
 export type Theme = "dark" | "light" | "system";
@@ -120,7 +129,7 @@ export function decodeFavorites(params: URLSearchParams): {
   const l = params.get("l");
   const t = params.get("t");
   const s = params.get("s");
-  if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
+  if (f) result.teams = f.split(".").map(decodeTeamId).filter((id): id is string => id !== null);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
   // Guard the unknown-code case: SHORT_TO_SPORT is typed Record<string, Sport>,
   // so an unrecognized `t` (malformed/hand-edited share URL) silently yields
@@ -212,8 +221,8 @@ export interface Preferences {
   // silently no-op'd (Jacob 8/9). The two league columns close ranks around
   // it, so the board still shows the same three feeds.
   newsGenericSlot?: 0 | 1 | 2;
-  // Default date on launch: smart (yesterday before 1 PM ET, today after),
-  // always today, or always yesterday.
+  // Date shown on launch: smart (yesterday before 1 PM ET, today after),
+  // always today, or always yesterday (default — see the `defaults` object below).
   defaultDateMode?: DefaultDateMode;
   // Landing view on launch: remember last (default), always scores, always news.
   defaultLandingView?: DefaultLandingView;
@@ -257,17 +266,18 @@ export interface Preferences {
   // YouTube's title strip (top). Defaults ON (undefined ⇒ true ⇒ covered) so
   // the player stays spoiler-safe out of the box; the user opts out in Settings.
   maskVideoTitle?: boolean;
-  // Opt-in (default OFF / undefined ⇒ false): show YouTube's NATIVE control bar
-  // (controls:1) on highlight clips instead of the stripped spoiler-safe player.
-  // Gives back YT's own progress/seek bar + time — a spoiler the user accepts,
-  // handy in fullscreen. When on, the bottom spoiler mask steps aside.
-  // YouTube's OWN control bar instead of the spoiler-safe one. Default TRUE as
-  // of 2026-08-09 (Jacob: "our player is good but a little overkill and not
-  // worth the trade off of usage"). The safe player still exists behind this
-  // toggle; what it buys — a blank seek track, no elapsed/duration readout — is
-  // real, but it costs the familiarity of the player everyone already knows,
-  // and its click-catcher was the thing swallowing the first tap. The headline
-  // spoiler mask over YouTube's title bar stays on in BOTH modes.
+  // Default ON (undefined ⇒ true, matching the `?? true` at every read site —
+  // HomeContent, SettingsPanel — and the `youtubeNativeControls: true` default
+  // below): show YouTube's NATIVE control bar (controls:1) on highlight clips
+  // instead of the stripped spoiler-safe player. Gives back YT's own progress/
+  // seek bar + time — a spoiler the user accepts, handy in fullscreen. When on,
+  // the bottom spoiler mask steps aside. Default TRUE as of 2026-08-09 (Jacob:
+  // "our player is good but a little overkill and not worth the trade off of
+  // usage"). The safe player still exists behind this toggle; what it buys — a
+  // blank seek track, no elapsed/duration readout — is real, but it costs the
+  // familiarity of the player everyone already knows, and its click-catcher was
+  // the thing swallowing the first tap. The headline spoiler mask over
+  // YouTube's title bar stays on in BOTH modes.
   youtubeNativeControls?: boolean;
   // Highlight-player seek control: the progress bar + the 10% jump buttons
   // ("both", default), just the bar, or just the jumps. The bar is custom and
@@ -318,8 +328,12 @@ export interface Preferences {
   // hidden by default. Undefined/false = hidden; true = shown. Headline reveal
   // never changes this filter, so both toolbar controls remain predictable.
   showTextPosts?: boolean;
-  // Image/video previews are visible by default. Set false to spoiler-blur the
-  // preview surfaces while leaving source/league icons alone.
+  // News image/video previews can spoil a result (a thumbnail or embedded clip
+  // gives the game away), so every preview surface is blurred by default, while
+  // leaving source/league icons alone. The "Media" eye toggle in the news header
+  // flips this on to reveal them all at once. Undefined/false = blurred
+  // (default); true = revealed. (Jacob 7/16 — blur on by default; the pre-paint
+  // guard in layout.tsx applies it before hydration to avoid a spoiler flash.)
   revealNewsMedia?: boolean;
   // News layout: false/undefined = the default multi-column "Cards" board (click
   // a post → lightbox); true = a single vertical "Feed" (Reddit-style scroll with

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Minimal inline feedback line that lives inside the footer. Submits on Enter
 // or via the send button straight to the same Formspree endpoint the
@@ -19,6 +19,13 @@ export default function FeedbackBox() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [open, setOpen] = useState(false);
+
+  // The collapsed "Feedback" trigger, so focus can return to it when the modal
+  // is dismissed (see the focus-return effect below).
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef(false);
+  // The dialog <form>, so Tab can be trapped inside it (see the trap effect).
+  const formRef = useRef<HTMLFormElement>(null);
 
   const trimmedEmail = email.trim();
   // Only warn once it looks like the user has finished typing something that
@@ -44,8 +51,55 @@ export default function FeedbackBox() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Trap Tab within the open dialog (WCAG 2.4.3) — the same pattern
+  // GameDetailModal / WorldCupGroupsModal use. aria-modal="true" only marks the
+  // page behind inert for ASSISTIVE TECH; it does NOT stop a sighted keyboard
+  // user from Tabbing out of the overlay into the footer/board behind it. Wrap
+  // focus at the first/last focusable control so Tab / Shift+Tab cycle inside
+  // the form. autoFocus on the message field still handles focus-IN and the
+  // existing effect below handles focus-return; this only contains the cycle
+  // while open. Focusables are queried live per keypress so the send button's
+  // disabled state (empty message) is honored via :not([disabled]), and
+  // offsetParent-filtered so focus never lands on a hidden control.
+  useEffect(() => {
+    if (!open) return;
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const form = formRef.current;
+      if (!form) return;
+      const focusable = Array.from(
+        form.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === form) { e.preventDefault(); last.focus(); }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onTab);
+    return () => document.removeEventListener("keydown", onTab);
+  }, [open]);
+
+  // Return focus to the trigger when the modal is DISMISSED (Escape, backdrop,
+  // the × / "Feedback" toggle) rather than leaving it stranded on <body> — the
+  // WCAG 2.4.3 dialog-close behavior every other modal in the app already gets
+  // for its opener. Scoped to cancel-closes: submit() sets `sent` (never calls
+  // close()), so the effect skips it and doesn't steal focus into the now-hidden
+  // trigger while the "Thanks" state renders. autoFocus already handles focus-IN
+  // on open; this closes the round trip.
+  useEffect(() => {
+    if (wasOpenRef.current && !open && !sent) triggerRef.current?.focus();
+    wasOpenRef.current = open;
+  }, [open, sent]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +133,7 @@ export default function FeedbackBox() {
   if (!open && !sent) {
     return (
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-expanded="false"
@@ -138,6 +193,7 @@ export default function FeedbackBox() {
           >
           <form
             id="hs-feedback-form"
+            ref={formRef}
             onSubmit={submit}
             role="dialog"
             aria-modal="true"
@@ -214,6 +270,12 @@ export default function FeedbackBox() {
               inputMode="email"
               autoComplete="email"
               enterKeyHint="send"
+              // Expose the malformed-address state programmatically, not just
+              // via the red border + describedby hint below: without aria-invalid
+              // a screen reader announces this as an ordinary email field even
+              // while sighted users see it flagged. Mirrors emailLooksWrong so
+              // the spoken state tracks the visual one exactly (WCAG 4.1.2).
+              aria-invalid={emailLooksWrong || undefined}
               aria-describedby={emailLooksWrong ? "hs-feedback-email-hint" : undefined}
               className="flex-1 w-0 text-sm px-3 py-2 rounded outline-none"
               style={{

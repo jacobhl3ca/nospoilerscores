@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!-- Developer-only icon preview tool, shipped in /public but never linked from
+     the app. robots.txt allows "/" so crawlers could otherwise index this page
+     and surface it in search results for HideScore. noindex keeps this internal
+     tool out of the index (it stays reachable by direct URL for development)
+     without needing a robots.txt Disallow — noindex de-indexes reliably even
+     for a directly-fetched page, whereas a Disallow only blocks crawling. -->
+<meta name="robots" content="noindex, nofollow" />
 <title>HideScore · Icon tester</title>
 <style>
   :root { --bg:#0a0a0a; --card:rgba(255,255,255,.05); --border:rgba(255,255,255,.14);

@@ -23,11 +23,11 @@ function gameLengthHours(sport: string): number {
   return GAME_LENGTH_H[sport] ?? 3;
 }
 
-// Matchup row — logo + name + W-L record, no score/winner. Stateless and
-// dependent only on `team`, so it lives at module scope rather than inside the
-// component body (declaring a component during render remounts it every render
-// and resets any state).
-function TeamRow({ team }: { team: Game["homeTeam"] }) {
+// Matchup row — logo + name + (opt-in) W-L record, no score/winner. Stateless
+// and dependent only on its props, so it lives at module scope rather than
+// inside the component body (declaring a component during render remounts it
+// every render and resets any state).
+function TeamRow({ team, showRecord }: { team: Game["homeTeam"]; showRecord: boolean }) {
   return (
     <div className="flex items-center gap-3 min-w-0">
       {team.logo
@@ -37,8 +37,12 @@ function TeamRow({ team }: { team: Game["homeTeam"] }) {
       <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>
         {team.displayName || team.shortDisplayName || team.abbreviation}
       </span>
-      {/* W-L record is not a spoiler of THIS game — safe to show. */}
-      {team.record ? (
+      {/* A W-L record is a second-order spoiler — today's 63-49 encodes whether
+          the team won last night — so it is gated on the showTeamRecords opt-in
+          (default off) and, like the game card, shown only on a LIVE game. On a
+          FINISHED game the record can encode this game's own result, which is
+          exactly what this spoiler-safe modal must never leak. */}
+      {showRecord && team.record ? (
         <span className="ml-auto text-xs tabular-nums shrink-0" style={{ color: "var(--text-muted)" }}>{team.record}</span>
       ) : null}
     </div>
@@ -48,10 +52,13 @@ function TeamRow({ team }: { team: Game["homeTeam"] }) {
 // Lightweight, SPOILER-SAFE game details popup. Shown when a score/ratings card
 // is tapped. Never renders score, winner, or rating unless `showRatings` is on
 // (the user has already opted into spoilers) — and even then only the rating
-// badge, never the raw score line. Pre/live/final all use the same shell.
+// badge, never the raw score line. W-L records (a second-order spoiler) are
+// likewise gated on `showTeamRecords` and shown only on live games, matching
+// the game card. Pre/live/final all use the same shell.
 export default function GameDetailModal({
   game,
   showRatings,
+  showTeamRecords = false,
   onClose,
   leagueLabel,
   onPlayHighlight,
@@ -60,6 +67,8 @@ export default function GameDetailModal({
 }: {
   game: Game;
   showRatings: boolean;
+  // Opt-in (Settings), default off — see showTeamRecords in preferences.ts.
+  showTeamRecords?: boolean;
   onClose: () => void;
   leagueLabel?: string;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
@@ -311,10 +320,12 @@ export default function GameDetailModal({
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
 
-        {/* Matchup — names + logos, NO score/winner */}
+        {/* Matchup — names + logos, NO score/winner. Records only when the user
+            opted in AND the game is live (see TeamRow), so a finished game's
+            record can't leak this game's result. */}
         <div className="flex flex-col gap-1 mb-4 pr-6">
-          <TeamRow team={game.awayTeam} />
-          <TeamRow team={game.homeTeam} />
+          <TeamRow team={game.awayTeam} showRecord={showTeamRecords && isLive} />
+          <TeamRow team={game.homeTeam} showRecord={showTeamRecords && isLive} />
         </div>
 
         {/* Status + time */}
@@ -358,11 +369,20 @@ export default function GameDetailModal({
               // Live game → show the venue's CURRENT conditions (real-time
               // emoji), so a mid-game drizzle reads even when the first-pitch
               // forecast was dry. Pre-game → the gametime forecast.
+              // The condition emoji is decorative here: the spelled-out label
+              // ({nowLabel}/{label}) sits right beside it, so left exposed a
+              // screen reader reads the glyph's raw Unicode name ("sun behind
+              // small cloud") on top of "Partly cloudy". aria-hidden drops the
+              // redundant glyph so only the temp + label speak — the intended
+              // treatment the GameCard live-weather emoji's comment already
+              // names as the reason this line differs from its own (that emoji
+              // stands alone with no adjacent label, so it gets role="img"). No
+              // visual change: aria-hidden on an inline span doesn't affect layout.
               <span className="shrink-0 whitespace-nowrap">
                 {game.state === "in" ? (
-                  <>{weather.nowIcon} {weather.nowTempF}° · <span className="font-semibold">{weather.nowLabel}{weather.rainingNow ? " now" : ""}</span></>
+                  <><span aria-hidden="true">{weather.nowIcon}</span> {weather.nowTempF}° · <span className="font-semibold">{weather.nowLabel}{weather.rainingNow ? " now" : ""}</span></>
                 ) : (
-                  <>{weather.icon} {weather.tempF}° · <span className="font-semibold">{weather.label}</span></>
+                  <><span aria-hidden="true">{weather.icon}</span> {weather.tempF}° · <span className="font-semibold">{weather.label}</span></>
                 )}
               </span>
             ) : null}
@@ -447,7 +467,19 @@ export default function GameDetailModal({
         {/* Competitiveness rating — ONLY when the user already revealed ratings. */}
         {showRatings && game.rating !== null && (isFinal || isLive) && !isDelayed ? (
           <div className="flex items-center gap-2 mt-3">
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${ratingTier(game.rating).bg}`}>
+            {/* Screen readers otherwise announce a bare "MEH"/"SKIP" here with no
+                hint it's the game's worth-watching rating — the same role="img" +
+                spoken aria-label the score-card badge (GameCard/GolfLeaderboard
+                RatingBadge) already carries; this modal was the lone outlier.
+                Title-case the label in the spoken name so engines don't spell the
+                short all-caps word out letter-by-letter. Unlike the card, this
+                modal's ratingTier never yields the "OK" initialism (GREAT/GOOD/
+                MEH/SKIP only), so no OK guard is needed. Visible text unchanged. */}
+            <span
+              role="img"
+              aria-label={`Worth-watching rating: ${ratingTier(game.rating).label.charAt(0) + ratingTier(game.rating).label.slice(1).toLowerCase()}`}
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${ratingTier(game.rating).bg}`}
+            >
               {ratingTier(game.rating).label}
             </span>
           </div>

@@ -91,13 +91,17 @@ interface LeagueColumnProps {
 const FORCE_BIG_INNING_LIVE_PREVIEW = false;
 
 // 2025-26 season playoff start dates (update each season)
-const PLAYOFF_START_DATES: Record<string, { date: string; label: string; preDate?: string; preEndDate?: string; preLabel?: string }> = {
+// singularLabel flags a grammatically SINGULAR label so the countdown subtitle
+// below agrees in number ("Postseason starts", "March Madness starts") instead
+// of the plural "Playoffs start" default. Without it the hard-coded "start"
+// verb rendered "Postseason start Oct 6" / "March Madness start tomorrow".
+const PLAYOFF_START_DATES: Record<string, { date: string; label: string; singularLabel?: boolean; preDate?: string; preEndDate?: string; preLabel?: string }> = {
   nba: { date: "2026-04-18", label: "Playoffs", preDate: "2026-04-14", preEndDate: "2026-04-17", preLabel: "Play-in" },
   wnba: { date: "2026-09-14", label: "Playoffs" },
   nhl: { date: "2026-04-18", label: "Playoffs" },
-  mlb: { date: "2026-10-06", label: "Postseason" },
+  mlb: { date: "2026-10-06", label: "Postseason", singularLabel: true },
   nfl: { date: "2027-01-09", label: "Playoffs" },
-  ncaam: { date: "2026-03-17", label: "March Madness" },
+  ncaam: { date: "2026-03-17", label: "March Madness", singularLabel: true },
 };
 
 // Strip generic "Stanley Cup Playoffs" / "NBA Playoffs" / "NCAA … Championship"
@@ -211,6 +215,25 @@ function tennisRoundTiers(label: string): string[] {
   return short !== label ? [label, short] : [label];
 }
 
+// Compact companion tier for a World Cup knockout round, mirroring
+// tennisRoundTiers: pickTier() can only shrink the italic subtitle when it has
+// a narrower tier to fall back to. Without one, a wide label ("Quarterfinals",
+// "Round of 32") renders whitespace-nowrap + overflow-hidden and simply CLIPS
+// (no ellipsis) in the narrowest mobile columns — every sibling subtitle branch
+// (group stage, tennis, the playoff countdown) already ships a compact tier;
+// the knockout branch was the lone one returning a single width. The replaces
+// are case-insensitive and tolerate ESPN's singular/hyphenated wording
+// ("Quarterfinal", "Semi-Final", "Third Place Match") so the short form still
+// forms even when game.stage carries a non-canonical variant.
+function fifaRoundTiers(label: string): string[] {
+  const short = label
+    .replace(/Round of (\d+)/i, "R$1")
+    .replace(/Quarter-?finals?/i, "QF")
+    .replace(/Semi-?finals?/i, "SF")
+    .replace(/Third Place(?: Match)?/i, "3rd Place");
+  return short !== label ? [label, short] : [label];
+}
+
 // Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
 function parseEtTime(s: string): { h: number; m: number } | null {
   const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -271,7 +294,7 @@ function getPlayoffSubtitle(
     if (rounds.length) {
       const order = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Third Place", "Final"];
       const deepest = rounds.reduce((best, r) => (order.indexOf(r) > order.indexOf(best) ? r : best), rounds[0]);
-      return { tiers: [deepest] };
+      return { tiers: fifaRoundTiers(deepest) };
     }
     return { tiers: ["Group Stage", "Groups"] };
   }
@@ -367,10 +390,13 @@ function getPlayoffSubtitle(
   if (days > 30) return null; // only show within 1 month
   const dd = playoffDate.getDate();
   const monthName = playoffDate.toLocaleDateString("en-US", { month: "short" });
+  // Plural "Playoffs start" vs singular "Postseason/March Madness starts" — the
+  // subject's number comes from the per-entry singularLabel flag above.
+  const startsVerb = config.singularLabel ? "starts" : "start";
   if (days === 1) {
-    return { tiers: [`${config.label} start tomorrow`] };
+    return { tiers: [`${config.label} ${startsVerb} tomorrow`] };
   }
-  const base = `${config.label} start ${monthName} ${dd}`;
+  const base = `${config.label} ${startsVerb} ${monthName} ${dd}`;
   const baseShort = `${config.label} ${monthName} ${dd}`;
   return { tiers: [`${base} (${days} days)`, `${baseShort} (${days}d)`, baseShort] };
 }
@@ -569,7 +595,12 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
     } else if (text && onClick) {
       label = (
         <button type="button" onClick={onClick} className="hover:underline transition-colors cursor-pointer">
-          {renderText(text)}{" ▸"}
+          {/* The "▸" is a decorative disclosure cue, not part of the button's
+              name — hide it from assistive tech so the accessible name is just
+              the label text, matching the aria-hidden treatment the live-pulse
+              dot (renderText above) and the weather glyphs in GameDetailModal
+              already use for purely-visual characters. */}
+          {renderText(text)}<span aria-hidden="true">{" ▸"}</span>
         </button>
       );
     } else if (text) {
@@ -616,7 +647,13 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
         className={`${linkCls} cursor-pointer`}
         style={baseStyle}
       >
-        {renderText(text)}{" ▸"}
+        {/* The trailing "▸" is a decorative disclosure cue, not part of the
+            button's name — hide it from assistive tech so the accessible name
+            is just the label text, matching the aria-hidden treatment the twin
+            subtitle button above and the live-pulse dot (renderText) already use
+            for purely-visual characters. Without it a screen reader read the
+            label plus a stray triangle (e.g. "Group Stage ▸"). */}
+        {renderText(text)}<span aria-hidden="true">{" ▸"}</span>
       </button>
     );
   }
@@ -658,6 +695,12 @@ function GolfSubtitle({ league, selectedDate }: { league: LeagueData; selectedDa
         href={href}
         target="_blank"
         rel="noopener noreferrer"
+        // Route the tap through openExternal so the Capacitor native wrapper
+        // deep-links into the installed streaming app (PGA Tour / Golf Channel /
+        // Peacock are all in APP_LINK_HOSTS) instead of opening the in-app
+        // browser — matching the sibling PlayoffSubtitle link and every other
+        // external anchor in the app. No behavior change on the plain web.
+        onClick={handleExternalClick(href)}
         className={`${baseClass} hover:underline transition-colors`}
         style={{ color: "var(--text-muted)" }}
       >
@@ -694,7 +737,7 @@ function formatDateCompact(yyyymmdd: string): string {
   const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffDays = Math.round((startDate.getTime() - startToday.getTime()) / 86400000);
   if (diffDays === 1) return "Tomorrow";
-  const md = `${parseInt(m)}/${parseInt(d)}`;
+  const md = `${parseInt(m, 10)}/${parseInt(d, 10)}`;
   // A weekday name only reads unambiguously within a week ("Thursday" 9 days out
   // could be either Thursday). 7+ days out, show just the date — the card bolds
   // the first token, so a far game reads "7/16 - 7:30 PM" instead of a vague
@@ -880,8 +923,23 @@ export default function LeagueColumn({
 
   // Remove any in-flight drag's window listeners if the column unmounts
   // mid-drag (see onHeaderPointerDown). Intentionally does NOT call endDrag —
-  // an unmount must not fire a reorder or setState, only detach the listeners.
-  useEffect(() => () => { dragListenersRef.current?.(); }, []);
+  // an unmount must not fire a reorder or setState. But it must still revert the
+  // GLOBAL DOM side-effects an active drag left on the document: the "grabbing"
+  // body cursor, the ghost label appended to <body>, and the hover-highlight
+  // background on whatever column the pointer was over. Without this, unmounting
+  // mid-drag (the live-poll re-render / slot swap the code above anticipates)
+  // strands the grabbing cursor app-wide and leaks an orphaned ghost <div>,
+  // since onUp/onCancel — the only other path that clears them — never fire.
+  // Mirrors endDrag's visual teardown (cursor/ghost/hoverEl) minus its state.
+  useEffect(() => () => {
+    dragListenersRef.current?.();
+    const d = dragRef.current;
+    if (d) {
+      document.body.style.cursor = "";
+      d.ghost?.remove();
+      if (d.hoverEl) d.hoverEl.style.background = "";
+    }
+  }, []);
 
   // Reset team view when the column's league changes (e.g., swapped via dropdown).
   // Done in the effect cleanup (fires before the next run on a league change and
@@ -1069,6 +1127,15 @@ export default function LeagueColumn({
   const getCombinedWins = (game: Game): number =>
     getWins(game.homeTeam.record) + getWins(game.awayTeam.record);
 
+  // NaN-safe chronological key: a raw new Date(bad).getTime() is NaN, and every
+  // comparison against NaN is false, so one undated game scatters the whole
+  // column. Sink an unparseable date to a far-future sentinel (like chronoMs in
+  // lib/espn.ts) so it sorts last instead of jumbling the slate.
+  const chronoMs = (iso: string): number => {
+    const t = new Date(iso).getTime();
+    return Number.isNaN(t) ? 8.64e15 : t;
+  };
+
   const sorted = [...league.games].sort((a, b) => {
     const aPri = getFavPriority(a);
     const bPri = getFavPriority(b);
@@ -1092,7 +1159,7 @@ export default function LeagueColumn({
         const aDel = isDelayed(a), bDel = isDelayed(b);
         if (aDel !== bDel) return aDel ? 1 : -1;
       }
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
+      return chronoMs(a.date) - chronoMs(b.date);
     }
 
     // Monkey ON: competitive sort
@@ -1132,7 +1199,7 @@ export default function LeagueColumn({
       return getCombinedWins(b) - getCombinedWins(a);
     }
 
-    return new Date(a.date).getTime() - new Date(b.date).getTime();
+    return chronoMs(a.date) - chronoMs(b.date);
   });
 
   // Split into sections
@@ -1425,16 +1492,25 @@ export default function LeagueColumn({
               })()
             ) : isSwappable ? (
               <div ref={swapRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setSwapOpen(!swapOpen)}
-                  className="cursor-pointer transition-colors hover:opacity-80"
-                  style={{ color: "var(--text)" }}
-                  title="Switch league"
-                  aria-haspopup="dialog"
-                  aria-expanded={swapOpen}
-                >
-                  <h2 className="text-base sm:text-lg font-bold tracking-wide flex items-center gap-1">
+                {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern),
+                    not the reverse: a <button>'s content model is phrasing
+                    content, so an <h2> nested inside it is invalid HTML and
+                    assistive tech may drop the heading role. This keeps the
+                    swappable title a real <h2> heading — matching the arrows
+                    branch above, the non-swappable branch below, and the sibling
+                    NewsColumn swap header — while the button stays the
+                    interactive trigger. The button inherits the heading's font +
+                    color and carries the label+chevron flex layout, so it renders
+                    pixel-for-pixel unchanged. */}
+                <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setSwapOpen(!swapOpen)}
+                    className="cursor-pointer transition-colors hover:opacity-80 flex items-center gap-1"
+                    title="Switch league"
+                    aria-haspopup="dialog"
+                    aria-expanded={swapOpen}
+                  >
                     {headerLabel}
                     {/* ▾ switcher affordance (Jacob 6/11). Settings → League
                         columns can hide it; tap-to-switch works either way. */}
@@ -1454,8 +1530,8 @@ export default function LeagueColumn({
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     )}
-                  </h2>
-                </button>
+                  </button>
+                </h2>
                 {swapOpen && (
                   <div
                     // The league-switch button declares aria-haspopup + aria-expanded,

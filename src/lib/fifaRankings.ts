@@ -57,6 +57,15 @@ const RANKS: Record<string, number> = {
   "bosnia and herzegovina": 64,
   "bosnia-herzegovina": 64,
   "cape verde": 67,
+  // Same fix as the Korea/Iran block below: the groups overlay reads ESPN's
+  // fifa.world *standings* endpoint (WorldCupGroupsModal), which labels teams
+  // with FIFA's official names — and FIFA/CAF officially render this nation as
+  // "Cabo Verde", not the everyday "Cape Verde" this table was seeded with.
+  // Without the alias the standings string normalizes to "cabo verde", misses
+  // the "cape verde" key, and the team shows "—" and sinks to the bottom of its
+  // group. Alias to the same rank; the "cape verde" primary key stays put, so
+  // the scoreboard-fed lookup (GameCard) can't regress.
+  "cabo verde": 67, // vs. "cape verde" (FIFA's official name)
   "ghana": 73,
   "curacao": 82,
   "haiti": 83,
