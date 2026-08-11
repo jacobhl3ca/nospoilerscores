@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getApiBase, leadChannelBlocksEmbeds } from "@/lib/youtube";
+import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
 import { openExternal } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
@@ -535,6 +535,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // spoiler titles for search-path clips, so most titles here are clean; this
   // also covers reddit/unvetted clips by re-checking client-side.
   const [titleSafe, setTitleSafe] = useState(false);
+  // …except on the combat channels, where the title bar never uncovers at all —
+  // see channelAlwaysMasksTitle. Read from the same strict-channel gate the
+  // embed check uses, so it holds for the fallback swaps too.
+  const titleAlwaysMasked = channelAlwaysMasksTitle(strictFallbackChannels(fallbackUrl));
   // PAUSED (or ENDED) means YouTube draws its own overlay on top of the iframe:
   // the "More videos" grid on pause, the suggested-video endscreen at the end.
   // Both are pure spoiler vectors — rel:0 only narrows them to the SAME channel,
@@ -1485,7 +1489,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // early, so we re-check on PLAYING below). Default stays covered.
             try {
               const t = event.target.getVideoData?.()?.title ?? "";
-              if (t) setTitleSafe(!isScoreSpoiler(t));
+              if (t) setTitleSafe(!titleAlwaysMasked && !isScoreSpoiler(t));
             } catch { /* keep covered */ }
             // Watchdog: if we never reach PLAYING or BUFFERING within 10s
             // something is wrong — but WHAT is wrong decides the treatment,
@@ -1549,7 +1553,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               // spoiler check in case getVideoData() was empty at onReady.
               try {
                 const t = event.target.getVideoData?.()?.title ?? "";
-                if (t) setTitleSafe(!isScoreSpoiler(t));
+                if (t) setTitleSafe(!titleAlwaysMasked && !isScoreSpoiler(t));
               } catch { /* keep covered */ }
             }
           },
@@ -1597,7 +1601,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // during a fallback swap before the replacement player is built.
       playerRef.current = null;
     };
-  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay]);
+    // titleAlwaysMasked is derived from fallbackUrl (already a dep), so it can
+    // never change on its own — listed to keep exhaustive-deps quiet.
+  }, [currentId, fallbackUrl, titleAlwaysMasked, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay]);
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
