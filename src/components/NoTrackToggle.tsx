@@ -20,7 +20,17 @@ export function NoTrackToggle() {
       if (next) window.localStorage.setItem(KEY, "1");
       else window.localStorage.removeItem(KEY);
       setDisabled(next);
-    } catch { setDisabled(null); }
+    } catch {
+      // The write threw (private-mode / quota / storage disabled). Don't drop
+      // back to `null`: that re-renders the whole page as the indefinite
+      // "Checking…" placeholder with no button, stranding the user with no way
+      // to retry short of a reload. Re-read the real persisted state instead —
+      // the same recovery the initial load above uses — so the toggle stays
+      // interactive and reflects whatever actually stuck (a failed setItem left
+      // the prior value in place, so getItem still reports the honest state).
+      try { setDisabled(window.localStorage.getItem(KEY) === "1"); }
+      catch { setDisabled(false); }
+    }
   }
 
   return (
