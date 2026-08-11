@@ -1,5 +1,10 @@
-import { LeagueEventCard } from "./types";
+import { EventFetchResult, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
+
+// See EventFetchResult: the curated file being unreachable is not the same
+// thing as it having no major on this date.
+const EMPTY: EventFetchResult = { card: null, failed: false };
+const FAILED: EventFetchResult = { card: null, failed: true };
 
 type PokerTour = "WSOP" | "WPT" | "EPT" | "Triton";
 
@@ -50,6 +55,13 @@ const DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
 function validRecord(event: PokerEventRecord): boolean {
   if (!event.id || !event.title || !DATE_RX.test(event.startDate) || !DATE_RX.test(event.endDate)) return false;
   if (event.startDate > event.endDate || event.officialChannel !== OFFICIAL_CHANNEL[event.tour]) return false;
+  // startTime/endTime are the only optional fields, and they drive the pre/in/post
+  // state and the card's `date`. Hold them to the same "drop, don't weaken" gate as
+  // everything else: an unparseable value slips past the checks above but then makes
+  // the state math go NaN — an upcoming card renders "Final" — and the `date` renders
+  // "Invalid Date". Reject the record instead.
+  if (event.startTime !== undefined && isNaN(new Date(event.startTime).getTime())) return false;
+  if (event.endTime !== undefined && isNaN(new Date(event.endTime).getTime())) return false;
   try {
     return new URL(event.eventUrl).hostname === OFFICIAL_HOST[event.tour];
   } catch {
@@ -57,21 +69,55 @@ function validRecord(event: PokerEventRecord): boolean {
   }
 }
 
-function dateMs(ymd: string): number {
-  return new Date(`${ymd}T12:00:00Z`).getTime();
+// `isoDate` MUST be a DASHED calendar date (YYYY-MM-DD) — the format every
+// caller here passes (validRecord gates startDate/endDate on DATE_RX, and
+// fetchPokerEvent dashes the compact selectedDate before it reaches
+// selectPokerEvent). NOT the app's usual compact `ymd` (YYYYMMDD): the param
+// was named `ymd` but `new Date("20260809T12:00:00Z")` silently returns Invalid
+// Date (see the same footgun documented in lib/etDay.ts), which would make an
+// upcoming series read "Final" and its date render "Invalid Date". Renamed to
+// keep the dashed-only contract self-evident at the call site.
+function dateMs(isoDate: string): number {
+  return new Date(`${isoDate}T12:00:00Z`).getTime();
 }
 
 function displayWindow(start: string, end: string): string {
   const fmt = (ymd: string, includeMonth = true) => {
     const d = new Date(`${ymd}T12:00:00Z`);
-    return new Intl.DateTimeFormat("en-US", includeMonth ? { month: "short", day: "numeric" } : { day: "numeric" }).format(d);
+    // Format in UTC — the instant is deliberately anchored to noon UTC (like
+    // dateMs above and boxing.ts's displayDate), so a bare local-zone format
+    // reads the wrong calendar day at UTC+12 and further east: noon UTC lands
+    // after local midnight there, printing "Aug 17–30" for an Aug 16–29 series.
+    // Pin the zone so the printed day is the ymd itself in every zone.
+    return new Intl.DateTimeFormat("en-US", includeMonth ? { month: "short", day: "numeric", timeZone: "UTC" } : { day: "numeric", timeZone: "UTC" }).format(d);
   };
   if (start === end) return fmt(start);
   const sameMonth = start.slice(0, 7) === end.slice(0, 7);
   return `${fmt(start)}–${fmt(end, !sameMonth)}`;
 }
 
-export function selectPokerEvent(events: PokerEventRecord[], targetYmd: string): PokerEventRecord | null {
+// How far back a PAST board date will walk to find the event that had already
+// happened. Matches the 45-day window fetchLeagueEvent uses for F1/UFC/NASCAR
+// (see the past-date lookback in lib/espn.ts) — long enough to bridge the gap
+// between poker majors, short enough that a pre-season date still reads as
+// upcoming rather than dredging up last year's series.
+const PAST_LOOKBACK_DAYS = 45;
+// On today/future dates a just-missed event stays claimable for a week, which
+// is what keeps "Final + replay" on the board the day after a series ends.
+const RECENT_DAYS = 7;
+
+// `preferPast` = the viewed board date is in the past. A past date must walk
+// BACKWARD (overlapping → most recent finished → upcoming) instead of the
+// forward default, or every past tab shows the NEXT major in state "pre" and
+// the replay button — which only renders on a finished tile — is unreachable.
+// Bug seen 2026-08-09 (Jacob 8/10): Yesterday rendered "EPT Barcelona ·
+// Aug 16–29" instead of the WSOP Main Event Final Table that had just wrapped.
+// Same fix, and same reasoning, as the F1/UFC/chess past-date walk-back.
+export function selectPokerEvent(
+  events: PokerEventRecord[],
+  targetYmd: string,
+  preferPast = false,
+): PokerEventRecord | null {
   const valid = events.filter(validRecord);
   const overlapping = valid
     .filter((event) => event.startDate <= targetYmd && event.endDate >= targetYmd)
@@ -79,37 +125,41 @@ export function selectPokerEvent(events: PokerEventRecord[], targetYmd: string):
   if (overlapping.length) return overlapping[0];
 
   const target = dateMs(targetYmd);
+  const windowDays = preferPast ? PAST_LOOKBACK_DAYS : RECENT_DAYS;
   const upcoming = valid
     .filter((event) => event.startDate > targetYmd && dateMs(event.startDate) - target <= 120 * DAY_MS)
     .sort((a, b) => a.startDate.localeCompare(b.startDate) || b.priority - a.priority);
-  if (upcoming.length) return upcoming[0];
-
   const recent = valid
-    .filter((event) => event.endDate < targetYmd && target - dateMs(event.endDate) <= 7 * DAY_MS)
+    .filter((event) => event.endDate < targetYmd && target - dateMs(event.endDate) <= windowDays * DAY_MS)
     .sort((a, b) => b.endDate.localeCompare(a.endDate) || b.priority - a.priority);
-  return recent[0] ?? null;
+
+  const ordered = preferPast ? [recent[0], upcoming[0]] : [upcoming[0], recent[0]];
+  return ordered.find(Boolean) ?? null;
 }
 
-export async function fetchPokerEvent(date?: string): Promise<LeagueEventCard | null> {
+export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> {
   try {
     const res = await fetch(`${getApiBase()}/poker-events.json`, { cache: "no-store" });
-    if (!res.ok) return null;
+    if (!res.ok) return FAILED;
     const data = (await res.json()) as PokerEventsFile;
-    if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return null;
+    // A schema we don't recognise is a broken deploy, not an empty calendar.
+    if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return FAILED;
+    const todayYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
     const targetYmd = date && /^\d{8}$/.test(date)
       ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
-      : new Intl.DateTimeFormat("en-CA", {
-          timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-        }).format(new Date());
-    const chosen = selectPokerEvent(data.events, targetYmd);
-    if (!chosen) return null;
+      : todayYmd;
+    const chosen = selectPokerEvent(data.events, targetYmd, targetYmd < todayYmd);
+    // The file loaded and simply has no major in range — an empty stretch.
+    if (!chosen) return EMPTY;
 
     const now = Date.now();
     const starts = chosen.startTime ? new Date(chosen.startTime).getTime() : dateMs(chosen.startDate) - DAY_MS / 2;
     const ends = chosen.endTime ? new Date(chosen.endTime).getTime() : dateMs(chosen.endDate) + DAY_MS / 2;
     const state: "pre" | "in" | "post" = now < starts ? "pre" : now <= ends ? "in" : "post";
     const exactBroadcast = !!chosen.startTime;
-    return {
+    const card: LeagueEventCard = {
       kind: "poker",
       title: `${chosen.tour} ${chosen.title}`.replace(new RegExp(`^${chosen.tour} ${chosen.tour}\\b`), chosen.tour),
       subtitle: [chosen.location, displayWindow(chosen.startDate, chosen.endDate)].filter(Boolean).join(" · "),
@@ -123,7 +173,8 @@ export async function fetchPokerEvent(date?: string): Promise<LeagueEventCard | 
       eventUrl: chosen.eventUrl,
       scheduleLabel: exactBroadcast ? undefined : displayWindow(chosen.startDate, chosen.endDate),
     };
+    return { card, failed: false };
   } catch {
-    return null;
+    return FAILED;
   }
 }

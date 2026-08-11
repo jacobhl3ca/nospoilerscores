@@ -32,11 +32,20 @@ function encodeTeamId(id: string): string {
   return (SPORT_TO_SHORT[sport] ?? sport) + id.slice(dash + 1);
 }
 
-function decodeTeamId(short: string): string {
+// Returns the full team id ("mlb-1") or null when the token isn't a decodable
+// `<shortcode><digits>` pair whose prefix is a known sport. Previously an
+// unrecognized token (a truncated/hand-edited share URL, e.g. "zz9") fell
+// through both `return short` branches unchanged; because that's a non-empty
+// string it survived the caller's `.filter(Boolean)` and landed a bogus,
+// team-matching-nothing id in `favoriteTeams` — which then persists to
+// localStorage AND (for signed-in users) syncs to the server. Return null so
+// the caller drops it, matching how the sibling thirdLeague/slotLeagues decodes
+// in decodeFavorites already reject unknown codes.
+function decodeTeamId(short: string): string | null {
   const match = short.match(/^([a-z]+)(\d+)$/);
-  if (!match) return short;
+  if (!match) return null;
   const sport = SHORT_TO_SPORT[match[1]];
-  return sport ? `${sport}-${match[2]}` : short;
+  return sport ? `${sport}-${match[2]}` : null;
 }
 
 export type Theme = "dark" | "light" | "system";
@@ -120,7 +129,7 @@ export function decodeFavorites(params: URLSearchParams): {
   const l = params.get("l");
   const t = params.get("t");
   const s = params.get("s");
-  if (f) result.teams = f.split(".").map(decodeTeamId).filter(Boolean);
+  if (f) result.teams = f.split(".").map(decodeTeamId).filter((id): id is string => id !== null);
   if (l) result.leagues = l.split(".").map((s) => SHORT_TO_SPORT[s]).filter(Boolean) as Sport[];
   // Guard the unknown-code case: SHORT_TO_SPORT is typed Record<string, Sport>,
   // so an unrecognized `t` (malformed/hand-edited share URL) silently yields
@@ -196,12 +205,24 @@ export interface Preferences {
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
+  // Season-kickoff banners the user dismissed, keyed by sport + kickoff day
+  // ("epl-2026-08-21"). Per-season rather than a boolean so dismissing this
+  // August's Premier League banner doesn't silence next August's, and capped to
+  // the last dozen keys so this can't grow without bound in a synced prefs blob.
+  kickoffBannersDismissed?: string[];
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
   // The generic "News" column is independent of scores slot 3. It appears by
   // default; true means the user explicitly removed it from the news board.
   newsGenericHidden?: boolean;
-  // Default date on launch: smart (yesterday before 1 PM ET, today after),
-  // always today, or always yesterday.
+  // Which POSITION the generic "Top news" column occupies on the news board
+  // (0-2, default 2 = last). Picking "Top news (ESPN)" from any column's
+  // switcher moves the column here rather than doing nothing — before this,
+  // the action only ever targeted col 3, so choosing it from a league column
+  // silently no-op'd (Jacob 8/9). The two league columns close ranks around
+  // it, so the board still shows the same three feeds.
+  newsGenericSlot?: 0 | 1 | 2;
+  // Date shown on launch: smart (yesterday before 1 PM ET, today after),
+  // always today, or always yesterday (default — see the `defaults` object below).
   defaultDateMode?: DefaultDateMode;
   // Landing view on launch: remember last (default), always scores, always news.
   defaultLandingView?: DefaultLandingView;
@@ -223,8 +244,14 @@ export interface Preferences {
   // appended to the end. Absence of an entry = use Smart (default) order.
   newsSourceOrder?: Record<string, string[]>;
   // Source-type pill filter for the news view. "all" shows every source;
-  // others restrict to one type globally across all visible leagues.
+  // others restrict to one type globally across all visible leagues. Retained
+  // as the legacy/single-select fallback for preferences saved before the
+  // multi-select source controls shipped.
   newsTypeFilter?: "all" | "topvideos" | "espn" | "reddit" | "homepage";
+  // Independently enabled news source types. Once present this is authoritative
+  // over newsTypeFilter, so a user can combine (for example) Reddit + ESPN while
+  // leaving homepage feeds unchecked. At least one stays enabled in the UI.
+  newsTypeFilters?: ("topvideos" | "espn" | "reddit" | "homepage")[];
   // User-chosen ordering of the source-type filter options (the values above).
   // Drag-to-reorder in the funnel popover persists here. Unknown/new values
   // fall through to the tail in default order, so added sources still show.
@@ -239,10 +266,18 @@ export interface Preferences {
   // YouTube's title strip (top). Defaults ON (undefined ⇒ true ⇒ covered) so
   // the player stays spoiler-safe out of the box; the user opts out in Settings.
   maskVideoTitle?: boolean;
-  // Opt-in (default OFF / undefined ⇒ false): show YouTube's NATIVE control bar
-  // (controls:1) on highlight clips instead of the stripped spoiler-safe player.
-  // Gives back YT's own progress/seek bar + time — a spoiler the user accepts,
-  // handy in fullscreen. When on, the bottom spoiler mask steps aside.
+  // Default ON (undefined ⇒ true, matching the `?? true` at every read site —
+  // HomeContent, SettingsPanel — and the `youtubeNativeControls: true` default
+  // below): show YouTube's NATIVE control bar (controls:1) on highlight clips
+  // instead of the stripped spoiler-safe player. Gives back YT's own progress/
+  // seek bar + time — a spoiler the user accepts, handy in fullscreen. When on,
+  // the bottom spoiler mask steps aside. Default TRUE as of 2026-08-09 (Jacob:
+  // "our player is good but a little overkill and not worth the trade off of
+  // usage"). The safe player still exists behind this toggle; what it buys — a
+  // blank seek track, no elapsed/duration readout — is real, but it costs the
+  // familiarity of the player everyone already knows, and its click-catcher was
+  // the thing swallowing the first tap. The headline spoiler mask over
+  // YouTube's title bar stays on in BOTH modes.
   youtubeNativeControls?: boolean;
   // Highlight-player seek control: the progress bar + the 10% jump buttons
   // ("both", default), just the bar, or just the jumps. The bar is custom and
@@ -293,8 +328,12 @@ export interface Preferences {
   // hidden by default. Undefined/false = hidden; true = shown. Headline reveal
   // never changes this filter, so both toolbar controls remain predictable.
   showTextPosts?: boolean;
-  // Image/video previews are visible by default. Set false to spoiler-blur the
-  // preview surfaces while leaving source/league icons alone.
+  // News image/video previews can spoil a result (a thumbnail or embedded clip
+  // gives the game away), so every preview surface is blurred by default, while
+  // leaving source/league icons alone. The "Media" eye toggle in the news header
+  // flips this on to reveal them all at once. Undefined/false = blurred
+  // (default); true = revealed. (Jacob 7/16 — blur on by default; the pre-paint
+  // guard in layout.tsx applies it before hydration to avoid a spoiler flash.)
   revealNewsMedia?: boolean;
   // News layout: false/undefined = the default multi-column "Cards" board (click
   // a post → lightbox); true = a single vertical "Feed" (Reddit-style scroll with
@@ -306,6 +345,14 @@ export interface Preferences {
   // video. Toggled by the 🎥 Videos pill in the news header. Overrides the funnel
   // type filter while on.
   newsVideosOnly?: boolean;
+  // Read a source bottom-to-top: true reverses every news list so the OLDEST
+  // item in the feed sits first (Jacob 8/9). Deliberately a reversal of the
+  // rendered order, not a re-sort on `published` — plenty of Reddit/prebaked
+  // items carry no timestamp, and a sort would scatter those to one end while
+  // the feed's own ordering (which is what the eye is following) is exactly
+  // what "start from the bottom" means. Lives next to the funnel in the news
+  // header rather than in Settings, since it's a per-session reading choice.
+  newsOldestFirst?: boolean;
 }
 
 const defaults: Preferences = {
@@ -316,9 +363,27 @@ const defaults: Preferences = {
   skipExplainer: false,
   skipNewsExplainer: false,
   showNews: false,
-  defaultDateMode: "smart",
+  // Yesterday, not "smart" (2026-08-09, Jacob). A brand-new visitor — most of
+  // them arriving from the no-spoiler-scores landing pages — is here to catch
+  // up on games that are already OVER. "smart" flipped them to Today after
+  // 1 PM local, which on a weekday afternoon is a board of games that have not
+  // started: no highlights, nothing to reveal, and a first impression of an
+  // empty product. Yesterday always has a full, finished slate.
+  // Existing users are unaffected — a saved defaultDateMode always wins, and
+  // Settings → "Automatic" restores the old behaviour.
+  defaultDateMode: "yesterday",
   defaultLandingView: "remember",
   defaultRatings: "auto",
+  // YouTube's own player controls by default (2026-08-09) — see the field doc.
+  youtubeNativeControls: true,
+  // Text posts ON by default (2026-08-09, Jacob). The news board is Reddit-first
+  // (see newsTypeFilter below) and most of what a subreddit produces IS a text
+  // post — hiding them by default emptied out whole columns for a brand-new
+  // user with no hint that a toolbar chip was responsible. Headlines stay
+  // blurred either way, so showing them leaks nothing. There is a matching
+  // pre-paint script in layout.tsx (the CSS hides them until <html> gets
+  // .show-text-posts) — change both together.
+  showTextPosts: true,
   newsColCount: 3,
   smartCutoffHour: 13,
   switcherDefaultsVersion: 2,

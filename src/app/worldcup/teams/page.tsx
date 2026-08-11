@@ -19,13 +19,13 @@ export const metadata: Metadata = {
     // parent openGraph wholesale, so each World Cup route must declare its own).
     locale: "en_US",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore - 2026 World Cup teams without spoilers" }],
+    images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore — 2026 World Cup teams without spoilers" }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESC,
-    images: [{ url: "https://hidescore.com/og-worldcup.png", alt: "HideScore - 2026 World Cup teams without spoilers" }],
+    images: [{ url: "https://hidescore.com/og-worldcup.png", alt: "HideScore — 2026 World Cup teams without spoilers" }],
   },
 };
 
@@ -55,7 +55,19 @@ export default function WorldCupTeamsPage() {
             </span>
             <span className="min-w-0 flex-1">
               {team.name}
-              {team.rank ? <span className="ml-1 font-normal" style={{ color: "var(--text-muted)" }}>#{team.rank}</span> : null}
+              {team.rank ? (
+                // The bare "#12" is part of the link's accessible name, so a
+                // screen reader announces "United States number 12" with no hint
+                // it's a FIFA ranking (the detail page spells it out as "FIFA
+                // ranking snapshot: #12"; this grid never did). Voice the "#N"
+                // glyph as "FIFA rank N" and hide the visual token from AT —
+                // same aria-hidden + sr-only split the loading state uses in
+                // HomeContent — so the label reads clearly with no visual change.
+                <span className="ml-1 font-normal" style={{ color: "var(--text-muted)" }}>
+                  <span aria-hidden="true">#{team.rank}</span>
+                  <span className="sr-only">FIFA rank {team.rank}</span>
+                </span>
+              ) : null}
             </span>
           </Link>
         ))}
@@ -98,6 +110,18 @@ export default function WorldCupTeamsPage() {
                 // node-linking the SeoLandingPage WebPage uses — instead of
                 // leaving two duplicate WebSite entities for hidescore.com.
                 isPartOf: { "@id": "https://hidescore.com/#website" },
+                // Point this page at its own BreadcrumbList node (below) by @id,
+                // the same @graph node-linking the WebPage→#website isPartOf above
+                // and every other route already uses. The BreadcrumbList was the
+                // one sibling node left unlinked here — a bare, @id-less list
+                // floating beside the page it describes, so Google read the trail
+                // as disconnected from this CollectionPage. `breadcrumb` is a valid
+                // WebPage property (CollectionPage is a WebPage subtype), and tying
+                // it to the page node is Google's recommended shape for the
+                // breadcrumb rich result — matching the /privacy, /worldcup/highlights,
+                // and /worldcup/tomorrow fixes. This was the last collection/WebPage
+                // route still emitting an orphan BreadcrumbList.
+                breadcrumb: { "@id": "https://hidescore.com/worldcup/teams#breadcrumb" },
                 // Enumerate the team links this page renders so crawlers can
                 // discover every /worldcup/teams/<slug> detail page from the
                 // structured data, not just the visible <a> grid. Mirrors the
@@ -115,6 +139,10 @@ export default function WorldCupTeamsPage() {
               },
               {
                 "@type": "BreadcrumbList",
+                // Stable @id so the CollectionPage node above can reference this
+                // exact list (Google merges the page's JSON-LD into one graph, so
+                // the ref resolves here) instead of leaving the trail orphaned.
+                "@id": "https://hidescore.com/worldcup/teams#breadcrumb",
                 itemListElement: [
                   { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
                   { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },

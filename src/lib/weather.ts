@@ -69,6 +69,21 @@ function hourLabel(h: number): string {
   return `${h12} ${ampm}`;
 }
 
+// A tz string safe to hand to Intl.DateTimeFormat({ timeZone }), or undefined
+// (→ the device zone). The geocoder's "auto" sentinel AND any malformed IANA
+// name both throw a RangeError from toLocale*({ timeZone }), so validate by
+// construction — the same probe getTimeZone() in lib/etDay.ts uses on the stored
+// zone override. A real IANA zone returns unchanged.
+function usableTz(tz: string | undefined): string | undefined {
+  if (!tz || tz === "auto") return undefined;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return undefined;
+  }
+}
+
 async function geocode(city: string, region: string): Promise<Geo | null> {
   const key = `${city}|${region}`.toLowerCase();
   const cached = geoCache.get(key);
@@ -80,8 +95,19 @@ async function geocode(city: string, region: string): Promise<Geo | null> {
       const stored = window.localStorage.getItem(`nss-geo:${key}`);
       if (stored) {
         const geo = JSON.parse(stored) as Geo;
-        geoCache.set(key, geo);
-        return geo;
+        // Only trust a cached hit whose coordinates are real finite numbers.
+        // The network path below validates lat/lon before it ever persists a
+        // Geo, but a legacy build's differently-shaped entry (or a partial/
+        // corrupt write) can still be valid JSON with missing/NaN coords. Left
+        // untrusted it would flow straight into the forecast URL as
+        // `latitude=undefined`, 400 the request, and — because geoCache then
+        // holds the bad entry — silently kill weather for that venue all
+        // session. Drop it and re-geocode instead.
+        if (Number.isFinite(geo?.lat) && Number.isFinite(geo?.lon)) {
+          geoCache.set(key, geo);
+          return geo;
+        }
+        window.localStorage.removeItem(`nss-geo:${key}`);
       }
     } catch {
       /* ignore */
@@ -133,8 +159,18 @@ async function geocode(city: string, region: string): Promise<Geo | null> {
 
 // venueLocation|gameDateISO → in-flight-or-resolved forecast. Sharing the
 // Promise means a prefetch (card hover/tap) and the modal's own fetch dedupe
-// to ONE request, and reopening a game is instant.
-const resultCache = new Map<string, Promise<GameWeather | null>>();
+// to ONE request, and reopening a game within the TTL is instant.
+//
+// Entries carry a timestamp and expire after WEATHER_TTL_MS: the forecast half
+// is fine to hold, but GameWeather also carries LIVE "right now" conditions
+// (nowTempF/nowIcon/nowLabel/rainingNow, the Open-Meteo `current` block) that
+// the detail modal renders for in-progress games. A session-lifetime cache
+// froze those at first fetch — a drizzle that rolled in mid-game never surfaced
+// on reopen, the exact staleness the now-* fields exist to fix. A short TTL lets
+// the next open refetch while still deduping the prefetch→open burst and keeping
+// rapid reopens instant (multi-day-out forecasts barely move in 5 min anyway).
+const WEATHER_TTL_MS = 5 * 60_000;
+const resultCache = new Map<string, { at: number; p: Promise<GameWeather | null> }>();
 
 // Warm the cache before the modal opens — call on card hover/pointerdown so the
 // forecast is usually ready by the time the detail popup renders (kills the
@@ -156,11 +192,13 @@ export function prefetchGameWeather(game: {
 export function fetchGameWeather(venueLocation: string, gameDateISO: string): Promise<GameWeather | null> {
   const key = `${venueLocation}|${gameDateISO}`;
   const hit = resultCache.get(key);
-  if (hit) return hit;
+  if (hit && Date.now() - hit.at < WEATHER_TTL_MS) return hit.p;
   const p = computeWeather(venueLocation, gameDateISO).catch(() => null);
-  resultCache.set(key, p);
+  resultCache.set(key, { at: Date.now(), p });
   // Drop a null (failed/transient) so a later open can retry; keep real hits.
-  p.then((w) => { if (w === null) resultCache.delete(key); });
+  // Guard the delete on identity so a retry that already replaced this entry
+  // isn't clobbered by the stale promise's late rejection.
+  p.then((w) => { if (w === null && resultCache.get(key)?.p === p) resultCache.delete(key); });
   return p;
 }
 
@@ -176,13 +214,18 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   const start = new Date(gameDateISO);
   if (isNaN(start.getTime())) return null;
   // geo.tz is an IANA zone from the geocoder, but it can be the "auto" sentinel
-  // when that result carried no timezone (see geocode's `?? "auto"`). "auto" is
-  // valid for Open-Meteo's `timezone=` API param below, but NOT for Intl —
-  // toLocale*({ timeZone: "auto" }) throws a RangeError, which (these calls sit
-  // outside the try) would reject the whole forecast and silently drop weather
-  // for the venue. Coerce it to the device zone so the intended graceful
-  // fallback actually works; a real IANA tz is used unchanged.
-  const tz = geo.tz && geo.tz !== "auto" ? geo.tz : undefined;
+  // when that result carried no timezone (see geocode's `?? "auto"`), and a hit
+  // restored from localStorage can carry ANY malformed tz — geocode()'s cache
+  // guard validates lat/lon but not tz, so a legacy/partial/corrupt write with
+  // real coords but a bad zone flows straight through. "auto" is valid for
+  // Open-Meteo's `timezone=` API param below, but NEITHER "auto" nor a bad IANA
+  // name is valid for Intl — toLocale*({ timeZone }) throws a RangeError, which
+  // (these calls sit outside the try) would reject the whole forecast and, since
+  // geoCache/localStorage still hold the entry, silently drop weather for that
+  // venue all session. usableTz probes the zone and coerces any unusable value to
+  // the device zone so the intended graceful fallback works; a real IANA tz is
+  // used unchanged.
+  const tz = usableTz(geo.tz);
   // The hourly request must return times in the SAME zone `localDate` and
   // `localHour` (below) are computed in, or the `hr === localHour` gametime
   // match reads the wrong hour. `timezone=auto` resolves times in the venue's

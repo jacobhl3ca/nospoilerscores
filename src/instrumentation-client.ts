@@ -10,6 +10,10 @@ Sentry.init({
     /EmptyRanges/,
     /runtime\.sendMessage/,
     /Unable to load image data:image\/svg\+xml/,
+    // ReferenceError for a variable that has never existed in HideScore source
+    // (confirmed via full git history search). Injected-script noise that
+    // denyUrls misses when the extension runs in the main page context.
+    /detailEvent is not defined/,
   ],
   denyUrls: [
     /^chrome-extension:\/\//,

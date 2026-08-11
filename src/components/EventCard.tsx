@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
 import { openExternal } from "@/lib/openExternal";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
@@ -12,13 +12,142 @@ import { openExternal } from "@/lib/openExternal";
 // rights-holder blocks embedding (e.g. Formula One Management), the modal
 // falls back to its "Watch on YouTube" link.
 
+// ── One line of tile text that must not get cut off ─────────────────────────
+//
+// The single-event tile hands its title a whole line and puts nothing else on
+// it, so when the title is too long there is nothing to trade away and it just
+// clipped — "Heineken Dutch Grand …" over "Circuit Park Zandvoort · Zan…"
+// (Jacob 8/10). On a race tile the clipped tail IS the identity of the race,
+// which makes truncation the worst available outcome rather than a safe net.
+//
+// Same ladder the fighter names and the golf leaderboard use, in this order:
+//   1. every VARIANT (longest first) at the line's natural font size,
+//   2. then step the font down 1px at a time, retrying the variants at each
+//      size, down to `floorPx`,
+//   3. then the shortest variant at the floor, with `truncate` as the last
+//      resort — reached only when even the shortest name can't fit at 11px.
+//
+// ⛔ The natural size is a CEILING, never a starting guess to grow from: this
+// text tracks the team-name size of the cards beside it (text-sm, or 1rem on
+// the single-column .ns-cards-lg board), and a tile whose title rendered larger
+// than the MLB team names next to it is a bug this app has shipped before. The
+// cap is READ OFF THE DOM with the inline size cleared, so a board-layout CSS
+// rule that changes the class size moves the cap with it automatically.
+const FIT_FLOOR_TITLE = 11;
+const FIT_FLOOR_SUBTITLE = 9;
+
+function FittedLine({
+  variants,
+  className,
+  style,
+  floorPx,
+  fullText,
+  ariaHidden,
+  lineKind,
+}: {
+  variants: string[];
+  className: string;
+  style?: React.CSSProperties;
+  floorPx: number;
+  fullText?: string;
+  ariaHidden?: boolean;
+  // Stable hook for tests/visual/text-fit.spec.ts, which walks every fitted
+  // line on the board and asserts none of them clipped. A class or a text
+  // matcher would break the first time either is restyled; this attribute
+  // exists only to be found.
+  lineKind: "title" | "subtitle";
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  // `size: null` = render at the class's own size (the cap). Text starts as the
+  // longest variant so the first paint is never SHORTER than what fits — a
+  // shrink is invisible, a grow reads as a flicker.
+  const [fit, setFit] = useState<{ text: string; size: number | null }>({ text: variants[0] ?? "", size: null });
+  // Join, not the array: a fresh array identity every render would re-run the
+  // layout effect forever.
+  const key = variants.join("\u001F");
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof window === "undefined") return;
+    const list = key.split("\u001F").filter(Boolean);
+    if (!list.length) return;
+
+    const measure = () => {
+      const node = ref.current;
+      if (!node) return;
+      // Clear the inline size BEFORE reading the cap, or each pass would cap
+      // itself at the size the previous pass chose and ratchet downward.
+      node.style.fontSize = "";
+      const cs = getComputedStyle(node);
+      const capPx = parseFloat(cs.fontSize) || 14;
+      // clientWidth is the room the line actually has: the span is flex-1
+      // inside the row, so it fills whatever the glyph slot and gaps leave.
+      const avail = node.clientWidth;
+      if (!avail) return;
+
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;top:-9999px;left:-9999px;";
+      probe.style.fontFamily = cs.fontFamily;
+      probe.style.fontWeight = cs.fontWeight;
+      probe.style.letterSpacing = cs.letterSpacing;
+      document.body.appendChild(probe);
+      const widthAt = (text: string, px: number) => {
+        probe.style.fontSize = `${px}px`;
+        probe.textContent = text;
+        return probe.offsetWidth;
+      };
+      let chosen: { text: string; size: number | null } = { text: list[list.length - 1], size: Math.min(capPx, floorPx) };
+      outer: for (let px = Math.round(capPx); px >= floorPx; px--) {
+        for (const text of list) {
+          // 1px of slack: offsetWidth rounds up, and a sub-pixel overflow still
+          // trips `truncate` into painting an ellipsis.
+          if (widthAt(text, px) <= avail - 1) {
+            chosen = { text, size: px >= Math.round(capPx) ? null : px };
+            break outer;
+          }
+        }
+      }
+      document.body.removeChild(probe);
+      setFit((prev) => (prev.text === chosen.text && prev.size === chosen.size ? prev : chosen));
+    };
+
+    // rAF for the same reason LeagueColumn's checkIfFullNamesFit uses one:
+    // measure off the commit, never synchronously inside the effect body.
+    const raf = requestAnimationFrame(measure);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => measure());
+    if (ro) ro.observe(el);
+    return () => { cancelAnimationFrame(raf); ro?.disconnect(); };
+  }, [key, floorPx]);
+
+  return (
+    <span
+      ref={ref}
+      className={className}
+      // `title` keeps the untruncated name reachable on hover even in the
+      // last-resort case, exactly as the team/fighter names do.
+      title={fullText || variants[0] || undefined}
+      aria-hidden={ariaHidden}
+      data-fit-line={lineKind}
+      style={fit.size == null ? style : { ...style, fontSize: `${fit.size}px` }}
+    >
+      {fit.text}
+    </span>
+  );
+}
+
 // "Sat 5:00 PM" for a future day, "5:00 PM" if it's today, "Sat" if the time is
 // a midnight placeholder (TBD). Mirrors how the game cards show the day for
 // upcoming/lookahead games instead of a bare time.
 // `refYmd` (YYYYMMDD, the board's viewed date) decides what "today" means: the
 // game cards drop the day prefix for games on the VIEWED slate, so an F1/UFC
 // tile must too — navigating to Sunday should show the Sunday race as just
-// "9:00AM", not "Sun 9:00AM". Falls back to the real today when absent.
+// "9:00AM", not "Sun 9:00AM". When absent, falls back to the app's canonical
+// service day (getEtServiceDate) — NOT a raw `new Date()` calendar day — so the
+// fallback respects the same 1 AM rollover the date nav and data layer use.
+// A bare calendar day was the one spot still computing "today" independently,
+// the exact UI/data drift etDay.ts's single-source-of-truth exists to prevent:
+// between midnight and 1 AM local, the board still shows yesterday's slate, so
+// "today" here must be that service day, not the new calendar day.
 function whenLabel(iso?: string, refYmd?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -28,9 +157,6 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // this, an F1/UFC tile showed kickoff times in the device's zone even when
   // the user had picked another, disagreeing with the cards beside it.
   const tz = getTimeZone();
-  const ymd = (date: Date) =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date).replace(/-/g, "");
-  const sameDay = ymd(d) === (refYmd || ymd(new Date()));
   // Detect the midnight (TBD) placeholder in the SAME zone the time is shown in
   // (tz), not the device's own zone. Reading d.getHours()/getMinutes() uses the
   // device zone, so a Settings "Time zone" override desyncs it from the
@@ -39,6 +165,24 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // (same guard as weather.ts / etDay.ts / DateNav.ts).
   const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   const midnight = hm === "00:00" || hm === "24:00";
+  // Bucket a REAL kickoff to its SLATE day (etSlateYmd's 1 AM rollover), not a
+  // raw effective-tz calendar day, so the "is this on the viewed slate?" test
+  // uses the SAME boundary the board, the soccer cards, and the data layer all
+  // use. The fallback below already reads the slate-aware service day
+  // (getEtServiceDate), so a plain-calendar bucket compared an apples-to-oranges
+  // day: a UFC main event at 12:30 AM — which ESPN files on (and the board shows
+  // under) the PREVIOUS day's slate — counted as the next calendar day and
+  // flashed a spurious "Sun 12:30AM" prefix while the user was viewing that
+  // fight's own Saturday slate. Now it just reads "12:30AM", matching a soccer
+  // card on the same slate. A midnight (00:00) value is the TBD placeholder, not
+  // a real 12 AM start, so it keeps the plain calendar day — otherwise the
+  // rollover would push a time-unknown event onto the prior slate and show a
+  // stray weekday where the label should be empty. Daytime events (>= 1 AM) are
+  // unaffected either way — etSlateYmd and the calendar day agree there.
+  const eventYmd = midnight
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d).replace(/-/g, "")
+    : etSlateYmd(iso);
+  const sameDay = eventYmd === (refYmd || toYmd(getEtServiceDate()));
   // Strip the space before AM/PM so it reads "8:00PM" like the game cards'
   // formatTime (GameCard's "1:10PM"), not "8:00 PM".
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).replace(/(\d)\s+([AP]M)\b/i, "$1$2");
@@ -66,9 +210,8 @@ function whenLabel(iso?: string, refYmd?: string): string {
 // beats "here's a page that spoils it". This makes UFC honour the contract
 // every other league already had — GameHighlights' "missing" state and
 // GolfLeaderboard's visibleHighlightSlots both hide a highlight button whose
-// chain came up empty instead of dropping the user on a search page. F1 is now
-// the only tile that still falls back to a search (its strict FORMULA 1 gate
-// means a miss is usually just FOM blocking the embed, not an unknown clip).
+// chain came up empty instead of dropping the user on a search page. Racing now
+// follows the same fail-closed contract.
 // NOTE even the official clips' TITLES carry a partial spoiler ("ROUND 1 SUB",
 // "UNANIMOUS DEC"), which the masked player never shows — one more reason the
 // native-YouTube-controls option stays off (it would surface the title).
@@ -77,7 +220,7 @@ const UFC_HIGHLIGHT_CHANNELS = ["UFC on Paramount+", "UFC", "ESPN MMA"] as const
 // What the play button reports once a bout has been resolved: the channel it
 // actually came from. Keyed by bout id so each card says where ITS video came
 // from; a null entry (not this type) means no rights-holder had the clip.
-export type HighlightSource = { label: string; official: boolean; videoId?: string };
+export type HighlightSource = { label: string; official: boolean; videoId?: string; fallbackUrl?: string };
 
 // "A vs B highlights" — deliberately WITHOUT the "UFC" token that espn.ts's
 // generic highlightQuery adds. Measured against the live resolver 2026-07-19:
@@ -92,40 +235,33 @@ function boutHighlightQuery(fight: FightBout): string {
 
 function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: string) => void) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  // strict → the worker oembed-verifies the result's uploader equals `channel`
-  // (drops title-only reuploads from random channels). Used by F1, whose
-  // official FORMULA 1 channel is the only acceptable in-app source; when
-  // nothing strict matches, the openExternal fallback below sends the user to
-  // a YouTube search OUTSIDE the app instead of playing an unvetted upload in
-  // the masked player.
-  const play = async (id: string, query: string, channel?: string, strict?: boolean, raceTokens?: string[]) => {
+  // Racing is strict and fail-closed: the worker verifies the uploader and race,
+  // and a miss returns null so the caller hides the button. The fallback URL is
+  // retained only as private retry metadata for VideoModal; it carries the same
+  // channel/race gates and is never opened as a generic search result.
+  const playRace = async (id: string, query: string, channel: string, label: string, raceTokens?: string[]): Promise<HighlightSource | null> => {
     // nss_channels/nss_strict ride along so VideoModal's embed-failure retry
     // keeps THIS call's channel gate. FOM blocks the FORMULA 1 embed often, and
     // an ungated retry is what put a fan reupload in the masked player (7/19);
-    // YouTube ignores the extra params, so the string is still a valid search
-    // URL for the external hand-off below.
-    const gate = (strict && channel
-      ? `&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`
-      : "")
+    // YouTube ignores the extra params; inside HideScore they are private retry
+    // metadata, while the modal's external handoff uses the resolved watch URL.
+    const gate = `&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`
       // nss_race rides along for the same reason nss_channels does: VideoModal's
       // embed-failure retry must keep THIS call's race gate, or an FOM embed
       // block on the F1 reel would retry ungated and put a different round's
       // race in the masked player.
       + (raceTokens?.length ? `&nss_race=${encodeURIComponent(raceTokens.join("|"))}` : "");
     const fallback = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${gate}`;
-    // Route the YouTube-search fallback through openExternal (not raw
-    // window.open) so it behaves like every other external YouTube open in the
-    // app: on the website it's byte-identical (openExternal does the same
-    // window.open there), but inside the Capacitor native wrapper it hands the
-    // /results URL off to the YouTube app via the youtube:// scheme (falling
-    // back to the in-app browser) instead of shelling out to mobile Safari and
-    // missing the handoff — matching GameHighlights' openExternal fallbacks.
-    if (!onPlayHighlight) { openExternal(fallback); return; }
+    if (!onPlayHighlight) return null;
     setLoadingId(id);
-    const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, strict, raceTokens);
-    setLoadingId(null);
-    if (videoId) onPlayHighlight(videoId, fallback);
-    else openExternal(fallback);
+    try {
+      const videoId = await fetchFirstVideoId(query, channel, undefined, undefined, true, raceTokens);
+      if (!videoId) return null;
+      onPlayHighlight(videoId, fallback);
+      return { label, official: true, videoId, fallbackUrl: fallback };
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   // UFC: walk the rights-holder channels in coverage order, each strict
@@ -175,7 +311,7 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
     }
   };
 
-  return { loadingId, play, playUfc, playStrictOnly };
+  return { loadingId, playRace, playUfc, playStrictOnly };
 }
 
 // Play button styled exactly like the game cards' highlight buttons
@@ -377,7 +513,7 @@ export default function EventCard({
   selectedDate?: string;
   isPastDate?: boolean;
 }) {
-  const { loadingId, play, playUfc, playStrictOnly } = useHighlightPlayer(onPlayHighlight);
+  const { loadingId, playRace, playUfc, playStrictOnly } = useHighlightPlayer(onPlayHighlight);
   // Where each bout's highlight actually came from, once played (bout id →
   // source). Sticky per card so the button keeps reporting its source. A NULL
   // entry means "resolved, and no rights-holder has it" — FightCard hides that
@@ -390,6 +526,13 @@ export default function EventCard({
   // Boxing majors use the same strict, fail-closed source contract as Poker,
   // but stay separate so a promoter mapping cannot affect another event type.
   const [boxingSource, setBoxingSource] = useState<HighlightSource | null | undefined>(undefined);
+  // Racing mirrors Poker/Boxing: undefined = untried, object = verified source,
+  // null = strict miss (button hidden; no YouTube-search handoff).
+  const [raceSource, setRaceSource] = useState<HighlightSource | null | undefined>(undefined);
+  // Chess is the same contract again. What it plays is the organizer's ROUND
+  // BROADCAST, not a highlight package — no chess body publishes one (see
+  // CHESS_ORGANIZER_CHANNELS in lib/espn.ts) — so the button says "Round".
+  const [chessSource, setChessSource] = useState<HighlightSource | null | undefined>(undefined);
   // A replay carried onto a later slate should not retain a redundant FINAL
   // row above its watch button. Normal finished GameCards also drop that row
   // on past dates. Apply the same rule to every event-card family (UFC,
@@ -398,11 +541,18 @@ export default function EventCard({
     if (state !== "post") return false;
     if (isPastDate) return true;
     if (!selectedDate) return false;
-    const parsed = new Date(date);
-    if (Number.isNaN(parsed.getTime())) return false;
-    const eventYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(parsed).replace(/-/g, "");
+    // Bucket the finished event to its SLATE day (etSlateYmd's 1 AM rollover),
+    // not a raw effective-tz calendar day, so "is this a replay carried onto a
+    // later slate?" uses the SAME boundary the board, whenLabel above, and the
+    // data layer all use. A UFC main event at 12:30 AM ET is filed on (and the
+    // board shows it under) the PREVIOUS day's slate; the old calendar-day bucket
+    // counted it as the NEXT day, so on that following slate eventYmd === selectedDate
+    // and the redundant FINAL row wrongly stayed. etSlateYmd returns "" for an
+    // unparseable date — treat that as "not historical" (keep the row) rather than
+    // letting "" sort before selectedDate. Daytime events (>= 1 AM local) are
+    // unaffected: etSlateYmd and the calendar day agree there.
+    const eventYmd = etSlateYmd(date);
+    if (!eventYmd) return false;
     return eventYmd < selectedDate;
   };
   const playBout = async (id: string, query: string) => {
@@ -438,13 +588,67 @@ export default function EventCard({
       onPlayHighlight(boxingSource.videoId, `https://www.youtube.com/watch?v=${boxingSource.videoId}`);
       return;
     }
-    const src = await playStrictOnly(
+    // playRace, not playStrictOnly, for the same reason chess uses it: one
+    // promoter channel covers every card they run, so the strict channel gate
+    // alone cannot tell two fight nights apart. `raceTokens` carries the
+    // fighters' surnames (buildBoxingTokens) — undefined on the curated file's
+    // entries, where the hand-written full-name query already does the work, and
+    // playRace with no tokens is playStrictOnly.
+    const src = await playRace(
       "boxing-official",
       event.highlightQuery ?? `${event.title} highlights`,
       event.officialChannel,
       event.officialLabel ?? "Boxing",
+      event.raceTokens,
     );
     setBoxingSource(src);
+  };
+  const playRaceHighlight = async () => {
+    if (!event.officialChannel) {
+      setRaceSource(null);
+      return;
+    }
+    if (raceSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(
+        raceSource.videoId,
+        raceSource.fallbackUrl ?? `https://www.youtube.com/watch?v=${raceSource.videoId}`,
+      );
+      return;
+    }
+    const src = await playRace(
+      "race-official",
+      f1Query,
+      event.officialChannel,
+      event.officialLabel ?? "Racing",
+      event.raceTokens,
+    );
+    setRaceSource(src);
+  };
+  // Chess reuses playRace verbatim: same strict channel gate, same title-token
+  // gate (`raceTokens` carries the tournament name here — the worker's `race`
+  // param is a generic "title must contain one of these", named for its first
+  // caller). One organizer channel covers a whole season, so without the token
+  // the tile would play whichever event that channel uploaded last.
+  const playChessRound = async () => {
+    if (!event.officialChannel) {
+      setChessSource(null);
+      return;
+    }
+    if (chessSource?.videoId && onPlayHighlight) {
+      onPlayHighlight(
+        chessSource.videoId,
+        chessSource.fallbackUrl ?? `https://www.youtube.com/watch?v=${chessSource.videoId}`,
+      );
+      return;
+    }
+    const src = await playRace(
+      "chess-official",
+      event.highlightQuery ?? event.title,
+      event.officialChannel,
+      event.officialLabel ?? "Round",
+      event.raceTokens,
+    );
+    setChessSource(src);
   };
 
   // Fighter-name size follows namesCompact — the game columns' REAL
@@ -603,15 +807,36 @@ export default function EventCard({
   // is already height-matched to an MLB card at every breakpoint; a bespoke
   // layout would drift out of alignment the first time either was touched.
   const isRace = event.kind === "f1";
+  // Longest-first renderings for the two text rows. The feed supplies these for
+  // racing (lib/eventTiles.ts); boxing, chess and poker have only the one
+  // string so far, and still get the font step — which is what was clipping
+  // "Sinquefield Cup" and the WSOP event names (Jacob 8/10). The   keeps a
+  // subtitle-less tile's second row a real line box, as the literal did before.
+  const titleVariants = event.titleVariants?.length ? event.titleVariants : [event.title];
+  const subtitleVariants = event.subtitleVariants?.length
+    ? event.subtitleVariants
+    : [event.subtitle || " "];
   const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : event.kind === "poker" ? "♠️" : "🏁";
+  // Spoken name for the sport-type glyph, announced via role="img"/aria-label on
+  // a NON-clickable tile (boxing has no detail page; a finished race/chess/poker
+  // event drops its link), where the tile root carries no aria-label and the
+  // emoji is otherwise the only cue to the event type. Mirrors `glyph`'s
+  // boxing/chess/poker/race branches so poker reads "Poker", not "Race".
+  const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : event.kind === "poker" ? "Poker" : "Race";
   // What the tile body links to, and what to call it. Chess points at the
-  // Lichess broadcast (a live BOARD, not a results table); boxing has no
-  // per-event page worth linking, so its tile is inert.
+  // Lichess broadcast (a live BOARD, not a results table); boxing opens the
+  // DAZN Boxing fixture/preview clip on YouTube (boxing.ts sets eventUrl to a
+  // www.youtube.com watch URL), so it needs its own noun — the fall-through
+  // "Race details on ESPN" was wrong on both counts (not a race, not ESPN) and,
+  // since a pre/live boxing tile IS clickable, it leaked into the tile's
+  // aria-label and tooltip. Mirrors glyphLabel's boxing branch above.
   const detailNoun = event.kind === "chess"
     ? "Follow live on Lichess"
     : event.kind === "poker"
       ? "Official tournament details"
-      : "Race details on ESPN";
+      : event.kind === "boxing"
+        ? "Fight preview on YouTube"
+        : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   const hideHistoricalMeta = historicalPost(event.state, event.date);
@@ -634,6 +859,13 @@ export default function EventCard({
   // PlayBtn stopPropagations so highlights don't also fire this.
   const clickable = !!event.eventUrl && !isPost;
   const openDetails = () => { if (event.eventUrl) openExternal(event.eventUrl); };
+  // Which (if any) highlight button this finished tile ends up showing. Each is
+  // its own strict lookup, and a tile renders at most one of them — a miss adds
+  // nothing, so the tile keeps its natural height rather than a blank band.
+  const showRaceBtn = isPost && isRace && !!event.officialChannel && raceSource !== null;
+  const showPokerBtn = isPost && event.kind === "poker" && !!event.officialChannel && pokerSource !== null;
+  const showBoxingBtn = isPost && event.kind === "boxing" && !!event.officialChannel && boxingSource !== null;
+  const showChessBtn = isPost && event.kind === "chess" && !!event.officialChannel && chessSource !== null;
 
   return (
     <div ref={rootRef} className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
@@ -670,43 +902,62 @@ export default function EventCard({
             these rows' 16px mobile logo slot + leading-none text would collapse
             shorter, drifting the column heights apart as cards stack. */}
         <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
-          <span aria-hidden className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
-          <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={event.title}>{event.title}</span>
+          {/* Glyph keeps main's a11y treatment (it names the sport when the
+              tile isn't itself a button); the title keeps the fitted line. */}
+          <span {...(clickable ? { "aria-hidden": true } : { role: "img", "aria-label": glyphLabel })} className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
+          {/* flex-1: the span must OWN the leftover width even when its text is
+              short, because FittedLine reads that width off clientWidth. A
+              plain auto-basis flex item shrinks to its text and would report
+              "no room" for a name that fits comfortably. */}
+          <FittedLine
+            variants={titleVariants}
+            lineKind="title"
+            fullText={event.title}
+            floorPx={FIT_FLOOR_TITLE}
+            className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0 flex-1`}
+            style={{ color: "var(--text)" }}
+          />
         </div>
-        {event.subtitle && (
-          <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
-            <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
-            <span className="text-[10px] sm:text-xs leading-none truncate min-w-0" style={{ color: "var(--text-muted)" }} title={event.subtitle}>{event.subtitle}</span>
-          </div>
-        )}
+        {/* Second row ALWAYS renders, even with no subtitle. This is the tile's
+            stand-in for a game card's second team row, so dropping it when the
+            feed carries no venue made the tile 24px shorter than every card
+            around it — IndyCar (no subtitle in ESPN's payload) sat visibly
+            short next to NASCAR and MLB (Jacob 8/9). Empty and aria-hidden when
+            there's nothing to say, so screen readers hear a one-line tile. */}
+        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6" aria-hidden={event.subtitle ? undefined : true}>
+          <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
+          <FittedLine
+            variants={subtitleVariants}
+            lineKind="subtitle"
+            fullText={event.subtitle || undefined}
+            floorPx={FIT_FLOOR_SUBTITLE}
+            className="text-[10px] sm:text-xs leading-none truncate min-w-0 flex-1"
+            style={{ color: "var(--text-muted)" }}
+          />
+        </div>
       </div>
-      {/* One official-channel button, like UFC's — the unscoped "Search" test
-          button is gone. strict=true hard-gates the in-app result to the real
-          FORMULA 1 channel (oembed-verified uploader); FOM blocks embedding on
-          most of its uploads, so when nothing strict/playable matches, the
-          fallback opens a YouTube search externally rather than playing some
-          random reupload in the masked player. */}
-      {/* Racing ONLY. Chess deliberately ships with no highlight
-          button, on the same rule the new soccer leagues were just held to: a
-          button goes in once its official channel has been verified end-to-end,
-          not before. Boxing is handled below through a per-card promoter
-          mapping because DAZN / Top Rank / Matchroom / PBC have no shared
-          uploader. Chess has no
-          highlight reel at all — its "highlight" is the live board, which the
-          tile already links to. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts for
-          the same call on cricket. */}
-      {isPost && isRace && (
+      {/* One official-channel button, like UFC's. A strict miss hides it; no
+          racing path opens a generic YouTube results page. */}
+      {/* Racing. Every family here follows the same rule the new soccer leagues
+          were held to: a button goes in once its official channel has been
+          verified end-to-end, not before. Boxing is handled below through a
+          per-card promoter mapping because DAZN / Top Rank / Matchroom / PBC
+          have no shared uploader; chess through an organizer mapping, and what
+          it plays is the round broadcast rather than a highlight reel, because
+          the sport publishes none. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts
+          for the case where the answer is no button at all (cricket). */}
+      {showRaceBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
               renders NASCAR and IndyCar, which would otherwise both offer an
               "F1" highlight button. Falls back to "F1" for older cards. */}
-          <PlayBtn label={event.officialLabel ?? "F1"} loading={loadingId === "f1-official"} onClick={() => play("f1-official", f1Query, event.officialChannel, true, event.raceTokens)} />
+          <PlayBtn label={raceSource?.label ?? event.officialLabel ?? "F1"} loading={loadingId === "race-official"} onClick={playRaceHighlight} />
         </div>
       )}
       {/* Poker replays are stricter than racing: exact tour channel or no
           button. A failed lookup never opens YouTube search because result
           titles commonly contain the champion. */}
-      {isPost && event.kind === "poker" && event.officialChannel && pokerSource !== null && (
+      {showPokerBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           <PlayBtn
             label={pokerSource?.label ?? event.officialLabel ?? "Poker"}
@@ -718,12 +969,26 @@ export default function EventCard({
       {/* Boxing has no league-wide uploader. Curated major records supply the
           exact promoter/rightsholder channel; a miss hides this button and
           never opens a spoiler-heavy search page. */}
-      {isPost && event.kind === "boxing" && event.officialChannel && boxingSource !== null && (
+      {showBoxingBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           <PlayBtn
             label={boxingSource?.label ?? event.officialLabel ?? "Boxing"}
             loading={loadingId === "boxing-official"}
             onClick={playBoxing}
+          />
+        </div>
+      )}
+      {/* Chess plays the organizer's ROUND BROADCAST — there is no highlight
+          package in the sport (see CHESS_ORGANIZER_CHANNELS in lib/espn.ts).
+          Strict channel + tournament-token gated like the rest, so an event
+          with no mapped organizer, or a round that is not up, shows nothing
+          rather than a search page. */}
+      {showChessBtn && (
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          <PlayBtn
+            label={chessSource?.label ?? event.officialLabel ?? "Round"}
+            loading={loadingId === "chess-official"}
+            onClick={playChessRound}
           />
         </div>
       )}

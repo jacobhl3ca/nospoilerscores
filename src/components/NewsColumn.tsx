@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sport } from "@/lib/types";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -91,13 +91,17 @@ interface NewsColumnProps {
   // League swap selector — click the title to pick a different league.
   // Callback receives undefined for Auto (revert to default) and "empty" to
   // hide the column entirely.
-  swappableOptions?: { sport: Sport; label: string; offseason?: boolean }[];
+  swappableOptions?: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string }[];
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
   // Switch this column to the ESPN "Top news" headlines feed (see NewsColumnTitle).
   onPickEspn?: () => void;
   espnActive?: boolean;
+  // What "Auto" resolves to for this column, so the switcher can mark it
+  // "· default" instead of leaving Auto an opaque choice (Jacob 8/9).
+  autoSport?: Sport;
+  autoIsEspn?: boolean;
   // When true, the column renders only its source cards — the title row is
   // rendered separately above (e.g. as part of the page-level TitleStrip
   // that sits above AlignedVideoStrip). Keeps the league title above the
@@ -117,6 +121,9 @@ interface NewsColumnProps {
   videosOnly?: boolean;
   // Headline-only rows are independently hidden unless this is true.
   showTextPosts?: boolean;
+  // Reverse each source's rendered order (oldest first) — the ⇅ news-header
+  // control, so a feed can be read bottom-to-top.
+  oldestFirst?: boolean;
   // Show the subtle × remove-column control on this column's title (see
   // NewsColumnTitle.removable) — set only when more than one column is visible.
   removable?: boolean;
@@ -133,11 +140,13 @@ export function NewsColumnTitle({
   onSwapLeague,
   onPickEspn,
   espnActive,
+  autoSport,
+  autoIsEspn,
   measureRef,
   removable,
 }: {
   title: string;
-  swappableOptions?: { sport: Sport; label: string; offseason?: boolean }[];
+  swappableOptions?: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string }[];
   shownElsewhere?: Sport[];
   selectedSport?: Sport;
   onSwapLeague?: (sport: Sport | "empty" | undefined) => void;
@@ -150,6 +159,9 @@ export function NewsColumnTitle({
   // was emptied (it reappears as the last column).
   onPickEspn?: () => void;
   espnActive?: boolean;
+  // See NewsColumnProps — marks the option "Auto" would land on.
+  autoSport?: Sport;
+  autoIsEspn?: boolean;
   // Callback ref on the title's root so the parent can measure its height into
   // --news-titlebar-h. In the strip layout HomeContent measures a shared title
   // row; here the same ref rides one per-column title so the measurement also
@@ -189,17 +201,25 @@ export function NewsColumnTitle({
       <div className="relative flex items-center justify-center px-6 w-full">
         {isSwappable ? (
           <div ref={swapRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setSwapOpen(!swapOpen)}
-              className="cursor-pointer transition-colors hover:opacity-80"
-              style={{ color: "var(--text)" }}
-              title="Switch news league"
-              aria-haspopup="dialog"
-              aria-expanded={swapOpen}
-            >
-              <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
-            </button>
+            {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern), not
+                the reverse: a <button>'s content model is phrasing content, so an
+                <h2> nested inside it is invalid HTML and assistive tech may drop
+                the heading role. This keeps the swappable title a real <h2>
+                heading — matching the non-swappable branch below — while the
+                button stays the interactive trigger. The button inherits the
+                heading's font + color, so it renders pixel-for-pixel unchanged. */}
+            <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+              <button
+                type="button"
+                onClick={() => setSwapOpen(!swapOpen)}
+                className="cursor-pointer transition-colors hover:opacity-80"
+                title="Switch news league"
+                aria-haspopup="dialog"
+                aria-expanded={swapOpen}
+              >
+                {title}
+              </button>
+            </h2>
             {swapOpen && (
               <div
                 // The toggle above declares aria-haspopup + aria-expanded, so
@@ -226,6 +246,9 @@ export function NewsColumnTitle({
                 {swappableOptions!.map((opt) => {
                   const isCurrent = opt.sport === selectedSport;
                   const isElsewhere = !isCurrent && !!shownElsewhere?.includes(opt.sport);
+                  // The league this column falls back to on Auto — bolded and
+                  // tagged so the fallback is visible before you commit to it.
+                  const isAutoDefault = !autoIsEspn && opt.sport === autoSport;
                   return (
                     <button
                       type="button"
@@ -238,14 +261,16 @@ export function NewsColumnTitle({
                       className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                       style={{
                         color: isCurrent ? "var(--accent)" : isElsewhere || opt.offseason ? "var(--text-muted)" : "var(--text)",
-                        fontWeight: isCurrent ? 600 : 400,
+                        fontWeight: isCurrent || isAutoDefault ? 600 : 400,
                       }}
-                      title={isElsewhere ? "Already shown in another column" : undefined}
+                      title={isElsewhere ? "Already shown in another column — pick to add a second" : opt.upcomingLabel ? `Season starts ${opt.upcomingLabel}` : isAutoDefault ? "What Auto picks for this column" : undefined}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                     >
                       {opt.label}
                       {opt.offseason && <em className="font-normal"> · offseason</em>}
+                      {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
+                      {isAutoDefault && !isCurrent && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                     </button>
                   );
                 })}
@@ -260,13 +285,15 @@ export function NewsColumnTitle({
                     className="w-full px-3 py-1.5 text-xs text-left cursor-pointer transition-colors"
                     style={{
                       color: espnActive ? "var(--accent)" : "var(--text)",
-                      fontWeight: espnActive ? 600 : 400,
+                      fontWeight: espnActive || autoIsEspn ? 600 : 400,
                       borderTop: "1px solid var(--border)",
                     }}
+                    title={autoIsEspn ? "What Auto picks for this column" : "Show ESPN's top headlines in this column"}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                   >
                     Top news (ESPN)
+                    {autoIsEspn && !espnActive && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
                   </button>
                 )}
                 {/* Remove col hides the column entirely (matches the scores-view
@@ -423,7 +450,13 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
+        // Announce the resolved-empty result too, not just the loading state
+        // above — the load swaps role=status "Loading headlines…" out for this
+        // bare line, so without its own live region a screen-reader user heard
+        // "Loading…" then silence, never learning the column came back empty.
+        // role=status + aria-live matches the loading skeleton here and the
+        // "No games found" empty state in TeamView (WCAG 4.1.3).
+        <p role="status" aria-live="polite" className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => (
@@ -443,6 +476,12 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
 // clean text instead of showing an empty grey placeholder box.
 function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; isFirst: boolean; onPlay?: PlayHandler; siblings?: PlayOpts[] | null; index?: number }) {
   const [imgFailed, setImgFailed] = useState(false);
+  // NO per-row reveal gesture here. The list headline OPENS the post, full stop
+  // (Jacob 8/10, reversing the tri-state toggle added earlier the same day):
+  // "should only have that happen when I'm in a modal — not on the news
+  // homepage, so I can open articles/videos by clicking them normally."
+  // Show/hide-per-item lives in the modal (VideoModal's PeekBlur); the global
+  // Headlines chip is what un-blurs the board in place.
   // sm:min-h-[7rem] forces a uniform row height across every text source card
   // — Reddit, MLB.com, NBA.com, ESPN-league. With identical row heights AND
   // identical item counts (each prebake caps at 12), card N ends at the same
@@ -464,7 +503,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
   // until the global reveal toggle un-blurs it or the row is tapped open.
   const isTextPost = itemIsTextPost(item);
   const rowCls = `flex items-start gap-2 px-3 py-2 text-sm leading-snug transition-colors hover:bg-[var(--bg-card-hover)] sm:min-h-[7rem]${isTextPost ? " news-textpost" : ""}`;
-  const titleCls = `news-title min-w-0 line-clamp-5`;
+  const titleCls = "news-title min-w-0 line-clamp-5";
   const rowStyle = { borderTop: isFirst ? "none" : "1px solid var(--border)", color: "var(--text)" };
   // Every news item opens the same modal; its source link remains available
   // inside, and modifier-click still opens that source directly in a new tab.
@@ -493,7 +532,13 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       {hasInlineMedia && (
         <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
           <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-            {(item.videoUrl || item.youtubeVideoId) ? (
+            {/* Pick the play triangle for ANY playable clip, not just
+                videoUrl/youtubeVideoId: hasInlineMedia (above) also lets a
+                direct-HLS (playbackUrl) or Brightcove-embed (embedUrl) item into
+                this branch, and those play on tap too — so the old check drew the
+                open-external/expand arrows over a video. Reuse itemIsVideo(), the
+                same signal the NewsFeed twin and the 🎥 Videos filter use. */}
+            {itemIsVideo(item) ? (
               <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
             ) : (
               <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -518,7 +563,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       style={{ background: "var(--bg-card-hover)" }}
     >
       <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-        {(item.videoUrl || item.youtubeVideoId) ? (
+        {itemIsVideo(item) ? (
           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
         ) : (
           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -551,50 +596,133 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       onError={(e) => { e.currentTarget.style.display = "none"; }}
     />
   ) : null;
+  // Only the 48/56px media tiles are a real tap target. The leagueLogo branch
+  // renders an 18px mark, which is decoration, not a button — rows that fall
+  // back to it get the chevron instead.
+  const thumbIsTile = showThumb || hasInlineMedia;
+  // ONE rule now: every clickable part of the row — thumbnail, headline,
+  // chevron — opens the post. Modifier/middle-click still means "open the
+  // source in a background tab" everywhere, so the split is only in the target,
+  // never in what a plain click does.
+  const openInNewTab = (e: ReactMouseEvent) => {
+    if (!(e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) return false;
+    if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+    return true;
+  };
   if (shouldPopModal) {
+    const open = () => onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
     return (
-      <button
-        type="button"
-        onClick={(e) => {
-          // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
-          // later" — never blow away the currently-open modal. Without this
-          // the button just re-pops the modal with new content and the user
-          // loses the video/image they were watching.
-          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-            if (item.articleUrl) window.open(item.articleUrl, "_blank", "noopener,noreferrer");
-            return;
-          }
-          // Same payload via the shared helper, plus the column's siblings so the
-          // modal can page prev/next across the full rendered column.
-          onPlay!({ ...newsItemToPlayOpts(item), siblings: siblings ?? undefined, index });
-        }}
-        onAuxClick={(e) => {
-          // Middle-click fires onAuxClick, not onClick. Mirror the modifier
-          // path so wheel-click also opens in a background tab.
-          if (e.button === 1 && item.articleUrl) {
-            window.open(item.articleUrl, "_blank", "noopener,noreferrer");
-          }
-        }}
-        className={`${rowCls} w-full text-left cursor-pointer`}
+      <div
+        className={`${rowCls} w-full text-left`}
         style={rowStyle}
       >
-        {thumb}
-        <span className={titleCls}>{item.headline}</span>
-      </button>
+        {/* The thumbnail always opens the post — that's the escape hatch for a
+            row whose headline is still blurred (and the same split the Feed
+            view uses: headline peeks, media opens). */}
+        {thumbIsTile ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              // Cmd/Ctrl/Shift/middle-click → "open in background tab to read
+              // later" — never blow away the currently-open modal. Without this
+              // the button just re-pops the modal with new content and the user
+              // loses the video/image they were watching.
+              if (openInNewTab(e)) return;
+              // Same payload via the shared helper, plus the column's siblings so the
+              // modal can page prev/next across the full rendered column.
+              open();
+            }}
+            onAuxClick={(e) => {
+              // Middle-click fires onAuxClick, not onClick. Mirror the modifier
+              // path so wheel-click also opens in a background tab.
+              if (e.button === 1 && item.articleUrl) {
+                window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+              }
+            }}
+            className="shrink-0 cursor-pointer"
+            aria-label="Open post"
+            title="Open post"
+          >
+            {thumb}
+          </button>
+        ) : thumb}
+        <button
+          type="button"
+          onClick={(e) => {
+            if (openInNewTab(e)) return;
+            open();
+          }}
+          onAuxClick={(e) => {
+            if (e.button === 1 && item.articleUrl) {
+              window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+            }
+          }}
+          className="min-w-0 flex-1 text-left cursor-pointer"
+          title="Open post"
+          aria-label="Open post"
+        >
+          <span className={titleCls}>{item.headline}</span>
+        </button>
+        {/* Rows with no thumbnail (plain text posts — now shown by default)
+            get a small chevron at the right edge as an explicit open
+            affordance, without touching the row height the column alignment
+            depends on. */}
+        {!thumbIsTile && (
+          <button
+            type="button"
+            onClick={open}
+            className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--bg-card-hover)]"
+            style={{ color: "var(--text-muted)" }}
+            aria-label="Open post"
+            title="Open post"
+          >
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        )}
+      </div>
     );
   }
   return (
-    <a
-      href={item.articleUrl || undefined}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={handleExternalClick(item.articleUrl)}
-      className={rowCls}
-      style={rowStyle}
-    >
-      {thumb}
-      <span className={titleCls}>{item.headline}</span>
-    </a>
+    <div className={rowCls} style={rowStyle}>
+      {thumbIsTile ? (
+        <a
+          href={item.articleUrl || undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
+          className="shrink-0"
+          aria-label="Open post"
+        >
+          {thumb}
+        </a>
+      ) : thumb}
+      {/* No modal on this surface, so the headline is a real link to the
+          source — same target as the thumbnail and chevron beside it, which
+          keeps middle-click, keyboard, and "copy link" honest. */}
+      <a
+        href={item.articleUrl || undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={handleExternalClick(item.articleUrl)}
+        className="min-w-0 flex-1 text-left cursor-pointer"
+        aria-label="Open post"
+      >
+        <span className={titleCls}>{item.headline}</span>
+      </a>
+      {!thumbIsTile && (
+        <a
+          href={item.articleUrl || undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
+          className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded"
+          style={{ color: "var(--text-muted)" }}
+          aria-label="Open post"
+        >
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -623,7 +751,10 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
+        // Announce the resolved-empty result, mirroring the loading role=status
+        // above and the TextSourceCard empty state — otherwise the load swaps
+        // "Loading videos…" out for a silent line (WCAG 4.1.3).
+        <p role="status" aria-live="polite" className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => {
@@ -705,6 +836,15 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                       window.open(item.articleUrl, "_blank", "noopener,noreferrer");
                     }
                   }}
+                  // The button wraps the thumbnail (alt="") + headline, so its
+                  // accessible name is just the headline — a screen-reader/voice-
+                  // control user hears the title but gets no cue this control PLAYS
+                  // a highlight inline (vs. the sibling <a> row below that opens an
+                  // article). Name the action explicitly; the headline stays inside
+                  // the label so "Label in Name" (WCAG 2.5.3) still holds and voice
+                  // users can say the visible title to activate it. Matches the twin
+                  // Play button in AlignedVideoStrip's VideoRow/CompactTailRow.
+                  aria-label={`Play highlight: ${item.headline}`}
                   className={commonCls}
                   style={commonStyle}
                 >
@@ -732,7 +872,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -741,12 +881,23 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    source.fetch().then((data) => {
-      if (!cancelled) {
-        setItems(data);
-        setLoading(false);
-      }
-    });
+    // Guard the fetch: without a .catch a rejected source.fetch() would skip the
+    // .then entirely, so setLoading(false) never fires and the card stays pinned
+    // on its loading skeletons forever. Settle to [] on rejection so the card
+    // degrades to its "No headlines"/"No videos" empty state instead — the same
+    // .catch(() => []) guard NewsFeed and AlignedVideoStrip already put on the
+    // identical source.fetch() call. Latent today (the built-in fetchers catch
+    // internally and resolve []), so no happy-path change; this hardens the
+    // rejection case (a future source, or a synchronous throw inside a fetch
+    // closure, would otherwise hang the column).
+    source.fetch()
+      .catch(() => [] as NewsItem[])
+      .then((data) => {
+        if (!cancelled) {
+          setItems(data);
+          setLoading(false);
+        }
+      });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.label]);
@@ -759,8 +910,14 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
     // clip-bearing posts, and with Text posts ALSO on you additionally get the
     // headline-only text posts (they carry no clip, so plain videosOnly hid them
     // and the Text posts toggle was a no-op — Jacob 7/16).
-    () => items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item))),
-    [items, videosOnly, showTextPosts],
+    () => {
+      const kept = items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item)));
+      // Bottom-to-top reading order (the ⇅ control next to the funnel). Reverse
+      // AFTER filtering so the flip is over what's actually on screen, and copy
+      // first — items is the fetched array other memos also read.
+      return oldestFirst ? [...kept].reverse() : kept;
+    },
+    [items, videosOnly, showTextPosts, oldestFirst],
   );
   // Publish exactly what is rendered so modal prev/next never pages into a row
   // that the active Videos filter hid.
@@ -802,12 +959,15 @@ export default function NewsColumn({
   onSwapLeague,
   onPickEspn,
   espnActive,
+  autoSport,
+  autoIsEspn,
   hideTitle,
   widthClassName,
   onPlayVideo,
   titleMeasureRef,
   videosOnly,
   showTextPosts,
+  oldestFirst,
   removable,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
@@ -856,6 +1016,8 @@ export default function NewsColumn({
           onSwapLeague={onSwapLeague}
           onPickEspn={onPickEspn}
           espnActive={espnActive}
+          autoSport={autoSport}
+          autoIsEspn={autoIsEspn}
           measureRef={titleMeasureRef}
           removable={removable}
         />
@@ -872,6 +1034,7 @@ export default function NewsColumn({
             baseIndex={baseIndexBySource[source.label] ?? null}
             videosOnly={videosOnly}
             showTextPosts={showTextPosts}
+            oldestFirst={oldestFirst}
           />
         ))}
         {allFiltered && (

@@ -26,6 +26,15 @@ export interface Game {
   // league but glued to the serie ("LCK Summer"), which is display text, not a
   // lookup key. Undefined for every other sport.
   esportsLeague?: string | null;
+  // Gridiron REGULAR-SEASON week number (NFL / NCAAF only, ESPN's
+  // event.week.number). Carried purely as a highlight-lookup discriminator:
+  // the NFL channel dates its recaps by week, not by calendar date
+  // ("… | NFL 2025 Season Week 15"), so two meetings between the same teams in
+  // the same season are indistinguishable to the date and year gates. Threaded
+  // to the /api/youtube `week` param (see resolveHighlightVideo). Null/undefined
+  // for the postseason — those titles say "Divisional Round", not "Week N" —
+  // and for every non-gridiron sport.
+  weekNumber?: number | null;
   // Whether this is a playoff/postseason/tournament game
   isPlayoff: boolean;
   // Full playoff round label (e.g. "Sweet 16", "ALWC - Game 2", "Conference Finals")
@@ -33,8 +42,7 @@ export interface Game {
   // ESPN playoff-series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
   // Only set when competition.series.type === "playoff".
   seriesStatus: string | null;
-  // Highlight/recap links
-  highlightUrl: string | null; // ESPN video clip URL
+  // Recap link
   recapUrl: string | null; // ESPN gamecast URL
   // NHL.com condensed-game + recap videos (finished NHL games only). Sourced
   // from the NHL API via the /api/nhl-videos worker proxy. Each has a *Url
@@ -194,6 +202,16 @@ export interface LeagueEventCard {
   kind: "f1" | "ufc" | "boxing" | "chess" | "poker";
   title: string;            // "Spanish Grand Prix" / "UFC Fight Night: Kape vs. Horiguchi"
   subtitle?: string;        // circuit + city (F1) / venue city (UFC)
+  // Progressively shorter renderings of `title` / `subtitle`, longest first and
+  // ALWAYS starting with the full string. The single-event tile picks the
+  // longest one that fits its single line before it will shrink the font, and
+  // shrinks before it will truncate — a race tile's truncated tail is the
+  // identity of the race. Built in lib/eventTiles.ts (eventTitleVariants /
+  // eventSubtitleVariants) so the shortenings are unit-testable data, not
+  // regexes buried in a component. Absent = the tile has only the full string
+  // to work with, which is the pre-existing behaviour.
+  titleVariants?: string[];
+  subtitleVariants?: string[];
   headline?: string;        // UFC main event "Kape vs. Horiguchi"; F1 leaves null
   state: "pre" | "in" | "post";
   statusDetail: string;     // "Race" / "Fight Night" / "Live" / "Final"
@@ -232,6 +250,18 @@ export interface LeagueEventCard {
   chessTimeControl?: string;// "25 min + 10 sec / move"
   chessPlayers?: string[];  // ["Caruana", "Keymer", …] — the draw, not the table
   chessTier?: number;       // Lichess tier; 5 = marquee, 4 = strong international
+}
+
+// What an event-tile feed (boxing / chess / poker) returns. There are THREE
+// outcomes, and the middle two are not the same thing: a card, an honestly
+// empty calendar, and a broken feed. Collapsing the last two into `null` made a
+// dead API look identical to a quiet Tuesday — the column said "No event"
+// either way (Jacob 8/10). `failed` is set ONLY when a source actually broke:
+// a non-OK response, an unparseable body, or a payload whose schema we don't
+// recognise. Nothing scheduled is `{ card: null, failed: false }`.
+export interface EventFetchResult {
+  card: LeagueEventCard | null;
+  failed: boolean;
 }
 
 export interface LeagueData {

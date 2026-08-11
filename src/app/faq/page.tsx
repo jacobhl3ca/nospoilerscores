@@ -35,7 +35,9 @@ export const metadata: Metadata = {
   },
 };
 
-const FAQ: { q: string; a: string }[] = [
+// `link` renders as an inline anchor at the end of the answer (and is folded
+// into the answer text for the FAQPage schema, which takes plain text only).
+const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   {
     q: "What is HideScore?",
     a: "HideScore is a free way to follow sports without spoilers. It hides NBA, MLB, NHL, NFL, soccer, and golf scores, highlights, and headlines until you choose to reveal them, so you can watch games on your own schedule.",
@@ -50,11 +52,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Which sports and leagues does HideScore cover?",
-    a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, chess, esports, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, and major international tournaments.",
+    a: "HideScore covers the NBA, WNBA, MLB, NHL, NFL, college basketball and football, golf, tennis, motorsports, combat sports, cricket, chess, poker, and soccer. Soccer includes the Premier League, MLS, Champions League, Europa League, La Liga, Serie A, Bundesliga, Ligue 1, Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, and major international tournaments.",
   },
   {
     q: "Why don't I see a league on the main screen?",
-    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in In season and Offseason groups, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
+    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in the In season and Offseason groups, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
   },
   {
     q: "How do the separate soccer leagues work?",
@@ -68,6 +70,11 @@ const FAQ: { q: string; a: string }[] = [
     q: "Is there a HideScore app?",
     a: "Yes. HideScore is a free iOS app on the App Store, and it also works in any web browser at hidescore.com.",
   },
+  {
+    q: "Who makes HideScore?",
+    a: "HideScore is built and maintained by Jacob Heifetz-Licht, an independent developer in New York known online as JacobHL. HideScore is one of several tools he builds and runs, which you can see at",
+    link: { href: "https://jacobhl.com", text: "jacobhl.com" },
+  },
 ];
 
 export default function FaqPage() {
@@ -79,7 +86,21 @@ export default function FaqPage() {
         {FAQ.map((item) => (
           <div key={item.q}>
             <h2 className="text-lg font-semibold mb-1">{item.q}</h2>
-            <p>{item.a}</p>
+            <p>
+              {item.a}
+              {item.link && (
+                <>
+                  {" "}
+                  {/* rel="me" — both sites are the same author, so this is the
+                      identity link Google/IndieWeb consumers read to tie the
+                      HideScore author to the jacobhl.com Person entity. */}
+                  <a href={item.link.href} rel="me" className="underline underline-offset-2">
+                    {item.link.text}
+                  </a>
+                  .
+                </>
+              )}
+            </p>
           </div>
         ))}
       </section>
@@ -101,6 +122,17 @@ export default function FaqPage() {
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "FAQPage",
+            // This FAQPage IS the page-level node for /faq (there's no separate
+            // WebPage node here, unlike the SeoLandingPage routes where the
+            // WebPage carries these). Give it the page's name + description so it
+            // matches every other route's page node (the /privacy and date-route
+            // WebPage nodes both carry name + description) — Google lists `name`
+            // as a recommended WebPage property, and FAQPage is a WebPage subtype,
+            // so both are valid here. Reuse the same constants the <title> and
+            // <meta name="description"> emit so the graph node stays in lockstep
+            // with the page metadata. Purely additive JSON-LD; no visual change.
+            name: FAQ_TITLE,
+            description: FAQ_DESC,
             // Anchor this node to the canonical /faq URL and into the shared
             // WebSite entity declared in layout.tsx. FAQPage is a WebPage subtype,
             // so without a `url`/`isPartOf` it floated as a page node describing
@@ -124,10 +156,28 @@ export default function FaqPage() {
             // tying it to the page node is Google's recommended pattern for the
             // breadcrumb rich result.
             breadcrumb: { "@id": "https://hidescore.com/faq#breadcrumb" },
+            // Topic entities for this page, matching the `about` array every
+            // SeoLandingPage WebPage node already carries (e.g. the NBA/soccer
+            // routes) — the FAQ page node was the one content page left without
+            // it. `about` is a valid WebPage property (FAQPage is a WebPage
+            // subtype) and gives Google explicit entity signals for what this
+            // page covers, using the site's own spoiler-free vocabulary. Purely
+            // additive JSON-LD; no visual change.
+            about: [
+              "spoiler-free sports scores",
+              "sports highlights without spoilers",
+              "sports game ratings",
+            ].map((name) => ({ "@type": "Thing", name })),
             mainEntity: FAQ.map((item) => ({
               "@type": "Question",
               name: item.q,
-              acceptedAnswer: { "@type": "Answer", text: item.a },
+              // Answer text is plain text in the schema, so an entry whose
+              // rendered answer ends in a link gets that link's label folded
+              // back in — otherwise the structured answer would end mid-sentence.
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: item.link ? `${item.a} ${item.link.text}.` : item.a,
+              },
             })),
           }).replace(/</g, "\\u003c"),
         }}

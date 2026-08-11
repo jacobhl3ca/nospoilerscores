@@ -11,6 +11,14 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // tests/race-details.test.ts imports "../src/lib/raceDetails.ts" WITH the
+    // explicit .ts extension because Node 22's native type-stripping (how the
+    // `node --test` suite runs .ts files) requires the extension on relative
+    // imports. tsc rejects that (TS5097) unless this is enabled — safe here
+    // since the project already sets `noEmit` (the flag's prerequisite) and
+    // never emits, and src/ code uses extension-less imports so nothing else
+    // is affected. Keeps `tsc --noEmit` green alongside the Node test runtime.
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,

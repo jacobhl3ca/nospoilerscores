@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, SportTeam } from "@/lib/espn";
 import {
@@ -16,6 +16,8 @@ interface LeagueOption {
   sport: Sport;
   label: string;
   offseason?: boolean;
+  // "starts Aug 21" for a league inside its pre-season selectable window.
+  upcomingLabel?: string;
   defaultInSwitcher?: boolean;
 }
 
@@ -528,12 +530,23 @@ export default function SettingsPanel({
       fifthLeague: undefined,
       newsThirdLeague: undefined,
       newsGenericHidden: undefined,
-      defaultDateMode: "smart",
+      newsGenericSlot: undefined,
+      // Yesterday, not "smart" — this is the documented fresh-install default
+      // (see `defaults` in preferences.ts, moved off "smart" on 2026-08-09 so a
+      // new visitor after 1 PM local isn't dropped on a board of not-yet-started
+      // games). Like smartCutoffHour/newsColCount/newsTypeFilter below, this pref
+      // carries an explicit non-undefined default, so a reset must write that
+      // value rather than "smart" for reset to match a genuine fresh install.
+      defaultDateMode: "yesterday",
       defaultLandingView: "remember",
       defaultRatings: "auto",
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
       wcBannerDismissed: undefined,
+      // Sibling of wcBannerDismissed: a full reset should bring back every
+      // season-kickoff banner too, so clear the per-kickoff dismissal list.
+      // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
+      kickoffBannersDismissed: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
       shownLeagues: undefined,
@@ -558,12 +571,25 @@ export default function SettingsPanel({
       revealNewsTitles: undefined,
       showTextPosts: undefined,
       revealNewsMedia: undefined,
+      // The remaining news-view state the toolbar persists was still omitted, so
+      // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, and
+      // their drag-reordered source-type order. newsHiddenSources belongs here
+      // too: it has no live setter, but it is still APPLIED as a source filter, so
+      // a value left in localStorage from an earlier build hides sources with no
+      // UI to clear it — a reset is the only way out. All four have no non-
+      // undefined default, so clearing to undefined restores the fresh-install
+      // default (Cards view, no video filter, default order, nothing hidden).
+      newsFeedView: undefined,
+      newsVideosOnly: undefined,
+      newsTypeFilterOrder: undefined,
+      newsHiddenSources: undefined,
       singleColumn: undefined,
       newsSingleColumn: undefined,
       timezone: undefined,
       smartCutoffHour: 13,
       newsColCount: 3,
       newsTypeFilter: "reddit",
+      newsTypeFilters: undefined,
     });
   };
 
@@ -756,6 +782,13 @@ export default function SettingsPanel({
                   onChange={(event) => setEmailAddress(event.target.value)}
                   placeholder="Email address"
                   aria-label="Email address"
+                  // On the email step a failed request (bad address, send error)
+                  // is voiced only by the red role="alert" status below — mark the
+                  // field itself invalid and point it at that message so a screen
+                  // reader announces the error state on the input too, matching the
+                  // FeedbackBox email field's aria-invalid/describedby pattern.
+                  aria-invalid={emailStep === "email" && emailError ? true : undefined}
+                  aria-describedby={emailStatus ? "hs-email-auth-status" : undefined}
                   className="w-full min-h-11 rounded-lg px-3 text-sm"
                   style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
                 />
@@ -772,6 +805,12 @@ export default function SettingsPanel({
                     onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="6-digit code"
                     aria-label="Six-digit sign-in code"
+                    // On the code step a wrong/expired code is voiced only by the
+                    // red role="alert" status below — mark the code field invalid
+                    // and describe it by that message so the error state reaches
+                    // the input for assistive tech (same pattern as the email field).
+                    aria-invalid={emailStep === "code" && emailError ? true : undefined}
+                    aria-describedby={emailStatus ? "hs-email-auth-status" : undefined}
                     className="w-full min-h-11 rounded-lg px-3 text-sm tracking-[0.18em]"
                     style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
                   />
@@ -789,13 +828,13 @@ export default function SettingsPanel({
                     type="button"
                     className="w-full text-xs underline"
                     style={{ color: "var(--text-muted)" }}
-                    onClick={() => { setEmailStep("email"); setEmailCode(""); setEmailStatus(""); }}
+                    onClick={() => { setEmailStep("email"); setEmailCode(""); setEmailStatus(""); setEmailError(false); }}
                   >
                     Use a different email
                   </button>
                 )}
                 {emailStatus && (
-                  <p role={emailError ? "alert" : "status"} className="text-[11px]" style={{ color: emailError ? "#ef4444" : "var(--text-muted)" }}>
+                  <p id="hs-email-auth-status" role={emailError ? "alert" : "status"} className="text-[11px]" style={{ color: emailError ? "#ef4444" : "var(--text-muted)" }}>
                     {emailStatus}
                   </p>
                 )}
@@ -828,14 +867,23 @@ export default function SettingsPanel({
           {/* Default View */}
           <Section title="Default view">
             <Field label="Landing date" hint="What day to show when you open the app">
+              {/* Fall back to "yesterday", the documented fresh-install default
+                  (see `defaults` in preferences.ts, moved off "smart" on
+                  2026-08-09), not "smart". loadPreferences() always merges that
+                  default in, so `prefs.defaultDateMode` is normally set and this
+                  fallback rarely fires — but when it does (a partial prefs blob),
+                  a stale "smart" fallback made the radio highlight "Automatic"
+                  and reveal the cutoff-hour field below, misrepresenting a board
+                  the app actually renders as "yesterday". Matches the reset value
+                  in this file's clearAll and the default in preferences.ts. */}
               <RadioGroup
                 label="Landing date"
-                value={prefs.defaultDateMode ?? "smart"}
+                value={prefs.defaultDateMode ?? "yesterday"}
                 options={DATE_MODE_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultDateMode: v })}
               />
             </Field>
-            {(prefs.defaultDateMode ?? "smart") === "smart" && (
+            {(prefs.defaultDateMode ?? "yesterday") === "smart" && (
             <Field label="Automatic switch time" hint="Hour (your local time) when the landing date flips from yesterday to today">
                 <select
                   value={prefs.smartCutoffHour ?? 13}
@@ -902,6 +950,15 @@ export default function SettingsPanel({
                 <button type="button"
                   onClick={resolveZip}
                   disabled={zip.length !== 5 || zipBusy}
+                  // Pin a stable, descriptive accessible name. The visible text
+                  // is a terse "Set" (ambiguous out of context next to a ZIP
+                  // field) and flips to a bare "…" while resolving — a meaningless
+                  // accessible name for that transient state. An aria-label
+                  // overrides the text content, so the button reads the same in
+                  // both states, matching the descriptive labels the app already
+                  // gives its other short buttons (the feedback "+", the golf
+                  // highlight buttons). Purely additive — no visual change.
+                  aria-label="Set time zone from ZIP code"
                   className="px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity disabled:opacity-40 disabled:cursor-default"
                   style={{ background: "var(--accent)", color: "white" }}
                 >
@@ -1137,7 +1194,7 @@ export default function SettingsPanel({
             <Field label="Player" hint="Spoiler-safe is the default; YouTube trades protection for familiar controls">
               <RadioGroup
                 label="Highlight video player"
-                value={(prefs.youtubeNativeControls ?? false) ? "youtube" : "safe"}
+                value={(prefs.youtubeNativeControls ?? true) ? "youtube" : "safe"}
                 options={PLAYER_OPTIONS}
                 onChange={(v) => updatePrefs({ youtubeNativeControls: v === "youtube" })}
               />
@@ -1148,7 +1205,7 @@ export default function SettingsPanel({
               checked={prefs.maskVideoTitle ?? true}
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
-            <fieldset disabled={prefs.youtubeNativeControls ?? false} className={(prefs.youtubeNativeControls ?? false) ? "space-y-3 opacity-40" : "space-y-3"}>
+            <fieldset disabled={prefs.youtubeNativeControls ?? true} className={(prefs.youtubeNativeControls ?? true) ? "space-y-3 opacity-40" : "space-y-3"}>
               <legend className="sr-only">Spoiler-safe player controls</legend>
               <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
                 <RadioGroup
@@ -1346,6 +1403,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  // Associate the visible label with the control it names. The label sits in a
+  // sibling row ABOVE the control (not wrapping it), so without htmlFor it was a
+  // bare, unassociated <label> — a screen reader focusing the <select>/<input>
+  // announced it with no name (WCAG 1.3.1/4.1.2). Only wire up intrinsic form
+  // controls (child.type is a string like "select"/"input"); custom children
+  // like RadioGroup carry their own accessible name (role="group" aria-label),
+  // so leave those untouched — their label stays htmlFor-less exactly as before.
+  const generatedId = useId();
+  const child = isValidElement(children) ? (children as React.ReactElement<{ id?: string }>) : null;
+  const isHostControl = child != null && typeof child.type === "string";
+  const controlId = isHostControl ? (child!.props.id ?? generatedId) : undefined;
+  const control = isHostControl && child!.props.id == null
+    ? cloneElement(child!, { id: controlId })
+    : children;
   return (
     <div>
       {/* Stack the hint UNDER the label on phones — the old side-by-side
@@ -1353,10 +1424,10 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
           clipped and overlapped on mobile (esp. the player rows). sm+ keeps
           them on one row, hint right-aligned, to preserve the dense desktop look. */}
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3 mb-1">
-        <label className="text-sm font-medium shrink-0" style={{ color: "var(--text)" }}>{label}</label>
+        <label htmlFor={controlId} className="text-sm font-medium shrink-0" style={{ color: "var(--text)" }}>{label}</label>
         {hint && <span className="text-[11px] leading-snug sm:text-right" style={{ color: "var(--text-muted)" }}>{hint}</span>}
       </div>
-      {children}
+      {control}
     </div>
   );
 }
@@ -1395,6 +1466,18 @@ function RadioGroup<T extends string>({
               border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
               color: active ? "white" : "var(--text)",
             }}
+            // The per-option hint carries the detail that distinguishes the
+            // choices — and for the Landing view / Ratings groups that detail is
+            // the spoiler warning itself ("Always start on news (spoilers)"). It
+            // rode ONLY on `title`, a mouse-hover tooltip that assistive tech and
+            // keyboard/voice users never get, so a screen-reader user choosing a
+            // landing view was never told which options reveal scores — the one
+            // thing this app exists to hide. Fold the hint into the accessible
+            // name so it's announced with the button; the visible `o.label` stays
+            // the leading token, keeping voice-control's "Label in Name" (WCAG
+            // 2.5.3) intact and the visible pill text unchanged. `title` stays for
+            // the mouse tooltip. Falls back to the bare label if a hint is absent.
+            aria-label={o.hint ? `${o.label} — ${o.hint}` : undefined}
             title={o.hint}
           >
             {o.label}

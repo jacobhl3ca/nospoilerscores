@@ -1,11 +1,25 @@
-import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, FightBout } from "./types";
+import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout } from "./types";
 import { getApiBase } from "./youtube";
-import { getEtServiceDate, toYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
+import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
 import { fetchPokerEvent } from "./poker";
 import { fetchCuratedBoxingEvent } from "./boxing";
+import {
+  chessEventState,
+  boxingChannelFor,
+  buildBoxingTokens,
+  boxingHighlightQuery,
+  indycarTrackSubtitle,
+  isStaleFinishedForBoard,
+  eventTitleVariants,
+  eventSubtitleVariants,
+} from "./eventTiles";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
+
+// See EventFetchResult — a feed that broke is not a day with nothing on it.
+const EVENT_FETCH_EMPTY: EventFetchResult = { card: null, failed: false };
+const EVENT_FETCH_FAILED: EventFetchResult = { card: null, failed: true };
 
 const SPORT_PATHS: Record<Sport, string> = {
   // Chess + boxing have NO ESPN path — they are served by worker routes
@@ -81,6 +95,23 @@ const SPORT_PATHS: Record<Sport, string> = {
   ufc: "/mma/ufc/scoreboard",
 };
 
+// Sortable epoch-ms for a Game's ISO date, NaN-safe. A Game can carry an empty
+// or missing date — a TBD future fixture, or a UFC card that resolved neither
+// the event nor the main-card date (see the `|| ""` fallback in the UFC parse)
+// — and `new Date("").getTime()` is NaN. A comparator that returns NaN is
+// inconsistent, so V8's sort leaves the surrounding order undefined and
+// SCATTERS the whole slate, not just the undated game. Coerce an unparseable
+// date to a finite far-future sentinel (the max valid timestamp) so those games
+// sink to the END of an ascending chronological sort — not jump to the top, the
+// same intent as the TeamView undated-game fix — without reintroducing NaN: two
+// sentinels subtract to 0, whereas an Infinity sentinel would give
+// `Infinity - Infinity === NaN` and re-scatter the very case this guards. Same
+// NaN-comparator guard the NewsFeed feed sort and news.ts formatPublished use.
+function chronoMs(iso: string): number {
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 8.64e15 : t;
+}
+
 // Seasonal league config: show/hide based on date
 // endDate: inclusive last day the league is shown (= its championship date, per
 //   isLeagueActive's `mmdd <= endDate`), so the league hides the day after its final game
@@ -91,6 +122,19 @@ export interface LeagueConfig {
   startDate?: string;        // MM-DD
   endDate?: string;          // MM-DD (last day league is shown)
   championshipDate?: string; // MM-DD — day the championship game is played
+  // MM-DD of the season's actual first match, when that is LATER than startDate
+  // (startDate can open a few days early so the column carries the fixture
+  // lookahead into the build-up). Drives the kickoff banner's copy and its
+  // "starts soon" → "is underway" flip. Falls back to startDate when unset.
+  kickoffDate?: string;
+  // MM-DD from which this league may be AUTO-PICKED into a column, when that is
+  // later than startDate. Between startDate and autoStartDate the league is in
+  // season and fully selectable — it just doesn't claim a slot on its own.
+  // NHL is the case this exists for: the hand-built three-column schedule only
+  // surfaces it once the playoffs begin, but a hockey fan should still be able
+  // to pick it in November. Without this the only way to make NHL selectable
+  // was to widen its window, which would have reshuffled every winter column.
+  autoStartDate?: string;
   firstPref?: boolean;       // Tier 1: always gets a slot when active (bumps lower leagues)
   mustInclude?: boolean;     // NBA/MLB/NHL/NFL — always picked when active
   excludeFromAuto?: boolean; // Skipped from auto-pick; still selectable via slot-3 dropdown
@@ -101,31 +145,57 @@ export interface LeagueConfig {
   // World Cup is every 4 years. yearCycle.anchor matches the championship year.
   yearCycle?: { mod: number; anchor: number };
   marchMadnessLabel?: boolean; // NCAAM swaps to "March Madness" during the tourney window
+  // MM-DD the league drops its full schedule, when that is a real annual event
+  // (NFL's May reveal show, the NBA's mid-August drop). Only used by the
+  // offseason empty state, and only while the release still falls BEFORE the
+  // next opener — once the schedule is out, saying when it dropped is noise.
+  scheduleReleaseDate?: string;
+  // Calendar year of the opener that was last checked against a real source
+  // (league site / ESPN), NOT the year the line was edited. Windows are MM-DD
+  // and recur forever, but the real dates drift a few days a year and sometimes
+  // move wholesale (see MLS 2027), so anything past its verified year is shown
+  // as approximate rather than stated as fact. Bump it when you re-check.
+  verifiedFor?: number;
+  // NCAAF: hold the pinned slot outright during the College Football Playoff
+  // window (firstPref + precedence 0), the way marchMadnessLabel does for NCAAM.
+  playoffPin?: boolean;
 }
 
 export const ALL_LEAGUES: LeagueConfig[] = [
   // ── Major team sports ──
-  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", marchMadnessLabel: true },
-  { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
-  { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", championshipDate: "11-01", mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
-  { sport: "nhl",   label: "NHL",   startDate: "04-07", endDate: "06-19", championshipDate: "06-19", mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
-  { sport: "nfl",   label: "NFL",   startDate: "09-04", endDate: "02-09", championshipDate: "02-09", mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
+  { sport: "ncaam", label: "NCAAM", startDate: "11-01", endDate: "04-06", championshipDate: "04-05", verifiedFor: 2026, marchMadnessLabel: true },
+  { sport: "nba",   label: "NBA",   startDate: "10-20", endDate: "06-22", kickoffDate: "10-20", championshipDate: "06-20", scheduleReleaseDate: "08-14", verifiedFor: 2026, mustInclude: true, displaySlot: "left",   slotPrecedence: 1 },
+  { sport: "mlb",   label: "MLB",   startDate: "03-20", endDate: "11-01", kickoffDate: "03-24", championshipDate: "10-31", scheduleReleaseDate: "07-16", verifiedFor: 2027, mustInclude: true, displaySlot: "left",   slotPrecedence: 2 },
+  // NHL runs Sep 29 → mid-June (verified against ESPN 2026-08-09: first
+  // 2026-27 regular-season game Tue Sep 29 2026; the 2026 Stanley Cup finished
+  // Jun 15). It used to be configured as 04-07 → 06-19 — the PLAYOFF window —
+  // because that is where the column schedule puts it. But isLeagueActive gates
+  // selectability too, so that also made NHL impossible to pick at all from
+  // October to April (Jacob 8/9). Now the window is the real season and
+  // autoStartDate keeps the auto-picker's behaviour exactly as it was.
+  { sport: "nhl",   label: "NHL",   startDate: "09-27", endDate: "06-24", kickoffDate: "09-29", autoStartDate: "04-07", championshipDate: "06-19", scheduleReleaseDate: "07-16", verifiedFor: 2026, mustInclude: true, displaySlot: "right",  slotPrecedence: 2 },
+  // NFL 2026-27 verified against ESPN 2026-08-09: Week 1 opens Thu Sep 10 2026,
+  // and Super Bowl LXI is Sun Feb 14 2027. The old 02-09 endDate hid the NFL
+  // column five days BEFORE the Super Bowl — the one game of the year a
+  // spoiler-free app must not be missing. Old 09-04 start was six days before
+  // any regular-season game.
+  { sport: "nfl",   label: "NFL",   startDate: "09-07", endDate: "02-16", kickoffDate: "09-09", championshipDate: "02-14", scheduleReleaseDate: "05-14", verifiedFor: 2026, mustInclude: true, displaySlot: "center", slotPrecedence: 1 },
   // NFL Preseason backfills the Jul 21 – Aug 15 thin window where only MLB + MLS are active.
-  // Window ends Sep 3 (regular NFL takes over Sep 4) — but EPL kickoff Aug 16 already fills
+  // Window ends Sep 3 (regular NFL takes over Sep 8) — but EPL kickoff Aug 16 already fills
   // the third slot, so backfillOnly ensures preseason only shows when slot 3 would be empty.
   { sport: "nfl",   label: "NFL Preseason", startDate: "07-21", endDate: "09-03", backfillOnly: true, displaySlot: "center", slotPrecedence: 7 },
   // ── Golf majors ──
   // Masters takes the right slot when active (Jacob's pref) — bumps NHL during Apr 9-13.
-  { sport: "golf",  label: "Masters",  startDate: "04-09", endDate: "04-13", championshipDate: "04-13", firstPref: true, displaySlot: "right",  slotPrecedence: 1 },
+  { sport: "golf",  label: "Masters",  startDate: "04-06", endDate: "04-13", kickoffDate: "04-08", championshipDate: "04-11", verifiedFor: 2027, firstPref: true, displaySlot: "right",  slotPrecedence: 1 },
   // PGA Champ + French Open never auto-pick (still selectable via slot-3 swap dropdown).
-  { sport: "golf",  label: "PGA Champ", startDate: "05-14", endDate: "05-18", championshipDate: "05-18", excludeFromAuto: true },
-  { sport: "golf",  label: "US Open",   startDate: "06-18", endDate: "06-22", championshipDate: "06-22", firstPref: true, displaySlot: "center", slotPrecedence: 5 },
-  { sport: "golf",  label: "The Open",  startDate: "07-16", endDate: "07-20", championshipDate: "07-20", displaySlot: "center", slotPrecedence: 6 },
+  { sport: "golf",  label: "PGA Champ", startDate: "05-13", endDate: "05-24", kickoffDate: "05-20", championshipDate: "05-23", verifiedFor: 2027, excludeFromAuto: true },
+  { sport: "golf",  label: "US Open",   startDate: "06-15", endDate: "06-22", kickoffDate: "06-17", championshipDate: "06-20", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 5 },
+  { sport: "golf",  label: "The Open",  startDate: "07-13", endDate: "07-20", kickoffDate: "07-15", championshipDate: "07-18", verifiedFor: 2027, displaySlot: "center", slotPrecedence: 6 },
   // ── Tennis Grand Slams ──
-  { sport: "tennis", label: "Aus Open",     startDate: "01-12", endDate: "01-26", championshipDate: "01-26" },
-  { sport: "tennis", label: "French Open",  startDate: "05-24", endDate: "06-08", championshipDate: "06-08", excludeFromAuto: true },
-  { sport: "tennis", label: "Wimbledon",    startDate: "06-29", endDate: "07-13", championshipDate: "07-13", firstPref: true, displaySlot: "center", slotPrecedence: 4 },
-  { sport: "tennis", label: "US Open",      startDate: "08-25", endDate: "09-14", championshipDate: "09-14", firstPref: true, displaySlot: "center", slotPrecedence: 3 },
+  { sport: "tennis", label: "Aus Open",     startDate: "01-11", endDate: "02-01", kickoffDate: "01-17", championshipDate: "01-31", verifiedFor: 2027 },
+  { sport: "tennis", label: "French Open",  startDate: "05-20", endDate: "06-09", kickoffDate: "05-23", championshipDate: "06-06", verifiedFor: 2027, excludeFromAuto: true },
+  { sport: "tennis", label: "Wimbledon",    startDate: "06-26", endDate: "07-14", kickoffDate: "06-28", championshipDate: "07-11", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 4 },
+  { sport: "tennis", label: "US Open",      startDate: "08-24", endDate: "09-15", kickoffDate: "08-29", championshipDate: "09-12", verifiedFor: 2027, firstPref: true, displaySlot: "center", slotPrecedence: 3 },
   // ── FIFA World Cup (every 4 years; 2026 was the most recent anchor) ──
   // startDate opened to 06-04 (tournament opens 06-11) so the column previews
   // live NOW with the opener via the next-game-day lookahead. Revert to 06-11
@@ -134,13 +204,21 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // NBA/NHL end (06-19).
   { sport: "fifa", label: "World Cup", startDate: "06-04", endDate: "07-19", championshipDate: "07-19", firstPref: true, displaySlot: "center", slotPrecedence: 2, yearCycle: { mod: 4, anchor: 2026 } },
   // ── Premier League (Aug–May) ──
-  { sport: "epl", label: "Prem", startDate: "08-16", endDate: "05-25", championshipDate: "05-25" },
+  // 2026-27 dates verified against ESPN's eng.1 scoreboard on 2026-08-08: the
+  // World Cup pushed kickoff a week later than a normal year — matchweek 1 is
+  // Fri Aug 21 (Coventry at Arsenal) through Mon Aug 24, and the final round is
+  // Sun May 30 2027. The old 08-16/05-25 window opened five days before any
+  // fixture existed (bumping NFL Preseason, which DID have games, out of slot 3)
+  // and closed with a full matchweek still to play. kickoffDate carries the real
+  // first-match day for the countdown banner; startDate stays two days earlier so
+  // the column is there with the fixture lookahead when the week's build-up starts.
+  { sport: "epl", label: "EPL", startDate: "08-19", endDate: "05-31", kickoffDate: "08-21", championshipDate: "05-30", scheduleReleaseDate: "06-19", verifiedFor: 2026 },
   // ── UEFA Champions League (Sep League phase → Jun Final) ──
   // Active across Sep 14 → Jun 5 but only ~17 matchdays in window; on
   // non-matchday days the column shows news only.
-  { sport: "ucl", label: "UCL", startDate: "09-14", endDate: "06-05", championshipDate: "06-05" },
+  { sport: "ucl", label: "UCL", startDate: "09-06", endDate: "06-06", kickoffDate: "09-08", championshipDate: "06-05", verifiedFor: 2026 },
   // ── UEFA Europa League (Sep group → late May Final) ──
-  { sport: "uel", label: "UEL", startDate: "09-24", endDate: "05-22", championshipDate: "05-22" },
+  { sport: "uel", label: "UEL", startDate: "09-14", endDate: "05-28", kickoffDate: "09-16", championshipDate: "05-26", verifiedFor: 2026 },
   // ── The other four big-five domestic leagues (Aug–May) ──
   // All excludeFromAuto: the 3-column default layout is already tuned around
   // NBA/MLB/NHL/NFL + EPL/UCL, and four more Aug–May soccer leagues competing
@@ -191,7 +269,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // as of 2026-08-03, and the 2025 edition was itself moved to Dec–Jan for
   // weather. Re-check these dates before the 2027 cycle opens; being wrong here
   // only costs a hidden column, never a wrong score.
-  { sport: "afcon", label: "AFCON", startDate: "06-15", endDate: "07-20", championshipDate: "07-20", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
+  { sport: "afcon", label: "AFCON", startDate: "06-17", endDate: "07-19", kickoffDate: "06-19", championshipDate: "07-17", verifiedFor: 2027, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
   // Saudi Pro League: ESPN calendar 08-13 → 05-28.
   { sport: "saudi", label: "Saudi PL", startDate: "08-13", endDate: "05-28", championshipDate: "05-28", excludeFromAuto: true },
   // ── Cricket (IPL) ──
@@ -199,10 +277,21 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // 2026-03-28 → 2026-05-31. Opt-in like the rest of the second wave.
   { sport: "cricket", label: "IPL", startDate: "03-28", endDate: "05-31", championshipDate: "05-31", excludeFromAuto: true },
   // ── MLS (Feb–Dec, MLS Cup early Dec) ──
-  { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-07", championshipDate: "12-07" },
-  // ── NCAAF (College Football, Aug–early Jan, CFB Championship ~Jan 11) ──
-  // Starts 08-22 to catch Week 0 (late-August opener weekend).
-  { sport: "ncaaf", label: "NCAAF", startDate: "08-22", endDate: "01-12", championshipDate: "01-12" },
+  { sport: "mls", label: "MLS", startDate: "02-21", endDate: "12-20", championshipDate: "12-18", verifiedFor: 2026 },
+  // ── NCAAF (College Football, late Aug – late Jan) ──
+  // Verified against ESPN 2026-08-09. The expanded playoff moved the calendar:
+  // quarterfinals Jan 1, semifinals Jan 15-16, and the National Championship on
+  // Jan 26 2027 — the old 01-12 endDate hid the entire playoff from the
+  // semifinals onward, title game included. Week 0 is Aug 29 2026, so the old
+  // 08-22 start opened a week of empty column.
+  // Jacob 2026-08-09: NCAAF outranks the NHL for the right slot for its whole
+  // season, and takes it outright during the playoff (playoffPin). Restoring the
+  // NHL's real October start put a mustInclude league on the right pin from Sep
+  // 29 on, which would otherwise have pushed college football — bowls and the
+  // CFP included — off the default board for the back half of its season. The
+  // NHL stays one tap away in the switcher and returns to the default board on
+  // Jan 29, when NCAAF ends.
+  { sport: "ncaaf", label: "NCAAF", startDate: "08-27", endDate: "01-28", kickoffDate: "08-29", championshipDate: "01-26", verifiedFor: 2026, displaySlot: "right", slotPrecedence: 1, playoffPin: true },
   // ── NCAAW (Women's College Basketball, Nov–early Apr) ──
   // Swap-only (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot
   // rotation — selectable from the slot-3 dropdown when in season.
@@ -210,7 +299,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
   // in season, but low priority so it only fills open summer/fall slots after
   // the core leagues and major tournament windows.
-  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19" },
+  { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", scheduleReleaseDate: "12-01", verifiedFor: 2026 },
   // ── F1 + UFC (single-event tiles) ──
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
@@ -247,7 +336,20 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Esports (PandaScore). Year-round, opt-in. Worlds and the LCK/LPL play in
   // Asian timezones, so the Western audience watches almost entirely on VOD —
   // the purest spoiler case in the app after cricket.
-  { sport: "esports", label: "Esports", excludeFromAuto: true },
+  //
+  // HIDDEN 2026-08-09 (Jacob). One "Esports" pill spans six unrelated circuits
+  // (VCT / LPL / LCK / LEC / CBLOL / LCS) and only ONE of them — LEC — has a
+  // verified official uploader, so ~87% of the column's cards can never show a
+  // highlight button at all (see OFFICIAL_CHANNELS + hasNoTrustedHighlightSource
+  // in lib/youtube.ts: LCK leaks the series length through its per-GAME VOD
+  // list, LPL and @lolesports post nothing usable, and esports is barred from
+  // the unscoped search fallback because fan re-upload titles spoil the result).
+  // A column that is mostly score-only cards under a label most users can't
+  // decode is worse than no column. Everything below stays live and inert — the
+  // PandaScore fetcher, /api/esports, the rating, the LEC channel entry — so
+  // deleting this one flag brings it back if LCK/LPL ever ship a per-series cut.
+  // Already-pinned slots are untouched: resolveSlot() does not check `hidden`.
+  { sport: "esports", label: "Esports", excludeFromAuto: true, hidden: true },
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -258,7 +360,8 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 //   center: NFL (1) > World Cup (2) > US Open Tennis (3) > Wimbledon (4)
 //           > US Open Golf (5) > The Open (6) > NFL Preseason (7)
 //           NCAAM dynamically pins to center during March Madness (Mar 17 – Apr 6).
-//   right : Masters (1) > NHL (2)
+//   right : Masters (1) > NHL (2, auto-picked only from Apr 7 — autoStartDate;
+//           selectable from the switcher all season, Sep 29 onward)
 //
 // Picks: mustInclude (NBA/MLB/NHL/NFL) + firstPref always picked when active;
 // regular leagues fill remaining slots by LEAGUE_PRIORITY; backfillOnly
@@ -269,7 +372,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 // Jan 1 – Jan 11:   NBA/NFL/NCAAM/MLS/EPL          → [NBA, NFL, NCAAM]
 // Jan 12 – Jan 26:  + Aus Open                     → [NBA, NFL, Aus Open]
 // Jan 27 – Feb 9:   Aus Open ends                  → [NBA, NFL, NCAAM]
-// Feb 10 – Mar 16:  NFL ends                       → [NBA, NCAAM, EPL]
+// Feb 17 – Mar 16:  NFL ends                       → [NBA, NCAAM, EPL]
 // Mar 17 – Mar 19:  NCAAM → March Madness          → [NBA, March Madness, EPL]
 // Mar 20 – Apr 6:   + MLB                           → [NBA, March Madness, MLB]
 // Apr 7 – Apr 8:    NCAAM done; + NHL              → [NBA, MLB, NHL]
@@ -287,15 +390,15 @@ export const ALL_LEAGUES: LeagueConfig[] = [
 // Jul 16 – Jul 19:  + The Open                     → [MLB, World Cup, The Open]
 // Jul 20:           World Cup ends                 → [MLB, The Open, MLS]
 // Jul 21 – Aug 15:  NFL Preseason backfill         → [MLB, NFL Preseason, MLS]
-// Aug 16 – Aug 24:  + EPL (Preseason bumped)       → [MLB, EPL, MLS]
+// Aug 19 – Aug 24:  + EPL (Preseason bumped)       → [MLB, EPL, MLS]
 // Aug 25 – Sep 3:   + US Open Tennis               → [MLB, US Open Tennis, EPL]
-// Sep 4 – Sep 14:   + NFL                           → [MLB, NFL, US Open Tennis]
+// Sep 8 – Sep 14:   + NFL                           → [MLB, NFL, US Open Tennis]
 // Sep 15 – Oct 19:  US Open Tennis ends            → [MLB, NFL, EPL]
 // Oct 20 – Nov 1:   + NBA                           → [NBA, NFL, MLB]
 // Nov 2 – Dec 31:   MLB ends; + NCAAM              → [NBA, NFL, NCAAM]
 // ═══════════════════════════════════════════════════════════════
 // Added 2026-05-27 — not unrolled into the day-by-day grid above:
-//   • NCAAF (Aug 29 – Jan 12, priority 4) joins between NFL and tennis;
+//   • NCAAF (Aug 27 – Jan 28, priority 4) joins between NFL and tennis;
 //     overlaps NFL Sundays and NCAAM/NBA in fall.
 //   • UCL (Sep 14 – Jun 5, priority 10) and UEL (Sep 24 – May 22, priority 11)
 //     compete for the soccer slot — UCL > UEL > MLS, EPL still beats both.
@@ -327,11 +430,294 @@ export function isLeagueActive(league: LeagueConfig, viewDate: Date): boolean {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SEASON KICKOFF — "starting soon" leagues
+// ═══════════════════════════════════════════════════════════════
+// A league that hasn't started yet is invisible everywhere: not in the auto
+// columns (correct — it has no games), but also not in the switcher, so a user
+// who already knows the season is coming has no way to add it and no way to
+// learn the date. Two consequences we hit for the 2026-27 Premier League: people
+// were asking for the column while it was still hidden, and the start date
+// itself (Aug 21, a week later than a normal year because of the World Cup) is
+// not something a casual fan knows.
+//
+// So a league becomes SELECTABLE — never auto-picked — this many days before it
+// starts, and the same window drives the one-line kickoff banner. The column it
+// opens is not empty: LeagueColumn's next-game-day lookahead shows the opening
+// fixtures, and the league's news feed is already baking year-round.
+// 14 days: long enough that the Premier League's Aug 21 opener is addable from
+// the first week of August (people were already asking), short enough that the
+// window doesn't sit open for a month and stop reading as news.
+export const KICKOFF_SOON_DAYS = 14;
+// How long after the first match the banner keeps offering the add, for anyone
+// who only opens the app on weekends.
+export const KICKOFF_UNDERWAY_DAYS = 4;
+
+const DAY_MS = 86_400_000;
+
+// Local-noon Date for the next occurrence of an MM-DD on or after viewDate.
+// Noon avoids the DST edges where a midnight date arithmetic lands on the wrong
+// calendar day. Returns null for a malformed MM-DD.
+function nextOccurrence(mmdd: string, viewDate: Date): Date | null {
+  const m = /^(\d{2})-(\d{2})$/.exec(mmdd);
+  if (!m) return null;
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+  let d = new Date(viewDate.getFullYear(), month - 1, day, 12, 0, 0, 0);
+  if (d.getTime() < view.getTime()) d = new Date(viewDate.getFullYear() + 1, month - 1, day, 12, 0, 0, 0);
+  return d;
+}
+
+export type LeagueKickoff = {
+  config: LeagueConfig;
+  kickoff: Date;       // local noon on the season's first match day
+  daysUntil: number;   // 0 = kicks off today; negative = already started
+  phase: "soon" | "today" | "underway";
+  // Stable per-season dismissal key ("epl-2026") so dismissing this year's
+  // banner doesn't dismiss the league forever.
+  seasonKey: string;
+};
+
+// Whether `league` is inside its pre-season selectable window for viewDate.
+// Deliberately excludes hidden/backfill entries and anything gated out by
+// yearCycle (a World Cup three years away must not surface as "starting soon").
+export function isLeagueUpcoming(league: LeagueConfig, viewDate: Date, withinDays = KICKOFF_SOON_DAYS): boolean {
+  // A league already in its window is "active", never "upcoming" — startDate can
+  // sit a couple of days before kickoffDate, and both being true at once would
+  // let a caller label a live column "starts Friday".
+  if (isLeagueActive(league, viewDate)) return false;
+  const k = kickoffFor(league, viewDate);
+  return k !== null && k.daysUntil > 0 && k.daysUntil <= withinDays;
+}
+
+function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null {
+  if (league.hidden || league.backfillOnly) return null;
+  if (!league.startDate || !league.endDate) return null;
+  const kickoff = nextOccurrence(league.kickoffDate ?? league.startDate, viewDate);
+  if (!kickoff) return null;
+  if (league.yearCycle) {
+    const { mod, anchor } = league.yearCycle;
+    if ((kickoff.getFullYear() - anchor) % mod !== 0) return null;
+  }
+  const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+  const daysUntil = Math.round((kickoff.getTime() - view.getTime()) / DAY_MS);
+  // nextOccurrence never looks backwards, so "underway" is detected by asking
+  // whether THIS year's kickoff has just passed rather than by a negative diff.
+  let phase: LeagueKickoff["phase"];
+  let effective = kickoff;
+  let effectiveDays = daysUntil;
+  if (daysUntil > 0) {
+    const lastYear = new Date(kickoff.getFullYear() - 1, kickoff.getMonth(), kickoff.getDate(), 12, 0, 0, 0);
+    const sinceLast = Math.round((view.getTime() - lastYear.getTime()) / DAY_MS);
+    if (sinceLast > 0 && sinceLast <= KICKOFF_UNDERWAY_DAYS && isLeagueActive(league, viewDate)) {
+      effective = lastYear;
+      effectiveDays = -sinceLast;
+      phase = "underway";
+    } else {
+      phase = "soon";
+    }
+  } else {
+    phase = "today";
+  }
+  // Keyed by the exact kickoff day, not just the year: golf and tennis run
+  // several separate events per sport per year, and dismissing the Masters
+  // banner must not silently dismiss the US Open's.
+  const stamp = `${effective.getFullYear()}-${String(effective.getMonth() + 1).padStart(2, "0")}-${String(effective.getDate()).padStart(2, "0")}`;
+  return { config: league, kickoff: effective, daysUntil: effectiveDays, phase, seasonKey: `${league.sport}-${stamp}` };
+}
+
+// One glyph per sport for the kickoff banner. Partial by design — anything not
+// listed falls back to a neutral marker rather than getting a wrong icon.
+const SPORT_GLYPH: Partial<Record<Sport, string>> = {
+  mlb: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
+  nfl: "🏈", ncaaf: "🏈", nhl: "🏒", golf: "⛳", tennis: "🎾",
+  fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
+  laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
+  nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
+  cricket: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
+  ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮",
+};
+
+export function sportGlyph(sport: Sport): string {
+  return SPORT_GLYPH[sport] ?? "🏟️";
+}
+
+// "8/21" — the compact form used in the league switcher's "EPL · 8/21" tail.
+export function formatKickoffShort(mmdd: string | undefined, viewDate: Date): string {
+  const d = mmdd ? nextOccurrence(mmdd, viewDate) : null;
+  if (!d) return "soon";
+  // Numeric "8/21", not "Aug 21": this rides inside a switcher row already
+  // carrying a league name ("EPL · starts Aug 21"), and the spelled month
+  // pushed it onto a second line in the dropdown (Jacob 8/9).
+  return d.toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+}
+
+// "Friday, Aug 21" — the banner form. Weekday included because for a league
+// people already follow, the day of the week is the part that makes it land.
+export function formatKickoffLong(d: Date): string {
+  return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEASON OPENER — what an offseason column says instead of nothing
+// ═══════════════════════════════════════════════════════════════
+// A column with no games today, no fixture lookahead and no recent game used to
+// bottom out at a bare "Upcoming Schedule TBD" — true, but useless: the one
+// thing someone looking at an offseason column wants is when it comes back.
+// ALL_LEAGUES already carries that date, so surface it.
+//
+// APPROXIMATE BY CONSTRUCTION. These are MM-DD windows re-verified against the
+// leagues' own schedules once a season, and startDate can open a few days before
+// the first real fixture. Only a kickoffDate inside its verifiedFor year is a
+// confirmed opening day; everything else is hedged with a "~" in the UI.
+export type SeasonOpener = {
+  date: Date;          // local noon on the opener
+  daysUntil: number;   // always >= 1
+  approximate: boolean;
+  // Tournaments (golf majors, Slams, World Cup/Euro/AFCON) don't have a
+  // "season" — the column returns for one event — so the UI says "Returns"
+  // for them and "Season starts" for the league sports.
+  kind: "season" | "event";
+  label: string;       // "Oct 20", or "Jun 2030" when more than a year out
+  awayLabel: string;   // "9 days away" / "6 weeks away" / "3 months" / "4 years"
+  // "May 14" when the full schedule is still unpublished on viewDate — the one
+  // fact an offseason column can add past the start date. Undefined once the
+  // schedule is out (or for leagues with no fixed release date), because
+  // "schedule dropped in July" is noise in October.
+  scheduleOut?: string;
+};
+
+// Sports whose columns are a single dated event rather than a season.
+const EVENT_SPORTS: Partial<Record<Sport, true>> = {
+  golf: true, tennis: true, fifa: true, euro: true, afcon: true,
+};
+
+// Next opener for `sport` on or after viewDate, or null when there is nothing to
+// name: event-driven sports with no season window (UFC, boxing, chess), or a
+// league already inside its window (an in-season gap is a schedule hole, not an
+// offseason — announcing next year's opener there would be flatly wrong).
+export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): SeasonOpener | null {
+  const candidates = ALL_LEAGUES.filter(
+    (l) => l.sport === sport && !l.hidden && !l.backfillOnly && l.startDate && l.endDate,
+  );
+  if (candidates.length === 0) return null;
+  // A sport can hold several configs (golf majors, tennis Slams, NFL + its
+  // preseason). Prefer the one this column is actually labelled with; otherwise
+  // take whichever comes back soonest.
+  const exact = candidates.find((l) => l.label === label);
+  const pool = exact ? [exact] : candidates;
+  // Bail while the relevant config is in its own window — an empty column there
+  // is a schedule gap, not an offseason. Scoped to the matched config so that a
+  // column parked on Wimbledon during the Australian Open still answers with
+  // Wimbledon's date instead of going silent.
+  if (pool.some((l) => isLeagueActive(l, viewDate))) return null;
+
+  let best: { config: LeagueConfig; kickoff: Date; daysUntil: number } | null = null;
+  for (const config of pool) {
+    // World Cup / Euro / AFCON are gated to their cycle year, so the next
+    // occurrence of their MM-DD is usually the wrong year and kickoffFor returns
+    // null. Walk forward a cycle at a time instead of giving up — "starts Jun
+    // 2030" is still the answer someone opening the column wants.
+    const maxYears = config.yearCycle ? config.yearCycle.mod : 1;
+    for (let i = 0; i < maxYears; i++) {
+      const probe = new Date(viewDate.getFullYear() + i, viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+      const k = kickoffFor(config, probe);
+      if (!k) continue;
+      const view = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate(), 12, 0, 0, 0);
+      const daysUntil = Math.round((k.kickoff.getTime() - view.getTime()) / DAY_MS);
+      if (daysUntil < 1) continue;
+      if (!best || daysUntil < best.daysUntil) best = { config, kickoff: k.kickoff, daysUntil };
+      break;
+    }
+  }
+  if (!best) return null;
+
+  const { config, kickoff, daysUntil } = best;
+  // The schedule is "not out yet" when its release lands between today and the
+  // opener. Past that the next occurrence rolls into the following season, which
+  // is how a released schedule detects itself without any extra state.
+  const release = config.scheduleReleaseDate ? nextOccurrence(config.scheduleReleaseDate, viewDate) : null;
+  const scheduleOut = release && release.getTime() < kickoff.getTime()
+    ? release.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : undefined;
+  // Rounded whole years, hoisted so the awayLabel years branch can pluralize
+  // like the days branch does — a World Cup column viewed ~1–1.5 years out
+  // (daysUntil 366–547) rounds to 1 and otherwise read "1 years away".
+  const years = Math.round(daysUntil / 365.25);
+  return {
+    date: kickoff,
+    daysUntil,
+    // A confirmed opening-day date only stays confirmed for the season someone
+    // actually checked — past that, kickoffDate is last year's date recurring,
+    // so the copy goes back to hedging. See LeagueConfig.verifiedFor.
+    approximate: !config.kickoffDate || (config.verifiedFor ?? 0) < kickoff.getFullYear(),
+    scheduleOut,
+    kind: EVENT_SPORTS[sport] ? "event" : "season",
+    // Past a year out the day-of-month is noise (and unknowable) — month + year
+    // carries all the signal a 2030 World Cup column can honestly give.
+    label: daysUntil > 365
+      ? kickoff.toLocaleDateString("en-US", { month: "short", year: "numeric" })
+      : kickoff.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    awayLabel: daysUntil <= 21
+      ? `${daysUntil} day${daysUntil === 1 ? "" : "s"} away`
+      : daysUntil <= 70
+        ? `${Math.round(daysUntil / 7)} weeks away`
+        : daysUntil <= 365
+          ? `${Math.round(daysUntil / 30.4)} months away`
+          : `${years} year${years === 1 ? "" : "s"} away`,
+  };
+}
+
+// The single most imminent league worth announcing for viewDate, or null.
+// One banner at a time by design — two stacked announcements is an ad unit.
+export function getLeagueKickoff(viewDate: Date): LeagueKickoff | null {
+  const candidates: LeagueKickoff[] = [];
+  for (const league of ALL_LEAGUES) {
+    // Opt-in leagues never take the banner. Mid-August alone opens La Liga,
+    // Serie A, Ligue 1 and the Saudi Pro League within nine days of each other,
+    // and announcing a league the user hasn't asked for — in the one slot above
+    // the board — turns a useful heads-up into an ad. They're still addable
+    // early from the switcher via isLeagueUpcoming.
+    if (league.excludeFromAuto) continue;
+    const k = kickoffFor(league, viewDate);
+    if (!k) continue;
+    if (k.phase === "soon" && k.daysUntil > KICKOFF_SOON_DAYS) continue;
+    candidates.push(k);
+  }
+  if (!candidates.length) return null;
+  // Nearest to now wins: today, then the closest upcoming, then the most
+  // recently started.
+  candidates.sort((a, b) => Math.abs(a.daysUntil) - Math.abs(b.daysUntil));
+  return candidates[0];
+}
+
+// Whether a league may claim a column ON ITS OWN for viewDate. Identical to
+// isLeagueActive unless the config carries an autoStartDate, which narrows the
+// auto-pick window to [autoStartDate, endDate] while leaving the full season
+// selectable. Every auto-pick path must use this; selectability paths must not.
+export function isLeagueAutoEligible(league: LeagueConfig, viewDate: Date): boolean {
+  if (!isLeagueActive(league, viewDate)) return false;
+  if (!league.autoStartDate || !league.endDate) return true;
+  const mmdd = toMMDD(viewDate);
+  return league.autoStartDate <= league.endDate
+    ? mmdd >= league.autoStartDate && mmdd <= league.endDate
+    : mmdd >= league.autoStartDate || mmdd <= league.endDate;
+}
+
 const MAX_LEAGUES = 3;
 
 // March Madness date range — NCAAM dynamically becomes a firstPref / center pin.
 const MARCH_MADNESS_START = "03-17";
 const MARCH_MADNESS_END = "04-06";
+
+// College Football Playoff — the same treatment NCAAM gets in March, for the
+// same reason: the biggest games of the sport's year must not be bumped off the
+// default board. Wraps New Year, so the check is an OR, not a range.
+// 2026-27: bowls open mid-Dec, CFP first round Dec 18-19 (on campus),
+// quarterfinals Jan 1, semifinals Jan 15-16, National Championship Jan 26.
+const CFP_START = "12-15";
+const CFP_END = "01-28";
 
 // Tiebreak when a regular (non-pinned, non-firstPref) league fills a leftover slot.
 // Lower number = picked first. Used only after pin assignment has consumed mustIncludes
@@ -392,10 +778,18 @@ function isMarchMadness(viewDate: Date): boolean {
   return mmdd >= MARCH_MADNESS_START && mmdd <= MARCH_MADNESS_END;
 }
 
-// During March Madness, NCAAM acts as a firstPref center pin.
+function isCollegeFootballPlayoff(league: LeagueConfig, viewDate: Date): boolean {
+  if (league.sport !== "ncaaf" || !league.playoffPin) return false;
+  const mmdd = toMMDD(viewDate);
+  return mmdd >= CFP_START || mmdd <= CFP_END;
+}
+
+// During March Madness, NCAAM acts as a firstPref center pin; during the CFP,
+// NCAAF does the same on the right.
 function effectiveFirstPref(league: LeagueConfig, viewDate: Date): boolean {
   if (league.firstPref) return true;
   if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) return true;
+  if (isCollegeFootballPlayoff(league, viewDate)) return true;
   return false;
 }
 function effectiveDisplaySlot(league: LeagueConfig, viewDate: Date): "left" | "center" | "right" | undefined {
@@ -404,6 +798,7 @@ function effectiveDisplaySlot(league: LeagueConfig, viewDate: Date): "left" | "c
 }
 function effectiveSlotPrecedence(league: LeagueConfig, viewDate: Date): number {
   if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) return 0; // beats NFL for center during MM
+  if (isCollegeFootballPlayoff(league, viewDate)) return 0;                                      // beats NHL for right during the CFP
   return league.slotPrecedence ?? 99;
 }
 
@@ -414,7 +809,7 @@ export function getActiveLeagueCandidates(viewDate?: Date): {
   rest: LeagueConfig[];
 } {
   const d = viewDate ?? new Date();
-  const active = ALL_LEAGUES.filter((l) => isLeagueActive(l, d) && !l.excludeFromAuto && !l.backfillOnly);
+  const active = ALL_LEAGUES.filter((l) => isLeagueAutoEligible(l, d) && !l.excludeFromAuto && !l.backfillOnly);
   const firstPref = active.filter((l) => effectiveFirstPref(l, d));
   const rest = active
     .filter((l) => !effectiveFirstPref(l, d))
@@ -427,7 +822,7 @@ export function getActiveLeagueCandidates(viewDate?: Date): {
 // [left, center, right] pin rules; slots beyond 3 (the wide-viewport 5-column
 // board) fill from the remaining pool by LEAGUE_PRIORITY.
 export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES): LeagueConfig[] {
-  const eligible = ALL_LEAGUES.filter((l) => isLeagueActive(l, viewDate) && !l.excludeFromAuto);
+  const eligible = ALL_LEAGUES.filter((l) => isLeagueAutoEligible(l, viewDate) && !l.excludeFromAuto);
 
   const mustInclude = eligible.filter((l) => l.mustInclude && !l.backfillOnly);
   const firstPref   = eligible.filter((l) => effectiveFirstPref(l, viewDate) && !l.mustInclude && !l.backfillOnly);
@@ -1092,10 +1487,10 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const state = (match.status?.type?.state ?? "pre") as "pre" | "in" | "post";
   const homeTeam = mkTeam(home);
   const awayTeam = mkTeam(away);
-  // Tournament + year context for the highlight search. Without it the
-  // unscoped fallback query ("A vs B highlights") can land on the same
-  // players' match from a DIFFERENT event/year (e.g. a French Open match
-  // resolving to "Rome Open 2025"). Threaded through the Game's seriesNote,
+  // Tournament + year context for the strict highlight query. Without it the
+  // tournament's own channel can still return the same players' match from a
+  // DIFFERENT event/year (e.g. a French Open match resolving to "Rome Open
+  // 2025"). Threaded through the Game's seriesNote,
   // which is only ever used to build the YouTube query (never rendered).
   const matchYear = (match.date ?? event.date ?? "").slice(0, 4);
   const tourneyTag = [event.name, matchYear].filter(Boolean).join(" ");
@@ -1107,11 +1502,27 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const as = Number(awayTeam.score) || 0;
   const diff = Math.abs(hs - as);
   const setNow = match.status?.period ?? 0; // current set number
+  // Best-of-3 (all women's draws) needs 2 sets to win; best-of-5 (men's Slam
+  // singles) needs 3. The grouping slug tells us which — ESPN's `format` field
+  // is unreliable (reports 5 for both). Hoisted above the rating block so the
+  // "went the distance" gate can require the winner to have actually reached it.
+  const setsToWin = /women/.test(slug) ? 2 : 3;
   let rating: number | null = null;
   if (state === "post") {
-    if (diff <= 1) rating = 90;             // went the distance (2-1 / 3-2)
+    // GREAT is reserved for a match that went to a deciding final set (2-1 or
+    // 3-2). Require the LOSER to have won at least one set AND the WINNER to have
+    // reached setsToWin — otherwise a retirement (e.g. a man retiring at 1-1,
+    // 2-1 or 2-2 in sets, or a first-set retirement up 1-0) or a walkover (0-0,
+    // no sets played) also passes `diff <= 1` and gets rated GREAT, sorting the
+    // LEAST watchable outcome to the top of the Rated view. Retirements/walkovers
+    // aren't filtered out (buildTennisGames only drops POSTPONED/CANCELED/
+    // SUSPENDED), so they reach here as finished games. A normally-completed
+    // match always has its winner at setsToWin (2 or 3); an incomplete retirement
+    // does not, so the `max >= setsToWin` check routes those to the 65 bucket
+    // below while every real 2-1 / 3-2 decider keeps its 90.
+    if (diff <= 1 && Math.min(hs, as) >= 1 && Math.max(hs, as) >= setsToWin) rating = 90; // went the distance (2-1 / 3-2)
     else if (hs + as >= 4 && diff === 2) rating = 78; // long match (3-1)
-    else rating = 65;                       // straight sets
+    else rating = 65;                       // straight sets / retirement / walkover
   } else if (state === "in" && setNow >= 2) {
     // Rate a live match by how level it is, capped below GREAT — GREAT is
     // reserved for finished deciders. Level (e.g. 1-1) reads best.
@@ -1119,9 +1530,8 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   }
   // Deciding set: a live match level on sets and into the final set — the
   // win-or-go-home stretch. Best-of-3 (all women's draws) decides at 1-1 in
-  // set 3; best-of-5 (men's Slam singles) at 2-2 in set 5. The grouping slug
-  // tells us which — ESPN's `format` field is unreliable (reports 5 for both).
-  const setsToWin = /women/.test(slug) ? 2 : 3;
+  // set 3; best-of-5 (men's Slam singles) at 2-2 in set 5 (setsToWin, hoisted
+  // above the rating block).
   const decidingSet = state === "in" && hs === as && hs === setsToWin - 1;
   // 1st set (or pre) → rating stays null (Too Early / unrated)
   // Gather broadcasts — tennis nests these on the match (competition) object
@@ -1148,7 +1558,6 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
     awayTeam,
     broadcasts,
     venue: "",
-    highlightUrl: null,
     // Not a playoff "Game N" — repurposed to carry tournament+year into the
     // highlight search so it can't drift to the wrong event (see above).
     seriesNote: tourneyTag || null,
@@ -1293,6 +1702,11 @@ type ScoreboardEvent = {
   shortName?: string;
   _sport?: Sport;
   season?: { type?: number; slug?: string };
+  // ESPN ships the gridiron week on the event itself (and again at the top of
+  // the scoreboard payload). Regular season only in practice — postseason
+  // events reuse the numbering under season.type 3, which is why
+  // gridironWeekNumber refuses to read it there.
+  week?: { number?: number };
   status?: {
     displayClock?: string;
     period?: number;
@@ -1318,6 +1732,26 @@ type ScoreboardEvent = {
     }
   >;
 };
+
+// Gridiron regular-season week, or null. This is the highlight-lookup gate for
+// NFL/NCAAF — see Game.weekNumber and the `week` param in public/_worker.js.
+//
+// Two deliberate refusals:
+//   • Non-gridiron sports return null. Nobody else's official channel titles by
+//     week, and a spurious week token would only ever subtract matches.
+//   • The POSTSEASON returns null even though ESPN keeps numbering weeks there
+//     (season.type 3 restarts at 1). NFL titles the playoff cuts by round
+//     ("Wild Card", "Divisional Round", "Super Bowl LX") and never by week, so
+//     sending week=1 for a Wild Card game would gate against a token the title
+//     doesn't carry — and, worse, would match a REGULAR-season Week 1 upload.
+//     Preseason (type 1) is excluded for the same reason: its own Week 1–3
+//     numbering collides head-on with the regular season's.
+function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null {
+  if (sport !== "nfl" && sport !== "ncaaf") return null;
+  if (event.season?.type !== 2) return null;
+  const week = event.week?.number;
+  return typeof week === "number" && week >= 1 && week <= 25 ? week : null;
+}
 
 function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const competition = event.competitions?.[0];
@@ -1347,19 +1781,6 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
 
   // Tag sport for rating calculation
   event._sport = sport;
-
-  // Extract highlight video URL from headlines
-  let highlightUrl: string | null = null;
-  for (const headline of competition?.headlines ?? []) {
-    for (const video of headline?.video ?? []) {
-      const webHref = video?.links?.web?.href;
-      if (webHref) {
-        highlightUrl = webHref;
-        break;
-      }
-    }
-    if (highlightUrl) break;
-  }
 
   // Extract series game number and playoff round from notes
   let seriesNote: string | null = null;
@@ -1490,10 +1911,10 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     stage,
     rating: calculateRating(event),
     seriesNote,
+    weekNumber: gridironWeekNumber(sport, event),
     isPlayoff,
     playoffLabel,
     seriesStatus,
-    highlightUrl,
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports
     primeStreamUrl: null, // populated from /prime-asins.json when matchup matches
@@ -2120,6 +2541,25 @@ function espnToMlbAbbrev(espnAbbrev: string): string {
   return ESPN_TO_MLB_ABBREV[espnAbbrev] || espnAbbrev;
 }
 
+// NHL team abbreviation mapping: ESPN → NHL public API (api-web.nhle.com).
+// Most codes match, but ESPN uses 2-char abbreviations for a few teams where
+// NHL's own API uses its canonical 3-char form (ESPN "TB" vs NHL "TBL", etc.).
+// The nhl.com/tv deep-link lookup below keys an ESPN abbreviation against the
+// NHL-abbrev map from fetchNHLGameIds, so without translating, those teams
+// silently miss and keep the generic espn.com/watch fallback — the same
+// ESPN-vs-league divergence ESPN_TO_MLB_ABBREV handles for MLB, and the reason
+// enrichNhlVideos matches on displayName instead of abbreviation.
+const ESPN_TO_NHL_ABBREV: Record<string, string> = {
+  TB: "TBL",
+  SJ: "SJS",
+  LA: "LAK",
+  NJ: "NJD",
+};
+
+function espnToNhlAbbrev(espnAbbrev: string): string {
+  return ESPN_TO_NHL_ABBREV[espnAbbrev] || espnAbbrev;
+}
+
 // Map ESPN country codes (from flag URLs) to display names
 const COUNTRY_NAMES: Record<string, string> = {
   usa: "United States", can: "Canada", mex: "Mexico",
@@ -2209,9 +2649,8 @@ const RACING_SERIES: Record<"f1" | "nascar" | "indycar", {
   nascar: { label: "NASCAR", queryPrefix: "NASCAR Cup Series", channel: "NASCAR" },
   // ⚠️ Sponsor-prefixed, the exact hazard the Ligue 1 note in youtube.ts calls
   // out: title sponsors rotate and the channel renames with them. A stale
-  // string doesn't break anything — the official slot just goes unfilled and
-  // the tile falls back to the unscoped search — but re-verify if the IndyCar
-  // highlight button ever stops resolving.
+  // string doesn't serve the wrong uploader: the strict lookup misses and the
+  // tile hides its button. Re-verify if the IndyCar highlight stops resolving.
   indycar: { label: "IndyCar", queryPrefix: "INDYCAR", channel: "NTT INDYCAR SERIES" },
 };
 
@@ -2271,34 +2710,98 @@ interface ChessApiEvent {
   url: string | null; website: string | null; tier: number;
 }
 
+// Chess has NO highlight package anywhere — verified 2026-08-10 across every
+// organizer that broadcasts on Lichess. What the organizers do post is the
+// round itself as a full VOD ("2026 Sinquefield Cup: Round 1 | #GrandChessTour",
+// "FIDE World University Team Chess Championship 2026 - Almaty Diary, Day 5").
+// Saint Louis last published a "Recap"-titled cut in 2019. So the chess tile
+// offers a ROUND REPLAY, not highlights, and only from an organizer whose exact
+// YouTube author_name is verified below — read off <link rel="canonical"> on the
+// handle page → the channel RSS <author><name>, never scraped from the channel
+// page body (that returns a RECOMMENDED channel; @SaintLouisChessClub and
+// @FIDE both resolved to unrelated personal accounts that way).
+// Anything without a mapping stays dark rather than falling through to a search.
+const CHESS_ORGANIZER_CHANNELS: { rx: RegExp; channel: string }[] = [
+  // Grand Chess Tour + everything hosted in Saint Louis (Sinquefield Cup,
+  // Cairns Cup, Saint Louis Rapid & Blitz, American Cup, Champions Showdown).
+  { rx: /\b(GCT|Sinquefield|Cairns|Saint Louis|St\.? Louis|American Cup|Champions Showdown)\b/i, channel: "Saint Louis Chess Club" },
+  // FIDE's own channel (@fide_chess). ⚠️ "fidechess" (@FIDEchess) is a
+  // different, unrelated account — keep this string byte-exact.
+  { rx: /\bFIDE\b/i, channel: "FIDE chess" },
+];
+
+// Reduce a Lichess broadcast name to the token that identifies WHICH event it
+// is, for the worker's title gate (`race=` on /api/youtube — a generic
+// "title must contain one of these" filter, named for its first caller).
+// One organizer channel covers a whole season of events, so without a token the
+// tile plays whatever that channel uploaded most recently.
+//   "GCT: Sinquefield Cup 2026 | Classical"          → "Sinquefield Cup"
+//   "FIDE World University Team Chess Championship 2026 (Finals)"
+//                                    → "FIDE World University Team Chess Championship"
+export function buildChessTokens(name: string): string[] {
+  const base = String(name || "")
+    .split("|")[0]
+    .replace(/^GCT:\s*/i, "")
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\b(?:19|20)\d{2}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return base ? [base] : [];
+}
+
 // Pick the event to show for `date`: prefer one actually running, then the next
 // one due, then the most recent finished. Mirrors how the F1/UFC tile behaves
 // on a day with no session — an empty column is worse than a nearby event.
-export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | null> {
+export async function fetchChessEvent(date?: string): Promise<EventFetchResult> {
   try {
     const res = await fetchWithRetry(`${getApiBase()}/api/chess`);
-    if (!res.ok) return null;
+    if (!res.ok) return EVENT_FETCH_FAILED;
     const { events } = (await res.json()) as { events: ChessApiEvent[] };
-    if (!events?.length) return null;
-    const target = date ? new Date(`${date}T12:00:00`).getTime() : Date.now();
+    // Lichess answering with an empty list is a real (if rare) quiet day, not a
+    // failure — see EventFetchResult.
+    if (!Array.isArray(events)) return EVENT_FETCH_FAILED;
+    if (!events.length) return EVENT_FETCH_EMPTY;
+    const target = date ? fromYmd(date).getTime() : Date.now();
     const onDate = (e: ChessApiEvent) =>
       e.startsAt != null && Math.abs(e.startsAt - target) < 24 * 60 * 60 * 1000;
     const byTier = (a: ChessApiEvent, b: ChessApiEvent) => (b.tier || 0) - (a.tier || 0);
-    const chosen =
-      events.filter((e) => e.state === "in" && onDate(e)).sort(byTier)[0] ??
-      events.filter((e) => e.state === "in").sort(byTier)[0] ??
-      events.filter((e) => e.state === "pre").sort((a, b) => (a.startsAt ?? 0) - (b.startsAt ?? 0))[0] ??
-      events.filter((e) => e.state === "post").sort((a, b) => (b.startsAt ?? 0) - (a.startsAt ?? 0))[0];
-    if (!chosen) return null;
+    const newestFirst = (a: ChessApiEvent, b: ChessApiEvent) => (b.startsAt ?? 0) - (a.startsAt ?? 0);
+    // Same rule the race/fight tile now follows: on a PAST board date, never
+    // show something that had not happened yet on that day. The live-first
+    // chain below is right for Today (Lichess always has SOMETHING running, so
+    // it would otherwise pin a currently-live tournament onto every past tab
+    // and hide the one that was actually being played then).
+    const isPastDate = !!date && date < toYmd(getEtServiceDate());
+    const dayMs = 24 * 60 * 60 * 1000;
+    const startedBy = (e: ChessApiEvent) => e.startsAt != null && e.startsAt <= target + dayMs / 2;
+    const runningOn = (e: ChessApiEvent) =>
+      startedBy(e) && (e.endsAt == null || e.endsAt >= target - dayMs / 2);
+    const chosen = isPastDate
+      ? events.filter(runningOn).sort(byTier)[0] ??
+        events.filter(startedBy).sort(newestFirst)[0]
+      : events.filter((e) => e.state === "in" && onDate(e)).sort(byTier)[0] ??
+        events.filter((e) => e.state === "in").sort(byTier)[0] ??
+        events.filter((e) => e.state === "pre").sort((a, b) => (a.startsAt ?? 0) - (b.startsAt ?? 0))[0] ??
+        events.filter((e) => e.state === "post").sort(newestFirst)[0];
+    if (!chosen) return EVENT_FETCH_EMPTY;
     // Lichess names read "GCT: Saint Louis Rapid & Blitz 2026 | Rapid" — the
     // segment after "|" duplicates what chessFormat/timeControl already say.
     const [name, ...rest] = chosen.name.split("|").map((s) => s.trim());
-    return {
+    // Has the round's first move actually been played? Lichess flips a tour to
+    // state "in" when its WINDOW opens, which can be hours before play starts —
+    // on 2026-08-10 at 09:51 ET the Sinquefield Cup read "in" while Round 1 was
+    // still a 13:30 start. Ask for a round video in that gap and YouTube's own
+    // search happily returns the organizer's SCHEDULED stream, so the button
+    // opened a countdown instead of chess (Jacob 8/10). No start time (older
+    // Lichess entries) is treated as started — the previous behaviour.
+    const hasStarted = chosen.startsAt == null || chosen.startsAt <= Date.now();
+    const state = chessEventState(chosen.state, chosen.endsAt);
+    const card: LeagueEventCard = {
       kind: "chess",
       title: name || chosen.name,
       subtitle: [chosen.location, rest.join(" · ")].filter(Boolean).join(" · ") || undefined,
-      state: chosen.state,
-      statusDetail: chosen.state === "in" ? "Live" : chosen.state === "post" ? "Final" : "Upcoming",
+      state,
+      statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : "Upcoming",
       date: new Date(chosen.startsAt ?? Date.now()).toISOString(),
       broadcasts: [],
       chessRound: chosen.round || undefined,
@@ -2306,12 +2809,29 @@ export async function fetchChessEvent(date?: string): Promise<LeagueEventCard | 
       chessTimeControl: chosen.timeControl || undefined,
       chessPlayers: chosen.players?.length ? chosen.players : undefined,
       chessTier: chosen.tier,
+      // The organizer's own broadcast of this round (see
+      // CHESS_ORGANIZER_CHANNELS) — the whole session end to end, because no
+      // chess body cuts a highlight package. Saint Louis DOES post short recaps
+      // ("Important Win for Fabi…", "Champion Praggnanandhaa…") but every one
+      // names the result in its title, which is the one thing this app cannot
+      // show. Undefined for any event without a verified organizer, and until
+      // the round has actually begun — EventCard hides the button when
+      // officialChannel is missing.
+      officialChannel: hasStarted
+        ? CHESS_ORGANIZER_CHANNELS.find((o) => o.rx.test(chosen.name))?.channel
+        : undefined,
+      // "Round" read as a mystery button (Jacob 8/10). Say what it opens: the
+      // full round, not a highlight reel.
+      officialLabel: "Full round",
+      highlightQuery: `${name || chosen.name}${chosen.round ? ` ${chosen.round}` : ""}`,
+      raceTokens: buildChessTokens(chosen.name),
       // Lichess's own board is the watch destination — it is live, free, and
       // (unlike a results page) shows the game rather than the outcome.
       eventUrl: chosen.url ?? chosen.website ?? undefined,
     };
+    return { card, failed: false };
   } catch {
-    return null;
+    return EVENT_FETCH_FAILED;
   }
 }
 
@@ -2338,8 +2858,11 @@ function esportsRating(g: EsportsApiGame): number | null {
   const loserGames = Math.min(a, h);
   // A Bo1 has no series shape at all — rate it mid rather than pretending.
   if (needed <= 1) return 55;
-  // 0 → sweep, needed-1 → full distance. Maps 40..95.
-  return Math.round(40 + (loserGames / (needed - 1)) * 55);
+  // 0 → sweep, needed-1 → full distance. Maps 40..95 for a well-formed tally.
+  // Clamp to 0..100 like every sibling rater (cricket/team/tennis): a malformed
+  // PandaScore row where loserGames >= needed (e.g. a "3-3" Bo5) would otherwise
+  // exceed 95 and top 100 (3/2 * 55 + 40 = 122), mis-sorting and mis-badging it.
+  return Math.round(Math.max(0, Math.min(100, 40 + (loserGames / (needed - 1)) * 55)));
 }
 
 export async function fetchEsportsGames(date?: string): Promise<Game[]> {
@@ -2392,7 +2915,6 @@ export async function fetchEsportsGames(date?: string): Promise<Game[]> {
         isPlayoff: g.tier === "s",
         playoffLabel: null,
         seriesStatus: null,
-        highlightUrl: null,
         recapUrl: null,
         // Twitch is where every tier-s/a match actually streams, free. Sent
         // through the shared per-sport fallback so the link stays in one place.
@@ -2410,19 +2932,51 @@ interface BoxingApiEvent {
   location: string | null; broadcasts: string[]; poster: string | null;
 }
 
-export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard | null> {
+// The live feed, with failure kept distinct from an empty calendar: `null`
+// events means the request errored or returned something we couldn't parse,
+// `[]` means boxing-data.com answered and has no cards.
+async function fetchBoxingApiEvents(): Promise<BoxingApiEvent[] | null> {
   try {
-    const [curated, res] = await Promise.all([
-      fetchCuratedBoxingEvent(date),
-      fetchWithRetry(`${getApiBase()}/api/boxing`),
-    ]);
-    if (!res.ok) return curated;
+    const res = await fetchWithRetry(`${getApiBase()}/api/boxing`);
+    if (!res.ok) return null;
     const { events } = (await res.json()) as { events: BoxingApiEvent[] };
-    if (!events?.length) return curated;
-    const target = date ? new Date(`${date}T12:00:00`).getTime() : Date.now();
+    return Array.isArray(events) ? events : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchBoxingEvent(date?: string): Promise<EventFetchResult> {
+  const [curated, events] = await Promise.all([
+    fetchCuratedBoxingEvent(date),
+    fetchBoxingApiEvents(),
+  ]);
+  // No card to show. Only call it a failure if a source actually broke —
+  // otherwise both feeds are healthy and the day is genuinely empty, and the
+  // column should say "No event" rather than cry wolf.
+  const nothing = (): EventFetchResult => ({
+    card: curated.card,
+    failed: !curated.card && (curated.failed || events === null),
+  });
+  if (events === null || !events.length) return nothing();
+  try {
+    const target = date ? fromYmd(date).getTime() : Date.now();
     const ts = (e: BoxingApiEvent) => new Date(e.date).getTime();
+    // The API behind /api/boxing is boxing-data.com's `/v2/events/schedule` —
+    // UPCOMING cards only, never a finished one. So the nearest-by-|date diff|
+    // sort below always had a FUTURE fight within reach and every past tab
+    // rendered a card that hadn't happened yet, in state "pre", with no replay.
+    // Same rule fetchLeagueEvent walks back for and fetchChessEvent applies to
+    // Lichess: on a past board date an event is only eligible if it had already
+    // taken place by then. Nothing left ⇒ fall through to the curated file,
+    // which is the only source here that carries finished cards at all.
+    const isPastDate = !!date && date < toYmd(getEtServiceDate());
+    const pool = isPastDate
+      ? events.filter((event) => ts(event) <= target + 24 * 60 * 60 * 1000)
+      : events;
+    if (!pool.length) return nothing();
     const exactDate = date
-      ? events.filter((event) => event.date.slice(0, 10).replace(/-/g, "") === date)
+      ? pool.filter((event) => event.date.slice(0, 10).replace(/-/g, "") === date)
       : [];
     // Prefer a card the user can actually WATCH. Nearest-by-date alone picks
     // badly here: the feed carries every sanctioned card worldwide, so on
@@ -2432,32 +2986,78 @@ export async function fetchBoxingEvent(date?: string): Promise<LeagueEventCard |
     // the boxing analogue of the chess `tier` filter, which the API gives us
     // for free but boxing-data.com does not.
     const watchable = (e: BoxingApiEvent) => (e.broadcasts?.length ? 0 : 1);
-    const chosen = [...(exactDate.length ? exactDate : events)].sort(
+    const chosen = [...(exactDate.length ? exactDate : pool)].sort(
       (a, b) =>
         watchable(a) - watchable(b) ||
         Math.abs(ts(a) - target) - Math.abs(ts(b) - target),
     )[0];
-    if (!exactDate.length && curated) return curated;
-    if (!chosen) return null;
+    if (!exactDate.length && curated.card) return curated;
+    if (!chosen) return nothing();
     const now = Date.now();
     const t = ts(chosen);
     // Boxing cards run ~4h from first bell. No live API state is available, so
     // derive it from the clock rather than claiming a status we cannot know.
     const state: "pre" | "in" | "post" =
       now < t ? "pre" : now < t + 4 * 60 * 60 * 1000 ? "in" : "post";
+    // Until now the ONLY boxing card that could ever show a highlight button was
+    // one hand-written into public/boxing-events.json — `officialChannel` is what
+    // gates the button (showBoxingBtn in EventCard) and the API branch never set
+    // it. That file holds a single entry, from Aug 1, so in practice a finished
+    // API card rendered with a permanently blank highlight row: no replay, and
+    // the oversized tile that blank row leaves behind (see the Liga MX note in
+    // the deploy memo — a dead channel reads as "the box is huge", not as a
+    // missing button). Derive the promoter's channel from the broadcasters
+    // instead; curation still wins when the file covers the date, because a
+    // hand-written query with both fighters' FULL names resolves better than
+    // surnames.
+    const promoter = boxingChannelFor(chosen.broadcasts);
+    const names = buildBoxingTokens(chosen.title);
     return {
-      kind: "boxing",
-      title: chosen.title,
-      subtitle: [chosen.venue, chosen.location].filter(Boolean).join(" · ") || undefined,
-      state,
-      statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : "Fight Night",
-      date: new Date(t).toISOString(),
-      broadcasts: chosen.broadcasts ?? [],
-      posterUrl: chosen.poster ?? undefined,
+      card: {
+        kind: "boxing",
+        title: chosen.title,
+        subtitle: [chosen.venue, chosen.location].filter(Boolean).join(" · ") || undefined,
+        state,
+        statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : "Fight Night",
+        date: new Date(t).toISOString(),
+        broadcasts: chosen.broadcasts ?? [],
+        posterUrl: chosen.poster ?? undefined,
+        officialChannel: promoter?.channel,
+        officialLabel: promoter?.label,
+        highlightQuery: boxingHighlightQuery(chosen.title),
+        raceTokens: names,
+      },
+      failed: false,
     };
   } catch {
-    return null;
+    // The feed answered but we couldn't make a card out of it — a bad payload,
+    // not an empty day.
+    return { card: curated.card, failed: !curated.card };
   }
+}
+
+// How far back a PAST board date looks for the most recent finished event.
+// Sized for the longest IN-SEASON gap on these calendars: F1's summer break is
+// 26 days (Hungary Jul 26 → Zandvoort Aug 21 in 2026). Deliberately not longer
+// — an out-of-season past date must still fall through to the upcoming event
+// rather than dredging up last season's finale.
+const EVENT_LOOKBACK_DAYS = 45;
+
+// …and how far FORWARD today/future looks for the next scheduled event, when
+// the undated fallback handed back a race that already ran (see the walk-
+// forward in fetchLeagueEvent). Same 45 days for the same reason: it clears
+// F1's 26-day summer break, and staying short means a truly finished season
+// finds nothing and keeps showing its finale rather than blanking the column.
+const EVENT_LOOKAHEAD_DAYS = 45;
+
+// YYYYMMDD ± days, in plain calendar arithmetic. Built and read back in UTC so
+// the host zone can never shift the result by a day; these are date keys for an
+// ESPN query, not instants.
+function shiftYmd(ymd: string, days: number): string {
+  const d = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)));
+  d.setUTCDate(d.getUTCDate() + days);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
 }
 
 async function fetchLeagueEvent(
@@ -2477,8 +3077,63 @@ async function fetchLeagueEvent(
     }
   };
 
-  const event: LeagueEvent | null = (date ? await load(date) : null) ?? await load();
+  // Every event in a YYYYMMDD-YYYYMMDD window. ESPN accepts a range on the
+  // scoreboard and returns the events in chronological order (verified
+  // 2026-08-10 against racing/f1 and mma/ufc).
+  const loadRange = async (from: string, to: string): Promise<LeagueEvent[]> => {
+    const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+    url.searchParams.set("dates", `${from}-${to}`);
+    try {
+      const res = await fetchWithRetry(url.toString());
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.events ?? []) as LeagueEvent[];
+    } catch {
+      return [];
+    }
+  };
+
+  let event: LeagueEvent | null = date ? await load(date) : null;
+  // A PAST board date must never surface an event that has not happened yet.
+  // The undated fallback below returns ESPN's CURRENT-OR-NEXT event, so during
+  // any calendar gap — F1's summer break, a UFC off-weekend — every past tab
+  // rendered the UPCOMING race/card in state "pre". The highlight button only
+  // renders on a finished tile (showRaceBtn in EventCard), so the last race's
+  // recap was unreachable from Yesterday or any earlier day, even though the
+  // reel exists. Walk BACK instead: the most recent event at or before the
+  // viewed day. This is the event-tile version of the isPastView rule the game
+  // columns already follow ("on a PAST tab … not surface a future game").
+  if (!event && date && date < toYmd(getEtServiceDate())) {
+    const past = await loadRange(shiftYmd(date, -EVENT_LOOKBACK_DAYS), date);
+    event = past.length ? past[past.length - 1] : null;
+  }
+  event = event ?? (await load());
   if (!event) return null;
+
+  // …and the mirror image on TODAY or a FUTURE tab. The undated fallback above
+  // is documented everywhere as ESPN's "current or next" event, and for F1 it
+  // is — but NOT for the US series: on 2026-08-10 the undated NASCAR and
+  // IndyCar scoreboards both returned SUNDAY'S FINISHED race (state "post")
+  // while F1 returned the Aug 21 Dutch GP (state "pre"). So today's board grew
+  // a finished race tile with its highlight button attached, on a day no race
+  // ran (Jacob 8/10). Walk FORWARD instead — the next scheduled event — which
+  // is what the F1 column was already showing and what "today" means here.
+  //
+  // Nothing ahead (the season is genuinely over) keeps the finished event: an
+  // offseason board showing the last race of the year is the pre-existing
+  // behaviour, and blanking the column outright would be the larger regression.
+  {
+    const todayYmd = toYmd(getEtServiceDate());
+    const boardYmd = date || todayYmd;
+    const evState = (event.status?.type?.state
+      ?? event.competitions?.[event.competitions.length - 1]?.status?.type?.state
+      ?? "pre") as "pre" | "in" | "post";
+    if (isStaleFinishedForBoard(boardYmd, todayYmd, etSlateYmd(event.date ?? ""), evState)) {
+      const ahead = await loadRange(boardYmd, shiftYmd(boardYmd, EVENT_LOOKAHEAD_DAYS));
+      const next = ahead.find((e) => etSlateYmd(e.date ?? "") >= boardYmd);
+      if (next) event = next;
+    }
+  }
   const comps: LeagueEventCompetition[] = event.competitions ?? [];
   const eventUrl: string | undefined = event.links?.find((l) => l?.href)?.href;
 
@@ -2490,28 +3145,54 @@ async function fetchLeagueEvent(
     const race = comps.find((c) => String(c?.type?.id) === "3") ?? comps[comps.length - 1] ?? null;
     const state = (race?.status?.type?.state ?? event.status?.type?.state ?? "pre") as "pre" | "in" | "post";
     // Location: F1 carries a `circuit`; the US series don't. NASCAR puts the
-    // track on competition.venue instead, and IndyCar supplies neither — it
-    // just renders without a subtitle rather than with a wrong one.
+    // track on competition.venue instead, and IndyCar supplies neither — see
+    // INDYCAR_TRACKS, which fills that in from the series' own schedule.
+    const mappedTrack = sport === "indycar"
+      ? indycarTrackSubtitle(event.name || event.shortName || "")
+      : undefined;
+    // Longest-first renderings of the venue line, so a narrow column drops the
+    // country and then the city rather than clipping the TRACK — see
+    // eventSubtitleVariants. subtitle stays the full string (variants[0]), so
+    // anything reading `subtitle` is unaffected.
+    let subtitleVariants: string[] = [];
     let subtitle: string | undefined;
     if (sport === "f1") {
       const circuit: LeagueEventCircuit = event.circuit ?? {};
-      const loc = [circuit.address?.city, circuit.address?.country].filter(Boolean).join(", ");
-      subtitle = [circuit.fullName, loc].filter(Boolean).join(" · ") || undefined;
+      subtitleVariants = eventSubtitleVariants(
+        circuit.fullName ?? "",
+        (circuit.address?.city ?? "").trim(),
+        (circuit.address?.country ?? "").trim(),
+      );
+      subtitle = subtitleVariants[0] || undefined;
+    } else if (mappedTrack) {
+      // INDYCAR_TRACKS is hand-written "<track> · <city, state>" — split on the
+      // separator it was built with rather than re-deriving it.
+      const [track, ...rest] = mappedTrack.split(" · ");
+      const [city, region] = (rest.join(" · ") || "").split(/,\s*/);
+      subtitleVariants = eventSubtitleVariants(track ?? "", city ?? "", region ?? "");
+      subtitle = subtitleVariants[0] || mappedTrack;
     } else {
       const venue: LeagueEventVenue = race?.venue ?? event.venue ?? {};
       // ESPN pads some track cities with a trailing space ("Newton ").
       const city = (venue.address?.city ?? "").trim();
       const region = (venue.address?.state || venue.address?.country || "").trim();
-      const loc = [city, region].filter(Boolean).join(", ");
-      subtitle = [venue.fullName, loc].filter(Boolean).join(" · ") || undefined;
+      subtitleVariants = eventSubtitleVariants(venue.fullName ?? "", city, region);
+      subtitle = subtitleVariants[0] || undefined;
     }
     const raceDate = race?.date ?? event.date;
     const year = new Date(raceDate).getFullYear() || new Date().getFullYear();
     const cleanName = (event.shortName || event.name || "Grand Prix").replace(/\bGP\b/i, "Grand Prix");
+    const fullTitle = event.name || event.shortName || "Grand Prix";
     return {
       kind: "f1",
-      title: event.name || event.shortName || "Grand Prix",
+      title: fullTitle,
+      // "Heineken Dutch Grand Prix" → "Heineken Dutch GP" → "Dutch GP"; the
+      // tile picks the longest that fits its one line. `title` is unchanged, so
+      // the highlight query, race tokens and aria-label all still use the full
+      // name — only what's PAINTED gets shortened.
+      titleVariants: eventTitleVariants(fullTitle, event.shortName, sport),
       subtitle,
+      subtitleVariants,
       state,
       statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Race",
       date: raceDate,
@@ -2766,8 +3447,15 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
         .slice(0, 10)
         .map(p => parseScore(p.score))
         .filter((n): n is number => n !== null);
-      // All non-numeric (e.g. field withdrew/cut) — leave rating null, no badge.
-      if (topScores.length > 0) {
+      // Need a real top-5 sample before rating. With <5 numeric scores the
+      // `topScores[4] ?? leader` fallbacks below collapse the spread to 0 →
+      // spreadScore 100 → a maximal "GREAT" badge on almost no data. That's the
+      // same opening-holes artifact the gate above guards against: e.g. an R1
+      // weather suspension where the leader is thru ≥6 (so the gate opens) but
+      // most of the field still shows "-"/"CUT"/"WD" (parseScore → null). Every
+      // normally-populated leaderboard has 10 numeric top-10 scores, so this is
+      // a no-op there; it only withholds the badge when the sample is too thin.
+      if (topScores.length >= 5) {
         const leader = topScores[0];
         // Spread between 1st and 5th
         const top5spread = Math.abs((topScores[4] ?? leader) - leader);
@@ -2971,7 +3659,7 @@ async function fetchNextGameDayRange(
       return "";
     }
   };
-  const chrono = (gs: Game[]) => [...gs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const chrono = (gs: Game[]) => [...gs].sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
   // allDays: every upcoming fixture in the window, chronological. Used for
   // NBA/NHL in the playoffs. We want exactly ONE series — the most imminent —
@@ -3207,7 +3895,13 @@ export async function fetchGames(
     const nhlIds = await nhlIdsPromise;
     for (const game of games) {
       if (game.streamUrl !== "https://www.espn.com/watch/") continue;
-      const nhlId = nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`);
+      // Try the raw ESPN abbreviations first (most teams' codes match NHL's),
+      // then the ESPN→NHL translation for the handful that diverge (TB→TBL, …).
+      // A matchup key is unique per date, so the fallback can only ADD a match,
+      // never replace a correct one — teams already resolving stay unchanged.
+      const nhlId =
+        nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`) ??
+        nhlIds.get(`${espnToNhlAbbrev(game.awayTeam.abbreviation)}@${espnToNhlAbbrev(game.homeTeam.abbreviation)}`);
       if (nhlId) game.streamUrl = `https://www.nhl.com/tv/${nhlId}`;
     }
   }
@@ -3697,6 +4391,13 @@ export async function fetchAllLeagues(
     // Resolve the active config for the viewed date instead.
     const activeConfig = configs.find((l) => isLeagueActive(l, viewDate));
     if (activeConfig) return activeConfig;
+    // A league inside its pre-season window is pinnable too — otherwise the
+    // switcher offers "Prem · starts Aug 21", the click writes the preference,
+    // and this resolver rejects it and silently auto-fills the slot with
+    // whatever was there before. (Same failure the NFL-preseason note above
+    // describes; the fix has to be here as well as in the options list.)
+    const upcomingConfig = configs.find((l) => isLeagueUpcoming(l, viewDate));
+    if (upcomingConfig) return upcomingConfig;
     // NBA is the deliberate offseason exception: it stays manually pinnable
     // for league news and the trade board, but the auto-picker above still
     // uses isLeagueActive() and therefore never forces an empty NBA column on
@@ -3715,11 +4416,9 @@ export async function fetchAllLeagues(
     // each set slot uses its override; each unset slot falls back to its position
     // default in auto.
     // Auto = the slot's position default, always (each unset slot falls back to
-    // its position default in auto). This can transiently put a league in two
-    // slots — e.g. World Cup pinned to the left column while the center slot's
-    // auto default is ALSO World Cup — which rendered two identical "World Cup"
-    // columns (Jacob 6/15). The dedupe-by-sport pass below removes that, so a
-    // league never appears in more than one column.
+    // its position default in auto). Explicit duplicates are intentional: the
+    // switcher greys an already-shown league but promises that selecting it adds
+    // a second column.
     const nextAutoForSlot = (slotIdx: number): LeagueConfig | null => auto[slotIdx] ?? null;
     // Each slot resolves to one of: explicit league (incl. "empty" → skip),
     // unset (null) → fall back to that slot's auto pick.
@@ -3731,44 +4430,20 @@ export async function fetchAllLeagues(
     // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
   } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
-    // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen league.
-    final = [...auto.slice(0, MAX_LEAGUES - 1), slot3Cfg];
+    // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen
+    // league. Slice at slotCount, NOT MAX_LEAGUES: `auto` holds up to slotCount
+    // configs, so on a wide (5-column) board MAX_LEAGUES-1 (2) kept only the
+    // first two auto columns and dropped slots 4-5 — the same shrink the dedupe
+    // backfill below already fixed by switching off MAX_LEAGUES. When slotCount
+    // is the default 3 this is byte-identical (slotCount-1 === MAX_LEAGUES-1).
+    final = [...auto.slice(0, slotCount - 1), slot3Cfg];
   } else {
     final = auto;
   }
 
-  // Never render the same league in two columns. The date nav is global, so two
-  // columns of the same league show identical games — always redundant. A league
-  // pinned to a non-default slot can collide with another slot's auto default
-  // (World Cup pinned left + center auto-defaulting to World Cup → two "World
-  // Cup" columns, Jacob 6/15). Dedupe by sport keeping the first (left-most)
-  // occurrence, so the pinned position wins and the board shrinks to the
-  // distinct leagues. Then BACKFILL each freed slot with the next distinct
-  // active league (by priority) so removing the duplicate doesn't shrink the
-  // board — the user keeps a full set of columns, just without the repeat
-  // (Jacob 6/15 #2: a deduped board collapsed to one column → "should show all").
-  const targetCount = final.length;
-  const seenSport = new Set<Sport>();
-  final = final.filter((cfg) => {
-    if (seenSport.has(cfg.sport)) return false;
-    seenSport.add(cfg.sport);
-    return true;
-  });
-  if (final.length < targetCount) {
-    // Draw the backfill pool at slotCount, NOT MAX_LEAGUES: on a wide (5-column)
-    // board pickAndAssignLeagues only builds a candidate pool up to `count`, so
-    // MAX_LEAGUES (3) yielded just the top-3 leagues — all already placed and in
-    // seenSport — leaving slots 4-5 un-backfillable. The board then rendered 4
-    // columns instead of 5 after a dedupe, the very shrink this block prevents.
-    const backfill = pickAndAssignLeagues(viewDate, slotCount).filter(
-      (l) => !seenSport.has(l.sport),
-    );
-    for (const l of backfill) {
-      if (final.length >= targetCount) break;
-      seenSport.add(l.sport);
-      final.push(l);
-    }
-  }
+  // Keep duplicate manual slots. Replacing one of them with an unrelated auto
+  // league made the grey "already shown" option misleading: the UI said a
+  // second column would be added, then rendered a different default instead.
 
   const fetchLeague = async (cfg: LeagueConfig): Promise<LeagueData | null> => {
     const label = effectiveLeagueLabel(cfg, viewDate);
@@ -3783,9 +4458,7 @@ export async function fetchAllLeagues(
       return { sport: cfg.sport, label, games: [], eventCard };
     }
     // Chess + boxing come from worker routes, not ESPN — see fetchChessEvent /
-    // fetchBoxingEvent. Poker reads the curated official major calendar. All
-    // return null on any failure, which drops the column
-    // rather than showing a broken one.
+    // fetchBoxingEvent. Poker reads the curated official major calendar.
     // Esports comes from PandaScore via the worker and produces real two-team
     // GAMES (not an event tile), so it returns through the normal games path.
     if (cfg.sport === "esports") {
@@ -3794,13 +4467,21 @@ export async function fetchAllLeagues(
       return { sport: cfg.sport, label, games };
     }
     if (cfg.sport === "chess" || cfg.sport === "boxing" || cfg.sport === "poker") {
-      const eventCard = cfg.sport === "chess"
+      const { card, failed } = cfg.sport === "chess"
         ? await fetchChessEvent(date)
         : cfg.sport === "boxing"
           ? await fetchBoxingEvent(date)
           : await fetchPokerEvent(date);
-      if (!eventCard) return null;
-      return { sport: cfg.sport, label, games: [], eventCard };
+      // A day with no card still renders the column. These three are
+      // excludeFromAuto, so a column only exists here because the user pinned
+      // it or picked it in the switcher — dropping it on a quiet date made the
+      // choice look like it never registered (Jacob 8/10: "can't even select
+      // the chess column"). Returning null here also silently re-flowed every
+      // column to its left. With no eventCard, LeagueColumn falls through to
+      // the same empty state every other league shows — or, when `failed` says
+      // the feed itself broke rather than the calendar being quiet, to the
+      // retry state instead of a "No event" the data doesn't support.
+      return { sport: cfg.sport, label, games: [], eventCard: card, fetchFailed: failed };
     }
     const { games, failed } = await fetchGames(cfg.sport, date);
     // Standings rank (#N next to the team name). Kicked off here so it overlaps
@@ -4139,7 +4820,7 @@ export async function fetchTeamSchedule(
       }
     })
   );
-  all.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  all.sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   // Fill missing records (mostly future games) from standings lookup.
   const standings = await standingsPromise;
   if (standings.size > 0) {
