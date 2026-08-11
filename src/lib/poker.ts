@@ -76,7 +76,12 @@ function dateMs(ymd: string): number {
 function displayWindow(start: string, end: string): string {
   const fmt = (ymd: string, includeMonth = true) => {
     const d = new Date(`${ymd}T12:00:00Z`);
-    return new Intl.DateTimeFormat("en-US", includeMonth ? { month: "short", day: "numeric" } : { day: "numeric" }).format(d);
+    // Format in UTC — the instant is deliberately anchored to noon UTC (like
+    // dateMs above and boxing.ts's displayDate), so a bare local-zone format
+    // reads the wrong calendar day at UTC+12 and further east: noon UTC lands
+    // after local midnight there, printing "Aug 17–30" for an Aug 16–29 series.
+    // Pin the zone so the printed day is the ymd itself in every zone.
+    return new Intl.DateTimeFormat("en-US", includeMonth ? { month: "short", day: "numeric", timeZone: "UTC" } : { day: "numeric", timeZone: "UTC" }).format(d);
   };
   if (start === end) return fmt(start);
   const sameMonth = start.slice(0, 7) === end.slice(0, 7);
