@@ -531,3 +531,17 @@ _src: 2026-08-03 session_
 **Needs-Jacob / open:**
 - Eyeball it in Safari (Cmd+Opt+R) and relaunch the iOS app to pick up the new bundle.
 - Gallery resolution depends on safereddit's post pages; when every mirror refuses, the post silently falls back to thumbnail-only (no error, just no gallery). If galleries look sparse later, that's why.
+
+### 🏈 In-app NFL highlight playback is closed — don't reopen it (measured 2026-08-10)
+
+⛔ **Do not re-attempt "route NFL to team-club YouTube channels."** This has now been picked up three times. It is dead, and here is the measurement so a fourth attempt isn't needed:
+
+- **Clubs do carry the games.** 9 of 16 Week 15 games resolved a correct-week club package with a clean, non-spoiler title. The reason it looked dead in earlier passes is the *date-keyed* query: 10 of 12 club lookups missed on date and resolved on week. So "clubs don't post highlights" was a query bug, not a fact.
+- **But club game footage is embed-blocked too — error 150, same as the league's.** Verified on Giants, Bears, Ravens, and Chargers highlight uploads. In the same session a DAZN Boxing control played fine, and so did two Bears *press conferences*. The block follows **game footage league-wide**, not the channel.
+- This also corrects the earlier "Bears and Chiefs embed fine" note — those were **social uploads**, not game highlights.
+- **Therefore slot 2 → clubs buys nothing:** it swaps one hand-off-to-YouTube button for another, and adds a live scrape on every finished NFL card. The wiring was written, measured, and reverted deliberately.
+- **What was kept:** `src/lib/nflTeamChannels.ts` (32 verified channel names) + `npm run nflchannels:check`. Useful the day the league re-enables embeds, and useful for non-footage clips.
+
+⚠️ **The channel list is trap-laden — 8 of the obvious handles are wrong.** Six are empty squatted channels (`@clevelandbrowns`, `@denverbroncos`, `@greenbaypackers`, `@indianapoliscolts`, `@minnesotavikings`, `@NewEnglandPatriots`); `@Cardinals` is the **MLB** Cardinals; `@Lions` is a **Japanese baseball team**. The checker verifies by **RSS, not search** — a search-based check flagged 9 *correct* names as dead, so don't "simplify" it back to search.
+
+**Unblocks only if:** the NFL re-enables embedding on league or club game footage. Nothing on our side can route around it.
