@@ -378,6 +378,12 @@ function kickoffMessage(k: LeagueKickoff): string {
   return `${name} kicks off ${formatKickoffLong(k.kickoff)} — spoiler-free from day one.`;
 }
 
+// Seeds the message when the feedback modal is opened from Settings' "Request
+// a league" link. A prefilled first line is what makes these arrive sortable —
+// the 2026-08-03 league request landed as an anonymous bare sentence and there
+// was nothing in it to file against.
+const FEEDBACK_LEAGUE_PREFILL = "League request: ";
+
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
@@ -489,6 +495,10 @@ export default function HomeContent({
   // there's no emptied slot to fill (Jacob 6/11).
   const [wcReplaceOpen, setWcReplaceOpen] = useState(false);
   const [kickoffReplaceOpen, setKickoffReplaceOpen] = useState(false);
+  // Bumped by Settings' "Request a league" link to pop the footer feedback
+  // modal. A counter rather than a boolean so FeedbackBox keeps owning its own
+  // open/closed state — see the openSignal note there.
+  const [feedbackSignal, setFeedbackSignal] = useState(0);
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
@@ -3579,7 +3589,7 @@ export default function HomeContent({
           </div>
         </details>
           <a href="/faq" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>FAQ</a>
-          <FeedbackBox />
+          <FeedbackBox openSignal={feedbackSignal} prefill={FEEDBACK_LEAGUE_PREFILL} />
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -3882,6 +3892,7 @@ export default function HomeContent({
         updatePrefs={updatePrefs}
         resolvedTheme={resolvedTheme}
         leagueOptions={settingsLeagueOptions}
+        onRequestLeague={() => setFeedbackSignal((n) => n + 1)}
         teamLeagueOptions={teamLeagueOptions}
         displayedLeagues={sortedLeagues}
         knownTeams={knownTeams}
