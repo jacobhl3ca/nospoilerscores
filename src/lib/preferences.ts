@@ -266,17 +266,18 @@ export interface Preferences {
   // YouTube's title strip (top). Defaults ON (undefined ⇒ true ⇒ covered) so
   // the player stays spoiler-safe out of the box; the user opts out in Settings.
   maskVideoTitle?: boolean;
-  // Opt-in (default OFF / undefined ⇒ false): show YouTube's NATIVE control bar
-  // (controls:1) on highlight clips instead of the stripped spoiler-safe player.
-  // Gives back YT's own progress/seek bar + time — a spoiler the user accepts,
-  // handy in fullscreen. When on, the bottom spoiler mask steps aside.
-  // YouTube's OWN control bar instead of the spoiler-safe one. Default TRUE as
-  // of 2026-08-09 (Jacob: "our player is good but a little overkill and not
-  // worth the trade off of usage"). The safe player still exists behind this
-  // toggle; what it buys — a blank seek track, no elapsed/duration readout — is
-  // real, but it costs the familiarity of the player everyone already knows,
-  // and its click-catcher was the thing swallowing the first tap. The headline
-  // spoiler mask over YouTube's title bar stays on in BOTH modes.
+  // Default ON (undefined ⇒ true, matching the `?? true` at every read site —
+  // HomeContent, SettingsPanel — and the `youtubeNativeControls: true` default
+  // below): show YouTube's NATIVE control bar (controls:1) on highlight clips
+  // instead of the stripped spoiler-safe player. Gives back YT's own progress/
+  // seek bar + time — a spoiler the user accepts, handy in fullscreen. When on,
+  // the bottom spoiler mask steps aside. Default TRUE as of 2026-08-09 (Jacob:
+  // "our player is good but a little overkill and not worth the trade off of
+  // usage"). The safe player still exists behind this toggle; what it buys — a
+  // blank seek track, no elapsed/duration readout — is real, but it costs the
+  // familiarity of the player everyone already knows, and its click-catcher was
+  // the thing swallowing the first tap. The headline spoiler mask over
+  // YouTube's title bar stays on in BOTH modes.
   youtubeNativeControls?: boolean;
   // Highlight-player seek control: the progress bar + the 10% jump buttons
   // ("both", default), just the bar, or just the jumps. The bar is custom and
