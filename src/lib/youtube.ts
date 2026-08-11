@@ -238,13 +238,42 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
 //
 // Deleting a name here restores the normal try-then-fall-back path, which is
 // all it takes if a rights holder ever turns embedding back on.
-const EMBED_BLOCKED_CHANNELS = new Set(["FORMULA 1"]);
+//
+// NFL added 2026-08-10 by the same measurement, run through scripts/check-
+// embeddable.mjs: four separate NFL uploads all returned error 150, while ESPN,
+// MLB and DAZN Boxing clips played in the very same headless session — so this
+// is the channel's own setting, not a bot or geo artifact. Worth stating
+// plainly because the last NFL playback complaint was NOT this: the "league
+// blocked embedded playback" card Jacob hit on 8/9 was a false positive from
+// the autoplay watchdog (see VideoModal's onReady note). This one is real, and
+// there is no second source to fall back to — ESPN's NFL scoreboard ships
+// `highlights: []` on every competition, so the league's own channel is the
+// only place the clip exists.
+const EMBED_BLOCKED_CHANNELS = new Set(["FORMULA 1", "NFL"]);
 
 // True when the FIRST channel a highlight is gated to refuses embeds. The lead
 // channel is the only one guaranteed to hold the clip (the rest of the chain is
 // opportunistic), so a blocked lead means the attempt is already lost.
 export function leadChannelBlocksEmbeds(channels: string[]): boolean {
   return channels.length > 0 && EMBED_BLOCKED_CHANNELS.has(channels[0]);
+}
+
+// Channels whose clip title bar must stay masked no matter what the spoiler
+// filter says. The mask is normally lifted once SPOILER_RX clears the real
+// YouTube title, which is right for a team sport: "Mets vs Braves | Game
+// Highlights" is the house style and carries nothing.
+//
+// Combat sports are not like that. A fight has exactly one fact — who finished
+// whom — and the channels title with it every time, in language that keeps
+// mutating (stopped, KO'd, def., retains, starched, and whatever comes next).
+// Every miss is a full spoiler on the marquee bout, and the filter has already
+// been caught out here more than once (Jacob 8/10). So for these channels the
+// answer isn't another keyword: it's to stop asking the question. The cost is
+// one covered strip on clips that would have been safe to show.
+const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "DAZN Boxing"]);
+
+export function channelAlwaysMasksTitle(channels: string[]): boolean {
+  return channels.some((c) => TITLE_ALWAYS_MASKED_CHANNELS.has(c));
 }
 
 export function getYouTubeSearchUrl(
