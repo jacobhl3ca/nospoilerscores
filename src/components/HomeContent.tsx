@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
-import { LeagueData, Sport, Game } from "@/lib/types";
+import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
@@ -10,6 +10,7 @@ import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAler
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
+import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
@@ -370,7 +371,7 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
 // Premier League is the case that prompted this — a World Cup summer pushed
 // kickoff a week later than usual, so even regular viewers have the wrong date.
 function kickoffMessage(k: LeagueKickoff): string {
-  const name = k.config.label === "EPL" ? "The Premier League" : k.config.label;
+  const name = k.config.label === "Premier League" ? "The Premier League" : k.config.label;
   if (k.phase === "underway") return `${name} is underway — every match, spoiler-free.`;
   if (k.phase === "today" || k.daysUntil === 0) return `${name} kicks off today — spoiler-free from the first whistle.`;
   if (k.daysUntil === 1) return `${name} kicks off tomorrow — spoiler-free from day one.`;
@@ -491,6 +492,10 @@ export default function HomeContent({
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
+  // The same, for the EVENT tiles (races, UFC bouts, boxing, chess, poker).
+  // Separate state because an event tile is not a Game; `fight` is set only
+  // when one bout of a UFC card was tapped rather than the card as a whole.
+  const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string } | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
@@ -3134,6 +3139,7 @@ export default function HomeContent({
               onPlayHighlight: openVideoModal,
               onPlayEmbed: openEmbedModal,
               onShowDetails: (g: Game) => setDetailGame(g),
+              onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
               selectedDate,
               onRetry: () => doRefreshRef.current(),
@@ -3153,7 +3159,6 @@ export default function HomeContent({
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
               autoSport: autoSlotSports[idx],
-              showSwapChevron: !prefs.hideLeagueChevrons,
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
             });
             // Slot fetched-league queue: fetchAllLeagues skipped empty slots,
@@ -3848,6 +3853,17 @@ export default function HomeContent({
           onPlayHighlight={openVideoModal}
           onPlayEmbed={openEmbedModal}
           onShowGroup={(groupName) => { setGroupsHighlight(groupName); setDetailGame(null); setGroupsOpen(true); }}
+        />
+      )}
+
+      {/* Event tiles get the same tap-for-details affordance the score cards
+          have. `fight` is set when a single UFC bout card was tapped. */}
+      {detailEvent && (
+        <EventDetailModal
+          event={detailEvent.event}
+          fight={detailEvent.fight}
+          leagueLabel={detailEvent.leagueLabel}
+          onClose={() => setDetailEvent(null)}
         />
       )}
 

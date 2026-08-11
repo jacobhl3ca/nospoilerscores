@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
 import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
-import { openExternal } from "@/lib/openExternal";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
 // bout). Never shows results (finishing order / fight outcome). Highlights
@@ -404,7 +403,7 @@ function FighterRow({ f, compact, nameTier, showRecord }: { f: FightBout["red"];
 }
 
 function FightCard({
-  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate, hideMeta,
+  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate, hideMeta, onShowDetails, defaultPlayLabel,
 }: {
   fight: FightBout;
   label?: string;
@@ -428,14 +427,37 @@ function FightCard({
   showRecords: boolean;
   selectedDate?: string;
   hideMeta: boolean;
+  // Opens the bout's detail sheet — the affordance every SCORE card has had
+  // and no event card did (Jacob 8/11: "nothing happens when i click the fight
+  // card"). Absent = inert, so a board that doesn't pass a handler is
+  // unchanged rather than clickable-but-dead.
+  onShowDetails?: () => void;
+  // What the play button says BEFORE a source is resolved. See the note at the
+  // call site: it's the event's own broadcaster, not a guess at the channel.
+  defaultPlayLabel: string;
 }) {
   const isLive = fight.state === "in";
   const isPost = fight.state === "post";
-  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(fight.date, selectedDate) || fight.statusDetail;
+  // "Live" is a WORD in the narrowest slot on the card, and the dot beside it
+  // already carries the meaning — so on a 3-up mobile board the word was
+  // spending ~24px to say what the green dot says for free, and the fighter
+  // names paid for it (Jacob 8/11: "maybe just a green dot instead of 'Live'").
+  // The dot is decorative, so the state stays reachable to assistive tech
+  // through the sr-only text below.
+  const status = isPost ? "Final" : isLive ? "" : whenLabel(fight.date, selectedDate) || fight.statusDetail;
+  const clickable = !!onShowDetails;
   return (
-    <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    <div className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+      onClick={onShowDetails}
+      // Guard on e.target === e.currentTarget, as GameCard's card-level key
+      // handler does: without it, Space/Enter on the nested play button would
+      // ALSO pop the detail sheet on top of the video the user just started.
+      onKeyDown={clickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(); } } : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${fight.red.name} vs ${fight.blue.name} — event details` : undefined}>
       {/* Status bar — the game cards' meta row verbatim (GameCard ~640):
           game-meta-row + text-xs fonts (10px on tight boards via CSS), flex-wrap
           + gap-x-1, shrink-0 time, ml-auto broadcast. The broadcast is ALWAYS
@@ -452,6 +474,7 @@ function FightCard({
       {!hideMeta && <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
+          {isLive && <span className="sr-only">Live</span>}
           {status}
         </span>
         {label && showLabel ? (
@@ -483,11 +506,15 @@ function FightCard({
       {isPost && source !== null && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label reports the SOURCE once resolved — "Paramount+" / "UFC" /
-              "ESPN MMA" once the rights-holder clip played in-app. Until then
-              it's the generic "UFC" (we don't know yet, and claiming a source
-              we haven't verified would be the lie the strict gate exists to
-              prevent). It can no longer read "Search" — that path is gone. */}
-          <PlayBtn label={source?.label ?? "UFC"} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
+              "ESPN MMA" once the rights-holder clip played in-app. Before that
+              it reports the event's OWN broadcaster (defaultPlayLabel), which
+              is ESPN's field, not a guess at which channel will win the chain —
+              so the strict gate's "never claim an unverified source" rule still
+              holds. The old fallback was a bare "UFC" that flipped to
+              "Paramount+" the moment you pressed it, which read as the label
+              being wrong until you clicked (Jacob 8/11). It can no longer read
+              "Search" — that path is gone. */}
+          <PlayBtn label={source?.label ?? defaultPlayLabel} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
         </div>
       )}
     </div>
@@ -497,6 +524,7 @@ function FightCard({
 export default function EventCard({
   event,
   onPlayHighlight,
+  onShowDetails,
   namesCompact,
   selectedDate,
   isPastDate,
@@ -504,6 +532,10 @@ export default function EventCard({
   event: LeagueEventCard;
   leagueLabel?: string;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  // Opens the event's detail sheet (EventDetailModal). `fight` is set when a
+  // single UFC bout card was tapped, so the sheet can lead with that bout.
+  // Absent = the tiles stay inert, as they were before.
+  onShowDetails?: (event: LeagueEventCard, fight?: FightBout) => void;
   // The board-level "game columns are showing abbreviated team names" signal
   // (HomeContent folds it from every game column's live useAbbreviations state).
   namesCompact?: boolean;
@@ -795,6 +827,12 @@ export default function EventCard({
             showRecords={nameFit.records}
             selectedDate={selectedDate}
             hideMeta={historicalPost(f.state, f.date)}
+            onShowDetails={onShowDetails ? () => onShowDetails(event, f) : undefined}
+            // ESPN's own broadcaster for the card ("Paramount+"), so the button
+            // names a real, verified source before the channel chain has run.
+            // Falls back to the league token when the feed carries no
+            // broadcast — never to a channel we haven't resolved.
+            defaultPlayLabel={event.broadcasts[0] || "UFC"}
           />
         ))}
       </div>
@@ -818,47 +856,40 @@ export default function EventCard({
     : [event.subtitle || " "];
   const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : event.kind === "poker" ? "♠️" : "🏁";
   // Spoken name for the sport-type glyph, announced via role="img"/aria-label on
-  // a NON-clickable tile (boxing has no detail page; a finished race/chess/poker
-  // event drops its link), where the tile root carries no aria-label and the
+  // a NON-clickable tile, where the tile root carries no aria-label and the
   // emoji is otherwise the only cue to the event type. Mirrors `glyph`'s
   // boxing/chess/poker/race branches so poker reads "Poker", not "Race".
+  // (Every tile is clickable now that the detail sheet exists, so this is a
+  // belt-and-braces path — it still fires if a caller omits onShowDetails.)
   const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : event.kind === "poker" ? "Poker" : "Race";
-  // What the tile body links to, and what to call it. Chess points at the
-  // Lichess broadcast (a live BOARD, not a results table); boxing opens the
-  // DAZN Boxing fixture/preview clip on YouTube (boxing.ts sets eventUrl to a
-  // www.youtube.com watch URL), so it needs its own noun — the fall-through
-  // "Race details on ESPN" was wrong on both counts (not a race, not ESPN) and,
-  // since a pre/live boxing tile IS clickable, it leaked into the tile's
-  // aria-label and tooltip. Mirrors glyphLabel's boxing branch above.
-  const detailNoun = event.kind === "chess"
-    ? "Follow live on Lichess"
-    : event.kind === "poker"
-      ? "Official tournament details"
-      : event.kind === "boxing"
-        ? "Fight preview on YouTube"
-        : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   const hideHistoricalMeta = historicalPost(event.state, event.date);
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
   // whenLabel ("Sat 9:00AM" for another day, bare "9:00AM" when the race is on
   // the viewed date — selectedDate — same rule as the game cards' time).
+  // "Live" gives way to the green dot for the same reason it does on a fight
+  // card — the word is the widest thing in the tightest slot, and the dot
+  // already says it. The state stays announced via the sr-only text below.
   const status = isPost
     ? "Final"
     : isLive
-      ? "Live"
+      ? ""
       : event.kind === "poker" && event.scheduleLabel
         ? event.scheduleLabel
         : whenLabel(event.date, selectedDate) || event.statusDetail;
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
-  // Clicking the tile body opens the ESPN race page — the game cards' "click
-  // for more details" affordance (there's no F1 GameDetailModal; ESPN's race
-  // hub is the detail view). Pre/live ONLY, mirroring GameCard's rule that a
-  // finished game never links to ESPN (the page shows the finishing order — a
-  // result spoiler). After the race the highlight button is the affordance.
+  // Clicking the tile body opens the detail SHEET, not ESPN. It used to open
+  // ESPN's race page directly, which meant only a pre/live race with an
+  // eventUrl responded to a tap at all — a finished WSOP, chess or boxing tile
+  // was dead, and its clipped title had nowhere to be read in full (Jacob
+  // 8/11: "wsop card cant click", "f1 cant click card"). The sheet answers
+  // every tile, and keeps the spoiler rule by carrying the ESPN button only
+  // while the event is pre/live (see showExternal in EventDetailModal) — a
+  // finished race's ESPN page still prints the finishing order.
   // PlayBtn stopPropagations so highlights don't also fire this.
-  const clickable = !!event.eventUrl && !isPost;
-  const openDetails = () => { if (event.eventUrl) openExternal(event.eventUrl); };
+  const clickable = !!onShowDetails;
+  const openDetails = () => { onShowDetails?.(event); };
   // Which (if any) highlight button this finished tile ends up showing. Each is
   // its own strict lookup, and a tile renders at most one of them — a miss adds
   // nothing, so the tile keeps its natural height rather than a blank band.
@@ -875,8 +906,8 @@ export default function EventCard({
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(); } } : undefined}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `${event.title} — ${detailNoun}` : undefined}
-      title={clickable ? detailNoun : undefined}>
+      aria-label={clickable ? `${event.title} — event details` : undefined}
+      title={clickable ? event.title : undefined}>
       {/* Meta row — game-meta-row like FightCard/GameCard, so an F1 tile is the
           SAME height as an MLB card: status/time left, broadcast right (dropped
           when the column is too narrow, same metaCompact rule as UFC). An
