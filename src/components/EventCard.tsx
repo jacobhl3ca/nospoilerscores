@@ -5,7 +5,6 @@ import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
 import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
 import { openExternal } from "@/lib/openExternal";
-import HighlightRowPlaceholder from "@/components/HighlightRowPlaceholder";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
 // bout). Never shows results (finishing order / fight outcome). Highlights
@@ -491,10 +490,6 @@ function FightCard({
           <PlayBtn label={source?.label ?? "UFC"} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
         </div>
       )}
-      {/* Bout resolved to nothing — keep the row's height so a card with no
-          clip doesn't sit short beside the bouts on the same fight card that
-          did resolve. Same rule as the single-event tile below. */}
-      {isPost && source === null && <HighlightRowPlaceholder />}
     </div>
   );
 }
@@ -864,10 +859,9 @@ export default function EventCard({
   // PlayBtn stopPropagations so highlights don't also fire this.
   const clickable = !!event.eventUrl && !isPost;
   const openDetails = () => { if (event.eventUrl) openExternal(event.eventUrl); };
-  // Which (if any) highlight button this finished tile ends up showing. Hoisted
-  // out of the JSX so the placeholder below can ask "did none of them render?"
-  // without restating all three conditions — the version that restated them is
-  // exactly how a fourth kind of tile would end up double-spaced.
+  // Which (if any) highlight button this finished tile ends up showing. Each is
+  // its own strict lookup, and a tile renders at most one of them — a miss adds
+  // nothing, so the tile keeps its natural height rather than a blank band.
   const showRaceBtn = isPost && isRace && !!event.officialChannel && raceSource !== null;
   const showPokerBtn = isPost && event.kind === "poker" && !!event.officialChannel && pokerSource !== null;
   const showBoxingBtn = isPost && event.kind === "boxing" && !!event.officialChannel && boxingSource !== null;
@@ -998,11 +992,6 @@ export default function EventCard({
           />
         </div>
       )}
-      {/* No button on a FINISHED tile — a chess event with no mapped organizer,
-          or a race/poker/boxing/chess event whose strict lookup came up empty.
-          Reserve the row anyway so the tile stays the same height as the ones
-          that did resolve, and as the game cards in the next column over. */}
-      {isPost && !showRaceBtn && !showPokerBtn && !showBoxingBtn && !showChessBtn && <HighlightRowPlaceholder />}
     </div>
   );
 }
