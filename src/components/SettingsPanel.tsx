@@ -867,14 +867,23 @@ export default function SettingsPanel({
           {/* Default View */}
           <Section title="Default view">
             <Field label="Landing date" hint="What day to show when you open the app">
+              {/* Fall back to "yesterday", the documented fresh-install default
+                  (see `defaults` in preferences.ts, moved off "smart" on
+                  2026-08-09), not "smart". loadPreferences() always merges that
+                  default in, so `prefs.defaultDateMode` is normally set and this
+                  fallback rarely fires — but when it does (a partial prefs blob),
+                  a stale "smart" fallback made the radio highlight "Automatic"
+                  and reveal the cutoff-hour field below, misrepresenting a board
+                  the app actually renders as "yesterday". Matches the reset value
+                  in this file's clearAll and the default in preferences.ts. */}
               <RadioGroup
                 label="Landing date"
-                value={prefs.defaultDateMode ?? "smart"}
+                value={prefs.defaultDateMode ?? "yesterday"}
                 options={DATE_MODE_OPTIONS}
                 onChange={(v) => updatePrefs({ defaultDateMode: v })}
               />
             </Field>
-            {(prefs.defaultDateMode ?? "smart") === "smart" && (
+            {(prefs.defaultDateMode ?? "yesterday") === "smart" && (
             <Field label="Automatic switch time" hint="Hour (your local time) when the landing date flips from yesterday to today">
                 <select
                   value={prefs.smartCutoffHour ?? 13}
