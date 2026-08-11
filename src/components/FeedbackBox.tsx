@@ -159,6 +159,12 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
+        // Opens the centered role="dialog" feedback form below, so declare
+        // aria-haspopup="dialog" alongside aria-expanded — the same pairing
+        // every other dialog-opener in the app uses (GameCard, HomeContent,
+        // NewsColumn…). Without it a screen reader announces this as a plain
+        // expandable button rather than one that summons a dialog.
+        aria-haspopup="dialog"
         aria-expanded="false"
         className="underline underline-offset-2 cursor-pointer hover:opacity-80"
         style={{ color: "var(--text-muted)" }}
@@ -199,6 +205,10 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
           <button
             type="button"
             onClick={close}
+            // Matches the collapsed trigger: this button controls the open
+            // role="dialog" form (aria-controls below), so it carries the same
+            // aria-haspopup="dialog" the app's other dialog-openers do.
+            aria-haspopup="dialog"
             aria-expanded="true"
             aria-controls="hs-feedback-form"
             className="underline underline-offset-2 cursor-pointer hover:opacity-80"
