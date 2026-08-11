@@ -2320,9 +2320,25 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b.startsWith("tele")) return "https://www.telemundo.com/deportes";
   if (b === "peacock") return "https://www.peacocktv.com/";
   // Plain "CBS" = the broadcast network → CBS's own live-TV stream. "CBSSN" =
-  // CBS Sports Network (the cable channel) → the CBS Sports live page.
+  // CBS Sports Network (the cable channel) → the CBS Sports live page. The
+  // includes() lines are the safety net: ESPN writes the cable channel as
+  // "CBSSN" on NWSL but spells it "CBS Sports Network" elsewhere, and an
+  // exact-match-only table sends a real CBS airing to the league's generic
+  // watch page — a chip that names a network and then doesn't go there.
   if (b === "cbs") return "https://www.cbs.com/live-tv/";
-  if (b === "cbssn") return "https://www.cbssports.com/watch/live";
+  if (b === "cbssn" || b.includes("cbs sports")) return "https://www.cbssports.com/watch/live";
+  if (b.includes("cbs")) return "https://www.cbs.com/live-tv/";
+  // NWSL's other three carriers. Between them ION, NWSL+ and Victory+ hold 31
+  // of the league's 54 matches in a six-week sample (2026-07-01 → 08-12, live
+  // ESPN scoreboard) — a clear majority of the season, all of it previously
+  // falling through to the generic league landing. All three verified 200 with
+  // a browser UA on 2026-08-11. NWSL+ IS nwslsoccer.com's own service, so it
+  // resolves to the same place the fallback would; it is listed anyway so the
+  // match is deliberate rather than a coincidence that a later edit could break.
+  if (b === "ion" || b === "ion television") return "https://www.iontelevision.com/";
+  if (b === "ion plus" || b === "ion+") return "https://ionplustv.com/";
+  if (b === "nwsl+" || b === "nwsl plus") return "https://www.nwslsoccer.com/watch";
+  if (b === "victory+" || b === "victory plus") return "https://victoryplus.com/";
   // Paramount+ broadcasts (rare; carries some CBS Sports content) → Paramount+
   if (b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
   // Amazon Prime Video — fall back to the Prime sports hub. Sport-specific

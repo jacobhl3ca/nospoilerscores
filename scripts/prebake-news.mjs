@@ -2374,7 +2374,18 @@ const HL_LEAGUES = [
   { sport: "uel",   path: "/soccer/uefa.europa/scoreboard",                   channel: "CBS Sports Golazo" },
   { sport: "seriea",     path: "/soccer/ita.1/scoreboard",                    channel: "CBS Sports Golazo" },
   { sport: "bundesliga", path: "/soccer/ger.1/scoreboard",                    channel: "Bundesliga" },
-  { sport: "ligamx",     path: "/soccer/mex.1/scoreboard",                    channel: "TUDN México" },
+  // ⚠️ "TUDN USA", NOT "TUDN México" — the third and last copy of this string.
+  // src/lib/youtube.ts and check-highlight-fallbacks.mjs were both corrected on
+  // 2026-08-10; this one was missed, so Liga MX was the one league in this list
+  // that could never bake: the prebaker asked a channel that has no per-match
+  // recap, wrote nothing, and getChannelVerifiedBakedId would have rejected the
+  // entry anyway for naming a channel the client does not expect. Every Liga MX
+  // card therefore fell through to a LIVE strict lookup — which is the "Liga MX
+  // videos load slowly" Jacob reported on 8/11. Re-measured against the live
+  // worker 2026-08-11, spaced to dodge the burst limiter: TUDN USA 4/4
+  // (Necaxa/Toluca, Santos/América, Pachuca/León, Monterrey/Atlas), TUDN México
+  // 0/4. Change all three copies together or the monitor validates the bug.
+  { sport: "ligamx",     path: "/soccer/mex.1/scoreboard",                    channel: "TUDN USA" },
   { sport: "nwsl",       path: "/soccer/usa.nwsl/scoreboard",                 channel: "National Women's Soccer League", secondaryChannel: "CBS Sports W Golazo" },
   { sport: "efl",        path: "/soccer/eng.2/scoreboard",                    channel: "EFL" },
   { sport: "libertadores", path: "/soccer/conmebol.libertadores/scoreboard",  channel: "CONMEBOL Libertadores" },
