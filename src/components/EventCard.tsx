@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
 import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
@@ -12,6 +12,129 @@ import HighlightRowPlaceholder from "@/components/HighlightRowPlaceholder";
 // surface once an event is over and play in the masked in-app player; if a
 // rights-holder blocks embedding (e.g. Formula One Management), the modal
 // falls back to its "Watch on YouTube" link.
+
+// ── One line of tile text that must not get cut off ─────────────────────────
+//
+// The single-event tile hands its title a whole line and puts nothing else on
+// it, so when the title is too long there is nothing to trade away and it just
+// clipped — "Heineken Dutch Grand …" over "Circuit Park Zandvoort · Zan…"
+// (Jacob 8/10). On a race tile the clipped tail IS the identity of the race,
+// which makes truncation the worst available outcome rather than a safe net.
+//
+// Same ladder the fighter names and the golf leaderboard use, in this order:
+//   1. every VARIANT (longest first) at the line's natural font size,
+//   2. then step the font down 1px at a time, retrying the variants at each
+//      size, down to `floorPx`,
+//   3. then the shortest variant at the floor, with `truncate` as the last
+//      resort — reached only when even the shortest name can't fit at 11px.
+//
+// ⛔ The natural size is a CEILING, never a starting guess to grow from: this
+// text tracks the team-name size of the cards beside it (text-sm, or 1rem on
+// the single-column .ns-cards-lg board), and a tile whose title rendered larger
+// than the MLB team names next to it is a bug this app has shipped before. The
+// cap is READ OFF THE DOM with the inline size cleared, so a board-layout CSS
+// rule that changes the class size moves the cap with it automatically.
+const FIT_FLOOR_TITLE = 11;
+const FIT_FLOOR_SUBTITLE = 9;
+
+function FittedLine({
+  variants,
+  className,
+  style,
+  floorPx,
+  fullText,
+  ariaHidden,
+  lineKind,
+}: {
+  variants: string[];
+  className: string;
+  style?: React.CSSProperties;
+  floorPx: number;
+  fullText?: string;
+  ariaHidden?: boolean;
+  // Stable hook for tests/visual/text-fit.spec.ts, which walks every fitted
+  // line on the board and asserts none of them clipped. A class or a text
+  // matcher would break the first time either is restyled; this attribute
+  // exists only to be found.
+  lineKind: "title" | "subtitle";
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  // `size: null` = render at the class's own size (the cap). Text starts as the
+  // longest variant so the first paint is never SHORTER than what fits — a
+  // shrink is invisible, a grow reads as a flicker.
+  const [fit, setFit] = useState<{ text: string; size: number | null }>({ text: variants[0] ?? "", size: null });
+  // Join, not the array: a fresh array identity every render would re-run the
+  // layout effect forever.
+  const key = variants.join("\u001F");
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof window === "undefined") return;
+    const list = key.split("\u001F").filter(Boolean);
+    if (!list.length) return;
+
+    const measure = () => {
+      const node = ref.current;
+      if (!node) return;
+      // Clear the inline size BEFORE reading the cap, or each pass would cap
+      // itself at the size the previous pass chose and ratchet downward.
+      node.style.fontSize = "";
+      const cs = getComputedStyle(node);
+      const capPx = parseFloat(cs.fontSize) || 14;
+      // clientWidth is the room the line actually has: the span is flex-1
+      // inside the row, so it fills whatever the glyph slot and gaps leave.
+      const avail = node.clientWidth;
+      if (!avail) return;
+
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;top:-9999px;left:-9999px;";
+      probe.style.fontFamily = cs.fontFamily;
+      probe.style.fontWeight = cs.fontWeight;
+      probe.style.letterSpacing = cs.letterSpacing;
+      document.body.appendChild(probe);
+      const widthAt = (text: string, px: number) => {
+        probe.style.fontSize = `${px}px`;
+        probe.textContent = text;
+        return probe.offsetWidth;
+      };
+      let chosen: { text: string; size: number | null } = { text: list[list.length - 1], size: Math.min(capPx, floorPx) };
+      outer: for (let px = Math.round(capPx); px >= floorPx; px--) {
+        for (const text of list) {
+          // 1px of slack: offsetWidth rounds up, and a sub-pixel overflow still
+          // trips `truncate` into painting an ellipsis.
+          if (widthAt(text, px) <= avail - 1) {
+            chosen = { text, size: px >= Math.round(capPx) ? null : px };
+            break outer;
+          }
+        }
+      }
+      document.body.removeChild(probe);
+      setFit((prev) => (prev.text === chosen.text && prev.size === chosen.size ? prev : chosen));
+    };
+
+    // rAF for the same reason LeagueColumn's checkIfFullNamesFit uses one:
+    // measure off the commit, never synchronously inside the effect body.
+    const raf = requestAnimationFrame(measure);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => measure());
+    if (ro) ro.observe(el);
+    return () => { cancelAnimationFrame(raf); ro?.disconnect(); };
+  }, [key, floorPx]);
+
+  return (
+    <span
+      ref={ref}
+      className={className}
+      // `title` keeps the untruncated name reachable on hover even in the
+      // last-resort case, exactly as the team/fighter names do.
+      title={fullText || variants[0] || undefined}
+      aria-hidden={ariaHidden}
+      data-fit-line={lineKind}
+      style={fit.size == null ? style : { ...style, fontSize: `${fit.size}px` }}
+    >
+      {fit.text}
+    </span>
+  );
+}
 
 // "Sat 5:00 PM" for a future day, "5:00 PM" if it's today, "Sat" if the time is
 // a midnight placeholder (TBD). Mirrors how the game cards show the day for
@@ -689,6 +812,15 @@ export default function EventCard({
   // is already height-matched to an MLB card at every breakpoint; a bespoke
   // layout would drift out of alignment the first time either was touched.
   const isRace = event.kind === "f1";
+  // Longest-first renderings for the two text rows. The feed supplies these for
+  // racing (lib/eventTiles.ts); boxing, chess and poker have only the one
+  // string so far, and still get the font step — which is what was clipping
+  // "Sinquefield Cup" and the WSOP event names (Jacob 8/10). The   keeps a
+  // subtitle-less tile's second row a real line box, as the literal did before.
+  const titleVariants = event.titleVariants?.length ? event.titleVariants : [event.title];
+  const subtitleVariants = event.subtitleVariants?.length
+    ? event.subtitleVariants
+    : [event.subtitle || " "];
   const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : event.kind === "poker" ? "♠️" : "🏁";
   // Spoken name for the sport-type glyph, announced via role="img"/aria-label on
   // a NON-clickable tile (boxing has no detail page; a finished race/chess/poker
@@ -776,8 +908,21 @@ export default function EventCard({
             these rows' 16px mobile logo slot + leading-none text would collapse
             shorter, drifting the column heights apart as cards stack. */}
         <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
+          {/* Glyph keeps main's a11y treatment (it names the sport when the
+              tile isn't itself a button); the title keeps the fitted line. */}
           <span {...(clickable ? { "aria-hidden": true } : { role: "img", "aria-label": glyphLabel })} className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
-          <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={event.title}>{event.title}</span>
+          {/* flex-1: the span must OWN the leftover width even when its text is
+              short, because FittedLine reads that width off clientWidth. A
+              plain auto-basis flex item shrinks to its text and would report
+              "no room" for a name that fits comfortably. */}
+          <FittedLine
+            variants={titleVariants}
+            lineKind="title"
+            fullText={event.title}
+            floorPx={FIT_FLOOR_TITLE}
+            className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0 flex-1`}
+            style={{ color: "var(--text)" }}
+          />
         </div>
         {/* Second row ALWAYS renders, even with no subtitle. This is the tile's
             stand-in for a game card's second team row, so dropping it when the
@@ -787,7 +932,14 @@ export default function EventCard({
             there's nothing to say, so screen readers hear a one-line tile. */}
         <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6" aria-hidden={event.subtitle ? undefined : true}>
           <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
-          <span className="text-[10px] sm:text-xs leading-none truncate min-w-0" style={{ color: "var(--text-muted)" }} title={event.subtitle || undefined}>{event.subtitle || " "}</span>
+          <FittedLine
+            variants={subtitleVariants}
+            lineKind="subtitle"
+            fullText={event.subtitle || undefined}
+            floorPx={FIT_FLOOR_SUBTITLE}
+            className="text-[10px] sm:text-xs leading-none truncate min-w-0 flex-1"
+            style={{ color: "var(--text-muted)" }}
+          />
         </div>
       </div>
       {/* One official-channel button, like UFC's. A strict miss hides it; no

@@ -10,6 +10,9 @@ import {
   buildBoxingTokens,
   boxingHighlightQuery,
   indycarTrackSubtitle,
+  isStaleFinishedForBoard,
+  eventTitleVariants,
+  eventSubtitleVariants,
 } from "./eventTiles";
 
 const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
@@ -3040,6 +3043,13 @@ export async function fetchBoxingEvent(date?: string): Promise<EventFetchResult>
 // rather than dredging up last season's finale.
 const EVENT_LOOKBACK_DAYS = 45;
 
+// …and how far FORWARD today/future looks for the next scheduled event, when
+// the undated fallback handed back a race that already ran (see the walk-
+// forward in fetchLeagueEvent). Same 45 days for the same reason: it clears
+// F1's 26-day summer break, and staying short means a truly finished season
+// finds nothing and keeps showing its finale rather than blanking the column.
+const EVENT_LOOKAHEAD_DAYS = 45;
+
 // YYYYMMDD ± days, in plain calendar arithmetic. Built and read back in UTC so
 // the host zone can never shift the result by a day; these are date keys for an
 // ESPN query, not instants.
@@ -3099,6 +3109,31 @@ async function fetchLeagueEvent(
   }
   event = event ?? (await load());
   if (!event) return null;
+
+  // …and the mirror image on TODAY or a FUTURE tab. The undated fallback above
+  // is documented everywhere as ESPN's "current or next" event, and for F1 it
+  // is — but NOT for the US series: on 2026-08-10 the undated NASCAR and
+  // IndyCar scoreboards both returned SUNDAY'S FINISHED race (state "post")
+  // while F1 returned the Aug 21 Dutch GP (state "pre"). So today's board grew
+  // a finished race tile with its highlight button attached, on a day no race
+  // ran (Jacob 8/10). Walk FORWARD instead — the next scheduled event — which
+  // is what the F1 column was already showing and what "today" means here.
+  //
+  // Nothing ahead (the season is genuinely over) keeps the finished event: an
+  // offseason board showing the last race of the year is the pre-existing
+  // behaviour, and blanking the column outright would be the larger regression.
+  {
+    const todayYmd = toYmd(getEtServiceDate());
+    const boardYmd = date || todayYmd;
+    const evState = (event.status?.type?.state
+      ?? event.competitions?.[event.competitions.length - 1]?.status?.type?.state
+      ?? "pre") as "pre" | "in" | "post";
+    if (isStaleFinishedForBoard(boardYmd, todayYmd, etSlateYmd(event.date ?? ""), evState)) {
+      const ahead = await loadRange(boardYmd, shiftYmd(boardYmd, EVENT_LOOKAHEAD_DAYS));
+      const next = ahead.find((e) => etSlateYmd(e.date ?? "") >= boardYmd);
+      if (next) event = next;
+    }
+  }
   const comps: LeagueEventCompetition[] = event.competitions ?? [];
   const eventUrl: string | undefined = event.links?.find((l) => l?.href)?.href;
 
@@ -3115,28 +3150,49 @@ async function fetchLeagueEvent(
     const mappedTrack = sport === "indycar"
       ? indycarTrackSubtitle(event.name || event.shortName || "")
       : undefined;
+    // Longest-first renderings of the venue line, so a narrow column drops the
+    // country and then the city rather than clipping the TRACK — see
+    // eventSubtitleVariants. subtitle stays the full string (variants[0]), so
+    // anything reading `subtitle` is unaffected.
+    let subtitleVariants: string[] = [];
     let subtitle: string | undefined;
     if (sport === "f1") {
       const circuit: LeagueEventCircuit = event.circuit ?? {};
-      const loc = [circuit.address?.city, circuit.address?.country].filter(Boolean).join(", ");
-      subtitle = [circuit.fullName, loc].filter(Boolean).join(" · ") || undefined;
+      subtitleVariants = eventSubtitleVariants(
+        circuit.fullName ?? "",
+        (circuit.address?.city ?? "").trim(),
+        (circuit.address?.country ?? "").trim(),
+      );
+      subtitle = subtitleVariants[0] || undefined;
     } else if (mappedTrack) {
-      subtitle = mappedTrack;
+      // INDYCAR_TRACKS is hand-written "<track> · <city, state>" — split on the
+      // separator it was built with rather than re-deriving it.
+      const [track, ...rest] = mappedTrack.split(" · ");
+      const [city, region] = (rest.join(" · ") || "").split(/,\s*/);
+      subtitleVariants = eventSubtitleVariants(track ?? "", city ?? "", region ?? "");
+      subtitle = subtitleVariants[0] || mappedTrack;
     } else {
       const venue: LeagueEventVenue = race?.venue ?? event.venue ?? {};
       // ESPN pads some track cities with a trailing space ("Newton ").
       const city = (venue.address?.city ?? "").trim();
       const region = (venue.address?.state || venue.address?.country || "").trim();
-      const loc = [city, region].filter(Boolean).join(", ");
-      subtitle = [venue.fullName, loc].filter(Boolean).join(" · ") || undefined;
+      subtitleVariants = eventSubtitleVariants(venue.fullName ?? "", city, region);
+      subtitle = subtitleVariants[0] || undefined;
     }
     const raceDate = race?.date ?? event.date;
     const year = new Date(raceDate).getFullYear() || new Date().getFullYear();
     const cleanName = (event.shortName || event.name || "Grand Prix").replace(/\bGP\b/i, "Grand Prix");
+    const fullTitle = event.name || event.shortName || "Grand Prix";
     return {
       kind: "f1",
-      title: event.name || event.shortName || "Grand Prix",
+      title: fullTitle,
+      // "Heineken Dutch Grand Prix" → "Heineken Dutch GP" → "Dutch GP"; the
+      // tile picks the longest that fits its one line. `title` is unchanged, so
+      // the highlight query, race tokens and aria-label all still use the full
+      // name — only what's PAINTED gets shortened.
+      titleVariants: eventTitleVariants(fullTitle, event.shortName, sport),
       subtitle,
+      subtitleVariants,
       state,
       statusDetail: state === "post" ? "Final" : state === "in" ? "Live" : "Race",
       date: raceDate,

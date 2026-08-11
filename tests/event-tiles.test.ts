@@ -7,6 +7,13 @@ import {
   boxingChannelFor,
   boxingHighlightQuery,
   indycarTrackSubtitle,
+  isStaleFinishedForBoard,
+  eventTitleVariants,
+  eventSubtitleVariants,
+  stripF1Sponsor,
+  stripNascarSeriesPrefix,
+  shortenIndycarTitle,
+  titleCasePlace,
 } from "../src/lib/eventTiles.ts";
 
 const H = 60 * 60 * 1000;
@@ -102,4 +109,98 @@ test("the highlight query never appends 'highlights' after 'full fight'", () => 
   // "No results" on DAZN, Matchroom and Top Rank alike.
   assert.equal(boxingHighlightQuery("Shields vs. Scott"), "Shields vs Scott full fight");
   assert.equal(boxingHighlightQuery("Matchroom Fight Night"), "Matchroom Fight Night full fight");
+});
+
+// ── Which event belongs on a board day ──────────────────────────────────────
+
+test("today's board never keeps a race that already finished", () => {
+  // The live 2026-08-10 case: the undated NASCAR/IndyCar scoreboards both
+  // returned Sunday's FINISHED race, so today grew a finished tile with a
+  // highlight button on a day no race ran.
+  assert.equal(isStaleFinishedForBoard("20260810", "20260810", "20260809", "post"), true);
+  assert.equal(isStaleFinishedForBoard("20260815", "20260810", "20260809", "post"), true);
+});
+
+test("a past board keeps its finished race — that is the whole point of it", () => {
+  assert.equal(isStaleFinishedForBoard("20260809", "20260810", "20260809", "post"), false);
+  assert.equal(isStaleFinishedForBoard("20260801", "20260810", "20260726", "post"), false);
+});
+
+test("an upcoming or live race on today is never stale", () => {
+  assert.equal(isStaleFinishedForBoard("20260810", "20260810", "20260821", "pre"), false);
+  assert.equal(isStaleFinishedForBoard("20260810", "20260810", "20260810", "in"), false);
+  // Same day = ran today = belongs on today.
+  assert.equal(isStaleFinishedForBoard("20260810", "20260810", "20260810", "post"), false);
+});
+
+test("an unreadable date is not evidence of staleness", () => {
+  // fromYmd's lesson: a NaN comparison answers "no" silently, and answering
+  // "yes" here would hide the tile on every board.
+  assert.equal(isStaleFinishedForBoard("20260810", "20260810", "", "post"), false);
+  assert.equal(isStaleFinishedForBoard("", "20260810", "20260809", "post"), false);
+});
+
+// ── Tile text that has to fit ───────────────────────────────────────────────
+
+test("an F1 title sheds its sponsor but never its identity", () => {
+  assert.deepEqual(
+    eventTitleVariants("Heineken Dutch Grand Prix", "Heineken Dutch GP", "f1"),
+    ["Heineken Dutch Grand Prix", "Heineken Dutch GP", "Dutch GP"],
+  );
+  // The names a "drop the words before GP" regex would have wrecked. All three
+  // are real 2026 rounds.
+  assert.equal(stripF1Sponsor("Mexico City GP"), "Mexico City GP");
+  assert.equal(stripF1Sponsor("MSC Cruises United States GP"), "United States GP");
+  assert.equal(stripF1Sponsor("MSC Cruises São Paulo GP"), "São Paulo GP");
+  assert.equal(stripF1Sponsor("Monaco GP"), "Monaco GP");
+});
+
+test("an unlisted F1 sponsor shortens nothing rather than guessing", () => {
+  // Sponsors rotate every season; the fallback is the full, correct name.
+  assert.equal(stripF1Sponsor("Fictional Bank Dutch GP"), "Fictional Bank Dutch GP");
+});
+
+test("a NASCAR title drops the series prefix the column header already carries", () => {
+  assert.equal(stripNascarSeriesPrefix("NASCAR Cup Series at Iowa"), "Iowa");
+  assert.equal(stripNascarSeriesPrefix("NASCAR Cup Series at Circuit of the Americas"), "Circuit of the Americas");
+  assert.equal(stripNascarSeriesPrefix("NASCAR Cup Series All Star Race"), "All Star Race");
+  // The four 2026 rounds ESPN does NOT prefix pass through untouched.
+  assert.equal(stripNascarSeriesPrefix("Daytona 500"), "Daytona 500");
+  assert.equal(stripNascarSeriesPrefix("Clash at Bowman Gray"), "Clash at Bowman Gray");
+});
+
+test("an IndyCar title puts the place first, where truncation can't eat it", () => {
+  assert.equal(shortenIndycarTitle("Grand Prix of St. Petersburg"), "St. Petersburg GP");
+  assert.equal(shortenIndycarTitle("Indianapolis 500"), "Indianapolis 500");
+});
+
+test("title variants are longest-first, deduplicated, and always start whole", () => {
+  const v = eventTitleVariants("Monaco Grand Prix", "Monaco GP", "f1");
+  assert.equal(v[0], "Monaco Grand Prix");
+  assert.deepEqual(v, ["Monaco Grand Prix", "Monaco GP"]);
+  // A tile with nothing to shorten still offers its full title.
+  assert.deepEqual(eventTitleVariants("Sinquefield Cup"), ["Sinquefield Cup"]);
+});
+
+test("the venue line drops the country, then the city, never the track", () => {
+  assert.deepEqual(
+    eventSubtitleVariants("Circuit Park Zandvoort", "Zandvoort", "Netherlands"),
+    [
+      "Circuit Park Zandvoort · Zandvoort, Netherlands",
+      "Circuit Park Zandvoort · Zandvoort",
+      "Circuit Park Zandvoort",
+      // Last rung before an ellipsis, reached only on the 3-column mobile board.
+      "Zandvoort",
+    ],
+  );
+});
+
+test("ESPN's lower-cased race cities are title-cased before they're shown", () => {
+  // All five live on the 2026 F1 calendar as ESPN prints them.
+  assert.equal(titleCasePlace("monte carlo"), "Monte Carlo");
+  assert.equal(titleCasePlace("Sao paulo"), "Sao Paulo");
+  assert.equal(titleCasePlace("Abu dhabi"), "Abu Dhabi");
+  // An all-caps state code and an interior lowercase particle survive.
+  assert.equal(eventSubtitleVariants("Circuit of the Americas", "Austin", "TX")[0],
+    "Circuit Of The Americas · Austin, TX");
 });
