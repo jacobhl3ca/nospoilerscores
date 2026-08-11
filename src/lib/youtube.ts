@@ -270,10 +270,18 @@ export function leadChannelBlocksEmbeds(channels: string[]): boolean {
 // been caught out here more than once (Jacob 8/10). So for these channels the
 // answer isn't another keyword: it's to stop asking the question. The cost is
 // one covered strip on clips that would have been safe to show.
-const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "DAZN Boxing"]);
+// ⚠️ These must cover EVERY channel a combat clip can arrive from, not just the
+// league's own. UFC walks three of them in coverage order
+// (UFC_HIGHLIGHT_CHANNELS in EventCard) and a bare "UFC" set matched exactly one
+// — so the two that actually serve most bouts, "UFC on Paramount+" and
+// "ESPN MMA", sailed past the always-mask and showed their titles (Jacob 8/11,
+// "titles have spoilers"). The `UFC on …` family is matched by PREFIX so a
+// broadcaster change (Paramount+ replaced ESPN+ mid-2026) cannot silently
+// reopen the hole; anything else has to be listed.
+const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "ESPN MMA", "DAZN Boxing"]);
 
 export function channelAlwaysMasksTitle(channels: string[]): boolean {
-  return channels.some((c) => TITLE_ALWAYS_MASKED_CHANNELS.has(c));
+  return channels.some((c) => TITLE_ALWAYS_MASKED_CHANNELS.has(c) || c.startsWith("UFC on "));
 }
 
 export function getYouTubeSearchUrl(
