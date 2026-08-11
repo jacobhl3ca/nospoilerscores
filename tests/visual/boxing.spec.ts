@@ -76,3 +76,41 @@ test("Boxing Today keeps carried-forward replay compact and loads Reddit plus ES
   await expect(page.getByText("ESPN BOXING", { exact: true })).toBeVisible();
   await expect(page.getByText("ESPN boxing report", { exact: true })).toBeAttached();
 });
+
+// A dead feed and a quiet day used to render identically ("No event"), so a
+// 500 read as "boxing has nothing on". These two lock the split in place.
+const BOXING_PREFS = {
+  favoriteLeagues: ["boxing"], favoriteTeams: [], theme: "light", showRatings: false,
+  skipExplainer: true, skipNewsExplainer: true, showNews: false, leaguesOnboarded: true,
+  firstLeague: "boxing", secondLeague: "empty", thirdLeague: "empty", fourthLeague: "empty",
+  fifthLeague: "empty", defaultDateMode: "today", defaultLandingView: "scores",
+};
+
+test("Boxing says the feed is down, not that the day is empty, when both sources fail", async ({ page }) => {
+  await page.route("**/api/boxing", route => route.fulfill({ status: 500, body: "" }));
+  await page.route("**/boxing-events.json", route => route.fulfill({ status: 500, body: "" }));
+  await page.clock.setFixedTime(new Date("2026-08-06T16:00:00-04:00"));
+  await page.addInitScript((prefs) => localStorage.setItem("nss-preferences", JSON.stringify(prefs)), BOXING_PREFS);
+
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { name: "Boxing" })).toBeVisible();
+  await expect(page.getByText("Event info unavailable")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry loading Boxing" })).toBeVisible();
+  await expect(page.getByText("No event scheduled", { exact: true })).toHaveCount(0);
+});
+
+test("Boxing still says No event when both feeds are healthy and simply empty", async ({ page }) => {
+  await page.route("**/api/boxing", route => route.fulfill({ status: 200, contentType: "application/json", body: '{"events":[]}' }));
+  await page.route("**/boxing-events.json", route => route.fulfill({
+    status: 200, contentType: "application/json", body: '{"schemaVersion":1,"events":[]}',
+  }));
+  await page.clock.setFixedTime(new Date("2026-08-06T16:00:00-04:00"));
+  await page.addInitScript((prefs) => localStorage.setItem("nss-preferences", JSON.stringify(prefs)), BOXING_PREFS);
+
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { name: "Boxing" })).toBeVisible();
+  await expect(page.getByText("Event info unavailable")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Retry loading Boxing" })).toHaveCount(0);
+  // Today's empty copy is emptyUpcomingLabel, not the past tab's "No event".
+  await expect(page.getByText("No event scheduled", { exact: true })).toBeVisible();
+});

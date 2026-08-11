@@ -25,13 +25,13 @@ export const metadata: Metadata = {
     // parent openGraph wholesale, so each World Cup route must declare its own).
     locale: "en_US",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore - tomorrow's 2026 FIFA World Cup schedule, spoiler-free" }],
+    images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: "HideScore — tomorrow's 2026 FIFA World Cup schedule, spoiler-free" }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: "Tomorrow's World Cup matches, spoiler-free.",
-    images: [{ url: "https://hidescore.com/og-worldcup.png", alt: "HideScore - tomorrow's 2026 FIFA World Cup schedule, spoiler-free" }],
+    images: [{ url: "https://hidescore.com/og-worldcup.png", alt: "HideScore — tomorrow's 2026 FIFA World Cup schedule, spoiler-free" }],
   },
 };
 
@@ -39,16 +39,39 @@ export default function WorldCupTomorrowPage() {
   return (
     <>
       <HomeContent initialOffset={1} worldCupHub worldCupHubMode="tomorrow" />
+      {/* Page graph: a WebPage node linked into the site's shared #website entity
+          (declared in layout.tsx) plus its own BreadcrumbList, so Google renders a
+          Home › World Cup › Tomorrow trail in the search result AND reads the
+          breadcrumb as this page's rather than an orphan list. This route was still
+          emitting a bare, @id-less BreadcrumbList with no WebPage node — every other
+          route (SeoLandingPage, /faq, /privacy, the date routes, /worldcup, the team
+          pages and /worldcup/highlights) already uses this WebPage→#website /
+          WebPage→#breadcrumb node-linking. Server-rendered: no "use client" here, so
+          the script ships in the static HTML for crawlers. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
-              { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
-              { "@type": "ListItem", position: 3, name: "Tomorrow", item: "https://hidescore.com/worldcup/tomorrow" },
+            "@graph": [
+              {
+                "@type": "WebPage",
+                name: TITLE,
+                description: DESC,
+                url: "https://hidescore.com/worldcup/tomorrow",
+                inLanguage: "en",
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                breadcrumb: { "@id": "https://hidescore.com/worldcup/tomorrow#breadcrumb" },
+              },
+              {
+                "@type": "BreadcrumbList",
+                "@id": "https://hidescore.com/worldcup/tomorrow#breadcrumb",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+                  { "@type": "ListItem", position: 2, name: "World Cup", item: "https://hidescore.com/worldcup" },
+                  { "@type": "ListItem", position: 3, name: "Tomorrow", item: "https://hidescore.com/worldcup/tomorrow" },
+                ],
+              },
             ],
           }).replace(/</g, "\\u003c"),
         }}

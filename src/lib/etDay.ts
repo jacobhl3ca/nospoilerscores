@@ -11,7 +11,27 @@ export function setServiceTimeZone(tz: string | undefined): void {
 }
 
 export function getTimeZone(): string {
-  if (overrideTz) return overrideTz;
+  if (overrideTz) {
+    // Validate the stored override before handing it to the dozens of
+    // Intl.DateTimeFormat({ timeZone }) / toLocaleString({ timeZone }) calls
+    // across the app. The override is loaded straight from localStorage (and
+    // synced from the server for signed-in users) with no schema check, so a
+    // corrupted, stale, or cross-build IANA name (a zone this ICU build doesn't
+    // recognize) would make EVERY one of those calls throw "Invalid time zone
+    // specified" — including getEtServiceDate() below, the app's single source
+    // of truth for "today", which is unguarded and would take down the whole
+    // board. Constructing a formatter throws on a bad zone, so this catches it
+    // and falls through to the device zone. The device-zone path below is
+    // already try/catch-guarded for the same reason; this extends the identical
+    // defense to the override path. Valid zones (the universal common case)
+    // validate and return unchanged, so behavior is byte-for-byte the same.
+    try {
+      new Intl.DateTimeFormat(undefined, { timeZone: overrideTz });
+      return overrideTz;
+    } catch {
+      /* bad override — fall through to the device zone */
+    }
+  }
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
   } catch {
@@ -53,6 +73,20 @@ export function getEtServiceDate(): Date {
 // local midnight of the ET service day, so its local components ARE that day).
 export function toYmd(d: Date): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// YYYYMMDD → a Date at local noon on that day, the inverse of toYmd. Noon so
+// neither a DST shift nor a ±12h comparison window can push it into a
+// neighbouring day.
+//
+// This exists because `new Date("20260809T12:00:00")` is NOT a parse error you
+// find out about — it silently returns Invalid Date, and every comparison
+// against its NaN getTime() is false. That is exactly what happened to the
+// chess and boxing event tiles: on any past board date the whole column
+// evaluated to "no event" and vanished (Jacob 8/10). Only a DASHED string is
+// valid ISO, so route every YYYYMMDD → Date conversion through here.
+export function fromYmd(ymd: string): Date {
+  return new Date(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8), 12, 0, 0, 0);
 }
 
 // YYYYMMDD → the next calendar day's YYYYMMDD. UTC math so it never trips on a

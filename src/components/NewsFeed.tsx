@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import { getTimeZone } from "@/lib/etDay";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -27,6 +27,8 @@ interface NewsFeedProps {
   sources: NewsSource[];
   onPlay: PlayHandler;
   showTextPosts: boolean;
+  // Reverse the merged feed so the oldest post is first (⇅ in the news header).
+  oldestFirst?: boolean;
   videosOnly: boolean;
 }
 
@@ -58,9 +60,19 @@ function useAggregatedFeed(sources: NewsSource[]) {
       if (!alive || (acc.size === 0 && !force)) return;
       setItems(
         [...acc.values()].sort((a, b) => {
-          const ta = a.published ? Date.parse(a.published) : 0;
-          const tb = b.published ? Date.parse(b.published) : 0;
-          return tb - ta;
+          // Coerce an unparseable timestamp to 0, not NaN. The `published ? … : 0`
+          // guard alone only catches an EMPTY string — a present-but-malformed
+          // date (feeds are heterogeneous; some emit non-ISO strings) makes
+          // Date.parse return NaN, and `tb - ta` then evaluates NaN for every
+          // comparison touching that item. NaN is an inconsistent comparator, so
+          // V8 leaves the surrounding order undefined and the post lands at an
+          // arbitrary spot. Number.isNaN → 0 sinks the bad item to the bottom,
+          // matching the same guard in TeamView's sort and news.ts formatPublished.
+          const ms = (s?: string) => {
+            const t = s ? Date.parse(s) : 0;
+            return Number.isNaN(t) ? 0 : t;
+          };
+          return ms(b.published) - ms(a.published);
         })
       );
     };
@@ -85,21 +97,25 @@ function useAggregatedFeed(sources: NewsSource[]) {
   return items;
 }
 
-export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly }: NewsFeedProps) {
+export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
 
   // Visible posts: in Videos mode keep only posts with a clip; otherwise hide
   // headline-only text posts unless explicitly opted in (matches the
   // .news-textpost / .show-text-posts rule the Cards view uses).
   const visible = useMemo(
-    () =>
-      (items ?? []).filter((it) =>
+    () => {
+      const kept = (items ?? []).filter((it) =>
         // Videos + Text posts are independent toggles: Videos keeps clip-bearing
         // posts, and Text posts ALSO on adds the headline-only ones (which carry
         // no clip, so videosOnly alone hid them — Jacob 7/16).
         videosOnly ? (hasVideo(it) || (showTextPosts && itemIsTextPost(it))) : (!itemIsTextPost(it) || showTextPosts)
-      ),
-    [items, showTextPosts, videosOnly]
+      );
+      // ⇅ Oldest first: the Feed is already time-sorted newest-first, so a plain
+      // reverse IS chronological order here. Reverse a copy — `items` is shared.
+      return oldestFirst ? [...kept].reverse() : kept;
+    },
+    [items, showTextPosts, videosOnly, oldestFirst]
   );
 
   // Prebuild the paging payloads once so tapping any post opens the lightbox
@@ -146,8 +162,12 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly }:
 }
 
 function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
-  const [peek, setPeek] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  // Stable, SSR-safe id tying the comments disclosure button to the strip it
+  // reveals. useId() (not a hard-coded id) keeps every FeedPost in the merged
+  // scroll unique — many posts render this toggle at once, so a constant id
+  // would emit duplicate ids and an ambiguous aria-controls across the feed.
+  const commentsId = useId();
   const isReddit = !!item.section?.startsWith("r/");
   // Hero = a real picture (gallery cover / full-res image post). A thumbOnly
   // item has nothing but Reddit's 140px link-preview crop: stretched to card
@@ -187,25 +207,21 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         )}
       </div>
 
-      {/* Text-only headlines open the same paged modal as every other post.
-          Media posts retain the lightweight one-headline peek because their
-          preview immediately below remains the main modal target. */}
+      {/* ONE rule, shared with the Cards view (NewsColumn/TextRow): a headline
+          click OPENS the post — never reveals it in place (Jacob 8/10). Peeking
+          a single spoiler belongs to the modal (VideoModal's PeekBlur); the
+          global Headlines chip is what un-blurs the feed where it stands. */}
       <button
         type="button"
-        onClick={hasMedia ? (() => setPeek((v) => !v)) : onOpen}
+        onClick={onOpen}
         className="block w-full text-left px-4 pt-2 pb-3 cursor-pointer"
-        title={hasMedia ? "Tap to reveal/hide this headline" : "Open post"}
-        // For a media post this button is a spoiler peek/blur toggle on the
-        // headline, but the only cue is a CSS blur (the `.peek` class) that
-        // assistive tech can't perceive — so expose the toggle state (WCAG
-        // 4.1.2), mirroring VideoModal's PeekBlur and the comments-strip
-        // disclosure below (which the comment there already claims this toggle
-        // matches). When !hasMedia the button is an "open post" action, not a
-        // toggle, so neither attribute applies.
-        aria-pressed={hasMedia ? peek : undefined}
-        aria-label={hasMedia ? (peek ? "Hide headline" : "Reveal headline (spoiler)") : undefined}
+        title="Open post"
+        // The only cue that this text is a spoiler is the CSS blur, which
+        // assistive tech can't perceive — but the action is now plainly "open
+        // post", same as the media preview below (WCAG 4.1.2).
+        aria-label="Open post"
       >
-        <h3 className={`news-title text-base sm:text-lg font-semibold leading-snug ${peek ? "peek" : ""}`} style={{ color: "var(--text)" }}>
+        <h3 className="news-title text-base sm:text-lg font-semibold leading-snug" style={{ color: "var(--text)" }}>
           {item.headline}
         </h3>
       </button>
@@ -215,8 +231,23 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         <button
           type="button"
           onClick={onOpen}
-          className="news-media-preview relative block w-full cursor-pointer bg-black"
-          aria-label="Open post"
+          // min-h keeps this button a tappable black tile even when its only
+          // child collapses to zero height — an image post whose proxied
+          // thumbnail 404s hides the <img> (onError below), and a video post's
+          // play overlay is absolute-positioned, so without a floor the button
+          // (this is the ONLY in-app lightbox opener for the post — the headline
+          // above is a peek toggle when hasMedia) shrinks to ~0px and can't be
+          // tapped. Every other .news-media-preview sets its own w/h or
+          // aspect-video; this full-width one was the lone reliant-on-content case.
+          className="news-media-preview relative block w-full min-h-[3rem] cursor-pointer bg-black"
+          // The tile's <img> is alt="", so this button's only accessible name is
+          // this label. For a video post (isVideo) it's the inline play trigger,
+          // yet a flat "Open post" gives no cue it PLAYS a clip and drops the
+          // headline — the twin control in NewsColumn (Cards view) already names
+          // it "Play highlight: {headline}". Mirror that here: name the action and
+          // keep the visible headline in the label so "Label in Name" (WCAG 2.5.3)
+          // holds and voice users can say the title to activate it.
+          aria-label={isVideo ? `Play video: ${item.headline}` : `Open post: ${item.headline}`}
         >
           {img || tile ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -271,6 +302,12 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
             // (WCAG 4.1.2 Name, Role, Value), matching the aria-pressed peek
             // toggles elsewhere in this card.
             aria-expanded={showComments}
+            // Point the toggle at the strip it reveals so screen readers can
+            // follow the disclosure relationship (WCAG 4.1.2). Unconditional
+            // here — unlike WorldCupMattersCard, whose panel unmounts while
+            // collapsed (so it drops the attr to avoid dangling to a missing
+            // id), this strip is always mounted, so commentsId always resolves.
+            aria-controls={commentsId}
             className="inline-flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer"
             style={{ color: "var(--text-muted)" }}
           >
@@ -278,7 +315,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
             {comments.length} top {comments.length === 1 ? "comment" : "comments"}
             <span style={{ opacity: 0.7 }}>{showComments ? "· hide" : "· tap to reveal (spoilers)"}</span>
           </button>
-          <div className="mt-2 flex flex-col gap-2">
+          <div id={commentsId} className="mt-2 flex flex-col gap-2">
             {comments.map((c, ci) => (
               <p
                 key={ci}
@@ -311,20 +348,30 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 px-4 pt-2 pb-3">
-        <a
-          href={item.articleUrl || undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={handleExternalClick(item.articleUrl)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-          style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}
-        >
-          Open{isReddit && item.section ? ` on ${item.section}` : ""}
-          <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
-        </a>
-      </div>
+      {/* Actions — rendered only when the post has a real external URL. Link-less
+          ESPN "now" items carry articleUrl="" (see parseArticle in lib/news.ts,
+          which the React-key fallback there already accounts for); with the URL
+          absent, href={articleUrl || undefined} dropped the attribute, leaving a
+          visible "Open ↗" anchor that does nothing on click AND is skipped by the
+          keyboard tab order (an href-less <a> isn't focusable) — WCAG 2.1.1 /
+          4.1.2. Gate the whole row on the URL so that dead control never renders;
+          the post is still openable via the headline/media button above. Mirrors
+          the same href-less-anchor guard VideoModal already applies. */}
+      {item.articleUrl && (
+        <div className="flex items-center gap-2 px-4 pt-2 pb-3">
+          <a
+            href={item.articleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleExternalClick(item.articleUrl)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+            style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}
+          >
+            Open{isReddit && item.section ? ` on ${item.section}` : ""}
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
+          </a>
+        </div>
+      )}
     </article>
   );
 }

@@ -2,18 +2,10 @@
 
 Single source of truth for the App Store Connect listing. Copy-paste ready.
 
-> ⚠️ **STALE — must fix before the next submission (flagged 2026-07-18).** Since this pack was
-> written, HideScore shipped **Sign in with Apple/Google accounts** (6/22) and **Sentry crash
-> reporting** (7/7). The "No accounts / no tracking / we do not collect data" answers below (App
-> Privacy section, ~line 85, and the "No accounts, no tracking, no ads" bullet) are now **factually
-> wrong**. Before resubmitting, update **App Privacy** to declare at least **Diagnostics → Crash
-> Data** (Sentry) and, since a Sign-in-with-Apple/Google identifier/email is now stored, the relevant
-> **Identifiers / Contact Info**. Apple also **requires in-app account deletion** (guideline
-> 5.1.1(v)) once an app supports account creation — **this is now BUILT (2026-07-20)**: Settings →
-> Account → "Delete account" (confirm + type-DELETE gate) calls `DELETE /api/account`, which erases
-> the user's R2 prefs object and clears the session. The iOS WebView shares that cookie, so it
-> satisfies 5.1.1(v) in-app. Confirm against your actual data flows before answering Apple's
-> questionnaire; don't copy the old "all No" answers.
+> **Account/privacy copy refreshed 2026-08-06.** HideScore now supports optional Apple, Google,
+> and six-digit email-code accounts, synced preferences, Sentry crash reporting, and in-app account
+> deletion. The data categories below reflect those flows; still verify the current binary and live
+> App Store Connect answers before the next submission.
 
 ---
 
@@ -54,7 +46,7 @@ KEY FEATURES
 • Today, tomorrow, and any past date covered
 • Highlights, news, and live game links when you're ready
 • Filter by your favorite teams
-• No accounts, no tracking, no ads
+• No account required, no advertising tracking, no ads
 
 COVERAGE
 Major professional and collegiate leagues across baseball, basketball, hockey, football, soccer, golf, and tennis.
@@ -95,7 +87,14 @@ First release.
 
 Click **Get Started** in App Store Connect → App Privacy.
 
-Answer **"No, we do not collect data from this app"** for the top-level question. Justification: this app has zero analytics SDKs (verified — no Sentry, Firebase, Plausible, PostHog, Mixpanel, Vercel Analytics, etc. in `package.json`), no user accounts, no cookies for tracking, and no advertising identifiers. User preferences are stored only in the device's local storage and never transmitted.
+Answer **"Yes, we collect data from this app"** for the top-level question, then declare the current optional account and diagnostics flows:
+
+- **Contact Info → Email Address:** App Functionality; linked to the user; not used for tracking.
+- **Identifiers → User ID:** App Functionality; linked to the user; not used for tracking. This covers Apple/Google identifiers and HideScore's internal account identity for email-code sign-in.
+- **Usage Data → Product Interaction:** App Functionality and Product Personalization; linked to the user; not used for tracking. This covers synced favorites and settings.
+- **Diagnostics → Crash Data:** App Functionality; not used for tracking. Confirm the current Sentry configuration before choosing whether Apple should mark it as linked to the user.
+
+HideScore does not combine this data with third-party data for advertising and does not use advertising identifiers. Account deletion in Settings removes the server-side account and synced preferences.
 
 If Apple flags the third-party score fetches: those are user-initiated requests to publicly available sports data APIs — no data is collected by HideScore from those requests.
 

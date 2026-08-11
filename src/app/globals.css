@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+/* HEADER FLOW SPACER — the reason the first game card keeps its top border.
+   The app header is position:fixed, so this element stands in for it in flow.
+   Its height uses the SAME --header-h expression (and the same fallbacks) that
+   .news-toolbar-sticky and .league-sticky-top pin at, which makes page content
+   start at exactly the offset those rows pin to. A stale --header-h then moves
+   the content and the pin point together instead of sliding them past each
+   other, so a sticky row can never be pushed below its natural position and
+   onto the card beneath it. See the comment on <header> in HomeContent.tsx.
+   Guarded by tests/visual/sticky-seam.spec.ts. */
+.header-flow-spacer {
+  height: var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem));
+  flex: none;
+}
+@media (min-width: 640px) {
+  .header-flow-spacer {
+    height: var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem));
+  }
+}
+
 /* The news toolbar (Cards/Feed + toggles) pins directly under the app header. */
 .news-toolbar-sticky {
   top: var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem));
@@ -18,6 +37,43 @@
 @media (min-width: 640px) {
   .league-sticky-top {
     top: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-h, 0px));
+  }
+}
+
+/* SEAM COVER — the permanent guard against "cards slice under the league title".
+   Every sticky row below the app header pins at an offset built from
+   --header-h, which is *measured* by a ResizeObserver. On the native iOS shell
+   the header's own padding is clamp(50px, env(safe-area-inset-top), 60px), so
+   its real height changes whenever the inset changes (resume, rotation,
+   keyboard). The measurement can lag that change by a frame or more — and when
+   the header ends up SHORTER than the stale --header-h, the league title pins
+   BELOW the header's bottom edge and scrolling game cards show through the band
+   in between. That's the slice Jacob has reported four times (16464D55,
+   436F28A9, 66BBA2B3, A1610FBF); it is a race, which is why fixing the
+   arithmetic never made it stay fixed.
+
+   This element removes the failure mode instead of the symptom: it paints the
+   whole strip from the viewport top down to the exact pin offset, using the
+   SAME expression .league-sticky-top uses for `top`. z-index sits above the
+   scrolling cards (z-30) and below the app header (z-40), so:
+     - stale value too LARGE  -> the cover reaches the title's pin point, gap filled
+     - stale value too SMALL  -> the header itself is taller and paints over it
+   Either way there is no transparent band, for any value of --header-h.
+   Guarded by tests/visual/sticky-seam.spec.ts, which deliberately corrupts
+   --header-h and asserts nothing bleeds through. */
+.sticky-seam-cover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  pointer-events: none;
+  background: var(--bg);
+  height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 3.75rem)) + var(--news-toolbar-h, 0px));
+}
+@media (min-width: 640px) {
+  .sticky-seam-cover {
+    height: calc(var(--header-h, calc(env(safe-area-inset-top, 0px) + 4.25rem)) + var(--news-toolbar-h, 0px));
   }
 }
 
@@ -55,7 +111,6 @@ html.reveal-news-titles .news-title,
   user-select: auto;
   -webkit-user-select: auto;
 }
-
 /* Text-post visibility is independent from headline reveal. .news-textpost
    marks one mixed-source row; .news-card-alltext collapses an all-text source
    card so hiding its rows never leaves a bare header behind. */
@@ -189,15 +244,6 @@ body {
 .date-nav-arrow:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-
-.theme-toggle {
-  box-shadow: 0 0 0 0px var(--accent);
-  transition: box-shadow 0.2s, background 0.2s, color 0.2s;
-}
-.theme-toggle:hover {
-  box-shadow: 0 0 0 2px var(--accent);
-  color: var(--accent);
 }
 
 .monkey-toggle {
@@ -369,6 +415,18 @@ html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
    so the rule lives with the app's other focus rings and survives a component
    rewrite. The id selector outranks the .outline-none utility. */
 #hs-feedback-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Same WCAG 2.4.7 fix for the feedback form's email field, the twin of the
+   message input above. It ships the identical Tailwind outline-none and its
+   border only changes color in the invalid (emailLooksWrong) state — never on
+   focus — so a keyboard Tab into the optional email field showed no cue on the
+   empty/valid path. Re-add the same keyboard-only (:focus-visible) accent ring;
+   the red error border still wins for the invalid state (it sits on the element
+   itself, distinct from this outline). Mouse clicks stay clean. */
+#hs-feedback-email:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

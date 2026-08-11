@@ -54,7 +54,7 @@ export const metadata: Metadata = {
         url: "https://hidescore.com/og-image.png",
         width: 1200,
         height: 630,
-        alt: "HideScore - spoiler-free sports scores and highlights",
+        alt: "HideScore — spoiler-free sports scores and highlights",
       },
     ],
   },
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: TITLE,
     description: DESC,
-    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore - spoiler-free sports scores and highlights" }],
+    images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — spoiler-free sports scores and highlights" }],
   },
 };
 
@@ -136,6 +136,18 @@ export default function SpoilerFreeSportsPage() {
           </Link>
           <Link href="/soccer-highlights-without-spoilers" className="underline underline-offset-2">
             Soccer
+          </Link>
+          {/* Premier League (shipped 2026-08-08) and Liga MX (2026-08-03) are
+              per-league pages whose ONLY inbound link was the soccer page's
+              footer — same orphan risk the Cricket note below calls out. This
+              hub is the strongest internal link source (every SeoLandingPage
+              footer points here), so listing them here strengthens crawling and
+              ranking. Grouped right after Soccer to cluster the football pages. */}
+          <Link href="/premier-league-without-spoilers" className="underline underline-offset-2">
+            Premier League
+          </Link>
+          <Link href="/liga-mx-scores-without-spoilers" className="underline underline-offset-2">
+            Liga MX
           </Link>
           <Link href="/nba-scores-without-spoilers" className="underline underline-offset-2">
             NBA

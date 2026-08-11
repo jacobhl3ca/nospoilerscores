@@ -65,6 +65,13 @@ const CARD_REV = 4;
 // Keep this narrow. An unscoped result-bearing upload must still be rejected.
 const MASKED_COMBAT_CHANNELS = new Set(["ufc on paramount+", "ufc", "espn mma"]);
 
+// Chess organizers who post the ROUND itself as a full broadcast VOD, with no
+// "highlights"/"recap" keyword in the title. Lowercased YouTube author_name —
+// mirrors CHESS_ORGANIZER_CHANNELS in src/lib/espn.ts, keep the two in step.
+// Used by isChessRoundBroadcast below; unlike MASKED_COMBAT_CHANNELS this does
+// NOT exempt anything from the spoiler filter.
+const CHESS_BROADCAST_CHANNELS = new Set(["saint louis chess club", "fide chess"]);
+
 // Wrap an arbitrary news image (Reddit photo, preview thumb, league poster, or
 // YouTube still) for use as the social-card image. Routed through weserv — the
 // SAME proxy the app already uses for every redd.it thumbnail (see proxyImage in
@@ -296,6 +303,19 @@ export default {
       // motorsport analogue of the golf-tournament and World Cup gates.
       const raceTokens = (url.searchParams.get("race") || "")
         .split("|").map((s) => normalizeRaceToken(s)).filter(Boolean);
+      // week=<n> → WEEK GATE for gridiron football (NFL / NCAAF regular season).
+      // Same failure class as the race gate, one league down: the NFL channel
+      // titles every recap "… Game Highlights | NFL 2025 Season Week 15" with
+      // NO calendar date, so for a pair that meets twice in a season BOTH
+      // uploads carry the same two teams and the same year — the date gate
+      // can't fire (no date token) and the year gate agrees (same year). The
+      // earlier upload then wins channelTeamsYearId just by ranking first.
+      // Measured against the LIVE worker 2026-08-10 over the eight-game
+      // Dec 14 2025 slate: 7/8 correct, and Commanders@Giants returned the
+      // WEEK 1 recap of the same fixture. Week is the only discriminator the
+      // title carries, so it has to be the gate.
+      const weekParam = parseInt(url.searchParams.get("week") || "", 10);
+      const queryWeek = Number.isFinite(weekParam) && weekParam >= 1 && weekParam <= 25 ? weekParam : null;
       const excludeParam = url.searchParams.get("exclude"); // comma-separated videoIds to skip (used by VideoModal fallback retries)
       const excludeSet = new Set(
         (excludeParam || "").split(",").map((s) => s.trim()).filter(Boolean)
@@ -536,7 +556,30 @@ export default {
         function titleHasTeam(titleLower, teamName) {
           const variants = getTeamVariants(teamName);
           const normalizedTitle = normalizeTeamMatch(titleLower);
-          return variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)));
+          if (variants.some((v) => normalizedTitle.includes(normalizeTeamMatch(v)))) return true;
+          // Singular-nickname tolerance. Not hypothetical: the OFFICIAL NFL
+          // channel's Week 15 recap of Dec 14 2025 is titled "Washington
+          // Commanders vs New York Giant Game Highlights | 2025 NFL Season
+          // Week 15" — singular "Giant", the league's own typo (verified
+          // 2026-08-10). The plural never matched, so the CORRECT clip failed
+          // hasTeams and fell out of every tier, and the Week 1 upload of the
+          // same fixture — spelled correctly — took the slot instead. A title
+          // typo on the one channel we trust must not be able to serve the
+          // wrong game.
+          //
+          // Deliberately narrow: only a trailing "s" is forgiven, only on a
+          // whole word, and only on variants of 5+ characters. The length floor
+          // is what keeps the risky short nicknames out — "Jets"/"Rams"/"Nets"/
+          // "Suns" would each strip to a common English word — while the
+          // boundary check stops "Lions"→"lion" from matching "Lionel". In
+          // practice the variant that fires here is the full "New York Giants",
+          // which is unambiguous.
+          return variants.some((v) => {
+            const n = normalizeTeamMatch(v);
+            if (!n.endsWith("s") || n.length < 5) return false;
+            const singular = n.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            return new RegExp(`(^|[^a-z0-9])${singular}([^a-z0-9]|$)`).test(normalizedTitle);
+          });
         }
 
         // Split HTML into videoRenderer blocks and parse each one individually
@@ -636,12 +679,29 @@ export default {
           // team/date gates below still have to match exactly.
           const isStrictBareWnbaRecap =
             strictChannelParam && isFromChannel && preferChannelLower === "wnba" && queryHasSpecificTeams;
+          // Chess publishes NO highlight package at all — verified 2026-08-10
+          // across every organizer that broadcasts on Lichess. What exists is
+          // the round itself, posted as a full VOD titled "2026 Sinquefield
+          // Cup: Round 1 | #GrandChessTour" or "… Almaty Diary, Day 5" — no
+          // "highlights", no "recap" (Saint Louis last used that word in 2019).
+          // Same shape as roundOnlyTitleOk for golf: accept a bare Round/Day
+          // title, but ONLY on a strict request against a verified organizer
+          // channel, so this can never widen any other sport's candidate pool.
+          // The `race=` token gate still has to match the tournament name, and
+          // SPOILER_RX still drops result-bearing titles ("… Wins Blitz
+          // Playoff!") — this only relaxes the highlight-keyword requirement.
+          const isChessRoundBroadcast =
+            strictChannelParam &&
+            isFromChannel &&
+            CHESS_BROADCAST_CHANNELS.has(preferChannelLower) &&
+            /\b(?:round|day|game|playoff|tiebreaks?)\s*\d/.test(titleLower);
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             roundOnlyTitleOk ||
-            isStrictBareWnbaRecap;
+            isStrictBareWnbaRecap ||
+            isChessRoundBroadcast;
           if (!isHighlight) continue;
 
           // Racing race gate (see the `race` param above). The official channel
@@ -770,6 +830,19 @@ export default {
           if (!titleHasExplicitDate && queryYear) {
             const titleYears = title.match(/\b(20\d{2})\b/g) || [];
             if (titleYears.length > 0 && !titleYears.includes(queryYear)) continue;
+          }
+          // Wrong-week hard-skip (gridiron) — see the queryWeek note up top.
+          // Deliberately shaped like the wrong-year skip above: a title whose
+          // week token DISAGREES is dropped outright, a title carrying NO week
+          // token falls through untouched to the existing date/year tiers. That
+          // asymmetry is what keeps this safe for the uploads that don't use the
+          // house format at all (postseason cuts are titled "Divisional Round",
+          // never "Week N", and the client sends no week for them anyway).
+          // "Week 15" / "Week15" / "Wk 15" are all accepted spellings; the
+          // \b…\b and 1–2 digit cap keep it off "Weeks" recaps and stray digits.
+          if (queryWeek) {
+            const weekTok = title.match(/\bw(?:ee)?k\.?\s*(\d{1,2})\b/i);
+            if (weekTok && parseInt(weekTok[1], 10) !== queryWeek) continue;
           }
           const hasYear = titleHasExplicitDate
             ? titleDateMatches
@@ -1059,8 +1132,16 @@ export default {
           // always 3 digits a side, so the old \d{1,2} cap leaked a bare box-score
           // headline with no result verb. Capped at 3 (not 4+) so 4-digit years
           // still fail; the lookbehind/lookahead keep M-D-Y dates and "2025-26"
-          // season spans out. Byte-identical to spoilers.ts.
-          const SCORE_RX = /(?<![-\/])\b\d{1,3}\s*[-–]\s*\d{1,3}\b(?![-\/])/;
+          // season spans out. The separator class is [-–—:] (hyphen, en-dash,
+          // em-dash, colon) so it also catches the colon scoreline European
+          // soccer titles lean on ("Real Madrid 3:1 Barcelona") and the em-dash
+          // form ("3—2") — both slipped past the hyphen/en-dash-only class. A
+          // colon between two 1-3 digit runs is a score in a per-match title;
+          // the 4-digit cap still drops "3: 2026" (2026 fails \d{1,3}\b), and a
+          // skipped false-positive just falls back to the next source (the
+          // over-hide-safe side the filter already embraces). Byte-identical to
+          // spoilers.ts.
+          const SCORE_RX = /(?<![-\/])\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-\/])/;
           //     "book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)" is the canonical
           //     knockout qualification idiom WC / cup-tie coverage reaches for the instant a side goes
           //     through ("England book their place in the final", "Brazil booked their passage") — a pure
@@ -1335,7 +1416,7 @@ export default {
           //     Verified against a 24-case battery (10 cricket results blocked, 14 non-spoiler headlines
           //     still passing, including the Super Bowl and date-format traps). Byte-identical to the
           //     worker's copy.
-          const SPOILER_RX = /\b(walk[- ]?off|buzzer[- ]?beaters?|comeback|come[- ]from[- ]behind|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|fight(?:s|ing)?[- ]?back|fought[- ]?back|rall(?:y|ies|ied|ying) (?:past|back|from)|extra[- ]?innings?|overtime|extra[- ]?time|sudden[- ]?death|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|overwhelm\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|relegat\w*|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|hold(?:s|ing)?[- ]?on|held[- ]?on|hang(?:s|ing)?[- ]?on|hung[- ]?on|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|top(?:s|ped)|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|choke\w*|collaps\w*|obliterat\w*|annihilat\w*|decimat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|brush(?:es|ed|ing)?[- ]?aside|(?:runs?|running|ran) riot|to the sword|hammer(?:ed|ing)|batter(?:ed|ing)|cruise(?:s|d)?|canter(?:s|ed|ing)?|(?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|coast(?:s|ed)?|stroll(?:s|ed)?|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past|(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past|triumph\w*|romp\w*|conquer\w*|dethron\w*|upset\w*|clinch\w*|seals?|sealed|snatch\w*|sweep\w*|swept|whitewash\w*|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|knock out|knock(?:s|ed|ing)? off|sent[- ]?packing|qualif(?:y|ies|ied)|advanc\w*|book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)|punch(?:es|ed)? (?:their|its|a) ticket|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|crowned (?:world )?champions?|world[- ]?(?:cup[- ]?)?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|trophy)|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|(?:comes?|came)[- ]?out on top|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]?hitter|empty[- ]?net(?:s|ter|ters)?|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|salvag\w*|rescu\w*|consolat\w*|share(?:s|d)? the spoils|share(?:s|d)? the points|share(?:s|d)? the honou?rs|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|all[- ]?square|equali[sz]\w*|level(?:l)?ers?|go[- ]?ahead (?:goal|run|homer|home[- ]?run|score|basket|bucket|touchdown|header|strike)s?|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|all three points|bowl(?:s|ed|ing)[- ]?out|all[- ]?out for|chas(?:e|es|ed|ing)[- ]?down|chas(?:e|es|ed) \d{2,3}\b|super[- ]?over|defend(?:s|ed|ing)? \d{2,3}\b|\d{2,3}\/(?:10|\d)\b|\d{2,3} for \d\b|five[- ]?for\b|fifer|wicket haul|skittl\w*|TKO|submission\w*|submit(?:s|ted|ting)|tap(?:s|ped|ping)?[- ]?out|(?:unanimous|split|majority)[- ]?decision)\b/i;
+          const SPOILER_RX = /\b(walk[- ]?off|buzzer[- ]?beaters?|comeback|come[- ]from[- ]behind|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|fight(?:s|ing)?[- ]?back|fought[- ]?back|rall(?:y|ies|ied|ying) (?:past|back|from)|extra[- ]?innings?|overtime|extra[- ]?time|sudden[- ]?death|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|overwhelm\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|relegat\w*|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|hold(?:s|ing)?[- ]?on|held[- ]?on|hang(?:s|ing)?[- ]?on|hung[- ]?on|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|top(?:s|ped)|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|choke\w*|collaps\w*|obliterat\w*|annihilat\w*|decimat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|brush(?:es|ed|ing)?[- ]?aside|(?:runs?|running|ran) riot|to the sword|hammer(?:ed|ing)|batter(?:ed|ing)|cruise(?:s|d)?|canter(?:s|ed|ing)?|(?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|coast(?:s|ed)?|stroll(?:s|ed)?|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past|(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past|triumph\w*|romp\w*|conquer\w*|dethron\w*|upset\w*|clinch\w*|seals?|sealed|snatch\w*|sweep\w*|swept|whitewash\w*|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|knock out|knock(?:s|ed|ing)? off|sent[- ]?packing|qualif(?:y|ies|ied)|advanc\w*|book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)|punch(?:es|ed)? (?:their|its|a) ticket|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|crowned (?:world )?champions?|world[- ]?(?:cup[- ]?)?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|trophy)|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|(?:comes?|came)[- ]?out on top|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]?hitter|empty[- ]?net(?:s|ter|ters)?|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|salvag\w*|rescu\w*|consolat\w*|share(?:s|d)? the spoils|share(?:s|d)? the points|share(?:s|d)? the honou?rs|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|all[- ]?square|equali[sz]\w*|level(?:l)?ers?|go[- ]?ahead (?:goal|run|homer|home[- ]?run|score|basket|bucket|touchdown|header|strike)s?|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|all three points|bowl(?:s|ed|ing)[- ]?out|all[- ]?out for|chas(?:e|es|ed|ing)[- ]?down|chas(?:e|es|ed) \d{2,3}\b|super[- ]?over|defend(?:s|ed|ing)? \d{2,3}\b|\d{2,3}\/(?:10|\d)\b|\d{2,3} for \d\b|five[- ]?for\b|fifer|wicket haul|skittl\w*|TKO|KOs?|KO'd|stops|stopped|def(?=\.)|retain(?:s|ed)|finish(?:es|ed)|starch\w*|submission\w*|submit(?:s|ted|ting)|tap(?:s|ped|ping)?[- ]?out|(?:unanimous|split|majority)[- ]?decision)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks

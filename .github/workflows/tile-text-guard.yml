@@ -1,0 +1,107 @@
+name: Event tile guard
+
+# Holds the two invariants that keep an event tile honest:
+#
+#   1. Its title and venue line are never CUT OFF, and never render larger than
+#      the team names on the cards beside them (tests/visual/text-fit.spec.ts).
+#   2. Today never shows a race that already finished on an earlier day
+#      (tests/visual/event-tile-day.spec.ts).
+#
+# Why a workflow rather than trusting review: both are invisible in a diff.
+# A clipped title looks fine in the source and only appears at one column count
+# on one phone width; a stale tile needs a specific shape of ESPN response on a
+# specific day to reproduce, which is exactly why it shipped — the undated
+# scoreboard behaves differently for F1 than it does for NASCAR and IndyCar, and
+# nothing about the code says so.
+#
+# Modelled on sticky-guard.yml, including the reason it is NOT part of
+# deploy.yml: a regression here is a display bug, so it must never be able to
+# block a deploy. It runs alongside and alerts.
+
+on:
+  push:
+    branches: [main]
+    # Everything either invariant depends on: the tile and its fit ladder, the
+    # feed decisions that build the text and pick the event, the board CSS that
+    # sets the team-name ceiling, and the specs themselves.
+    paths:
+      - 'src/components/EventCard.tsx'
+      - 'src/components/LeagueColumn.tsx'
+      - 'src/lib/eventTiles.ts'
+      - 'src/lib/espn.ts'
+      - 'src/lib/types.ts'
+      - 'src/app/globals.css'
+      - 'tests/visual/text-fit.spec.ts'
+      - 'tests/visual/event-tile-day.spec.ts'
+      - 'playwright.config.ts'
+      - '.github/workflows/tile-text-guard.yml'
+  pull_request:
+    paths:
+      - 'src/components/EventCard.tsx'
+      - 'src/components/LeagueColumn.tsx'
+      - 'src/lib/eventTiles.ts'
+      - 'src/lib/espn.ts'
+      - 'src/lib/types.ts'
+      - 'src/app/globals.css'
+      - 'tests/visual/text-fit.spec.ts'
+      - 'tests/visual/event-tile-day.spec.ts'
+      - 'playwright.config.ts'
+  workflow_dispatch:
+
+concurrency:
+  group: tile-text-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tile-text:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # The pure half first — it needs no browser and names the broken rule
+      # directly ("an F1 title sheds its sponsor but never its identity"), so a
+      # data regression fails in seconds instead of via a pixel measurement.
+      - name: Unit tests (shortening ladder + which event belongs on a day)
+        run: npm run test:unit
+
+      # Chromium only — playwright.config provisions no other browser.
+      - run: npx playwright install --with-deps chromium
+
+      # --workers=1: both specs drive the same dev server, which compiles routes
+      # lazily; serial is ~15s and stable, parallel races the first compile
+      # (same call as the sticky-seam suite).
+      - name: Run the event-tile invariant suite
+        run: npx playwright test tests/visual/text-fit.spec.ts tests/visual/event-tile-day.spec.ts --workers=1 --reporter=line
+
+      - name: Upload trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tile-text-guard-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -z "$NTFY_TOPIC" ]; then
+            echo "::warning::NTFY_TOPIC secret unset — cannot alert."
+            exit 0
+          fi
+          curl -s -H "Title: HideScore event tile regression" -H "Priority: high" -H "Tags: rotating_light" \
+            -d "A tile title is clipping again, or today is showing a finished race. $run_url" \
+            "https://ntfy.sh/$NTFY_TOPIC" > /dev/null

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getApiBase } from "@/lib/youtube";
-import { openExternal } from "@/lib/openExternal";
+import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
+import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
@@ -140,6 +140,7 @@ declare global {
   interface Window {
     YT?: YTNamespace;
     onYouTubeIframeAPIReady?: () => void;
+    umami?: { track: (event: string, data?: Record<string, string>) => void };
   }
 }
 
@@ -159,8 +160,8 @@ function extractSearchQuery(fallbackUrl: string): string | null {
 // that resolved their video under a strict channel gate (F1, golf). YouTube
 // ignores the extra params on a /results URL, so the same string still works
 // verbatim as the external "Watch on YouTube" hand-off — same trick as the
-// existing `nss_no_fallback=1`. Empty list = ungated caller (news, per-game
-// league highlights): retry behavior there is unchanged.
+// existing `nss_no_fallback=1`. A YouTube search retry with no strict channel
+// list is rejected below; non-highlight media use direct source URLs instead.
 function strictFallbackChannels(fallbackUrl: string): string[] {
   try {
     const u = new URL(fallbackUrl);
@@ -183,6 +184,21 @@ function raceFallbackParam(fallbackUrl: string): string {
   try {
     const race = new URL(fallbackUrl).searchParams.get("nss_race");
     return race ? `&race=${encodeURIComponent(race)}` : "";
+  } catch {
+    return "";
+  }
+}
+
+// Gridiron week gate carried the same way (`nss_week=` — see GameHighlights).
+// Identical failure mode to the race gate one league over: the NFL channel
+// uploads every week of the season, and its recap titles carry a week rather
+// than a date, so an ungated retry after an embed block can serve the SAME two
+// teams' OTHER meeting from the very same (correct) channel — which neither the
+// channel gate nor the worker's date/year gates can catch.
+function weekFallbackParam(fallbackUrl: string): string {
+  try {
+    const week = new URL(fallbackUrl).searchParams.get("nss_week");
+    return week && /^\d{1,2}$/.test(week) ? `&week=${week}` : "";
   } catch {
     return "";
   }
@@ -442,6 +458,23 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // prompt instead of silently leaving a paused black player.
   const autoplayBlockedRef = useRef(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  // Has THIS YouTube clip ever actually reached PLAYING/BUFFERING?
+  // Everything before the first frame is a different world from everything
+  // after it, because playback can only START from a real user gesture INSIDE
+  // the cross-origin iframe. `playerRef.current.playVideo()` travels as a
+  // postMessage and carries NO user activation with it, so once the browser has
+  // refused autoplay, no amount of tapping our own overlays can start the clip
+  // — which is exactly the "the play button does nothing" bug (Jacob 8/9, WNBA
+  // + NFL). While this is false we deliberately leave YouTube's own big red
+  // play button exposed and un-intercepted: it's the only control in the DOM
+  // that can legally begin playback. Once it's true we go back to the
+  // click-catcher so keyboard shortcuts and double-tap seek behave as before.
+  const hasStartedRef = useRef(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  // Set by the player effect so code outside it (the autoplay-prompt retry
+  // timer) can still trigger the alternate-video search.
+  const tryFallbackRef = useRef<(() => void) | null>(null);
+  const retryConfirmRef = useRef<number | null>(null);
   // imgFailed flips when the lightbox image errors out — at that point we
   // collapse to text-card mode so the user sees the headline + open button
   // instead of an empty modal (Firefox + Reddit external-preview is the
@@ -502,6 +535,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // spoiler titles for search-path clips, so most titles here are clean; this
   // also covers reddit/unvetted clips by re-checking client-side.
   const [titleSafe, setTitleSafe] = useState(false);
+  // …except on the combat channels, where the title bar never uncovers at all —
+  // see channelAlwaysMasksTitle. Read from the same strict-channel gate the
+  // embed check uses, so it holds for the fallback swaps too.
+  const titleAlwaysMasked = channelAlwaysMasksTitle(strictFallbackChannels(fallbackUrl));
   // PAUSED (or ENDED) means YouTube draws its own overlay on top of the iframe:
   // the "More videos" grid on pause, the suggested-video endscreen at the end.
   // Both are pure spoiler vectors — rel:0 only narrows them to the SAME channel,
@@ -578,6 +615,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // (Jacob 7/19). Keying each PeekBlur by postKey remounts it fresh per post,
   // resetting the reveal, while leaving the video player + modal chrome mounted.
   const postKey = String(currentId ?? playbackUrl ?? embedUrl ?? imageUrl ?? fallbackUrl ?? headline ?? "");
+  const trackedPlayRef = useRef<string | null>(null);
+  const trackVideoPlay = useCallback(() => {
+    if (!postKey || trackedPlayRef.current === postKey) return;
+    trackedPlayRef.current = postKey;
+    window.umami?.track("video-play", {
+      player: ytMode ? "youtube" : hlsMode ? "native" : "other",
+      source: (sourceLabel || "unknown").slice(0, 40),
+    });
+  }, [postKey, ytMode, hlsMode, sourceLabel]);
   // Same reuse trap as PeekBlur: page to another post and the gallery cursor
   // must go back to picture 1 (post B would otherwise open on post A's 4th).
   useEffect(() => { setGalIdx(0); }, [postKey]);
@@ -605,15 +651,46 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       videoRef.current?.play().catch(handleNativePlayError);
     } else if (ytMode) {
       playerRef.current?.playVideo?.();
+      // playVideo() is a postMessage — it can be refused silently (autoplay
+      // policy) OR land on a clip that renders a *silent* error screen inside
+      // the iframe (YT Error 153, which never fires onError). Give it 8s; if
+      // we're still not playing, THEN it's worth burning an alternate video id.
+      // This is the only path that can still reach the "league blocked" card
+      // from a never-started player, so a clip that simply needed a tap never
+      // gets mislabelled as an embed block (Jacob 8/9, NFL).
+      if (retryConfirmRef.current) window.clearTimeout(retryConfirmRef.current);
+      retryConfirmRef.current = window.setTimeout(() => {
+        retryConfirmRef.current = null;
+        const state = playerRef.current?.getPlayerState?.();
+        if (state !== 1 && state !== 3) tryFallbackRef.current?.();
+      }, 8000);
     }
   }, [clearAutoplayBlocked, handleNativePlayError, hlsMode, ytMode]);
 
   useEffect(() => {
     clearAutoplayBlocked();
-    // New post / new stream — clear any prior playback-failure overlay so the
-    // fresh clip gets a clean attempt (prev/next paging reuses this modal).
+    // New post / new stream — clear any prior failure overlay so the fresh clip
+    // gets a clean attempt (prev/next paging reuses this modal, so a flag set on
+    // the previous post persists otherwise). setImgFailed clears the lightbox
+    // image-error flag for the same reason: two consecutive image posts both
+    // have videoId/currentId/playbackUrl/embedUrl undefined, so imageUrl is the
+    // only dep that changes between them — without it here, a broken image on
+    // post A left imgFailed stuck true and post B's valid image was suppressed
+    // into text-card mode until the modal was closed and reopened.
     setMediaFailed(false);
-  }, [currentId, playbackUrl, embedUrl, clearAutoplayBlocked]);
+    setImgFailed(false);
+    // A swapped clip has not started either — re-expose YouTube's own play
+    // button until the new id actually reaches PLAYING.
+    hasStartedRef.current = false;
+    setHasStarted(false);
+    if (retryConfirmRef.current) {
+      window.clearTimeout(retryConfirmRef.current);
+      retryConfirmRef.current = null;
+    }
+  }, [currentId, playbackUrl, embedUrl, imageUrl, clearAutoplayBlocked]);
+  useEffect(() => () => {
+    if (retryConfirmRef.current) window.clearTimeout(retryConfirmRef.current);
+  }, []);
   // The YouTube video id, when this is a YouTube clip (not an HLS/embed/image/
   // text card) — used both for the footer link and the hidescore deep-link.
   const ytId = ytMode ? currentId : null;
@@ -733,6 +810,21 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // 90% cap that still gates the jumps and the bar. Back floors at 0. No
   // warn-halfway prompt — a small relative nudge isn't a "click past 50%".
   const seekBy = useCallback((delta: number) => {
+    // Direct-stream clips (MLB .m3u8, v.redd.it, streamff) play through an
+    // in-document <video>, not the YouTube player — playerRef is null for them,
+    // so every seek path (← →, double-tap, the ⟲5/⟳5 buttons) silently did
+    // nothing on an MLB highlight (Jacob 8/9). It reads like a Safari/HLS quirk
+    // but it's ours: the handler was written YouTube-only. Same clamping rules.
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const dur = v.duration;
+      if (!dur || !isFinite(dur) || dur <= 0) return;
+      const target = delta >= 0 ? Math.min(v.currentTime + delta, dur) : Math.max(0, v.currentTime + delta);
+      v.currentTime = target;
+      void v.play().catch(() => { /* autoplay prompt already covers this */ });
+      setProgress(Math.min(1, target / dur));
+      return;
+    }
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
     const d = p.getDuration();
@@ -742,7 +834,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     p.seekTo(target, true);
     p.playVideo?.();
     setProgress(Math.min(1, target / d));
-  }, []);
+  }, [hlsMode]);
 
   // Toggle play/pause on the YouTube player — drives both the Space/k keys and a
   // click anywhere on the video (via the click-catcher overlay). We do it through
@@ -950,7 +1042,9 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         if (stepGallery(e.key === "ArrowLeft" ? -1 : 1)) { e.preventDefault(); return; }
         if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
         else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
-        else if (ytMode) { e.preventDefault(); seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP); }
+        // hlsMode included: MLB/Reddit direct streams seek through the <video>
+        // element now (see seekBy), so ← → skip on them like they do on YouTube.
+        else if (ytMode || hlsMode) { e.preventDefault(); seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP); }
       }
       // Space (or "k", YouTube's own key) toggles play/pause on the YT clip.
       // preventDefault stops Space from scrolling the page. Skip text entry and
@@ -964,7 +1058,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, seekBy, togglePlay, onPrev, onNext, stepGallery]);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, hlsMode, seekBy, togglePlay, onPrev, onNext, stepGallery]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -977,7 +1071,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // overlay: aria-modal="true" only marks that content inert to assistive tech,
   // it does NOT stop a sighted keyboard user Tabbing out. Focusables are queried
   // live per keypress (so per-mode controls — image / text / video — are always
-  // current) and offsetParent filters hidden ones. The modal mounts fresh per
+  // current) and getClientRects() filters hidden ones. The modal mounts fresh per
   // open (the parent guards it), so this fires on every open/close — empty deps
   // capture the opener once. (Once focus enters the cross-origin YouTube iframe
   // the browser routes keydown to the iframe's own document, so the trap governs
@@ -992,7 +1086,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         dialog.querySelectorAll<HTMLElement>(
           'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
         )
-      ).filter((el) => el.offsetParent !== null);
+      // getClientRects().length, NOT offsetParent: offsetParent is null for
+      // BOTH display:none elements AND any position:fixed element, so the earlier
+      // offsetParent test silently dropped the desktop Prev/Next post chevrons
+      // (rendered inside this dialog, `position:fixed`) from the trap — leaving
+      // them visible but Tab-unreachable. getClientRects() is empty only when the
+      // element is genuinely unrendered (display:none, incl. the off-breakpoint
+      // pager variant), so it keeps hiding those while re-including the fixed one.
+      ).filter((el) => el.getClientRects().length > 0);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -1260,6 +1361,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
     if (hlsMode || embedMode || imageMode || textMode) return; // HLS / iframe / image / text branches handle rendering instead
+    // Channels that refuse embeds on every upload (F1) can only end at the
+    // "Watch on YouTube" card, so go there on the first frame instead of
+    // mounting a player that will black-screen, error 150, and then walk a
+    // fallback chain with nothing in it (Jacob 8/10). See
+    // leadChannelBlocksEmbeds for how the list is verified and unwound.
+    if (leadChannelBlocksEmbeds(strictFallbackChannels(fallbackUrl))) {
+      setYtFailed(true);
+      return;
+    }
     setYtFailed(false); // fresh attempt (initial load or a fallback swap) — clear any prior failure
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
@@ -1297,24 +1407,28 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // the "Watch on YouTube" card rather than playing an unvetted upload.
       const strictChannels = strictFallbackChannels(fallbackUrl);
       const raceParam = raceFallbackParam(fallbackUrl);
+      const weekParam = weekFallbackParam(fallbackUrl);
+      // Fail closed if a highlight caller ever forgets to carry its channel
+      // contract. The old unscoped branch was how NFL (and every other league)
+      // could resolve correctly, hit an embed error, then silently swap to a
+      // video from a different uploader.
+      if (!strictChannels.length) {
+        retryingRef.current = false;
+        setYtFailed(true);
+        return;
+      }
       try {
         const excl = encodeURIComponent(failed.join(","));
         let nextId: string | null = null;
-        if (strictChannels.length) {
-          // Sequential, not parallel: the worker scrapes YouTube's results page
-          // and rate-limits into empty responses under bursts (same reason
-          // EventCard's UFC chain is sequential).
-          for (const channel of strictChannels) {
-            const res = await fetch(
-              `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}`
-            );
-            const data = res.ok ? await res.json() : null;
-            if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
-          }
-        } else {
-          const res = await fetch(`${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}${raceParam}`);
+        // Sequential, not parallel: the worker scrapes YouTube's results page
+        // and rate-limits into empty responses under bursts (same reason
+        // EventCard's UFC chain is sequential).
+        for (const channel of strictChannels) {
+          const res = await fetch(
+            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}`
+          );
           const data = res.ok ? await res.json() : null;
-          if (data?.videoId && data.videoId !== currentId) nextId = data.videoId;
+          if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
         }
         if (nextId) {
           setCurrentId(nextId); // an untried alternate — the effect resets ytFailed
@@ -1327,6 +1441,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         retryingRef.current = false;
       }
     };
+    tryFallbackRef.current = () => { void tryFallback(); };
 
     // Highest → lowest. Only request qualities we know YT advertises.
     const QUALITY_PREF = ["highres", "hd2160", "hd1440", "hd1080", "hd720"];
@@ -1388,18 +1503,37 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // early, so we re-check on PLAYING below). Default stays covered.
             try {
               const t = event.target.getVideoData?.()?.title ?? "";
-              if (t) setTitleSafe(!isScoreSpoiler(t));
+              if (t) setTitleSafe(!titleAlwaysMasked && !isScoreSpoiler(t));
             } catch { /* keep covered */ }
-            // Watchdog: if we never reach PLAYING or BUFFERING within
-            // 10s, assume the iframe is stuck on a silent error screen
-            // (e.g. YT Error 153 on MLB content) and try the next
-            // candidate. Bounded by failedIdsRef + the worker's exclude
-            // param, so retries terminate when no more candidates exist.
+            // Watchdog: if we never reach PLAYING or BUFFERING within 10s
+            // something is wrong — but WHAT is wrong decides the treatment,
+            // and the two causes look identical from out here:
+            //   • the browser refused muted autoplay (very common on a cold
+            //     profile / fresh account with no media engagement, and
+            //     YouTube's onAutoplayBlocked does NOT reliably fire), or
+            //   • the iframe is stuck on a silent error screen (YT Error 153).
+            // In BOTH cases the player parks in UNSTARTED (-1) / CUED (5).
+            // Burning fallback ids on the first one is how a perfectly
+            // embeddable NFL clip ended up behind "the league blocked embedded
+            // playback" (Jacob 8/9) — the retry re-searched the same strict
+            // channel, found nothing new, and painted the block card.
+            // So: park state ⇒ treat it as autoplay-blocked and show the
+            // tap-to-play prompt. Only if the user's own tap ALSO fails to
+            // start it (the 8s confirm in resumeBlockedPlayback) do we go
+            // hunting for an alternate id. A player that's missing entirely
+            // (undefined state) is genuinely broken and still falls back now.
             if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
             watchdogRef.current = window.setTimeout(() => {
               if (autoplayBlockedRef.current) return;
               const state = playerRef.current?.getPlayerState?.();
-              if (state !== 1 && state !== 3) tryFallback();
+              if (state === 1 || state === 3) return;
+              // Discriminator between the two: a healthy clip that simply was
+              // not allowed to start has still loaded its metadata, so
+              // getDuration() is non-zero. A player parked on YouTube's silent
+              // error screen never gets that far and reports 0.
+              const loaded = (playerRef.current?.getDuration?.() ?? 0) > 0;
+              if (loaded && (state === -1 || state === 5)) markAutoplayBlocked();
+              else tryFallback();
             }, 10000);
           },
           // PLAYING (1) is the first state where getAvailableQualityLevels()
@@ -1413,18 +1547,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // Playback actually started — kill the watchdog.
             if (event.data === 1 || event.data === 3) {
               clearAutoplayBlocked();
+              if (!hasStartedRef.current) {
+                hasStartedRef.current = true;
+                setHasStarted(true);
+              }
+              if (retryConfirmRef.current) {
+                window.clearTimeout(retryConfirmRef.current);
+                retryConfirmRef.current = null;
+              }
               if (watchdogRef.current) {
                 window.clearTimeout(watchdogRef.current);
                 watchdogRef.current = null;
               }
             }
             if (event.data === 1) {
+              trackVideoPlay();
               forceBest(event.target);
               // By PLAYING the title metadata is reliably populated — re-run the
               // spoiler check in case getVideoData() was empty at onReady.
               try {
                 const t = event.target.getVideoData?.()?.title ?? "";
-                if (t) setTitleSafe(!isScoreSpoiler(t));
+                if (t) setTitleSafe(!titleAlwaysMasked && !isScoreSpoiler(t));
               } catch { /* keep covered */ }
             }
           },
@@ -1465,13 +1608,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       if (window.onYouTubeIframeAPIReady === initPlayer) {
         window.onYouTubeIframeAPIReady = undefined;
       }
+      tryFallbackRef.current = null;
       if (playerRef.current?.destroy) playerRef.current.destroy();
       // Drop the reference to the just-destroyed instance so the position poll
       // (which re-subscribes on ytMode, not currentId) can't call methods on it
       // during a fallback swap before the replacement player is built.
       playerRef.current = null;
     };
-  }, [currentId, fallbackUrl, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked]);
+    // titleAlwaysMasked is derived from fallbackUrl (already a dep), so it can
+    // never change on its own — listed to keep exhaustive-deps quiet.
+  }, [currentId, fallbackUrl, titleAlwaysMasked, hlsMode, embedMode, imageMode, textMode, youtubeNativeControls, clearAutoplayBlocked, markAutoplayBlocked, trackVideoPlay]);
 
   // Shared sizing for the YT video region + control bar so both line up and,
   // in fullscreen, the video is capped to leave room for the bar underneath.
@@ -1512,26 +1658,39 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const mediaFrameWidth = fsActive ? fsMediaWidth : `min(100%, calc(${mediaMaxH} * 16 / 9))`;
   const ytFrameWidth = mediaFrameWidth;
 
+  // Before a YouTube clip has ever played, the ONLY thing that can start it is
+  // a real click on YouTube's own play button inside the iframe (see
+  // hasStarted). So in that window we must not put a clickable target of our
+  // own over it — our button would eat the tap and hand it to playVideo(),
+  // which is a postMessage with no user activation, and nothing would happen.
+  // We render hint text only, pushed below centre and fully click-through, so
+  // YouTube's red button stays the tap target.
+  const ytTapThrough = ytMode && !hasStarted;
+
   // LIGHT, non-blocking autoplay hint (Jacob 7/16): when the browser blocks even
   // muted autoplay, show a translucent centered play button + a small pill hint —
   // NOT a full-screen dark cover that swallows the tap. The container is
   // pointer-events-none so tapping ANYWHERE on the video falls through to the
   // click-catcher and starts playback; the "playing" event then clears this
-  // (see clearAutoplayBlocked). Only the play button itself catches a click.
+  // (see clearAutoplayBlocked). Only the play button itself catches a click,
+  // and only once in-document playback is possible (HLS, or a YT clip that has
+  // already played and is merely paused).
   const autoplayPrompt = autoplayBlocked ? (
     <div
       role="alert"
-      className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 px-6 text-center"
+      className={`pointer-events-none absolute inset-0 z-40 flex flex-col items-center px-6 text-center ${ytTapThrough ? "justify-end pb-[18%]" : "justify-center gap-2"}`}
     >
-      <button
-        type="button"
-        onClick={resumeBlockedPlayback}
-        aria-label="Play"
-        className="pointer-events-auto inline-flex items-center justify-center rounded-full w-16 h-16 text-white shadow-lg transition-transform hover:scale-105 cursor-pointer"
-        style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.35)" }}
-      >
-        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20" /></svg>
-      </button>
+      {!ytTapThrough && (
+        <button
+          type="button"
+          onClick={resumeBlockedPlayback}
+          aria-label="Play"
+          className="pointer-events-auto inline-flex items-center justify-center rounded-full w-16 h-16 text-white shadow-lg transition-transform hover:scale-105 cursor-pointer"
+          style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.35)" }}
+        >
+          <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 20,12 7,20" /></svg>
+        </button>
+      )}
       <span className="rounded-full px-3 py-1 text-[11px] font-medium text-white/90" style={{ background: "rgba(0,0,0,0.5)" }}>
         Tap to play — enable autoplay for HideScore to skip this
       </span>
@@ -1720,12 +1879,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               {isGallery && (
                 <>
                   {/* Picture counter — the cue that there's more than one, which
-                      the old single-image lightbox gave no hint of. */}
+                      the old single-image lightbox gave no hint of. Purely visual
+                      ("2 / 3" reads as a bare "2 3" to a screen reader), so hide it
+                      from AT and voice the position through the sr-only live region
+                      below instead. */}
                   <span
+                    aria-hidden="true"
                     className="absolute top-2 right-2 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none text-white"
                     style={{ background: "rgba(0,0,0,0.6)" }}
                   >
                     {galAt + 1} / {galLen}
+                  </span>
+                  {/* The gallery frames all carry alt="" (no per-image caption is
+                      available), and the counter + dots above are aria-hidden, so
+                      paging with the Prev/Next buttons gave a screen-reader user no
+                      cue which picture they'd landed on. Voice the new position
+                      through a dedicated sr-only live region (WCAG 4.1.3 Status
+                      Messages), matching the same role="status" aria-live="polite"
+                      pattern the copy-link confirmation and FeedbackBox already use.
+                      Its text changes on every step, so each page is announced. */}
+                  <span role="status" aria-live="polite" className="sr-only">
+                    Picture {galAt + 1} of {galLen}
                   </span>
                   {/* On-image arrows: the fixed side chevrons page POSTS, so the
                       within-post controls have to live on the photo itself. */}
@@ -1961,8 +2135,18 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   buttons (z-20) so those still work; the masks are pointer-events:
                   none and pass their clicks down to here. */}
               {/* When YouTube's native controls are on, DON'T catch clicks —
-                  let them reach the iframe so YT's own play/seek/fullscreen work. */}
-              {!youtubeNativeControls && (
+                  let them reach the iframe so YT's own play/seek/fullscreen work.
+                  ALSO don't catch them before the clip has ever played: until
+                  then YouTube's own red play button is the only control that can
+                  legally start playback (a postMessage playVideo() carries no
+                  user gesture across the origin boundary), and swallowing that
+                  first tap is what made WNBA/NFL clips sit on a dead play button
+                  forever — MLB looked fine only because it's an in-document HLS
+                  <video>, not an iframe (Jacob 8/9). The moment PLAYING lands we
+                  mount the catcher and every existing behaviour — pause on tap,
+                  double-tap seek, keyboard shortcuts staying in this document —
+                  is back. */}
+              {!youtubeNativeControls && hasStarted && (
                 <div
                   aria-hidden
                   className={`absolute inset-0 z-10 touch-manipulation ${idleCursor ? "cursor-none" : "cursor-default"}`}
@@ -2338,14 +2522,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 autoPlay
                 muted
                 playsInline
-                aria-label={headline || "Video player"}
+                onPlaying={trackVideoPlay}
+                // Spoiler-safe accessible name — matching the sibling <iframe>'s
+                // title and the dialog's aria-label: the PeekBlur'd headline can
+                // carry a score, so setting it as this focusable player's
+                // aria-label announced the spoiler unblurred to screen readers on
+                // the HLS path (MLB statsapi + Reddit clips, whose headlines
+                // routinely state the result). Use the generic label instead.
+                aria-label="Video player"
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (
               <iframe
                 ref={iframeRef}
                 src={withAutoplay(embedUrl!)}
-                title={headline || "Video player"}
+                // Spoiler-safe accessible name — see the <video> note above and
+                // the dialog's aria-label: the PeekBlur'd headline can carry a
+                // score, so an iframe `title` set to it would announce the
+                // spoiler unblurred to screen readers. Use the generic label.
+                title="Video player"
                 className="absolute inset-0 w-full h-full"
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowFullScreen
@@ -2406,7 +2601,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               href={sourceShareUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              // Route through handleExternalClick so a YouTube sourceShareUrl
+              // deep-links into the installed YouTube app on native (matching
+              // the sibling "Open on…" buttons above that already call
+              // openExternal) instead of opening the in-app browser. The helper
+              // still stopPropagation()s — so the click doesn't dismiss the
+              // modal — and leaves modifier/middle-clicks to the browser.
+              onClick={handleExternalClick(sourceShareUrl)}
               className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
             >
               {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}

@@ -11,14 +11,63 @@ import { getApiBase } from "@/lib/youtube";
 // on. `official` = 1st button (channel recap), `extended` = 2nd button (already
 // deduped against `official` at bake time).
 export type BakedHighlight = {
+  t?: number;
   matchup?: string;
+  teams?: [string, string];
+  eventDate?: string;
   official?: string;
+  officialChannel?: string;
   extended?: string;
+  extendedChannel?: string;
   telemundo?: string;
+  telemundoChannel?: string;
   telemundoExtended?: string;
+  telemundoExtendedChannel?: string;
   mlbOrder?: "official-first";
   sourcePolicy?: "official-channel";
 };
+
+const BAKED_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;
+
+const BAKED_CHANNEL_KEY = {
+  official: "officialChannel",
+  extended: "extendedChannel",
+  telemundo: "telemundoChannel",
+  telemundoExtended: "telemundoExtendedChannel",
+} as const;
+
+// A policy label alone is not proof: older manifests carried stale or unscoped
+// IDs while still saying "official-channel". Trust a prebaked slot only when it
+// names the exact channel the current caller expects. Legacy records safely fall
+// back to the same strict live resolver until the next bake adds these markers.
+export function getChannelVerifiedBakedId(
+  baked: BakedHighlight | null | undefined,
+  slot: keyof typeof BAKED_CHANNEL_KEY,
+  expectedChannel: string | null | undefined,
+  expectedAway: string,
+  expectedHome: string,
+): string | null {
+  if (!baked || baked.sourcePolicy !== "official-channel" || !expectedChannel) return null;
+  if (!Number.isFinite(baked.t) || Date.now() - Number(baked.t) >= BAKED_MAX_AGE_MS) return null;
+  const normalizeTeam = (name: string) => name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const expectedMatchup = [normalizeTeam(expectedAway), normalizeTeam(expectedHome)].sort().join("|");
+  if (!baked.matchup || baked.matchup !== expectedMatchup) return null;
+  const actualChannel = baked[BAKED_CHANNEL_KEY[slot]];
+  const videoId = baked[slot];
+  if (!videoId || actualChannel?.toLowerCase() !== expectedChannel.toLowerCase()) return null;
+  // Even two slots from the same approved uploader must never render the same
+  // clip under two labels. Reject the duplicate at the client trust boundary;
+  // the strict live resolver can refill a distinct slot.
+  const duplicated = (Object.keys(BAKED_CHANNEL_KEY) as (keyof typeof BAKED_CHANNEL_KEY)[])
+    .some((otherSlot) => otherSlot !== slot && baked[otherSlot] === videoId);
+  return duplicated ? null : videoId;
+}
 
 // Fetched once per session and shared across every card (one small static
 // request vs. N live scrapes). On any miss the promise is cleared so the next
@@ -36,7 +85,19 @@ export function loadBakedHighlights(): Promise<Record<string, BakedHighlight>> {
           return {};
         }
         const data = await res.json();
-        bakedCache = (data?.games ?? {}) as Record<string, BakedHighlight>;
+        // A 200 whose body carries no `games` map — a malformed or partial
+        // deploy, an R2 stub, or a bare `{}` — is a miss, not an empty day:
+        // clear the promise so the next card retries, rather than caching an
+        // empty map for the page's whole lifetime (the documented behavior in
+        // this file's header, until now wired only for the !res.ok and
+        // thrown-error branches). A present-but-empty `{games:{}}` (a valid day
+        // with nothing baked yet) still caches as before — one request, no
+        // per-card refetch.
+        if (!data?.games) {
+          bakedPromise = null;
+          return {};
+        }
+        bakedCache = data.games as Record<string, BakedHighlight>;
         return bakedCache;
       } catch {
         bakedPromise = null;

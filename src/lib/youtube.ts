@@ -7,8 +7,8 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   nfl: "NFL",
   ncaam: "March Madness",
   // NCAAW: same NCAA tournament uploader as NCAAM ("March Madness" channel
-  // posts both men's and women's brackets). Regular-season games fall through
-  // to the no-channel secondary search — same limitation NCAAM has.
+  // posts both men's and women's brackets). Regular-season games stay dark if
+  // that exact uploader has no recap; there is no unscoped secondary search.
   ncaaw: "March Madness",
   // NCAAF: ESPN College Football posts per-game recaps with title format
   // "Team A vs. Team B | Full Game Highlights | ESPN College Football".
@@ -18,8 +18,8 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // for every game. FIFA's own channel only posts alt-cast / limited clips, so
   // use the broadcaster — same pattern as EPL→NBC Sports, UCL→CBS Sports Golazo,
   // MLS→Major League Soccer. The worker further restricts WC results to an
-  // official-channel allowlist (FOX Sports / FOX Soccer / FIFA) so the unscoped
-  // "search" button can't serve fan re-uploads either.
+  // official-channel allowlist (FOX Sports / FOX Soccer / FIFA); the client also
+  // requires an exact channel for every slot and every embed retry.
   fifa: "FOX Sports",
   // EPL: Premier League's own YouTube channel posts only short clips
   // (broadcast rights restrict full game recaps). NBC Sports (US broadcaster)
@@ -52,18 +52,21 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // → club/aggregator uploads, NWSL → single-club channels, EFL → "Wrexham
   // AFC", Saudi PL → "Santos El Creador", Libertadores → nothing at all.
   //
-  // Liga MX: TUDN is the Univision rightsholder. The MX feed posts the
-  // per-match "RESUMEN Y GOLES I A vs B | Liga MX - Jornada N" recap and is
-  // what the search consistently ranks; the sibling "TUDN USA" posts an
-  // English "HIGHLIGHTS -" cut but ranks inconsistently, so it is NOT used —
-  // a second channel here would only widen the strict gate, not deepen it.
-  ligamx: "TUDN México",
+  // Liga MX: TUDN is the Univision rightsholder, and the channel that actually
+  // carries the per-match recap is "TUDN USA" — it posts
+  // "HIGHLIGHTS - A vs B | Liga MX - Jornada N Apertura YYYY | TUDN".
+  // ⚠️ This was "TUDN México" through 2026-08-09 and resolved NOTHING: a strict
+  // (and even a non-strict) channel-scoped lookup returned "No results" for
+  // every Liga MX fixture tried, so the column rendered a finished card with an
+  // empty reserved highlight row (Jacob 8/10 — "box size is huge and don't see
+  // highlights"). Re-verified 2026-08-10 against the live worker with strict=1:
+  // TUDN USA 3/3, TUDN México 0/3, bare "TUDN" 0/3.
+  ligamx: "TUDN USA",
   // NWSL: the league channel's author_name is the FULL name, not the
   // abbreviation — "NWSL" never matched. Club channels (Seattle Reign FC,
   // San Diego Wave FC) also post per-match highlights and were winning the
   // unscoped search, which is exactly the inconsistency the gate exists to
-  // stop. CBS Sports Golazo's NWSL playlist is NOT a fallback: verified 0/3
-  // on strict, its uploads aren't titled per-match the way UCL/UEL's are.
+  // stop. CBS Sports W Golazo is separately verified for the strict alternate.
   nwsl: "National Women's Soccer League",
   // EFL Championship: the league's own channel, author_name is the bare
   // "EFL" (not "Sky Bet EFL", not "Sky Sports Football" — both verified 0/1).
@@ -77,13 +80,13 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // AFCON: CAF's own channel ("CAFOnline" verified 0/1). Gated to 2027 in
   // ALL_LEAGUES, so this sits inert until the tournament year.
   afcon: "CAF TV",
-  // ⛔ euro + cricket deliberately have NO entry — see the block comment below.
-  // laliga + ligue1 deliberately have NO official channel — same call as UFC.
+  // euro + cricket deliberately have NO entry — see the block comment below.
+  // laliga + ligue1 deliberately have NO approved channel.
   // LALIGA's channel ("LALIGA EA SPORTS") posts Spanish-language full matches
   // rather than clean per-match English highlights, and Ligue 1's author name
   // is sponsor-suffixed with a curly apostrophe ("Ligue 1 McDonald's") that
   // re-brands every cycle. A wrong string silently kills the official slot, so
-  // both fall through to the unscoped search instead.
+  // both stay dark instead of falling through to an unscoped search.
   // Golf majors — each tournament has its own channel. Keys must match the
   // label-derived lookup key `golf_${label.toLowerCase().replace(/\s+/g,"")}`
   // (see getOfficialChannelName), so the PGA Championship — whose league label
@@ -146,10 +149,9 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // "any title that matches" fallback must NOT run — a null here hides the
 // highlight button entirely rather than serving a re-upload.
 //
-// ⚠️ This is the opposite of laliga/ligue1, which have no OFFICIAL_CHANNELS
-// entry but are still fine on the unscoped search (Spanish/French rightsholder
-// cuts rank #1 there). Membership in this set is a stronger claim: the unscoped
-// result was CHECKED and found to be junk.
+// La Liga / Ligue 1: neither currently has a stable, verified per-match uploader
+// mapping. A rightsholder happening to rank first in an unscoped search is not a
+// channel guarantee, so both stay dark until an exact author_name is verified.
 //
 // cricket (IPL): verified 2026-08-03 against three real 2026 fixtures. The
 // unscoped search returned "Cricket fan 🏏786", "BCCI Cricket Match Highlights"
@@ -171,19 +173,17 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // verified official channel (currently LEC only, see OFFICIAL_CHANNELS) can
 // still resolve strictly against that channel. A league with no verified entry
 // stays fully dark. See hasNoTrustedHighlightSource below.
-const NO_HIGHLIGHT_FALLBACK = new Set(["cricket", "euro", "esports"]);
+const NO_HIGHLIGHT_FALLBACK = new Set(["cricket", "euro", "esports", "laliga", "ligue1"]);
 
-// True when a league has no acceptable highlight source at all — neither an
-// official channel nor a trustworthy unscoped search. Callers must render no
+// True when a league has no exact approved channel. Callers must render no
 // highlight button (not a search-page link) for these.
 //
 // `label` is the sub-league (esports: PandaScore's league name — "LCK", "LEC").
 // Esports is one sport key spanning many unrelated uploaders, so the answer is
-// per-league: dark unless that league has a verified official channel. Every
-// other sport ignores `label` and behaves exactly as before.
+// per-league. Every sport is dark unless it maps to a verified exact channel.
 export function hasNoTrustedHighlightSource(sport: string, label?: string): boolean {
   if (sport === "esports") return !getOfficialChannelName(sport, label);
-  return NO_HIGHLIGHT_FALLBACK.has(sport);
+  return NO_HIGHLIGHT_FALLBACK.has(sport) || !getOfficialChannelName(sport, label);
 }
 
 // True when a sport must never fall back to an unscoped YouTube search, even
@@ -221,6 +221,60 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   f1: ["FORMULA 1", "ESPN", "Sky Sports F1"],
   ufc: ["UFC", "ESPN"],
 };
+
+// Official channels that disable embedded playback on EVERY upload, so the
+// in-app player can only ever render YouTube's own "Video unavailable" screen.
+// Verified 2026-08-10 in a real browser from the hidescore.com origin via the
+// IFrame API: FORMULA 1's 2026 Hungarian and 2026 British race-highlight
+// uploads both fire onError with code 150 ("embedding disabled by request of
+// the owner"). Not a geo/bot artifact — the same videos play fine on
+// youtube.com.
+//
+// Being on this list means the modal skips the player entirely and opens on the
+// "Watch on YouTube" card instead of black-screening for several seconds first
+// (player init → error 150 → a walk down SECONDARY_CHANNELS that, for F1,
+// cannot succeed: ESPN and Sky Sports F1 both return "No results" for a race
+// highlight — checked the same day against the live /api/youtube worker).
+//
+// Deleting a name here restores the normal try-then-fall-back path, which is
+// all it takes if a rights holder ever turns embedding back on.
+//
+// NFL added 2026-08-10 by the same measurement, run through scripts/check-
+// embeddable.mjs: four separate NFL uploads all returned error 150, while ESPN,
+// MLB and DAZN Boxing clips played in the very same headless session — so this
+// is the channel's own setting, not a bot or geo artifact. Worth stating
+// plainly because the last NFL playback complaint was NOT this: the "league
+// blocked embedded playback" card Jacob hit on 8/9 was a false positive from
+// the autoplay watchdog (see VideoModal's onReady note). This one is real, and
+// there is no second source to fall back to — ESPN's NFL scoreboard ships
+// `highlights: []` on every competition, so the league's own channel is the
+// only place the clip exists.
+const EMBED_BLOCKED_CHANNELS = new Set(["FORMULA 1", "NFL"]);
+
+// True when the FIRST channel a highlight is gated to refuses embeds. The lead
+// channel is the only one guaranteed to hold the clip (the rest of the chain is
+// opportunistic), so a blocked lead means the attempt is already lost.
+export function leadChannelBlocksEmbeds(channels: string[]): boolean {
+  return channels.length > 0 && EMBED_BLOCKED_CHANNELS.has(channels[0]);
+}
+
+// Channels whose clip title bar must stay masked no matter what the spoiler
+// filter says. The mask is normally lifted once SPOILER_RX clears the real
+// YouTube title, which is right for a team sport: "Mets vs Braves | Game
+// Highlights" is the house style and carries nothing.
+//
+// Combat sports are not like that. A fight has exactly one fact — who finished
+// whom — and the channels title with it every time, in language that keeps
+// mutating (stopped, KO'd, def., retains, starched, and whatever comes next).
+// Every miss is a full spoiler on the marquee bout, and the filter has already
+// been caught out here more than once (Jacob 8/10). So for these channels the
+// answer isn't another keyword: it's to stop asking the question. The cost is
+// one covered strip on clips that would have been safe to show.
+const TITLE_ALWAYS_MASKED_CHANNELS = new Set(["UFC", "DAZN Boxing"]);
+
+export function channelAlwaysMasksTitle(channels: string[]): boolean {
+  return channels.some((c) => TITLE_ALWAYS_MASKED_CHANNELS.has(c));
+}
 
 export function getYouTubeSearchUrl(
   awayTeam: string,
@@ -271,7 +325,7 @@ export function getCompetitionName(sport: string): string | null {
 
 // Returns the full curated fallback chain of YouTube channels to try for the
 // 2nd highlight button, in priority order. Empty array means no curated
-// options — caller should drop straight to a generic search.
+// options; callers must not substitute a generic search.
 export function getSecondaryChannels(sport: string, label?: string): string[] {
   if (label) {
     const labelKey = `${sport}_${label.toLowerCase().replace(/\s+/g, "")}`;
@@ -288,8 +342,8 @@ export function getSecondaryChannels(sport: string, label?: string): string[] {
 // ESPN's `shortDisplayName` occasionally diverges from how official league
 // channels title their highlight uploads (e.g. ESPN: "Red Bull NY", MLS
 // channel videos: "New York Red Bulls"). Without a rewrite the
-// channel-scoped /api/youtube lookup returns no results and the highlight
-// button falls back to a YouTube search page.
+// strict channel-scoped /api/youtube lookup returns no results and the
+// highlight button stays hidden.
 const TEAM_NAME_ALIASES: Record<string, string> = {
   "Red Bull NY": "New York Red Bulls",
   // ESPN uses compact expansion-team names while WNBA titles spell out the
@@ -305,17 +359,6 @@ function aliasTeam(name: string): string {
 function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null, competition?: string | null): string {
   const head = `${aliasTeam(awayTeam)} vs ${aliasTeam(homeTeam)} highlights`;
   const parts = [competition ? `${head} ${competition} ${dateStr}` : `${head} ${dateStr}`];
-  if (seriesNote) parts.push(seriesNote);
-  return parts.join(" ");
-}
-
-// Same query without the date suffix — used as a last-resort retry when the
-// dated form returns nothing. Some official channels title their recaps
-// without a date or use a format the matcher doesn't see ("Game Recap |
-// AwayTeam @ HomeTeam") so dropping the date lets the lookup land.
-function buildUndatedQuery(awayTeam: string, homeTeam: string, seriesNote?: string | null, competition?: string | null): string {
-  const head = `${aliasTeam(awayTeam)} vs ${aliasTeam(homeTeam)} highlights`;
-  const parts = [competition ? `${head} ${competition}` : head];
   if (seriesNote) parts.push(seriesNote);
   return parts.join(" ");
 }
@@ -337,13 +380,17 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[]): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[], weekNumber?: number | null): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
     // Motorsport race gate — the channel gate can't tell two races apart when
     // one channel uploads every round. See buildRaceTokens in lib/espn.ts.
     if (raceTokens?.length) url += `&race=${encodeURIComponent(raceTokens.join("|"))}`;
+    // Gridiron week gate — the NFL analogue of the race gate. NFL recap titles
+    // carry a week, never a date, so two meetings of the same teams in one
+    // season are identical to the date and year gates. See Game.weekNumber.
+    if (weekNumber) url += `&week=${weekNumber}`;
     const excludeIds = (exclude ?? []).filter((id): id is string => !!id);
     if (excludeIds.length) url += `&exclude=${encodeURIComponent(excludeIds.join(","))}`;
     if (preferExtended) url += `&prefer=extended`;
@@ -415,6 +462,15 @@ const TELEMUNDO_WORLD_CUP_TEAM_ALIASES: Record<string, string> = {
   Uruguay: "Uruguay",
   USA: "Estados Unidos",
   Uzbekistan: "Uzbekistán",
+  // Same fix fifaRankings.ts carries for these two nations: ESPN's scoreboard
+  // commonly sends "DR Congo" and "Côte d'Ivoire", which normalize away from the
+  // "Congo DR"/"Ivory Coast" primary keys above and would fall through to the
+  // English name on a Spanish-language channel — the exact under-match this map
+  // is meant to prevent. Alias each to the same Spanish name; the primary keys
+  // stay put, and distinct nations can't collide under the normalization, so no
+  // currently-resolving lookup regresses.
+  "DR Congo": "RD Congo", // vs. "Congo DR"
+  "Cote d'Ivoire": "Costa de Marfil", // vs. "Ivory Coast" (FIFA's official French name)
 };
 
 // Fold diacritics + typographic apostrophes and lowercase for lookup — the SAME
@@ -463,18 +519,13 @@ export async function resolveTelemundoWorldCupVideo(
     "Telemundo Deportes",
     exclude,
     preferExtended,
+    true,
   );
 }
 
-// Walks the lookup chain so a highlight button never has to fall back to
-// opening a YouTube search page externally. Tries in order:
-//   1. channel-filtered query (the strict "official" lookup)
-//   2. unfiltered query (any video matching the dated title)
-//   3. unfiltered query without the date suffix (catches channels whose
-//      recap titles omit the date entirely)
-// Returns the first hit (deduped against `exclude`), or null if nothing
-// matched anywhere — callers should hide the button in that case rather
-// than dropping users into a YouTube search.
+// Resolve a per-game highlight against one exact uploader. There is no
+// unscoped tier: a missing channel or strict miss returns null and the caller
+// hides the button rather than serving a re-upload.
 export async function resolveHighlightVideo(
   awayTeam: string,
   homeTeam: string,
@@ -484,27 +535,9 @@ export async function resolveHighlightVideo(
   exclude?: (string | null | undefined)[],
   competition?: string | null,
   preferExtended?: boolean,
-  strictChannel?: boolean
+  weekNumber?: number | null,
 ): Promise<string | null> {
   const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
-  const undated = buildUndatedQuery(awayTeam, homeTeam, seriesNote, competition);
-  if (strictChannel && channel) {
-    // Hard channel gate (strict=1): the official channel is authoritative — if
-    // it hasn't posted this match, 404 rather than let a reupload win. This is
-    // what stops junk like "Sadak Chaps" from taking a tennis/golf slot.
-    return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true);
-  }
-  // Fire every fallback tier CONCURRENTLY instead of awaiting them in series.
-  // Each /api/youtube call is a live YouTube scrape (~1-2s); walking
-  // channel → dated → undated sequentially meant a button that fell through to
-  // the undated tier (common for World Cup, whose FIFA-channel recap often lags)
-  // took 2-3× as long to appear (Jacob 7/7). Running them at once resolves in a
-  // single scrape-time, and we still return by the SAME priority — channel hit,
-  // then dated unscoped, then undated — so results are identical, just faster.
-  const [chanHit, datedUnscoped, undatedHit] = await Promise.all([
-    channel ? fetchFirstVideoId(datedQuery, channel, exclude, preferExtended) : Promise.resolve(null),
-    fetchFirstVideoId(datedQuery, undefined, exclude, preferExtended),
-    fetchFirstVideoId(undated, undefined, exclude, preferExtended),
-  ]);
-  return chanHit || datedUnscoped || undatedHit;
+  if (!channel) return null;
+  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true, undefined, weekNumber);
 }

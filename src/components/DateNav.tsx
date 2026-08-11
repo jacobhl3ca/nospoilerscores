@@ -76,6 +76,19 @@ export function getETHour(): number {
 function CalendarDropdown({ selectedDate, onDateChange, onClose }: DateNavProps & { onClose: () => void }) {
   const [viewDate, setViewDate] = useState(() => parseYMD(selectedDate));
 
+  // Keep the displayed month in sync with the controlled date. `viewDate` (which
+  // drives the rendered grid) is seeded from selectedDate once on open, but the
+  // ‹/› day arrows and Yesterday/Today/Tomorrow pills in the DateNav row beside
+  // the calendar toggle stay live WHILE the dropdown is open (the toggle is that
+  // row's `trailing` node). Paging the date across a month boundary — e.g. ‹ from
+  // Jul 1 to Jun 30 — then changed selectedDate but left the grid stranded on the
+  // old month, with the selected-day highlight (dateStr === selectedDate) matching
+  // nothing shown. Re-sync so the grid follows. Manual month paging (prev/next)
+  // moves only viewDate, not selectedDate, so it never fights this.
+  useEffect(() => {
+    setViewDate(parseYMD(selectedDate));
+  }, [selectedDate]);
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       // NOTE: two DateNav/CalendarDropdown instances (mobile + desktop) are

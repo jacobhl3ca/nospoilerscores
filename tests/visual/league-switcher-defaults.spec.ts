@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test";
 
 const CORE_SETTINGS_LEAGUES = ["MLB", "NFL", "MLS", "WNBA"];
 const CORE_SWITCHER_LEAGUES = ["MLB", "NFL Preseason", "MLS", "WNBA"];
-const OPT_IN_LEAGUES = ["Liga MX", "NWSL", "Libertadores", "F1", "NASCAR", "IndyCar", "UFC", "Boxing", "Chess", "Esports"];
+// "Esports" dropped 2026-08-09 — hidden in ALL_LEAGUES (only LEC has a trusted
+// highlight source, so most of the column could never show video).
+const OPT_IN_LEAGUES = ["Liga MX", "NWSL", "Libertadores", "F1", "NASCAR", "IndyCar", "UFC", "Boxing", "Chess"];
 
 async function openSwitcherSettings(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Open settings", exact: true }).click();
@@ -155,6 +157,12 @@ test("legacy signed-in account prefs migrate and sync from a new device", async 
   await expect(page.getByRole("checkbox", { name: "Liga MX", exact: true })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "NWSL", exact: true })).not.toBeChecked();
   await expect.poll(() => uploaded?.switcherDefaultsVersion).toBe(2);
+  // `uploaded` is only ever assigned inside the page.route closure above, so
+  // same-scope control-flow analysis narrows this direct read back to its
+  // `null` initializer — making `null?.shownLeagues` resolve to `never` (TS2339).
+  // (Line 157 escapes this only because it reads inside an arrow callback, which
+  // uses the declared type.) Cast back to the declared type; type-only, no
+  // runtime change — the poll above already asserted the upload landed.
   expect((uploaded as Record<string, unknown> | null)?.shownLeagues).toEqual(expect.arrayContaining(["ligamx"]));
 });
 

@@ -5,7 +5,7 @@ import { LeagueData, Sport, Game } from "@/lib/types";
 import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
-import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, getActiveLeagueCandidates } from "@/lib/espn";
+import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
 import NewsFeed from "@/components/NewsFeed";
 import LeagueColumn from "@/components/LeagueColumn";
@@ -14,7 +14,7 @@ import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import FeedbackBox from "@/components/FeedbackBox";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
-import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource } from "@/lib/news";
+import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
 import { loadBakedHighlights } from "@/lib/highlights";
 import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/components/DateNav";
 import VideoModal from "@/components/VideoModal";
@@ -169,23 +169,26 @@ function BottomTabBar({ viewMode, onChange, placement = "bottom" }: { viewMode: 
   );
 }
 
+type NewsSourceType = "topvideos" | "espn" | "reddit" | "homepage";
+
 // Vertical, one-per-row source-type filter used inside the funnel popover.
-// Each row is tappable to select that filter; a drag handle reorders the
+// Each source is independently checkable; a drag handle reorders the
 // rows (order persisted in prefs). Pointer-based drag (not HTML5) so it
 // works on iOS. `dropIdx` is the insertion
 // slot drawn as a thin accent bar between rows.
-function NewsFilterList({ options, value, onSelect, onReorder }: {
-  options: { value: string; label: string }[];
-  value: string;
-  onSelect: (v: string) => void;
+function NewsFilterList({ options, selected, onToggle, onReorder }: {
+  options: { value: NewsSourceType; label: string }[];
+  selected: NewsSourceType[];
+  onToggle: (v: NewsSourceType) => void;
   onReorder: (order: string[]) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [dragVal, setDragVal] = useState<string | null>(null);
+  const dragListenersRef = useRef<(() => void) | null>(null);
+  const [dragVal, setDragVal] = useState<NewsSourceType | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
   const order = options.map((o) => o.value);
 
-  const startDrag = (e: React.PointerEvent, val: string) => {
+  const startDrag = (e: React.PointerEvent, val: NewsSourceType) => {
     e.preventDefault();
     e.stopPropagation();
     setDragVal(val);
@@ -201,10 +204,14 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
       }
       setDropIdx(next);
     };
-    const onUp = () => {
+    const removeListeners = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      dragListenersRef.current = null;
+    };
+    const onUp = () => {
+      removeListeners();
       setDragVal((curVal) => {
         setDropIdx((curDrop) => {
           if (curVal != null && curDrop != null) {
@@ -222,12 +229,24 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
+    // If the funnel popover unmounts mid-drag (pointer still down when the
+    // popover closes or HomeContent re-renders it away), onUp/onCancel never
+    // fire — so hand the teardown to the unmount effect below, which removes
+    // these window listeners without leaking the closures over order/onReorder.
+    // Mirrors LeagueColumn's dragListenersRef guard for its header drag.
+    dragListenersRef.current = removeListeners;
   };
+
+  // Remove any in-flight drag's window listeners if this list unmounts mid-drag
+  // (see startDrag). No DOM side-effects to revert here — unlike LeagueColumn's
+  // drag, this one appends no body cursor or ghost node — so it only detaches
+  // the listeners; it intentionally does NOT fire the reorder/setState onUp runs.
+  useEffect(() => () => { dragListenersRef.current?.(); }, []);
 
   return (
     <div ref={listRef} className="select-none">
       {options.map((opt, i) => {
-        const active = opt.value === value;
+        const active = selected.includes(opt.value);
         const isDragging = dragVal === opt.value;
         return (
           <div key={opt.value} className="relative">
@@ -243,22 +262,39 @@ function NewsFilterList({ options, value, onSelect, onReorder }: {
                 onPointerDown={(e) => startDrag(e, opt.value)}
                 className="shrink-0 px-1 py-2 cursor-grab active:cursor-grabbing"
                 style={{ color: "var(--text-muted)" }}
-                aria-label="Drag to reorder"
+                // Pointer-only reorder handle (onPointerDown drag, no HTML5 DnD so
+                // it works on iOS) with no keyboard/AT equivalent. It used to carry
+                // aria-label="Drag to reorder" on this bare, non-focusable span,
+                // which advertised a "Drag to reorder" control to screen readers
+                // that a keyboard/SR user then had no way to operate. Selecting a
+                // filter is already fully keyboard-accessible via the row's <button>
+                // below; reordering is a pointer-only enhancement whose persisted
+                // order degrades gracefully (applyOrder tolerates any/no custom
+                // order). So hide the handle from assistive tech — the honest state
+                // for an inoperable affordance — matching the aria-hidden the
+                // decorative grip glyph inside already carries.
+                aria-hidden="true"
               >
                 <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" />
                 </svg>
               </span>
-              <button
-                type="button"
-                onClick={() => onSelect(opt.value)}
-                className="flex-1 min-w-0 text-left px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors cursor-pointer"
+              <label
+                className="flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded text-sm whitespace-nowrap transition-colors cursor-pointer"
                 style={active
                   ? { background: "var(--bg-card-hover)", color: "var(--text)", fontWeight: 600 }
                   : { color: "var(--text-muted)", background: "transparent" }}
               >
-                {opt.label}
-              </button>
+                <input
+                  type="checkbox"
+                  checked={active}
+                  disabled={active && selected.length === 1}
+                  onChange={() => onToggle(opt.value)}
+                  className="cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed"
+                  title={active && selected.length === 1 ? "Keep at least one source selected" : undefined}
+                />
+                <span>{opt.label}</span>
+              </label>
             </div>
           </div>
         );
@@ -327,6 +363,20 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
 // 5-column board breakpoint: at ≥1280px the max-w-7xl board fits five columns
 // at ~236px each (above the 225px desktop column cap) — "room for all
 // naturally". Below it the board stays at the classic 3 columns.
+// Copy for the season-kickoff banner. Kept apart from the markup because the
+// wording is the whole point of the banner: for a league someone already
+// follows, the useful fact is WHEN, and "Friday, Aug 21" carries that better
+// than a countdown ("in 13 days" makes a reader do arithmetic). The 2026-27
+// Premier League is the case that prompted this — a World Cup summer pushed
+// kickoff a week later than usual, so even regular viewers have the wrong date.
+function kickoffMessage(k: LeagueKickoff): string {
+  const name = k.config.label === "EPL" ? "The Premier League" : k.config.label;
+  if (k.phase === "underway") return `${name} is underway — every match, spoiler-free.`;
+  if (k.phase === "today" || k.daysUntil === 0) return `${name} kicks off today — spoiler-free from the first whistle.`;
+  if (k.daysUntil === 1) return `${name} kicks off tomorrow — spoiler-free from day one.`;
+  return `${name} kicks off ${formatKickoffLong(k.kickoff)} — spoiler-free from day one.`;
+}
+
 const WIDE_BOARD_QUERY = "(min-width: 1280px)";
 const isWideViewport = () =>
   typeof window !== "undefined" && window.matchMedia(WIDE_BOARD_QUERY).matches;
@@ -366,14 +416,21 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
 // A labeled on/off chip for the news toolbar (Headlines / Videos / Text posts).
 // Filled accent = ON, outline = OFF — one consistent shape so the row is easy to
 // read and toggle (Jacob 7/14).
-function NewsToggleChip({ active, onClick, title, children }: {
-  active: boolean; onClick: () => void; title: string; children: ReactNode;
+function NewsToggleChip({ active, onClick, title, ariaLabel, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
+      // The visible text label is display:none below 640px (`hidden sm:inline`)
+      // and the icon is aria-hidden, so on phones the only name source left is
+      // `title` — which iOS VoiceOver doesn't reliably announce for buttons,
+      // leaving these chips as unnamed "button, pressed/not pressed". Pin an
+      // explicit aria-label so the name survives on every viewport, matching the
+      // icon-button convention used elsewhere (e.g. SingleColToggle above).
+      aria-label={ariaLabel}
       aria-pressed={active}
       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer"
       style={{
@@ -430,6 +487,7 @@ export default function HomeContent({
   // World Cup banner: "Add" expands into a replace-which-column picker when
   // there's no emptied slot to fill (Jacob 6/11).
   const [wcReplaceOpen, setWcReplaceOpen] = useState(false);
+  const [kickoffReplaceOpen, setKickoffReplaceOpen] = useState(false);
   const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] } | null>(null);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
@@ -483,6 +541,13 @@ export default function HomeContent({
     skipNewsExplainer: false,
     showNews: false,
   });
+  // `prefs` above starts as hardcoded defaults and is replaced from
+  // localStorage in an effect, so the first paint of every reload runs against
+  // a blob with no saved columns and no dismissals. Anything conditioned on a
+  // stored preference therefore flashes on and off — which is exactly what the
+  // kickoff banner did after being dismissed, or after the league was added
+  // (Jacob 8/9). This flips true once the stored blob is in state.
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
   // A signed-in account that has already used the iPhone app does not need an
   // install prompt on the web. This is account history from /api/me, not a
   // guess based on the current browser's user agent.
@@ -588,6 +653,10 @@ export default function HomeContent({
       // the first render already has it.
       if (landing === "ratings") p.showRatings = true;
       setPrefs(p);
+      // Stored prefs are now in state. Anything that would otherwise render
+      // once against the hardcoded defaults above — and then vanish a frame
+      // later — must wait on this. See prefsHydrated's declaration.
+      setPrefsHydrated(true);
       // Landing view: "remember" restores the last view EXCEPT across a day
       // boundary — a new calendar day (ET) since the last open drops a remembered
       // News view to Scores so the user never lands on yesterday's spoilers
@@ -892,13 +961,22 @@ export default function HomeContent({
     // new pull resolves, which prevents the "all 3 columns flash gray" effect.
     if (!silent) setLoading(true);
     setError(false);
-    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    // Watchdog lifecycle across fetchData's five concurrent callers, all sharing
+    // one watchdogRef slot. Capture THIS call's timer locally so the finally can
+    // tell whether the shared ref still points at our timer or a newer call's.
+    // Only a non-silent call owns a watchdog: clear the previous one and install
+    // ours here, guarded by !silent so a silent poll can't clear a visible load's
+    // watchdog and then install no replacement (that left the skeleton with no
+    // safety net).
+    let myWatchdog: ReturnType<typeof setTimeout> | null = null;
     if (!silent) {
-      watchdogRef.current = setTimeout(() => {
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+      myWatchdog = setTimeout(() => {
         watchdogRef.current = null;
         setLoading(false);
         setError(true);
       }, 40_000);
+      watchdogRef.current = myWatchdog;
     }
     try {
       // Slot count reads the live viewport so the initial desktop load fetches
@@ -923,7 +1001,11 @@ export default function HomeContent({
       setLeagues([]);
       setError(true);
     } finally {
-      if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+      // Clear the shared watchdog only if it's still OURS. A newer non-silent
+      // fetch may have replaced it while we awaited; cancelling that call's timer
+      // (the old bug) would defeat the very safety net it just installed, so an
+      // earlier call resolving must leave the latest call's watchdog running.
+      if (myWatchdog && watchdogRef.current === myWatchdog) { clearTimeout(myWatchdog); watchdogRef.current = null; }
       if (!silent) setLoading(false);
     }
   }, []);
@@ -964,7 +1046,19 @@ export default function HomeContent({
   // refetch every 10s so the Q4/period and clock keep advancing (matches
   // Google's sports-card behavior — clock jumps every poll, not every second).
   // Pauses when the tab is hidden so background tabs don't burn ESPN calls.
-  const hasLiveGames = leagues.some(l => l.games.some(g => g.state === "in"));
+  // Golf and F1/UFC columns carry no `games` — their live state lives on
+  // `golfTournament`/`eventCard` — so they must be checked too, or a Sunday
+  // final round (or a live race/fight card) that's the only live thing on the
+  // board would never start the poll and freeze at its load-time state. Golf
+  // gates on `roundStatus`, not the tournament-level `state` (which stays "in"
+  // for the whole multi-day event), so we poll only while players are actually
+  // on course — the same "live now" signal isGolfLive uses — not all night
+  // between rounds.
+  const hasLiveGames = leagues.some(l =>
+    l.games.some(g => g.state === "in") ||
+    l.golfTournament?.roundStatus === "in" ||
+    l.eventCard?.state === "in"
+  );
   useEffect(() => {
     if (!hasLiveGames || !selectedDate) return;
     const id = window.setInterval(() => {
@@ -1085,12 +1179,15 @@ export default function HomeContent({
   };
 
   const shareFavorites = () => {
-    // .catch swallows a rejected writeText (document not focused, permission
-    // denied, non-secure context) so it can't surface as an unhandled promise
-    // rejection — which the console flags and @sentry/nextjs captures as noise.
-    // Copy is a throwaway affordance (the link stays visible), matching the
-    // swallow-on-failure pattern in VideoModal's copyLink.
-    navigator.clipboard.writeText(buildShareUrl()).then(() => {
+    // ?. guards the non-secure-context case where navigator.clipboard is
+    // undefined: reading .writeText off it throws synchronously, before any
+    // promise exists, so the trailing .catch can't swallow it — optional
+    // chaining short-circuits the whole chain to undefined instead. The .catch
+    // still swallows a rejected writeText (document not focused, permission
+    // denied) so it can't surface as an unhandled promise rejection — which the
+    // console flags and @sentry/nextjs captures as noise. Copy is a throwaway
+    // affordance (the link stays visible), matching VideoModal's copyLink.
+    navigator.clipboard?.writeText(buildShareUrl()).then(() => {
       setShowShareCopied(true);
       setTimeout(() => setShowShareCopied(false), 2000);
     }).catch(() => {});
@@ -1118,9 +1215,10 @@ export default function HomeContent({
   };
 
   const copyFavLink = () => {
-    // See shareFavorites: .catch keeps a failed clipboard write from becoming an
-    // unhandled promise rejection / Sentry error. Copy is best-effort here too.
-    navigator.clipboard.writeText(buildShareUrl()).then(() => {
+    // See shareFavorites: ?. guards the undefined-clipboard throw and .catch
+    // keeps a failed write from becoming an unhandled rejection / Sentry error.
+    // Copy is best-effort here too.
+    navigator.clipboard?.writeText(buildShareUrl()).then(() => {
       setFavToastCopied(true);
       setTimeout(() => {
         dismissFavToast();
@@ -1173,31 +1271,83 @@ export default function HomeContent({
     return fifa ? isLeagueActive(fifa, viewDate) : false;
   }, [selectedDate]);
 
+  // The one league whose season is about to start (or just did) on the viewed
+  // date, if any — drives the kickoff banner below the date nav.
+  const kickoff = useMemo(() => {
+    if (!selectedDate) return null;
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    return getLeagueKickoff(viewDate);
+  }, [selectedDate]);
+
   // Compute which leagues are available for manual selection. Most seasonal
   // leagues disappear outside their season; NBA deliberately remains as a
   // muted "offseason" option so its news + trade board stay reachable early.
   // This does not affect the automatic columns, which still use active leagues.
+  //
+  // A league inside its KICKOFF_SOON_DAYS window is offered too, labelled with
+  // its start date ("Prem · starts Aug 21"). People ask for a column before the
+  // season opens and previously had no way to add it — and the column is not
+  // blank, since the next-game-day lookahead shows the opening fixtures and the
+  // league's news feed bakes year-round. Still manual only: getActiveLeagueCandidates
+  // (the auto-picker) is untouched, so nothing reshuffles on its own.
   const thirdLeagueOptions = useMemo(() => {
     if (!selectedDate) return [];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
     // Get active leagues plus the NBA exception, deduplicated by sport.
     const seen = new Set<Sport>();
-    const options: { sport: Sport; label: string; offseason?: boolean; defaultInSwitcher: boolean }[] = [];
+    const options: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string; defaultInSwitcher: boolean }[] = [];
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       if (seen.has(league.sport)) continue;
       const active = isLeagueActive(league, viewDate);
-      if (!active && league.sport !== "nba") continue;
+      const upcoming = !active && isLeagueUpcoming(league, viewDate);
+      if (!active && !upcoming && league.sport !== "nba") continue;
       seen.add(league.sport);
       options.push({
         sport: league.sport,
         label: league.label,
-        offseason: !active,
+        offseason: !active && !upcoming,
+        // Bare "8/21", not "starts Aug 21": inside a switcher row that already
+        // reads "EPL · …" the words were the part that wrapped it onto a
+        // second line, and a date tail on an unstarted league can only mean
+        // its opener. The row's tooltip still spells it out (Jacob 8/9).
+        upcomingLabel: upcoming ? formatKickoffShort(league.kickoffDate ?? league.startDate, viewDate) : undefined,
         defaultInSwitcher: !league.excludeFromAuto,
       });
     }
     return options;
   }, [selectedDate]);
+
+  // First-run picker order (Jacob 8/9). ALL_LEAGUES is ordered for the *season
+  // calendar*, which put "Prem · starts Aug 21" and three more soccer leagues
+  // above WNBA and the NFL — the opposite of what a US first-timer scans for.
+  // This is a deliberate popularity ranking for the signup screen ONLY: the
+  // column switcher and Settings keep the calendar order they've always had.
+  // Soccer is grouped as one block at the very bottom rather than interleaved,
+  // so the domestic leagues read as a set you scroll past or into.
+  const PICKER_RANK: Sport[] = [
+    // MLB leads: it is the league actually playing games today, and a picker
+    // whose first pill is an offseason/preseason league reads as stale (Jacob
+    // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
+    "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw",
+    "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
+    "chess", "poker", "esports",
+    // ── soccer block, bottom ──
+    "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
+    "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",
+    "fifa", "euro", "afcon",
+  ];
+  const pickerOptions = useMemo(() => {
+    const rank = (s: Sport) => {
+      const i = PICKER_RANK.indexOf(s);
+      // A league missing from the ranking sorts just before the soccer block
+      // rather than vanishing or jumping to the front — adding a new league to
+      // ALL_LEAGUES must never silently reorder the top of this screen.
+      return i === -1 ? PICKER_RANK.indexOf("epl") - 0.5 : i;
+    };
+    return [...thirdLeagueOptions].sort((a, b) => rank(a.sport) - rank(b.sport));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- PICKER_RANK is a literal constant
+  }, [thirdLeagueOptions]);
 
   // Settings is the durable league catalog, so it must not hide a saved pick
   // merely because that league is between seasons. A sport can have several
@@ -1250,11 +1400,15 @@ export default function HomeContent({
     }
   }, [thirdLeagueOptions, prefs.leaguesOnboarded]);
 
+  // How many leagues the picker lets you take = how many columns this viewport
+  // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
+  // has been showing five columns all along (Jacob 8/9).
+  const pickerMax = slotCount;
   const togglePick = (sport: Sport) => {
     setPickerSel((sel) =>
       sel.includes(sport)
         ? sel.filter((s) => s !== sport)
-        : sel.length >= 3
+        : sel.length >= pickerMax
           ? sel
           : [...sel, sport],
     );
@@ -1271,14 +1425,16 @@ export default function HomeContent({
   // columns (the 2 chosen + 2 auto-filled). The picker only offers 3, so the
   // extra columns should stay hidden until the user adds them in Settings.
   const confirmLeaguePicker = () => {
-    const picks = pickerSel.slice(0, 3);
+    const picks = pickerSel.slice(0, pickerMax);
     const chose = picks.length > 0;
     updatePrefs({
       firstLeague: picks[0] ?? undefined,
       secondLeague: picks[1] ?? (chose ? "empty" : undefined),
       thirdLeague: picks[2] ?? (chose ? "empty" : undefined),
-      fourthLeague: chose ? "empty" : undefined,
-      fifthLeague: chose ? "empty" : undefined,
+      // Slots 4-5 now take real picks on a wide viewport instead of always
+      // being pinned "empty" — that pin was what capped the picker at 3.
+      fourthLeague: picks[3] ?? (chose ? "empty" : undefined),
+      fifthLeague: picks[4] ?? (chose ? "empty" : undefined),
       leaguesOnboarded: true,
     });
     setShowLeaguePicker(false);
@@ -1398,6 +1554,16 @@ export default function HomeContent({
     return ordered;
   }, [selectedDate, switcherOptions]);
 
+  // What "Auto" actually resolves to, per slot — the same assignment
+  // fetchAllLeagues runs before per-slot overrides are applied. The switcher
+  // marks this option "· default" so "Auto" isn't an opaque choice: you can
+  // see which league the column falls back to (Jacob 8/9).
+  const autoSlotSports = useMemo(() => {
+    if (!selectedDate) return [] as Sport[];
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    return pickAndAssignLeagues(viewDate, slotCount).map((l) => l.sport);
+  }, [selectedDate, slotCount]);
+
   // ‹ › cycling cursor, per slot. Lives up here (in a ref) because the column
   // component remounts whenever its league changes — per-column state would
   // reset every press and recomputing "most relevant unused" from scratch each
@@ -1486,8 +1652,28 @@ export default function HomeContent({
   // Source cards use the current deterministic smart cascade. Ignore stale
   // newsSourceOrder values from the removed drag-reorder UI: otherwise an old
   // local preference can silently bury a newly added source forever.
-  const newsTypeFilter = prefs.newsTypeFilter ?? "reddit";
-  const setNewsTypeFilter = (t: "all" | "topvideos" | "espn" | "reddit" | "homepage") => updatePrefs({ newsTypeFilter: t });
+  const ALL_NEWS_SOURCE_TYPES: NewsSourceType[] = ["topvideos", "reddit", "espn", "homepage"];
+  const legacyNewsTypeFilter = prefs.newsTypeFilter ?? "reddit";
+  const savedNewsTypeFilters = prefs.newsTypeFilters?.filter(
+    (value): value is NewsSourceType => ALL_NEWS_SOURCE_TYPES.includes(value as NewsSourceType),
+  );
+  const newsTypeFilters: NewsSourceType[] = savedNewsTypeFilters?.length
+    ? savedNewsTypeFilters
+    : legacyNewsTypeFilter === "all"
+      ? ALL_NEWS_SOURCE_TYPES
+      : [legacyNewsTypeFilter];
+  const setNewsTypeFilters = (types: NewsSourceType[]) => updatePrefs({
+    newsTypeFilters: types,
+    // Older app versions cannot express a multi-select. "all" is the safest
+    // fallback because it never silently hides a source the user enabled here.
+    newsTypeFilter: types.length === 1 ? types[0] : "all",
+  });
+  const toggleNewsTypeFilter = (type: NewsSourceType) => {
+    const next = newsTypeFilters.includes(type)
+      ? newsTypeFilters.filter((value) => value !== type)
+      : [...newsTypeFilters, type];
+    if (next.length > 0) setNewsTypeFilters(next);
+  };
   // The 🎥 Videos quick-filter is ITEM-level (not source-level) so it includes
   // Reddit video posts (v.redd.it clips), not just the "Top Videos" highlight
   // sources: Cards filters each source's items to those with a clip (NewsColumn
@@ -1495,8 +1681,7 @@ export default function HomeContent({
   // Source-filter options + the user's drag-reordered order. Unknown labels in
   // the saved order are ignored; new options not yet in the saved order fall
   // through to the tail in default order.
-  const NEWS_FILTER_OPTIONS: { value: string; label: string }[] = [
-    { value: "all", label: "All" },
+  const NEWS_FILTER_OPTIONS: { value: NewsSourceType; label: string }[] = [
     { value: "topvideos", label: "Top videos" },
     { value: "reddit", label: "Reddit" },
     { value: "espn", label: "ESPN" },
@@ -1748,18 +1933,6 @@ export default function HomeContent({
   }, []);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [newsOrderOpen, setNewsOrderOpen] = useState(false);
-  const newsOrderRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!newsOrderOpen) return;
-    const onClickAway = (e: MouseEvent) => {
-      if (newsOrderRef.current && !newsOrderRef.current.contains(e.target as Node)) {
-        setNewsOrderOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClickAway);
-    return () => document.removeEventListener("mousedown", onClickAway);
-  }, [newsOrderOpen]);
   // News filter popover (source type + focus league) — same click-away pattern.
   const [newsFilterOpen, setNewsFilterOpen] = useState(false);
   const newsFilterRef = useRef<HTMLDivElement>(null);
@@ -1770,8 +1943,21 @@ export default function HomeContent({
         setNewsFilterOpen(false);
       }
     };
+    // Escape closes the source-filter popover too — it's a role="dialog", and
+    // every other overlay in the app dismisses on Escape (the DateNav calendar
+    // popover, GameDetailModal, WorldCupGroupsModal, the ratings/news
+    // explainers). This dialog was the lone outlier: a keyboard user who opened
+    // it had no keyboard way out short of tabbing back to the toggle or picking
+    // an option, so Escape now matches the click-away dismissal already here.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNewsFilterOpen(false);
+    };
     document.addEventListener("mousedown", onClickAway);
-    return () => document.removeEventListener("mousedown", onClickAway);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClickAway);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [newsFilterOpen]);
   // Aggregate teams seen across loaded leagues so the settings panel can map
   // favorite-team IDs to display names + logos. Teams favorited but not
@@ -1836,7 +2022,18 @@ export default function HomeContent({
           style={{
             top: "calc(env(safe-area-inset-top) + var(--header-h, 4rem))",
             transform: `translate3d(-50%, ${ptrTranslateY}px, 0)`,
-            transition: refreshing ? "transform 200ms ease-out" : "none",
+            // Honor prefers-reduced-motion for the puck's settle slide, matching
+            // the .ptr-spinner guard in globals.css — the spinner inside this same
+            // element is already silenced under reduced-motion, so the transform
+            // transition was the lone unguarded piece. Read live (an OS toggle
+            // takes effect without reload) and only when refreshing gates it on,
+            // so matchMedia stays out of the pull-gesture render path.
+            transition:
+              refreshing &&
+              !(typeof window !== "undefined" &&
+                window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+                ? "transform 200ms ease-out"
+                : "none",
             opacity: refreshing ? 1 : ptrProgress,
           }}
         >
@@ -1868,7 +2065,36 @@ export default function HomeContent({
           </div>
         </div>
       )}
-      <header ref={headerRef} className="px-4 sticky top-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
+      {/* Opaque strip from the viewport top down to wherever the sticky league
+          titles pin. Sits under the header, over the cards — see
+          .sticky-seam-cover in globals.css for why this exists rather than
+          another round of offset arithmetic. */}
+      <div className="sticky-seam-cover" aria-hidden="true" data-testid="sticky-seam-cover" />
+      {/* FIXED, not sticky — and the flow space it vacates is given back by
+          <div className="header-flow-spacer"> right below </header>, whose
+          height is var(--header-h): the SAME variable every sticky row below
+          pins at.
+
+          Why this matters (the "first card has no top outline" bug, reported
+          repeatedly and 'fixed' three times with padding tweaks): while the
+          header was in flow, page content started at the header's REAL height
+          but .league-sticky-top pinned at the MEASURED --header-h. Those two
+          numbers disagree by exactly the ResizeObserver's lag, and when the
+          measurement runs large, `position: sticky` shoves the league title
+          DOWN to its pin point — past its natural spot, on top of the first
+          game card — where its opaque var(--bg) at z-30 eats the card's 1px
+          top border. The seam cover hides the tell-tale gap above the title,
+          so it reads as a clipped card rather than a displaced title. Single
+          column shows it first because condense mode has only 0.5rem of top
+          padding to absorb the drift (row layout has 1.75rem).
+
+          Fixed header + a spacer sized by the same variable makes the two
+          numbers the same number: content now starts AT --header-h, so the
+          title's natural position is never above its pin point and sticky has
+          nothing to shove. The overlap is zero by construction, for any value
+          of --header-h, however stale. Guarded by tests/visual/sticky-seam.spec.ts
+          ("the first card's top edge survives a stale --header-h"). */}
+      <header ref={headerRef} className="px-4 fixed top-0 left-0 right-0 z-40" style={{ borderBottom: "1px solid var(--border)", background: "var(--bg)", backdropFilter: "blur(8px)",
         // In the native iOS app the WKWebView reports env(safe-area-inset-top)
         // unreliably — sometimes ~0 (header collides with the status bar),
         // sometimes an inflated stale value from a rotation/resume transition
@@ -1996,6 +2222,44 @@ export default function HomeContent({
                 onClick={() => updatePrefs({ newsSingleColumn: !prefs.newsSingleColumn })}
               />
             )}
+            {/* Read order, immediately LEFT of the funnel (Jacob 8/9). This is a
+                reading choice you change mid-scroll — "let me work up from the
+                bottom of r/nba" — so it belongs on the news header next to the
+                other list controls, not buried in Settings. Same round shape and
+                filled-accent = on treatment as the funnel beside it. */}
+            {showNews && (
+              <button
+                type="button"
+                onClick={() => updatePrefs({ newsOldestFirst: !prefs.newsOldestFirst })}
+                className="monkey-toggle relative w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
+                style={{
+                  background: prefs.newsOldestFirst ? "var(--accent)" : "var(--bg-card)",
+                  border: `1px solid ${prefs.newsOldestFirst ? "var(--accent)" : "var(--border)"}`,
+                  color: prefs.newsOldestFirst ? "white" : "var(--text-muted)",
+                }}
+                title={prefs.newsOldestFirst ? "Oldest first — tap for newest first" : "Newest first — tap for oldest first"}
+                aria-label={prefs.newsOldestFirst ? "Sort oldest first (on)" : "Sort newest first"}
+                aria-pressed={!!prefs.newsOldestFirst}
+              >
+                {prefs.newsOldestFirst ? (
+                  // Ascending: arrow up + short-to-tall bars.
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 20V6" /><path d="m3 9 3-3 3 3" />
+                    <line x1="12" y1="17" x2="15" y2="17" />
+                    <line x1="12" y1="12" x2="18" y2="12" />
+                    <line x1="12" y1="7" x2="21" y2="7" />
+                  </svg>
+                ) : (
+                  // Descending: arrow down + tall-to-short bars.
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 4v14" /><path d="m3 15 3 3 3-3" />
+                    <line x1="12" y1="7" x2="15" y2="7" />
+                    <line x1="12" y1="12" x2="18" y2="12" />
+                    <line x1="12" y1="17" x2="21" y2="17" />
+                  </svg>
+                )}
+              </button>
+            )}
             {showNews && (
               <div ref={newsFilterRef} className="relative">
                 <button
@@ -2032,18 +2296,18 @@ export default function HomeContent({
                     {/* One per row + drag-to-reorder (order saved to prefs). */}
                     <NewsFilterList
                       options={orderedNewsFilterOptions}
-                      value={newsTypeFilter}
-                      onSelect={(v) => setNewsTypeFilter(v as "all" | "topvideos" | "espn" | "reddit" | "homepage")}
+                      selected={newsTypeFilters}
+                      onToggle={toggleNewsTypeFilter}
                       onReorder={setNewsTypeFilterOrder}
                     />
-                    {newsTypeFilter !== "all" && (
+                    {newsTypeFilters.length !== ALL_NEWS_SOURCE_TYPES.length && (
                       <button
                         type="button"
-                        onClick={() => setNewsTypeFilter("all")}
+                        onClick={() => setNewsTypeFilters(ALL_NEWS_SOURCE_TYPES)}
                         className="mt-3 text-xs underline cursor-pointer"
                         style={{ color: "var(--text-muted)" }}
                       >
-                        Clear filter
+                        Select all
                       </button>
                     )}
                   </div>
@@ -2110,6 +2374,12 @@ export default function HomeContent({
         </div>
 
       </header>
+      {/* Gives back the flow space the now-fixed header vacated — sized by
+          var(--header-h), the same variable .league-sticky-top pins at, which
+          is the whole point (see the header comment above). Its CSS fallbacks
+          match .league-sticky-top's byte for byte so the pre-measurement first
+          paint agrees too. */}
+      <div className="header-flow-spacer" aria-hidden="true" data-testid="header-flow-spacer" />
       {/* sm+ only: date nav sits BELOW the header divider line (desktop has the
           view tabs in the top-row middle, so the date nav drops here). On mobile
           it's inline in the header middle instead (above). Scores/rated only;
@@ -2146,9 +2416,18 @@ export default function HomeContent({
           toggles. Sits one row below the header (its original spot), but STICKY:
           it pins to the top while scrolling, like the league titles (Jacob 7/14).
           Its measured height drives --news-toolbar-h so the Cards league titles +
-          per-source headers stack right below it (see globals.css). */}
+          per-source headers stack right below it (see globals.css).
+
+          z-36, NOT z-30. .sticky-seam-cover is a fixed, opaque var(--bg) bar at
+          z-35 whose height is header-h + --news-toolbar-h — i.e. it deliberately
+          spans this toolbar's whole band. At z-30 the toolbar rendered UNDER it
+          and the entire pill row (Headlines / Media / Videos / Text posts) was
+          invisible in news view, at every scroll position (Jacob 8/10: "all our
+          pills above it with toggles for media etc aren't there"). The toolbar
+          paints its own opaque var(--bg), so sitting above the cover — and still
+          below the z-40 app header — keeps the seam sealed either way. */}
       {showNews && (
-        <div ref={newsToolbarRef} className="news-toolbar-sticky sticky z-30" style={{ background: "var(--bg)" }}>
+        <div ref={newsToolbarRef} className="news-toolbar-sticky sticky z-[36]" style={{ background: "var(--bg)" }}>
           <div className="max-w-6xl mx-auto px-4 flex justify-center flex-wrap items-center gap-2 pt-2 pb-2">
             <div className="inline-flex rounded-full p-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
               {([["Cards", false], ["Feed", true]] as const).map(([label, on]) => (
@@ -2174,37 +2453,46 @@ export default function HomeContent({
               active={!!prefs.revealNewsTitles}
               onClick={() => updatePrefs({ revealNewsTitles: !prefs.revealNewsTitles })}
               title="Headlines are spoilers — blurred by default. Tap to show or hide them all."
+              ariaLabel="Toggle headline reveal"
             >
               {prefs.revealNewsTitles ? (
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
               ) : (
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
               )}
-              <span className="hidden sm:inline">Headlines</span>
+              <span>Headlines</span>
+            </NewsToggleChip>
+            {/* Media sits directly after Headlines (Jacob 8/9): the two
+                spoiler-reveal toggles belong next to each other — they do the
+                same job to the two halves of a post — while Videos/Text posts
+                are content FILTERS. Grouping them by what they do is most of
+                what makes this row readable. */}
+            <NewsToggleChip
+              active={prefs.revealNewsMedia === true}
+              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
+              title="Show or spoiler-blur news image and video previews"
+              ariaLabel="Toggle media reveal"
+            >
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
+              <span>Media</span>
             </NewsToggleChip>
             <NewsToggleChip
               active={!!prefs.newsVideosOnly}
               onClick={() => updatePrefs({ newsVideosOnly: !prefs.newsVideosOnly })}
               title="Show only video posts (highlights + Reddit clips)"
+              ariaLabel="Toggle videos-only filter"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
-              <span className="hidden sm:inline">Videos</span>
-            </NewsToggleChip>
-            <NewsToggleChip
-              active={prefs.revealNewsMedia === true}
-              onClick={() => updatePrefs({ revealNewsMedia: prefs.revealNewsMedia !== true })}
-              title="Show or spoiler-blur news image and video previews"
-            >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
-              <span className="hidden sm:inline">Media</span>
+              <span>Videos only</span>
             </NewsToggleChip>
             <NewsToggleChip
               active={!!prefs.showTextPosts}
               onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
               title="Show or hide headline-only text posts"
+              ariaLabel="Toggle text posts"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
-              <span className="hidden sm:inline">Text posts</span>
+              <span>Text posts</span>
             </NewsToggleChip>
           </div>
         </div>
@@ -2230,7 +2518,7 @@ export default function HomeContent({
           >
             <p className="text-sm" style={{ color: "var(--text)" }}>
               <span aria-hidden="true">🙉 </span>
-              <strong>Ratings are on.</strong>{" "}They show how competitive a game is — based on score closeness, not who&apos;s winning — so they can hint at the outcome. Games are also reordered by top records and best matchups.
+              <strong>Ratings are on.</strong>{" "}They show how competitive a game is — based on score closeness, not who&apos;s winning — so they can hint at the outcome. Games are also reordered — live and finished by rating, upcoming by best matchups.
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
               <span className="font-medium" style={{ color: "var(--text-muted)" }}>SCALE</span>
@@ -2433,35 +2721,47 @@ export default function HomeContent({
           // Mobile (single stacked column): lead with News, then the two score
           // leagues (Jacob 5/30 — "news, then mlb, then nba"). Desktop keeps the
           // 3-across order: the two leagues, then the News/3rd-league column.
+          // Desktop position of the generic column: last by default, but the
+          // user can pull it left by picking "Top news (ESPN)" from any
+          // column's switcher (newsGenericSlot). The league columns shift
+          // right around it — nothing is dropped. Mobile keeps its fixed
+          // news-first stack (Jacob 5/30) regardless.
+          const genericPos = Math.min(prefs.newsGenericSlot ?? 2, firstTwoEntries.length);
           const visibleNewsEntries = isMobile
             ? [...(thirdColEntry ? [thirdColEntry] : []), ...firstTwoEntries]
-            : [...firstTwoEntries, ...(thirdColEntry ? [thirdColEntry] : [])];
+            : thirdColEntry
+              ? [...firstTwoEntries.slice(0, genericPos), thirdColEntry, ...firstTwoEntries.slice(genericPos)]
+              : [...firstTwoEntries];
 
-          // Apply Focus league (drops other entries) then per-entry filter
-          // by type + hidden labels. Type "all" is a no-op; hidden labels
-          // are removed via Array.filter so they vanish from view but stay
-          // togglable in the dropdown.
+          // Apply Focus league (drops other entries) then per-entry filter by
+          // the independently checked source types + hidden labels. Hidden
+          // labels vanish from view but stay togglable in the dropdown.
           const focusedEntries = newsFocusLeague
             ? visibleNewsEntries.filter((e) => e.id === newsFocusLeague)
             : visibleNewsEntries;
           const orderedColumnSourcesFor = (entry: typeof visibleNewsEntries[number]): ColumnSource[] => {
             const visible = entry.orderedCascade.filter((s) => !newsHiddenSources.includes(s.label));
-            const typeMatched = visible.filter((s) => newsTypeFilter === "all" || classifySource(s) === newsTypeFilter);
+            const typeMatched = visible.filter((s) => newsTypeFilters.includes(classifySource(s) as NewsSourceType));
             // Not every league has a source of every type — NWSL and cricket
             // have no Reddit card at all (r/soccer is men's club football, so
             // it is deliberately kept out of the NWSL column). Since the
-            // default filter is now "reddit", a strict filter would render
+            // legacy default filter is "reddit", a strict filter would render
             // those columns completely blank on first visit with nothing to
             // explain why. Fall back to the league's full cascade whenever the
             // type filter would empty the column, so the filter narrows a
             // column that has the type and is a no-op for one that doesn't.
-            const filtered = typeMatched.length > 0 ? typeMatched : visible;
+            // Preserve that legacy fallback until the user touches the new
+            // checkboxes. Once newsTypeFilters exists, unchecked types stay
+            // unchecked even for a league that has none of the selected type.
+            const filtered = typeMatched.length > 0 || prefs.newsTypeFilters
+              ? typeMatched
+              : visible;
             // When viewing "All", honor the user's source-type order from the
             // funnel popover (Jacob 6/1) — dragging a source higher makes its
             // items lead in every column. Stable within a type so the per-sport
             // cascade order is preserved among same-type sources.
             const typeOrder = prefs.newsTypeFilterOrder;
-            return (newsTypeFilter === "all" && typeOrder && typeOrder.length)
+            return (newsTypeFilters.length > 1 && typeOrder && typeOrder.length)
               ? filtered
                   .map((s, i) => [s, i] as const)
                   .sort(([a, ai], [bz, bi]) => {
@@ -2494,10 +2794,17 @@ export default function HomeContent({
             };
           // Force the ESPN "Top news" feed back as a column: clear any 3rd-league
           // override and explicitly show the independent generic column.
-          const pickEspn = () => {
+          // When called from a column's switcher, `position` is that column's
+          // index so the feed lands where the user asked for it instead of
+          // always in col 3 (which read as "the menu item does nothing" from
+          // columns 1-2).
+          const pickEspn = (position?: number) => {
             updatePrefs({
               newsThirdLeague: undefined,
               newsGenericHidden: false,
+              newsGenericSlot: position === undefined
+                ? prefs.newsGenericSlot
+                : (Math.max(0, Math.min(2, position)) as 0 | 1 | 2),
               newsFocusLeague: prefs.newsFocusLeague ? "espn" : undefined,
             });
           };
@@ -2626,6 +2933,7 @@ export default function HomeContent({
                 onPlay={playNewsVideo}
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
+                oldestFirst={!!prefs.newsOldestFirst}
               />
             );
           }
@@ -2652,15 +2960,17 @@ export default function HomeContent({
                       // setNewsThirdLeague — matches hidescore.com's "News ▾".
                       const isEspn = entry.id === "espn";
                       return (
-                        <div key={`title-${entry.id}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
+                        <div key={`title-${entry.id}-${entry.slotIdx}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                           <NewsColumnTitle
                             title={entry.label}
                             swappableOptions={switcherOptions}
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
-                            onPickEspn={pickEspn}
+                            onPickEspn={() => pickEspn(idx)}
                             espnActive={isEspn}
+                            autoSport={entry.slotIdx === 2 ? undefined : autoSlotSports[entry.slotIdx]}
+                            autoIsEspn={entry.slotIdx === 2}
                             removable={renderedEntries.length > 1}
                           />
                         </div>
@@ -2674,6 +2984,7 @@ export default function HomeContent({
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
+                    oldestFirst={!!prefs.newsOldestFirst}
                   />
                 </>
               )}
@@ -2698,6 +3009,7 @@ export default function HomeContent({
                     widthClassName={widthClassFor()}
                     videosOnly={!!prefs.newsVideosOnly}
                     showTextPosts={!!prefs.showTextPosts}
+                    oldestFirst={!!prefs.newsOldestFirst}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -2707,20 +3019,23 @@ export default function HomeContent({
                   const isEspn = entry.id === "espn";
                   return (
                     <NewsColumn
-                      key={`nc-${entry.id}-${newsRefreshKey}`}
+                      key={`nc-${entry.id}-${entry.slotIdx}-${newsRefreshKey}`}
                       title={entry.label}
                       sources={sourcesForEntry(entry, idx)}
                       swappableOptions={switcherOptions}
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
-                      onPickEspn={pickEspn}
+                      onPickEspn={() => pickEspn(idx)}
                       espnActive={isEspn}
+                      autoSport={entry.slotIdx === 2 ? undefined : autoSlotSports[entry.slotIdx]}
+                      autoIsEspn={entry.slotIdx === 2}
                       hideTitle={stripActive}
                       onPlayVideo={playNewsVideo}
                       widthClassName={widthClassFor()}
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
+                      oldestFirst={!!prefs.newsOldestFirst}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}
@@ -2837,6 +3152,7 @@ export default function HomeContent({
               swappableOptions: switcherOptions,
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
               onSwapLeague: (s: Sport | "empty" | undefined) => setSlotLeague(idx, s),
+              autoSport: autoSlotSports[idx],
               showSwapChevron: !prefs.hideLeagueChevrons,
               switcherMode: prefs.leagueSwitcherMode ?? ("dropdown" as const),
             });
@@ -2905,13 +3221,23 @@ export default function HomeContent({
             // which column?" picker so the user chooses what the WC bumps
             // (Jacob 6/11 #2). Dismiss persists.
             const wcActive = thirdLeagueOptions.some((o) => o.sport === "fifa");
-            const showWcBanner = wcActive
+            const showWcBanner = prefsHydrated
+              && wcActive
               && !displayedSports.includes("fifa")
               && !prefs.wcBannerDismissed;
             const wcBanner = showWcBanner ? (
               <div
                 className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10 flex items-center justify-center gap-x-3 gap-y-1.5 flex-wrap"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
+                // role="status" so this dismissible in-flow banner announces itself
+                // to screen readers without stealing focus — matching its structural
+                // twin the kickoff banner below, the ratings/news notices above, and
+                // the "same shape as the World Cup banner … role=status" convention
+                // spelled out where those notices render. This banner (the pattern's
+                // namesake) was the one that never carried the attribute; inert at
+                // load like every live region, it only speaks if the banner appears
+                // dynamically — the exact behavior the kickoff twin already has.
+                role="status"
               >
                 <span className="text-sm" style={{ color: "var(--text)" }}>
                   <span aria-hidden="true">⚽ </span>The 2026 World Cup is on — every match, spoiler-free.
@@ -2949,6 +3275,10 @@ export default function HomeContent({
                         style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        // aria-label mirrors the title so the button's action reaches
+                        // screen readers too — in focus mode a user lands on a bare
+                        // "NBA"/"MLB" with no cue that activating it replaces that column.
+                        aria-label={`Show the World Cup instead of ${entry.league.label}`}
                         title={`Show the World Cup instead of ${entry.league.label}`}
                       >
                         {entry.league.label}
@@ -2981,6 +3311,110 @@ export default function HomeContent({
                 </button>
               </div>
             ) : null;
+
+            // Season-kickoff banner (Jacob 8/8): the same slim one-line shape as
+            // the World Cup banner, but driven by league config instead of a
+            // hard-coded sport, so every future season opener gets it for free.
+            // Shows in the days before a league starts, on the day itself, and
+            // for a few days after (weekend-only users). Dismissal is keyed to
+            // the exact kickoff, so next season's banner still appears.
+            // Never renders alongside the World Cup banner — one announcement.
+            const showKickoffBanner = prefsHydrated
+              && !showWcBanner
+              && kickoff !== null
+              && !displayedSports.includes(kickoff.config.sport)
+              // displayedSports comes from the FETCHED board, which lands a few
+              // frames after prefs do — so a user who already pinned the league
+              // still saw a brief flash of "add it" on reload. The slot prefs
+              // are synchronous, so check those too and the flash has no window
+              // to happen in.
+              && !selectedSlotLeagues.includes(kickoff.config.sport)
+              && !(prefs.kickoffBannersDismissed ?? []).includes(kickoff.seasonKey);
+            const kickoffAddLabel = kickoff ? `Add the ${kickoff.config.label} column` : "";
+            const kickoffBanner = showKickoffBanner && kickoff ? (
+              <div
+                className="relative mt-6 mb-3 rounded-lg px-3 py-2 pr-10 flex items-center justify-center gap-x-3 gap-y-1.5 flex-wrap"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: "3px solid var(--accent)" }}
+                role="status"
+              >
+                <span className="text-sm" style={{ color: "var(--text)" }}>
+                  <span aria-hidden="true">{sportGlyph(kickoff.config.sport)} </span>
+                  {kickoffMessage(kickoff)}
+                </span>
+                {firstEmptySlot !== undefined ? (
+                  <button
+                    type="button"
+                    onClick={() => setSlotLeague(firstEmptySlot, kickoff.config.sport)}
+                    data-umami-event={`kickoff-banner-add-empty-slot-${kickoff.config.sport}`}
+                    className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
+                    style={{ background: "var(--accent)", color: "white" }}
+                  >
+                    {kickoffAddLabel}
+                  </button>
+                ) : !kickoffReplaceOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setKickoffReplaceOpen(true)}
+                    data-umami-event={`kickoff-banner-open-replace-picker-${kickoff.config.sport}`}
+                    className="text-sm font-medium px-3 py-1 rounded-md cursor-pointer transition-opacity hover:opacity-85"
+                    style={{ background: "var(--accent)", color: "white" }}
+                  >
+                    {kickoffAddLabel}
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm" style={{ color: "var(--text-muted)" }}>Replace:</span>
+                    {slotEntries.map((entry) => (
+                      <button
+                        type="button"
+                        key={entry.slotIdx}
+                        onClick={() => { setSlotLeague(entry.slotIdx, kickoff.config.sport); setKickoffReplaceOpen(false); }}
+                        data-umami-event={`kickoff-banner-replace-${entry.league.sport}`}
+                        className="text-sm font-medium px-2.5 py-1 rounded-md cursor-pointer transition-colors"
+                        style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)", color: "var(--text)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                        // aria-label mirrors the title so the button's action reaches
+                        // screen readers too — in focus mode a user lands on a bare
+                        // league label with no cue that activating it replaces that column.
+                        aria-label={`Show ${kickoff.config.label} instead of ${entry.league.label}`}
+                        title={`Show ${kickoff.config.label} instead of ${entry.league.label}`}
+                      >
+                        {entry.league.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setKickoffReplaceOpen(false)}
+                      data-umami-event="kickoff-banner-cancel-replace"
+                      className="text-sm px-1.5 py-1 cursor-pointer"
+                      style={{ color: "var(--text-muted)" }}
+                      title="Cancel"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => updatePrefs({
+                    kickoffBannersDismissed: [...(prefs.kickoffBannersDismissed ?? []), kickoff.seasonKey].slice(-12),
+                  })}
+                  data-umami-event={`kickoff-banner-dismiss-${kickoff.config.sport}`}
+                  aria-label={`Dismiss ${kickoff.config.label} banner`}
+                  title="Dismiss"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
+                  style={{ color: "var(--text-muted)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  ✕
+                </button>
+              </div>
+            ) : null;
+
+            // At most one banner occupies the strip above the board.
+            const topBanner = wcBanner ?? kickoffBanner;
 
             // Single-column board (Settings → Board layout): stack every league
             // in one centered, wider column with bigger cards. The .ns-cards-lg
@@ -3028,7 +3462,7 @@ export default function HomeContent({
             if (showFinalSplit) {
               return (
                 <>
-                {wcBanner}
+                {topBanner}
                 <div className={boardRowCls}>
                   {/* Invisible leading spacer balances the trailing + button so
                       the columns stay centered when a slot has been emptied
@@ -3057,7 +3491,7 @@ export default function HomeContent({
 
             return (
               <>
-              {wcBanner}
+              {topBanner}
               <div className={boardRowCls}>
                 {/* Invisible leading spacer balances the trailing + button so
                     the columns stay centered when a slot has been emptied
@@ -3279,13 +3713,19 @@ export default function HomeContent({
             </div>
             <h3 id="league-picker-title" className="font-bold text-lg mb-1 text-center" style={{ color: "var(--text)" }}>Pick your leagues</h3>
             <p className="text-sm mb-4 text-center" style={{ color: "var(--text-secondary)" }}>
-              Choose up to <strong>3 leagues</strong> for your score columns.<br />You can change these anytime in Settings.
+              Choose up to <strong>{pickerMax} leagues</strong> for your score columns.<br />You can change these anytime in Settings.
             </p>
+            {/* Popularity-ordered, soccer grouped at the bottom (pickerOptions).
+                Two rules keep this list STILL while you tap through it, which is
+                the whole complaint (Jacob 8/9): nothing re-sorts on selection,
+                and the order badge lives in a fixed-width slot that is present
+                (blank) on every pill — the old `1. ` prefix grew the pill on
+                click, which reflowed the wrap and made unrelated pills jump. */}
             <div className="flex flex-wrap justify-center gap-2 mb-4">
-              {thirdLeagueOptions.map((o) => {
+              {pickerOptions.map((o) => {
                 const idx = pickerSel.indexOf(o.sport);
                 const on = idx >= 0;
-                const full = pickerSel.length >= 3 && !on;
+                const full = pickerSel.length >= pickerMax && !on;
                 return (
                   <button
                     key={o.sport}
@@ -3300,13 +3740,46 @@ export default function HomeContent({
                     // the World Cup groups band/day pills) — this picker was the
                     // lone group missing it.
                     aria-pressed={on}
-                    className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     style={on
                       ? { background: "var(--accent)", color: "white", border: "1px solid var(--accent)" }
                       : { background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
                   >
-                    {on ? `${idx + 1}. ` : ""}{o.label}
-                    {o.offseason && <em className="font-normal" style={{ color: on ? "inherit" : "var(--text-muted)" }}> · offseason</em>}
+                    {/* Fixed 1rem slot, reserved whether or not this pill is
+                        picked, so selecting one never changes any pill's width. */}
+                    <span aria-hidden className="inline-block w-4 shrink-0 text-center text-xs font-bold tabular-nums">
+                      {on ? idx + 1 : ""}
+                    </span>
+                    {/* The mark always sits on a white chip. Most of these are
+                        dark-on-transparent, so on the accent-blue selected fill
+                        they'd disappear; knocking them to solid white instead
+                        turned filled marks (MLB) into a featureless blob. The
+                        chip keeps every logo legible and identical in both
+                        states, so selecting a pill changes only its background. */}
+                    <span className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-full shrink-0 bg-white">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={LEAGUE_LOGO[o.sport]}
+                        alt=""
+                        width={16}
+                        height={16}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-[16px] h-[16px] object-contain"
+                        draggable={false}
+                        // Remote ESPN/Wikimedia mark: a blocked hotlink would leave
+                        // the browser's broken-image glyph. Collapse it and let the
+                        // pill read as text, matching every other logo in the app.
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                    </span>
+                    <span>{o.label}</span>
+                    {/* Start dates dropped here on purpose (Jacob 8/9): six
+                        "· starts Aug 21" tails made the grid unreadable and are
+                        noise at signup. The kickoff banner still announces them
+                        and the column switcher still shows them. "offseason"
+                        stays — that one changes whether the column has games. */}
+                    {o.offseason && <em className="font-normal text-xs" style={{ color: on ? "inherit" : "var(--text-muted)" }}>offseason</em>}
                   </button>
                 );
               })}
@@ -3353,7 +3826,7 @@ export default function HomeContent({
           body={videoModal.body}
           shareCard={videoModal.shareCard}
           maskVideoTitle={prefs.maskVideoTitle ?? true}
-          youtubeNativeControls={prefs.youtubeNativeControls ?? false}
+          youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
           allowEnd={prefs.videoAllowEnd ?? false}
@@ -3369,6 +3842,7 @@ export default function HomeContent({
         <GameDetailModal
           game={detailGame}
           showRatings={prefs.showRatings}
+          showTeamRecords={!!prefs.showTeamRecords}
           onClose={() => setDetailGame(null)}
           leagueLabel={thirdLeagueOptions.find((o) => o.sport === detailGame.sport)?.label ?? detailGame.sport.toUpperCase()}
           onPlayHighlight={openVideoModal}
