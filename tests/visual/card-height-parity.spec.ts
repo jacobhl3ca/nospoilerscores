@@ -1,12 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// A column that mixes finished games WITH a highlight and finished games
-// WITHOUT one used to render ragged: the ones that resolved nothing dropped the
-// button row entirely and sat ~27px shorter, with nothing on screen to explain
-// the gap (Jacob 8/9, an NWSL column where one of three finals had a video).
-// GameHighlights now reserves the row for any finished card, so these assert the
-// heights stay equal. They are DOM-measurement tests, not screenshots — a
-// pixel baseline would churn on every unrelated style change.
+// The card grows for a highlight it actually has, and not before.
+//
+// f2deaf2d went the other way: every finished card reserved the button row so a
+// mixed column lined up. On a slate where nothing resolves — a whole MLB column
+// before the recaps land, or a league whose official-channel string is dead —
+// that put a permanently blank 27px band under every card and read as fat
+// ("bigger box not until it has actual highlight", Jacob 8/10). So these assert
+// the opposite of what they used to: a card with no highlight is SHORTER by
+// exactly one button row, and carries no empty trailing row at all.
+//
+// DOM-measurement tests, not screenshots — a pixel baseline would churn on
+// every unrelated style change.
 
 async function setSingleLeague(page: Page, sport: string) {
   await page.addInitScript((selectedSport) => localStorage.setItem("nss-preferences", JSON.stringify({
@@ -70,27 +75,34 @@ function twoFinishedGames() {
   });
 }
 
-// The rendered height of each game card, identified by its away-team name.
+// Height of each game card plus its trailing element, identified by away team.
 // Walks up from the team-name span to the nearest rounded-lg box, which is the
 // card root in GameCard — matching on the inline `var(--bg-card)` background
-// instead would break the first time that moves to a class.
-async function measuredCards(page: Page): Promise<{ name: string; height: number }[]> {
+// instead would break the first time that moves to a class. `lastRowText` is
+// what catches a re-reserved row: an invisible stand-in renders as a real child
+// with no text, which is indistinguishable from a real button by height alone.
+async function measuredCards(page: Page): Promise<{ name: string; height: number; rows: number; lastRowText: string }[]> {
   return page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('[aria-label$="game details"]')].map((card) => ({
-      name: (card.getAttribute("aria-label") ?? "").split(" at ")[0],
-      height: Math.round(card.getBoundingClientRect().height),
-    })),
+    [...document.querySelectorAll<HTMLElement>('[aria-label$="game details"]')].map((card) => {
+      const last = card.lastElementChild as HTMLElement | null;
+      return {
+        name: (card.getAttribute("aria-label") ?? "").split(" at ")[0],
+        height: Math.round(card.getBoundingClientRect().height),
+        rows: card.children.length,
+        lastRowText: (last?.innerText ?? "").trim(),
+      };
+    }),
   );
 }
 
-test("a finished card with no highlight is the same height as one with", async ({ page }) => {
+test("a finished card with no highlight is shorter than one with — no reserved row", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-08-06T16:00:00-04:00"));
   await setSingleLeague(page, "wnba");
   await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({
     status: 200, contentType: "application/json", body: twoFinishedGames(),
   }));
   // Resolve a video for the Aces game only. The Fever game gets nothing, so its
-  // buttons never render and it falls back to the reserved empty row.
+  // buttons never render and it must collapse to its natural height.
   await page.route("**/api/youtube?**", route => {
     const q = new URL(route.request().url()).searchParams.get("q") ?? "";
     return q.includes("Aces")
@@ -103,15 +115,20 @@ test("a finished card with no highlight is the same height as one with", async (
   // One card resolved a button; the other must not have.
   await expect(page.getByRole("button", { name: "WNBA highlights" })).toHaveCount(1);
 
-  await expect.poll(() => measuredCards(page), { timeout: 15_000 }).toEqual([
-    { name: "Aces", height: expect.any(Number) },
-    { name: "Fever", height: expect.any(Number) },
-  ]);
+  await expect.poll(async () => {
+    const [withVideo, without] = await measuredCards(page);
+    return withVideo && without ? without.height < withVideo.height : null;
+  }, { timeout: 15_000 }).toBe(true);
+
   const [withVideo, without] = await measuredCards(page);
-  expect(without.height).toBe(withVideo.height);
+  // The card that earned the row is exactly one button row taller.
+  expect(withVideo.rows).toBe(without.rows + 1);
+  expect(withVideo.lastRowText).toBe("WNBA");
+  // And the short one ends on its team rows, not on a blank band.
+  expect(without.lastRowText).not.toBe("");
 });
 
-test("the reserved row is invisible to assistive tech", async ({ page }) => {
+test("a slate where nothing resolves renders no highlight row anywhere", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-08-06T16:00:00-04:00"));
   await setSingleLeague(page, "wnba");
   await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({
@@ -124,8 +141,10 @@ test("the reserved row is invisible to assistive tech", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible();
   // No highlight resolved anywhere, so nothing may announce itself as one.
   await expect(page.getByRole("button", { name: /highlights/i })).toHaveCount(0);
-  // Both cards still stand at the same height on the reserved row alone.
+
   const cards = await measuredCards(page);
   expect(cards).toHaveLength(2);
+  // Equal heights again — but because BOTH collapsed, not because both padded.
   expect(cards[0].height).toBe(cards[1].height);
+  for (const card of cards) expect(card.lastRowText).not.toBe("");
 });
