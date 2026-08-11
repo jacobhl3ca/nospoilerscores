@@ -531,7 +531,13 @@ export default function SettingsPanel({
       newsThirdLeague: undefined,
       newsGenericHidden: undefined,
       newsGenericSlot: undefined,
-      defaultDateMode: "smart",
+      // Yesterday, not "smart" — this is the documented fresh-install default
+      // (see `defaults` in preferences.ts, moved off "smart" on 2026-08-09 so a
+      // new visitor after 1 PM local isn't dropped on a board of not-yet-started
+      // games). Like smartCutoffHour/newsColCount/newsTypeFilter below, this pref
+      // carries an explicit non-undefined default, so a reset must write that
+      // value rather than "smart" for reset to match a genuine fresh install.
+      defaultDateMode: "yesterday",
       defaultLandingView: "remember",
       defaultRatings: "auto",
       hideLeagueChevrons: undefined,
