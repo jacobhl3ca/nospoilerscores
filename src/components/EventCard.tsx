@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
-import { fetchFirstVideoId } from "@/lib/youtube";
+import { fetchFirstVideoId, leadChannelBlocksEmbeds } from "@/lib/youtube";
 import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
@@ -327,7 +327,13 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
 
 // Play button styled exactly like the game cards' highlight buttons
 // (GameHighlights): bg-card-hover pill, accent play triangle + label.
-function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean; onClick: () => void }) {
+// `note` is a muted visual tail on the label ("(Opens YouTube)") for a channel
+// that refuses embeds, so the hand-off out of the app is stated BEFORE the tap
+// rather than discovered as a surprise card (Jacob 8/11, F1). It is written
+// short on a narrow column and spelled out on a wide one; `hint` carries the
+// full sentence to the accessible name either way, so what a screen reader
+// hears never depends on the column width.
+function PlayBtn({ label, loading, onClick, note, hint }: { label: string; loading: boolean; onClick: () => void; note?: string; hint?: string }) {
   return (
     <button
       type="button"
@@ -338,14 +344,14 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
       disabled={loading}
       className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer disabled:opacity-50"
       style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-      title={`${label} highlights`}
+      title={`${label} highlights${hint ? ` — ${hint}` : ""}`}
       // Pin the accessible name to the button's purpose so a screen reader
       // hears "UFC highlights" / "Search highlights" — otherwise the name fell
       // back to the bare visible text ("Search" alone is ambiguous) while
       // loading swapped it to "Loading…", losing what the button does. aria-busy
       // conveys the in-flight fetch that the visible "Loading…" shows sighted
       // users. Matches the title+aria-label pairing every other button here uses.
-      aria-label={`${label} highlights`}
+      aria-label={`${label} highlights${hint ? ` — ${hint}` : ""}`}
       aria-busy={loading}
     >
       {loading ? (
@@ -353,7 +359,12 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
       ) : (
         <>
           <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-          <span className="text-[10px] font-medium">{label}</span>
+          <span className="text-[10px] font-medium truncate min-w-0">{label}</span>
+          {note && (
+            // aria-hidden: the same fact is already in the button's aria-label,
+            // spelled out in full — announcing an "↗" as well would be noise.
+            <span aria-hidden="true" className="text-[10px] font-normal shrink-0" style={{ color: "var(--text-muted)" }}>{note}</span>
+          )}
         </>
       )}
     </button>
@@ -917,6 +928,10 @@ export default function EventCard({
   // its own strict lookup, and a tile renders at most one of them — a miss adds
   // nothing, so the tile keeps its natural height rather than a blank band.
   const showRaceBtn = isPost && isRace && !!event.officialChannel && raceSource !== null;
+  // FOM refuses embeds, so a FORMULA 1 clip can only ever be handed off to
+  // YouTube — VideoModal skips straight to its "Watch on YouTube" card. Say so
+  // on the button instead of letting the tap discover it.
+  const raceOpensYouTube = showRaceBtn && leadChannelBlocksEmbeds([event.officialChannel!]);
   const showPokerBtn = isPost && event.kind === "poker" && !!event.officialChannel && pokerSource !== null;
   const showBoxingBtn = isPost && event.kind === "boxing" && !!event.officialChannel && boxingSource !== null;
   const showChessBtn = isPost && event.kind === "chess" && !!event.officialChannel && chessSource !== null;
@@ -1004,8 +1019,20 @@ export default function EventCard({
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
               renders NASCAR and IndyCar, which would otherwise both offer an
-              "F1" highlight button. Falls back to "F1" for older cards. */}
-          <PlayBtn label={raceSource?.label ?? event.officialLabel ?? "F1"} loading={loadingId === "race-official"} onClick={playRaceHighlight} />
+              "F1" highlight button. Falls back to "F1" for older cards.
+              The "(Opens YouTube)" tail is keyed off the CHANNEL's embed
+              policy, not off F1 by name — FOM blocks embedding, so the modal
+              can only hand the clip off, and NASCAR/IndyCar play in-app from
+              the same layout and must not claim otherwise. If FOM ever
+              re-enables embeds, removing the channel from EMBED_BLOCKED_CHANNELS
+              takes the tail with it. */}
+          <PlayBtn
+            label={raceSource?.label ?? event.officialLabel ?? "F1"}
+            loading={loadingId === "race-official"}
+            onClick={playRaceHighlight}
+            note={raceOpensYouTube ? (metaCompact ? "↗" : "(Opens YouTube)") : undefined}
+            hint={raceOpensYouTube ? "opens YouTube" : undefined}
+          />
         </div>
       )}
       {/* Poker replays are stricter than racing: exact tour channel or no
