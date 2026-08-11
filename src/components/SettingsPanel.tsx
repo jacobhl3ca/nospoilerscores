@@ -2,7 +2,7 @@
 
 import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
-import { fetchSportTeams, SportTeam } from "@/lib/espn";
+import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup } from "@/lib/espn";
 import {
   Preferences,
   Theme,
@@ -27,10 +27,14 @@ interface SettingsPanelProps {
   prefs: Preferences;
   updatePrefs: (update: Partial<Preferences>) => void;
   resolvedTheme: "dark" | "light";
-  // Every supported league, split into in-season/offseason in the UI. Saved
-  // offseason picks stay visible here even while the score board falls back to
-  // its active automatic columns.
+  // Every supported league, sectioned by KIND of sport in the UI (see
+  // SPORT_GROUP_ORDER). Saved offseason picks stay visible here even while the
+  // score board falls back to its active automatic columns.
   leagueOptions: LeagueOption[];
+  // Opens the footer feedback modal with a league-request message prefilled.
+  // Settings is the one place someone is already looking for a league that
+  // isn't there, so the ask belongs at the end of the catalog.
+  onRequestLeague?: () => void;
   // Every supported team league, including out-of-season leagues. Team
   // favorites are durable; the picker must not hide La Liga in July merely
   // because its score column is not active yet.
@@ -184,6 +188,7 @@ export default function SettingsPanel({
   updatePrefs,
   resolvedTheme,
   leagueOptions,
+  onRequestLeague,
   teamLeagueOptions,
   displayedLeagues,
   knownTeams,
@@ -398,14 +403,32 @@ export default function SettingsPanel({
     prefs.fifthLeague,
   ];
 
-  const inSeasonLeagueOptions = useMemo(
-    () => leagueOptions.filter((option) => !option.offseason),
-    [leagueOptions],
-  );
-  const offseasonLeagueOptions = useMemo(
-    () => leagueOptions.filter((option) => option.offseason),
-    [leagueOptions],
-  );
+  // The league catalog, sectioned by KIND of sport rather than by season
+  // (Jacob 8/11). The old split was "In season" / "Offseason", which answered a
+  // question nobody was asking here: Settings is the durable catalog, you come
+  // to it to FIND a league, and 16 soccer competitions interleaved with the US
+  // leagues is what made it unscannable. Nothing is lost in the swap — every
+  // row still carries its own "· offseason" marker, and each group sorts its
+  // in-season leagues first, so the seasonal signal survives at row level where
+  // it belongs. Empty groups are dropped rather than rendered as bare headings.
+  const groupedLeagueOptions = useMemo(() => {
+    const byGroup = new Map<string, LeagueOption[]>();
+    for (const option of leagueOptions) {
+      const key = sportGroup(option.sport);
+      const bucket = byGroup.get(key);
+      if (bucket) bucket.push(option);
+      else byGroup.set(key, [option]);
+    }
+    return SPORT_GROUP_ORDER.flatMap(({ key, label }) => {
+      const options = byGroup.get(key);
+      if (!options?.length) return [];
+      // Stable within a group: in-season first, then the catalog's own order
+      // (ALL_LEAGUES, which is arranged by season calendar). Array.prototype
+      // .sort is stable in every engine we ship to, so equal keys keep it.
+      const sorted = [...options].sort((a, b) => Number(!!a.offseason) - Number(!!b.offseason));
+      return [{ key, label, options: sorted }];
+    });
+  }, [leagueOptions]);
 
   const optionText = (option: LeagueOption) =>
     `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : ""}`;
@@ -997,18 +1020,13 @@ export default function SettingsPanel({
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
                     <option value="">Auto</option>
-                    <optgroup label="In season">
-                      {inSeasonLeagueOptions.map((option) => (
-                        <option key={option.sport} value={option.sport}>{optionText(option)}</option>
-                      ))}
-                    </optgroup>
-                    {offseasonLeagueOptions.length > 0 && (
-                      <optgroup label="Offseason">
-                        {offseasonLeagueOptions.map((option) => (
+                    {groupedLeagueOptions.map((group) => (
+                      <optgroup key={group.key} label={group.label}>
+                        {group.options.map((option) => (
                           <option key={option.sport} value={option.sport}>{optionText(option)}</option>
                         ))}
                       </optgroup>
-                    )}
+                    ))}
                     <option value="empty">Remove col</option>
                   </select>
                 </Field>
@@ -1024,19 +1042,26 @@ export default function SettingsPanel({
             </Field>
             <Field label="Leagues in the switcher" hint="Core leagues start checked; choose any others you want in the header switcher">
               <div className="space-y-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>In season</p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                    {inSeasonLeagueOptions.map(renderSwitcherToggle)}
-                  </div>
-                </div>
-                {offseasonLeagueOptions.length > 0 && (
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>Offseason</p>
+                {groupedLeagueOptions.map((group) => (
+                  <div key={group.key}>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>{group.label}</p>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                      {offseasonLeagueOptions.map(renderSwitcherToggle)}
+                      {group.options.map(renderSwitcherToggle)}
                     </div>
                   </div>
+                ))}
+                {onRequestLeague && (
+                  // Last line of the catalog, italic and quiet: the person
+                  // reading it has just scanned every league we carry and not
+                  // found theirs, which is the only moment the ask is useful.
+                  <button
+                    type="button"
+                    onClick={onRequestLeague}
+                    className="text-xs italic underline underline-offset-2 cursor-pointer hover:opacity-80"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Request a league
+                  </button>
                 )}
               </div>
             </Field>
