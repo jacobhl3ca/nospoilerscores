@@ -221,8 +221,8 @@ export interface Preferences {
   // silently no-op'd (Jacob 8/9). The two league columns close ranks around
   // it, so the board still shows the same three feeds.
   newsGenericSlot?: 0 | 1 | 2;
-  // Default date on launch: smart (yesterday before 1 PM ET, today after),
-  // always today, or always yesterday.
+  // Date shown on launch: smart (yesterday before 1 PM ET, today after),
+  // always today, or always yesterday (default — see the `defaults` object below).
   defaultDateMode?: DefaultDateMode;
   // Landing view on launch: remember last (default), always scores, always news.
   defaultLandingView?: DefaultLandingView;
