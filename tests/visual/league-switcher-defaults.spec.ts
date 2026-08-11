@@ -155,7 +155,7 @@ test("legacy signed-in account prefs migrate and sync from a new device", async 
   await expect(page.getByRole("checkbox", { name: "Liga MX", exact: true })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "NWSL", exact: true })).not.toBeChecked();
   await expect.poll(() => uploaded?.switcherDefaultsVersion).toBe(2);
-  expect(uploaded?.shownLeagues).toEqual(expect.arrayContaining(["ligamx"]));
+  expect((uploaded as Record<string, unknown> | null)?.shownLeagues).toEqual(expect.arrayContaining(["ligamx"]));
 });
 
 test("v2 account defaults clear device-only switcher overrides", async ({ page }) => {
