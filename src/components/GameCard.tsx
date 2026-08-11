@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Game, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
+import { isDemoModeActive } from "@/lib/demoMode";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
 import { getTimeZone, etSlateYmd } from "@/lib/etDay";
 import { fifaRank } from "@/lib/fifaRankings";
@@ -52,8 +53,11 @@ interface GameCardProps {
 }
 
 function RatingBadge({ rating }: { rating: number }) {
-  let color = "bg-gray-500";
-  let label = "OK";
+  // The badge only renders for a real numeric rating (see showRating gate below),
+  // and this chain is exhaustive, so the four tiers below are the only outcomes —
+  // GREAT/GOOD/MEH/SKIP, matching the legend and the detail modal's ratingTier.
+  let color: string;
+  let label: string;
   if (rating >= 85) {
     color = "bg-green-600";
     label = "GREAT";
@@ -72,12 +76,11 @@ function RatingBadge({ rating }: { rating: number }) {
     // Screen readers otherwise announce a bare "MEH"/"SKIP" mid-card with no hint
     // it's the game's worth-watching rating. role="img" + a spoken aria-label give
     // the badge a self-describing name; the visible all-caps text is unchanged.
-    // Title case in the label ("Meh"/"Skip") stops some engines spelling the short
-    // all-caps words out letter-by-letter — except "OK", which is an initialism
-    // and stays "OK" so it isn't mangled to "Ok".
+    // Title case in the label ("Great"/"Meh"/"Skip") stops some engines spelling
+    // the short all-caps words out letter-by-letter.
     <span
       role="img"
-      aria-label={`Worth-watching rating: ${label === "OK" ? "OK" : label.charAt(0) + label.slice(1).toLowerCase()}`}
+      aria-label={`Worth-watching rating: ${label.charAt(0) + label.slice(1).toLowerCase()}`}
       className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}
     >
       {label}
@@ -142,7 +145,12 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: h, short: h };
   }
-  if (sport === "nba" || sport === "wnba") {
+  if (sport === "nba" || sport === "wnba" || sport === "ncaaw") {
+    // NCAAW plays four 10-min quarters (then OT), same structure as WNBA/NBA —
+    // the rest of the app already classifies it that way (SPORT_RATING_CONFIG
+    // regulationPeriods: 4, PERIOD_SECONDS 600). Without this branch a live
+    // NCAAW card fell through to the generic status, so ESPN's "8:32 - 2nd"
+    // rendered raw on desktop and truncated to "8:3" on mobile instead of "Q2".
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
     if (clock && clock !== "0.0") return { full: `${q} - ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
@@ -161,7 +169,14 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
     if (!shootout && clock && clock !== "0.0") return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
-  if (sport === "nfl") {
+  if (sport === "nfl" || sport === "ncaaf") {
+    // NCAAF plays four 15-min quarters (then OT), the same period structure as
+    // the NFL — the rest of the app already classifies it that way (espn.ts:
+    // regulationPeriods 4, PERIOD_SECONDS 900). Without this branch a live NCAAF
+    // card fell through to the generic status, so ESPN's "8:32 - 2nd" rendered
+    // raw on desktop and truncated to "8:3" on mobile instead of "Q2 - 8:32".
+    // College-football OT is untimed (no game clock), so the clock guard below
+    // falls through to the bare "OT"/"2OT" label there, same as the NFL path.
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
     if (clock && clock !== "0.0") return { full: `${q} - ${clock}`, short: q };
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
@@ -222,13 +237,6 @@ function shortNetwork(name: string): string {
 // (Jacob 6/9).
 function formatTime(t: string | null | undefined): string {
   return (t ?? "").replace(/(\d)\s+([AP]M)\b/i, "$1$2");
-}
-
-// Keep upcoming-card weekday labels compact at every breakpoint. The row also
-// carries date/time plus a pinned-right network, and full names like "Thursday"
-// can force the network onto a second line in single-column cards.
-function displayDow(s: string): string {
-  return s;
 }
 
 // once, on the full lead card, instead of repeating down every row.
@@ -329,7 +337,7 @@ export function CompactUpcomingCard({
           before the dash. Network pinned right (Jacob 6/9). */}
       <div className="hidden sm:flex items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
         <span className="whitespace-nowrap">
-          {displayDow((nextGameDate || "").split(" ")[0])}
+          {(nextGameDate || "").split(" ")[0]}
           {(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${formatTime(localTime)}` : ""}
         </span>
         {networkNode ? <span className="ml-auto whitespace-nowrap">{networkNode}</span> : null}
@@ -371,8 +379,20 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       if (broadcastOverlayRef.current?.contains(e.target as Node)) return;
       setBroadcastExpanded(false);
     };
+    // Keyboard parity with the app's other dropdowns/modals: Escape dismisses
+    // the popup the "+N" chip promises via aria-haspopup="dialog". Without it a
+    // keyboard user who opened this role="dialog" overlay had no way to close
+    // it (the outside-click above is pointer-only) — the lone popover missing
+    // the Escape handler LeagueColumn/NewsColumn's swap dropdowns already carry.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBroadcastExpanded(false);
+    };
     document.addEventListener("pointerdown", closeOnOutside, true);
-    return () => document.removeEventListener("pointerdown", closeOnOutside, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [broadcastExpanded]);
 
   // Live outdoor games: pull current venue conditions so a small weather emoji
@@ -403,6 +423,18 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   // Team-view treats finished games like past-date cards (hide records, show highlights).
   const effectivePastDate = isPastDate || (teamView && isFinished);
   const espnUrl = espnGameUrl(game);
+  // Under ?demo=1 the team names are anonymized ("Team A1 at Team A2"), but
+  // espnUrl still points at the REAL ESPN gamecast — game.recapUrl (which
+  // demoMode can't scrub without breaking the non-demo id-fallback) or the
+  // /game/_/gameId/{game.id} fallback built from the real event id. So tapping
+  // the date/time label — the one card element wrapped in this link — opened
+  // the real matchup page: real team names and the final score, the exact
+  // spoiler ?demo=1 hides (same leak class as the streamUrl/recap fixes in
+  // demoMode.ts, which fall back to a team-less page). Drop the link in demo
+  // mode so the label renders as plain text; production is unaffected. Memoized
+  // like GameHighlights' own demo check so score-poll re-renders don't re-parse
+  // the query string.
+  const demoActive = useMemo(() => isDemoModeActive(), []);
   const teamViewDateLabel = teamView ? (() => {
     const d = new Date(game.date);
     if (isNaN(d.getTime())) return "";
@@ -576,6 +608,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             title={game.isPerfectGame
               ? `${game.noHitterPitchingTeam}: no batter has reached base`
               : `${game.noHitterPitchingTeam} has not allowed a hit`}
+            // The which-team detail lived only in `title` (mouse hover), so a
+            // screen reader/touch user heard "No-Hitter" but never the pitching
+            // team. role="img" + aria-label speaks the whole thing — the same
+            // bare-<span> glyph treatment the live-status/weather badges use
+            // (aria-label alone is dropped on a generic <span>). No visual change.
+            role="img"
+            aria-label={game.isPerfectGame
+              ? `Perfect game alert: ${game.noHitterPitchingTeam} — no batter has reached base`
+              : `No-hitter alert: ${game.noHitterPitchingTeam} has not allowed a hit`}
           >
             <span aria-hidden>⚾</span>
             {game.isPerfectGame ? "Perfect Game" : "No-Hitter"}
@@ -593,6 +634,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-500"
             style={{ background: "rgba(14, 165, 233, 0.12)" }}
             title={`${game.cycleWatch.player} needs a ${game.cycleWatch.needs} for the cycle`}
+            // Spoken detail (who + which hit) rode only in `title`; role="img" +
+            // aria-label reads it to AT too, matching the no-hitter badge above.
+            role="img"
+            aria-label={`Cycle watch: ${game.cycleWatch.player} needs a ${game.cycleWatch.needs} for the cycle`}
           >
             <span aria-hidden>💎</span>
             Cycle Watch
@@ -613,6 +658,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-500"
             style={{ background: "rgba(139, 92, 246, 0.12)" }}
             title="Match level on sets — into the deciding set"
+            // The "level on sets" context lived only in `title`; role="img" +
+            // aria-label voices it to AT too, matching the badges above.
+            role="img"
+            aria-label="Deciding set: the match is level on sets, into the deciding set"
           >
             <span aria-hidden>🎾</span>
             Deciding Set
@@ -633,20 +682,30 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         // not in the status bar's middle cell, so it's gone from showBar here.
         const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView;
         if (!showBar) return null;
-        // Small ESPN link wrapper for upcoming-time / date labels.
-        const withEspn = (node: ReactNode) => (
-          <a
-            href={espnUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline transition-colors"
-            style={{ color: "inherit" }}
-            title="View on ESPN"
-            onClick={handleExternalClick(espnUrl)}
-          >
-            {node}
-          </a>
-        );
+        // Small ESPN link wrapper for upcoming-time / date labels. In demo mode
+        // the link would leak the real matchup (see demoActive above), so render
+        // the label as plain text there instead. Esports has no ESPN gamecast —
+        // its games come from PandaScore, so espnGameUrl() falls back to
+        // pandascore.co (a B2B API homepage, not a match page) for that sport.
+        // Linking there would send the user to an irrelevant vendor site under a
+        // "View on ESPN" tooltip that's wrong on both counts, so drop the link
+        // for esports too and let the date/time read as plain text.
+        const withEspn = (node: ReactNode) =>
+          demoActive || game.sport === "esports" ? (
+            <>{node}</>
+          ) : (
+            <a
+              href={espnUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline transition-colors"
+              style={{ color: "inherit" }}
+              title="View on ESPN"
+              onClick={handleExternalClick(espnUrl)}
+            >
+              {node}
+            </a>
+          );
         return (
           <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
             {/* Date/time never shrinks or clips (shrink-0) so the time always
@@ -687,12 +746,28 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // condition emoji right after the clock (🌧️). Spoiler-free
                   // and only when wet, so it never clutters a clear-sky card.
                   const wx = cardWeather?.rainingNow ? (
-                    <span className="ml-1" title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
+                    // role="img" + a spoken name so this bare condition emoji
+                    // isn't read as an ambiguous glyph (or silently skipped) by
+                    // screen readers — the `title` only surfaces on mouse hover,
+                    // so SR/touch users got nothing. Matches the role="img" +
+                    // aria-label pattern the rating badge and the detail modal's
+                    // rain timeline already use; unlike the modal's live-weather
+                    // line this emoji stands alone with no adjacent label text.
+                    <span className="ml-1" role="img" aria-label={`${cardWeather.nowLabel} at the venue`} title={`${cardWeather.nowLabel} at the venue`}>{cardWeather.nowIcon}</span>
                   ) : null;
                   return liveUrl ? (
                     <><a href={liveUrl} target="_blank" rel="noopener noreferrer" aria-label={gameProgress.label || undefined} className={colorCls} onClick={handleExternalClick(liveUrl)}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></a>{wx}</>
                   ) : (
-                    <><span className={staticCls} aria-label={gameProgress.label || undefined}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
+                    // No live-stream link, so this is a bare <span> — implicit
+                    // role "generic", on which aria-label is prohibited and
+                    // dropped by AT, so an MLB "▲5"/"▼5" leaks through as
+                    // "down-pointing triangle 5". role="img" (only when a spoken
+                    // `label` exists — i.e. MLB; other sports read their visible
+                    // "Q3 - 4:32" fine and keep it) makes the alt text
+                    // authoritative, the same glyph treatment the live-weather
+                    // emoji above and the rating badge already use. The <a>
+                    // branch needs none of this: link role honors aria-label.
+                    <><span className={staticCls} role={gameProgress.label ? "img" : undefined} aria-label={gameProgress.label || undefined}><span className="hidden sm:inline">{gameProgress.full}</span><span className="sm:hidden">{gameProgress.short}</span></span>{wx}</>
                   );
                 })()
               ) : showFinal && !hasRating ? (
@@ -704,18 +779,21 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // Desktop: "Thu 6/11 - 7:00 PM"; mobile drops the M/D and
                   // shortens the time ("Thu 7 PM") (Jacob 6/9).
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? <><span className="sm:hidden">Tomo</span><span className="hidden sm:inline">Tomorrow</span></> : <><span className="sm:hidden">{(nextGameDate || "").split(" ")[0]}</span><span className="hidden sm:inline">{displayDow((nextGameDate || "").split(" ")[0])}</span></>}</span>
+                    <span className="font-bold" style={{ color: "var(--text)" }}>{nextGameDate === "Tomorrow" ? <><span className="sm:hidden">Tomo</span><span className="hidden sm:inline">Tomorrow</span></> : <><span className="sm:hidden">{(nextGameDate || "").split(" ")[0]}</span><span className="hidden sm:inline">{(nextGameDate || "").split(" ")[0]}</span></>}</span>
                     <span className="hidden sm:inline">{(nextGameDate || "").includes(" ") ? ` ${(nextGameDate || "").split(" ").slice(1).join(" ")}` : ""}{localTime ? ` - ${formatTime(localTime)}` : ""}</span>
                     <span className="sm:hidden">{localTime ? ` ${formatTime(localTime)}` : ""}</span>
                   </span>
                 )
               ) : isFuture ? (
-                // Normal today/future card with no date label — just the time
-                // (left), full ":00" on desktop, shortened on mobile.
+                // Normal today/future card with no date label — just the game
+                // time (left), identical at every breakpoint: formatTime only
+                // tightens the AM/PM spacing ("7:00 PM" → "7:00PM") and has no
+                // separate shortened mobile form, so a single span serves all
+                // widths (the old sm:hidden / hidden sm:inline pair rendered the
+                // exact same string twice).
                 withEspn(
                   <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    <span className="sm:hidden">{formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}</span>
-                    <span className="hidden sm:inline">{formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}</span>
+                    {formatTime(localTime || cleanStatusDetail(game.statusDetail, false))}
                   </span>
                 )
               ) : null}

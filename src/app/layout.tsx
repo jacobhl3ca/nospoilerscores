@@ -160,6 +160,14 @@ const JSON_LD = {
       applicationCategory: "SportsApplication",
       url: "https://apps.apple.com/app/hidescore/id6766885311",
       installUrl: "https://apps.apple.com/app/hidescore/id6766885311",
+      // Google lists `description` as a recommended property for the
+      // SoftwareApplication family (MobileApplication is a subtype) — it feeds
+      // the app's entity/rich-result understanding. The sibling WebApplication
+      // node above already carries it (as does the Organization node below);
+      // this iOS product node was the lone outlier still missing it. Reuse
+      // SITE_DESC so the app summary stays in one place and matches the
+      // WebApplication description, the <meta name="description">, and OG copy.
+      description: SITE_DESC,
       // Same locale signal the sibling WebApplication/WebSite nodes carry —
       // MobileApplication is a SoftwareApplication → CreativeWork subtype too,
       // so inLanguage is valid here and keeps all product nodes consistent.
@@ -204,8 +212,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // dir="ltr" is set explicitly (not left to the browser default) per W3C i18n
+  // guidance to always declare a base direction on the <html> element — it pins
+  // bidirectional-text and form-control behavior instead of relying on the
+  // implicit default, and matches the `"dir": "ltr"` already declared in
+  // public/manifest.json so the document and the installed-PWA metadata agree.
+  // No visual change for this LTR English site.
   return (
-    <html lang="en" className={geistSans.variable} suppressHydrationWarning>
+    <html lang="en" dir="ltr" className={geistSans.variable} suppressHydrationWarning>
       <head>
         {/* Team & league logos load from ESPN's image CDN above the fold on
             nearly every game card. Warm the DNS + TCP + TLS connection before
@@ -215,6 +229,19 @@ export default function RootLayout({
             dns-prefetch is the fallback for browsers that ignore preconnect. */}
         <link rel="preconnect" href="https://a.espncdn.com" />
         <link rel="dns-prefetch" href="https://a.espncdn.com" />
+        {/* ESPN's CDN doesn't host league marks for NCAA (M/W/F) or tennis, so
+            those columns' source-header logos are hotlinked from
+            upload.wikimedia.org instead (LEAGUE_LOGO in lib/news.ts) — the one
+            runtime image host the hints above don't already cover. Warm its DNS
+            during HTML parse so the lookup isn't the first thing blocking that
+            <img> when one of those columns is on the board. dns-prefetch only,
+            NOT a full preconnect like the espncdn logos above: those fire on
+            nearly every card unconditionally, whereas Wikimedia is gated on a
+            user having a niche NCAA/tennis column shown, so a warmed TCP+TLS
+            socket would idle unused for everyone else — the same on-demand
+            idle-socket reasoning as the statsapi.mlb.com hint below. DNS
+            resolution is the cheap, always-useful part with no idle-socket cost. */}
+        <link rel="dns-prefetch" href="https://upload.wikimedia.org" />
         {/* The first paint is data-driven: on load the app immediately fetches
             the ESPN scoreboard from site.api.espn.com to fill every league
             column (BASE_URL in lib/espn.ts). Warm that host's DNS + TCP + TLS
@@ -237,6 +264,19 @@ export default function RootLayout({
             so it carries crossOrigin to match, with dns-prefetch as fallback. */}
         <link rel="preconnect" href="https://site.web.api.espn.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://site.web.api.espn.com" />
+        {/* MLB game metadata (linescore + cycle/no-hitter watch) comes from a
+            separate provider, statsapi.mlb.com, not ESPN: fetchMLBGameMeta in
+            lib/espn.ts fires it whenever an MLB column is on the board, on the
+            same first-paint load path as the ESPN scoreboard above. Warm its DNS
+            during HTML parse so the lookup isn't the first thing blocking that
+            fetch. dns-prefetch only, NOT a full preconnect like the ESPN data
+            hosts above: those fire on EVERY load unconditionally, whereas this
+            one is gated on MLB being among the shown leagues (a user can drop it,
+            and it's off-season half the year), so a warmed TCP+TLS socket would
+            idle unused for anyone not viewing MLB — the same on-demand idle-socket
+            reasoning as the weather/youtube hints below. DNS resolution is the
+            cheap, always-useful part with no idle-socket cost. */}
+        <link rel="dns-prefetch" href="https://statsapi.mlb.com" />
         {/* Every news-column and video-strip thumbnail is routed through the
             images.weserv.nl proxy (proxyImage in lib/news.ts) — the heaviest
             images on the board. Resolve its DNS during HTML parse so the first
@@ -403,7 +443,7 @@ export default function RootLayout({
       <body className="antialiased">
         <BootBeacon />
         {children}
-        {/* GoatCounter analytics — create hidescore site at goatcounter.com and update the URL */}
+        {/* GoatCounter analytics — live at hidescore.goatcounter.com, privacy-first */}
         {/* Explicit https (not protocol-relative //) so the loader still resolves
             inside the Capacitor native WebView, where the page origin is
             capacitor://localhost — a // URL would resolve to capacitor://gc.zgo.at

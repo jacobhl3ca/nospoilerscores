@@ -31,10 +31,20 @@ export default function Error({
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
-      <p className="mb-5" style={{ color: "var(--text-muted)" }}>
-        That didn&apos;t load right. Try again — your scores are still hidden.
-      </p>
+      {/* role="alert" so a screen reader announces the failure. This boundary
+          swaps in dynamically when a client-side render error occurs, so the
+          alert node is inserted into the live document at error time (not
+          present at initial load) — the reliable case for role="alert" to fire.
+          Wrapping the heading + message (not the recovery buttons) keeps the
+          announcement to what went wrong; the buttons stay ordinary controls.
+          The wrapper carries no box margins, so the message's mb-5 collapses
+          through to preserve the exact spacing before the button row. */}
+      <div role="alert">
+        <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
+        <p className="mb-5" style={{ color: "var(--text-muted)" }}>
+          That didn&apos;t load right. Try again — your scores are still hidden.
+        </p>
+      </div>
       <div className="flex items-center gap-3">
         <button
           type="button"

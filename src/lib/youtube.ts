@@ -462,6 +462,15 @@ const TELEMUNDO_WORLD_CUP_TEAM_ALIASES: Record<string, string> = {
   Uruguay: "Uruguay",
   USA: "Estados Unidos",
   Uzbekistan: "Uzbekistán",
+  // Same fix fifaRankings.ts carries for these two nations: ESPN's scoreboard
+  // commonly sends "DR Congo" and "Côte d'Ivoire", which normalize away from the
+  // "Congo DR"/"Ivory Coast" primary keys above and would fall through to the
+  // English name on a Spanish-language channel — the exact under-match this map
+  // is meant to prevent. Alias each to the same Spanish name; the primary keys
+  // stay put, and distinct nations can't collide under the normalization, so no
+  // currently-resolving lookup regresses.
+  "DR Congo": "RD Congo", // vs. "Congo DR"
+  "Cote d'Ivoire": "Costa de Marfil", // vs. "Ivory Coast" (FIFA's official French name)
 };
 
 // Fold diacritics + typographic apostrophes and lowercase for lookup — the SAME

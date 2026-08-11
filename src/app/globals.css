@@ -246,15 +246,6 @@ body {
   outline-offset: 2px;
 }
 
-.theme-toggle {
-  box-shadow: 0 0 0 0px var(--accent);
-  transition: box-shadow 0.2s, background 0.2s, color 0.2s;
-}
-.theme-toggle:hover {
-  box-shadow: 0 0 0 2px var(--accent);
-  color: var(--accent);
-}
-
 .monkey-toggle {
   /* Outline (not box-shadow) so the ring stays uniform around rounded corners
      instead of AA-flattening at top/bottom. Inline 1px var(--border) is
@@ -424,6 +415,18 @@ html[data-view="news"] .view-tab[data-tab="news"] .tab-icon {
    so the rule lives with the app's other focus rings and survives a component
    rewrite. The id selector outranks the .outline-none utility. */
 #hs-feedback-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Same WCAG 2.4.7 fix for the feedback form's email field, the twin of the
+   message input above. It ships the identical Tailwind outline-none and its
+   border only changes color in the invalid (emailLooksWrong) state — never on
+   focus — so a keyboard Tab into the optional email field showed no cue on the
+   empty/valid path. Re-add the same keyboard-only (:focus-visible) accent ring;
+   the red error border still wins for the invalid state (it sits on the element
+   itself, distinct from this outline). Mouse clicks stay clean. */
+#hs-feedback-email:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

@@ -1132,8 +1132,16 @@ export default {
           // always 3 digits a side, so the old \d{1,2} cap leaked a bare box-score
           // headline with no result verb. Capped at 3 (not 4+) so 4-digit years
           // still fail; the lookbehind/lookahead keep M-D-Y dates and "2025-26"
-          // season spans out. Byte-identical to spoilers.ts.
-          const SCORE_RX = /(?<![-\/])\b\d{1,3}\s*[-–]\s*\d{1,3}\b(?![-\/])/;
+          // season spans out. The separator class is [-–—:] (hyphen, en-dash,
+          // em-dash, colon) so it also catches the colon scoreline European
+          // soccer titles lean on ("Real Madrid 3:1 Barcelona") and the em-dash
+          // form ("3—2") — both slipped past the hyphen/en-dash-only class. A
+          // colon between two 1-3 digit runs is a score in a per-match title;
+          // the 4-digit cap still drops "3: 2026" (2026 fails \d{1,3}\b), and a
+          // skipped false-positive just falls back to the next source (the
+          // over-hide-safe side the filter already embraces). Byte-identical to
+          // spoilers.ts.
+          const SCORE_RX = /(?<![-\/])\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-\/])/;
           //     "book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)" is the canonical
           //     knockout qualification idiom WC / cup-tie coverage reaches for the instant a side goes
           //     through ("England book their place in the final", "Brazil booked their passage") — a pure

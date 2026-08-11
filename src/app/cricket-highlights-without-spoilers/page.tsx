@@ -59,13 +59,18 @@ export const metadata: Metadata = {
     // replaces the parent's wholesale and must restate og:locale.
     locale: "en_US",
     type: "website",
-    images: [{ url: "https://hidescore.com/og-worldcup.png", width: 1200, height: 630, alt: TITLE }],
+    // Brand card (og-image.png), not og-worldcup.png: the World Cup card reads
+    // "Watch the World Cup" and points at hidescore.com/worldcup — a mismatched
+    // unfurl for a cricket page (cricket isn't even the same sport), and stale
+    // now the 2026 World Cup is over (ended Jul 19). og-image.png is the generic
+    // HideScore card, matching the other single-sport pages (NBA/NHL/MLB/NFL/EPL).
+    images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESC,
-    images: [{ url: "https://hidescore.com/og-worldcup.png", alt: TITLE }],
+    images: [{ url: "https://hidescore.com/og-image.png", alt: TITLE }],
   },
 };
 

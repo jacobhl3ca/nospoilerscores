@@ -53,6 +53,19 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
           next[idx] = filtered;
           return next;
         });
+      }).catch(() => {
+        // A rejected fetch would leave this column null forever, so `allLoaded`
+        // (below) never flips and the WHOLE subgrid stays pinned on skeletons
+        // with no empty state or retry. Settle it empty — mirroring NewsFeed's
+        // `.catch(() => [])` guard — so the strip renders with its other columns
+        // instead of hanging. (Built-in fetchers swallow errors today, so this
+        // only fires if a source ever rejects/throws.)
+        if (cancelled) return;
+        setColItems((prev) => {
+          const next = [...prev];
+          next[idx] = [];
+          return next;
+        });
       });
     });
     return () => { cancelled = true; };
@@ -67,6 +80,11 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
     let cancelled = false;
     tailFetch().then((items) => {
       if (!cancelled) setTailItems(items);
+    }).catch(() => {
+      // Same guard as the column fetch above: a rejected tail fetch would leave
+      // tailItems null (its "still loading" sentinel) permanently. Settle it
+      // empty so the tail simply doesn't render instead of hanging.
+      if (!cancelled) setTailItems([]);
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -122,12 +140,31 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
         const itemCount = items === null ? 0 : capped;
         const padCount = Math.max(0, maxItems - itemCount);
         const tail = isTailCol ? visibleTailItems : [];
-        const hasTail = tail.length > 0 && padCount > 0;
+        // Gate the tail on the column's OWN items having settled (items !== null),
+        // not just on padCount. The tail column runs two fetches: its live
+        // per-league video source (colItems[tailColIdx], slow ESPN API) AND the
+        // static ESPN-top tailFetch (fast JSON). When the static tail resolves
+        // first — the common case — items is still null so the skeleton branch
+        // renders 5 SkeletonRows at rows 2..6, while padCount == maxItems (5) made
+        // hasTail true and the tail <div> spanned `gridRow: itemCount+2 / span
+        // padCount` == `2 / span 5`, painting the ESPN headlines directly on top
+        // of those skeletons. The pad `else` branch below already guards items !==
+        // null for the same reason; mirror it so the tail simply waits for the
+        // column to load. Once items settle, this is byte-identical to before.
+        const hasTail = items !== null && tail.length > 0 && padCount > 0;
         const modalItems = [...(items?.slice(0, itemCount) ?? []), ...(hasTail ? tail : [])];
         const siblings: PlayOpts[] = modalItems.map(newsItemToPlayOpts);
         return (
           <div
-            key={source.label}
+            // Composite key: the strip is fed one lead source per column
+            // (stripCols.map((s) => s[0]) in HomeContent), and two columns CAN
+            // share a label — e.g. the 3rd news column (prefs.newsThirdLeague)
+            // set to a league already shown in the first two, giving sources
+            // like [MLB, NBA, MLB]. A bare source.label key would then collide,
+            // so React reconciles the wrong column's items under a header. This
+            // whole component is already positional (colItems[colIdx], etc.), so
+            // folding colIdx into the key restores unique, stable identity.
+            key={`${source.label}-${colIdx}`}
             // overflow-clip (not overflow-hidden) so the sticky SourceHeader
             // below pins to window scroll instead of being trapped inside this
             // card. See feedback_overflow_clip_for_sticky.md.
@@ -400,7 +437,7 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
             window.open(item.articleUrl, "_blank", "noopener,noreferrer");
           }
         }}
-        // Same inline-play control as VideoStripRow's button (its thumb is
+        // Same inline-play control as VideoRow's button (its thumb is
         // alt=""), so the accessible name would otherwise be just the headline
         // with no cue this PLAYS a highlight vs. the sibling <a> tail rows that
         // open an article. Name the action explicitly; the headline stays in

@@ -95,7 +95,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-semibold mt-6">Credits</h2>
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          The HideScore monkey icon is derived from <a href="https://github.com/twitter/twemoji" className="underline underline-offset-2" target="_blank" rel="noreferrer">Twemoji</a>, copyright Twitter, Inc. and other contributors, licensed under CC-BY 4.0.
+          The HideScore monkey icon is derived from <a href="https://github.com/twitter/twemoji" className="underline underline-offset-2" target="_blank" rel="noopener noreferrer">Twemoji</a>, copyright Twitter, Inc. and other contributors, licensed under CC-BY 4.0.
         </p>
       </section>
 
@@ -103,20 +103,38 @@ export default function PrivacyPage() {
         <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>← Back to HideScore</Link>
       </div>
 
-      {/* BreadcrumbList lets Google render a Home › Privacy trail in the search
-          result instead of the bare /privacy URL — matching the /faq, /worldcup,
-          and /watch-world-cup-without-spoilers pages that already declare the same
-          hierarchy. Server-rendered: this page has no "use client", so the script
-          ships in the static HTML for crawlers. */}
+      {/* Page graph: a WebPage node linked into the site's shared #website entity
+          (declared in layout.tsx) plus its own BreadcrumbList, so Google renders a
+          Home › Privacy trail in the search result AND reads the breadcrumb as this
+          page's rather than an orphan list. Privacy was still emitting a bare,
+          @id-less BreadcrumbList with no WebPage node — every other route
+          (SeoLandingPage, /faq, the date routes, the World Cup team/hub pages)
+          already uses this WebPage→#website / WebPage→#breadcrumb node-linking.
+          Server-rendered: this page has no "use client", so the script ships in the
+          static HTML for crawlers. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "BreadcrumbList",
-            itemListElement: [
-              { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
-              { "@type": "ListItem", position: 2, name: "Privacy Policy", item: "https://hidescore.com/privacy" },
+            "@graph": [
+              {
+                "@type": "WebPage",
+                name: PRIVACY_TITLE,
+                description: PRIVACY_DESC,
+                url: "https://hidescore.com/privacy",
+                inLanguage: "en",
+                isPartOf: { "@id": "https://hidescore.com/#website" },
+                breadcrumb: { "@id": "https://hidescore.com/privacy#breadcrumb" },
+              },
+              {
+                "@type": "BreadcrumbList",
+                "@id": "https://hidescore.com/privacy#breadcrumb",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "HideScore", item: "https://hidescore.com" },
+                  { "@type": "ListItem", position: 2, name: "Privacy Policy", item: "https://hidescore.com/privacy" },
+                ],
+              },
             ],
           }).replace(/</g, "\\u003c"),
         }}
