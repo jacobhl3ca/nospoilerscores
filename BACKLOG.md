@@ -545,3 +545,64 @@ _src: 2026-08-03 session_
 ⚠️ **The channel list is trap-laden — 8 of the obvious handles are wrong.** Six are empty squatted channels (`@clevelandbrowns`, `@denverbroncos`, `@greenbaypackers`, `@indianapoliscolts`, `@minnesotavikings`, `@NewEnglandPatriots`); `@Cardinals` is the **MLB** Cardinals; `@Lions` is a **Japanese baseball team**. The checker verifies by **RSS, not search** — a search-based check flagged 9 *correct* names as dead, so don't "simplify" it back to search.
 
 **Unblocks only if:** the NFL re-enables embedding on league or club game footage. Nothing on our side can route around it.
+### 🔒 Stale bundled iOS privacy page (deferred 2026-08-10)
+
+⬜ **~30 min, not urgent — Jacob deprioritized it 2026-08-10.** The privacy policy bundled into the HideScore iOS app is out of date relative to the live web one (found in the 2026-08-04 privacy audit; the three false privacy claims on the *web* side were fixed and deployed, the *bundled* copy was not).
+
+- Fix = update the bundled HTML + ship it in the next build. No urgency of its own; fold it into whatever the next HideScore iOS release is so it doesn't cost a build by itself.
+- Detail: `privacy-audit-2026-08-04.html`.
+
+## 2026-08-11 — New sports Jacob approved: rugby + Little League are cheap, WWE + horse racing are not
+
+Jacob approved adding **WWE, horse racing and rugby**, and asked to revisit the
+**Olympics conditionally in 2027** with "the popup that EPL got". Endpoints probed
+live against `site.api.espn.com` on 2026-08-11 — the answer splits cleanly in two.
+
+**✅ Buildable from the existing data layer (a config entry, not a parser):**
+- **Rugby** — `/sports/rugby/<leagueId>/scoreboard` returns the STANDARD ESPN
+  scoreboard shape (`competitions[].competitors[]` with `homeAway`/`score`,
+  `status.type.state`, venue, `highlights`), so `parseGame` handles it as-is.
+  Verified ids: **Six Nations 180659** (3 events), **French Top 14 270559** (6),
+  **European Champions Cup 271937**, **Rugby World Cup 164205**, **Super Rugby
+  Pacific 242041**, **International Test Match 289234**. ⚠️ There is no
+  `/sports/rugby/scoreboard` — 404. The league id is mandatory.
+- **Little League World Series** — `/sports/baseball/llb/scoreboard` works and
+  returned **48 events for August 2026**; it is running RIGHT NOW and is
+  genuinely spoiler-sensitive. This is the best immediate add of the five.
+
+**⛔ Not buildable from ESPN — needs a different source, so price them separately:**
+- **WWE** — no endpoint. `wwe/scoreboard` 404s, `mma/wwe/scoreboard` 400s. ESPN
+  lists WWE on its menu but exposes no fixtures/results feed.
+- **Horse racing** — no endpoint. `horse-racing/scoreboard`, `racing/scoreboard`
+  and `racing/horse/scoreboard` all 404/400. Only three days a year matter
+  (Derby/Preakness/Belmont), which argues for a curated JSON like `lib/boxing.ts`
+  and `lib/poker.ts` already use, rather than a live feed.
+- **Olympics** — no endpoint at `olympics/scoreboard`, `olympics/summer/…` or
+  `olympics-summer/…`. Next Summer Games is **LA, Jul 2028**; Milan-Cortina
+  (Feb 2026) has already been and gone.
+
+**Where they sit in the four Settings groups** (see `SPORT_GROUP` in `espn.ts`):
+rugby, WWE, horse racing and the Olympics all land in **"Racing, combat & more"** —
+that group's "& more" is exactly the catch-all for a sport that is not a US
+league, not soccer, and not a golf/tennis major. **Little League goes in "US
+leagues"**, next to MLB, because that is where someone scanning for baseball
+looks. No fifth group is needed for any of them.
+
+**The "EPL popup" already exists and is already generic** — nothing to plan.
+`getLeagueKickoff` (espn.ts) scans ALL_LEAGUES on every render, takes any league
+within **KICKOFF_SOON_DAYS = 14** of its `kickoffDate`, sorts nearest-first and
+hands one to the banner above the board; `kickoffMessage` in HomeContent writes
+the line. It is per-season dismissible (`seasonKey` is keyed to the exact kickoff
+DAY, so next year's banner still fires). **NBA already qualifies** — `kickoffDate:
+"10-20"`, not `excludeFromAuto` — so the NBA season opening gets this banner today
+with no work. ⚠️ The one catch for a future Olympics/WWE config: the banner
+deliberately skips `excludeFromAuto` leagues (mid-August alone opens four soccer
+leagues, and announcing an unrequested league above the board reads as an ad), so
+a two-week event that wants the banner must also accept being auto-pick eligible.
+`yearCycle: { mod: 4, anchor: 2028 }` already exists for quadrennial events (Euro
+uses it), so the config shape is not the blocker — the missing feed is.
+
+**Recommended order:** Little League now (it is live and the endpoint works) →
+rugby (Six Nations opens February) → horse racing as curated JSON before the
+2027 Derby → Olympics revisited in 2027 as Jacob suggested → WWE last, and only
+if a results source turns up.

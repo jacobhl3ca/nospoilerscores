@@ -2,9 +2,8 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
-import { fetchFirstVideoId } from "@/lib/youtube";
+import { fetchFirstVideoId, leadChannelBlocksEmbeds } from "@/lib/youtube";
 import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
-import { openExternal } from "@/lib/openExternal";
 
 // Spoiler-safe event rendering for F1 (one race tile) and UFC (a card PER
 // bout). Never shows results (finishing order / fight outcome). Highlights
@@ -282,7 +281,19 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
           // The modal's "Watch on YouTube" fallback is this EXACT clip's watch
           // page, never a /results search — an embed block must not become the
           // spoiler surface the strict gate just avoided.
-          onPlayHighlight(videoId, `https://www.youtube.com/watch?v=${videoId}`);
+          //
+          // nss_strict/nss_channels ride along the way racing's do. They are not
+          // decoration here: VideoModal derives its ALWAYS-ON title mask from
+          // exactly these params (strictFallbackChannels → channelAlwaysMasksTitle),
+          // so a bare watch URL left every UFC clip falling back to the generic
+          // SPOILER_RX check — which is the check the 8/10 combat-sports commit
+          // concluded can never be trusted on a fight title. That is why the
+          // masking shipped and the titles still leaked (Jacob 8/11). YouTube
+          // ignores the extra params; inside HideScore they are private metadata.
+          onPlayHighlight(
+            videoId,
+            `https://www.youtube.com/watch?v=${videoId}&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`,
+          );
           // "UFC on Paramount+" → "Paramount+" on the button (the channel name
           // repeats the league label the button already sits under).
           return { label: channel.replace(/^UFC on /, ""), official: true, videoId };
@@ -316,7 +327,13 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
 
 // Play button styled exactly like the game cards' highlight buttons
 // (GameHighlights): bg-card-hover pill, accent play triangle + label.
-function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean; onClick: () => void }) {
+// `note` is a muted visual tail on the label ("(Opens YouTube)") for a channel
+// that refuses embeds, so the hand-off out of the app is stated BEFORE the tap
+// rather than discovered as a surprise card (Jacob 8/11, F1). It is written
+// short on a narrow column and spelled out on a wide one; `hint` carries the
+// full sentence to the accessible name either way, so what a screen reader
+// hears never depends on the column width.
+function PlayBtn({ label, loading, onClick, note, hint }: { label: string; loading: boolean; onClick: () => void; note?: string; hint?: string }) {
   return (
     <button
       type="button"
@@ -327,14 +344,14 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
       disabled={loading}
       className="highlight-btn flex items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer disabled:opacity-50"
       style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-      title={`${label} highlights`}
+      title={`${label} highlights${hint ? ` — ${hint}` : ""}`}
       // Pin the accessible name to the button's purpose so a screen reader
       // hears "UFC highlights" / "Search highlights" — otherwise the name fell
       // back to the bare visible text ("Search" alone is ambiguous) while
       // loading swapped it to "Loading…", losing what the button does. aria-busy
       // conveys the in-flight fetch that the visible "Loading…" shows sighted
       // users. Matches the title+aria-label pairing every other button here uses.
-      aria-label={`${label} highlights`}
+      aria-label={`${label} highlights${hint ? ` — ${hint}` : ""}`}
       aria-busy={loading}
     >
       {loading ? (
@@ -342,7 +359,12 @@ function PlayBtn({ label, loading, onClick }: { label: string; loading: boolean;
       ) : (
         <>
           <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-          <span className="text-[10px] font-medium">{label}</span>
+          <span className="text-[10px] font-medium truncate min-w-0">{label}</span>
+          {note && (
+            // aria-hidden: the same fact is already in the button's aria-label,
+            // spelled out in full — announcing an "↗" as well would be noise.
+            <span aria-hidden="true" className="text-[10px] font-normal shrink-0" style={{ color: "var(--text-muted)" }}>{note}</span>
+          )}
         </>
       )}
     </button>
@@ -404,7 +426,7 @@ function FighterRow({ f, compact, nameTier, showRecord }: { f: FightBout["red"];
 }
 
 function FightCard({
-  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate, hideMeta,
+  fight, label, showLabel, broadcasts, showBroadcast, loadingId, onPlay, source, compact, metaCompact, nameTier, showRecords, selectedDate, hideMeta, onShowDetails, defaultPlayLabel,
 }: {
   fight: FightBout;
   label?: string;
@@ -428,14 +450,37 @@ function FightCard({
   showRecords: boolean;
   selectedDate?: string;
   hideMeta: boolean;
+  // Opens the bout's detail sheet — the affordance every SCORE card has had
+  // and no event card did (Jacob 8/11: "nothing happens when i click the fight
+  // card"). Absent = inert, so a board that doesn't pass a handler is
+  // unchanged rather than clickable-but-dead.
+  onShowDetails?: () => void;
+  // What the play button says BEFORE a source is resolved. See the note at the
+  // call site: it's the event's own broadcaster, not a guess at the channel.
+  defaultPlayLabel: string;
 }) {
   const isLive = fight.state === "in";
   const isPost = fight.state === "post";
-  const status = isPost ? "Final" : isLive ? "Live" : whenLabel(fight.date, selectedDate) || fight.statusDetail;
+  // "Live" is a WORD in the narrowest slot on the card, and the dot beside it
+  // already carries the meaning — so on a 3-up mobile board the word was
+  // spending ~24px to say what the green dot says for free, and the fighter
+  // names paid for it (Jacob 8/11: "maybe just a green dot instead of 'Live'").
+  // The dot is decorative, so the state stays reachable to assistive tech
+  // through the sr-only text below.
+  const status = isPost ? "Final" : isLive ? "" : whenLabel(fight.date, selectedDate) || fight.statusDetail;
+  const clickable = !!onShowDetails;
   return (
-    <div className="rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    <div className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}>
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+      onClick={onShowDetails}
+      // Guard on e.target === e.currentTarget, as GameCard's card-level key
+      // handler does: without it, Space/Enter on the nested play button would
+      // ALSO pop the detail sheet on top of the video the user just started.
+      onKeyDown={clickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onShowDetails!(); } } : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `${fight.red.name} vs ${fight.blue.name} — event details` : undefined}>
       {/* Status bar — the game cards' meta row verbatim (GameCard ~640):
           game-meta-row + text-xs fonts (10px on tight boards via CSS), flex-wrap
           + gap-x-1, shrink-0 time, ml-auto broadcast. The broadcast is ALWAYS
@@ -452,6 +497,7 @@ function FightCard({
       {!hideMeta && <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
+          {isLive && <span className="sr-only">Live</span>}
           {status}
         </span>
         {label && showLabel ? (
@@ -475,19 +521,34 @@ function FightCard({
         <FighterRow f={fight.blue} compact={compact} nameTier={nameTier} showRecord={showRecords} />
       </div>
       {/* source === null → resolved, and no rights-holder channel has this
-          bout's clip: drop the button entirely rather than offer a YouTube
-          search whose result titles spoil the finish (see the
-          UFC_HIGHLIGHT_CHANNELS note). undefined → not attempted yet, so the
-          button shows. Same hide-on-empty contract as GameHighlights /
-          GolfLeaderboard. */}
+          bout's clip. Still no YouTube search — those result titles spoil the
+          finish (see the UFC_HIGHLIGHT_CHANNELS note) — but the row does NOT
+          vanish either. Unlike a game card, a bout resolves on TAP, not on
+          render, so the button is speculative until pressed; deleting it on a
+          miss meant an undercard fight "said it had a link and then it
+          disappeared" (Jacob 8/11) with nothing to show for the tap. Saying so
+          keeps the answer where the question was asked, and costs no height
+          that the button was not already occupying.
+          undefined → not attempted yet, so the button shows. */}
+      {isPost && source === null && (
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          <p role="status" className="flex-1 text-center text-[10px] py-1.5" style={{ color: "var(--text-muted)" }}>
+            No highlight yet
+          </p>
+        </div>
+      )}
       {isPost && source !== null && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label reports the SOURCE once resolved — "Paramount+" / "UFC" /
-              "ESPN MMA" once the rights-holder clip played in-app. Until then
-              it's the generic "UFC" (we don't know yet, and claiming a source
-              we haven't verified would be the lie the strict gate exists to
-              prevent). It can no longer read "Search" — that path is gone. */}
-          <PlayBtn label={source?.label ?? "UFC"} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
+              "ESPN MMA" once the rights-holder clip played in-app. Before that
+              it reports the event's OWN broadcaster (defaultPlayLabel), which
+              is ESPN's field, not a guess at which channel will win the chain —
+              so the strict gate's "never claim an unverified source" rule still
+              holds. The old fallback was a bare "UFC" that flipped to
+              "Paramount+" the moment you pressed it, which read as the label
+              being wrong until you clicked (Jacob 8/11). It can no longer read
+              "Search" — that path is gone. */}
+          <PlayBtn label={source?.label ?? defaultPlayLabel} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
         </div>
       )}
     </div>
@@ -497,6 +558,7 @@ function FightCard({
 export default function EventCard({
   event,
   onPlayHighlight,
+  onShowDetails,
   namesCompact,
   selectedDate,
   isPastDate,
@@ -504,6 +566,10 @@ export default function EventCard({
   event: LeagueEventCard;
   leagueLabel?: string;
   onPlayHighlight?: (videoId: string, fallbackUrl: string) => void;
+  // Opens the event's detail sheet (EventDetailModal). `fight` is set when a
+  // single UFC bout card was tapped, so the sheet can lead with that bout.
+  // Absent = the tiles stay inert, as they were before.
+  onShowDetails?: (event: LeagueEventCard, fight?: FightBout) => void;
   // The board-level "game columns are showing abbreviated team names" signal
   // (HomeContent folds it from every game column's live useAbbreviations state).
   namesCompact?: boolean;
@@ -795,6 +861,12 @@ export default function EventCard({
             showRecords={nameFit.records}
             selectedDate={selectedDate}
             hideMeta={historicalPost(f.state, f.date)}
+            onShowDetails={onShowDetails ? () => onShowDetails(event, f) : undefined}
+            // ESPN's own broadcaster for the card ("Paramount+"), so the button
+            // names a real, verified source before the channel chain has run.
+            // Falls back to the league token when the feed carries no
+            // broadcast — never to a channel we haven't resolved.
+            defaultPlayLabel={event.broadcasts[0] || "UFC"}
           />
         ))}
       </div>
@@ -818,51 +890,48 @@ export default function EventCard({
     : [event.subtitle || " "];
   const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : event.kind === "poker" ? "♠️" : "🏁";
   // Spoken name for the sport-type glyph, announced via role="img"/aria-label on
-  // a NON-clickable tile (boxing has no detail page; a finished race/chess/poker
-  // event drops its link), where the tile root carries no aria-label and the
+  // a NON-clickable tile, where the tile root carries no aria-label and the
   // emoji is otherwise the only cue to the event type. Mirrors `glyph`'s
   // boxing/chess/poker/race branches so poker reads "Poker", not "Race".
+  // (Every tile is clickable now that the detail sheet exists, so this is a
+  // belt-and-braces path — it still fires if a caller omits onShowDetails.)
   const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : event.kind === "poker" ? "Poker" : "Race";
-  // What the tile body links to, and what to call it. Chess points at the
-  // Lichess broadcast (a live BOARD, not a results table); boxing opens the
-  // DAZN Boxing fixture/preview clip on YouTube (boxing.ts sets eventUrl to a
-  // www.youtube.com watch URL), so it needs its own noun — the fall-through
-  // "Race details on ESPN" was wrong on both counts (not a race, not ESPN) and,
-  // since a pre/live boxing tile IS clickable, it leaked into the tile's
-  // aria-label and tooltip. Mirrors glyphLabel's boxing branch above.
-  const detailNoun = event.kind === "chess"
-    ? "Follow live on Lichess"
-    : event.kind === "poker"
-      ? "Official tournament details"
-      : event.kind === "boxing"
-        ? "Fight preview on YouTube"
-        : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   const hideHistoricalMeta = historicalPost(event.state, event.date);
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
   // whenLabel ("Sat 9:00AM" for another day, bare "9:00AM" when the race is on
   // the viewed date — selectedDate — same rule as the game cards' time).
+  // "Live" gives way to the green dot for the same reason it does on a fight
+  // card — the word is the widest thing in the tightest slot, and the dot
+  // already says it. The state stays announced via the sr-only text below.
   const status = isPost
     ? "Final"
     : isLive
-      ? "Live"
+      ? ""
       : event.kind === "poker" && event.scheduleLabel
         ? event.scheduleLabel
         : whenLabel(event.date, selectedDate) || event.statusDetail;
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
-  // Clicking the tile body opens the ESPN race page — the game cards' "click
-  // for more details" affordance (there's no F1 GameDetailModal; ESPN's race
-  // hub is the detail view). Pre/live ONLY, mirroring GameCard's rule that a
-  // finished game never links to ESPN (the page shows the finishing order — a
-  // result spoiler). After the race the highlight button is the affordance.
+  // Clicking the tile body opens the detail SHEET, not ESPN. It used to open
+  // ESPN's race page directly, which meant only a pre/live race with an
+  // eventUrl responded to a tap at all — a finished WSOP, chess or boxing tile
+  // was dead, and its clipped title had nowhere to be read in full (Jacob
+  // 8/11: "wsop card cant click", "f1 cant click card"). The sheet answers
+  // every tile, and keeps the spoiler rule by carrying the ESPN button only
+  // while the event is pre/live (see showExternal in EventDetailModal) — a
+  // finished race's ESPN page still prints the finishing order.
   // PlayBtn stopPropagations so highlights don't also fire this.
-  const clickable = !!event.eventUrl && !isPost;
-  const openDetails = () => { if (event.eventUrl) openExternal(event.eventUrl); };
+  const clickable = !!onShowDetails;
+  const openDetails = () => { onShowDetails?.(event); };
   // Which (if any) highlight button this finished tile ends up showing. Each is
   // its own strict lookup, and a tile renders at most one of them — a miss adds
   // nothing, so the tile keeps its natural height rather than a blank band.
   const showRaceBtn = isPost && isRace && !!event.officialChannel && raceSource !== null;
+  // FOM refuses embeds, so a FORMULA 1 clip can only ever be handed off to
+  // YouTube — VideoModal skips straight to its "Watch on YouTube" card. Say so
+  // on the button instead of letting the tap discover it.
+  const raceOpensYouTube = showRaceBtn && leadChannelBlocksEmbeds([event.officialChannel!]);
   const showPokerBtn = isPost && event.kind === "poker" && !!event.officialChannel && pokerSource !== null;
   const showBoxingBtn = isPost && event.kind === "boxing" && !!event.officialChannel && boxingSource !== null;
   const showChessBtn = isPost && event.kind === "chess" && !!event.officialChannel && chessSource !== null;
@@ -875,8 +944,8 @@ export default function EventCard({
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(); } } : undefined}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `${event.title} — ${detailNoun}` : undefined}
-      title={clickable ? detailNoun : undefined}>
+      aria-label={clickable ? `${event.title} — event details` : undefined}
+      title={clickable ? event.title : undefined}>
       {/* Meta row — game-meta-row like FightCard/GameCard, so an F1 tile is the
           SAME height as an MLB card: status/time left, broadcast right (dropped
           when the column is too narrow, same metaCompact rule as UFC). An
@@ -950,8 +1019,20 @@ export default function EventCard({
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
               renders NASCAR and IndyCar, which would otherwise both offer an
-              "F1" highlight button. Falls back to "F1" for older cards. */}
-          <PlayBtn label={raceSource?.label ?? event.officialLabel ?? "F1"} loading={loadingId === "race-official"} onClick={playRaceHighlight} />
+              "F1" highlight button. Falls back to "F1" for older cards.
+              The "(Opens YouTube)" tail is keyed off the CHANNEL's embed
+              policy, not off F1 by name — FOM blocks embedding, so the modal
+              can only hand the clip off, and NASCAR/IndyCar play in-app from
+              the same layout and must not claim otherwise. If FOM ever
+              re-enables embeds, removing the channel from EMBED_BLOCKED_CHANNELS
+              takes the tail with it. */}
+          <PlayBtn
+            label={raceSource?.label ?? event.officialLabel ?? "F1"}
+            loading={loadingId === "race-official"}
+            onClick={playRaceHighlight}
+            note={raceOpensYouTube ? (metaCompact ? "↗" : "(Opens YouTube)") : undefined}
+            hint={raceOpensYouTube ? "opens YouTube" : undefined}
+          />
         </div>
       )}
       {/* Poker replays are stricter than racing: exact tour channel or no

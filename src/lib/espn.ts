@@ -212,7 +212,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // and closed with a full matchweek still to play. kickoffDate carries the real
   // first-match day for the countdown banner; startDate stays two days earlier so
   // the column is there with the fixture lookahead when the week's build-up starts.
-  { sport: "epl", label: "EPL", startDate: "08-19", endDate: "05-31", kickoffDate: "08-21", championshipDate: "05-30", scheduleReleaseDate: "06-19", verifiedFor: 2026 },
+  { sport: "epl", label: "Premier League", startDate: "08-19", endDate: "05-31", kickoffDate: "08-21", championshipDate: "05-30", scheduleReleaseDate: "06-19", verifiedFor: 2026 },
   // ── UEFA Champions League (Sep League phase → Jun Final) ──
   // Active across Sep 14 → Jun 5 but only ~17 matchdays in window; on
   // non-matchday days the column shows news only.
@@ -541,6 +541,58 @@ const SPORT_GLYPH: Partial<Record<Sport, string>> = {
 
 export function sportGlyph(sport: Sport): string {
   return SPORT_GLYPH[sport] ?? "🏟️";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPORT GROUPS — how the league catalog is sectioned in Settings
+// ═══════════════════════════════════════════════════════════════
+//
+// Every label answers "what KIND of sport is this", never "how important is
+// it" (Jacob 8/11). The rejected first cut was Primary / Soccer / Additional,
+// which mixes the two axes: someone who only watches F1 does not think of it
+// as "additional", and a ranking has to be re-argued every season. A kind is
+// stable, so a new league's group is a fact rather than a judgement call.
+//
+// The four groups, and why each exists:
+// - "US leagues": the domestic team leagues, including the college ones. NOT
+//   "college" as its own group — that is a level of play, not a league name.
+// - "Soccer": 16 competitions, far and away the biggest bloc, and ESPN itself
+//   lists all of it under one "Soccer" entry. It is the thing that overflows
+//   the list, so it gets a section rather than being interleaved.
+// - "Golf & tennis majors": these are EVENTS, not leagues — ALL_LEAGUES holds
+//   four configs per sport (the Masters, Wimbledon, …) and "majors" is what
+//   both sports actually call them. They belong to neither group above.
+// - "Racing, combat & more": the remainder. "& more" is doing real work — it
+//   is the group that absorbs anything that is not a US league, soccer, or a
+//   golf/tennis major (cricket, chess, poker today; rugby, horse racing and
+//   pro wrestling when they land).
+export type SportGroup = "us" | "soccer" | "majors" | "other";
+
+export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
+  { key: "us", label: "US leagues" },
+  { key: "soccer", label: "Soccer" },
+  { key: "majors", label: "Golf & tennis majors" },
+  { key: "other", label: "Racing, combat & more" },
+];
+
+// Partial on purpose: an unlisted sport falls through to "other" rather than
+// disappearing from Settings. Adding a sport to `Sport` without touching this
+// map degrades to a slightly-wrong section, never to an unpickable league.
+const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
+  nfl: "us", nba: "us", mlb: "us", nhl: "us", wnba: "us",
+  ncaaf: "us", ncaam: "us", ncaaw: "us",
+  epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
+  seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
+  ligamx: "soccer", nwsl: "soccer", efl: "soccer", libertadores: "soccer",
+  saudi: "soccer", fifa: "soccer", euro: "soccer", afcon: "soccer",
+  golf: "majors", tennis: "majors",
+  f1: "other", nascar: "other", indycar: "other", ufc: "other",
+  boxing: "other", cricket: "other", chess: "other", poker: "other",
+  esports: "other",
+};
+
+export function sportGroup(sport: Sport): SportGroup {
+  return SPORT_GROUP[sport] ?? "other";
 }
 
 // "8/21" — the compact form used in the league switcher's "EPL · 8/21" tail.
@@ -2268,9 +2320,25 @@ export function networkStreamUrl(broadcast: string, gameId: string, sport?: Spor
   if (b.startsWith("tele")) return "https://www.telemundo.com/deportes";
   if (b === "peacock") return "https://www.peacocktv.com/";
   // Plain "CBS" = the broadcast network → CBS's own live-TV stream. "CBSSN" =
-  // CBS Sports Network (the cable channel) → the CBS Sports live page.
+  // CBS Sports Network (the cable channel) → the CBS Sports live page. The
+  // includes() lines are the safety net: ESPN writes the cable channel as
+  // "CBSSN" on NWSL but spells it "CBS Sports Network" elsewhere, and an
+  // exact-match-only table sends a real CBS airing to the league's generic
+  // watch page — a chip that names a network and then doesn't go there.
   if (b === "cbs") return "https://www.cbs.com/live-tv/";
-  if (b === "cbssn") return "https://www.cbssports.com/watch/live";
+  if (b === "cbssn" || b.includes("cbs sports")) return "https://www.cbssports.com/watch/live";
+  if (b.includes("cbs")) return "https://www.cbs.com/live-tv/";
+  // NWSL's other three carriers. Between them ION, NWSL+ and Victory+ hold 31
+  // of the league's 54 matches in a six-week sample (2026-07-01 → 08-12, live
+  // ESPN scoreboard) — a clear majority of the season, all of it previously
+  // falling through to the generic league landing. All three verified 200 with
+  // a browser UA on 2026-08-11. NWSL+ IS nwslsoccer.com's own service, so it
+  // resolves to the same place the fallback would; it is listed anyway so the
+  // match is deliberate rather than a coincidence that a later edit could break.
+  if (b === "ion" || b === "ion television") return "https://www.iontelevision.com/";
+  if (b === "ion plus" || b === "ion+") return "https://ionplustv.com/";
+  if (b === "nwsl+" || b === "nwsl plus") return "https://www.nwslsoccer.com/watch";
+  if (b === "victory+" || b === "victory plus") return "https://victoryplus.com/";
   // Paramount+ broadcasts (rare; carries some CBS Sports content) → Paramount+
   if (b === "paramount+" || b === "paramount plus") return "https://www.paramountplus.com/live-tv/";
   // Amazon Prime Video — fall back to the Prime sports hub. Sport-specific
