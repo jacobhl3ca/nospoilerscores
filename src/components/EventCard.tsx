@@ -281,7 +281,19 @@ function useHighlightPlayer(onPlayHighlight?: (videoId: string, fallbackUrl: str
           // The modal's "Watch on YouTube" fallback is this EXACT clip's watch
           // page, never a /results search — an embed block must not become the
           // spoiler surface the strict gate just avoided.
-          onPlayHighlight(videoId, `https://www.youtube.com/watch?v=${videoId}`);
+          //
+          // nss_strict/nss_channels ride along the way racing's do. They are not
+          // decoration here: VideoModal derives its ALWAYS-ON title mask from
+          // exactly these params (strictFallbackChannels → channelAlwaysMasksTitle),
+          // so a bare watch URL left every UFC clip falling back to the generic
+          // SPOILER_RX check — which is the check the 8/10 combat-sports commit
+          // concluded can never be trusted on a fight title. That is why the
+          // masking shipped and the titles still leaked (Jacob 8/11). YouTube
+          // ignores the extra params; inside HideScore they are private metadata.
+          onPlayHighlight(
+            videoId,
+            `https://www.youtube.com/watch?v=${videoId}&nss_strict=1&nss_channels=${encodeURIComponent(channel)}`,
+          );
           // "UFC on Paramount+" → "Paramount+" on the button (the channel name
           // repeats the league label the button already sits under).
           return { label: channel.replace(/^UFC on /, ""), official: true, videoId };
@@ -498,11 +510,22 @@ function FightCard({
         <FighterRow f={fight.blue} compact={compact} nameTier={nameTier} showRecord={showRecords} />
       </div>
       {/* source === null → resolved, and no rights-holder channel has this
-          bout's clip: drop the button entirely rather than offer a YouTube
-          search whose result titles spoil the finish (see the
-          UFC_HIGHLIGHT_CHANNELS note). undefined → not attempted yet, so the
-          button shows. Same hide-on-empty contract as GameHighlights /
-          GolfLeaderboard. */}
+          bout's clip. Still no YouTube search — those result titles spoil the
+          finish (see the UFC_HIGHLIGHT_CHANNELS note) — but the row does NOT
+          vanish either. Unlike a game card, a bout resolves on TAP, not on
+          render, so the button is speculative until pressed; deleting it on a
+          miss meant an undercard fight "said it had a link and then it
+          disappeared" (Jacob 8/11) with nothing to show for the tap. Saying so
+          keeps the answer where the question was asked, and costs no height
+          that the button was not already occupying.
+          undefined → not attempted yet, so the button shows. */}
+      {isPost && source === null && (
+        <div className="mt-1 sm:mt-2 flex gap-1">
+          <p role="status" className="flex-1 text-center text-[10px] py-1.5" style={{ color: "var(--text-muted)" }}>
+            No highlight yet
+          </p>
+        </div>
+      )}
       {isPost && source !== null && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label reports the SOURCE once resolved — "Paramount+" / "UFC" /

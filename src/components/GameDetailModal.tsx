@@ -321,11 +321,18 @@ export default function GameDetailModal({
         </button>
 
         {/* Matchup — names + logos, NO score/winner. Records only when the user
-            opted in AND the game is live (see TeamRow), so a finished game's
-            record can't leak this game's result. */}
+            opted in, the game is live, AND it belongs to TODAY'S slate.
+            `isLive` alone was not enough (Jacob 8/11, MLB on Yesterday): a West
+            Coast game that starts at 10 PM ET is filed under that day's slate
+            and is still state="in" well after midnight, so opening it from the
+            Yesterday tab printed a live 63-49 — and yesterday's record is
+            precisely the second-order spoiler a delayed viewer is avoiding.
+            The score CARD already refuses on a past date (effectivePastDate in
+            GameCard); this is the modal catching up to it. isToday buckets by
+            the same 1 AM service-day rollover the card and date nav use. */}
         <div className="flex flex-col gap-1 mb-4 pr-6">
-          <TeamRow team={game.awayTeam} showRecord={showTeamRecords && isLive} />
-          <TeamRow team={game.homeTeam} showRecord={showTeamRecords && isLive} />
+          <TeamRow team={game.awayTeam} showRecord={showTeamRecords && isLive && isToday} />
+          <TeamRow team={game.homeTeam} showRecord={showTeamRecords && isLive && isToday} />
         </div>
 
         {/* Status + time */}
