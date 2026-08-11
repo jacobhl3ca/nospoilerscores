@@ -15,7 +15,8 @@
     "boxing:check": "node scripts/check-boxing-events.mjs",
     "test:unit": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
     "indycar:check": "node scripts/check-indycar-tracks.mjs",
-    "nfl:check": "node scripts/check-nfl-weeks.mjs"
+    "nfl:check": "node scripts/check-nfl-weeks.mjs",
+    "nflchannels:check": "node scripts/check-nfl-team-channels.mjs"
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",
@@ -43,5 +44,9 @@
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": ">=8.5.23",
+    "sharp": ">=0.35.0"
   }
 }
