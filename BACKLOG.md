@@ -545,3 +545,9 @@ _src: 2026-08-03 session_
 ⚠️ **The channel list is trap-laden — 8 of the obvious handles are wrong.** Six are empty squatted channels (`@clevelandbrowns`, `@denverbroncos`, `@greenbaypackers`, `@indianapoliscolts`, `@minnesotavikings`, `@NewEnglandPatriots`); `@Cardinals` is the **MLB** Cardinals; `@Lions` is a **Japanese baseball team**. The checker verifies by **RSS, not search** — a search-based check flagged 9 *correct* names as dead, so don't "simplify" it back to search.
 
 **Unblocks only if:** the NFL re-enables embedding on league or club game footage. Nothing on our side can route around it.
+### 🔒 Stale bundled iOS privacy page (deferred 2026-08-10)
+
+⬜ **~30 min, not urgent — Jacob deprioritized it 2026-08-10.** The privacy policy bundled into the HideScore iOS app is out of date relative to the live web one (found in the 2026-08-04 privacy audit; the three false privacy claims on the *web* side were fixed and deployed, the *bundled* copy was not).
+
+- Fix = update the bundled HTML + ship it in the next build. No urgency of its own; fold it into whatever the next HideScore iOS release is so it doesn't cost a build by itself.
+- Detail: `privacy-audit-2026-08-04.html`.

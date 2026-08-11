@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 
 // useLayoutEffect warns in SSR; on the client we want the sync measurement.
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
-import { Game, LeagueData, Sport, Team } from "@/lib/types";
+import { Game, LeagueData, LeagueEventCard, FightBout, Sport, Team } from "@/lib/types";
 import type { ShareCardMeta } from "@/lib/shareCard";
 import { displayShortName, loadBigInningSchedule, getSeasonOpener, BigInningSchedule } from "@/lib/espn";
 import { handleExternalClick } from "@/lib/openExternal";
@@ -29,6 +29,13 @@ interface LeagueColumnProps {
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   // Clicking a game card body opens a spoiler-safe details popup (owned by HomeContent).
   onShowDetails?: (game: Game) => void;
+  // The same affordance for the EVENT tiles (races, UFC bouts, boxing, chess,
+  // poker), which had none. Separate from onShowDetails because an event tile
+  // is not a Game — it opens EventDetailModal, not GameDetailModal.
+  // `leagueLabel` is injected by the column rather than resolved by the owner:
+  // an event card carries no `sport` field, so HomeContent's sport→label lookup
+  // (the one GameDetailModal uses) has nothing to key on here.
+  onShowEventDetails?: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => void;
   // Opens the World Cup all-groups overlay (used only by the fifa column's
   // tappable "Group Stage" subtitle).
   onShowGroups?: () => void;
@@ -47,7 +54,9 @@ interface LeagueColumnProps {
   // Header switcher style: dropdown (default), arrows (‹ › flank the title
   // and cycle through the unused leagues by relevance), or off (plain
   // non-tappable header).
-  switcherMode?: "dropdown" | "arrows" | "off";
+  // "both" = ‹ › flank a header that is ALSO the dropdown trigger, so a tap
+  // opens the list and the arrows step through it without opening anything.
+  switcherMode?: "dropdown" | "arrows" | "both" | "off";
   // Arrows-mode step callback (owned by HomeContent, which holds the
   // relevance-ordered browse ring + cursor). dir 1 = ›, -1 = ‹.
   onCycleLeague?: (dir: 1 | -1) => void;
@@ -764,6 +773,7 @@ export default function LeagueColumn({
   onPlayHighlight,
   onPlayEmbed,
   onShowDetails,
+  onShowEventDetails,
   onShowGroups,
   selectedDate,
   section,
@@ -805,6 +815,26 @@ export default function LeagueColumn({
   const [nowMs] = useState(() => Date.now());
   const mode = switcherMode ?? "dropdown";
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague && mode !== "off";
+  // ‹ › step button. Hoisted to component scope (it used to live inside the
+  // arrows-branch IIFE) because "both" mode needs the SAME button flanking the
+  // dropdown trigger — two copies would drift the moment either was restyled.
+  const showArrows = (mode === "arrows" || mode === "both") && !!onCycleLeague;
+  const arrowBtn = (dir: 1 | -1) => (
+    <button
+      type="button"
+      onClick={() => onCycleLeague!(dir)}
+      aria-label={dir === 1 ? "Next league" : "Previous league"}
+      title={dir === 1 ? "Next league" : "Previous league"}
+      className="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer transition-colors shrink-0"
+      style={{ color: "var(--text-muted)" }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
+    >
+      <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        {dir === 1 ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
+      </svg>
+    </button>
+  );
 
   // ── Column drag-to-reorder (pointer events) ──────────────────────────────
   // Rebuilt 6/11 with pointer events after the HTML5 DnD version proved flaky
@@ -1422,6 +1452,35 @@ export default function LeagueColumn({
       )
     : null;
 
+  // The offseason "when does it come back" block. Rendered from BOTH the
+  // current-view and the past-tab empty states: once the lookback stops
+  // reaching the last game played (NBA's Finals fall out of the 14-day window
+  // in late June), a past tab had nothing left to say and printed a bare
+  // "No games" — while Today, one tab over, already said "Season starts Oct 20".
+  // Same league, same offseason, two different answers (Jacob 8/10). The
+  // lookback still wins where it fires, so this only shows on days that are
+  // genuinely past the last highlight.
+  const seasonOpenerBlock = seasonOpener ? (
+    // "~" whenever the date came from the column's opening window rather than a
+    // verified opening-day fixture — see SeasonOpener.
+    <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">
+      <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
+        {seasonOpener.kind === "event" ? "Returns" : "Season starts"} {seasonOpener.approximate ? "~" : ""}{seasonOpener.label}
+      </p>
+      <p className="text-center text-[10px] sm:text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+        {seasonOpener.awayLabel}
+      </p>
+      {seasonOpener.scheduleOut && (
+        // Only while the fixtures are genuinely unpublished — see
+        // SeasonOpener.scheduleOut. Answers the follow-up question the start
+        // date creates ("so when can I see the games?").
+        <p className="text-center text-[10px] sm:text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+          Full schedule ~{seasonOpener.scheduleOut}
+        </p>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div
       ref={columnRef}
@@ -1461,36 +1520,24 @@ export default function LeagueColumn({
               // the leagues no other column is showing, most→least relevant —
               // › starts at the most relevant unused league, ‹ walks the same
               // ring backwards. The ring/cursor live in HomeContent (this
-              // component remounts on every league change).
-              (() => {
-                const cycle = (dir: 1 | -1) => onCycleLeague(dir);
-                const arrowBtn = (dir: 1 | -1) => (
-                  <button
-                    type="button"
-                    onClick={() => cycle(dir)}
-                    aria-label={dir === 1 ? "Next league" : "Previous league"}
-                    title={dir === 1 ? "Next league" : "Previous league"}
-                    className="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer transition-colors shrink-0"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
-                  >
-                    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      {dir === 1 ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
-                    </svg>
-                  </button>
-                );
-                return (
-                  <div className="flex items-center gap-0.5">
-                    {arrowBtn(-1)}
-                    <h2 className="text-base sm:text-lg font-bold tracking-wide px-0.5" style={{ color: "var(--text)" }}>
-                      {headerLabel}
-                    </h2>
-                    {arrowBtn(1)}
-                  </div>
-                );
-              })()
+              // component remounts on every league change). In THIS mode the
+              // title is inert text; "both" below keeps the arrows and makes
+              // the title a dropdown trigger as well.
+              <div className="flex items-center gap-0.5">
+                {arrowBtn(-1)}
+                <h2 className="text-base sm:text-lg font-bold tracking-wide px-0.5" style={{ color: "var(--text)" }}>
+                  {headerLabel}
+                </h2>
+                {arrowBtn(1)}
+              </div>
             ) : isSwappable ? (
+              // Dropdown mode, and "both" — identical except that "both" flanks
+              // the trigger with the same ‹ › buttons. The arrows step the ring
+              // without opening the panel; tapping the name still opens it. The
+              // wrapper is a flex row in both cases so the relative-positioned
+              // panel anchor is unchanged.
+              <div className="flex items-center gap-0.5">
+              {showArrows && mode === "both" ? arrowBtn(-1) : null}
               <div ref={swapRef} className="relative">
                 {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern),
                     not the reverse: a <button>'s content model is phrasing
@@ -1609,6 +1656,8 @@ export default function LeagueColumn({
                   </div>
                 )}
               </div>
+              {showArrows && mode === "both" ? arrowBtn(1) : null}
+              </div>
             ) : (
               <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
                 {headerLabel}
@@ -1655,7 +1704,7 @@ export default function LeagueColumn({
           onPlayHighlight={onPlayHighlight}
         />
       ) : league.eventCard && section !== "finished" ? (
-        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} />
+        <EventCard event={league.eventCard} leagueLabel={league.label} onPlayHighlight={onPlayHighlight} onShowDetails={onShowEventDetails ? (e, f) => onShowEventDetails(e, f, league.label) : undefined} namesCompact={namesCompact} selectedDate={selectedDate} isPastDate={isPastDate} />
       ) : sorted.length === 0 ? (
         renderUpcoming ? (
           league.fetchFailed ? (
@@ -1693,6 +1742,10 @@ export default function LeagueColumn({
               <div className="flex flex-col gap-1.5 sm:gap-2">
                 {renderUpcomingSlate(league.nextGameDay.games, true)}
               </div>
+            ) : seasonOpenerBlock ? (
+              // Past tab, offseason, and the lookback no longer reaches the last
+              // game — say when the league returns instead of "No games".
+              seasonOpenerBlock
             ) : (
               <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>{emptyLabel}</p>
             )
@@ -1708,26 +1761,10 @@ export default function LeagueColumn({
             // the past tab uses — so the column stays useful instead of announcing
             // the season ended with a bare "Upcoming Schedule TBD".
             renderPreviousSlate(league.previousGameDay.games)
-          ) : seasonOpener ? (
+          ) : seasonOpenerBlock ? (
             // Offseason with nothing to show: the return date is the only thing
-            // worth saying. "~" whenever the date came from the column's opening
-            // window rather than a verified opening-day fixture — see SeasonOpener.
-            <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">
-              <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
-                {seasonOpener.kind === "event" ? "Returns" : "Season starts"} {seasonOpener.approximate ? "~" : ""}{seasonOpener.label}
-              </p>
-              <p className="text-center text-[10px] sm:text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-                {seasonOpener.awayLabel}
-              </p>
-              {seasonOpener.scheduleOut && (
-                // Only while the fixtures are genuinely unpublished — see
-                // SeasonOpener.scheduleOut. Answers the follow-up question the
-                // start date creates ("so when can I see the games?").
-                <p className="text-center text-[10px] sm:text-xs" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-                  Full schedule ~{seasonOpener.scheduleOut}
-                </p>
-              )}
-            </div>
+            // worth saying.
+            seasonOpenerBlock
           ) : (
             <p className="text-center text-xs sm:text-sm py-6 sm:py-8" style={{ color: "var(--text-muted)" }}>{emptyUpcomingLabel}</p>
           )

@@ -109,9 +109,10 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "dark", label: "Dark" },
 ];
 
-const SWITCHER_MODE_OPTIONS: { value: "dropdown" | "arrows" | "off"; label: string; hint: string }[] = [
+const SWITCHER_MODE_OPTIONS: { value: "dropdown" | "arrows" | "both" | "off"; label: string; hint: string }[] = [
   { value: "dropdown", label: "Dropdown", hint: "Tap a header to pick from a list" },
   { value: "arrows", label: "Arrows", hint: "‹ › cycle the unused leagues, most relevant first" },
+  { value: "both", label: "Both", hint: "‹ › beside a header that still opens the list" },
   { value: "off", label: "Off", hint: "Headers are plain — switch here instead" },
 ];
 
@@ -144,7 +145,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   golf: "Golf",
   tennis: "Tennis",
   fifa: "FIFA",
-  epl: "EPL",
+  epl: "Premier League",
   mls: "MLS",
   ucl: "UCL",
   uel: "UEL",
@@ -653,28 +654,39 @@ export default function SettingsPanel({
                 <p className="text-sm" style={{ color: "var(--text)" }}>
                   Signed in{auth.email ? <> as <span className="font-medium">{auth.email}</span></> : ""}.
                 </p>
-                <AccountFacts auth={auth} />
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                   Your teams, layout, and settings sync automatically across all your browsers and devices.
                 </p>
-                {auth.providers?.google && canUseGoogle && !auth.linkedProviders?.includes("google") && (
-                  <button type="button"
-                    onClick={() => signInWithGoogle(undefined, true)}
-                    className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                    style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
-                  >
-                    Link Google to this account
-                  </button>
-                )}
-                {auth.providers?.apple && !auth.linkedProviders?.includes("apple") && (
-                  <button type="button"
-                    onClick={() => signInWithApple(undefined, true)}
-                    className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                    style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
-                  >
-                    Link Apple to this account
-                  </button>
-                )}
+                {/* Everything still linkable, on ONE row (Jacob 8/11: "for
+                    link google/email/etc just have it in 1 row with all things
+                    that can be linked"). Each was a full-width stacked button,
+                    so an account with two providers left to link pushed Sign
+                    out and everything below it a screen further down. A
+                    provider already linked simply isn't in the row. flex-wrap
+                    keeps it honest if a third provider is ever added. */}
+                {(() => {
+                  const linkable: { key: string; label: string; onClick: () => void }[] = [];
+                  if (auth.providers?.google && canUseGoogle && !auth.linkedProviders?.includes("google")) {
+                    linkable.push({ key: "google", label: "Google", onClick: () => signInWithGoogle(undefined, true) });
+                  }
+                  if (auth.providers?.apple && !auth.linkedProviders?.includes("apple")) {
+                    linkable.push({ key: "apple", label: "Apple", onClick: () => signInWithApple(undefined, true) });
+                  }
+                  if (!linkable.length) return null;
+                  return (
+                    <div className="flex flex-wrap gap-2">
+                      {linkable.map((l) => (
+                        <button key={l.key} type="button"
+                          onClick={l.onClick}
+                          className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                          style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                        >
+                          Link {l.label}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <button type="button"
                   onClick={() => signOut()}
                   className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
@@ -682,32 +694,6 @@ export default function SettingsPanel({
                 >
                   Sign out
                 </button>
-                {/* Apple requires in-app account deletion (guideline 5.1.1(v)) for any
-                    app with accounts. Deletes the user's server-stored prefs + signs out. */}
-                <button type="button"
-                  onClick={async () => {
-                    if (!confirm("Permanently delete your account? This erases your synced teams, layout, and settings from our servers and signs you out. This cannot be undone.")) return;
-                    // Second, deliberate step: typing the word is enough friction that an
-                    // accidental or half-sure tap can't wipe an account, while still being
-                    // a plain in-app flow (Apple 5.1.1(v) wants it easy to FIND, not frictionless).
-                    const typed = prompt("Last check — this permanently erases your synced data and cannot be undone.\n\nType DELETE to confirm.");
-                    if (typed === null) return;
-                    if (typed.trim().toUpperCase() !== "DELETE") {
-                      alert("Account not deleted — you didn't type DELETE.");
-                      return;
-                    }
-                    const ok = await deleteAccount();
-                    if (ok) window.location.href = "/";
-                    else alert("Couldn't delete your account. Please try again in a moment.");
-                  }}
-                  className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                  style={{ background: "transparent", color: "rgb(239,68,68)", border: "1px solid rgb(239,68,68)" }}
-                >
-                  Delete account
-                </button>
-                <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  Deleting removes your synced data from our servers. This cannot be undone.
-                </p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1036,14 +1022,6 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ leagueSwitcherMode: v })}
               />
             </Field>
-            {(prefs.leagueSwitcherMode ?? "dropdown") === "dropdown" && (
-              <ToggleRow
-                label="Dropdown arrow (▾)"
-                hint="The hint arrow next to each header (tap still switches either way)"
-                checked={!prefs.hideLeagueChevrons}
-                onChange={(v) => updatePrefs({ hideLeagueChevrons: !v })}
-              />
-            )}
             <Field label="Leagues in the switcher" hint="Core leagues start checked; choose any others you want in the header switcher">
               <div className="space-y-3">
                 <div>
@@ -1331,6 +1309,37 @@ export default function SettingsPanel({
               </button>
             </div>
           </Section>
+
+          {/* Bottom-most, and deliberately quiet. Only rendered when signed in
+              — there is no account to delete otherwise. */}
+          {auth.signedIn && (
+            <div className="pt-2 text-center" style={{ borderTop: "1px solid var(--border)" }}>
+              <button type="button"
+                onClick={async () => {
+                  if (!confirm("Permanently delete your account? This erases your synced teams, layout, and settings from our servers and signs you out. This cannot be undone.")) return;
+                  // Second, deliberate step: typing the word is enough friction that an
+                  // accidental or half-sure tap can't wipe an account, while still being
+                  // a plain in-app flow (Apple 5.1.1(v) wants it easy to FIND, not frictionless).
+                  const typed = prompt("Last check — this permanently erases your synced data and cannot be undone.\n\nType DELETE to confirm.");
+                  if (typed === null) return;
+                  if (typed.trim().toUpperCase() !== "DELETE") {
+                    alert("Account not deleted — you didn't type DELETE.");
+                    return;
+                  }
+                  const ok = await deleteAccount();
+                  if (ok) window.location.href = "/";
+                  else alert("Couldn't delete your account. Please try again in a moment.");
+                }}
+                className="text-[11px] underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Delete account
+              </button>
+              <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
+                Removes your synced data from our servers. This cannot be undone.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1342,55 +1351,6 @@ export default function SettingsPanel({
 // server without the X-HS-Client header — see hsPlatform in lib/prefsSync.ts), and
 // how long it has existed. All of it comes from the canonical users/<uid>.json
 // record in R2 via /api/me.
-const PLATFORM_LABEL: Record<string, string> = {
-  ios: "iPhone app",
-  android: "Android app",
-  web: "Web browser",
-};
-
-function shortDate(iso?: string | null): string | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
-
-function AccountFacts({ auth }: { auth: AuthState }) {
-  const providers = (auth.linkedProviders?.length ? auth.linkedProviders : auth.provider ? [auth.provider] : [])
-    .map((provider) => provider === "google" ? "Google" : provider === "apple" ? "Apple" : provider === "email" ? "Email" : provider)
-    .filter(Boolean);
-  // Newest-first so the client they actually use leads.
-  const used = Object.entries(auth.platforms || {})
-    .filter(([, seen]) => !!seen)
-    .sort((a, b) => Date.parse(b[1] as string) - Date.parse(a[1] as string));
-  const since = shortDate(auth.firstSeen);
-  if (providers.length === 0 && used.length === 0 && !since) return null;
-  return (
-    <div className="rounded-lg px-3 py-2 space-y-1" style={{ background: "var(--bg-card-hover)", border: "1px solid var(--border)" }}>
-      {providers.length > 0 && (
-        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Linked with <span className="font-medium" style={{ color: "var(--text)" }}>{providers.join(" + ")}</span>
-          {since ? <> · account created {since}</> : null}
-        </p>
-      )}
-      {used.length > 0 && (
-        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          Used on{" "}
-          {used.map(([p, seen], i) => (
-            <span key={p}>
-              {i > 0 ? " · " : ""}
-              <span className="font-medium" style={{ color: "var(--text)" }}>
-                {PLATFORM_LABEL[p] || p}
-              </span>
-              {shortDate(seen as string) ? <> (last {shortDate(seen as string)})</> : null}
-            </span>
-          ))}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
