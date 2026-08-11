@@ -57,6 +57,18 @@ export default function YesterdayPage() {
                 inLanguage: "en",
                 isPartOf: { "@id": "https://hidescore.com/#website" },
                 breadcrumb: { "@id": "https://hidescore.com/yesterday#breadcrumb" },
+                // Topic entities for this page, matching the `about` array every
+                // SeoLandingPage WebPage node and the /faq WebPage node already
+                // carry — the three date routes were the last content pages still
+                // without it. `about` is a valid WebPage property and gives Google
+                // explicit entity signals for what the board covers, using the
+                // site's own spoiler-free vocabulary. Purely additive JSON-LD; no
+                // visual change.
+                about: [
+                  "spoiler-free sports scores",
+                  "sports highlights without spoilers",
+                  "sports game ratings",
+                ].map((name) => ({ "@type": "Thing", name })),
               },
               {
                 "@type": "BreadcrumbList",

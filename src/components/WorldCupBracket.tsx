@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, getEtServiceDate, toYmd } from "@/lib/etDay";
 import {
   fetchBracket,
   type Bracket,
@@ -59,8 +59,15 @@ function Side({ side, bracket }: { side: BracketSide; bracket: Bracket }) {
 }
 
 function MatchCard({ match, bracket }: { match: Bracket["rounds"][number]["matches"][number]; bracket: Bracket }) {
-  const dateLabel = match.date
-    ? new Date(match.date).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() })
+  // Guard the parse before formatting: toLocaleDateString on an Invalid Date
+  // doesn't throw, it returns the literal string "Invalid Date" — so a present-
+  // but-unparseable match.date from ESPN would render "Invalid Date" in the card
+  // corner. isNaN-check it (the same guard etSlateYmd/shareCard already apply to
+  // their date parses, and matching this file's own try/guarded ymd() helper) so
+  // a bad date simply drops the corner label instead. Valid dates are unchanged.
+  const parsed = match.date ? new Date(match.date) : null;
+  const dateLabel = parsed && !isNaN(parsed.getTime())
+    ? parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: getTimeZone() })
     : null;
   return (
     <div className={`relative rounded-lg p-1.5 w-full ${dateLabel ? "pr-8" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
@@ -106,7 +113,13 @@ export default function WorldCupBracket({ selectedDate }: { selectedDate?: strin
   const treeRounds = useMemo(() => bracket?.rounds.filter((r) => r.key !== "third") ?? [], [bracket]);
   const third = useMemo(() => bracket?.rounds.find((r) => r.key === "third") ?? null, [bracket]);
   const focusRoundKey = useMemo(() => {
-    const target = selectedDate || ymd(new Date().toISOString());
+    // Fall back to the canonical service day (etDay.ts) — NOT a raw new Date() —
+    // so this matches the selectedDate the parent normally passes in, which is
+    // itself getDateString(0) = the service day with the 1 AM rollover. A bare
+    // new Date() skips that rollover, so between local midnight and 1 AM it would
+    // resolve to the next calendar day and auto-scroll the bracket to the wrong
+    // round while the date nav still shows the previous service day.
+    const target = selectedDate || toYmd(getEtServiceDate());
     return treeRounds.find((round) => round.matches.some((m) => ymd(m.date) === target))?.key ?? null;
   }, [selectedDate, treeRounds]);
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
-import { openExternal } from "@/lib/openExternal";
+import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
@@ -669,9 +669,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   useEffect(() => {
     clearAutoplayBlocked();
-    // New post / new stream — clear any prior playback-failure overlay so the
-    // fresh clip gets a clean attempt (prev/next paging reuses this modal).
+    // New post / new stream — clear any prior failure overlay so the fresh clip
+    // gets a clean attempt (prev/next paging reuses this modal, so a flag set on
+    // the previous post persists otherwise). setImgFailed clears the lightbox
+    // image-error flag for the same reason: two consecutive image posts both
+    // have videoId/currentId/playbackUrl/embedUrl undefined, so imageUrl is the
+    // only dep that changes between them — without it here, a broken image on
+    // post A left imgFailed stuck true and post B's valid image was suppressed
+    // into text-card mode until the modal was closed and reopened.
     setMediaFailed(false);
+    setImgFailed(false);
     // A swapped clip has not started either — re-expose YouTube's own play
     // button until the new id actually reaches PLAYING.
     hasStartedRef.current = false;
@@ -680,7 +687,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       window.clearTimeout(retryConfirmRef.current);
       retryConfirmRef.current = null;
     }
-  }, [currentId, playbackUrl, embedUrl, clearAutoplayBlocked]);
+  }, [currentId, playbackUrl, embedUrl, imageUrl, clearAutoplayBlocked]);
   useEffect(() => () => {
     if (retryConfirmRef.current) window.clearTimeout(retryConfirmRef.current);
   }, []);
@@ -1064,7 +1071,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // overlay: aria-modal="true" only marks that content inert to assistive tech,
   // it does NOT stop a sighted keyboard user Tabbing out. Focusables are queried
   // live per keypress (so per-mode controls — image / text / video — are always
-  // current) and offsetParent filters hidden ones. The modal mounts fresh per
+  // current) and getClientRects() filters hidden ones. The modal mounts fresh per
   // open (the parent guards it), so this fires on every open/close — empty deps
   // capture the opener once. (Once focus enters the cross-origin YouTube iframe
   // the browser routes keydown to the iframe's own document, so the trap governs
@@ -1079,7 +1086,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         dialog.querySelectorAll<HTMLElement>(
           'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
         )
-      ).filter((el) => el.offsetParent !== null);
+      // getClientRects().length, NOT offsetParent: offsetParent is null for
+      // BOTH display:none elements AND any position:fixed element, so the earlier
+      // offsetParent test silently dropped the desktop Prev/Next post chevrons
+      // (rendered inside this dialog, `position:fixed`) from the trap — leaving
+      // them visible but Tab-unreachable. getClientRects() is empty only when the
+      // element is genuinely unrendered (display:none, incl. the off-breakpoint
+      // pager variant), so it keeps hiding those while re-including the fixed one.
+      ).filter((el) => el.getClientRects().length > 0);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -1865,12 +1879,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               {isGallery && (
                 <>
                   {/* Picture counter — the cue that there's more than one, which
-                      the old single-image lightbox gave no hint of. */}
+                      the old single-image lightbox gave no hint of. Purely visual
+                      ("2 / 3" reads as a bare "2 3" to a screen reader), so hide it
+                      from AT and voice the position through the sr-only live region
+                      below instead. */}
                   <span
+                    aria-hidden="true"
                     className="absolute top-2 right-2 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-none text-white"
                     style={{ background: "rgba(0,0,0,0.6)" }}
                   >
                     {galAt + 1} / {galLen}
+                  </span>
+                  {/* The gallery frames all carry alt="" (no per-image caption is
+                      available), and the counter + dots above are aria-hidden, so
+                      paging with the Prev/Next buttons gave a screen-reader user no
+                      cue which picture they'd landed on. Voice the new position
+                      through a dedicated sr-only live region (WCAG 4.1.3 Status
+                      Messages), matching the same role="status" aria-live="polite"
+                      pattern the copy-link confirmation and FeedbackBox already use.
+                      Its text changes on every step, so each page is announced. */}
+                  <span role="status" aria-live="polite" className="sr-only">
+                    Picture {galAt + 1} of {galLen}
                   </span>
                   {/* On-image arrows: the fixed side chevrons page POSTS, so the
                       within-post controls have to live on the photo itself. */}
@@ -2494,14 +2523,24 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 muted
                 playsInline
                 onPlaying={trackVideoPlay}
-                aria-label={headline || "Video player"}
+                // Spoiler-safe accessible name — matching the sibling <iframe>'s
+                // title and the dialog's aria-label: the PeekBlur'd headline can
+                // carry a score, so setting it as this focusable player's
+                // aria-label announced the spoiler unblurred to screen readers on
+                // the HLS path (MLB statsapi + Reddit clips, whose headlines
+                // routinely state the result). Use the generic label instead.
+                aria-label="Video player"
                 poster={proxyImage(poster) ?? undefined}
               />
             ) : (
               <iframe
                 ref={iframeRef}
                 src={withAutoplay(embedUrl!)}
-                title={headline || "Video player"}
+                // Spoiler-safe accessible name — see the <video> note above and
+                // the dialog's aria-label: the PeekBlur'd headline can carry a
+                // score, so an iframe `title` set to it would announce the
+                // spoiler unblurred to screen readers. Use the generic label.
+                title="Video player"
                 className="absolute inset-0 w-full h-full"
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowFullScreen
@@ -2562,7 +2601,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               href={sourceShareUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              // Route through handleExternalClick so a YouTube sourceShareUrl
+              // deep-links into the installed YouTube app on native (matching
+              // the sibling "Open on…" buttons above that already call
+              // openExternal) instead of opening the in-app browser. The helper
+              // still stopPropagation()s — so the click doesn't dismiss the
+              // modal — and leaves modifier/middle-clicks to the browser.
+              onClick={handleExternalClick(sourceShareUrl)}
               className="text-xs text-white/40 hover:text-white/60 transition-colors underline underline-offset-2"
             >
               {(hlsMode || embedMode || imageMode || textMode) ? linkLabel : "Watch on YouTube"}

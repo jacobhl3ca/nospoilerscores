@@ -201,17 +201,25 @@ export function NewsColumnTitle({
       <div className="relative flex items-center justify-center px-6 w-full">
         {isSwappable ? (
           <div ref={swapRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setSwapOpen(!swapOpen)}
-              className="cursor-pointer transition-colors hover:opacity-80"
-              style={{ color: "var(--text)" }}
-              title="Switch news league"
-              aria-haspopup="dialog"
-              aria-expanded={swapOpen}
-            >
-              <h2 className="text-base sm:text-lg font-bold tracking-wide">{title}</h2>
-            </button>
+            {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern), not
+                the reverse: a <button>'s content model is phrasing content, so an
+                <h2> nested inside it is invalid HTML and assistive tech may drop
+                the heading role. This keeps the swappable title a real <h2>
+                heading — matching the non-swappable branch below — while the
+                button stays the interactive trigger. The button inherits the
+                heading's font + color, so it renders pixel-for-pixel unchanged. */}
+            <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }}>
+              <button
+                type="button"
+                onClick={() => setSwapOpen(!swapOpen)}
+                className="cursor-pointer transition-colors hover:opacity-80"
+                title="Switch news league"
+                aria-haspopup="dialog"
+                aria-expanded={swapOpen}
+              >
+                {title}
+              </button>
+            </h2>
             {swapOpen && (
               <div
                 // The toggle above declares aria-haspopup + aria-expanded, so
@@ -442,7 +450,13 @@ function TextSourceCard({ label, logoUrl, items, loading, onPlay, siblings, base
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
+        // Announce the resolved-empty result too, not just the loading state
+        // above — the load swaps role=status "Loading headlines…" out for this
+        // bare line, so without its own live region a screen-reader user heard
+        // "Loading…" then silence, never learning the column came back empty.
+        // role=status + aria-live matches the loading skeleton here and the
+        // "No games found" empty state in TeamView (WCAG 4.1.3).
+        <p role="status" aria-live="polite" className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No headlines</p>
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => (
@@ -518,7 +532,13 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       {hasInlineMedia && (
         <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
           <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-            {(item.videoUrl || item.youtubeVideoId) ? (
+            {/* Pick the play triangle for ANY playable clip, not just
+                videoUrl/youtubeVideoId: hasInlineMedia (above) also lets a
+                direct-HLS (playbackUrl) or Brightcove-embed (embedUrl) item into
+                this branch, and those play on tap too — so the old check drew the
+                open-external/expand arrows over a video. Reuse itemIsVideo(), the
+                same signal the NewsFeed twin and the 🎥 Videos filter use. */}
+            {itemIsVideo(item) ? (
               <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
             ) : (
               <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -543,7 +563,7 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       style={{ background: "var(--bg-card-hover)" }}
     >
       <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)", color: "white" }}>
-        {(item.videoUrl || item.youtubeVideoId) ? (
+        {itemIsVideo(item) ? (
           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
         ) : (
           <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -731,7 +751,10 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
+        // Announce the resolved-empty result, mirroring the loading role=status
+        // above and the TextSourceCard empty state — otherwise the load swaps
+        // "Loading videos…" out for a silent line (WCAG 4.1.3).
+        <p role="status" aria-live="polite" className="px-3 py-3 text-xs text-center" style={{ color: "var(--text-muted)" }}>No videos</p>
       ) : (
         <div className="flex flex-col">
           {items.map((item, idx) => {
@@ -813,6 +836,15 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                       window.open(item.articleUrl, "_blank", "noopener,noreferrer");
                     }
                   }}
+                  // The button wraps the thumbnail (alt="") + headline, so its
+                  // accessible name is just the headline — a screen-reader/voice-
+                  // control user hears the title but gets no cue this control PLAYS
+                  // a highlight inline (vs. the sibling <a> row below that opens an
+                  // article). Name the action explicitly; the headline stays inside
+                  // the label so "Label in Name" (WCAG 2.5.3) still holds and voice
+                  // users can say the visible title to activate it. Matches the twin
+                  // Play button in AlignedVideoStrip's VideoRow/CompactTailRow.
+                  aria-label={`Play highlight: ${item.headline}`}
                   className={commonCls}
                   style={commonStyle}
                 >
@@ -849,12 +881,23 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    source.fetch().then((data) => {
-      if (!cancelled) {
-        setItems(data);
-        setLoading(false);
-      }
-    });
+    // Guard the fetch: without a .catch a rejected source.fetch() would skip the
+    // .then entirely, so setLoading(false) never fires and the card stays pinned
+    // on its loading skeletons forever. Settle to [] on rejection so the card
+    // degrades to its "No headlines"/"No videos" empty state instead — the same
+    // .catch(() => []) guard NewsFeed and AlignedVideoStrip already put on the
+    // identical source.fetch() call. Latent today (the built-in fetchers catch
+    // internally and resolve []), so no happy-path change; this hardens the
+    // rejection case (a future source, or a synchronous throw inside a fetch
+    // closure, would otherwise hang the column).
+    source.fetch()
+      .catch(() => [] as NewsItem[])
+      .then((data) => {
+        if (!cancelled) {
+          setItems(data);
+          setLoading(false);
+        }
+      });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.label]);

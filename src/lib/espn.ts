@@ -92,6 +92,23 @@ const SPORT_PATHS: Record<Sport, string> = {
   ufc: "/mma/ufc/scoreboard",
 };
 
+// Sortable epoch-ms for a Game's ISO date, NaN-safe. A Game can carry an empty
+// or missing date — a TBD future fixture, or a UFC card that resolved neither
+// the event nor the main-card date (see the `|| ""` fallback in the UFC parse)
+// — and `new Date("").getTime()` is NaN. A comparator that returns NaN is
+// inconsistent, so V8's sort leaves the surrounding order undefined and
+// SCATTERS the whole slate, not just the undated game. Coerce an unparseable
+// date to a finite far-future sentinel (the max valid timestamp) so those games
+// sink to the END of an ascending chronological sort — not jump to the top, the
+// same intent as the TeamView undated-game fix — without reintroducing NaN: two
+// sentinels subtract to 0, whereas an Infinity sentinel would give
+// `Infinity - Infinity === NaN` and re-scatter the very case this guards. Same
+// NaN-comparator guard the NewsFeed feed sort and news.ts formatPublished use.
+function chronoMs(iso: string): number {
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 8.64e15 : t;
+}
+
 // Seasonal league config: show/hide based on date
 // endDate: inclusive last day the league is shown (= its championship date, per
 //   isLeagueActive's `mmdd <= endDate`), so the league hides the day after its final game
@@ -621,6 +638,10 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
   const scheduleOut = release && release.getTime() < kickoff.getTime()
     ? release.toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : undefined;
+  // Rounded whole years, hoisted so the awayLabel years branch can pluralize
+  // like the days branch does — a World Cup column viewed ~1–1.5 years out
+  // (daysUntil 366–547) rounds to 1 and otherwise read "1 years away".
+  const years = Math.round(daysUntil / 365.25);
   return {
     date: kickoff,
     daysUntil,
@@ -641,7 +662,7 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
         ? `${Math.round(daysUntil / 7)} weeks away`
         : daysUntil <= 365
           ? `${Math.round(daysUntil / 30.4)} months away`
-          : `${Math.round(daysUntil / 365.25)} years away`,
+          : `${years} year${years === 1 ? "" : "s"} away`,
   };
 }
 
@@ -1478,11 +1499,27 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const as = Number(awayTeam.score) || 0;
   const diff = Math.abs(hs - as);
   const setNow = match.status?.period ?? 0; // current set number
+  // Best-of-3 (all women's draws) needs 2 sets to win; best-of-5 (men's Slam
+  // singles) needs 3. The grouping slug tells us which — ESPN's `format` field
+  // is unreliable (reports 5 for both). Hoisted above the rating block so the
+  // "went the distance" gate can require the winner to have actually reached it.
+  const setsToWin = /women/.test(slug) ? 2 : 3;
   let rating: number | null = null;
   if (state === "post") {
-    if (diff <= 1) rating = 90;             // went the distance (2-1 / 3-2)
+    // GREAT is reserved for a match that went to a deciding final set (2-1 or
+    // 3-2). Require the LOSER to have won at least one set AND the WINNER to have
+    // reached setsToWin — otherwise a retirement (e.g. a man retiring at 1-1,
+    // 2-1 or 2-2 in sets, or a first-set retirement up 1-0) or a walkover (0-0,
+    // no sets played) also passes `diff <= 1` and gets rated GREAT, sorting the
+    // LEAST watchable outcome to the top of the Rated view. Retirements/walkovers
+    // aren't filtered out (buildTennisGames only drops POSTPONED/CANCELED/
+    // SUSPENDED), so they reach here as finished games. A normally-completed
+    // match always has its winner at setsToWin (2 or 3); an incomplete retirement
+    // does not, so the `max >= setsToWin` check routes those to the 65 bucket
+    // below while every real 2-1 / 3-2 decider keeps its 90.
+    if (diff <= 1 && Math.min(hs, as) >= 1 && Math.max(hs, as) >= setsToWin) rating = 90; // went the distance (2-1 / 3-2)
     else if (hs + as >= 4 && diff === 2) rating = 78; // long match (3-1)
-    else rating = 65;                       // straight sets
+    else rating = 65;                       // straight sets / retirement / walkover
   } else if (state === "in" && setNow >= 2) {
     // Rate a live match by how level it is, capped below GREAT — GREAT is
     // reserved for finished deciders. Level (e.g. 1-1) reads best.
@@ -1490,9 +1527,8 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   }
   // Deciding set: a live match level on sets and into the final set — the
   // win-or-go-home stretch. Best-of-3 (all women's draws) decides at 1-1 in
-  // set 3; best-of-5 (men's Slam singles) at 2-2 in set 5. The grouping slug
-  // tells us which — ESPN's `format` field is unreliable (reports 5 for both).
-  const setsToWin = /women/.test(slug) ? 2 : 3;
+  // set 3; best-of-5 (men's Slam singles) at 2-2 in set 5 (setsToWin, hoisted
+  // above the rating block).
   const decidingSet = state === "in" && hs === as && hs === setsToWin - 1;
   // 1st set (or pre) → rating stays null (Too Early / unrated)
   // Gather broadcasts — tennis nests these on the match (competition) object
@@ -1519,7 +1555,6 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
     awayTeam,
     broadcasts,
     venue: "",
-    highlightUrl: null,
     // Not a playoff "Game N" — repurposed to carry tournament+year into the
     // highlight search so it can't drift to the wrong event (see above).
     seriesNote: tourneyTag || null,
@@ -1744,19 +1779,6 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   // Tag sport for rating calculation
   event._sport = sport;
 
-  // Extract highlight video URL from headlines
-  let highlightUrl: string | null = null;
-  for (const headline of competition?.headlines ?? []) {
-    for (const video of headline?.video ?? []) {
-      const webHref = video?.links?.web?.href;
-      if (webHref) {
-        highlightUrl = webHref;
-        break;
-      }
-    }
-    if (highlightUrl) break;
-  }
-
   // Extract series game number and playoff round from notes
   let seriesNote: string | null = null;
   let playoffLabel: string | null = null;
@@ -1890,7 +1912,6 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     isPlayoff,
     playoffLabel,
     seriesStatus,
-    highlightUrl,
     recapUrl,
     streamUrl: null, // populated after fetch for supported sports
     primeStreamUrl: null, // populated from /prime-asins.json when matchup matches
@@ -2517,6 +2538,25 @@ function espnToMlbAbbrev(espnAbbrev: string): string {
   return ESPN_TO_MLB_ABBREV[espnAbbrev] || espnAbbrev;
 }
 
+// NHL team abbreviation mapping: ESPN → NHL public API (api-web.nhle.com).
+// Most codes match, but ESPN uses 2-char abbreviations for a few teams where
+// NHL's own API uses its canonical 3-char form (ESPN "TB" vs NHL "TBL", etc.).
+// The nhl.com/tv deep-link lookup below keys an ESPN abbreviation against the
+// NHL-abbrev map from fetchNHLGameIds, so without translating, those teams
+// silently miss and keep the generic espn.com/watch fallback — the same
+// ESPN-vs-league divergence ESPN_TO_MLB_ABBREV handles for MLB, and the reason
+// enrichNhlVideos matches on displayName instead of abbreviation.
+const ESPN_TO_NHL_ABBREV: Record<string, string> = {
+  TB: "TBL",
+  SJ: "SJS",
+  LA: "LAK",
+  NJ: "NJD",
+};
+
+function espnToNhlAbbrev(espnAbbrev: string): string {
+  return ESPN_TO_NHL_ABBREV[espnAbbrev] || espnAbbrev;
+}
+
 // Map ESPN country codes (from flag URLs) to display names
 const COUNTRY_NAMES: Record<string, string> = {
   usa: "United States", can: "Canada", mex: "Mexico",
@@ -2815,8 +2855,11 @@ function esportsRating(g: EsportsApiGame): number | null {
   const loserGames = Math.min(a, h);
   // A Bo1 has no series shape at all — rate it mid rather than pretending.
   if (needed <= 1) return 55;
-  // 0 → sweep, needed-1 → full distance. Maps 40..95.
-  return Math.round(40 + (loserGames / (needed - 1)) * 55);
+  // 0 → sweep, needed-1 → full distance. Maps 40..95 for a well-formed tally.
+  // Clamp to 0..100 like every sibling rater (cricket/team/tennis): a malformed
+  // PandaScore row where loserGames >= needed (e.g. a "3-3" Bo5) would otherwise
+  // exceed 95 and top 100 (3/2 * 55 + 40 = 122), mis-sorting and mis-badging it.
+  return Math.round(Math.max(0, Math.min(100, 40 + (loserGames / (needed - 1)) * 55)));
 }
 
 export async function fetchEsportsGames(date?: string): Promise<Game[]> {
@@ -2869,7 +2912,6 @@ export async function fetchEsportsGames(date?: string): Promise<Game[]> {
         isPlayoff: g.tier === "s",
         playoffLabel: null,
         seriesStatus: null,
-        highlightUrl: null,
         recapUrl: null,
         // Twitch is where every tier-s/a match actually streams, free. Sent
         // through the shared per-sport fallback so the link stays in one place.
@@ -3349,8 +3391,15 @@ async function fetchGolfTournament(date?: string): Promise<GolfTournament | null
         .slice(0, 10)
         .map(p => parseScore(p.score))
         .filter((n): n is number => n !== null);
-      // All non-numeric (e.g. field withdrew/cut) — leave rating null, no badge.
-      if (topScores.length > 0) {
+      // Need a real top-5 sample before rating. With <5 numeric scores the
+      // `topScores[4] ?? leader` fallbacks below collapse the spread to 0 →
+      // spreadScore 100 → a maximal "GREAT" badge on almost no data. That's the
+      // same opening-holes artifact the gate above guards against: e.g. an R1
+      // weather suspension where the leader is thru ≥6 (so the gate opens) but
+      // most of the field still shows "-"/"CUT"/"WD" (parseScore → null). Every
+      // normally-populated leaderboard has 10 numeric top-10 scores, so this is
+      // a no-op there; it only withholds the badge when the sample is too thin.
+      if (topScores.length >= 5) {
         const leader = topScores[0];
         // Spread between 1st and 5th
         const top5spread = Math.abs((topScores[4] ?? leader) - leader);
@@ -3554,7 +3603,7 @@ async function fetchNextGameDayRange(
       return "";
     }
   };
-  const chrono = (gs: Game[]) => [...gs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const chrono = (gs: Game[]) => [...gs].sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
   // allDays: every upcoming fixture in the window, chronological. Used for
   // NBA/NHL in the playoffs. We want exactly ONE series — the most imminent —
@@ -3790,7 +3839,13 @@ export async function fetchGames(
     const nhlIds = await nhlIdsPromise;
     for (const game of games) {
       if (game.streamUrl !== "https://www.espn.com/watch/") continue;
-      const nhlId = nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`);
+      // Try the raw ESPN abbreviations first (most teams' codes match NHL's),
+      // then the ESPN→NHL translation for the handful that diverge (TB→TBL, …).
+      // A matchup key is unique per date, so the fallback can only ADD a match,
+      // never replace a correct one — teams already resolving stay unchanged.
+      const nhlId =
+        nhlIds.get(`${game.awayTeam.abbreviation}@${game.homeTeam.abbreviation}`) ??
+        nhlIds.get(`${espnToNhlAbbrev(game.awayTeam.abbreviation)}@${espnToNhlAbbrev(game.homeTeam.abbreviation)}`);
       if (nhlId) game.streamUrl = `https://www.nhl.com/tv/${nhlId}`;
     }
   }
@@ -4319,8 +4374,13 @@ export async function fetchAllLeagues(
     // Drop both empty slots and any null auto-fallback misses.
     final = slots.filter((cfg): cfg is LeagueConfig => cfg !== null);
   } else if (slot3Cfg && slot3Cfg !== "empty" && !auto.some((l) => l.sport === slot3Cfg.sport && l.label === slot3Cfg.label)) {
-    // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen league.
-    final = [...auto.slice(0, MAX_LEAGUES - 1), slot3Cfg];
+    // Legacy slot-3 swap path: replace the rightmost auto slot with the chosen
+    // league. Slice at slotCount, NOT MAX_LEAGUES: `auto` holds up to slotCount
+    // configs, so on a wide (5-column) board MAX_LEAGUES-1 (2) kept only the
+    // first two auto columns and dropped slots 4-5 — the same shrink the dedupe
+    // backfill below already fixed by switching off MAX_LEAGUES. When slotCount
+    // is the default 3 this is byte-identical (slotCount-1 === MAX_LEAGUES-1).
+    final = [...auto.slice(0, slotCount - 1), slot3Cfg];
   } else {
     final = auto;
   }
@@ -4704,7 +4764,7 @@ export async function fetchTeamSchedule(
       }
     })
   );
-  all.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  all.sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   // Fill missing records (mostly future games) from standings lookup.
   const standings = await standingsPromise;
   if (standings.size > 0) {

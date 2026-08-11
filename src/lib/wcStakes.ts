@@ -12,10 +12,12 @@
 // picture ourselves (enumerating the matchday's two results) so the copy can
 // say precisely whether a team is through, safe-with-a-draw, or must-win.
 
+import { etSlateYmd, nextYmd } from "./etDay";
+
 const STANDINGS_URL =
   "https://site.web.api.espn.com/apis/v2/sports/soccer/fifa.world/standings";
-const SCOREBOARD_URL = (date: string) =>
-  `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${date}`;
+const SCOREBOARD_URL = (dates: string) =>
+  `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dates}`;
 
 // Group-stage tiers (qualification stakes) + knockout tiers (marquee/balance).
 export type WcTier =
@@ -117,6 +119,7 @@ interface Fixture {
   state: "pre" | "in" | "post";
   knockoutLabel: string | null;
   roundSlug: string; // ESPN event.season.slug, e.g. "round-of-32", "final"
+  iso: string; // ESPN event.date (ISO kickoff) — used for slate-day bucketing
 }
 
 function parseFixtures(data: unknown): Fixture[] {
@@ -146,6 +149,7 @@ function parseFixtures(data: unknown): Fixture[] {
         ? headline
         : null,
       roundSlug: String(season?.slug ?? ""),
+      iso: String(e.date ?? ""),
     });
   }
   return out;
@@ -293,7 +297,18 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
 
   // seeding — both settled
   if (safe.length === 2) {
-    return `Both are through — this decides who wins ${group} (1st vs 2nd) and the kinder Round-of-32 draw.`;
+    // Both sides are top-two SAFE, but only a genuinely "through" side advances
+    // on ANY result. A "drawsafe" side clinches with a draw yet a DEFEAT can
+    // still drop it (see the Status doc), so a decisive result here can decide
+    // qualification — not just seeding — and claiming "both are through" would
+    // falsely tell the user a team has already qualified. Only make that claim
+    // when both truly are through; otherwise say what's actually at stake. This
+    // is the same through/drawsafe split the decider (safe===1) and safe===1/
+    // out===1 branches above already make.
+    if (safe.every((t) => t.s === "through")) {
+      return `Both are through — this decides who wins ${group} (1st vs 2nd) and the kinder Round-of-32 draw.`;
+    }
+    return `A draw sends both through as ${group}'s top two, but a defeat could drop the loser into the best-third-place scramble.`;
   }
   if (safe.length === 1 && out.length === 1) {
     const s = safe[0];
@@ -303,17 +318,17 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
         : `${s.name} are all but through (a draw seals it)`;
     return `${through} and ${out[0].name} are out — the result only affects ${s.name}'s seeding, so top ${group} for an easier path.`;
   }
-  // Both sides are already out (out.length === 2) — the only combination left
-  // in this tier once safe===2 and safe===1/out===1 are handled above. Neither
-  // team can advance, so there is nothing at stake: NOT seeding, NOT goal
-  // difference (both matter only to teams still in the tournament). The old
-  // fallback ("nothing left to settle but seeding and goal difference") wrongly
-  // cast this dead rubber as a fight for group position, mirroring the decider
-  // tier's "already out" wording above but for the both-eliminated case.
-  if (out.length === 2) {
-    return `Both are already out — a dead rubber with nothing at stake.`;
-  }
-  return `${group}: nothing left to settle but seeding and goal difference.`;
+  // Both sides are already out — the ONLY combination left in this tier once
+  // safe===2 (line 299) and safe===1/out===1 (line 302) are handled above: the
+  // seeding tier is reached only when live.length===0 (see tierFor), so every
+  // side is safe or eliminated, and with two sides that leaves out.length===2 as
+  // the exhaustive remainder. Neither team can advance, so there is nothing at
+  // stake: NOT seeding, NOT goal difference (both matter only to teams still in
+  // the tournament). This is the unconditional final return — the previous
+  // `if (out.length === 2)` guard left a trailing fallback ("nothing left to
+  // settle but seeding and goal difference") that was both unreachable AND wrong
+  // (it cast this dead rubber as a fight for group position), so it's dropped.
+  return `Both are already out — a dead rubber with nothing at stake.`;
 }
 
 // Group-stage and knockout tiers never appear on the same day, so they share
@@ -384,11 +399,20 @@ function classifyKnockout(away: Row | undefined, home: Row | undefined, awayName
 export async function getWorldCupStakes(date: string): Promise<WcStakes | null> {
   const [standingsData, scoreData] = await Promise.all([
     fetchJson(STANDINGS_URL),
-    fetchJson(SCOREBOARD_URL(date)),
+    // Fetch a 2-day window [date, date+1] and re-bucket by slate day below, the
+    // same reconcile the score column does (fetchGames' soccer path in espn.ts).
+    // ESPN buckets a fixture under its raw ET calendar day, but the app's date
+    // nav rolls the day over at 1 AM local (etDay.ts is the single source of
+    // truth), so a western-venue World Cup night match kicking off 12 AM–1 AM ET
+    // (e.g. 9 PM PT) belongs to the PREVIOUS day's slate. Without this, the
+    // "What matters today" card fetched only the raw calendar day and diverged
+    // from the score column by a day at that boundary — omitting a match the
+    // column lists (and listing one it doesn't).
+    fetchJson(SCOREBOARD_URL(`${date}-${nextYmd(date)}`)),
   ]);
   if (!standingsData || !scoreData) return null;
   const { groups, byAbbr } = parseStandings(standingsData);
-  const fixtures = parseFixtures(scoreData);
+  const fixtures = parseFixtures(scoreData).filter((f) => etSlateYmd(f.iso) === date);
   if (fixtures.length === 0) return null;
 
   // Bucket the day's fixtures by group so the within-group enumeration sees

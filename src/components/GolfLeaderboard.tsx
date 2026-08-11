@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import { GolfTournament } from "@/lib/types";
 import { networkStreamUrl, sportStreamFallback } from "@/lib/espn";
+import { handleExternalClick } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import {
   isGolfLive,
@@ -33,8 +34,11 @@ const TOP25_SHOW = 25;
 type ExpandLevel = "collapsed" | "top25" | "all";
 
 function RatingBadge({ rating }: { rating: number }) {
-  let color = "bg-gray-500";
-  let label = "OK";
+  // The badge only renders for a real numeric rating, and this chain is
+  // exhaustive, so the four tiers below are the only outcomes — GREAT/GOOD/MEH/
+  // SKIP, matching GameCard's badge, the legend, and the detail modal's ratingTier.
+  let color: string;
+  let label: string;
   if (rating >= 85) {
     color = "bg-green-600";
     label = "GREAT";
@@ -52,12 +56,11 @@ function RatingBadge({ rating }: { rating: number }) {
     // Screen readers otherwise announce a bare "MEH"/"SKIP" mid-card with no hint
     // it's the round's worth-watching rating. role="img" + a spoken aria-label give
     // the badge a self-describing name; the visible all-caps text is unchanged.
-    // Title case in the label ("Meh"/"Skip") stops some engines spelling the short
-    // all-caps words out letter-by-letter — except "OK", which is an initialism
-    // and stays "OK" so it isn't mangled to "Ok".
+    // Title case in the label ("Great"/"Meh"/"Skip") stops some engines spelling
+    // the short all-caps words out letter-by-letter.
     <span
       role="img"
-      aria-label={`Worth-watching rating: ${label === "OK" ? "OK" : label.charAt(0) + label.slice(1).toLowerCase()}`}
+      aria-label={`Worth-watching rating: ${label.charAt(0) + label.slice(1).toLowerCase()}`}
       className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color} text-white uppercase`}
     >
       {label}
@@ -81,15 +84,39 @@ export default function GolfLeaderboard({
   const containerRef = useRef<HTMLDivElement>(null);
   const [nameTier, setNameTier] = useState<"full" | "initial" | "last">("full");
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
-  // Four highlight slots, in Jacob's preferred order:
-  //   0: official channel video (the "main recap" — labeled "ESPN"
-  //      since that's the brand he trusts for the full recap)
-  //   1: walked curated-channel result (PGA TOUR → Golf Channel → ESPN),
-  //      stopping at the first video distinct from slot 0. This matches the
-  //      pre-session-N 2-button behavior without accepting generic reuploads.
-  //   2–3: two more "top videos" pulled from the remaining channels in
-  //      the fallback chain + a generic search, deduped against the
-  //      earlier slots. Only populate if a distinct video exists.
+  // Any click outside the expanded network list (or Escape) collapses it —
+  // mirrors GameCard's "+N" broadcast overlay, which added the same dismiss
+  // paths (Jacob 6/11). Without this the golf "+N" chip was a one-way toggle:
+  // once tapped, the expanded row stayed open for the card's whole lifetime
+  // with no collapse control, Escape, or outside-click to close it. Capture
+  // phase so another card's stopPropagation can't keep a stale row open.
+  const broadcastRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!broadcastExpanded) return;
+    const closeOnOutside = (e: PointerEvent) => {
+      if (broadcastRef.current?.contains(e.target as Node)) return;
+      setBroadcastExpanded(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBroadcastExpanded(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutside, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [broadcastExpanded]);
+  // Four highlight slots. Slot 0 is the main round recap, resolved from the
+  // FIRST curated channel in the tournament's chain (secondaryChannels[0] —
+  // Golf Channel across all four majors; see SECONDARY_CHANNELS in youtube.ts)
+  // and labeled after that channel, not a hardcoded "ESPN" (see mainChannelName
+  // below). The tournament-run "official" channel (The Masters, USGA, …) is
+  // appended LAST, since during tournament week it posts Par 3 / player clips
+  // that drown out the round recap. Slots 1-3 fill progressively from the
+  // remaining curated channels plus curated backfill queries (never an
+  // unscoped/generic search), deduped against the earlier slots. Only populate
+  // if a distinct video exists.
   const [highlightSlots, setHighlightSlots] = useState<(string | null)[]>([
     null,
     null,
@@ -198,11 +225,20 @@ export default function GolfLeaderboard({
   if (showTeeTime && tournament.eventDate) {
     try {
       const d = new Date(tournament.eventDate);
-      teeTimeLabel = d.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: getTimeZone(),
-      });
+      // Guard the parse before formatting: toLocaleTimeString on an Invalid Date
+      // returns the literal string "Invalid Date" (it does NOT throw), so the
+      // surrounding try/catch can't catch it — a malformed ESPN eventDate would
+      // render "Invalid Date" as this card's tee-time label. Bail to null on a
+      // bad date so the label simply drops, the same Number.isNaN(getTime())
+      // guard golf.ts's getGolfSubtitle / shareCard / the card date paths carry.
+      // Byte-identical for every valid eventDate.
+      if (!Number.isNaN(d.getTime())) {
+        teeTimeLabel = d.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          timeZone: getTimeZone(),
+        });
+      }
     } catch {
       /* ignore */
     }
@@ -313,13 +349,21 @@ export default function GolfLeaderboard({
     // bails when prev[0] is set; tryFill fills the first open slot), so without
     // this reset a date change couldn't overwrite the stale IDs at all.
     setHighlightSlots([null, null, null, null]);
+    // Guard against a prior round's in-flight fetches writing into the new
+    // round's slots. This effect re-runs whenever highlightQuery changes (the
+    // component stays mounted across date/round navigation), and each
+    // fetchFirstVideoId is a ~1-2s live YouTube lookup. Without this flag a
+    // stale R1 promise resolving after the R2 reset would drop the WRONG
+    // round's recap into a freshly-nulled slot — including the labeled slot 0.
+    // Same cancelled-flag pattern as GameHighlights.tsx / TeamView.tsx.
+    let cancelled = false;
     (async () => {
-      // Drive the slot list from the curated secondary chain (ESPN
-      // first — the reliable full-day recap source Jacob flagged).
-      // The tournament-run "official" channel (The Masters, USGA,
-      // etc.) goes LAST because during tournament week those channels
-      // post Par 3 clips and player top-shot reels that were drowning
-      // out the actual round recap in slot 0.
+      // Drive the slot list from the curated secondary chain (Golf
+      // Channel first — the reliable per-round recap source across the
+      // majors). The tournament-run "official" channel (The Masters,
+      // USGA, etc.) goes LAST because during tournament week those
+      // channels post Par 3 clips and player top-shot reels that were
+      // drowning out the actual round recap in slot 0.
       const channelsInOrder: string[] = [...secondaryChannels];
       if (officialChannel && !channelsInOrder.includes(officialChannel)) {
         channelsInOrder.push(officialChannel);
@@ -332,27 +376,37 @@ export default function GolfLeaderboard({
       // takes the next open slot, deduped by videoId.
       const seen = new Set<string>();
       const tryFill = (id: string | null) => {
-        if (!id) return;
+        if (cancelled || !id) return;
+        // Keep this updater PURE — no `seen.add(id)` inside it. React can invoke
+        // a state updater more than once for a single update (StrictMode's dev
+        // double-invoke, or a concurrent render that gets discarded and rebased),
+        // and mutating `seen` here made the second pass hit the `seen.has(id)`
+        // branch and silently drop the slot, so a secondary highlight button
+        // could intermittently fail to appear. The dedup is already pure:
+        // `prev.includes(id)` blocks a repeat within these slots (queued
+        // updaters run sequentially against the updated `prev`), and `seen.has`
+        // still defers to slot 0's claim — the slot-0 resolver populates `seen`
+        // before its own updater (see below), which is the only writer needed.
         setHighlightSlots((prev) => {
           if (prev.includes(id) || seen.has(id)) return prev;
           const nextOpen = prev.findIndex((s, i) => i > 0 && s === null);
           if (nextOpen === -1) return prev;
-          seen.add(id);
           const next = [...prev];
           next[nextOpen] = id;
           return next;
         });
       };
 
-      // Slot 0 keeps using the first curated channel (ESPN for golf
-      // majors) so the labeled "ESPN" main-recap button gets the
-      // right videoId once it resolves.
+      // Slot 0 keeps using the first curated channel (Golf Channel for
+      // the majors) so the main-recap button — labeled after that same
+      // channel (see mainChannelName below) — gets the right videoId
+      // once it resolves.
       const mainChannel = channelsInOrder[0];
       if (mainChannel) {
         // strict=1: oembed-verify the uploader is this curated channel, so a
         // reuploader's "Round N highlights" title can't win a golf slot.
         fetchFirstVideoId(highlightQuery, mainChannel, undefined, undefined, true).then((id) => {
-          if (!id) return;
+          if (cancelled || !id) return;
           seen.add(id);
           setHighlightSlots((prev) => {
             // Skip if slot 0 is taken OR this id already landed in a later slot:
@@ -391,6 +445,7 @@ export default function GolfLeaderboard({
         }
       }
     })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightQuery, officialChannel, secondaryChannelsKey]);
 
@@ -431,6 +486,7 @@ export default function GolfLeaderboard({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-green-500 font-medium hover:text-green-400 transition-colors"
+                onClick={handleExternalClick(tournament.streamUrl)}
               >
                 {liveLabel}
               </a>
@@ -459,7 +515,7 @@ export default function GolfLeaderboard({
                   className="hover:underline transition-colors"
                   style={{ color: "var(--text-muted)" }}
                   title={`Watch on ${name}`}
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={handleExternalClick(href)}
                 >
                   {name}
                 </a>
@@ -467,14 +523,35 @@ export default function GolfLeaderboard({
             };
             if (tournament.broadcasts.length > 1) {
               return (
-                <span className="text-[10px] sm:text-xs">
+                <span ref={broadcastRef} className="text-[10px] sm:text-xs">
                   {broadcastExpanded ? (
-                    tournament.broadcasts.map((b, i) => (
-                      <span key={b}>
-                        {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
-                        {networkLink(b, b)}
-                      </span>
-                    ))
+                    <>
+                      {tournament.broadcasts.map((b, i) => (
+                        <span key={b}>
+                          {i > 0 && <span style={{ color: "var(--text-muted)" }}> · </span>}
+                          {networkLink(b, b)}
+                        </span>
+                      ))}
+                      {/* Collapse control — mirrors GameCard's expanded-networks
+                          ✕ so the revealed list carries a discoverable,
+                          keyboard-operable way back to the "+N" state. The
+                          disclosure toggle unmounts once open (this branch drops
+                          it), so without an in-DOM control the list could be
+                          dismissed only via Escape or an outside click (the
+                          effect above) — no visible affordance for a keyboard/SR
+                          user, who also lost focus to <body> on expand. Same
+                          aria-label="Hide networks" ✕ GameCard's overlay uses. */}
+                      <button
+                        type="button"
+                        className="ml-1.5 cursor-pointer hover:underline"
+                        style={{ color: "var(--text-muted)" }}
+                        title="Hide networks"
+                        aria-label="Hide networks"
+                        onClick={(e) => { e.stopPropagation(); setBroadcastExpanded(false); }}
+                      >
+                        ✕
+                      </button>
+                    </>
                   ) : (
                     <>
                       {networkLink(tournament.broadcasts[0], 0)}
@@ -520,8 +597,19 @@ export default function GolfLeaderboard({
                 ? player.shortName
                 : lastNameOnly(player.shortName);
           return (
+            // Key by the player's stable identity (name), NOT the array index:
+            // this list reorders while mounted — it flips alpha↔position order on
+            // the hidden↔revealed toggle, and in the revealed state each player's
+            // `position` shifts on every live poll — so an index key made a player
+            // who moved rows unmount+remount (needless DOM churn, and a 404'd
+            // flag's hidden state re-attempts) instead of React moving the row in
+            // place. The same stable-identity keying the golf highlight chips and
+            // WorldCupMattersCard already use; the row list was the last holdout.
+            // Fall back to the index only for a blank-name row (espn.ts can yield
+            // name "" when displayName is missing) so the uniqueness the `-${idx}`
+            // suffix guarded is preserved for that degenerate case.
             <div
-              key={`${player.name}-${idx}`}
+              key={player.name || `pos-${idx}`}
               className="flex items-center gap-1.5 py-[3px]"
               style={{
                 borderBottom: idx < visible.length - 1 ? "1px solid var(--border)" : undefined,
@@ -669,9 +757,10 @@ export default function GolfLeaderboard({
         </div>
       )}
 
-      {/* Highlights — slot 0 is the main "ESPN" recap button
-          (prefetched from the tournament's YouTube channel chain),
-          slots 1–3 are additional top videos. Laid out as a 2-column
+      {/* Highlights — slot 0 is the main round-recap button, named after
+          the channel its clip is prefetched from (the first curated channel
+          in the tournament's chain — Golf Channel across the majors); slots
+          1–3 are additional top videos. Laid out as a 2-column
           grid so buttons match the Show Top / Show All callout width
           above and wrap cleanly on narrow cards: slots 0–1 on the top
           row, slots 2–3 underneath. Only slot 0 carries a text label;
@@ -680,6 +769,28 @@ export default function GolfLeaderboard({
         <div className="mt-1.5 grid grid-cols-2 gap-1">
           {visibleHighlightSlots.map(({ id, index }) => {
             const isMainSlot = index === 0;
+            // Slots 1–3 are all "more on YouTube" play buttons; without the slot
+            // number folded in, every secondary slot resolved the SAME accessible
+            // name, so a screen-reader/voice-control user heard 2–3 identical
+            // "…more on YouTube" buttons with no way to tell them apart or target
+            // one by voice. Number the secondaries (1/2/3) so each has a unique
+            // name — the same disambiguation the repo already applies to
+            // GameCard's favorite stars and LeagueColumn's per-league Retry
+            // buttons. One label const keeps aria-label and title in sync.
+            // Name slot 0 after the channel its clip is ACTUALLY pulled from —
+            // channelsInOrder[0] === secondaryChannels[0] (Golf Channel across
+            // the majors; see SECONDARY_CHANNELS in youtube.ts) — not a
+            // hardcoded "ESPN". The chain was reordered to lead with Golf
+            // Channel, and ESPN isn't in the US Open / The Open chains at all,
+            // so the old literal misnamed the strictly-verified source. This
+            // button is icon-only, so aria-label/title is its ONLY accessible
+            // name (screen reader, voice control, hover). Fall back to a plain
+            // "Round N highlights" if no channel is known (unreachable for a
+            // visible slot 0, which only resolves once mainChannel is truthy).
+            const mainChannelName = secondaryChannels[0] ?? officialChannel;
+            const highlightLabel = isMainSlot
+              ? `${mainChannelName ? `${mainChannelName} — ` : ""}Round ${completedRounds} highlights`
+              : `Round ${completedRounds} highlights — more on YouTube (${index})`;
             return (
               <button
                 key={index}
@@ -692,16 +803,8 @@ export default function GolfLeaderboard({
                 }}
                 className="highlight-btn flex items-center justify-center py-1.5 rounded-md transition-opacity hover:opacity-80 cursor-pointer"
                 style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
-                aria-label={
-                  isMainSlot
-                    ? `ESPN — Round ${completedRounds} highlights`
-                    : `Round ${completedRounds} highlights — more on YouTube`
-                }
-                title={
-                  isMainSlot
-                    ? `ESPN — Round ${completedRounds} highlights`
-                    : `Round ${completedRounds} highlights — more on YouTube`
-                }
+                aria-label={highlightLabel}
+                title={highlightLabel}
               >
                 <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
               </button>

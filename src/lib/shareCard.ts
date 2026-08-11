@@ -37,6 +37,13 @@ export function buildShareCard(game: Game, leagueLabel?: string): ShareCardMeta 
   if (!home?.abbreviation && !home?.shortDisplayName) return null;
 
   const d = new Date(game.date);
+  // A malformed/empty game.date makes an Invalid Date, whose toLocaleDateString
+  // returns "Invalid Date" — after sanitize that bakes a garbage key like
+  // `mlb-bos-nyy-invaliddate` pointing at a card that was never prebaked, so the
+  // OG unfurl silently breaks. Bail like the sibling guards above (and mirror the
+  // isNaN guard weather.ts puts on the same new Date() pattern); the sole caller
+  // already handles a null card.
+  if (isNaN(d.getTime())) return null;
   // ET calendar date → YYYYMMDD. en-CA renders as YYYY-MM-DD; strip dashes.
   const ymd = d
     .toLocaleDateString("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" })

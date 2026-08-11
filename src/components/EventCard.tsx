@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { fetchFirstVideoId } from "@/lib/youtube";
-import { getTimeZone } from "@/lib/etDay";
+import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
 import { openExternal } from "@/lib/openExternal";
 import HighlightRowPlaceholder from "@/components/HighlightRowPlaceholder";
 
@@ -19,7 +19,13 @@ import HighlightRowPlaceholder from "@/components/HighlightRowPlaceholder";
 // `refYmd` (YYYYMMDD, the board's viewed date) decides what "today" means: the
 // game cards drop the day prefix for games on the VIEWED slate, so an F1/UFC
 // tile must too — navigating to Sunday should show the Sunday race as just
-// "9:00AM", not "Sun 9:00AM". Falls back to the real today when absent.
+// "9:00AM", not "Sun 9:00AM". When absent, falls back to the app's canonical
+// service day (getEtServiceDate) — NOT a raw `new Date()` calendar day — so the
+// fallback respects the same 1 AM rollover the date nav and data layer use.
+// A bare calendar day was the one spot still computing "today" independently,
+// the exact UI/data drift etDay.ts's single-source-of-truth exists to prevent:
+// between midnight and 1 AM local, the board still shows yesterday's slate, so
+// "today" here must be that service day, not the new calendar day.
 function whenLabel(iso?: string, refYmd?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -29,9 +35,6 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // this, an F1/UFC tile showed kickoff times in the device's zone even when
   // the user had picked another, disagreeing with the cards beside it.
   const tz = getTimeZone();
-  const ymd = (date: Date) =>
-    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(date).replace(/-/g, "");
-  const sameDay = ymd(d) === (refYmd || ymd(new Date()));
   // Detect the midnight (TBD) placeholder in the SAME zone the time is shown in
   // (tz), not the device's own zone. Reading d.getHours()/getMinutes() uses the
   // device zone, so a Settings "Time zone" override desyncs it from the
@@ -40,6 +43,24 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // (same guard as weather.ts / etDay.ts / DateNav.ts).
   const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   const midnight = hm === "00:00" || hm === "24:00";
+  // Bucket a REAL kickoff to its SLATE day (etSlateYmd's 1 AM rollover), not a
+  // raw effective-tz calendar day, so the "is this on the viewed slate?" test
+  // uses the SAME boundary the board, the soccer cards, and the data layer all
+  // use. The fallback below already reads the slate-aware service day
+  // (getEtServiceDate), so a plain-calendar bucket compared an apples-to-oranges
+  // day: a UFC main event at 12:30 AM — which ESPN files on (and the board shows
+  // under) the PREVIOUS day's slate — counted as the next calendar day and
+  // flashed a spurious "Sun 12:30AM" prefix while the user was viewing that
+  // fight's own Saturday slate. Now it just reads "12:30AM", matching a soccer
+  // card on the same slate. A midnight (00:00) value is the TBD placeholder, not
+  // a real 12 AM start, so it keeps the plain calendar day — otherwise the
+  // rollover would push a time-unknown event onto the prior slate and show a
+  // stray weekday where the label should be empty. Daytime events (>= 1 AM) are
+  // unaffected either way — etSlateYmd and the calendar day agree there.
+  const eventYmd = midnight
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d).replace(/-/g, "")
+    : etSlateYmd(iso);
+  const sameDay = eventYmd === (refYmd || toYmd(getEtServiceDate()));
   // Strip the space before AM/PM so it reads "8:00PM" like the game cards'
   // formatTime (GameCard's "1:10PM"), not "8:00 PM".
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).replace(/(\d)\s+([AP]M)\b/i, "$1$2");
@@ -402,11 +423,18 @@ export default function EventCard({
     if (state !== "post") return false;
     if (isPastDate) return true;
     if (!selectedDate) return false;
-    const parsed = new Date(date);
-    if (Number.isNaN(parsed.getTime())) return false;
-    const eventYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(parsed).replace(/-/g, "");
+    // Bucket the finished event to its SLATE day (etSlateYmd's 1 AM rollover),
+    // not a raw effective-tz calendar day, so "is this a replay carried onto a
+    // later slate?" uses the SAME boundary the board, whenLabel above, and the
+    // data layer all use. A UFC main event at 12:30 AM ET is filed on (and the
+    // board shows it under) the PREVIOUS day's slate; the old calendar-day bucket
+    // counted it as the NEXT day, so on that following slate eventYmd === selectedDate
+    // and the redundant FINAL row wrongly stayed. etSlateYmd returns "" for an
+    // unparseable date — treat that as "not historical" (keep the row) rather than
+    // letting "" sort before selectedDate. Daytime events (>= 1 AM local) are
+    // unaffected: etSlateYmd and the calendar day agree there.
+    const eventYmd = etSlateYmd(date);
+    if (!eventYmd) return false;
     return eventYmd < selectedDate;
   };
   const playBout = async (id: string, query: string) => {
@@ -662,14 +690,26 @@ export default function EventCard({
   // layout would drift out of alignment the first time either was touched.
   const isRace = event.kind === "f1";
   const glyph = event.kind === "boxing" ? "🥊" : event.kind === "chess" ? "♟️" : event.kind === "poker" ? "♠️" : "🏁";
+  // Spoken name for the sport-type glyph, announced via role="img"/aria-label on
+  // a NON-clickable tile (boxing has no detail page; a finished race/chess/poker
+  // event drops its link), where the tile root carries no aria-label and the
+  // emoji is otherwise the only cue to the event type. Mirrors `glyph`'s
+  // boxing/chess/poker/race branches so poker reads "Poker", not "Race".
+  const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : event.kind === "poker" ? "Poker" : "Race";
   // What the tile body links to, and what to call it. Chess points at the
-  // Lichess broadcast (a live BOARD, not a results table); boxing has no
-  // per-event page worth linking, so its tile is inert.
+  // Lichess broadcast (a live BOARD, not a results table); boxing opens the
+  // DAZN Boxing fixture/preview clip on YouTube (boxing.ts sets eventUrl to a
+  // www.youtube.com watch URL), so it needs its own noun — the fall-through
+  // "Race details on ESPN" was wrong on both counts (not a race, not ESPN) and,
+  // since a pre/live boxing tile IS clickable, it leaked into the tile's
+  // aria-label and tooltip. Mirrors glyphLabel's boxing branch above.
   const detailNoun = event.kind === "chess"
     ? "Follow live on Lichess"
     : event.kind === "poker"
       ? "Official tournament details"
-      : "Race details on ESPN";
+      : event.kind === "boxing"
+        ? "Fight preview on YouTube"
+        : "Race details on ESPN";
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   const hideHistoricalMeta = historicalPost(event.state, event.date);
@@ -736,7 +776,7 @@ export default function EventCard({
             these rows' 16px mobile logo slot + leading-none text would collapse
             shorter, drifting the column heights apart as cards stack. */}
         <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
-          <span aria-hidden className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
+          <span {...(clickable ? { "aria-hidden": true } : { role: "img", "aria-label": glyphLabel })} className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
           <span className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0`} style={{ color: "var(--text)" }} title={event.title}>{event.title}</span>
         </div>
         {/* Second row ALWAYS renders, even with no subtitle. This is the tile's

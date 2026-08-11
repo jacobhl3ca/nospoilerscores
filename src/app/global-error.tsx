@@ -31,7 +31,13 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en">
+    // dir="ltr" mirrors the root layout's <html> (layout.tsx): this boundary
+    // REPLACES that layout and ships its own <html>, so it's the one full
+    // document that didn't inherit the explicit base direction. Declaring it
+    // here per W3C i18n guidance (always set a base direction on <html>) keeps
+    // the crash screen consistent with every normal page and the manifest's
+    // "dir": "ltr". No visual change for this LTR English site.
+    <html lang="en" dir="ltr">
       <body>
         {/* This boundary REPLACES the root layout, so layout.tsx's `viewport`
             export (which emits the width=device-width meta on every normal page)
@@ -59,8 +65,20 @@ export default function GlobalError({
           .ge-btn--secondary { background:var(--ge-card); border:1px solid var(--ge-border); color:var(--ge-accent); }
         `}</style>
         <div className="ge-wrap">
-          <h1>Something went wrong</h1>
-          <p>That didn&apos;t load right. Try again — your scores are still hidden.</p>
+          {/* role="alert" so a screen reader announces the failure, matching the
+              page-level error.tsx boundary. This global boundary swaps in
+              dynamically when the root layout throws, so the alert node is
+              inserted into the live document at error time (not present at
+              initial load) — the reliable case for role="alert" to fire. Wraps
+              the heading + message (not the recovery buttons) so the
+              announcement is just what went wrong; the buttons stay ordinary
+              controls. The wrapper adds no box styling, and the h1/p margins
+              still come from the `.ge-wrap h1`/`.ge-wrap p` descendant rules, so
+              the card renders pixel-for-pixel unchanged. */}
+          <div role="alert">
+            <h1>Something went wrong</h1>
+            <p>That didn&apos;t load right. Try again — your scores are still hidden.</p>
+          </div>
           <div className="ge-actions">
             <button type="button" className="ge-btn ge-btn--primary" onClick={() => unstable_retry()}>
               Try again
