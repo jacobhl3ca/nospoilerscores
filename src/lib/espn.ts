@@ -33,6 +33,13 @@ const SPORT_PATHS: Record<Sport, string> = {
   poker: "",
   esports: "",
   mlb: "/baseball/mlb/scoreboard",
+  // Little League World Series (added 2026-08-11). ESPN files it under
+  // baseball/llb and it returns the STANDARD scoreboard shape, so parseGame
+  // handles it with no new parser. Probed live 2026-08-11: 200 with a 16-date
+  // calendar (Aug 10 → Aug 30) and real two-competitor events. It is one of
+  // the most spoiler-sensitive slates of the summer — games run all day on
+  // ESPN networks and get replayed in prime time.
+  llws: "/baseball/llb/scoreboard",
   nba: "/basketball/nba/scoreboard",
   wnba: "/basketball/wnba/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
@@ -83,6 +90,27 @@ const SPORT_PATHS: Record<Sport, string> = {
   // Adding any of them ungated would park a permanently empty column in the
   // switcher, which is exactly the failure the big-five block warns about.
   cricket: "/cricket/8048/scoreboard",
+  // Rugby union (added 2026-08-11). ESPN keys rugby by LEAGUE ID, not by a
+  // slug — there is no `/sports/rugby/scoreboard` (404), the id is mandatory.
+  // Each competition therefore needs its own Sport key, exactly like the
+  // soccer block above; they cannot share one path the way the four golf
+  // majors share /golf/pga. Every id below was probed live on 2026-08-11 and
+  // returned 200 with the standard `competitions[].competitors[]` shape
+  // (homeAway/score, status.type.state, venue, highlights), so parseGame
+  // handles all five unchanged.
+  //   180659 Six Nations                  (cal 02-05 → 03-14)
+  //   164205 Rugby World Cup              (cal 10-01 → 11-13, next 2027)
+  //   271937 European Champions Cup       (cal 12-05 → 05-23)
+  //   242041 Super Rugby Pacific          (cal 02-13 → 06-20)
+  //   289234 International Test Match     (cal 04-03 → 11-13)
+  // Deliberately NOT shipped: French Top 14 (270559) — real and verified, but
+  // a 10-month domestic window for the smallest US audience of the six. Its id
+  // is recorded here so nobody re-probes for it.
+  sixnations: "/rugby/180659/scoreboard",
+  rugbywc: "/rugby/164205/scoreboard",
+  rugbychamp: "/rugby/271937/scoreboard",
+  superrugby: "/rugby/242041/scoreboard",
+  rugbytest: "/rugby/289234/scoreboard",
   f1: "/racing/f1/scoreboard",
   // NASCAR Cup + IndyCar (added 2026-08-03). Both share F1's racing shape, so
   // they render through the same single-race event tile. Two differences from
@@ -300,6 +328,32 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // in season, but low priority so it only fills open summer/fall slots after
   // the core leagues and major tournament windows.
   { sport: "wnba",  label: "WNBA",  startDate: "05-16", endDate: "10-19", championshipDate: "10-19", scheduleReleaseDate: "12-01", verifiedFor: 2026 },
+  // ── Little League World Series (three weeks in August) ──
+  // Window is ESPN's own /baseball/llb calendar, read live 2026-08-11:
+  // 2026-08-10 → 2026-08-30, 16 game days, championship on the last one.
+  // opt-in (excludeFromAuto) on purpose: it overlaps MLB, the NFL preseason
+  // and the start of NCAAF, and a three-week event should never evict a
+  // league someone chose. It sits in the "US leagues" section of Settings,
+  // next to MLB, because that is where a baseball fan looks for it.
+  { sport: "llws", label: "Little League", startDate: "08-10", endDate: "08-30", championshipDate: "08-30", verifiedFor: 2026, excludeFromAuto: true },
+  // ── Rugby union (five competitions, added 2026-08-11) ──
+  // Every window below is ESPN's own published calendar for that league id,
+  // read live on 2026-08-11 (see SPORT_PATHS for the ids). All five are
+  // opt-in: rugby is a minority US sport and none of these should ever claim
+  // a column on its own. They land in "Racing, combat & more".
+  // verifiedFor is the year of the OPENER that was actually checked, which for
+  // the club competitions is the season ESPN is currently publishing — the
+  // MM-DD window recurs, but nobody has confirmed next season's exact dates.
+  { sport: "sixnations", label: "Six Nations", startDate: "02-05", endDate: "03-14", championshipDate: "03-14", verifiedFor: 2026, excludeFromAuto: true },
+  // Rugby World Cup is quadrennial; 2027 (Australia) is the next edition, so
+  // the anchor is 2027 rather than the 2028 used by the Euro.
+  { sport: "rugbywc", label: "Rugby World Cup", startDate: "10-01", endDate: "11-13", championshipDate: "11-13", verifiedFor: 2027, excludeFromAuto: true, yearCycle: { mod: 4, anchor: 2027 } },
+  { sport: "rugbychamp", label: "Champions Cup", startDate: "12-05", endDate: "05-23", championshipDate: "05-23", verifiedFor: 2025, excludeFromAuto: true },
+  { sport: "superrugby", label: "Super Rugby", startDate: "02-13", endDate: "06-20", championshipDate: "06-20", verifiedFor: 2026, excludeFromAuto: true },
+  // Internationals (summer/autumn tours + one-off tests). No championship —
+  // it is a run of standalone fixtures, not a competition with a final, so
+  // championshipDate is deliberately absent.
+  { sport: "rugbytest", label: "Rugby Tests", startDate: "04-03", endDate: "11-13", verifiedFor: 2026, excludeFromAuto: true },
   // ── F1 + UFC (single-event tiles) ──
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
@@ -530,8 +584,9 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // One glyph per sport for the kickoff banner. Partial by design — anything not
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
-  mlb: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
+  mlb: "⚾", llws: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
   nfl: "🏈", ncaaf: "🏈", nhl: "🏒", golf: "⛳", tennis: "🎾",
+  sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
@@ -580,7 +635,7 @@ export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
 // map degrades to a slightly-wrong section, never to an unpickable league.
 const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   nfl: "us", nba: "us", mlb: "us", nhl: "us", wnba: "us",
-  ncaaf: "us", ncaam: "us", ncaaw: "us",
+  ncaaf: "us", ncaam: "us", ncaaw: "us", llws: "us",
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
   ligamx: "soccer", nwsl: "soccer", efl: "soccer", libertadores: "soccer",
@@ -589,6 +644,8 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   f1: "other", nascar: "other", indycar: "other", ufc: "other",
   boxing: "other", cricket: "other", chess: "other", poker: "other",
   esports: "other",
+  sixnations: "other", rugbywc: "other", rugbychamp: "other",
+  superrugby: "other", rugbytest: "other",
 };
 
 export function sportGroup(sport: Sport): SportGroup {
@@ -1007,6 +1064,12 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   regulationPeriods: number; // normal period count (innings for MLB)
 }> = {
   mlb:    { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,   regulationPeriods: 9 },
+  // Little League regulation is SIX innings, not nine — getting this wrong
+  // would make `periods > regulationPeriods` false for a real extra-innings
+  // game and true for none of them, the same trap NCAAW hit below. Scoring
+  // runs much higher than MLB (mercy rule at 10 after 4), so the differential
+  // multiplier is softened and the scoring divisor raised.
+  llws:   { multiplier: 9,   overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 6 },
   nba:    { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40,  regulationPeriods: 4 },
   // WNBA: same quarter structure as NBA but lower totals (~80 vs ~115); divisor
   // scaled down so scoring bonus normalizes the same way.
@@ -1052,6 +1115,15 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // field that IS still read, by gameProgress: a limited-overs match is two
   // innings, so innings 1 reads as ~25% elapsed and clears the "too early" gate.
   cricket: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 2 },
+  // Rugby union: two 40-minute halves, team totals in the 20-35 range — close
+  // enough to NFL's shape that it takes NFL's calibration, with two periods
+  // instead of four. Extra time is rare and only happens in knockout rugby, so
+  // it carries the higher 20-point bonus the cup competitions use.
+  sixnations: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  rugbywc:    { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  rugbychamp: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  superrugby: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  rugbytest:  { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
   // F1 / UFC render as single-event tiles (no Game objects), so these are
@@ -2161,6 +2233,22 @@ export function espnGameUrl(game: Game): string {
     case "ncaaf": return `https://www.espn.com/college-football/game/_/gameId/${game.id}`;
     case "nfl": return `https://www.espn.com/nfl/game/_/gameId/${game.id}`;
     case "nhl": return `https://www.espn.com/nhl/game/_/gameId/${game.id}`;
+    // ⚠️ The Little League World Series has NO per-game page on espn.com.
+    // Checked every plausible pattern on 2026-08-11 with a browser UA and a
+    // real event id (401889776): /llws/, /llb/, /baseball/llb/,
+    // /little-league-world-series/game/_/gameId/ and /mlb/game/_/gameId/ all
+    // 404. The events themselves also carry no `links` array, so there is no
+    // recapUrl to prefer. The section index is the only page that exists —
+    // the same section-landing compromise golf and tennis already make below.
+    case "llws": return `https://www.espn.com/little-league-world-series/`;
+    // ⚠️ Rugby match pages REQUIRE the /league/<id> suffix. Without it ESPN
+    // returns 503, not a redirect (verified 2026-08-11 on gameId 603459), so
+    // the id has to be carried per competition rather than dropped.
+    case "sixnations": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/180659`;
+    case "rugbywc":    return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/164205`;
+    case "rugbychamp": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/271937`;
+    case "superrugby": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/242041`;
+    case "rugbytest":  return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/289234`;
     case "epl":
     case "mls":
     case "fifa":
@@ -2213,6 +2301,20 @@ export function sportStreamFallback(sport: Sport): string {
     case "nfl": return "https://www.nfl.com/plus/";
     case "nhl": return "https://www.espn.com/watch/";
     case "mlb": return "https://www.mlb.com/tv";
+    // The LLWS is an ESPN-network property end to end (ESPN / ESPN2 / ABC),
+    // so ESPN's own watch hub is the correct and only landing.
+    case "llws": return "https://www.espn.com/watch/";
+    // Rugby's US rights are split and they move between cycles (CBS/Paramount+
+    // has had the Six Nations, Peacock had RWC 2023, FloRugby carries Super
+    // Rugby). Naming any one of them would be wrong for most fixtures, so all
+    // five land on ESPN's rugby section — verified 200 on 2026-08-11 — which
+    // lists where each match is actually being shown.
+    case "sixnations":
+    case "rugbywc":
+    case "rugbychamp":
+    case "superrugby":
+    case "rugbytest":
+      return "https://www.espn.com/rugby/";
     case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";
     case "fifa": return "https://www.foxsports.com/soccer/fifa-world-cup";

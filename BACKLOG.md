@@ -554,6 +554,44 @@ _src: 2026-08-03 session_
 
 ## 2026-08-11 — New sports Jacob approved: rugby + Little League are cheap, WWE + horse racing are not
 
+✅ **SHIPPED the same day — Little League and five rugby competitions are live.**
+Six new `Sport` keys (`llws`, `sixnations`, `rugbywc`, `rugbychamp`, `superrugby`,
+`rugbytest`), config only, no new parser. What the build taught us on top of the
+probe below:
+
+- **Rugby needs one Sport key per competition, not one `rugby` key.** ESPN keys
+  rugby by league id and `LeagueConfig` has no per-config path override — the
+  four golf majors can share `/golf/pga` but the rugby competitions cannot share
+  anything. This is the soccer pattern (16 keys), not the golf pattern.
+- ⚠️ **A rugby match page 503s without its `/league/<id>` suffix**, so
+  `espnGameUrl` carries the id per competition rather than using one shared path.
+- ⚠️ **The LLWS has NO per-game page on espn.com.** `/llws/`, `/llb/`,
+  `/baseball/llb/`, `/little-league-world-series/game/_/gameId/` and
+  `/mlb/game/_/gameId/` all 404 against a real event id, and llb events carry no
+  `links` array at all, so there is no `recapUrl` either. It lands on the section
+  index `https://www.espn.com/little-league-world-series/` (200) — the same
+  compromise golf and tennis already make. Don't re-probe this.
+- **No league logo exists for either.** `teamlogos/leagues/500/llb.png` 404s and
+  there is no `leaguelogos/rugby/` set at all; both fall back to the redesign
+  sport icons, which is exactly what ESPN's own scoreboards serve.
+- **All six are `excludeFromAuto`** — they are selectable in Settings but never
+  claim a column on their own. Consequence, by design: **no kickoff banner**,
+  since the banner deliberately skips opt-in leagues.
+- **No `OFFICIAL_CHANNELS` entries were added.** A wrong channel string fails
+  silently and the monitor agrees with it (the Liga MX / "TUDN México" bug), so
+  highlights fall back to the loose spoiler-filtered search until someone
+  verifies real channels end-to-end. That is the honest state, not an oversight.
+- **French Top 14 (270559) deliberately not shipped** — real and verified, but a
+  10-month domestic window for the smallest US audience of the six.
+- Windows come from each league's own ESPN calendar: LLWS `08-10→08-30`,
+  Six Nations `02-05→03-14`, RWC `10-01→11-13` (`yearCycle` mod 4 anchor 2027),
+  Champions Cup `12-05→05-23`, Super Rugby `02-13→06-20`, Tests `04-03→11-13`.
+  `check-season-windows.mjs` verifies Little League ✓; the rugby windows read
+  "unverifiable" because ESPN has not published next season yet.
+
+Still open from this section: **WWE, horse racing, and the Olympics** (the last
+one has 2027/2028 calendar events holding the decision).
+
 Jacob approved adding **WWE, horse racing and rugby**, and asked to revisit the
 **Olympics conditionally in 2027** with "the popup that EPL got". Endpoints probed
 live against `site.api.espn.com` on 2026-08-11 — the answer splits cleanly in two.
