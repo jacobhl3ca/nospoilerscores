@@ -272,6 +272,11 @@ export const PREBAKED_FEEDS: Partial<Record<Sport, { name: string; label: string
 // never ships logo-less. EPL has its own slug under `leaguelogos/soccer`.
 export const LEAGUE_LOGO: Record<Sport, string> = {
   mlb: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
+  // Little League has no entry in the `teamlogos/leagues` set (llb.png 404s,
+  // checked 2026-08-11). ESPN's own llb scoreboard serves the redesign
+  // baseball sport-icon as its league logo, so use exactly that — same family
+  // NASCAR and boxing already fall back to. Verified 200 image/png.
+  llws: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png",
   nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
   wnba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
   nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
@@ -314,6 +319,16 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   // Cricket keys its league logos by series id under its own /cricket/ path
   // (8048 = IPL), not the /soccer/ path. Verified 200 on 2026-08-03.
   cricket: "https://a.espncdn.com/i/leaguelogos/cricket/500/8048.png",
+  // Rugby has no `leaguelogos/rugby/500/<id>.png` set at all (8323 and 8337
+  // both 404, checked 2026-08-11) — ESPN's own rugby scoreboards serve the
+  // redesign sport icon as `leagues[0].logos[0]`, identically for all five
+  // competitions. One shared mark is therefore what ESPN itself shows; the
+  // competitions are told apart by their column label, not their badge.
+  sixnations: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  rugbywc: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  rugbychamp: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  superrugby: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  rugbytest: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   // Racing has no entry in the `teamlogos/leagues` set (nascar/indycar/irl all
   // 404 there). NASCAR does have one in ESPN's redesign sport-icon set; IndyCar
   // has neither, so it falls back to Wikimedia exactly like NCAAM and tennis
