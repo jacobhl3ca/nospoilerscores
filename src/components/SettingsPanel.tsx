@@ -35,6 +35,9 @@ interface SettingsPanelProps {
   // Settings is the one place someone is already looking for a league that
   // isn't there, so the ask belongs at the end of the catalog.
   onRequestLeague?: () => void;
+  // Opens the same footer feedback modal with an EMPTY message, for the quiet
+  // Feedback link in the legal row at the bottom of the panel.
+  onOpenFeedback?: () => void;
   // Every supported team league, including out-of-season leagues. Team
   // favorites are durable; the picker must not hide La Liga in July merely
   // because its score column is not active yet.
@@ -195,6 +198,7 @@ export default function SettingsPanel({
   resolvedTheme,
   leagueOptions,
   onRequestLeague,
+  onOpenFeedback,
   teamLeagueOptions,
   displayedLeagues,
   knownTeams,
@@ -1376,6 +1380,35 @@ export default function SettingsPanel({
               </p>
             </div>
           )}
+
+          {/* Legal row — last, and deliberately quiet: muted, small, underlined
+              text, never a button. Privacy previously lived ONLY in the page
+              footer, which is behind this drawer and unreachable while it's
+              open — the one moment someone actually goes looking for it.
+              Feedback opens the footer feedback modal with an empty message
+              (the "Request a league" link above seeds a prefill instead). */}
+          <div className="pt-2 text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
+            {onOpenFeedback && (
+              <>
+                <button
+                  type="button"
+                  onClick={onOpenFeedback}
+                  className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Feedback
+                </button>
+                <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
+              </>
+            )}
+            <a
+              href="/privacy"
+              className="underline underline-offset-2 transition-opacity hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Privacy
+            </a>
+          </div>
         </div>
       </div>
     </div>
