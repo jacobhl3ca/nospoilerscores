@@ -1,11 +1,21 @@
 name: Refresh ESPN airing UUIDs
 
+# NOTE: no `schedule:` here on purpose. ESPN's WAF 403s GitHub-hosted runners
+# on every site.api.espn.com endpoint, so this workflow could not scrape a
+# single game — it just re-uploaded the checked-in public/espn-airings.json to
+# R2 every 2 hours and reported success, which is how the feed sat frozen at
+# 2026-05-13 for ~90 days (found 2026-08-11). Same datacenter-IP problem
+# already documented in news-prebake.yml for espn-*/reddit-* feeds.
+#
+# The residential-IP Mac mini owns this feed now:
+#   ~/bin/hidescore-espn-airings-cron.sh, launchd com.hidescore.espn-airings,
+#   every 2h, uploading to the same hidescore-data R2 bucket.
+# check-staleness.mjs (/espn-airings.json, crit 24h) is the alarm if it stops.
+#
+# Kept dispatch-only as a manual net: if ESPN ever unblocks Actions IPs this
+# runs green again, and if it doesn't, the guard below fails loudly instead of
+# shipping a stale file.
 on:
-  schedule:
-    # Every 2 hours — airings are per-day, so we refresh frequently enough
-    # to catch games that ESPN adds/shifts during the day but not so often
-    # we spam the picker endpoint.
-    - cron: "0 */2 * * *"
   workflow_dispatch:
 
 jobs:
@@ -17,6 +27,22 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/scrape-espn-airings.mjs
+      # Never upload a file this run did not freshly write. The scrape step
+      # deliberately leaves the previous file untouched on a total outage, and
+      # without this an untouched file would sail into R2 looking like a
+      # successful refresh.
+      - name: Verify the scrape actually refreshed the file
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const { generatedAt } = JSON.parse(fs.readFileSync("public/espn-airings.json", "utf8"));
+            const ageMin = (Date.now() - Date.parse(generatedAt)) / 60000;
+            if (!(ageMin < 30)) {
+              console.error(`::error::espn-airings.json was not refreshed by this run (generatedAt=${generatedAt}, ${ageMin.toFixed(0)} min old) — refusing to upload a stale file to R2`);
+              process.exit(1);
+            }
+            console.log(`generatedAt=${generatedAt} (${ageMin.toFixed(1)} min old) — fresh, uploading`);
+          '
       - name: Upload ESPN airings to R2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -49,9 +49,9 @@ const SPORT_PATHS = {
 // them up on the next cron run.
 const ESPN_BROADCAST_RE = /\b(espn|abc|espnu|sec network|acc network|espn\+)\b/i;
 
-async function fetchJson(url) {
+async function fetchJson(url, extraHeaders = {}) {
   const res = await fetch(url, {
-    headers: { "user-agent": UA, accept: "application/json" },
+    headers: { "user-agent": UA, accept: "application/json", ...extraHeaders },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return res.json();
@@ -100,8 +100,14 @@ async function resolveAiring(eventId) {
 async function fetchNbaGameIdsByMatchup() {
   const map = new Map();
   try {
+    // cdn.nba.com 403s any request that doesn't look like it came from
+    // nba.com itself — including from a residential IP, so this is a header
+    // rule, not an IP block. Without the pair below every run logged
+    // "nba cdn schedule failed: HTTP 403" and quietly resolved 0 mappings
+    // (verified 2026-08-11: none/plain-UA → 403, referer+origin → 200).
     const data = await fetchJson(
-      "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
+      "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json",
+      { referer: "https://www.nba.com/", origin: "https://www.nba.com" }
     );
     const games = data?.scoreboard?.games ?? [];
     for (const g of games) {
@@ -207,11 +213,20 @@ async function main() {
         );
       } else {
         // Every scoreboard fetch failed — a real outage. Leave the previous
-        // file untouched so its generatedAt ages out and the staleness
-        // check fires the alert it's supposed to.
-        console.log(
+        // file untouched so its generatedAt ages out, and FAIL so the job
+        // that ran us says so.
+        //
+        // 2026-08-11: this branch used to `process.exit(0)`, which is how the
+        // feed sat frozen at 2026-05-13 for 2,173h while "Refresh ESPN airing
+        // UUIDs" reported success every 2h — ESPN's WAF 403s GitHub-hosted
+        // runners on every site.api endpoint, the script swallowed it, and the
+        // workflow's next step re-uploaded the untouched May file to R2. Only
+        // check-staleness.mjs (which reads generatedAt off the live origin)
+        // ever noticed. A run that resolved nothing is a failed run.
+        console.error(
           `all scoreboards failed; keeping previous untouched (${prevAirings} airings, ${prevNba} nba)`
         );
+        process.exit(1);
       }
       process.exit(0);
     }
