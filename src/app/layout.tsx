@@ -243,25 +243,22 @@ export default function RootLayout({
             resolution is the cheap, always-useful part with no idle-socket cost. */}
         <link rel="dns-prefetch" href="https://upload.wikimedia.org" />
         {/* The first paint is data-driven: on load the app immediately fetches
-            the ESPN scoreboard from site.api.espn.com to fill every league
-            column (BASE_URL in lib/espn.ts). Warm that host's DNS + TCP + TLS
-            during HTML parse so the handshake is already done when React fires
-            its first fetch, shaving it off the time-to-content path. Unlike the
-            image preconnect above, this one carries crossOrigin — the data
-            fetch is an anonymous CORS request (default mode, no credentials),
-            and a CORS-mode preconnect only gets reused by a matching CORS
-            connection; without it the browser would open a second one.
-            dns-prefetch is the fallback for browsers that ignore preconnect. */}
-        <link rel="preconnect" href="https://site.api.espn.com" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href="https://site.api.espn.com" />
-        {/* A SECOND ESPN API host is hit on that same first-paint load: the
-            standings feed at site.web.api.espn.com (fetchStandingsRanks /
-            fetchStandingsRecords in lib/espn.ts), kicked off inside fetchLeague
-            for every RANK_LEAGUES column (NBA/MLB/NFL/NHL/…) to stamp the "#N"
-            rank + W-L record onto team names. It's a different subdomain than
-            site.api.espn.com above, so it needs its own connection — warm it
-            here too. Same anonymous CORS request (plain fetch, no credentials),
-            so it carries crossOrigin to match, with dns-prefetch as fallback. */}
+            the ESPN scoreboard to fill every league column (BASE_URL in
+            lib/espn.ts) AND the standings feed that stamps the "#N" rank + W-L
+            record onto team names (fetchStandingsRanks / fetchStandingsRecords,
+            kicked off inside fetchLeague for every RANK_LEAGUES column). Both
+            now live on site.web.api.espn.com — scoreboards moved there on
+            2026-08-11 when site.api started refusing browser requests without
+            CORS headers (see the BASE_URL note in lib/espn.ts), which also
+            means ONE warmed connection now serves both, where this used to
+            need two. Warm its DNS + TCP + TLS during HTML parse so the
+            handshake is already done when React fires its first fetch, shaving
+            it off the time-to-content path. Unlike the image preconnect above,
+            this one carries crossOrigin — the data fetch is an anonymous CORS
+            request (default mode, no credentials), and a CORS-mode preconnect
+            only gets reused by a matching CORS connection; without it the
+            browser would open a second one. dns-prefetch is the fallback for
+            browsers that ignore preconnect. */}
         <link rel="preconnect" href="https://site.web.api.espn.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://site.web.api.espn.com" />
         {/* MLB game metadata (linescore + cycle/no-hitter watch) comes from a

@@ -2,8 +2,11 @@ import { Sport } from "./types";
 import { getApiBase } from "./youtube";
 import { getTimeZone } from "./etDay";
 
-// League-specific news (articles) — CORS-open, same origin as scoreboard API.
-const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
+// League-specific news (articles) — same host as the scoreboard API.
+// site.web.api, NOT site.api: see the BASE_URL note in espn.ts. site.api
+// answers a browser request without CORS headers, so this was failing exactly
+// like the scoreboards did.
+const BASE_URL = "https://site.web.api.espn.com/apis/site/v2/sports";
 // ESPN "now" feed — homepage headlines across all sports.
 const HOME_NEWS_URL = "https://now.core.api.espn.com/v1/sports/news";
 // ESPN's JSON sports API has no Boxing league path (the obvious candidates
