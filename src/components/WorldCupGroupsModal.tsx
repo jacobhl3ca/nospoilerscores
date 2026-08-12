@@ -328,7 +328,8 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
     (async () => {
       try {
         const r = await fetch(
-          "https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings",
+          // site.web.api, NOT site.api — see the BASE_URL note in espn.ts.
+          "https://site.web.api.espn.com/apis/v2/sports/soccer/fifa.world/standings",
           { signal: ctrl.signal },
         );
         if (!r.ok) throw new Error("bad status");
@@ -380,7 +381,8 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
         fetchedDays.current.add(def.key);
         try {
           const r = await fetch(
-            `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${etDate(def.offset)}`,
+            // site.web.api, NOT site.api — see the BASE_URL note in espn.ts.
+            `https://site.web.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${etDate(def.offset)}`,
             { signal: ctrl.signal },
           );
           if (!r.ok) continue;

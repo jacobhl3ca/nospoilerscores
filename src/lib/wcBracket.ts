@@ -53,7 +53,8 @@ export interface Bracket {
 const KNOCKOUT_DATE_RANGE = "20260628-20260719";
 export const KNOCKOUT_START_YMD = "20260628";
 
-const SCOREBOARD = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${KNOCKOUT_DATE_RANGE}`;
+// site.web.api, NOT site.api — see the BASE_URL note in espn.ts.
+const SCOREBOARD = `https://site.web.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${KNOCKOUT_DATE_RANGE}`;
 const CORE_EVENT = (id: string) =>
   `https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/events/${id}`;
 
