@@ -1,5 +1,6 @@
 import { EventFetchResult, LeagueEventCard } from "./types";
 import { getApiBase } from "./youtube";
+import { getEtServiceDate, toYmd } from "./etDay";
 
 // See EventFetchResult: the curated file being unreachable is not the same
 // thing as it having no major on this date.
@@ -144,9 +145,18 @@ export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> 
     const data = (await res.json()) as PokerEventsFile;
     // A schema we don't recognise is a broken deploy, not an empty calendar.
     if (data.schemaVersion !== 1 || !Array.isArray(data.events)) return FAILED;
-    const todayYmd = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(new Date());
+    // "Today" must come from the app's canonical service day, NOT a hard-coded
+    // ET calendar day. toYmd(getEtServiceDate()) is the single source of truth
+    // (see lib/etDay.ts) that honors the Settings time-zone override and the
+    // 1 AM service-day rollover, and that the sibling event tiles already route
+    // through (fetchCuratedBoxingEvent and fetchChessEvent both use it). The old
+    // `Intl … timeZone: "America/New_York"` literal ignored a user's chosen zone
+    // and could drift a day near midnight for a non-ET user — shifting both the
+    // no-date "today" fallback AND the `targetYmd < todayYmd` preferPast decision
+    // (the past-date walk-back) onto the wrong day. getEtServiceDate/toYmd yields
+    // a compact YYYYMMDD, so dash it to the YYYY-MM-DD the compares below expect.
+    const compactToday = toYmd(getEtServiceDate());
+    const todayYmd = `${compactToday.slice(0, 4)}-${compactToday.slice(4, 6)}-${compactToday.slice(6, 8)}`;
     const targetYmd = date && /^\d{8}$/.test(date)
       ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
       : todayYmd;
