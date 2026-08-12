@@ -552,6 +552,107 @@ _src: 2026-08-03 session_
 - Fix = update the bundled HTML + ship it in the next build. No urgency of its own; fold it into whatever the next HideScore iOS release is so it doesn't cost a build by itself.
 - Detail: `privacy-audit-2026-08-04.html`.
 
+## 2026-08-12 — NFL path verified clean; rugby/LLWS channels probed and decided; two frozen data feeds deleted
+
+**NFL (checked before September, nothing to fix).** `check-nfl-weeks.mjs` 13/13 ok,
+`check-nfl-team-channels.mjs` **32/32 clubs match their channel's own feed**, and
+`check-season-windows.mjs` verifies **NFL `09-07→02-16` (kickoff 09-09)** and
+**NFL Preseason `07-21→09-03`** against ESPN's published fixtures. 5 leagues read
+"unverifiable" (NCAAM, NBA, NHL, UCL, MLS) only because ESPN has not published their
+finals yet — recheck later, nothing is wrong.
+
+**`OFFICIAL_CHANNELS` for the six sports added 8/11 — all six shipped with NO entry,
+so all six were falling through to the unscoped search.** Probed each against **five
+real completed fixtures** through the live worker with `strict=1`, then read every hit
+back through oembed to confirm the uploader.
+
+⚠️ **The probe query must be BARE** — `A vs B highlights M/D/YYYY`, no competition
+token, because `COMPETITION_NAMES` carries `fifa` only. Appending one gives false
+negatives: World Rugby read **0/3 with "Rugby World Cup" appended and 5/5 without it**.
+
+| key | verdict | channel | strict score |
+|---|---|---|---|
+| `rugbywc` | ✅ added | `World Rugby` | **5/5** |
+| `sixnations` | ✅ added | `Guinness Men's Six Nations` | **4/5** |
+| `superrugby` | ✅ added | `Super Rugby Pacific` | **3/5** |
+| `llws` | ⛔ dark | — | 0/2 official |
+| `rugbychamp` | ⛔ dark | — | 0/5 on three candidates |
+| `rugbytest` | ⛔ dark | — | best 2/5, wrong-match risk |
+
+- **Six Nations is sponsor- AND gender-qualified.** "Six Nations Rugby" and "Guinness
+  Six Nations" both **0/3**; only the full `Guinness Men's Six Nations` resolves.
+  Re-check when the title sponsor changes — it is in the channel name.
+- **⛔ LLWS was serving a channel called "Matt H."** A fan aggregator won the unscoped
+  search for **both** live 2026 fixtures. Little League's own channel and "ESPN" are
+  **0/2** on strict — ESPN holds the broadcast and posts no per-game cut. This was live
+  and wrong during the tournament, which is running now through Aug 30.
+- **⛔ Champions Cup has no competition-level uploader.** 0/5 on "Investec Champions
+  Cup", "EPCR Rugby" and "Champions Cup"; the unscoped winner was **"Glasgow Warriors"**,
+  one of the two clubs in that match, and four of five fixtures returned nothing.
+- **⛔ November tests have no owner.** Best was "Quilter Nations Series" at 2/5 (England
+  home tests only) — and that is a **title sponsor that rebrands every cycle**, the same
+  hazard as "Ligue 1 McDonald's". "World Rugby" scored 1/5 and its hit on the first probe
+  was a **wrong match** — a 2025 *Women's* Rugby World Cup game served for a men's test.
+  Unscoped winners were "Rugby Mzansi" and "Match Videos", both fan channels.
+
+**🧬 The checker's mirror had drifted.** `scripts/check-highlight-fallbacks.mjs` keeps a
+copy of `OFFICIAL_CHANNELS`; `mlb` was **missing entirely** and `fifa` read `"FIFA"` while
+the app has sent `"FOX Sports"` since the World Cup work. A drifted mirror means green
+there proved nothing for those two leagues. Synced, plus the three new rugby keys and
+their buffer/period entries.
+
+**🗑️ Deleted `public/espn-airings.json` + `public/prime-asins.json`.** Both are served
+from R2 (`R2_ROOT_PATHS` in `_worker.js`) and the repo copies were frozen at **May 13**,
+sitting underneath as the documented fall-through on an R2 miss. `prime-asins` keys on a
+**dateless matchup string** (`"kc current vs. dash"`), so that fallback would hand today's
+game a three-month-old Prime link — a real wrong-answer path, not just clutter. Both now
+in `.gitignore`. On a miss the client gets a 404 → empty map → the deep link simply is not
+upgraded. **`big-inning-schedule.json` deliberately kept**: CI reads it as a merge base and
+it is date-keyed, so a stale entry can never collide with today.
+
+Typecheck clean, `npm run build` clean. **Committed `190fa9a3`, NOT pushed** — pushing to
+`main` deploys. LLWS is live through Aug 30, so the fan-channel fix is the one with a
+closing window.
+
+## 2026-08-12 — QA pass: everything claimed on Aug 11 is genuinely live; one shipped Android release had no source commit
+
+Verified, not taken on trust. **28/28 feeds fresh, all four Aug-11 deploys green, live site 200.**
+
+- ✅ **hidescore.com 200** (61 KB). The four Aug-11 GHA deploys all `success`
+  (`31550173188`, `31554539339`, `31555172596`, `31555686778`, ~1m each, last at 02:04 UTC Aug 12).
+  Local repo is **0 ahead / 0 behind `origin/main`**.
+- ✅ **Rugby + Little League really shipped.** `llws`, `sixnations`, `superrugby` all present in the
+  deployed bundle `/_next/static/chunks/30z7jgng0sidd.js`. Absent from the homepage HTML, which is
+  correct — all six are `excludeFromAuto` and only appear once selected in Settings.
+- ✅ **The ESPN host move held.** Zero live `site.api.espn.com` calls remain under `src/` — the three
+  hits there are comments. The 13 browser-side calls are all `site.web.api.espn.com`. Every remaining
+  `site.api` reference is in `scripts/` (Node-side), which is where it belongs.
+- ✅ **The airings scrape genuinely runs on the mini.** `com.hidescore.espn-airings` loaded,
+  `StartInterval 7200`, wrapper `~/bin/hidescore-espn-airings-cron.sh`, stderr log **empty**. Last run
+  11:44 EDT: read 30 games across 5 sports, found no ESPN broadcasts, refreshed the timestamp, and
+  uploaded to R2. `hidescore.com/espn-airings.json` serves a `generatedAt` 1.8h old. The freshness guard
+  (refuse to upload anything >30 min old) is present and working — this is the exact failure that let
+  the old GHA job sit 2,173h stale while reporting green.
+- ✅ **`check-staleness.mjs`: all 28 feeds fresh** — 11 reddit, 8 theScore, 3 BBC, Guardian, FIFA/MLS
+  video, airings, prime-asins, big-inning. Nothing even in warn.
+- ✅ **play-test-monitor healthy after its Aug 11 rebuild.** 15/15 testers on all four apps, day 5 of 16,
+  `consecutiveFailures: 0`, last success 09:06 today. The pre-rebuild failure streak ends in the log at
+  `FAIL 16` on Aug 11 and does not recur.
+- ❌→✅ **FIXED: the Android `5 (1.0.3)` release live on Play was built from uncommitted files.**
+  `capacitor.config.ts` (`errorPath`), `android/app/build.gradle` (versionCode 2→5, 1.0.1→1.0.3),
+  and the untracked `public/offline.html` + `scripts/trim-android-assets.sh` were all still working-tree
+  only, 30 hours after that build went live to testers. The auto-improve bot checks branches out **in
+  this working dir**, and the mini's reddit cron hard-resets its copy to `origin/main` every 30 min —
+  one such reset would have silently reverted the version bump and the errorPath, and the next release
+  would have rebuilt from `versionCode 2` against version codes Play has already burned.
+  **Committed locally as `b07d81cb` on `fix/video-tap-play` (not pushed — pushing to `main` deploys).**
+- ⚠️ **`public/espn-airings.json` in git is the May 13 file**, shadowed at runtime by the R2 copy the
+  browser actually fetches via `getApiBase()`. Harmless today, but it is the file anyone reads when
+  debugging, and it is what a native offline bundle would carry. Worth deleting or refreshing.
+- ⚠️ **HideScore's Play "sign in details" declaration still says nothing is restricted.** It gained
+  sign-in Aug 6 and was not flagged the way Roosevelt Island was, so it submitted on a probably-false
+  answer. Fix before the production-access application, not after.
+
 ## 2026-08-11 — New sports Jacob approved: rugby + Little League are cheap, WWE + horse racing are not
 
 ✅ **SHIPPED the same day — Little League and five rugby competitions are live.**
