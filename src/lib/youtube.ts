@@ -80,6 +80,28 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // AFCON: CAF's own channel ("CAFOnline" verified 0/1). Gated to 2027 in
   // ALL_LEAGUES, so this sits inert until the tournament year.
   afcon: "CAF TV",
+  // ── Rugby, added 2026-08-12. The six sports shipped on 8/11 went out with NO
+  // entries at all, so all six fell through to the unscoped search. Verified
+  // END-TO-END against the LIVE worker with strict=1 on 5 real completed
+  // fixtures each, using the query production actually sends.
+  // ⚠️ That query is BARE — `A vs B highlights M/D/YYYY`, no competition token,
+  // because COMPETITION_NAMES carries `fifa` only. Appending a competition
+  // string while probing gives false negatives (World Rugby read 0/3 with
+  // "Rugby World Cup" appended and 5/5 without it). Probe with the bare shape.
+  //
+  // Six Nations: the channel is sponsor- AND gender-qualified. Bare
+  // "Six Nations Rugby" and "Guinness Six Nations" both verified 0/3 — only
+  // the full "Guinness Men's Six Nations" resolves (4/5). Re-check the string
+  // when the title sponsor changes; it is in the channel name.
+  sixnations: "Guinness Men's Six Nations",
+  // Super Rugby Pacific: "Super Rugby" alone is 0/5, the competition's own
+  // channel spells out Pacific (3/5). Sky Sport NZ holds the broadcast but
+  // posts no per-match cut (0/5).
+  superrugby: "Super Rugby Pacific",
+  // Rugby World Cup: World Rugby's own channel, 5/5 — the cleanest of the six.
+  // NOT "Rugby World Cup" (0/5, no such uploader). Gated to 2027 by yearCycle,
+  // so this sits inert until the tournament.
+  rugbywc: "World Rugby",
   // euro + cricket deliberately have NO entry — see the block comment below.
   // laliga + ligue1 deliberately have NO approved channel.
   // LALIGA's channel ("LALIGA EA SPORTS") posts Spanish-language full matches
@@ -173,7 +195,38 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // verified official channel (currently LEC only, see OFFICIAL_CHANNELS) can
 // still resolve strictly against that channel. A league with no verified entry
 // stays fully dark. See hasNoTrustedHighlightSource below.
-const NO_HIGHLIGHT_FALLBACK = new Set(["cricket", "euro", "esports", "laliga", "ligue1"]);
+//
+// llws (Little League World Series): verified 2026-08-12 against the two real
+// completed 2026 fixtures, while the tournament was live. Little League's own
+// channel and "ESPN" both resolved 0/2 on strict — ESPN holds the broadcast but
+// posts no per-game cut. The unscoped search returned "Matt H" for BOTH games,
+// a fan aggregator, exactly the re-upload the gate exists to stop. So the LLWS
+// card shows its scorecard + rating and no highlight button.
+//
+// rugbychamp (Investec Champions Cup): 0/5 on "Investec Champions Cup",
+// "EPCR Rugby" and "Champions Cup". There is no competition-level uploader —
+// the unscoped winner was "Glasgow Warriors", i.e. one of the two CLUBS in the
+// match, and the other four fixtures returned nothing at all. Club channels
+// winning an unscoped search is the same inconsistency that put NWSL behind an
+// exact channel; here there is no exact channel to put it behind.
+//
+// rugbytest (International Test Match): no single uploader owns the November
+// window. Best was "Quilter Nations Series" at 2/5 — England home tests only,
+// and that name is a title SPONSOR that rebrands every cycle (the Ligue 1
+// McDonald's hazard). "World Rugby" scored 1/5 here and, worse, its one hit on
+// the first probe was a WRONG match — a 2025 Women's Rugby World Cup game
+// served for a men's autumn test. The unscoped winners were "Rugby Mzansi" and
+// "Match Videos", both fan channels. Dark until one uploader owns the window.
+const NO_HIGHLIGHT_FALLBACK = new Set([
+  "cricket",
+  "euro",
+  "esports",
+  "laliga",
+  "ligue1",
+  "llws",
+  "rugbychamp",
+  "rugbytest",
+]);
 
 // True when a league has no exact approved channel. Callers must render no
 // highlight button (not a search-page link) for these.

@@ -85,7 +85,13 @@ const ESPN_PATHS = {
 const OFFICIAL_CHANNELS = {
   nba: "NBA", wnba: "WNBA", nhl: "NHL", nfl: "NFL", ncaam: "March Madness",
   ncaaw: "March Madness", ncaaf: "ESPN College Football",
-  fifa: "FIFA", epl: "NBC Sports", mls: "Major League Soccer",
+  // ⚠️ Two entries below had DRIFTED from src/lib/youtube.ts (found 2026-08-12).
+  // `mlb: "MLB"` was missing outright, and fifa read "FIFA" while the app has
+  // used "FOX Sports" since the World Cup work — FIFA's own channel posts only
+  // alt-cast clips. A drifted mirror means this checker was validating a string
+  // production never sends, i.e. green here proved nothing for those two.
+  mlb: "MLB",
+  fifa: "FOX Sports", epl: "NBC Sports", mls: "Major League Soccer",
   ucl: "CBS Sports Golazo", uel: "CBS Sports Golazo", seriea: "CBS Sports Golazo",
   bundesliga: "Bundesliga",
   // "TUDN USA", not "TUDN México" — see the note on ligamx in
@@ -96,6 +102,13 @@ const OFFICIAL_CHANNELS = {
   libertadores: "CONMEBOL Libertadores",
   saudi: "الدوري السعودي للمحترفين - Saudi Pro League",
   afcon: "CAF TV",
+  // Rugby, verified 2026-08-12 (see the block in src/lib/youtube.ts).
+  // llws, rugbychamp and rugbytest deliberately have NO entry — they are in
+  // NO_HIGHLIGHT_FALLBACK instead, because their only uploaders are fan
+  // channels or one of the two clubs in the match.
+  sixnations: "Guinness Men's Six Nations",
+  superrugby: "Super Rugby Pacific",
+  rugbywc: "World Rugby",
 };
 
 // Matches SECONDARY_CHANNELS in src/lib/youtube.ts for team-game leagues.
@@ -118,12 +131,15 @@ const HIGHLIGHT_BUFFER_HOURS = {
   nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
   seriea: 3, bundesliga: 3,
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3,
+  // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
+  sixnations: 3, superrugby: 3, rugbywc: 3,
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3,
   nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
   seriea: 2, bundesliga: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2,
+  sixnations: 2, superrugby: 2, rugbywc: 2,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.
