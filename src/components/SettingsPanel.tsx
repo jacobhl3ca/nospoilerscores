@@ -2,7 +2,7 @@
 
 import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
-import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup } from "@/lib/espn";
+import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
 import {
   Preferences,
   Theme,
@@ -429,9 +429,14 @@ export default function SettingsPanel({
       const options = byGroup.get(key);
       if (!options?.length) return [];
       // Stable within a group: in-season first, then the catalog's own order
-      // (ALL_LEAGUES, which is arranged by season calendar). Array.prototype
-      // .sort is stable in every engine we ship to, so equal keys keep it.
-      const sorted = [...options].sort((a, b) => Number(!!a.offseason) - Number(!!b.offseason));
+      // (ALL_LEAGUES, which is arranged by season calendar) — except that the
+      // short-window minority events sort to the tail regardless of season, so
+      // Little League cannot outrank the NBA for three weeks in August. See
+      // catalogSortRank / CATALOG_TAIL. Array.prototype.sort is stable in every
+      // engine we ship to, so equal keys keep the catalog order.
+      const sorted = [...options].sort(
+        (a, b) => catalogSortRank(a.sport, !!a.offseason) - catalogSortRank(b.sport, !!b.offseason),
+      );
       return [{ key, label, options: sorted }];
     });
   }, [leagueOptions]);
