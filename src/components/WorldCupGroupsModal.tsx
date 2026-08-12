@@ -385,7 +385,13 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
             `https://site.web.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${etDate(def.offset)}`,
             { signal: ctrl.signal },
           );
-          if (!r.ok) continue;
+          // A transient HTTP error (ESPN 503/429/500) must be retryable on a
+          // later toggle, exactly like the network/JSON failure the catch below
+          // recovers. The day was marked fetched BEFORE the request (above), so
+          // without un-marking it here the `fetchedDays.has` guard at the top of
+          // the loop would block every re-fetch and leave this day's fixtures
+          // blank for the whole modal session even after the endpoint recovers.
+          if (!r.ok) { fetchedDays.current.delete(def.key); continue; }
           const d = await r.json();
           // Collect each fixture as a [teamA, teamB] pair of normalized names.
           const matches: Array<[string, string]> = [];
