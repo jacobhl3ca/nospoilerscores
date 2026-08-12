@@ -15,7 +15,19 @@ import {
   eventSubtitleVariants,
 } from "./eventTiles";
 
-const BASE_URL = "https://site.api.espn.com/apis/site/v2/sports";
+// ⚠️ HOST MATTERS. This is `site.web.api.espn.com`, not `site.api.espn.com`.
+// Both serve byte-identical /apis/site/v2/sports responses, but as of
+// 2026-08-11 site.api rejects the request a BROWSER makes: the rejection
+// carries no Access-Control-Allow-Origin, so it surfaces in the console as a
+// CORS error and in the UI as "Schedule unavailable" on every column at once.
+// It is not a UA rule (a real Chrome UA fails too) and not our IP (reproduced
+// from two networks) — curl and undici still get 200 from site.api, which is
+// why every scripts/*.mjs checker kept passing while the live site showed no
+// games at all. Verified 2026-08-11 by rewriting the host at the network layer
+// against production: every column went from "Schedule unavailable" to a full
+// slate. If you ever move this back, load /today in a real browser and watch
+// the console — the scripts will not tell you.
+const BASE_URL = "https://site.web.api.espn.com/apis/site/v2/sports";
 
 // See EventFetchResult — a feed that broke is not a day with nothing on it.
 const EVENT_FETCH_EMPTY: EventFetchResult = { card: null, failed: false };
@@ -650,6 +662,28 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
 
 export function sportGroup(sport: Sport): SportGroup {
   return SPORT_GROUP[sport] ?? "other";
+}
+
+// Competitions that sort to the END of their Settings group no matter what the
+// calendar says. The catalog otherwise sorts in-season leagues above offseason
+// ones, which is right for peers but wrong here: for three weeks in August a
+// kids' tournament was listed above the NBA, NHL, NCAAF and NCAAM, and the
+// rugby block led "Racing, combat & more" ahead of F1, NASCAR and UFC (Jacob
+// 8/11 — "little league should not be that high ranking"). Settings is the
+// durable catalog you come to in order to FIND a league, so stature has to beat
+// seasonality for the short-window minority events; the "· offseason" marker on
+// each row still carries the seasonal signal. Every entry here is
+// excludeFromAuto, so this only ever reorders a list — it can never change
+// which columns you get.
+const CATALOG_TAIL: ReadonlySet<Sport> = new Set<Sport>([
+  "llws",
+  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest",
+]);
+
+// Sort rank within a Settings group: minority events last, then in-season
+// before offseason, then the catalog's own (season-calendar) order.
+export function catalogSortRank(sport: Sport, offseason: boolean): number {
+  return (CATALOG_TAIL.has(sport) ? 2 : 0) + (offseason ? 1 : 0);
 }
 
 // "8/21" — the compact form used in the league switcher's "EPL · 8/21" tail.

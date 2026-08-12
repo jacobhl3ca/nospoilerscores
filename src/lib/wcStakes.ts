@@ -16,8 +16,9 @@ import { etSlateYmd, nextYmd } from "./etDay";
 
 const STANDINGS_URL =
   "https://site.web.api.espn.com/apis/v2/sports/soccer/fifa.world/standings";
+// site.web.api, NOT site.api — see the BASE_URL note in espn.ts.
 const SCOREBOARD_URL = (dates: string) =>
-  `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dates}`;
+  `https://site.web.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dates}`;
 
 // Group-stage tiers (qualification stakes) + knockout tiers (marquee/balance).
 export type WcTier =
