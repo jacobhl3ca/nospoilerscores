@@ -6,7 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, hasNoTrustedHighlightSource, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, hasNoTrustedHighlightSource, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
@@ -29,13 +29,25 @@ const highlightBufferHours: Record<string, number> = {
   // until roughly four hours in even on a fast turnaround. A 3-hour buffer would
   // surface the button while the second innings is still being bowled.
   cricket: 7,
+  // Rugby union: 80 minutes of play in two halves, so the same 3-hour
+  // post-kickoff buffer every 90-minute soccer league uses. These five were
+  // absent until 2026-08-12 and silently took the 4h default, which both
+  // delayed the buttons by an hour AND disagreed with
+  // scripts/check-highlight-fallbacks.mjs, whose mirror has always said 3 —
+  // i.e. the audit could flag a "missing" button during the hour the app was
+  // still deliberately hiding it.
+  sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, nationschamp: 3,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
 // quarters in 2015-16), so a finished regulation game reports period 4. A value
 // of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
 // 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 4 };
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, mlb: 9, nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 4,
+  // Two 40-minute halves. Without these the default of 4 made rawOt negative
+  // for every finished rugby match — clamped to 0 by the Math.max, so the
+  // buffer was right by accident; stating it keeps that an intent, not luck.
+  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2 };
 
 // The highlight-button badge uppercases the sport KEY (nba → "NBA"), which reads
 // right for the leagues whose key IS the abbreviation. A couple of later
@@ -43,7 +55,14 @@ const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, n
 // together ("SERIEA", "LIGAMX") on their official-highlight button. Restore the
 // space here — same all-caps badge style, just the correct wording. Any key not
 // listed keeps game.sport.toUpperCase() untouched (tennis Slams, NBA, etc.).
-const highlightBadgeLabel: Record<string, string> = { seriea: "SERIE A", ligamx: "LIGA MX" };
+// The rugby keys are the same problem one step worse — "SIXNATIONS",
+// "SUPERRUGBY", "RUGBYWC" and "NATIONSCHAMP" are not words. Badges stay short
+// enough for the pill (the longest shipping one is "SERIE A" at 7).
+const highlightBadgeLabel: Record<string, string> = {
+  seriea: "SERIE A", ligamx: "LIGA MX",
+  sixnations: "6 NATIONS", superrugby: "SUPER RUGBY", rugbywc: "RWC",
+  rugbychamp: "CHAMPIONS", rugbytest: "TESTS", nationschamp: "NATIONS",
+};
 
 
 // Shared highlight buttons for a finished game — the official-channel + top-
@@ -272,6 +291,11 @@ export default function GameHighlights({
         // reads "normal + extended". Hidden if no extended exists. (fifa-only;
         // competition is null for every other league.)
         const preferExtended = !!competition;
+        // Hard title filter for leagues whose official channel uploads more
+        // than one competition between the same teams (rugby's Nations
+        // Championship vs the U20 Junior World Championships). Empty — and so
+        // completely inert — for every other sport. See COMPETITION_TITLE_TOKENS.
+        const compTokens = getCompetitionTitleTokens(game.sport);
         const baked = await getBakedHighlight(game.sport, game.id);
         const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel, away, home);
         const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
@@ -286,7 +310,7 @@ export default function GameHighlights({
           ? Promise.resolve(null)
           : bakedOfficial
           ? Promise.resolve(bakedOfficial)
-          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition, false, weekNumber);
+          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition, false, weekNumber, compTokens);
         // If the server prebake already found the primary clip but no secondary,
         // trust that miss for this page load instead of making every browser do
         // another slow live YouTube scrape. The 30-min prebake will fill
@@ -296,7 +320,7 @@ export default function GameHighlights({
           ? Promise.resolve(bakedSecondary)
           : skipLiveSecondary
             ? Promise.resolve(null)
-          : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, weekNumber);
+          : resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, weekNumber, compTokens);
         const bakedTelemundoShort = getChannelVerifiedBakedId(baked, "telemundo", "Telemundo Deportes", away, home);
         const bakedTelemundoLong = getChannelVerifiedBakedId(baked, "telemundoExtended", "Telemundo Deportes", away, home);
         const telemundoShortP = isFifa && fifaTelemundoEnabled
@@ -344,7 +368,7 @@ export default function GameHighlights({
           // official. Re-resolve once, this time excluding it, so the two buttons
           // never play the same video. (Only for a freshly live-resolved 2nd — a
           // baked 2nd is already deduped at bake time.)
-          secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended, weekNumber);
+          secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended, weekNumber, compTokens);
         }
         prefetchedVideoId.current = secondId;
         setSearchStatus(secondId ? "found" : "missing");
@@ -447,7 +471,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, getCompetitionTitleTokens(game.sport));
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -491,7 +515,7 @@ export default function GameHighlights({
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
                 // World Cup prefers the extended cut (see prefetch note above).
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition, weekNumber);
+                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition, weekNumber, getCompetitionTitleTokens(game.sport));
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;

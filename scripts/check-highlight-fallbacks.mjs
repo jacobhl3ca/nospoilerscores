@@ -77,6 +77,19 @@ const ESPN_PATHS = {
   libertadores: "/soccer/conmebol.libertadores/scoreboard",
   saudi:        "/soccer/ksa.1/scoreboard",
   afcon:        "/soccer/caf.nations/scoreboard",
+  // ⚠️ Rugby was ANOTHER unmonitored wave (added here 2026-08-12). The three
+  // rugby competitions with an approved uploader have had OFFICIAL_CHANNELS
+  // entries and buffer/period rows in this file since 8/12, but no ESPN_PATHS
+  // row — so this audit never fetched a single rugby fixture and their
+  // highlight buttons shipped with nothing behind them. Same class of gap as
+  // the UEFA-cups wave above and the six news feeds on 2026-07-22.
+  // ESPN keys rugby by league PATH id, not a slug (see SPORT_PATHS in
+  // src/lib/espn.ts). rugbychamp and rugbytest stay absent — they are in
+  // NO_HIGHLIGHT_FALLBACK, so there is no button to monitor.
+  sixnations:   "/rugby/180659/scoreboard",
+  superrugby:   "/rugby/242041/scoreboard",
+  rugbywc:      "/rugby/164205/scoreboard",
+  nationschamp: "/rugby/17567/scoreboard",
   // Deliberately absent: MLB (MLB.com-native); La Liga, Ligue 1, EURO, and
   // cricket (no approved per-match uploader, so no YouTube button).
 };
@@ -109,12 +122,25 @@ const OFFICIAL_CHANNELS = {
   sixnations: "Guinness Men's Six Nations",
   superrugby: "Super Rugby Pacific",
   rugbywc: "World Rugby",
+  nationschamp: "World Rugby",
+};
+
+// Mirrors COMPETITION_TITLE_TOKENS in src/lib/youtube.ts. Keep in sync.
+// This is not optional decoration: without it the audit would resolve WITHOUT
+// the `comp` gate the app sends, accept a U20 Junior World Championships video
+// as a senior Nations Championship hit, and report a green button the app is
+// actually hiding — a false NEGATIVE on a real gap.
+const COMPETITION_TITLE_TOKENS = {
+  nationschamp: ["nations championship"],
 };
 
 // Matches SECONDARY_CHANNELS in src/lib/youtube.ts for team-game leagues.
 // Every entry remains strict to that exact uploader.
 const SECONDARY_CHANNELS = {
   nwsl: "CBS Sports W Golazo",
+  // World Rugby posts the northern-hosted fixtures, SANZAAR's channel the
+  // southern-hosted ones. See the block in src/lib/youtube.ts.
+  nationschamp: "Super Rugby Pacific",
 };
 
 const TENNIS_CHANNELS = new Set([
@@ -132,14 +158,14 @@ const HIGHLIGHT_BUFFER_HOURS = {
   seriea: 3, bundesliga: 3,
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3,
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
-  sixnations: 3, superrugby: 3, rugbywc: 3,
+  sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3,
   nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
   seriea: 2, bundesliga: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2,
-  sixnations: 2, superrugby: 2, rugbywc: 2,
+  sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
 };
 
 // Matches TEAM_NAME_ALIASES in src/lib/youtube.ts. Keep in sync.
@@ -284,11 +310,12 @@ function extractTeams(ev) {
   };
 }
 
-async function youtubeLookup(query, channel, strict = !!channel, { raceTokens = [] } = {}) {
+async function youtubeLookup(query, channel, strict = !!channel, { raceTokens = [], compTokens = [] } = {}) {
   let url = `${BASE}/api/youtube?q=${encodeURIComponent(query)}`;
   if (channel) url += `&channel=${encodeURIComponent(channel)}`;
   if (strict && channel) url += "&strict=1";
   if (raceTokens.length) url += `&race=${encodeURIComponent(raceTokens.join("|"))}`;
+  if (compTokens.length) url += `&comp=${encodeURIComponent(compTokens.join("|"))}`;
   try {
     const res = await tfetch(url);
     if (!res.ok) return null;
@@ -454,12 +481,13 @@ async function validateBakedHighlight(sport, bakedHighlight) {
 
 // Mirrors resolveHighlightVideo() in src/lib/youtube.ts: exactly one channel,
 // strict, with no unscoped tier.
-async function resolve(away, home, dateStr, channel) {
+async function resolve(away, home, dateStr, channel, sport) {
   const a = aliasTeam(away);
   const h = aliasTeam(home);
   const dated = `${a} vs ${h} highlights ${dateStr}`;
   if (!channel) return { videoId: null, via: "no-approved-channel" };
-  const hit = await youtubeLookup(dated, channel, true);
+  const compTokens = COMPETITION_TITLE_TOKENS[sport] ?? [];
+  const hit = await youtubeLookup(dated, channel, true, { compTokens });
   return hit
     ? { videoId: hit, via: "strict-channel+date" }
     : { videoId: null, via: "channel-exhausted" };
@@ -878,7 +906,7 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
           ? "FOX Sports"
           : (SECONDARY_CHANNELS[sport] ?? channel);
       const official = primaryChannel
-        ? await resolve(teams.away, teams.home, dateStr, primaryChannel)
+        ? await resolve(teams.away, teams.home, dateStr, primaryChannel, sport)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(FIRST_PASS_GAP_MS);
       const search = await resolve(
@@ -886,6 +914,7 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
         teams.home,
         dateStr,
         secondaryChannel,
+        sport,
       );
       await sleep(FIRST_PASS_GAP_MS);
 
@@ -899,6 +928,10 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
         officialResult: official.videoId ? `${official.videoId} (${official.via})` : "EXHAUSTED",
         searchResult: search.videoId ? `${search.videoId} (${search.via})` : "EXHAUSTED",
         // Raw inputs kept so the confirmation pass below can re-resolve.
+        // sportKey is the lowercase key (`sport` above is uppercased for the
+        // printed table); the confirmation pass needs it to look the
+        // competition title tokens back up.
+        sportKey: sport,
         away: teams.away,
         home: teams.home,
         dateStr,
@@ -958,7 +991,7 @@ if (exhausted.length) {
     for (let attempt = 0; attempt < CONFIRM_ATTEMPTS; attempt++) {
       if (attempt > 0) await sleep(CONFIRM_RETRY_BACKOFF_MS); // let a lingering block lift
       official = row.primaryChannel
-        ? await resolve(row.away, row.home, row.dateStr, row.primaryChannel)
+        ? await resolve(row.away, row.home, row.dateStr, row.primaryChannel, row.sportKey)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(CONFIRM_GAP_MS);
       search = await resolve(
@@ -966,6 +999,7 @@ if (exhausted.length) {
         row.home,
         row.dateStr,
         row.secondaryChannel,
+        row.sportKey,
       );
       const anyVisibleButton = (row.primaryChannel ? !!official.videoId : false) || !!search.videoId;
       if (anyVisibleButton) break; // recovered — stop retrying this game

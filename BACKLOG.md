@@ -1,5 +1,70 @@
 # HideScore — Master Backlog
 
+## 2026-08-12 — Nations Championship shipped (league request); the U20 wrong-match trap and the `comp=` gate; rugby was unmonitored
+
+✅ **`nationschamp` — World Rugby's Nations Championship, ESPN path `/rugby/17567`.** Opt-in
+(`excludeFromAuto`), "Racing, combat & more", labeled **"Rugby Nations"**, biennial
+(`yearCycle {mod:2, anchor:2026}` — every non-RWC, non-Lions year is even). Window
+`07-04 → 11-29` from ESPN's own published calendar: **36 fixtures, the 18 July pool
+matches complete, the November leg scheduled, the finals weekend TBD.**
+
+⚠️ **It REPLACED the July/November test windows — it is not an extra column.** `The Rugby
+Championship` (path 244293) is frozen on its **2025** season for that reason, and
+**`rugbytest` (289234) returns ZERO events for every 2026 date checked**, so there is no
+duplicate-fixture overlap. Do not "fix" rugbytest's empty column by pointing it here.
+
+🚨 **The channel gate alone would have served WRONG MATCHES.** `World Rugby` strict-resolved
+**13/18** July fixtures — and **three of those thirteen were U20 Junior World Championships
+matches**. That tournament runs in the same July window between the same NATIONS, so
+"Italy v Japan | Junior World Championships 2026" satisfies the channel gate, the
+both-teams gate AND the year gate for the senior Italy–Japan fixture on the same day. That
+is a wrong scoreline on a card whose whole promise is not leaking one.
+
+🆕 **Fix = a new `comp=` COMPETITION TITLE GATE** in `public/_worker.js` — the race gate's
+sibling for team sports (`compTitleMatches`, pipe-separated, OR across tokens, driven by
+`COMPETITION_TITLE_TOKENS` in `src/lib/youtube.ts`). Empty token list = no gate, so every
+other sport is byte-for-byte unchanged (verified: an MLB lookup returns the same video).
+It is also excluded from the raw-regex rescue tier, the exact hole the race gate fell
+through on 2026-08-04.
+
+⚠️ **Query text stays BARE.** Appending the competition name is a measured false-negative
+generator on rugby (World Rugby: 0/3 with "Rugby World Cup" appended, 5/5 without).
+**Recall comes from the bare query, precision from the title gate.**
+
+📊 **Verified END-TO-END against a LOCAL `wrangler pages dev` worker over all 18 completed
+fixtures, both channels, gate live:**
+
+| | result |
+|---|---|
+| coverage | **15/18** fixtures show a highlight button |
+| wrong-competition hits | **0** (was 3 without the gate) |
+| `World Rugby` (primary) | 10/18 correct |
+| `Super Rugby Pacific` (secondary) | covers 5 more — the southern-hosted fixtures World Rugby skips |
+
+- **⛔ NOT "SANZAAR TV".** It wins the UNSCOPED search for several of these and looks like the
+  obvious answer — **0/5 on strict.** Verified, not assumed.
+- **3 uncovered, knowingly:** Italy–Japan 7/4 (only a U20 video exists), Italy–Australia 7/18
+  (neither channel posted it), Ireland–New Zealand 7/18 — the last is the gate's **one true
+  positive cost**: Super Rugby Pacific has the right match under the title "July
+  Internationals | New Zealand v Ireland - Third Test Highlights", which never says Nations
+  Championship. Correct trade — a hidden button is recoverable, a wrong score is not. **Do
+  NOT widen the token to "july internationals"**: generic enough to match a plain test.
+
+🚨 **Rugby has been shipping UNMONITORED since 8/11.** `scripts/check-highlight-fallbacks.mjs`
+had OFFICIAL_CHANNELS entries and buffer/period rows for the rugby leagues but **no
+`ESPN_PATHS` row**, so the audit never fetched a single rugby fixture. Added
+`sixnations`/`superrugby`/`rugbywc`/`nationschamp`; the checker now also sends `comp=`, without
+which it would accept a U20 video and report green on a button the app is hiding.
+
+🧹 **Two consistency fixes found on the way:**
+- The rugby keys were **missing from `highlightBufferHours`** in `GameHighlights.tsx`, taking
+  the 4h default while the audit's mirror said 3 — i.e. the audit could flag a "missing"
+  button during the hour the app was deliberately hiding it. Now 3 in both, plus explicit
+  `regulationPeriods: 2`.
+- The official-highlight badge uppercases the sport KEY, so the rugby cards read
+  **"SIXNATIONS" / "SUPERRUGBY" / "RUGBYWC"**. Added `highlightBadgeLabel` rows:
+  `6 NATIONS`, `SUPER RUGBY`, `RWC`, `CHAMPIONS`, `TESTS`, `NATIONS`.
+
 ## 2026-08-04 — PH account live + launch set **Tue Aug 11**; 3 onboarding modals → 1; NWSL/NASCAR/IndyCar feeds MERGED
 🚀 **Product Hunt account created and verified live: `producthunt.com/@jacobhl`** (display name **Jacob Heifetz-Licht**, user **#10099686**). Bio = "Visit jacobhl.com for all projects!", photo present, LinkedIn + Roosevelt Island links attached. **Personal account, hunted by Jacob himself** — PH prohibits company accounts, and a same-hour signup + launch reads as cold, which is why the account was made a week ahead.
 📅 **Launch = Tue Aug 11 2026, 00:01 PST / 3:01am ET.** No alarm needed — PH's submit form has a **"Schedule for later"** toggle (status flips to *Scheduled*, up to a month out). Tue–Wed is the window; **Mon and Fri are the two days to avoid.** Two gcal events created on his `Events` calendar:
