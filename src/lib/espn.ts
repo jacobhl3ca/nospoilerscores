@@ -115,14 +115,29 @@ const SPORT_PATHS: Record<Sport, string> = {
   //   271937 European Champions Cup       (cal 12-05 → 05-23)
   //   242041 Super Rugby Pacific          (cal 02-13 → 06-20)
   //   289234 International Test Match     (cal 04-03 → 11-13)
+  //   17567  Nations Championship         (cal 07-04 → 11-29, added 2026-08-12)
   // Deliberately NOT shipped: French Top 14 (270559) — real and verified, but
   // a 10-month domestic window for the smallest US audience of the six. Its id
   // is recorded here so nobody re-probes for it.
+  //
+  // ⚠️ The Nations Championship path segment is 17567, NOT the league's own id
+  // (24400). ESPN's `/v2/sports/rugby/leagues` returns BOTH per league and the
+  // scoreboard route keys on `slug`, which for every rugby competition is the
+  // numeric path id — 24400 404s. Same shape for the other five (Six Nations is
+  // id 8323, path 180659), which is why every line here is a path, not an id.
+  //
+  // ⚠️ The Nations Championship is not an ADDITIONAL competition — in 2026 it
+  // REPLACED the July/November international windows. `The Rugby Championship`
+  // (path 244293) is stuck on its 2025 season for exactly that reason, and
+  // `rugbytest` (289234) returns ZERO events for every 2026 date checked on
+  // 2026-08-12, so there is no duplicate-fixture overlap between the two
+  // columns. Do not "fix" rugbytest's empty column by pointing it here.
   sixnations: "/rugby/180659/scoreboard",
   rugbywc: "/rugby/164205/scoreboard",
   rugbychamp: "/rugby/271937/scoreboard",
   superrugby: "/rugby/242041/scoreboard",
   rugbytest: "/rugby/289234/scoreboard",
+  nationschamp: "/rugby/17567/scoreboard",
   f1: "/racing/f1/scoreboard",
   // NASCAR Cup + IndyCar (added 2026-08-03). Both share F1's racing shape, so
   // they render through the same single-race event tile. Two differences from
@@ -366,6 +381,30 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // it is a run of standalone fixtures, not a competition with a final, so
   // championshipDate is deliberately absent.
   { sport: "rugbytest", label: "Rugby Tests", startDate: "04-03", endDate: "11-13", verifiedFor: 2026, excludeFromAuto: true },
+  // ── Nations Championship (added 2026-08-12, on request) ──
+  // World Rugby's new senior international competition: the Six Nations and
+  // SANZAAR sides plus Japan and Fiji, pool matches in July and the finals
+  // weekend in November. Window is ESPN's own published calendar for path
+  // 17567, read live on 2026-08-12 — 13 game days, 07-04 → 11-29, 36 fixtures
+  // (the 18 July pool matches are complete; the November leg is scheduled and
+  // the 11-27/28/29 finals are TBD until the pools settle).
+  //
+  // ⚠️ The window has a deliberate ~15-week HOLE in it (Jul 19 → Nov 5) that
+  // the single start/end model cannot express. That is survivable only because
+  // this is excludeFromAuto: an empty column can never be auto-picked onto
+  // someone's board, it only appears if they chose the league themselves.
+  //
+  // BIENNIAL, even years — mod 2 / anchor 2026. World Rugby runs it in every
+  // year that is not a Rugby World Cup (2027, 2031) or a Lions tour (2029,
+  // 2033), all of which are odd, so the parity test is exact rather than an
+  // approximation. Without the gate the column would sit empty all of 2027.
+  //
+  // Label is "Rugby Nations", not the full "Nations Championship": the column
+  // header reserves a fixed width sized to the longest label in this list
+  // ("Rugby World Cup"), and a 20-character name would push the ‹ › arrows out
+  // from under the pointer. "Rugby Nations" also reads unambiguously next to
+  // "Six Nations" in the switcher, which "Nations Champ" does not.
+  { sport: "nationschamp", label: "Rugby Nations", startDate: "07-04", endDate: "11-29", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
   // ── F1 + UFC (single-event tiles) ──
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
@@ -598,7 +637,7 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
   nfl: "🏈", ncaaf: "🏈", nhl: "🏒", golf: "⛳", tennis: "🎾",
-  sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉",
+  sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
@@ -657,7 +696,7 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   boxing: "other", cricket: "other", chess: "other", poker: "other",
   esports: "other",
   sixnations: "other", rugbywc: "other", rugbychamp: "other",
-  superrugby: "other", rugbytest: "other",
+  superrugby: "other", rugbytest: "other", nationschamp: "other",
 };
 
 export function sportGroup(sport: Sport): SportGroup {
@@ -677,7 +716,7 @@ export function sportGroup(sport: Sport): SportGroup {
 // which columns you get.
 const CATALOG_TAIL: ReadonlySet<Sport> = new Set<Sport>([
   "llws",
-  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest",
+  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
 ]);
 
 // Sort rank within a Settings group: minority events last, then in-season
@@ -1158,6 +1197,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   rugbychamp: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   superrugby: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   rugbytest:  { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  nationschamp: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
   // F1 / UFC render as single-event tiles (no Game objects), so these are
@@ -2283,6 +2323,7 @@ export function espnGameUrl(game: Game): string {
     case "rugbychamp": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/271937`;
     case "superrugby": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/242041`;
     case "rugbytest":  return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/289234`;
+    case "nationschamp": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/17567`;
     case "epl":
     case "mls":
     case "fifa":
@@ -2348,6 +2389,7 @@ export function sportStreamFallback(sport: Sport): string {
     case "rugbychamp":
     case "superrugby":
     case "rugbytest":
+    case "nationschamp":
       return "https://www.espn.com/rugby/";
     case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";

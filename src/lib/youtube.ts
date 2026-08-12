@@ -102,6 +102,22 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // NOT "Rugby World Cup" (0/5, no such uploader). Gated to 2027 by yearCycle,
   // so this sits inert until the tournament.
   rugbywc: "World Rugby",
+  // Nations Championship (added 2026-08-12). World Rugby's own channel again —
+  // but this one CANNOT ship on the channel gate alone, and that is the whole
+  // story of this entry.
+  //
+  // Measured against the LIVE worker with strict=1 over ALL 18 completed July
+  // 2026 pool fixtures, bare query shape: "World Rugby" resolved 13/18 — and
+  // THREE of those thirteen were the WRONG MATCH. The channel also carries the
+  // U20 Junior World Championships, which runs in the same July window between
+  // the same NATIONS, so "Italy v Japan | Junior World Championships 2026"
+  // satisfies the channel gate, the both-teams gate and the year gate for the
+  // senior Italy–Japan fixture on the same day. Serving it would put an U20
+  // scoreline on a senior card — the same wrong-match class that kept rugbytest
+  // dark (a Women's RWC game served for a men's test). Hence the title gate in
+  // COMPETITION_TITLE_TOKENS below, which is REQUIRED, not an optimization:
+  // with it World Rugby is 10/18 correct and 0/18 wrong.
+  nationschamp: "World Rugby",
   // euro + cricket deliberately have NO entry — see the block comment below.
   // laliga + ligue1 deliberately have NO approved channel.
   // LALIGA's channel ("LALIGA EA SPORTS") posts Spanish-language full matches
@@ -267,6 +283,18 @@ const SECONDARY_CHANNELS: Record<string, string[]> = {
   // The league channel skipped Courage–Summit on 2026-08-05 while W Golazo
   // published an official, embeddable cut, so keep it as the strict 2nd slot.
   nwsl: ["CBS Sports W Golazo"],
+  // Nations Championship: the two hemispheres post separately. World Rugby
+  // covers the fixtures hosted in the north, and Super Rugby Pacific — the
+  // SANZAAR channel, already this app's primary for `superrugby` — posts the
+  // southern-hosted ones World Rugby skips. Strict-verified 2026-08-12 over all
+  // 18 completed July fixtures: the five World Rugby has NO video for
+  // (Scotland–South Africa, Wales–Argentina, Ireland–New Zealand,
+  // Italy–Australia, Scotland–Fiji) are 4/5 covered here, taking the league
+  // from 10/18 to 15/18 with still zero wrong matches.
+  // ⚠️ NOT "SANZAAR TV". It wins the UNSCOPED search for several of these and
+  // looks like the obvious answer, but it is 0/5 on strict — its uploads do not
+  // survive the resolver's own gates. Verified, not assumed.
+  nationschamp: ["Super Rugby Pacific"],
   golf_masters: ["Golf Channel", "ESPN"],
   golf_pgachamp: ["Golf Channel", "ESPN"],
   golf_usopen: ["Golf Channel"],
@@ -384,6 +412,37 @@ export function getCompetitionName(sport: string): string | null {
   return COMPETITION_NAMES[sport] ?? null;
 }
 
+// COMPETITION TITLE GATE (`comp=` on /api/youtube). Distinct from
+// COMPETITION_NAMES above: that one appends a word to the SEARCH QUERY, this
+// one is a hard filter on the winning video's TITLE. A candidate that clears
+// the channel gate but whose title carries none of these tokens is dropped and
+// the button hides — the same "better to 404 than serve the wrong event"
+// posture as the race gate (motorsport), the week gate (NFL) and the World Cup
+// gate, and it exists for exactly the same failure: ONE official channel that
+// uploads more than one competition between the same opponents.
+//
+// Query text is deliberately left BARE for these sports. Appending the
+// competition name is a measured false-negative generator on rugby (World Rugby
+// read 0/3 with "Rugby World Cup" appended and 5/5 without it — 2026-08-12),
+// so recall comes from the bare query and precision comes from this gate.
+//
+// nationschamp: World Rugby and Super Rugby Pacific both also post the U20
+// Junior World Championships, played in the same July window between the same
+// nations. Without the token, three of thirteen strict hits were U20 matches
+// dressed as senior internationals. The gate costs one true positive —
+// "July Internationals | New Zealand v Ireland - Third Test Highlights" is the
+// right match under a title that never says Nations Championship — and that is
+// the correct trade: a hidden button is recoverable, a wrong scoreline on a
+// no-spoiler card is not. Do NOT widen this to "july internationals": it is
+// generic enough to match a plain test that is not part of the competition.
+const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
+  nationschamp: ["nations championship"],
+};
+
+export function getCompetitionTitleTokens(sport: string): string[] {
+  return COMPETITION_TITLE_TOKENS[sport] ?? [];
+}
+
 // Returns the full curated fallback chain of YouTube channels to try for the
 // 2nd highlight button, in priority order. Empty array means no curated
 // options; callers must not substitute a generic search.
@@ -441,10 +500,13 @@ export function getApiBase(): string {
   return "";
 }
 
-export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[], weekNumber?: number | null): Promise<string | null> {
+export async function fetchFirstVideoId(query: string, channel?: string, exclude?: (string | null | undefined)[], preferExtended?: boolean, strict?: boolean, raceTokens?: string[], weekNumber?: number | null, compTokens?: string[]): Promise<string | null> {
   try {
     let url = `${getApiBase()}/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
+    // Competition title gate — see COMPETITION_TITLE_TOKENS. Pipe-separated to
+    // match the `race` param's shape; empty for every sport that doesn't need it.
+    if (compTokens?.length) url += `&comp=${encodeURIComponent(compTokens.join("|"))}`;
     // Motorsport race gate — the channel gate can't tell two races apart when
     // one channel uploads every round. See buildRaceTokens in lib/espn.ts.
     if (raceTokens?.length) url += `&race=${encodeURIComponent(raceTokens.join("|"))}`;
@@ -597,8 +659,9 @@ export async function resolveHighlightVideo(
   competition?: string | null,
   preferExtended?: boolean,
   weekNumber?: number | null,
+  compTokens?: string[],
 ): Promise<string | null> {
   const datedQuery = buildQuery(awayTeam, homeTeam, dateStr, seriesNote, competition);
   if (!channel) return null;
-  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true, undefined, weekNumber);
+  return fetchFirstVideoId(datedQuery, channel, exclude, preferExtended, true, undefined, weekNumber, compTokens);
 }
