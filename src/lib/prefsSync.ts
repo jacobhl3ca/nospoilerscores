@@ -38,7 +38,7 @@ export interface AuthState {
 // indistinguishable from mobile Safari, so the SERVER cannot tell an app user
 // from a browser user on its own. Every authed request carries this header and
 // the worker records it on the account (see _hsTouchUser in public/_worker.js).
-function hsPlatform(): "ios" | "android" | "web" {
+export function hsPlatform(): "ios" | "android" | "web" {
   if (typeof window === "undefined") return "web";
   const cap = (window as unknown as {
     Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string };
