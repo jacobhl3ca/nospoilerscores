@@ -2692,6 +2692,76 @@ function getCycleWatch(gamePk: string): CycleBid | null {
   return entry?.bid ?? null;
 }
 
+// Perfect-game confirmation, straight from MLB's own live-feed flags.
+//
+// The schedule+linescore hydrate CANNOT prove a perfect game. `leftOnBase`
+// counts only runners stranded when an inning ends, so a baserunner who is
+// erased still leaves runs+LOB at 0: Dansby Swanson walked in the 6th of
+// CHC@WSH on 2026-08-13 and was doubled off, and the old runs+LOB proxy kept
+// flying PERFECT GAME on a bid that had already died. Walks that score, HBP
+// and errors have the same hole.
+//
+// The v1.1 live feed carries the authoritative flags, and a `fields` filter
+// trims that ~525 KB payload to ~165 bytes — cheap enough to poll for the
+// handful of games that ever clear the no-hit gate. Cached + refreshed in the
+// background so the score poll never blocks on it, and a cold or failed cache
+// reads as "not perfect", which degrades to the No-Hitter badge rather than
+// over-claiming.
+//
+// Verified by replaying Domingo German's 2023-06-28 perfect game through the
+// feed's `timecode` param: awayTeamPerfectGame flips true at Top 6 — the same
+// threshold the gate below already uses — and stays true to the final out. So
+// the flag is live, not a post-game stamp, and it does not under-report inside
+// our window. (It is also non-inverted: German pitched for the AWAY team.)
+interface PerfectFlags {
+  awayTeamPerfectGame: boolean; // away team is THROWING the perfect game
+  homeTeamPerfectGame: boolean;
+}
+const perfectFlagsCache = new Map<string, { ts: number; flags: PerfectFlags }>();
+const perfectFlagsInFlight = new Set<string>();
+const PERFECT_FLAGS_TTL = 15_000;
+// Serve-while-revalidate has a ceiling: if the feed goes away entirely we must
+// stop trusting a cached `true`, or a dead fetch freezes PERFECT GAME on screen
+// for the rest of the game.
+const PERFECT_FLAGS_MAX_AGE = 90_000;
+
+async function refreshPerfectFlags(gamePk: string): Promise<void> {
+  if (perfectFlagsInFlight.has(gamePk)) return;
+  perfectFlagsInFlight.add(gamePk);
+  try {
+    const res = await fetchWithRetry(
+      `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live?fields=gameData,flags,awayTeamPerfectGame,homeTeamPerfectGame`,
+      1,
+      5000,
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    const f = data?.gameData?.flags;
+    if (!f) return;
+    perfectFlagsCache.set(gamePk, {
+      ts: Date.now(),
+      flags: {
+        awayTeamPerfectGame: f.awayTeamPerfectGame === true,
+        homeTeamPerfectGame: f.homeTeamPerfectGame === true,
+      },
+    });
+  } catch {
+    // Non-critical — the bid just stays labelled a no-hitter this round.
+  } finally {
+    perfectFlagsInFlight.delete(gamePk);
+  }
+}
+
+// Has MLB confirmed `side` is throwing a perfect game? Kicks off a background
+// refresh when the cache is cold or stale, and answers false until one lands.
+function isPerfectGameConfirmed(gamePk: string, side: "away" | "home"): boolean {
+  const entry = perfectFlagsCache.get(gamePk);
+  const age = entry ? Date.now() - entry.ts : Infinity;
+  if (age > PERFECT_FLAGS_TTL) void refreshPerfectFlags(gamePk);
+  if (!entry || age > PERFECT_FLAGS_MAX_AGE) return false;
+  return side === "home" ? entry.flags.homeTeamPerfectGame : entry.flags.awayTeamPerfectGame;
+}
+
 // MLB Stats API: fetch per-game metadata for a date, keyed by "away@home"
 // (abbreviations). Returns the gamePk for the MLB.tv deep link plus the live
 // linescore signals needed to compute the No-Hit Alert badge.
@@ -4101,10 +4171,12 @@ export async function fetchGames(
       // No-Hit / Perfect Game Alert: live game, opposing batting team has 0
       // hits, pitcher has carried the bid into at least the 6th inning (5
       // complete innings of no-hit ball). Matches the MLB.com Gameday alert
-      // threshold. The opposing team's runs+leftOnBase=0 upgrades it to a
-      // perfect game (catches walks/HBP/errors via aggregate runners-on
-      // without needing the boxscore hydrate). Cleared on next refresh as
-      // soon as a hit drops or a runner reaches.
+      // threshold. Cleared on next refresh as soon as a hit drops.
+      //
+      // The upgrade to PERFECT GAME needs MLB's own flag (see
+      // isPerfectGameConfirmed) — runs+leftOnBase=0 is only a cheap necessary
+      // condition used to keep us from fetching flags for a bid that already
+      // has a runner stranded on base, never proof on its own.
       //
       // Rating override: a no-hit bid is always interesting regardless of
       // score margin, so floor the rating at 95 (always GREAT). A perfect
@@ -4113,12 +4185,20 @@ export async function fetchGames(
       if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 6) {
         if (meta.awayHits === 0) {
           game.noHitterPitchingTeam = game.homeTeam.abbreviation;
-          if ((meta.awayRuns ?? 0) === 0 && (meta.awayLeftOnBase ?? 0) === 0) {
+          if (
+            (meta.awayRuns ?? 0) === 0 &&
+            (meta.awayLeftOnBase ?? 0) === 0 &&
+            isPerfectGameConfirmed(meta.gamePk, "home")
+          ) {
             game.isPerfectGame = true;
           }
         } else if (meta.homeHits === 0) {
           game.noHitterPitchingTeam = game.awayTeam.abbreviation;
-          if ((meta.homeRuns ?? 0) === 0 && (meta.homeLeftOnBase ?? 0) === 0) {
+          if (
+            (meta.homeRuns ?? 0) === 0 &&
+            (meta.homeLeftOnBase ?? 0) === 0 &&
+            isPerfectGameConfirmed(meta.gamePk, "away")
+          ) {
             game.isPerfectGame = true;
           }
         }
