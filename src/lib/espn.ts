@@ -131,7 +131,10 @@ const SPORT_PATHS: Record<Sport, string> = {
   // (path 244293) is stuck on its 2025 season for exactly that reason, and
   // `rugbytest` (289234) returns ZERO events for every 2026 date checked on
   // 2026-08-12, so there is no duplicate-fixture overlap between the two
-  // columns. Do not "fix" rugbytest's empty column by pointing it here.
+  // columns. Do not "fix" rugbytest's empty column by pointing it here — as of
+  // 2026-08-13 there IS no empty column: rugbytest is yearCycle-gated to odd
+  // years and nationschamp to even ones, so exactly one of the two is live in
+  // any given year. See their ALL_LEAGUES entries.
   sixnations: "/rugby/180659/scoreboard",
   rugbywc: "/rugby/164205/scoreboard",
   rugbychamp: "/rugby/271937/scoreboard",
@@ -380,7 +383,25 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Internationals (summer/autumn tours + one-off tests). No championship —
   // it is a run of standalone fixtures, not a competition with a final, so
   // championshipDate is deliberately absent.
-  { sport: "rugbytest", label: "Rugby Tests", startDate: "04-03", endDate: "11-13", verifiedFor: 2026, excludeFromAuto: true },
+  //
+  // ⚠️ ODD YEARS ONLY (gated 2026-08-13). The Nations Championship REPLACED the
+  // July/November test windows in the years it runs, and it runs in even years
+  // (2026, 2028 — never a World Cup or Lions year). ESPN 289234 accordingly
+  // returned zero events for every 2026 date checked, on 2026-08-12 and again
+  // on 2026-08-13, across all three of April, July and November. Without the
+  // gate the column is addable from the switcher and then sits empty for eight
+  // months of a "live" season window, which reads as broken rather than as
+  // offseason. With it, 2026 hides the column entirely and the season-opener
+  // probe walks forward to Apr 2027. Anchor 2027 is the yearCycle complement of
+  // nationschamp's anchor 2026 — the two columns alternate by construction.
+  //
+  // verifiedFor is deliberately ABSENT: 2026 is now known to have no fixtures,
+  // and 2027's window is inherited from ESPN's generic calendar, not confirmed
+  // against a published schedule. 2027 is also a Rugby World Cup year (Oct–Nov,
+  // Australia), so the autumn half of this window will likely be swallowed by
+  // rugbywc and the real content is the July warm-ups. RE-VERIFY the window
+  // against ESPN before the 2027 season rather than trusting 04-03 → 11-13.
+  { sport: "rugbytest", label: "Rugby Tests", startDate: "04-03", endDate: "11-13", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
   // ── Nations Championship (added 2026-08-12, on request) ──
   // World Rugby's new senior international competition: the Six Nations and
   // SANZAAR sides plus Japan and Fiji, pool matches in July and the finals
