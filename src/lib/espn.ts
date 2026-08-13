@@ -2770,10 +2770,6 @@ interface MlbGameMeta {
   isLive: boolean;       // status.abstractGameState === "Live"
   awayHits?: number;
   homeHits?: number;
-  awayRuns?: number;
-  homeRuns?: number;
-  awayLeftOnBase?: number;
-  homeLeftOnBase?: number;
   currentInning?: number; // 1-9+
 }
 async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>> {
@@ -2804,10 +2800,6 @@ async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>
           isLive: game.status?.abstractGameState === "Live",
           awayHits: ls.teams?.away?.hits,
           homeHits: ls.teams?.home?.hits,
-          awayRuns: ls.teams?.away?.runs,
-          homeRuns: ls.teams?.home?.runs,
-          awayLeftOnBase: ls.teams?.away?.leftOnBase,
-          homeLeftOnBase: ls.teams?.home?.leftOnBase,
           currentInning: ls.currentInning,
         };
         // Key by "away@home". A doubleheader is two games with the SAME
@@ -4173,10 +4165,10 @@ export async function fetchGames(
       // complete innings of no-hit ball). Matches the MLB.com Gameday alert
       // threshold. Cleared on next refresh as soon as a hit drops.
       //
-      // The upgrade to PERFECT GAME needs MLB's own flag (see
-      // isPerfectGameConfirmed) — runs+leftOnBase=0 is only a cheap necessary
-      // condition used to keep us from fetching flags for a bid that already
-      // has a runner stranded on base, never proof on its own.
+      // The upgrade to PERFECT GAME is MLB's call alone (see
+      // isPerfectGameConfirmed). Nothing in the linescore can stand in for it:
+      // this is the `hits === 0` gate deciding WHICH game to ask about, and
+      // MLB's flag deciding the answer.
       //
       // Rating override: a no-hit bid is always interesting regardless of
       // score margin, so floor the rating at 95 (always GREAT). A perfect
@@ -4185,22 +4177,10 @@ export async function fetchGames(
       if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 6) {
         if (meta.awayHits === 0) {
           game.noHitterPitchingTeam = game.homeTeam.abbreviation;
-          if (
-            (meta.awayRuns ?? 0) === 0 &&
-            (meta.awayLeftOnBase ?? 0) === 0 &&
-            isPerfectGameConfirmed(meta.gamePk, "home")
-          ) {
-            game.isPerfectGame = true;
-          }
+          if (isPerfectGameConfirmed(meta.gamePk, "home")) game.isPerfectGame = true;
         } else if (meta.homeHits === 0) {
           game.noHitterPitchingTeam = game.awayTeam.abbreviation;
-          if (
-            (meta.homeRuns ?? 0) === 0 &&
-            (meta.homeLeftOnBase ?? 0) === 0 &&
-            isPerfectGameConfirmed(meta.gamePk, "away")
-          ) {
-            game.isPerfectGame = true;
-          }
+          if (isPerfectGameConfirmed(meta.gamePk, "away")) game.isPerfectGame = true;
         }
         if (game.isPerfectGame) {
           game.rating = 110;
