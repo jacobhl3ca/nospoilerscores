@@ -1,5 +1,32 @@
 # HideScore — Master Backlog
 
+## 2026-08-13 — `rugbytest` gated to ODD years (closes the empty-column question)
+
+✅ **The open call from the 8/12 entry is decided: gate it, don't leave it.** `rugbytest`
+(ESPN 289234) now carries `yearCycle {mod:2, anchor:2027}` — the exact complement of
+`nationschamp`'s `anchor:2026`, so **exactly one of the two columns is live in any year.**
+Re-confirmed zero events on 289234 for 2026-06-15, 2026-07-11 and 2026-11-07 before
+changing anything.
+
+**Why gate rather than leave it:** `excludeFromAuto` kept it out of the auto-picker but NOT
+out of the switcher, so it was addable and then empty for the whole `04-03 → 11-13` window.
+Eight months of a column that says it is in season and shows nothing reads as broken. With
+the gate, 2026 drops it from `thirdLeagueOptions` entirely and the season-opener probe walks
+forward to **Apr 2027** ("Returns ~Apr 3"), which is the answer someone opening it wants.
+
+🗑️ **Dropped `verifiedFor: 2026`** — it asserted a 2026 opener now known not to exist. Left
+absent rather than moved to 2027: the 2027 window is inherited from ESPN's generic calendar,
+not confirmed against a published schedule.
+
+⚠️ **2027 is a Rugby World Cup year (Oct–Nov, Australia), so re-verify the window before the
+season** — the autumn half of `04-03 → 11-13` will likely be swallowed by `rugbywc` and the
+real content is the July warm-ups.
+
+📊 Verified: `tsc --noEmit` clean, 39/39 unit tests, `npm run build` clean, GHA `6836506b`
+green on all three workflows, and the **LIVE prod bundle** confirmed carrying
+`sport:"rugbytest",…,yearCycle:{mod:2,anchor:2027}` with no `verifiedFor`. Gate truth table
+(2026 Apr/Jul/Nov → Tests off, Nations on · 2027 → Tests on, Nations off · 2028 → flips back).
+
 ## 2026-08-12 — Nations Championship shipped (league request); the U20 wrong-match trap and the `comp=` gate; rugby was unmonitored
 
 ✅ **`nationschamp` — World Rugby's Nations Championship, ESPN path `/rugby/17567`.** Opt-in
