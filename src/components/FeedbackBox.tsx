@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { hsPlatform } from "@/lib/prefsSync";
 
 // Minimal inline feedback line that lives inside the footer. Submits on Enter
 // or via the send button straight to the same Formspree endpoint the
@@ -13,6 +14,13 @@ const FORMSPREE_ENDPOINT = "https://formspree.io/f/mkgqkgyr";
 // The field is optional, so a failed check downgrades to "send it anyway
 // without the email" rather than blocking the message.
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Stamped into the bundle by the deploy workflow (`NEXT_PUBLIC_BUILD_SHA:
+// ${{ github.sha }}`). Every report used to arrive with no way to tell WHICH
+// build it came from, so answering one started with a round-trip asking. A
+// local `npm run build` has no SHA — that reads "dev", which is the honest
+// answer rather than a stale hash from whenever the file was last touched.
+const BUILD = (process.env.NEXT_PUBLIC_BUILD_SHA || "dev").slice(0, 8);
 
 // `openSignal` lets a caller elsewhere in the tree pop this modal open — it is
 // a COUNTER, not a boolean, because the box owns its own open/closed state and
@@ -146,6 +154,12 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
           ...(replyTo ? { email: replyTo, _replyto: replyTo } : {}),
           _subject: replyTo ? `HideScore feedback from ${replyTo}` : "HideScore feedback",
           source: "hidescore.com",
+          // Which build, and whether this came from the app or a browser. The
+          // server can't infer the latter — the Capacitor WebView's UA is
+          // identical to mobile Safari (see hsPlatform).
+          build: BUILD,
+          platform: hsPlatform(),
+          userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
         }),
       });
     } catch {

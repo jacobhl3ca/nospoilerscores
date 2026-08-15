@@ -58,3 +58,8 @@ MARKETING_*.md
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# R2-served data feeds. The repo copy is only ever a stale R2-miss fallback —
+# see the deletion commit. Do not re-add.
+public/espn-airings.json
+public/prime-asins.json

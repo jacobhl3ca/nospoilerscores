@@ -125,6 +125,25 @@ const RACE_TOKEN_ALIASES = {
 const NON_RACE_SESSION_RX =
   /\b(pre[\s-]?season|testing|test \d|practice|fp[123]\b|qualifying|qualifier|shootout|warm[\s-]?up|sprint)\b/i;
 
+// ── Competition title gate (see the `comp` param in /api/youtube) ──────────
+// The race gate's sibling for team sports. Some official channels upload more
+// than ONE competition between the SAME two teams inside the same window, so
+// the channel gate, the both-teams gate and the year gate can all agree while
+// the video is still the wrong event. Verified case (2026-08-12): World Rugby
+// posts the senior Nations Championship AND the U20 Junior World Championships
+// in the same July, both as "Italy v Japan", and three of thirteen strict hits
+// for senior fixtures were U20 matches.
+//
+// Substring on the normalized title, OR across tokens — an empty token list is
+// no gate at all, so every sport that doesn't set `comp` is byte-for-byte
+// unchanged. Reuses normalizeRaceToken purely as a punctuation-insensitive
+// lowercase; it carries no racing semantics.
+function compTitleMatches(tokens, titleLower) {
+  if (tokens.length === 0) return true; // no gate requested → unchanged behaviour
+  const nt = normalizeRaceToken(titleLower);
+  return tokens.some((tok) => tok && nt.includes(tok));
+}
+
 function raceTitleMatches(tokens, titleLower) {
   if (tokens.length === 0) return true; // no gate requested → unchanged behaviour
   if (NON_RACE_SESSION_RX.test(titleLower)) return false;
@@ -302,6 +321,12 @@ export default {
       // speedweek exhibitions, which have no Cup reel at all). This is the
       // motorsport analogue of the golf-tournament and World Cup gates.
       const raceTokens = (url.searchParams.get("race") || "")
+        .split("|").map((s) => normalizeRaceToken(s)).filter(Boolean);
+      // comp=<a|b> → COMPETITION TITLE GATE (see compTitleMatches above and
+      // COMPETITION_TITLE_TOKENS in src/lib/youtube.ts). Same shape as `race`,
+      // one sport family over: the channel is right, the teams are right, the
+      // year is right, and the COMPETITION is wrong.
+      const compTokens = (url.searchParams.get("comp") || "")
         .split("|").map((s) => normalizeRaceToken(s)).filter(Boolean);
       // week=<n> → WEEK GATE for gridiron football (NFL / NCAAF regular season).
       // Same failure class as the race gate, one league down: the NFL channel
@@ -711,6 +736,12 @@ export default {
           // wrong event" posture as the World Cup gate below — a rejected race
           // resolves to null and the tile hides its button.
           if (!raceTitleMatches(raceTokens, titleLower)) continue;
+
+          // Competition gate (see the `comp` param above). Rejecting here hides
+          // the button, which is the intended failure direction — an U20 match
+          // rendered on a senior card would put a wrong scoreline on a card
+          // whose entire promise is that it doesn't leak one.
+          if (!compTitleMatches(compTokens, titleLower)) continue;
 
           // World Cup gate (see isWorldCupQuery above) — drop any video whose
           // title doesn't say "World Cup" so a friendly / qualifier / continental
@@ -1669,7 +1700,7 @@ export default {
             (isGolfQuery || queryHasSpecificTeams ? null : firstHighlightExtendedId)
           );
         }
-        if (!videoId && !isGolfQuery && !queryHasSpecificTeams && raceTokens.length === 0) {
+        if (!videoId && !isGolfQuery && !queryHasSpecificTeams && raceTokens.length === 0 && compTokens.length === 0) {
           // Raw-regex fallback — only for non-golf. For golf we'd
           // rather return 404 than guess wrong and let a random
           // PGA TOUR highlight win the Masters slot.

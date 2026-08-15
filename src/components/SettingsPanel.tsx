@@ -12,6 +12,10 @@ import {
 } from "@/lib/preferences";
 import { getAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
+// The one key that turns HideScore's self-hosted Umami off in this browser.
+// NoTrackToggle (/notrack) owns the same key — keep the two in step.
+const UMAMI_DISABLED_KEY = "umami.disabled";
+
 interface LeagueOption {
   sport: Sport;
   label: string;
@@ -35,6 +39,9 @@ interface SettingsPanelProps {
   // Settings is the one place someone is already looking for a league that
   // isn't there, so the ask belongs at the end of the catalog.
   onRequestLeague?: () => void;
+  // Opens the same footer feedback modal with an EMPTY message, for the quiet
+  // Feedback link in the legal row at the bottom of the panel.
+  onOpenFeedback?: () => void;
   // Every supported team league, including out-of-season leagues. Team
   // favorites are durable; the picker must not hide La Liga in July merely
   // because its score column is not active yet.
@@ -171,6 +178,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   rugbychamp: "Champions Cup",
   superrugby: "Super Rugby",
   rugbytest: "Rugby Tests",
+  nationschamp: "Rugby Nations",
   f1: "F1",
   nascar: "NASCAR",
   indycar: "IndyCar",
@@ -195,6 +203,7 @@ export default function SettingsPanel({
   resolvedTheme,
   leagueOptions,
   onRequestLeague,
+  onOpenFeedback,
   teamLeagueOptions,
   displayedLeagues,
   knownTeams,
@@ -207,6 +216,30 @@ export default function SettingsPanel({
   // Auto resolves to. Computed at render (client) so it reflects their device.
   let deviceTimeZone = "";
   try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
+  // Analytics opt-out, mirrored from the SAME localStorage key the /notrack
+  // page writes and the Umami script reads — this is a second door onto one
+  // switch, not a second setting. Deliberately not in `prefs`: it must not sync
+  // to the account or ride a settings-share link, because it is a per-browser
+  // choice about that browser. Read on open (not on mount) so the toggle is
+  // right even if /notrack was used in another tab since.
+  const [noTrack, setNoTrack] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    try { setNoTrack(window.localStorage.getItem(UMAMI_DISABLED_KEY) === "1"); }
+    catch { setNoTrack(false); }
+  }, [open]);
+  const applyNoTrack = (next: boolean) => {
+    try {
+      if (next) window.localStorage.setItem(UMAMI_DISABLED_KEY, "1");
+      else window.localStorage.removeItem(UMAMI_DISABLED_KEY);
+      setNoTrack(next);
+    } catch {
+      // Private mode / storage disabled: re-read rather than assume the write
+      // took, so the checkbox never claims a state that isn't persisted.
+      try { setNoTrack(window.localStorage.getItem(UMAMI_DISABLED_KEY) === "1"); }
+      catch { setNoTrack(false); }
+    }
+  };
   // ZIP → time zone helper state (Settings → Time zone).
   const [zip, setZip] = useState("");
   const [zipBusy, setZipBusy] = useState(false);
@@ -1376,6 +1409,48 @@ export default function SettingsPanel({
               </p>
             </div>
           )}
+
+          {/* The opt-out was live at /notrack the whole time, but that page is
+              noindex and linked only from the privacy policy — so in practice
+              nobody could find it. A visible switch is also the thing App
+              Review and privacy regulators look for. */}
+          <Section title="Privacy">
+            <ToggleRow
+              label="Don't count my visits"
+              hint="Turns off our self-hosted traffic measurement in this browser. Set per browser; clearing site data resets it."
+              checked={noTrack}
+              onChange={applyNoTrack}
+            />
+          </Section>
+
+          {/* Legal row — last, and deliberately quiet: muted, small, underlined
+              text, never a button. Privacy previously lived ONLY in the page
+              footer, which is behind this drawer and unreachable while it's
+              open — the one moment someone actually goes looking for it.
+              Feedback opens the footer feedback modal with an empty message
+              (the "Request a league" link above seeds a prefill instead). */}
+          <div className="pt-2 text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
+            {onOpenFeedback && (
+              <>
+                <button
+                  type="button"
+                  onClick={onOpenFeedback}
+                  className="underline underline-offset-2 cursor-pointer transition-opacity hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Feedback
+                </button>
+                <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
+              </>
+            )}
+            <a
+              href="/privacy"
+              className="underline underline-offset-2 transition-opacity hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Privacy
+            </a>
+          </div>
         </div>
       </div>
     </div>
