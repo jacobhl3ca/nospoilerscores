@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
+// Deliberately does NOT say "Highlights": the highlights queries that reach hockey
+// ("nhl highlights no spoilers", "spoiler free nhl highlights") now have their own
+// route at /nhl-highlights-without-spoilers, and two pages competing on one phrase
+// splits the signal instead of doubling it. This page keeps the scores intent.
 const TITLE = "NHL Scores Without Spoilers | HideScore";
 const DESC =
   "Check NHL scores, playoff games, recaps, and highlights without spoilers. HideScore keeps hockey results hidden until you reveal them.";
@@ -86,6 +90,7 @@ export default function NhlScoresWithoutSpoilersPage() {
       ctaHref="/yesterday"
       links={[
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
+        { href: "/nhl-highlights-without-spoilers", label: "NHL highlights" },
         { href: "/watch-sports-highlights-without-spoilers", label: "Highlights" },
         { href: "/today", label: "Today" },
       ]}
