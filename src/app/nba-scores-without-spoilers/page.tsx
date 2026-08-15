@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
-const TITLE = "NBA Scores Without Spoilers | HideScore";
+// 74 impressions / 0 clicks at position 11.5 (Search Console 2026-08-15). Same fix as
+// the NHL page: the reaching queries are "nba no spoilers" / "nba spoiler free", and
+// the phrase people actually scan for ("Highlights") was buried in the description.
+const TITLE = "NBA Highlights and Scores Without Spoilers | HideScore";
 const DESC =
-  "Check NBA scores, schedules, highlights, and game ratings without seeing the result first. HideScore keeps basketball scores hidden until you tap.";
+  "Watch NBA highlights, recaps, and game ratings without spoilers. HideScore keeps basketball scores and winners hidden until you reveal them, so you can pick a game before you know who won.";
 const CANONICAL = "/nba-scores-without-spoilers";
 
 const FAQ = [
