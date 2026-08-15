@@ -960,6 +960,7 @@ export default function EventCard({
       {!hideHistoricalMeta && <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
         <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
+          {isLive && <span className="sr-only">Live</span>}
           {isPost || isLive ? status : <span className="text-[11px] whitespace-nowrap">{status}</span>}
         </span>
         {!metaCompact && event.broadcasts.length > 0 && (
