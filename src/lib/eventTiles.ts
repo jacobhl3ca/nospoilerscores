@@ -280,9 +280,11 @@ export function eventTitleVariants(
 // ESPN lower-cases the tail of multi-word race cities — "Monte carlo",
 // "Mexico city", "Sao paulo", "Abu dhabi", "Kuala lumpur" (all five live on the
 // 2026 F1 calendar). Title-case each word so the subtitle doesn't read like a
-// typo. Deliberately dumb: it only ever changes the FIRST letter of a word, so
-// "of"/"de"/"the" inside a circuit name and an all-caps state code ("TX", "IA",
-// "PQ") come out unchanged.
+// typo. Deliberately dumb: it only ever touches the FIRST letter of each word.
+// An all-caps state/region code ("TX", "IA", "PQ") already starts uppercase, so
+// it comes out unchanged; short function words inside a name ARE capitalized too
+// ("Circuit of the Americas" → "Circuit Of The Americas"), which reads fine for
+// these terse venue/city subtitles (see the eventSubtitleVariants test).
 export function titleCasePlace(s: string): string {
   return String(s || "").replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
