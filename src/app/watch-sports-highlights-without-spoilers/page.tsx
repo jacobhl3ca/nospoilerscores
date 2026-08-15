@@ -88,6 +88,7 @@ export default function WatchSportsHighlightsWithoutSpoilersPage() {
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
         { href: "/mlb-highlights-without-spoilers", label: "MLB" },
         { href: "/nfl-highlights-without-spoilers", label: "NFL" },
+        { href: "/nhl-highlights-without-spoilers", label: "NHL" },
         { href: "/soccer-highlights-without-spoilers", label: "Soccer" },
         { href: "/worldcup/highlights", label: "World Cup" },
       ]}
