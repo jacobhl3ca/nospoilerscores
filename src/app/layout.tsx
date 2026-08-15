@@ -8,9 +8,16 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const SITE_TITLE = "HideScore — Spoiler-Free Sports Scores & Highlights | NBA, NFL, NHL, MLB";
+// The previous title ran 71 chars, so Google cut it after "…Scores & Highlights" and
+// the "| NBA, NFL, NHL, MLB" tail never rendered in the SERP. Search Console
+// 2026-08-15: the homepage took 149 impressions at position 6.9 for "spoiler free nhl
+// highlights" and earned 0 clicks, while converting fine (33/406) on brand queries. So
+// keep "HideScore" first and pull the sports plus "Highlights" inside the ~60-char
+// window instead of leaving them past the truncation point. NFL comes out of the list
+// on purpose: its highlights are embed-blocked league-wide, and it keeps its own page.
+const SITE_TITLE = "HideScore: Spoiler-Free NHL, NBA & MLB Highlights and Scores";
 const SITE_DESC =
-  "Spoiler-free sports scores and highlights. Check NBA, MLB, NHL, NFL, soccer, and golf without seeing the score. Game ratings tell you if it's worth watching before you hit play.";
+  "Watch NHL, NBA, MLB, NFL and soccer highlights without spoilers. HideScore hides every score and winner until you choose to reveal it, and game ratings tell you if a game is worth watching before you hit play.";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
@@ -452,11 +459,29 @@ export default function RootLayout({
           async
           src="https://gc.zgo.at/count.js"
         />
+        {/* The Capacitor shells load this site remotely (server.url), so every app
+            open lands in Umami as an ordinary web visit and there is no way to tell
+            them apart. That is not academic: the Play closed test (15 paid testers,
+            from Aug 5 2026) pushed tonightnyc.com's homepage 57 -> 211 views and the
+            weekly insights job scored it a #1 "breakout" worth chasing. Tag app
+            traffic so web numbers stay web numbers.
+
+            This runs as a before-send hook rather than a load-time data-tag attribute
+            on purpose: the tracker reads data-tag once when it loads, which races the
+            native bridge injecting window.Capacitor, while before-send fires per event
+            and is always late enough to see it. It must return the payload on every
+            path — a throw or an undefined return silently drops the event. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__umamiTagApp=function(t,p){try{var c=window.Capacitor;if(c&&(typeof c.isNativePlatform==="function"?c.isNativePlatform():c.isNative)){p.tag="app"}}catch(e){}return p};`,
+          }}
+        />
         {/* Umami analytics — self-hosted on the Mac mini, privacy-first */}
         <script
           defer
           src="https://stats.hidescore.com/script.js"
           data-website-id="bd9fa6f3-8754-4ca6-b439-f9e2bdeec66d" data-domains="hidescore.com,www.hidescore.com"
+          data-before-send="__umamiTagApp"
         />
         {/* PWA service worker — prod only; in dev it caches stale chunks and breaks hydration */}
         {process.env.NODE_ENV === "production" && (
