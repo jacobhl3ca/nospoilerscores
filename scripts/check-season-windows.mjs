@@ -90,12 +90,18 @@ function parseLeagues() {
   for (const m of body.matchAll(/\{\s*sport:\s*"(\w+)",\s*label:\s*"([^"]+)"([^}]*)\}/g)) {
     const rest = m[3];
     const field = (k) => (rest.match(new RegExp(`${k}:\\s*"([^"]+)"`)) || [])[1];
+    const num = (k) => {
+      const v = (rest.match(new RegExp(`${k}:\\s*(\\d+)`)) || [])[1];
+      return v ? Number(v) : undefined;
+    };
     out.push({
       sport: m[1],
       label: m[2],
       startDate: field("startDate"),
       endDate: field("endDate"),
       kickoffDate: field("kickoffDate"),
+      scheduleReleaseDate: field("scheduleReleaseDate"),
+      verifiedFor: num("verifiedFor"),
       yearCycle: /yearCycle:/.test(rest),
       excludeFromAuto: /excludeFromAuto:\s*true/.test(rest),
       backfillOnly: /backfillOnly:\s*true/.test(rest),
@@ -271,6 +277,27 @@ async function checkLeague(cfg, paths, now) {
   const open = mmddToDate(cfg.kickoffDate ?? cfg.startDate, openYear);
   const close = mmddToDate(cfg.endDate, wraps ? openYear + 1 : openYear);
 
+  // The fixture probes below only prove the OPENER and the LAST GAME sit inside
+  // the window. They say nothing about championshipDate, or about a league that
+  // moved its finale by a week — the class of bug the 2026-08-09 hand audit
+  // found. `verifiedFor` is the human half of that loop: the opener year someone
+  // actually sat down and checked. Once a league has published the schedule for
+  // a season nobody has verified, the config is due for a look, and saying so is
+  // the only way that ever surfaces. Gated on scheduleReleaseDate so it can only
+  // fire for the six leagues whose release date we actually know.
+  let stale = null;
+  if (cfg.scheduleReleaseDate && cfg.verifiedFor) {
+    // Which season did the most recent release announce? A release that falls
+    // BEFORE the league's own startDate in the calendar announces that same
+    // year's season (NBA drops Aug 14 for an Oct 20 opener). One that falls
+    // after it announces the next (MLB dropped Jul 16 2026 for March 2027).
+    const releaseYear = mmddToDate(cfg.scheduleReleaseDate, year) > now ? year - 1 : year;
+    const announced = cfg.scheduleReleaseDate < cfg.startDate ? releaseYear : releaseYear + 1;
+    if (cfg.verifiedFor < announced) {
+      stale = `the ${announced} schedule dropped ${cfg.scheduleReleaseDate}, but this window was last verified for ${cfg.verifiedFor} — recheck the opener and the championship, then bump verifiedFor`;
+    }
+  }
+
   // Probe a window around each edge rather than the whole season — ESPN caps
   // how much a single ranged request will return.
   const preseason = /preseason/i.test(cfg.label);
@@ -314,7 +341,7 @@ async function checkLeague(cfg, paths, now) {
     }
   }
 
-  return { cfg, issues, notes };
+  return { cfg, issues, notes, stale };
 }
 
 const args = process.argv.slice(2);
@@ -340,33 +367,50 @@ const leagues = parseLeagues().filter((l) => {
 });
 
 let flagged = 0;
+let stale = 0;
 let unverified = 0;
 let skipped = 0;
 for (const cfg of leagues) {
   const r = await checkLeague(cfg, paths, now);
   if (!r) continue;
   const window = `${cfg.startDate}→${cfg.endDate}${cfg.kickoffDate ? ` (kickoff ${cfg.kickoffDate})` : ""}`;
+  // One header line per league, marked with the worst thing found, then the
+  // detail indented under it. A stale verifiedFor counts even when the fixture
+  // probes are clean — the probes and the human re-verification catch different
+  // bugs, so one passing does not excuse the other.
+  const detail = [];
+  let marker;
   if (r.skipped) {
     skipped++;
-    console.log(`- ${cfg.label.padEnd(14)} ${window}  (per-event window, tour-wide feed — not checkable here)`);
+    marker = "-";
+    detail.push("per-event window, tour-wide feed — not checkable here");
   } else if (r.issues.length) {
     flagged++;
-    console.log(`✗ ${cfg.label.padEnd(14)} ${window}`);
-    for (const i of r.issues) console.log(`    ${i}`);
+    marker = "✗";
+    detail.push(...r.issues);
   } else if (r.notes.length) {
     // Unverifiable is NOT the same as correct — a schedule ESPN has not
     // published yet has to read as "recheck later", or a silent gap becomes a
     // green check.
     unverified++;
-    console.log(`? ${cfg.label.padEnd(14)} ${window}  (${r.notes.join("; ")})`);
+    marker = "?";
+    detail.push(...r.notes);
   } else {
-    console.log(`✓ ${cfg.label.padEnd(14)} ${window}`);
+    marker = "✓";
   }
+  if (r.stale) {
+    stale++;
+    if (marker === "✓" || marker === "?") marker = "!";
+    detail.push(r.stale);
+  }
+  console.log(`${marker} ${cfg.label.padEnd(14)} ${window}`);
+  for (const d of detail) console.log(`    ${d}`);
 }
 
+const tail = `${stale ? ` ${stale} awaiting re-verification after a schedule release.` : ""}${unverified ? ` ${unverified} unverifiable — recheck when ESPN publishes.` : ""}${skipped ? ` ${skipped} skipped.` : ""}`;
 console.log(
   flagged
-    ? `\n${flagged} league window(s) need updating.${unverified ? ` ${unverified} unverifiable — recheck when ESPN publishes.` : ""}${skipped ? ` ${skipped} skipped.` : ""}`
-    : `\nAll verifiable league windows cover their fixtures.${unverified ? ` ${unverified} unverifiable — recheck when ESPN publishes.` : ""}${skipped ? ` ${skipped} skipped.` : ""}`,
+    ? `\n${flagged} league window(s) need updating.${tail}`
+    : `\nAll verifiable league windows cover their fixtures.${tail}`,
 );
-process.exit(flagged ? 1 : 0);
+process.exit(flagged || stale ? 1 : 0);

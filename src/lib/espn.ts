@@ -115,14 +115,32 @@ const SPORT_PATHS: Record<Sport, string> = {
   //   271937 European Champions Cup       (cal 12-05 → 05-23)
   //   242041 Super Rugby Pacific          (cal 02-13 → 06-20)
   //   289234 International Test Match     (cal 04-03 → 11-13)
+  //   17567  Nations Championship         (cal 07-04 → 11-29, added 2026-08-12)
   // Deliberately NOT shipped: French Top 14 (270559) — real and verified, but
   // a 10-month domestic window for the smallest US audience of the six. Its id
   // is recorded here so nobody re-probes for it.
+  //
+  // ⚠️ The Nations Championship path segment is 17567, NOT the league's own id
+  // (24400). ESPN's `/v2/sports/rugby/leagues` returns BOTH per league and the
+  // scoreboard route keys on `slug`, which for every rugby competition is the
+  // numeric path id — 24400 404s. Same shape for the other five (Six Nations is
+  // id 8323, path 180659), which is why every line here is a path, not an id.
+  //
+  // ⚠️ The Nations Championship is not an ADDITIONAL competition — in 2026 it
+  // REPLACED the July/November international windows. `The Rugby Championship`
+  // (path 244293) is stuck on its 2025 season for exactly that reason, and
+  // `rugbytest` (289234) returns ZERO events for every 2026 date checked on
+  // 2026-08-12, so there is no duplicate-fixture overlap between the two
+  // columns. Do not "fix" rugbytest's empty column by pointing it here — as of
+  // 2026-08-13 there IS no empty column: rugbytest is yearCycle-gated to odd
+  // years and nationschamp to even ones, so exactly one of the two is live in
+  // any given year. See their ALL_LEAGUES entries.
   sixnations: "/rugby/180659/scoreboard",
   rugbywc: "/rugby/164205/scoreboard",
   rugbychamp: "/rugby/271937/scoreboard",
   superrugby: "/rugby/242041/scoreboard",
   rugbytest: "/rugby/289234/scoreboard",
+  nationschamp: "/rugby/17567/scoreboard",
   f1: "/racing/f1/scoreboard",
   // NASCAR Cup + IndyCar (added 2026-08-03). Both share F1's racing shape, so
   // they render through the same single-race event tile. Two differences from
@@ -365,7 +383,49 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Internationals (summer/autumn tours + one-off tests). No championship —
   // it is a run of standalone fixtures, not a competition with a final, so
   // championshipDate is deliberately absent.
-  { sport: "rugbytest", label: "Rugby Tests", startDate: "04-03", endDate: "11-13", verifiedFor: 2026, excludeFromAuto: true },
+  //
+  // ⚠️ ODD YEARS ONLY (gated 2026-08-13). The Nations Championship REPLACED the
+  // July/November test windows in the years it runs, and it runs in even years
+  // (2026, 2028 — never a World Cup or Lions year). ESPN 289234 accordingly
+  // returned zero events for every 2026 date checked, on 2026-08-12 and again
+  // on 2026-08-13, across all three of April, July and November. Without the
+  // gate the column is addable from the switcher and then sits empty for eight
+  // months of a "live" season window, which reads as broken rather than as
+  // offseason. With it, 2026 hides the column entirely and the season-opener
+  // probe walks forward to Apr 2027. Anchor 2027 is the yearCycle complement of
+  // nationschamp's anchor 2026 — the two columns alternate by construction.
+  //
+  // verifiedFor is deliberately ABSENT: 2026 is now known to have no fixtures,
+  // and 2027's window is inherited from ESPN's generic calendar, not confirmed
+  // against a published schedule. 2027 is also a Rugby World Cup year (Oct–Nov,
+  // Australia), so the autumn half of this window will likely be swallowed by
+  // rugbywc and the real content is the July warm-ups. RE-VERIFY the window
+  // against ESPN before the 2027 season rather than trusting 04-03 → 11-13.
+  { sport: "rugbytest", label: "Rugby Tests", startDate: "04-03", endDate: "11-13", excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
+  // ── Nations Championship (added 2026-08-12, on request) ──
+  // World Rugby's new senior international competition: the Six Nations and
+  // SANZAAR sides plus Japan and Fiji, pool matches in July and the finals
+  // weekend in November. Window is ESPN's own published calendar for path
+  // 17567, read live on 2026-08-12 — 13 game days, 07-04 → 11-29, 36 fixtures
+  // (the 18 July pool matches are complete; the November leg is scheduled and
+  // the 11-27/28/29 finals are TBD until the pools settle).
+  //
+  // ⚠️ The window has a deliberate ~15-week HOLE in it (Jul 19 → Nov 5) that
+  // the single start/end model cannot express. That is survivable only because
+  // this is excludeFromAuto: an empty column can never be auto-picked onto
+  // someone's board, it only appears if they chose the league themselves.
+  //
+  // BIENNIAL, even years — mod 2 / anchor 2026. World Rugby runs it in every
+  // year that is not a Rugby World Cup (2027, 2031) or a Lions tour (2029,
+  // 2033), all of which are odd, so the parity test is exact rather than an
+  // approximation. Without the gate the column would sit empty all of 2027.
+  //
+  // Label is "Rugby Nations", not the full "Nations Championship": the column
+  // header reserves a fixed width sized to the longest label in this list
+  // ("Rugby World Cup"), and a 20-character name would push the ‹ › arrows out
+  // from under the pointer. "Rugby Nations" also reads unambiguously next to
+  // "Six Nations" in the switcher, which "Nations Champ" does not.
+  { sport: "nationschamp", label: "Rugby Nations", startDate: "07-04", endDate: "11-29", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
   // ── F1 + UFC (single-event tiles) ──
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
@@ -598,7 +658,7 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
   nfl: "🏈", ncaaf: "🏈", nhl: "🏒", golf: "⛳", tennis: "🎾",
-  sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉",
+  sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
@@ -657,7 +717,7 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   boxing: "other", cricket: "other", chess: "other", poker: "other",
   esports: "other",
   sixnations: "other", rugbywc: "other", rugbychamp: "other",
-  superrugby: "other", rugbytest: "other",
+  superrugby: "other", rugbytest: "other", nationschamp: "other",
 };
 
 export function sportGroup(sport: Sport): SportGroup {
@@ -677,7 +737,7 @@ export function sportGroup(sport: Sport): SportGroup {
 // which columns you get.
 const CATALOG_TAIL: ReadonlySet<Sport> = new Set<Sport>([
   "llws",
-  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest",
+  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
 ]);
 
 // Sort rank within a Settings group: minority events last, then in-season
@@ -1158,6 +1218,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   rugbychamp: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   superrugby: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   rugbytest:  { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
+  nationschamp: { multiplier: 5, overtimeBonus: 20, scoringDivisor: 8, regulationPeriods: 2 },
   golf:   { multiplier: 1,   overtimeBonus: 10, scoringDivisor: 1,   regulationPeriods: 4 },
   tennis: { multiplier: 25,  overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 4 },
   // F1 / UFC render as single-event tiles (no Game objects), so these are
@@ -2283,6 +2344,7 @@ export function espnGameUrl(game: Game): string {
     case "rugbychamp": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/271937`;
     case "superrugby": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/242041`;
     case "rugbytest":  return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/289234`;
+    case "nationschamp": return `https://www.espn.com/rugby/match/_/gameId/${game.id}/league/17567`;
     case "epl":
     case "mls":
     case "fifa":
@@ -2348,6 +2410,7 @@ export function sportStreamFallback(sport: Sport): string {
     case "rugbychamp":
     case "superrugby":
     case "rugbytest":
+    case "nationschamp":
       return "https://www.espn.com/rugby/";
     case "mls": return "https://tv.apple.com/us/mls";
     case "epl": return "https://www.peacocktv.com/";
@@ -2629,6 +2692,76 @@ function getCycleWatch(gamePk: string): CycleBid | null {
   return entry?.bid ?? null;
 }
 
+// Perfect-game confirmation, straight from MLB's own live-feed flags.
+//
+// The schedule+linescore hydrate CANNOT prove a perfect game. `leftOnBase`
+// counts only runners stranded when an inning ends, so a baserunner who is
+// erased still leaves runs+LOB at 0: Dansby Swanson walked in the 6th of
+// CHC@WSH on 2026-08-13 and was doubled off, and the old runs+LOB proxy kept
+// flying PERFECT GAME on a bid that had already died. Walks that score, HBP
+// and errors have the same hole.
+//
+// The v1.1 live feed carries the authoritative flags, and a `fields` filter
+// trims that ~525 KB payload to ~165 bytes — cheap enough to poll for the
+// handful of games that ever clear the no-hit gate. Cached + refreshed in the
+// background so the score poll never blocks on it, and a cold or failed cache
+// reads as "not perfect", which degrades to the No-Hitter badge rather than
+// over-claiming.
+//
+// Verified by replaying Domingo German's 2023-06-28 perfect game through the
+// feed's `timecode` param: awayTeamPerfectGame flips true at Top 6 — the same
+// threshold the gate below already uses — and stays true to the final out. So
+// the flag is live, not a post-game stamp, and it does not under-report inside
+// our window. (It is also non-inverted: German pitched for the AWAY team.)
+interface PerfectFlags {
+  awayTeamPerfectGame: boolean; // away team is THROWING the perfect game
+  homeTeamPerfectGame: boolean;
+}
+const perfectFlagsCache = new Map<string, { ts: number; flags: PerfectFlags }>();
+const perfectFlagsInFlight = new Set<string>();
+const PERFECT_FLAGS_TTL = 15_000;
+// Serve-while-revalidate has a ceiling: if the feed goes away entirely we must
+// stop trusting a cached `true`, or a dead fetch freezes PERFECT GAME on screen
+// for the rest of the game.
+const PERFECT_FLAGS_MAX_AGE = 90_000;
+
+async function refreshPerfectFlags(gamePk: string): Promise<void> {
+  if (perfectFlagsInFlight.has(gamePk)) return;
+  perfectFlagsInFlight.add(gamePk);
+  try {
+    const res = await fetchWithRetry(
+      `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live?fields=gameData,flags,awayTeamPerfectGame,homeTeamPerfectGame`,
+      1,
+      5000,
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    const f = data?.gameData?.flags;
+    if (!f) return;
+    perfectFlagsCache.set(gamePk, {
+      ts: Date.now(),
+      flags: {
+        awayTeamPerfectGame: f.awayTeamPerfectGame === true,
+        homeTeamPerfectGame: f.homeTeamPerfectGame === true,
+      },
+    });
+  } catch {
+    // Non-critical — the bid just stays labelled a no-hitter this round.
+  } finally {
+    perfectFlagsInFlight.delete(gamePk);
+  }
+}
+
+// Has MLB confirmed `side` is throwing a perfect game? Kicks off a background
+// refresh when the cache is cold or stale, and answers false until one lands.
+function isPerfectGameConfirmed(gamePk: string, side: "away" | "home"): boolean {
+  const entry = perfectFlagsCache.get(gamePk);
+  const age = entry ? Date.now() - entry.ts : Infinity;
+  if (age > PERFECT_FLAGS_TTL) void refreshPerfectFlags(gamePk);
+  if (!entry || age > PERFECT_FLAGS_MAX_AGE) return false;
+  return side === "home" ? entry.flags.homeTeamPerfectGame : entry.flags.awayTeamPerfectGame;
+}
+
 // MLB Stats API: fetch per-game metadata for a date, keyed by "away@home"
 // (abbreviations). Returns the gamePk for the MLB.tv deep link plus the live
 // linescore signals needed to compute the No-Hit Alert badge.
@@ -2637,10 +2770,6 @@ interface MlbGameMeta {
   isLive: boolean;       // status.abstractGameState === "Live"
   awayHits?: number;
   homeHits?: number;
-  awayRuns?: number;
-  homeRuns?: number;
-  awayLeftOnBase?: number;
-  homeLeftOnBase?: number;
   currentInning?: number; // 1-9+
 }
 async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>> {
@@ -2671,10 +2800,6 @@ async function fetchMLBGameMeta(date?: string): Promise<Map<string, MlbGameMeta>
           isLive: game.status?.abstractGameState === "Live",
           awayHits: ls.teams?.away?.hits,
           homeHits: ls.teams?.home?.hits,
-          awayRuns: ls.teams?.away?.runs,
-          homeRuns: ls.teams?.home?.runs,
-          awayLeftOnBase: ls.teams?.away?.leftOnBase,
-          homeLeftOnBase: ls.teams?.home?.leftOnBase,
           currentInning: ls.currentInning,
         };
         // Key by "away@home". A doubleheader is two games with the SAME
@@ -4038,10 +4163,12 @@ export async function fetchGames(
       // No-Hit / Perfect Game Alert: live game, opposing batting team has 0
       // hits, pitcher has carried the bid into at least the 6th inning (5
       // complete innings of no-hit ball). Matches the MLB.com Gameday alert
-      // threshold. The opposing team's runs+leftOnBase=0 upgrades it to a
-      // perfect game (catches walks/HBP/errors via aggregate runners-on
-      // without needing the boxscore hydrate). Cleared on next refresh as
-      // soon as a hit drops or a runner reaches.
+      // threshold. Cleared on next refresh as soon as a hit drops.
+      //
+      // The upgrade to PERFECT GAME is MLB's call alone (see
+      // isPerfectGameConfirmed). Nothing in the linescore can stand in for it:
+      // this is the `hits === 0` gate deciding WHICH game to ask about, and
+      // MLB's flag deciding the answer.
       //
       // Rating override: a no-hit bid is always interesting regardless of
       // score margin, so floor the rating at 95 (always GREAT). A perfect
@@ -4050,14 +4177,10 @@ export async function fetchGames(
       if (meta.isLive && game.state === "in" && (meta.currentInning ?? 0) >= 6) {
         if (meta.awayHits === 0) {
           game.noHitterPitchingTeam = game.homeTeam.abbreviation;
-          if ((meta.awayRuns ?? 0) === 0 && (meta.awayLeftOnBase ?? 0) === 0) {
-            game.isPerfectGame = true;
-          }
+          if (isPerfectGameConfirmed(meta.gamePk, "home")) game.isPerfectGame = true;
         } else if (meta.homeHits === 0) {
           game.noHitterPitchingTeam = game.awayTeam.abbreviation;
-          if ((meta.homeRuns ?? 0) === 0 && (meta.homeLeftOnBase ?? 0) === 0) {
-            game.isPerfectGame = true;
-          }
+          if (isPerfectGameConfirmed(meta.gamePk, "away")) game.isPerfectGame = true;
         }
         if (game.isPerfectGame) {
           game.rating = 110;

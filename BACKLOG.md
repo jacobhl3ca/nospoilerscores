@@ -1,5 +1,97 @@
 # HideScore — Master Backlog
 
+## 2026-08-13 — `rugbytest` gated to ODD years (closes the empty-column question)
+
+✅ **The open call from the 8/12 entry is decided: gate it, don't leave it.** `rugbytest`
+(ESPN 289234) now carries `yearCycle {mod:2, anchor:2027}` — the exact complement of
+`nationschamp`'s `anchor:2026`, so **exactly one of the two columns is live in any year.**
+Re-confirmed zero events on 289234 for 2026-06-15, 2026-07-11 and 2026-11-07 before
+changing anything.
+
+**Why gate rather than leave it:** `excludeFromAuto` kept it out of the auto-picker but NOT
+out of the switcher, so it was addable and then empty for the whole `04-03 → 11-13` window.
+Eight months of a column that says it is in season and shows nothing reads as broken. With
+the gate, 2026 drops it from `thirdLeagueOptions` entirely and the season-opener probe walks
+forward to **Apr 2027** ("Returns ~Apr 3"), which is the answer someone opening it wants.
+
+🗑️ **Dropped `verifiedFor: 2026`** — it asserted a 2026 opener now known not to exist. Left
+absent rather than moved to 2027: the 2027 window is inherited from ESPN's generic calendar,
+not confirmed against a published schedule.
+
+⚠️ **2027 is a Rugby World Cup year (Oct–Nov, Australia), so re-verify the window before the
+season** — the autumn half of `04-03 → 11-13` will likely be swallowed by `rugbywc` and the
+real content is the July warm-ups.
+
+📊 Verified: `tsc --noEmit` clean, 39/39 unit tests, `npm run build` clean, GHA `6836506b`
+green on all three workflows, and the **LIVE prod bundle** confirmed carrying
+`sport:"rugbytest",…,yearCycle:{mod:2,anchor:2027}` with no `verifiedFor`. Gate truth table
+(2026 Apr/Jul/Nov → Tests off, Nations on · 2027 → Tests on, Nations off · 2028 → flips back).
+
+## 2026-08-12 — Nations Championship shipped (league request); the U20 wrong-match trap and the `comp=` gate; rugby was unmonitored
+
+✅ **`nationschamp` — World Rugby's Nations Championship, ESPN path `/rugby/17567`.** Opt-in
+(`excludeFromAuto`), "Racing, combat & more", labeled **"Rugby Nations"**, biennial
+(`yearCycle {mod:2, anchor:2026}` — every non-RWC, non-Lions year is even). Window
+`07-04 → 11-29` from ESPN's own published calendar: **36 fixtures, the 18 July pool
+matches complete, the November leg scheduled, the finals weekend TBD.**
+
+⚠️ **It REPLACED the July/November test windows — it is not an extra column.** `The Rugby
+Championship` (path 244293) is frozen on its **2025** season for that reason, and
+**`rugbytest` (289234) returns ZERO events for every 2026 date checked**, so there is no
+duplicate-fixture overlap. Do not "fix" rugbytest's empty column by pointing it here.
+
+🚨 **The channel gate alone would have served WRONG MATCHES.** `World Rugby` strict-resolved
+**13/18** July fixtures — and **three of those thirteen were U20 Junior World Championships
+matches**. That tournament runs in the same July window between the same NATIONS, so
+"Italy v Japan | Junior World Championships 2026" satisfies the channel gate, the
+both-teams gate AND the year gate for the senior Italy–Japan fixture on the same day. That
+is a wrong scoreline on a card whose whole promise is not leaking one.
+
+🆕 **Fix = a new `comp=` COMPETITION TITLE GATE** in `public/_worker.js` — the race gate's
+sibling for team sports (`compTitleMatches`, pipe-separated, OR across tokens, driven by
+`COMPETITION_TITLE_TOKENS` in `src/lib/youtube.ts`). Empty token list = no gate, so every
+other sport is byte-for-byte unchanged (verified: an MLB lookup returns the same video).
+It is also excluded from the raw-regex rescue tier, the exact hole the race gate fell
+through on 2026-08-04.
+
+⚠️ **Query text stays BARE.** Appending the competition name is a measured false-negative
+generator on rugby (World Rugby: 0/3 with "Rugby World Cup" appended, 5/5 without).
+**Recall comes from the bare query, precision from the title gate.**
+
+📊 **Verified END-TO-END against a LOCAL `wrangler pages dev` worker over all 18 completed
+fixtures, both channels, gate live:**
+
+| | result |
+|---|---|
+| coverage | **15/18** fixtures show a highlight button |
+| wrong-competition hits | **0** (was 3 without the gate) |
+| `World Rugby` (primary) | 10/18 correct |
+| `Super Rugby Pacific` (secondary) | covers 5 more — the southern-hosted fixtures World Rugby skips |
+
+- **⛔ NOT "SANZAAR TV".** It wins the UNSCOPED search for several of these and looks like the
+  obvious answer — **0/5 on strict.** Verified, not assumed.
+- **3 uncovered, knowingly:** Italy–Japan 7/4 (only a U20 video exists), Italy–Australia 7/18
+  (neither channel posted it), Ireland–New Zealand 7/18 — the last is the gate's **one true
+  positive cost**: Super Rugby Pacific has the right match under the title "July
+  Internationals | New Zealand v Ireland - Third Test Highlights", which never says Nations
+  Championship. Correct trade — a hidden button is recoverable, a wrong score is not. **Do
+  NOT widen the token to "july internationals"**: generic enough to match a plain test.
+
+🚨 **Rugby has been shipping UNMONITORED since 8/11.** `scripts/check-highlight-fallbacks.mjs`
+had OFFICIAL_CHANNELS entries and buffer/period rows for the rugby leagues but **no
+`ESPN_PATHS` row**, so the audit never fetched a single rugby fixture. Added
+`sixnations`/`superrugby`/`rugbywc`/`nationschamp`; the checker now also sends `comp=`, without
+which it would accept a U20 video and report green on a button the app is hiding.
+
+🧹 **Two consistency fixes found on the way:**
+- The rugby keys were **missing from `highlightBufferHours`** in `GameHighlights.tsx`, taking
+  the 4h default while the audit's mirror said 3 — i.e. the audit could flag a "missing"
+  button during the hour the app was deliberately hiding it. Now 3 in both, plus explicit
+  `regulationPeriods: 2`.
+- The official-highlight badge uppercases the sport KEY, so the rugby cards read
+  **"SIXNATIONS" / "SUPERRUGBY" / "RUGBYWC"**. Added `highlightBadgeLabel` rows:
+  `6 NATIONS`, `SUPER RUGBY`, `RWC`, `CHAMPIONS`, `TESTS`, `NATIONS`.
+
 ## 2026-08-04 — PH account live + launch set **Tue Aug 11**; 3 onboarding modals → 1; NWSL/NASCAR/IndyCar feeds MERGED
 🚀 **Product Hunt account created and verified live: `producthunt.com/@jacobhl`** (display name **Jacob Heifetz-Licht**, user **#10099686**). Bio = "Visit jacobhl.com for all projects!", photo present, LinkedIn + Roosevelt Island links attached. **Personal account, hunted by Jacob himself** — PH prohibits company accounts, and a same-hour signup + launch reads as cold, which is why the account was made a week ahead.
 📅 **Launch = Tue Aug 11 2026, 00:01 PST / 3:01am ET.** No alarm needed — PH's submit form has a **"Schedule for later"** toggle (status flips to *Scheduled*, up to a month out). Tue–Wed is the window; **Mon and Fri are the two days to avoid.** Two gcal events created on his `Events` calendar:
@@ -551,6 +643,107 @@ _src: 2026-08-03 session_
 
 - Fix = update the bundled HTML + ship it in the next build. No urgency of its own; fold it into whatever the next HideScore iOS release is so it doesn't cost a build by itself.
 - Detail: `privacy-audit-2026-08-04.html`.
+
+## 2026-08-12 — NFL path verified clean; rugby/LLWS channels probed and decided; two frozen data feeds deleted
+
+**NFL (checked before September, nothing to fix).** `check-nfl-weeks.mjs` 13/13 ok,
+`check-nfl-team-channels.mjs` **32/32 clubs match their channel's own feed**, and
+`check-season-windows.mjs` verifies **NFL `09-07→02-16` (kickoff 09-09)** and
+**NFL Preseason `07-21→09-03`** against ESPN's published fixtures. 5 leagues read
+"unverifiable" (NCAAM, NBA, NHL, UCL, MLS) only because ESPN has not published their
+finals yet — recheck later, nothing is wrong.
+
+**`OFFICIAL_CHANNELS` for the six sports added 8/11 — all six shipped with NO entry,
+so all six were falling through to the unscoped search.** Probed each against **five
+real completed fixtures** through the live worker with `strict=1`, then read every hit
+back through oembed to confirm the uploader.
+
+⚠️ **The probe query must be BARE** — `A vs B highlights M/D/YYYY`, no competition
+token, because `COMPETITION_NAMES` carries `fifa` only. Appending one gives false
+negatives: World Rugby read **0/3 with "Rugby World Cup" appended and 5/5 without it**.
+
+| key | verdict | channel | strict score |
+|---|---|---|---|
+| `rugbywc` | ✅ added | `World Rugby` | **5/5** |
+| `sixnations` | ✅ added | `Guinness Men's Six Nations` | **4/5** |
+| `superrugby` | ✅ added | `Super Rugby Pacific` | **3/5** |
+| `llws` | ⛔ dark | — | 0/2 official |
+| `rugbychamp` | ⛔ dark | — | 0/5 on three candidates |
+| `rugbytest` | ⛔ dark | — | best 2/5, wrong-match risk |
+
+- **Six Nations is sponsor- AND gender-qualified.** "Six Nations Rugby" and "Guinness
+  Six Nations" both **0/3**; only the full `Guinness Men's Six Nations` resolves.
+  Re-check when the title sponsor changes — it is in the channel name.
+- **⛔ LLWS was serving a channel called "Matt H."** A fan aggregator won the unscoped
+  search for **both** live 2026 fixtures. Little League's own channel and "ESPN" are
+  **0/2** on strict — ESPN holds the broadcast and posts no per-game cut. This was live
+  and wrong during the tournament, which is running now through Aug 30.
+- **⛔ Champions Cup has no competition-level uploader.** 0/5 on "Investec Champions
+  Cup", "EPCR Rugby" and "Champions Cup"; the unscoped winner was **"Glasgow Warriors"**,
+  one of the two clubs in that match, and four of five fixtures returned nothing.
+- **⛔ November tests have no owner.** Best was "Quilter Nations Series" at 2/5 (England
+  home tests only) — and that is a **title sponsor that rebrands every cycle**, the same
+  hazard as "Ligue 1 McDonald's". "World Rugby" scored 1/5 and its hit on the first probe
+  was a **wrong match** — a 2025 *Women's* Rugby World Cup game served for a men's test.
+  Unscoped winners were "Rugby Mzansi" and "Match Videos", both fan channels.
+
+**🧬 The checker's mirror had drifted.** `scripts/check-highlight-fallbacks.mjs` keeps a
+copy of `OFFICIAL_CHANNELS`; `mlb` was **missing entirely** and `fifa` read `"FIFA"` while
+the app has sent `"FOX Sports"` since the World Cup work. A drifted mirror means green
+there proved nothing for those two leagues. Synced, plus the three new rugby keys and
+their buffer/period entries.
+
+**🗑️ Deleted `public/espn-airings.json` + `public/prime-asins.json`.** Both are served
+from R2 (`R2_ROOT_PATHS` in `_worker.js`) and the repo copies were frozen at **May 13**,
+sitting underneath as the documented fall-through on an R2 miss. `prime-asins` keys on a
+**dateless matchup string** (`"kc current vs. dash"`), so that fallback would hand today's
+game a three-month-old Prime link — a real wrong-answer path, not just clutter. Both now
+in `.gitignore`. On a miss the client gets a 404 → empty map → the deep link simply is not
+upgraded. **`big-inning-schedule.json` deliberately kept**: CI reads it as a merge base and
+it is date-keyed, so a stale entry can never collide with today.
+
+Typecheck clean, `npm run build` clean. **Committed `190fa9a3`, NOT pushed** — pushing to
+`main` deploys. LLWS is live through Aug 30, so the fan-channel fix is the one with a
+closing window.
+
+## 2026-08-12 — QA pass: everything claimed on Aug 11 is genuinely live; one shipped Android release had no source commit
+
+Verified, not taken on trust. **28/28 feeds fresh, all four Aug-11 deploys green, live site 200.**
+
+- ✅ **hidescore.com 200** (61 KB). The four Aug-11 GHA deploys all `success`
+  (`31550173188`, `31554539339`, `31555172596`, `31555686778`, ~1m each, last at 02:04 UTC Aug 12).
+  Local repo is **0 ahead / 0 behind `origin/main`**.
+- ✅ **Rugby + Little League really shipped.** `llws`, `sixnations`, `superrugby` all present in the
+  deployed bundle `/_next/static/chunks/30z7jgng0sidd.js`. Absent from the homepage HTML, which is
+  correct — all six are `excludeFromAuto` and only appear once selected in Settings.
+- ✅ **The ESPN host move held.** Zero live `site.api.espn.com` calls remain under `src/` — the three
+  hits there are comments. The 13 browser-side calls are all `site.web.api.espn.com`. Every remaining
+  `site.api` reference is in `scripts/` (Node-side), which is where it belongs.
+- ✅ **The airings scrape genuinely runs on the mini.** `com.hidescore.espn-airings` loaded,
+  `StartInterval 7200`, wrapper `~/bin/hidescore-espn-airings-cron.sh`, stderr log **empty**. Last run
+  11:44 EDT: read 30 games across 5 sports, found no ESPN broadcasts, refreshed the timestamp, and
+  uploaded to R2. `hidescore.com/espn-airings.json` serves a `generatedAt` 1.8h old. The freshness guard
+  (refuse to upload anything >30 min old) is present and working — this is the exact failure that let
+  the old GHA job sit 2,173h stale while reporting green.
+- ✅ **`check-staleness.mjs`: all 28 feeds fresh** — 11 reddit, 8 theScore, 3 BBC, Guardian, FIFA/MLS
+  video, airings, prime-asins, big-inning. Nothing even in warn.
+- ✅ **play-test-monitor healthy after its Aug 11 rebuild.** 15/15 testers on all four apps, day 5 of 16,
+  `consecutiveFailures: 0`, last success 09:06 today. The pre-rebuild failure streak ends in the log at
+  `FAIL 16` on Aug 11 and does not recur.
+- ❌→✅ **FIXED: the Android `5 (1.0.3)` release live on Play was built from uncommitted files.**
+  `capacitor.config.ts` (`errorPath`), `android/app/build.gradle` (versionCode 2→5, 1.0.1→1.0.3),
+  and the untracked `public/offline.html` + `scripts/trim-android-assets.sh` were all still working-tree
+  only, 30 hours after that build went live to testers. The auto-improve bot checks branches out **in
+  this working dir**, and the mini's reddit cron hard-resets its copy to `origin/main` every 30 min —
+  one such reset would have silently reverted the version bump and the errorPath, and the next release
+  would have rebuilt from `versionCode 2` against version codes Play has already burned.
+  **Committed locally as `b07d81cb` on `fix/video-tap-play` (not pushed — pushing to `main` deploys).**
+- ⚠️ **`public/espn-airings.json` in git is the May 13 file**, shadowed at runtime by the R2 copy the
+  browser actually fetches via `getApiBase()`. Harmless today, but it is the file anyone reads when
+  debugging, and it is what a native offline bundle would carry. Worth deleting or refreshing.
+- ⚠️ **HideScore's Play "sign in details" declaration still says nothing is restricted.** It gained
+  sign-in Aug 6 and was not flagged the way Roosevelt Island was, so it submitted on a probably-false
+  answer. Fix before the production-access application, not after.
 
 ## 2026-08-11 — New sports Jacob approved: rugby + Little League are cheap, WWE + horse racing are not
 

@@ -332,6 +332,7 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   rugbychamp: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   superrugby: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   rugbytest: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+  nationschamp: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
   // Racing has no entry in the `teamlogos/leagues` set (nascar/indycar/irl all
   // 404 there). NASCAR does have one in ESPN's redesign sport-icon set; IndyCar
   // has neither, so it falls back to Wikimedia exactly like NCAAM and tennis

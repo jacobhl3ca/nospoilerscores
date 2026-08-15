@@ -7,9 +7,19 @@ name: Check season windows
 # days before Super Bowl LXI, and the NCAAF window closed before the playoff
 # semifinals, hiding the National Championship. This is that check, automated.
 #
-# Monthly, not daily: these are annual schedules, and ESPN publishes a season's
-# fixtures in one go. The 3rd of the month is deliberate — leagues announce
-# schedules in the first days of a month, so this lands just after.
+# Twice monthly, not daily: these are annual schedules, and ESPN publishes a
+# season's fixtures in one go.
+#
+# The 3rd was originally picked on the belief that "leagues announce schedules in
+# the first days of a month". That is wrong, and the repo's own data says so —
+# every scheduleReleaseDate in espn.ts is mid-month except WNBA's:
+#
+#   nba 08-14   mlb 07-16   nhl 07-16   nfl 05-14   epl 06-19   wnba 12-01
+#
+# So the NBA's 2026-27 schedule dropped on 08-14 and the next scheduled run was
+# 09-03, three weeks later. The 17th covers the 14th/16th/19th cluster with a few
+# days' slack for ESPN to ingest the fixtures; the 3rd stays as a floor and
+# catches WNBA.
 #
 # Runs plain node against ESPN's public API. No credentials, no Claude, no
 # Mac mini — it costs nothing but a free-tier Actions minute.
@@ -17,6 +27,7 @@ name: Check season windows
 on:
   schedule:
     - cron: "0 15 3 * *"
+    - cron: "0 15 17 * *"
   workflow_dispatch:
 
 jobs:
@@ -42,7 +53,7 @@ jobs:
       # DOWN-only, no grace period. Unlike the feed check this cannot flap: a
       # league window is either right or wrong, and it stays wrong until someone
       # edits espn.ts. No "recovered" ping by design — silence is the signal.
-      - name: Alert on a bad window (ntfy)
+      - name: Alert on a bad or unverified window (ntfy)
         if: failure()
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
@@ -52,6 +63,6 @@ jobs:
             echo "::warning::NTFY_TOPIC secret unset — cannot alert."
             exit 0
           fi
-          curl -s -H "Title: HideScore league window is wrong" -H "Priority: high" -H "Tags: calendar" \
-            -d "A season window in espn.ts no longer matches ESPN's fixtures — a league column will vanish early or open late. $run_url" \
+          curl -s -H "Title: HideScore league window needs a look" -H "Priority: high" -H "Tags: calendar" \
+            -d "Either a season window in espn.ts no longer matches ESPN's fixtures (a league column will vanish early or open late), or a league published a new schedule that nobody has verified the window against yet. $run_url" \
             "https://ntfy.sh/$NTFY_TOPIC" > /dev/null
