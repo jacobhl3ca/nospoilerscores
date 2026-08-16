@@ -682,11 +682,19 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       </div>
     );
   }
+  // An ESPN item can carry an empty articleUrl (news.ts falls back to ""), and
+  // the click handlers here already no-op on a missing URL (handleExternalClick
+  // / openInNewTab both guard `if (!item.articleUrl)`). The markup has to match:
+  // an <a> with no href drops out of the tab order and leaves its
+  // aria-label="Open post" on a role-less element that announces an action it
+  // can't perform. So when there's nothing to open, render the same content
+  // without the link wrapper (and drop the dead chevron affordance).
+  const hasUrl = !!item.articleUrl;
   return (
     <div className={rowCls} style={rowStyle}>
-      {thumbIsTile ? (
+      {thumbIsTile && hasUrl ? (
         <a
-          href={item.articleUrl || undefined}
+          href={item.articleUrl}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
@@ -699,19 +707,25 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
       {/* No modal on this surface, so the headline is a real link to the
           source — same target as the thumbnail and chevron beside it, which
           keeps middle-click, keyboard, and "copy link" honest. */}
-      <a
-        href={item.articleUrl || undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={handleExternalClick(item.articleUrl)}
-        className="min-w-0 flex-1 text-left cursor-pointer"
-        aria-label="Open post"
-      >
-        <span className={titleCls}>{item.headline}</span>
-      </a>
-      {!thumbIsTile && (
+      {hasUrl ? (
         <a
-          href={item.articleUrl || undefined}
+          href={item.articleUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleExternalClick(item.articleUrl)}
+          className="min-w-0 flex-1 text-left cursor-pointer"
+          aria-label="Open post"
+        >
+          <span className={titleCls}>{item.headline}</span>
+        </a>
+      ) : (
+        <span className="min-w-0 flex-1 text-left">
+          <span className={titleCls}>{item.headline}</span>
+        </span>
+      )}
+      {!thumbIsTile && hasUrl && (
+        <a
+          href={item.articleUrl}
           target="_blank"
           rel="noopener noreferrer"
           onClick={handleExternalClick(item.articleUrl)}
