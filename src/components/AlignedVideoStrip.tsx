@@ -274,8 +274,10 @@ function SourceHeader({ label, logoUrl }: { label: string; logoUrl?: string }) {
 
 // Strip league/network tokens from the source label on narrow screens so the
 // logo + remaining text isn't redundant ("MLB MLB MOST POPULAR" effect when
-// the logo already conveys the league). Repeats so "ESPN NBA" → "" → keep
-// original. Empty after strip falls back to the full label.
+// the logo already conveys the league). Loops to peel stacked prefixes
+// ("MLB NBA Videos" → "Videos"); each token only matches with trailing
+// whitespace, so a bare trailing "NBA" is left intact. If stripping empties
+// the label (e.g. "NBA "), fall back to the full original.
 function stripLeaguePrefixForMobile(label: string): string {
   let s = label;
   for (let i = 0; i < 3; i++) {
