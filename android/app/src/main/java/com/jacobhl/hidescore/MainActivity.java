@@ -1,5 +1,7 @@
 package com.jacobhl.hidescore;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.WebView;
 import androidx.activity.OnBackPressedCallback;
@@ -11,6 +13,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HideScoreGoogleAuthPlugin.class);
         super.onCreate(savedInstanceState);
         installBackHandler();
+        loadAppLink(getIntent());
     }
 
     // Capacitor's own Android layer has no back-button handling at all, so what the
@@ -36,5 +39,31 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+    }
+
+    // The activity is singleTask, so a link tapped while the app is already running
+    // arrives here rather than through onCreate.
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        loadAppLink(intent);
+    }
+
+    // This app is a server.url shell — the WebView loads hidescore.com itself — so
+    // handling an app link means pointing that WebView at the incoming URL. Without
+    // this the link opens the app but leaves it on whatever page it was showing, which
+    // is indistinguishable from the link being ignored. @capacitor/app is not used for
+    // this, so it is done natively.
+    private void loadAppLink(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
+        Uri uri = intent.getData();
+        if (uri == null) return;
+        if (!"https".equals(uri.getScheme())) return;  // hidescore-auth:// is the plugin's, not ours
+        String host = uri.getHost();
+        if (!"hidescore.com".equals(host) && !"www.hidescore.com".equals(host)) return;
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        final String url = uri.toString();
+        runOnUiThread(() -> getBridge().getWebView().loadUrl(url));
     }
 }

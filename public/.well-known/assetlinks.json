@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.jacobhl.hidescore",
+      "sha256_cert_fingerprints": [
+        "BB:22:AD:FA:16:BB:F7:84:A5:EA:03:CD:7E:17:ED:76:D9:F3:CD:F4:EB:3A:8A:41:F1:20:D2:30:0A:FD:3B:92"
+      ]
+    }
+  }
+]
