@@ -625,11 +625,14 @@ export default function SettingsPanel({
       // no-spoiler defaults a reset is supposed to restore. Clearing each to
       // undefined mirrors a fresh install: JSON.stringify drops undefined keys,
       // and every read falls back to its documented default (`?? true`/`?? false`
-      // /`?? "both"` /`!!`). The three prefs with an explicit non-undefined
+      // /`?? "both"` /`!!`). The prefs with an explicit non-undefined
       // default in `defaults` (smartCutoffHour: 13, newsColCount: 3,
-      // newsTypeFilter: "reddit") can't rely on that undefined fallback, so reset
-      // each to its documented default value instead — otherwise a user's chosen
-      // news source-type filter (e.g. "ESPN only") survived "Reset to defaults".
+      // newsTypeFilter: "reddit", showTextPosts: true) can't rely on that
+      // undefined fallback, so reset each to its documented default value
+      // instead — otherwise a user's chosen news source-type filter (e.g.
+      // "ESPN only") survived "Reset to defaults", and clearing showTextPosts to
+      // undefined read back as `!!undefined` === false, hiding the text posts a
+      // fresh install shows on by default.
       maskVideoTitle: undefined,
       youtubeNativeControls: undefined,
       videoSeekControl: undefined,
@@ -637,7 +640,6 @@ export default function SettingsPanel({
       videoAllowEnd: undefined,
       videoWarnHalfway: undefined,
       revealNewsTitles: undefined,
-      showTextPosts: undefined,
       revealNewsMedia: undefined,
       // The remaining news-view state the toolbar persists was still omitted, so
       // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, and
@@ -657,6 +659,7 @@ export default function SettingsPanel({
       smartCutoffHour: 13,
       newsColCount: 3,
       newsTypeFilter: "reddit",
+      showTextPosts: true,
       newsTypeFilters: undefined,
     });
   };
