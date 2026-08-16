@@ -127,6 +127,9 @@ export default function HowToWatchSportsHighlightsWithoutSpoilersPage() {
           <Link href="/nfl-highlights-without-spoilers" className="underline underline-offset-2">
             NFL
           </Link>
+          <Link href="/nhl-highlights-without-spoilers" className="underline underline-offset-2">
+            NHL
+          </Link>
           <Link href="/soccer-highlights-without-spoilers" className="underline underline-offset-2">
             Soccer
           </Link>
