@@ -30,13 +30,17 @@ const highlightBufferHours: Record<string, number> = {
   // surface the button while the second innings is still being bowled.
   cricket: 7,
   // Rugby union: 80 minutes of play in two halves, so the same 3-hour
-  // post-kickoff buffer every 90-minute soccer league uses. These five were
-  // absent until 2026-08-12 and silently took the 4h default, which both
-  // delayed the buttons by an hour AND disagreed with
-  // scripts/check-highlight-fallbacks.mjs, whose mirror has always said 3 —
-  // i.e. the audit could flag a "missing" button during the hour the app was
-  // still deliberately hiding it.
-  sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, nationschamp: 3,
+  // post-kickoff buffer every 90-minute soccer league uses. sixnations,
+  // superrugby, rugbywc and nationschamp were absent until 2026-08-12 and
+  // silently took the 4h default, which both delayed the buttons by an hour AND
+  // disagreed with scripts/check-highlight-fallbacks.mjs, whose mirror has
+  // always said 3 — i.e. the audit could flag a "missing" button during the
+  // hour the app was still deliberately hiding it. rugbychamp and rugbytest are
+  // in NO_HIGHLIGHT_FALLBACK (no button ever renders), so their values are inert
+  // today; both are listed anyway to keep this table complete alongside
+  // regulationPeriods and highlightBadgeLabel below — where both already appear —
+  // so neither silently takes the wrong 4h default if it is ever un-gated.
+  sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, rugbytest: 3, nationschamp: 3,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
 // quarters in 2015-16), so a finished regulation game reports period 4. A value
