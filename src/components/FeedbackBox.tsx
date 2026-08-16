@@ -350,13 +350,20 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
               </svg>
             </button>
           </div>
-          {emailLooksWrong && (
-            // Advisory only — the send button stays enabled and the message
-            // still goes through, just without a reply address attached.
-            <span id="hs-feedback-email-hint" className="text-xs leading-tight" style={{ color: "var(--text-muted)" }}>
-              That doesn&apos;t look like an email — the note will send without it.
-            </span>
-          )}
+          {/* Advisory only — the send button stays enabled and the message
+              still goes through, just without a reply address attached.
+              role="status" makes this an aria-live="polite" region so the
+              warning is ANNOUNCED the moment it appears while the email field
+              already has focus (WCAG 4.1.3 Status Messages). aria-describedby
+              alone is only read when the field GAINS focus, so a message that
+              materialised mid-typing went unspoken until the user tabbed away
+              and back. A live region must already exist in the DOM before its
+              text changes to announce reliably, so the span is rendered
+              unconditionally with the text toggled inside — an empty inline
+              span adds no layout box, so there is no visual change. */}
+          <span id="hs-feedback-email-hint" role="status" className="text-xs leading-tight" style={{ color: "var(--text-muted)" }}>
+            {emailLooksWrong ? "That doesn't look like an email — the note will send without it." : ""}
+          </span>
           </form>
           </div>
         </>
