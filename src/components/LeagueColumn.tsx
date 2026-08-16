@@ -563,7 +563,17 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
       // is `display: inline-block`, the parent's hover:underline won't
       // draw a line under the dot or the gap \u2014 only under the text that
       // follows.
-      return <><span className="live-pulse-dot" aria-hidden="true">{"\u25CF\u00A0"}</span>{t.slice(2)}</>;
+      //
+      // The green pulse dot is the ONLY live cue on the narrowest fitted tier
+      // ("\u25CF Big Inning", chosen when the column is too tight for the
+      // "\u00B7 LIVE"/"live" tiers), and it's aria-hidden \u2014 so a screen
+      // reader there hears just "Big Inning" with no hint the whip-around is on
+      // air (WCAG 1.1.1 / 4.1.2). Add an sr-only "Live" whenever the visible
+      // text doesn't already spell it, mirroring the FightCard/EventCard live
+      // tiles. Guarded on /live/i so the wider tiers (which show "LIVE"/"live"
+      // in the visible text) aren't announced twice. sr-only \u2014 no visual
+      // change, and zero width so the layout probe stays exact.
+      return <><span className="live-pulse-dot" aria-hidden="true">{"\u25CF\u00A0"}</span>{!/live/i.test(t) && <span className="sr-only">Live </span>}{t.slice(2)}</>;
     }
     return t;
   };
