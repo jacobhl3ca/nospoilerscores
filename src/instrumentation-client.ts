@@ -10,10 +10,19 @@ Sentry.init({
     /EmptyRanges/,
     /runtime\.sendMessage/,
     /Unable to load image data:image\/svg\+xml/,
-    // ReferenceError for a variable that has never existed in HideScore source
-    // (confirmed via full git history search). Injected-script noise that
-    // denyUrls misses when the extension runs in the main page context.
-    /detailEvent is not defined/,
+    // ⛔ The old comment here claimed detailEvent "has never existed in HideScore
+    // source" and called this injected-extension noise. That is wrong, and the
+    // 2026-08-16 Sentry audit caught it: `detailEvent` is declared at
+    // HomeContent.tsx:512 (`useState`) and used at 3875-3879, and the captured
+    // stack frame is our own `HomeContent` in src_components_HomeContent_tsx_*.js,
+    // not an extension. Every one of the 5 events was `next dev` on localhost
+    // (environment=development), so this is a stale-closure artifact of Turbopack
+    // hot reload, not a browser extension.
+    //
+    // Kept, because it is dev-only and unactionable — but scoped to development
+    // so that a real production `detailEvent` ReferenceError is NOT swallowed.
+    // The blanket rule would have hidden one.
+    ...(process.env.NODE_ENV === "development" ? [/detailEvent is not defined/] : []),
   ],
   denyUrls: [
     /^chrome-extension:\/\//,
