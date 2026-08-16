@@ -22,6 +22,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/nhl-scores-without-spoilers",
     "/mlb-highlights-without-spoilers",
     "/nfl-highlights-without-spoilers",
+    "/nhl-highlights-without-spoilers",
     "/soccer-highlights-without-spoilers",
     "/premier-league-without-spoilers",
     "/liga-mx-scores-without-spoilers",
@@ -42,6 +43,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/nhl-scores-without-spoilers",
     "/mlb-highlights-without-spoilers",
     "/nfl-highlights-without-spoilers",
+    // Added 2026-08-15. Not a new-demand bet like the three below — this one is
+    // measured: GSC had "spoiler free nhl highlights" at 149 impressions and 0
+    // clicks from position 6.9, all of it landing on the homepage for want of a
+    // page that answers it. See the route's own header comment.
+    "/nhl-highlights-without-spoilers",
     "/soccer-highlights-without-spoilers",
     // Added 2026-08-03 with the Liga MX and IPL columns. Same 0.7 league-intent
     // priority as the other per-league pages — these two got their own routes
