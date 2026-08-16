@@ -155,6 +155,14 @@ export default function SpoilerFreeSportsPage() {
           <Link href="/nhl-scores-without-spoilers" className="underline underline-offset-2">
             NHL
           </Link>
+          {/* NHL highlights shipped 2026-08-15 and gets its own entry rather than
+              riding on the NHL scores link above: they are separate routes for
+              separate intents, and the highlights one was built specifically to
+              catch a query the homepage was absorbing. Listing only one of them
+              here would leave the new page with a single inbound link. */}
+          <Link href="/nhl-highlights-without-spoilers" className="underline underline-offset-2">
+            NHL highlights
+          </Link>
           {/* Cricket shipped 2026-08-03 as a sitemap-only page with ZERO inbound
               internal links — an orphan, which crawlers reach late and rank
               poorly. Liga MX got its link from the soccer page; this is
