@@ -282,10 +282,13 @@ export default function SettingsPanel({
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailStatus, setEmailStatus] = useState("");
   const [emailError, setEmailError] = useState(false);
+  // Android shell only — see the Rate link in the legal row below.
+  const [isAndroidApp, setIsAndroidApp] = useState(false);
   useEffect(() => {
     if (!open) return;
-    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
     setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
+    setIsAndroidApp(!!cap?.isNativePlatform?.() && cap?.getPlatform?.() === "android");
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuth(a); });
     return () => { alive = false; };
@@ -1450,6 +1453,24 @@ export default function SettingsPanel({
             >
               Privacy
             </a>
+            {/* Android shell only: the web has no store to rate on and iOS has a
+                different one. A plain anchor is what makes this work — hidescore.com
+                is the server.url host, so a foreign host falls through Capacitor's
+                Bridge.launchIntent to an ACTION_VIEW Intent and the Play Store app
+                opens on the listing. An in-app browser would only show the store's
+                web page, which has no rating control. */}
+            {isAndroidApp && (
+              <>
+                <span aria-hidden="true" className="mx-1.5" style={{ opacity: 0.65 }}>·</span>
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
+                  className="underline underline-offset-2 transition-opacity hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Rate this app
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>
