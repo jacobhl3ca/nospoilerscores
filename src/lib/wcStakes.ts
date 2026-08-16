@@ -329,7 +329,7 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
     return `${through} and ${out[0].name} are out — the result only affects ${s.name}'s seeding, so top ${group} for an easier path.`;
   }
   // Both sides are already out — the ONLY combination left in this tier once
-  // safe===2 (line 299) and safe===1/out===1 (line 302) are handled above: the
+  // the safe===2 and safe===1/out===1 branches above are handled: the
   // seeding tier is reached only when live.length===0 (see tierFor), so every
   // side is safe or eliminated, and with two sides that leaves out.length===2 as
   // the exhaustive remainder. Neither team can advance, so there is nothing at
