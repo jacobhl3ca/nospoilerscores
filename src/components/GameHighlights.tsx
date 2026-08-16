@@ -41,6 +41,14 @@ const highlightBufferHours: Record<string, number> = {
   // regulationPeriods and highlightBadgeLabel below — where both already appear —
   // so neither silently takes the wrong 4h default if it is ever un-gated.
   sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, rugbytest: 3, nationschamp: 3,
+  // llws (Little League World Series) is in NO_HIGHLIGHT_FALLBACK (youtube.ts) —
+  // ESPN holds the broadcast but posts no per-game cut, so no button ever
+  // renders and this value is inert today, exactly like the rugbychamp/rugbytest
+  // keys above. Listed anyway to keep this table complete: llws was the lone
+  // game-sport missing from it and regulationPeriods below, so it would silently
+  // take the wrong 4h default if it is ever un-gated. 5 mirrors mlb — its
+  // closest analog, LLWS being 6-inning baseball.
+  llws: 5,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
 // quarters in 2015-16), so a finished regulation game reports period 4. A value
@@ -51,7 +59,14 @@ const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, n
   // Two 40-minute halves. Without these the default of 4 made rawOt negative
   // for every finished rugby match — clamped to 0 by the Math.max, so the
   // buffer was right by accident; stating it keeps that an intent, not luck.
-  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2 };
+  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2,
+  // llws is 6-inning baseball — SPORT_RATING_CONFIG in espn.ts sets its
+  // regulationPeriods to 6. Without this row the default of 4 made a regulation
+  // final (period 6) read as rawOt = 6 - 4 = 2 phantom overtimes, padding the
+  // buffer ~1h. Inert today (llws is in NO_HIGHLIGHT_FALLBACK so no button
+  // renders), but mirrors the rating config so it can't misfire if un-gated —
+  // same "keep the table complete" intent as the rugby rows above.
+  llws: 6 };
 
 // The highlight-button badge uppercases the sport KEY (nba → "NBA"), which reads
 // right for the leagues whose key IS the abbreviation. A couple of later
