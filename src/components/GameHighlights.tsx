@@ -612,17 +612,14 @@ export default function GameHighlights({
               // Telemundo buttons): this opens the pre-resolved date-exact clip
               // synchronously via onPlayEmbed with no click-time fetch, so
               // `fetchingOnClick` is never set on the MLB path (showYouTube needs
-              // !isMlb, showTelemundo needs FIFA). The old loading swap keyed off
-              // it was therefore dead code — the button never dimmed or showed
-              // "Loading...".
+              // !isMlb, showTelemundo needs FIFA). Render the icon + label
+              // directly — a `fetchingOnClick`-keyed loading swap here would be
+              // dead code (the button can never dim or show "Loading..."), and
+              // the sibling 3m recap button above already renders without one.
               title="MLB 10 minute condensed game"
             >
-              {fetchingOnClick === "official" ? <span className="text-[10px]">Loading...</span> : (
-                <>
-                  <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
-                </>
-              )}
+              <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
             </button>
           )}
         </div>
