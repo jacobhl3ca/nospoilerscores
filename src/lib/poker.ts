@@ -83,13 +83,18 @@ function dateMs(isoDate: string): number {
 }
 
 function displayWindow(start: string, end: string): string {
-  const fmt = (ymd: string, includeMonth = true) => {
-    const d = new Date(`${ymd}T12:00:00Z`);
+  // `isoDate` is a DASHED calendar date (YYYY-MM-DD): callers pass
+  // chosen.startDate/endDate, gated by DATE_RX. Same dashed-only contract as
+  // dateMs above and boxing.ts's displayDate — never the compact `ymd`, or
+  // `new Date("20260809T12:00:00Z")` returns Invalid Date and this renders
+  // "Invalid Date" in the subtitle (the footgun documented in lib/etDay.ts).
+  const fmt = (isoDate: string, includeMonth = true) => {
+    const d = new Date(`${isoDate}T12:00:00Z`);
     // Format in UTC — the instant is deliberately anchored to noon UTC (like
     // dateMs above and boxing.ts's displayDate), so a bare local-zone format
     // reads the wrong calendar day at UTC+12 and further east: noon UTC lands
     // after local midnight there, printing "Aug 17–30" for an Aug 16–29 series.
-    // Pin the zone so the printed day is the ymd itself in every zone.
+    // Pin the zone so the printed day is the isoDate itself in every zone.
     return new Intl.DateTimeFormat("en-US", includeMonth ? { month: "short", day: "numeric", timeZone: "UTC" } : { day: "numeric", timeZone: "UTC" }).format(d);
   };
   if (start === end) return fmt(start);
