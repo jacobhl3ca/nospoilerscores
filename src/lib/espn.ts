@@ -1721,11 +1721,18 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   const as = Number(awayTeam.score) || 0;
   const diff = Math.abs(hs - as);
   const setNow = match.status?.period ?? 0; // current set number
-  // Best-of-3 (all women's draws) needs 2 sets to win; best-of-5 (men's Slam
-  // singles) needs 3. The grouping slug tells us which — ESPN's `format` field
-  // is unreliable (reports 5 for both). Hoisted above the rating block so the
+  // Best-of-3 needs 2 sets to win; best-of-5 needs 3. Only the men's Slam MAIN
+  // singles draw is best-of-5 — every women's draw AND the men's junior
+  // ("boys"), wheelchair, and quad singles draws that the `singles` filter
+  // above also admits are all best-of-3. A bare `/women/.test(slug) ? 2 : 3`
+  // mislabeled those best-of-3 men's sub-draws as best-of-5, so a genuine 2-1
+  // decider never reached `max >= setsToWin (3)` and dropped to the 65
+  // straight-sets bucket — the GREAT tier could never fire for them. Default to
+  // best-of-5 (so the men's main draw stays 3 whatever its exact slug) and pull
+  // only the known best-of-3 variants down to 2. ESPN's `format` field is
+  // unreliable (reports 5 for both). Hoisted above the rating block so the
   // "went the distance" gate can require the winner to have actually reached it.
-  const setsToWin = /women/.test(slug) ? 2 : 3;
+  const setsToWin = /women|wheelchair|quad|boys|girls/.test(slug) ? 2 : 3;
   let rating: number | null = null;
   if (state === "post") {
     // GREAT is reserved for a match that went to a deciding final set (2-1 or
