@@ -1244,7 +1244,7 @@ export default function SettingsPanel({
           {/* Player choice leads; the custom-only controls below stay visible
               but disabled in YouTube mode so the relationship is obvious. */}
           <Section title="Highlight video player">
-            <Field label="Player" hint="Spoiler-safe is the default; YouTube trades protection for familiar controls">
+            <Field label="Player" hint="YouTube's familiar controls are the default; Spoiler-safe hides progress and the ending">
               <RadioGroup
                 label="Highlight video player"
                 value={(prefs.youtubeNativeControls ?? true) ? "youtube" : "safe"}
