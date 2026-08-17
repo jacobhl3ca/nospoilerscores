@@ -1790,6 +1790,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              leagueLabel={league.label}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={isPastDate}
@@ -1811,6 +1812,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              leagueLabel={league.label}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
@@ -1828,6 +1830,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              leagueLabel={league.label}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
@@ -1859,6 +1862,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              leagueLabel={league.label}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={false}
