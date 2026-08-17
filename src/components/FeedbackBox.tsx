@@ -295,7 +295,7 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
             // a team-name filter). No behavior change on desktop.
             enterKeyHint="send"
             autoComplete="off"
-            className="w-full text-sm px-3 py-2 rounded outline-none"
+            className="feedback-input w-full text-sm px-3 py-2 rounded outline-none"
             style={{ background: "var(--bg-card-hover)", color: "var(--text)", border: "1px solid var(--border-hover)" }}
           />
           <div className="flex items-center gap-1.5">
@@ -327,7 +327,7 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
               // the spoken state tracks the visual one exactly (WCAG 4.1.2).
               aria-invalid={emailLooksWrong || undefined}
               aria-describedby={emailLooksWrong ? "hs-feedback-email-hint" : undefined}
-              className="flex-1 w-0 text-sm px-3 py-2 rounded outline-none"
+              className="feedback-input flex-1 w-0 text-sm px-3 py-2 rounded outline-none"
               style={{
                 background: "var(--bg-card-hover)",
                 color: "var(--text)",
