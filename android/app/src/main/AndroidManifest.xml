@@ -9,6 +9,13 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <!-- Native crash reporting (sentry-android auto-init). Reuses this app's
+             existing Sentry project so native crashes land beside its web errors.
+             Tracing is off: crashes and ANRs only, no performance quota. -->
+        <meta-data android:name="io.sentry.dsn" android:value="https://b1d8b3efe70b8dbe7f865cd0b5dc832a@o4511667913818112.ingest.us.sentry.io/4511694546534400" />
+        <meta-data android:name="io.sentry.environment" android:value="production" />
+        <meta-data android:name="io.sentry.traces.sample-rate" android:value="0.0" />
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
