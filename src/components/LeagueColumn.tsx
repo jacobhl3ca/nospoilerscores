@@ -243,6 +243,24 @@ function fifaRoundTiers(label: string): string[] {
   return short !== label ? [label, short] : [label];
 }
 
+// How deep in the bracket a knockout round sits, for picking the deepest round
+// to show when a single day mixes them. Tolerates ESPN's spelling the SAME way
+// fifaRoundTiers above and espn.ts's deriveStage already do — game.stage
+// carries ESPN's own wording, which varies ("Quarterfinal" vs "Quarterfinals",
+// "Semi-Final", "Third Place Match", hyphenated or not; see the note above). An
+// exact-string lookup scored those variants as unknown, so a mixed-round day
+// could mis-rank the deepest. Checks run most-specific first — "final" last,
+// since "Semifinal"/"Quarterfinal" both contain it. Group/unknown stages → 0.
+function fifaRoundDepth(stage: string): number {
+  if (/^round of 32/i.test(stage)) return 1;
+  if (/^round of 16/i.test(stage)) return 2;
+  if (/quarter-?finals?/i.test(stage)) return 3;
+  if (/semi-?finals?/i.test(stage)) return 4;
+  if (/third place/i.test(stage)) return 5;
+  if (/final/i.test(stage)) return 6;
+  return 0;
+}
+
 // Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
 function parseEtTime(s: string): { h: number; m: number } | null {
   const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -301,8 +319,7 @@ function getPlayoffSubtitle(
     if (!stages.length) return null;
     const rounds = stages.filter((s) => !/^group/i.test(s));
     if (rounds.length) {
-      const order = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Third Place", "Final"];
-      const deepest = rounds.reduce((best, r) => (order.indexOf(r) > order.indexOf(best) ? r : best), rounds[0]);
+      const deepest = rounds.reduce((best, r) => (fifaRoundDepth(r) > fifaRoundDepth(best) ? r : best), rounds[0]);
       return { tiers: fifaRoundTiers(deepest) };
     }
     return { tiers: ["Group Stage", "Groups"] };
