@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     // og:locale matches the site-level Open Graph block in layout.tsx and the
     // World Cup/date/SEO-landing routes. A page's openGraph replaces the parent's
     // wholesale (Next merges metadata per top-level field, not deep), so without
-    // this this page emitted no og:locale for social unfurlers (Facebook/
+    // this the page emitted no og:locale for social unfurlers (Facebook/
     // LinkedIn/Slack/iMessage). en_US is the OG-spec format (underscore, not "en").
     locale: "en_US",
     type: "article",
