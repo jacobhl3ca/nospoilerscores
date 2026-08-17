@@ -285,8 +285,17 @@ export function eventTitleVariants(
 // it comes out unchanged; short function words inside a name ARE capitalized too
 // ("Circuit of the Americas" → "Circuit Of The Americas"), which reads fine for
 // these terse venue/city subtitles (see the eventSubtitleVariants test).
+//
+// Unicode-aware on purpose. The old `/\b[a-z]/` keyed on JS's ASCII-only word
+// boundary, so an accented letter counted as a NON-word char and manufactured a
+// false boundary right after it: "são paulo" title-cased the letter following
+// the "ã" and rendered "SãO Paulo" (likewise "MontréAl", "MáLaga"). ESPN's
+// diacritic-stripped feed hides that today, but a place name that keeps its
+// accents must not be mangled. `\p{Ll}` at a start-or-non-letter boundary
+// uppercases only a real word-initial lowercase letter; every ASCII case above
+// is byte-for-byte unchanged.
 export function titleCasePlace(s: string): string {
-  return String(s || "").replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  return String(s || "").replace(/(^|[^\p{L}])(\p{Ll})/gu, (_, sep, ch) => sep + ch.toUpperCase());
 }
 
 // The subtitle ladder: "<venue> · <city>, <region>" → "<venue> · <city>" →
