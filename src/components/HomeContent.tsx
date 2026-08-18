@@ -653,8 +653,8 @@ export default function HomeContent({
     // spoiler-safety logic.
     //   Ratings on launch: respect defaultRatings pref.
     //     auto (default) → keep the morning-safety reset (off before noon ET)
-    //     off            → always off on launch
-    //     on             → always on on launch
+    //     off            → always off
+    //     on             → always on
     //   News view does NOT reset — it's a viewer choice, not a spoiler surface.
     const applyLaunchState = (p: Preferences) => {
       const landing = p.defaultLandingView ?? "remember";
