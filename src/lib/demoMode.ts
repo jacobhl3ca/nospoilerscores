@@ -91,6 +91,16 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         abbreviation: `${slot}${n}`,
         logo: placeholderLogo(slot, color),
         color,
+        // The overall standings rank (1 = league leader) is real data the
+        // rename can't rewrite in place — it rode straight through `...team`
+        // and rendered as the `#N` chip GameCard shows on live/upcoming cards
+        // (team.rank != null && !effectivePastDate && !isFinished), pinning the
+        // anonymized side to a real league position under ?demo=1. The FIFA
+        // path never leaked it — that chip re-derives via fifaRank(displayName),
+        // which returns null for the scrubbed "Team A1" name — so this nulls the
+        // one sport family that still showed a real rank, matching that path and
+        // the name/logo/venueLocation identity-scrub the rest of this file does.
+        rank: null,
       };
     };
     const transformGame = (game: Game): Game => {
