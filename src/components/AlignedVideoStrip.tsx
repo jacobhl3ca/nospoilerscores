@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
-import { NewsSource, PlayHandler, PlayOpts, itemIsTextPost, newsItemToPlayOpts } from "./NewsColumn";
+import { NewsSource, PlayHandler, PlayOpts, itemIsTextPost, itemIsVideo, newsItemToPlayOpts } from "./NewsColumn";
 
 interface Props {
   sources: NewsSource[];
@@ -439,12 +439,15 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
             window.open(item.articleUrl, "_blank", "noopener,noreferrer");
           }
         }}
-        // Same inline-play control as VideoRow's button (its thumb is
-        // alt=""), so the accessible name would otherwise be just the headline
-        // with no cue this PLAYS a highlight vs. the sibling <a> tail rows that
-        // open an article. Name the action explicitly; the headline stays in
-        // the label so "Label in Name" (WCAG 2.5.3) still holds.
-        aria-label={`Play highlight: ${item.headline}`}
+        // The thumb is alt="", so this button's only accessible name is this
+        // label. But the col-3 tail is ESPN "top headlines" — mostly plain
+        // ARTICLES that open a text/image card, with only the occasional clip
+        // that actually plays. A flat "Play highlight: …" on every row (the old
+        // wording) announced a play action most of these rows don't perform
+        // (WCAG 2.4.6 / 4.1.2 — name must match function). Name the real action
+        // per item, exactly like the mobile twin NewsFeed's FeedPost; the
+        // headline stays in the label so "Label in Name" (WCAG 2.5.3) holds.
+        aria-label={itemIsVideo(item) ? `Play highlight: ${item.headline}` : `Open post: ${item.headline}`}
         className={`${rowCls} cursor-pointer`}
         style={rowStyle}
       >
