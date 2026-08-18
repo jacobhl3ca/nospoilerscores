@@ -819,6 +819,24 @@ export default function LeagueColumn({
   // arrows-branch IIFE) because "both" mode needs the SAME button flanking the
   // dropdown trigger — two copies would drift the moment either was restyled.
   const showArrows = (mode === "arrows" || mode === "both") && !!onCycleLeague;
+  // Reserved width for the league name whenever the ‹ › arrows are on screen
+  // (Jacob 8/12). Without it the arrows are glued to the label, so every press
+  // that swaps a short name for a long one ("NHL" → "Premier League") slides
+  // the › out from under the pointer — you cannot stand on one spot and click
+  // through the ring, which is the whole point of arrows mode. Reserving the
+  // width parks both arrows at a fixed x for every league in the ring.
+  // 10.5rem/168px is measured, not guessed: the widest label in ALL_LEAGUES
+  // ("Rugby World Cup") renders at 163px in Geist 700 / 18px / tracking-wide,
+  // and 168 + the two 24px arrows + the 4px of gaps = 220px, inside the 225px
+  // column. min-width (not width) so a future longer label still renders in
+  // full rather than truncating — that would move the arrows, the lesser evil.
+  //
+  // md+ ONLY. Columns are 225px from 768px up, but 192px at sm and just 114px
+  // on a phone (three columns at every width — measured on live, 2026-08-12),
+  // where reserving 168px for "NHL" would burst the column. Below md the
+  // arrows stay tight to the label exactly as before; that board is tapped,
+  // not click-hammered.
+  const titleReserve = showArrows ? "md:min-w-[10.5rem]" : "";
   const arrowBtn = (dir: 1 | -1) => (
     <button
       type="button"
@@ -1525,7 +1543,7 @@ export default function LeagueColumn({
               // the title a dropdown trigger as well.
               <div className="flex items-center gap-0.5">
                 {arrowBtn(-1)}
-                <h2 className="text-base sm:text-lg font-bold tracking-wide px-0.5" style={{ color: "var(--text)" }}>
+                <h2 className={`text-base sm:text-lg font-bold tracking-wide px-0.5 text-center ${titleReserve}`} style={{ color: "var(--text)" }}>
                   {headerLabel}
                 </h2>
                 {arrowBtn(1)}
@@ -1538,7 +1556,11 @@ export default function LeagueColumn({
               // panel anchor is unchanged.
               <div className="flex items-center gap-0.5">
               {showArrows && mode === "both" ? arrowBtn(-1) : null}
-              <div ref={swapRef} className="relative">
+              {/* titleReserve (empty unless the ‹ › arrows are showing) parks
+                  them at a fixed x — see its definition. The dropdown panel is
+                  centred on THIS box (right-1/2 translate-x-1/2), so widening
+                  it keeps the panel centred under the name, unshifted. */}
+              <div ref={swapRef} className={`relative ${titleReserve}`}>
                 {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern),
                     not the reverse: a <button>'s content model is phrasing
                     content, so an <h2> nested inside it is invalid HTML and
@@ -1553,7 +1575,7 @@ export default function LeagueColumn({
                   <button
                     type="button"
                     onClick={() => setSwapOpen(!swapOpen)}
-                    className="cursor-pointer transition-colors hover:opacity-80 flex items-center gap-1"
+                    className="cursor-pointer transition-colors hover:opacity-80 flex items-center justify-center gap-1 w-full"
                     title="Switch league"
                     aria-haspopup="dialog"
                     aria-expanded={swapOpen}
