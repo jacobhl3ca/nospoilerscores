@@ -130,9 +130,23 @@ async function geocode(city: string, region: string): Promise<Geo | null> {
       d.results ?? [];
     const reg = region.toLowerCase();
     // Disambiguate same-named cities by matching the venue's state/country
-    // ("St. Louis, Missouri" → the Missouri hit, not PEI). Fall back to the
-    // top result (Open-Meteo ranks by prominence).
+    // ("St. Louis, Missouri" → the Missouri hit, not PEI). Prefer an EXACT
+    // admin1/country match, then fall back to a substring match, then to the
+    // top result (Open-Meteo ranks by prominence). The substring fallback is
+    // deliberate — it lets a shorter ESPN region match a longer official name
+    // ("Madrid" ⊆ "Community of Madrid") — but must not run first: as a bare
+    // substring test it also false-matches a region that is a substring of a
+    // DIFFERENT admin1 ("Kansas" ⊆ "Arkansas", "Mexico" ⊆ "New Mexico"), which
+    // could geocode a venue to the wrong same-named city. Trying exact first
+    // resolves those collisions to the right region while leaving the
+    // shorter-⊆-longer case unchanged.
     const pick =
+      (reg &&
+        list.find(
+          (x) =>
+            (x.admin1 ?? "").toLowerCase() === reg ||
+            (x.country ?? "").toLowerCase() === reg,
+        )) ||
       (reg &&
         list.find(
           (x) =>
