@@ -1380,10 +1380,28 @@ function soccerLateDramaBonus(competition: SoccerCompetition | null | undefined)
   // latest goal that CHANGED who's ahead (tie→lead, lead→tie, or a lead flip).
   const tally: Record<string, number> = {};
   const ids = [...new Set(goals.map((g) => g.team))];
+  // Whoever has the most goals so far, or "tie" when the top count is shared (or
+  // nobody has scored yet). Scan every scoring team rather than only comparing
+  // ids[0] vs ids[1]: soccer has two competitors so `ids` is normally length ≤2
+  // and this is identical to the old two-team compare, but ESPN's details[] can
+  // occasionally credit a scoring play to a third id (e.g. an oddly-attributed
+  // own goal), which the fixed-pair compare silently dropped from the leader
+  // walk — skewing the swing minute and thus the late-drama bonus.
   const leaderOf = (): string => {
-    if (ids.length < 2) return (tally[ids[0]] ?? 0) > 0 ? ids[0] : "tie";
-    const da = (tally[ids[0]] ?? 0) - (tally[ids[1]] ?? 0);
-    return da === 0 ? "tie" : da > 0 ? ids[0] : ids[1];
+    let best = "tie";
+    let bestCount = 0;
+    let tied = false;
+    for (const id of ids) {
+      const c = tally[id] ?? 0;
+      if (c > bestCount) {
+        best = id;
+        bestCount = c;
+        tied = false;
+      } else if (c === bestCount && bestCount > 0) {
+        tied = true;
+      }
+    }
+    return tied ? "tie" : best;
   };
   let prevLeader = "tie";
   let latestSwingMin = -1;
