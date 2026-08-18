@@ -101,6 +101,16 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         // one sport family that still showed a real rank, matching that path and
         // the name/logo/venueLocation identity-scrub the rest of this file does.
         rank: null,
+        // The W-L record ("12-5") is the same class of real standings data as
+        // `rank` above — it rode straight through `...team` and rendered as the
+        // record chip GameCard/GameDetailModal show on live/upcoming cards
+        // (showRecords && team.record && !effectivePastDate && !isFinished &&
+        // !isFuture), pinning the anonymized side to a real season position under
+        // ?demo=1. Blank it so those chips fall to their empty state (each guards
+        // on a truthy record), matching the rank scrub above. Empty is the type's
+        // own "unknown" value (espn.ts defaults record to ""), and LeagueColumn's
+        // getWins/getLosses/isWinningRecord already treat "" as 0-0 with no throw.
+        record: "",
       };
     };
     const transformGame = (game: Game): Game => {
