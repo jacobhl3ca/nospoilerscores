@@ -1878,7 +1878,15 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 // several MB each) — cap the delivered width at the proxy so a
                 // phone isn't downloading 3.5 MB per swipe.
                 src={proxyImage(isGallery ? gallery[galAt] : imageUrl!, 1400)}
-                alt=""
+                // The lightbox's whole reason to exist is this image, and in
+                // image mode nothing else names it — no adjacent headline the
+                // way the text-card poster below has — so a bare alt="" leaves
+                // a screen reader announcing an unlabeled graphic (WCAG 1.1.1).
+                // Name it from the source label (a subreddit/publisher, never a
+                // score) rather than the headline, which is spoiler-sensitive
+                // and stays PeekBlur-covered elsewhere. Falls back to a generic
+                // name when no source is known.
+                alt={sourceLabel ? `Image from ${sourceLabel}` : "Post image"}
                 decoding="async"
                 className="block max-w-full object-contain"
                 style={{ maxHeight: mediaMaxH }}
