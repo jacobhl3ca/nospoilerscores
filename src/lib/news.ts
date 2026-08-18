@@ -384,7 +384,11 @@ const PREBAKED_VIDEOS: Partial<Record<Sport, { key: string; label: string; chann
   // card is baked from the league's official YouTube channel (prebake-news.mjs
   // fetchYouTubeChannelVideos), so items already carry youtubeVideoId.
   fifa: { key: "fifa-videos", label: "World Cup Top Videos", channel: "FIFA" },
-  mls: { key: "mls-videos", label: "MLS Top Videos", channel: "MLS" },
+  // The channel hint must be the YouTube author_name, NOT the abbreviation:
+  // MLS's channel resolves as "Major League Soccer" (the bare "MLS" never
+  // matched — see OFFICIAL_CHANNELS.mls in youtube.ts and prebake-news.mjs's
+  // mls scoreboard entry, both of which already use the full name).
+  mls: { key: "mls-videos", label: "MLS Top Videos", channel: "Major League Soccer" },
 };
 
 // Per-league subreddit card — pinned just below the official news link since
