@@ -670,7 +670,20 @@ function TextRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; i
         {!thumbIsTile && (
           <button
             type="button"
-            onClick={open}
+            onClick={(e) => {
+              // Mirror the thumbnail/headline controls above: modifier-click
+              // opens the source in a background tab instead of re-popping the
+              // modal, honoring this row's "every clickable part" contract.
+              if (openInNewTab(e)) return;
+              open();
+            }}
+            onAuxClick={(e) => {
+              // Middle-click fires onAuxClick, not onClick — mirror the modifier
+              // path so wheel-click also opens in a background tab.
+              if (e.button === 1 && item.articleUrl) {
+                window.open(item.articleUrl, "_blank", "noopener,noreferrer");
+              }
+            }}
             className="shrink-0 self-start mt-0.5 w-6 h-6 -mr-1 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--bg-card-hover)]"
             style={{ color: "var(--text-muted)" }}
             aria-label="Open post"
