@@ -2547,7 +2547,19 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 // the HLS path (MLB statsapi + Reddit clips, whose headlines
                 // routinely state the result). Use the generic label instead.
                 aria-label="Video player"
-                poster={proxyImage(poster) ?? undefined}
+                // Spoiler-safe poster: a shareCard means this clip IS a game
+                // recap (MLB.com recap / condensed), and MLB bakes the result
+                // into its poster frame — a celebration still, a walk-off swing,
+                // sometimes the linescore. autoPlay only paints the first video
+                // frame once the stream decodes, so that poster FLASHES the
+                // outcome for a beat before playback covers it, which is exactly
+                // the spoiler this app exists to prevent. Drop it for game
+                // recaps (the black frame beneath is spoiler-free and lasts a
+                // few hundred ms) and keep it for news clips, whose posters are
+                // the item's own picture and carry no result. This is the
+                // no-extra-tap version of the reverted reveal overlay (5131079f
+                // → f498eaf5): no gate to click, just no spoiler frame.
+                poster={shareCard ? undefined : (proxyImage(poster) ?? undefined)}
               />
             ) : (
               <iframe
