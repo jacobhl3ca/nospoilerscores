@@ -125,6 +125,17 @@ export function applyDemoMode(leagues: LeagueData[]): LeagueData[] {
         broadcasts: game.broadcasts.length ? ["Stream"] : [],
         playoffLabel: game.playoffLabel ? "Playoffs" : null,
         seriesStatus: null,
+        // The soccer cup stage ("Group J", "Round of 16", "Final") is the
+        // playoffLabel sibling for FIFA — rendered in the SAME detail-modal
+        // label slot (game.playoffLabel || game.stage) — but it rode straight
+        // through `...game` while playoffLabel was genericized above. Worse than
+        // a facade break: the "Group X" line is TAPPABLE in the detail modal
+        // (GameDetailModal's wcGroup) and opens the World Cup groups overlay with
+        // REAL country names, and it also drives LeagueColumn's italic phase
+        // subtitle ("Round of 16") right under an anonymized "Sports A" header.
+        // Null it so both fall to their empty state (every read guards on a
+        // truthy stage), matching the playoffLabel/seriesStatus scrub beside it.
+        stage: null,
         venue: "",
         // The venue city/state ("Minneapolis, Minnesota") is as identifying as
         // the team names transformTeam scrubs, and it renders on the detail
