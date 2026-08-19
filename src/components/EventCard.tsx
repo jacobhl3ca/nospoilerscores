@@ -147,7 +147,13 @@ function FittedLine({
 // the exact UI/data drift etDay.ts's single-source-of-truth exists to prevent:
 // between midnight and 1 AM local, the board still shows yesterday's slate, so
 // "today" here must be that service day, not the new calendar day.
-function whenLabel(iso?: string, refYmd?: string): string {
+// `dateOnly` forces the date-only rendering (no clock) even for a non-midnight
+// value: boxing.ts anchors every card's `date` to a synthetic noon-UTC
+// placeholder (there's no published bout time), which reads as a real "8:00AM"
+// here and fabricated a wall-clock for what is a night fight. EventDetailModal
+// already special-cases boxing to a date-only "When"; this is the tile-side
+// half of that fix so the compact tile stops inventing a time too.
+function whenLabel(iso?: string, refYmd?: string, dateOnly?: boolean): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
@@ -164,6 +170,10 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // (same guard as weather.ts / etDay.ts / DateNav.ts).
   const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   const midnight = hm === "00:00" || hm === "24:00";
+  // A date-only event (boxing's noon-UTC placeholder) has no real clock, so it
+  // renders like the midnight TBD placeholder: bare weekday off-slate, nothing
+  // on-slate — never a fabricated time.
+  const noTime = midnight || dateOnly;
   // Bucket a REAL kickoff to its SLATE day (etSlateYmd's 1 AM rollover), not a
   // raw effective-tz calendar day, so the "is this on the viewed slate?" test
   // uses the SAME boundary the board, the soccer cards, and the data layer all
@@ -186,8 +196,8 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // formatTime (GameCard's "1:10PM"), not "8:00 PM".
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).replace(/(\d)\s+([AP]M)\b/i, "$1$2");
   const wd = d.toLocaleDateString("en-US", { weekday: "short", timeZone: tz });
-  if (sameDay) return midnight ? "" : time;
-  return midnight ? wd : `${wd} ${time}`;
+  if (sameDay) return noTime ? "" : time;
+  return noTime ? wd : `${wd} ${time}`;
 }
 
 // Rights-holder channels that post per-BOUT UFC highlights, best coverage
@@ -911,7 +921,7 @@ export default function EventCard({
       ? ""
       : event.kind === "poker" && event.scheduleLabel
         ? event.scheduleLabel
-        : whenLabel(event.date, selectedDate) || event.statusDetail;
+        : whenLabel(event.date, selectedDate, event.kind === "boxing") || event.statusDetail;
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
   // Clicking the tile body opens the detail SHEET, not ESPN. It used to open
   // ESPN's race page directly, which meant only a pre/live race with an
