@@ -132,7 +132,15 @@ export default function WorldCupBracket({ selectedDate }: { selectedDate?: strin
     if (!focusRoundKey || !scrollRef.current) return;
     const el = scrollRef.current.querySelector<HTMLElement>(`[data-round-key="${focusRoundKey}"]`);
     if (!el) return;
-    requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", inline: "center" }));
+    // Capture + cancel the frame in cleanup (matching the AbortController and
+    // FittedLine effects elsewhere in this tree). selectedDate can change while
+    // the overlay is open, so focusRoundKey re-runs this effect — without the
+    // cancel, a still-pending frame from the previous round would fire and
+    // scroll to the STALE round before the new one lands (and it would fire on a
+    // detached node after unmount). Cancelling keeps the scroll to the current
+    // focus round only.
+    const raf = requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", inline: "center" }));
+    return () => cancelAnimationFrame(raf);
   }, [focusRoundKey]);
 
   if (failed) {
