@@ -865,13 +865,17 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                   }}
                   // The button wraps the thumbnail (alt="") + headline, so its
                   // accessible name is just the headline — a screen-reader/voice-
-                  // control user hears the title but gets no cue this control PLAYS
-                  // a highlight inline (vs. the sibling <a> row below that opens an
-                  // article). Name the action explicitly; the headline stays inside
-                  // the label so "Label in Name" (WCAG 2.5.3) still holds and voice
-                  // users can say the visible title to activate it. Matches the twin
-                  // Play button in AlignedVideoStrip's VideoRow/CompactTailRow.
-                  aria-label={`Play highlight: ${item.headline}`}
+                  // control user hears the title but gets no cue what this control
+                  // DOES. Name the action explicitly; the headline stays inside the
+                  // label so "Label in Name" (WCAG 2.5.3) still holds and voice
+                  // users can say the visible title to activate it. But this card
+                  // isn't videos-only: with the Text posts toggle on it also holds
+                  // clip-less text/image posts (the `shown` filter above keeps
+                  // itemIsTextPost items), and those open a card rather than play —
+                  // so branch the verb on itemIsVideo (WCAG 2.4.6 / 4.1.2, name must
+                  // match function), matching the twin Play button in
+                  // AlignedVideoStrip's VideoRow/CompactTailRow and NewsFeed's row.
+                  aria-label={itemIsVideo(item) ? `Play highlight: ${item.headline}` : `Open post: ${item.headline}`}
                   className={commonCls}
                   style={commonStyle}
                 >
