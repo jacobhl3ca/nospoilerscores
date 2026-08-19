@@ -1172,7 +1172,7 @@ export default {
           // skipped false-positive just falls back to the next source (the
           // over-hide-safe side the filter already embraces). Byte-identical to
           // spoilers.ts.
-          const SCORE_RX = /(?<![-\/])\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-\/])/;
+          const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-/])/;
           //     "book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)" is the canonical
           //     knockout qualification idiom WC / cup-tie coverage reaches for the instant a side goes
           //     through ("England book their place in the final", "Brazil booked their passage") — a pure

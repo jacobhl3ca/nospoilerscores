@@ -40,15 +40,28 @@ test("the combat words do not swallow ordinary highlight titles", () => {
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
 test("the worker's copy of the pattern is byte-identical", () => {
-  const grab = (path: string) => {
-    const m = fs
-      .readFileSync(new URL(path, import.meta.url), "utf8")
-      .match(/const SPOILER_RX = (\/\\b\(walk[\s\S]*?\/i);/);
-    return m?.[1] ?? null;
-  };
-  const lib = grab("../src/lib/spoilers.ts");
-  const worker = grab("../public/_worker.js");
-  assert.ok(lib, "could not find SPOILER_RX in src/lib/spoilers.ts");
-  assert.ok(worker, "could not find SPOILER_RX in public/_worker.js");
-  assert.equal(worker, lib);
+  const read = (path: string) =>
+    fs.readFileSync(new URL(path, import.meta.url), "utf8");
+  const lib = read("../src/lib/spoilers.ts");
+  const worker = read("../public/_worker.js");
+  const grab = (src: string, re: RegExp) => src.match(re)?.[1] ?? null;
+
+  // SPOILER_RX — the outcome-keyword pattern.
+  const spoilerRe = /const SPOILER_RX = (\/\\b\(walk[\s\S]*?\/i);/;
+  const libSpoiler = grab(lib, spoilerRe);
+  const workerSpoiler = grab(worker, spoilerRe);
+  assert.ok(libSpoiler, "could not find SPOILER_RX in src/lib/spoilers.ts");
+  assert.ok(workerSpoiler, "could not find SPOILER_RX in public/_worker.js");
+  assert.equal(workerSpoiler, libSpoiler);
+
+  // SCORE_RX — the digit-scoreline pattern, the mask's OTHER copy. It once
+  // drifted (the worker escaped the slash, `[-\/]`, where the lib did not, so
+  // the "byte-identical" claim both files carry was quietly false) — pin it too
+  // so the sibling copy can't diverge the way SPOILER_RX is already guarded.
+  const scoreRe = /const SCORE_RX = (\/.+\/);/;
+  const libScore = grab(lib, scoreRe);
+  const workerScore = grab(worker, scoreRe);
+  assert.ok(libScore, "could not find SCORE_RX in src/lib/spoilers.ts");
+  assert.ok(workerScore, "could not find SCORE_RX in public/_worker.js");
+  assert.equal(workerScore, libScore);
 });
