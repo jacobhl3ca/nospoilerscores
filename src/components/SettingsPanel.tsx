@@ -653,15 +653,19 @@ export default function SettingsPanel({
       revealNewsTitles: undefined,
       revealNewsMedia: undefined,
       // The remaining news-view state the toolbar persists was still omitted, so
-      // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, and
-      // their drag-reordered source-type order. newsHiddenSources belongs here
-      // too: it has no live setter, but it is still APPLIED as a source filter, so
-      // a value left in localStorage from an earlier build hides sources with no
-      // UI to clear it — a reset is the only way out. All four have no non-
-      // undefined default, so clearing to undefined restores the fresh-install
-      // default (Cards view, no video filter, default order, nothing hidden).
+      // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, the
+      // ⇅ oldest-first sort, and their drag-reordered source-type order.
+      // newsHiddenSources belongs here too: it has no live setter, but it is still
+      // APPLIED as a source filter, so a value left in localStorage from an earlier
+      // build hides sources with no UI to clear it — a reset is the only way out.
+      // All five have no non-undefined default, so clearing to undefined restores
+      // the fresh-install default (Cards view, no video filter, newest-first,
+      // default order, nothing hidden). newsOldestFirst was the lone news-header
+      // toolbar toggle still missing here — its ⇅ pill persists to prefs like
+      // newsFeedView/newsVideosOnly, so a reset otherwise left the feed reversed.
       newsFeedView: undefined,
       newsVideosOnly: undefined,
+      newsOldestFirst: undefined,
       newsTypeFilterOrder: undefined,
       newsHiddenSources: undefined,
       singleColumn: undefined,
