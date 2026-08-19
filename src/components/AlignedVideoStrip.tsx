@@ -366,11 +366,15 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
         }}
         // The button wraps the thumbnail (alt="") + headline, so its accessible
         // name is just the headline — a screen-reader/voice-control user hears the
-        // title but gets no cue this control PLAYS a highlight inline (vs. the
-        // sibling <a> rows that open an article). Name the action explicitly; the
-        // headline is kept inside the label so "Label in Name" (WCAG 2.5.3) still
-        // holds and voice users can say the visible title to activate it.
-        aria-label={`Play highlight: ${item.headline}`}
+        // title but gets no cue this control acts on the item inline (vs. the
+        // sibling <a> rows that open an article). Name the action explicitly. But
+        // the strip only filters its sources to items WITH a thumbnail, not to
+        // actual videos, so a non-video row opens a text/image card rather than
+        // playing — announce the real action per item (WCAG 2.4.6 / 4.1.2, name
+        // must match function), exactly like the CompactTailRow twin below. The
+        // headline stays in the label so "Label in Name" (WCAG 2.5.3) still holds
+        // and voice users can say the visible title to activate it.
+        aria-label={itemIsVideo(item) ? `Play highlight: ${item.headline}` : `Open post: ${item.headline}`}
         className={commonCls}
         style={commonStyle}
       >
