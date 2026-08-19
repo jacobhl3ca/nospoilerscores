@@ -1062,7 +1062,14 @@ export default function LeagueColumn({
   const checkIfFullNamesFit = useCallback(() => {
     const el = columnRef.current;
     if (!el) return;
-    requestAnimationFrame(() => {
+    // Return the frame id so the callers can cancel it on cleanup — the same
+    // paired requestAnimationFrame/cancelAnimationFrame the sibling measurers
+    // use (EventCard's FittedLine, WorldCupBracket's focus scroll). Without it a
+    // frame queued right before an unmount or a league swap fires against the
+    // now-detached `el`, does its body's document.body probe append/remove, and
+    // set-states a gone column. `undefined` (the early return above) means
+    // nothing was scheduled, so the callers skip the cancel.
+    const raf = requestAnimationFrame(() => {
       // Find a team-name cell to measure available width
       // The name sits in a flex container: [name] [star], inside a grid cell (1fr)
       const nameContainers = el.querySelectorAll(".team-name-container");
@@ -1122,20 +1129,26 @@ export default function LeagueColumn({
 
       setUseAbbreviations(longestWidth > availableWidth);
     });
+    return raf;
   }, [league.games, league.nextGameDay, league.previousGameDay, league.sport]);
 
   // Re-check when the rendered games change
   useEffect(() => {
-    checkIfFullNamesFit();
+    const raf = checkIfFullNamesFit();
+    return () => { if (raf !== undefined) cancelAnimationFrame(raf); };
   }, [checkIfFullNamesFit]);
 
   // Re-check on resize
   useEffect(() => {
     const el = columnRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => checkIfFullNamesFit());
+    let raf: number | undefined;
+    const ro = new ResizeObserver(() => { raf = checkIfFullNamesFit(); });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (raf !== undefined) cancelAnimationFrame(raf);
+    };
   }, [checkIfFullNamesFit]);
 
   // Report the abbreviation state up (see onAbbrevReport in the props). Keyed
