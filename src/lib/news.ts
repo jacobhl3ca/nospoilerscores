@@ -469,16 +469,22 @@ const ESPN_LEAGUE_LABEL: Partial<Record<Sport, string>> = {
 };
 
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
-  // Three event-tile leagues have NO wired news source of any kind — no
+  // Several event-tile leagues have NO wired news source of any kind — no
   // SPORT_NEWS_PATHS entry, no REDDIT_SUB, no PREBAKED_VIDEOS — so the only card
   // the cascade below can build for them is the trailing ESPN catch-all, and
   // fetchLeagueNews() returns [] for a pathless sport. That manufactured an
-  // "ESPN POKER" / "ESPN CHESS" / "ESPN ESPORTS" card that could only ever
+  // "ESPN POKER" / "ESPN LLWS" / "ESPN SIXNATIONS" card that could only ever
   // render "No headlines". Return nothing so the News column stays clean; the
-  // score/event tile view remains complete. Poker was already handled here;
-  // chess and esports are the same sourceless case and were missed (both are
-  // selectable league columns — see SettingsPanel's league labels).
-  if (sport === "poker" || sport === "chess" || sport === "esports") return [];
+  // score/event tile view remains complete. Poker/chess/esports were already
+  // handled here; Little League (llws) and the six rugby-union competitions are
+  // the same sourceless case and were missed — all are selectable league
+  // columns (see SettingsPanel's league labels / ALL_LEAGUES).
+  if (
+    sport === "poker" || sport === "chess" || sport === "esports" ||
+    sport === "llws" || sport === "sixnations" || sport === "rugbywc" ||
+    sport === "rugbychamp" || sport === "superrugby" || sport === "rugbytest" ||
+    sport === "nationschamp"
+  ) return [];
   const logoUrl = LEAGUE_LOGO[sport];
   const out: ColumnSource[] = [];
   // Reddit FIRST (Jacob 7/16): the freshest community discussion leads every
