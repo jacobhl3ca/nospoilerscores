@@ -613,6 +613,14 @@ export default function SettingsPanel({
       defaultRatings: "auto",
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
+      // Sibling of hideTeamStars (rendered directly beneath it in the panel) and
+      // a documented second-order spoiler (see showTeamRecords in preferences.ts:
+      // today's W-L record encodes whether the team won last night). It ships
+      // default-off and reads everywhere as `!!prefs.showTeamRecords`, but was
+      // omitted here — so a user who turned records ON kept them revealed through
+      // "Reset all settings to defaults," which is meant to restore the no-spoiler
+      // defaults. Clearing to undefined restores the fresh-install off state.
+      showTeamRecords: undefined,
       wcBannerDismissed: undefined,
       // Sibling of wcBannerDismissed: a full reset should bring back every
       // season-kickoff banner too, so clear the per-kickoff dismissal list.
