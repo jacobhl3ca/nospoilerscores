@@ -56,6 +56,14 @@ const DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
 function validRecord(event: PokerEventRecord): boolean {
   if (!event.id || !event.title || !DATE_RX.test(event.startDate) || !DATE_RX.test(event.endDate)) return false;
   if (event.startDate > event.endDate || event.officialChannel !== OFFICIAL_CHANNEL[event.tour]) return false;
+  // highlightQuery and broadcasts drive the card the same way they do on the
+  // sibling boxing tile (fetchPokerEvent copies both straight onto the card),
+  // so hold them to the same "drop, don't weaken" gate boxing.ts already
+  // applies: an empty highlightQuery feeds the highlight lookup a blank query
+  // (no clip resolves), and empty broadcasts renders a card with no "where to
+  // watch" line. A curated record missing either is a broken entry, not a
+  // weaker-but-usable one — reject it rather than surface a half-built tile.
+  if (!event.highlightQuery || !event.broadcasts?.length) return false;
   // startTime/endTime are the only optional fields, and they drive the pre/in/post
   // state and the card's `date`. Hold them to the same "drop, don't weaken" gate as
   // everything else: an unparseable value slips past the checks above but then makes
