@@ -4,6 +4,8 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { NewsItem, proxyImage, formatPublished } from "@/lib/news";
 import { getTimeZone } from "@/lib/etDay";
 import { handleExternalClick } from "@/lib/openExternal";
+import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
+import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import {
   NewsSource,
   PlayHandler,
@@ -30,6 +32,13 @@ interface NewsFeedProps {
   // Reverse the merged feed so the oldest post is first (⇅ in the news header).
   oldestFirst?: boolean;
   videosOnly: boolean;
+  // Settings → "Hide upsetting news". When on, items matching lib/sensitiveNews
+  // are dropped from the merged feed and counted in a footer line; tapping its
+  // Show link calls onShowSensitive, which lifts the filter for this session
+  // only (the preference itself is untouched).
+  // Categories switched on by the two Settings toggles; empty = filter off.
+  hiddenCategories?: SensitiveCategory[];
+  onShowSensitive?: () => void;
 }
 
 // A post counts as a video when it carries any playable clip.
@@ -97,25 +106,29 @@ function useAggregatedFeed(sources: NewsSource[]) {
   return items;
 }
 
-export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst }: NewsFeedProps) {
+export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories, onShowSensitive }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
 
   // Visible posts: in Videos mode keep only posts with a clip; otherwise hide
   // headline-only text posts unless explicitly opted in (matches the
   // .news-textpost / .show-text-posts rule the Cards view uses).
-  const visible = useMemo(
+  // How many posts the sensitive filter removed, so the feed can say so rather
+  // than silently shrinking. Counted over the SAME post set the other filters
+  // leave behind, so the number matches what would appear if it were off.
+  const [visible, sensitiveHidden] = useMemo<[NewsItem[], number]>(
     () => {
-      const kept = (items ?? []).filter((it) =>
+      const preFilter = (items ?? []).filter((it) =>
         // Videos + Text posts are independent toggles: Videos keeps clip-bearing
         // posts, and Text posts ALSO on adds the headline-only ones (which carry
         // no clip, so videosOnly alone hid them — Jacob 7/16).
         videosOnly ? (hasVideo(it) || (showTextPosts && itemIsTextPost(it))) : (!itemIsTextPost(it) || showTextPosts)
       );
+      const kept = hiddenCategories?.length ? preFilter.filter((it) => !isSensitiveNews(it, hiddenCategories)) : preFilter;
       // ⇅ Oldest first: the Feed is already time-sorted newest-first, so a plain
       // reverse IS chronological order here. Reverse a copy — `items` is shared.
-      return oldestFirst ? [...kept].reverse() : kept;
+      return [oldestFirst ? [...kept].reverse() : kept, preFilter.length - kept.length];
     },
-    [items, showTextPosts, videosOnly, oldestFirst]
+    [items, showTextPosts, videosOnly, oldestFirst, hiddenCategories]
   );
 
   // Prebuild the paging payloads once so tapping any post opens the lightbox
@@ -142,6 +155,11 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
     return (
       <div role="status" aria-live="polite" className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
         No posts to show.
+        {sensitiveHidden > 0 && (
+          <span className="block mt-2">
+            <SensitiveHiddenNote count={sensitiveHidden} onShow={onShowSensitive} />
+          </span>
+        )}
       </div>
     );
   }
@@ -157,6 +175,11 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
           }
         />
       ))}
+      {sensitiveHidden > 0 && (
+        <div className="pt-2 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+          <SensitiveHiddenNote count={sensitiveHidden} onShow={onShowSensitive} />
+        </div>
+      )}
     </div>
   );
 }

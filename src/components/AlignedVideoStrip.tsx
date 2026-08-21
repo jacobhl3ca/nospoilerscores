@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
+import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
 import { NewsSource, PlayHandler, PlayOpts, itemIsTextPost, newsItemToPlayOpts } from "./NewsColumn";
 
@@ -17,6 +18,11 @@ interface Props {
   tailFetch?: () => Promise<NewsItem[]>;
   tailColIdx?: number;
   showTextPosts?: boolean;
+  // Settings → "Hide upsetting news" (lib/sensitiveNews). Filters both the video
+  // cells and the ESPN text tail. No "N hidden" line here: the strip sits above
+  // the news columns, which print that count for the same filter — two notes for
+  // one filter reads like two different things were hidden.
+  hiddenCategories?: SensitiveCategory[];
   // Reverse the tail list (oldest first) — the ⇅ news-header control.
   oldestFirst?: boolean;
 }
@@ -26,7 +32,7 @@ interface Props {
 // gridTemplateRows: subgrid. Per-row height = tallest headline at that row,
 // shorter cells anchor align-self: start so blank space sits at the bottom.
 // Headlines stay un-clamped so long titles wrap fully (Jacob 2026-05-02).
-export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, oldestFirst }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, hiddenCategories, oldestFirst }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
@@ -91,7 +97,14 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   }, [tailFetch ? "set" : "unset"]);
 
   const allLoaded = colItems.every(Boolean);
-  const keptTailItems = (tailItems ?? []).filter((item) => showTextPosts || !itemIsTextPost(item));
+  // Apply the sensitive filter at RENDER, not in the fetch effect: the effect
+  // only re-runs on a source-set change, so filtering there would leave the
+  // already-fetched strip untouched when the Settings toggle flips mid-session.
+  const shownColItems = useMemo(
+    () => (hiddenCategories?.length ? colItems.map((c) => (c ? c.filter((i) => !isSensitiveNews(i, hiddenCategories)) : c)) : colItems),
+    [colItems, hiddenCategories],
+  );
+  const keptTailItems = (tailItems ?? []).filter((item) => (showTextPosts || !itemIsTextPost(item)) && !(hiddenCategories?.length && isSensitiveNews(item, hiddenCategories)));
   const visibleTailItems = oldestFirst ? [...keptTailItems].reverse() : keptTailItems;
   const tailHasItems = tailColIdx !== undefined && visibleTailItems.length > 0;
   // Reserve 2 pad rows in the tail col so the ESPN-top tail always has somewhere
@@ -100,7 +113,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   const TAIL_RESERVE_ROWS = 2;
   const maxItems = allLoaded
     ? Math.max(
-        ...colItems.map((c, idx) => {
+        ...shownColItems.map((c, idx) => {
           if (tailHasItems && idx === tailColIdx) return 0;
           return c?.length || 0;
         }),
@@ -132,7 +145,7 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
         // loading" guards below (skeleton, pad count) catch it too — otherwise
         // `items.slice(...)` runs on `undefined` and throws, crashing the news
         // view for that render.
-        const items = colItems[colIdx] ?? null;
+        const items = shownColItems[colIdx] ?? null;
         const isTailCol = tailHasItems && colIdx === tailColIdx;
         const capped = isTailCol
           ? Math.min(items?.length || 0, Math.max(0, maxItems - TAIL_RESERVE_ROWS))
