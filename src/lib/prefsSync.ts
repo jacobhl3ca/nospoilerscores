@@ -82,28 +82,114 @@ function identifyToUmami(a: AuthState): void {
   } catch { /* analytics must never break the app */ }
 }
 
-export async function getAuthState(): Promise<AuthState> {
+// ---------------------------------------------------------------------------
+// Auth-state cache.
+//
+// /api/me is not cheap: for a signed-in user the worker walks identity ->
+// account -> usage-record in R2 before it can answer, so the round trip runs
+// into the seconds. SettingsPanel used to start from { signedIn: false } and
+// only ask once the drawer opened, so an already signed-in user watched the
+// Account section paint the SIGNED-OUT UI ("Sign in with Apple") and then flip
+// to their email a couple of seconds later. Two layers remove that:
+//
+//   1. A localStorage snapshot of the last known state, so a caller can paint
+//      the right thing on the first frame and revalidate behind it.
+//   2. A module-level memo plus in-flight dedupe, so the callers that all ask
+//      on load (HomeContent twice, SettingsPanel once) share ONE request.
+//
+// The snapshot is written only from a real 200 answer and cleared only by a
+// real 200 that says signedIn:false, or by signOut/deleteAccount. A network
+// blip must never look like a sign-out.
+// ---------------------------------------------------------------------------
+const AUTH_CACHE_KEY = "nss-auth";
+// The session cookie lives 90 days (SIWA_SESSION_TTL in public/_worker.js), so
+// a snapshot older than that cannot still be valid.
+const AUTH_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+// How long an in-memory answer counts as fresh enough to hand back without
+// re-asking: long enough to collapse the burst of calls at load, short enough
+// that opening Settings minutes later still revalidates.
+const AUTH_FRESH_MS = 30_000;
+
+let authMemo: { at: number; state: AuthState } | null = null;
+let authInFlight: Promise<AuthState> | null = null;
+
+function readAuthCache(): AuthState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(AUTH_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { at?: number; state?: AuthState } | null;
+    if (!parsed || typeof parsed.at !== "number" || !parsed.state) return null;
+    if (Date.now() - parsed.at > AUTH_CACHE_TTL_MS) return null;
+    return parsed.state;
+  } catch {
+    return null;
+  }
+}
+
+function writeAuthCache(state: AuthState | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (!state || !state.signedIn) window.localStorage.removeItem(AUTH_CACHE_KEY);
+    else window.localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({ at: Date.now(), state }));
+  } catch {
+    /* private mode / quota — the cache is an optimisation, never a requirement */
+  }
+}
+
+/** Last known auth state, synchronously, or null when we have never had one.
+ *  null means UNKNOWN, not signed out: render a placeholder rather than a
+ *  sign-in button, or you reintroduce the flash this exists to remove. */
+export function cachedAuthState(): AuthState | null {
+  return authMemo?.state ?? readAuthCache();
+}
+
+/** Drop everything we remember about the session. */
+export function clearAuthCache(): void {
+  authMemo = null;
+  authInFlight = null;
+  writeAuthCache(null);
+}
+
+async function fetchAuthState(): Promise<AuthState> {
+  let j: Record<string, unknown>;
   try {
     const r = await fetch("/api/me", { credentials: "include", headers: hsClientHeaders() });
-    if (!r.ok) return { signedIn: false, email: null };
-    const j = await r.json();
-    const state: AuthState = {
-      signedIn: !!j.signedIn,
-      email: j.email ?? null,
-      providers: j.providers,
-      uid: j.uid ?? null,
-      provider: j.provider ?? null,
-      linkedProviders: Array.isArray(j.linkedProviders) ? j.linkedProviders : [],
-      platform: j.platform ?? hsPlatform(),
-      platforms: j.platforms || {},
-      firstSeen: j.firstSeen ?? null,
-      lastSeen: j.lastSeen ?? null,
-    };
-    identifyToUmami(state);
-    return state;
+    if (!r.ok) throw new Error(`/api/me ${r.status}`);
+    j = await r.json();
   } catch {
-    return { signedIn: false, email: null };
+    // We still do not know. Hand back the last known state instead of asserting
+    // signed-out, and do NOT memoize, so the next caller retries.
+    return cachedAuthState() ?? { signedIn: false, email: null };
   }
+  const state: AuthState = {
+    signedIn: !!j.signedIn,
+    email: (j.email as string | null) ?? null,
+    providers: j.providers as AuthState["providers"],
+    uid: (j.uid as string | null) ?? null,
+    provider: (j.provider as string | null) ?? null,
+    linkedProviders: Array.isArray(j.linkedProviders) ? (j.linkedProviders as string[]) : [],
+    platform: (j.platform as AuthState["platform"]) ?? hsPlatform(),
+    platforms: (j.platforms as AuthState["platforms"]) || {},
+    firstSeen: (j.firstSeen as string | null) ?? null,
+    lastSeen: (j.lastSeen as string | null) ?? null,
+  };
+  identifyToUmami(state);
+  authMemo = { at: Date.now(), state };
+  writeAuthCache(state);
+  return state;
+}
+
+/** Current auth state. Shares one request across concurrent callers and reuses
+ *  a very recent answer; pass force to bypass the memo (not the dedupe). */
+export async function getAuthState(force = false): Promise<AuthState> {
+  if (!force && authMemo && Date.now() - authMemo.at < AUTH_FRESH_MS) return authMemo.state;
+  if (authInFlight) return authInFlight;
+  const req = fetchAuthState().finally(() => {
+    if (authInFlight === req) authInFlight = null;
+  });
+  authInFlight = req;
+  return req;
 }
 
 // Returns the server's stored prefs (a partial Preferences blob) or null if the
@@ -350,6 +436,10 @@ export async function verifyEmailCode(email: string, code: string): Promise<{ ok
 
 export function signOut(): void {
   if (typeof window === "undefined") return;
+  // Drop the cached snapshot BEFORE navigating: the redirect tears this page
+  // down, and a snapshot left behind would paint "signed in" on the next load
+  // from a session that no longer exists.
+  clearAuthCache();
   // The worker clears the cookie and 303s back to "/".
   window.location.href = "/auth/logout";
 }
@@ -361,6 +451,8 @@ export function signOut(): void {
 export async function deleteAccount(): Promise<boolean> {
   try {
     const r = await fetch("/api/account", { method: "DELETE", credentials: "include" });
+    // The account is gone server-side; never let a stale snapshot outlive it.
+    if (r.ok) clearAuthCache();
     return r.ok;
   } catch {
     return false;
