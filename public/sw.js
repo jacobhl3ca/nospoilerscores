@@ -2,13 +2,19 @@
 // Goals: faster repeat visits (precache shell), graceful offline fallback,
 // never cache /api/youtube responses long-term (results stale fast).
 //
-// ⚠️ BUMP CACHE_VERSION on any deploy that changes the app shell / JS chunks.
-// Static assets are served stale-while-revalidate, and Turbopack chunk names
-// are stable across builds, so returning users keep running OLD chunk content
-// until this byte-changes (forcing the SW to reinstall and `activate` to purge
-// the prior cache). Symptom of forgetting: a shipped UI/logic change is live
-// for fresh visitors but invisible to everyone who already has the SW
-// (e.g. the 2026-06-28 MLB two-button highlights fix). v2 → v3.
+// You do NOT need to bump CACHE_VERSION for an ordinary code deploy.
+// This comment used to say you did, back when static assets were
+// stale-while-revalidate and stable Turbopack chunk names could pin a returning
+// user to old code. 381273c6 (2026-07-16) ended that: HTML navigations and
+// /_next/static/ are now network-first, `fetch(req, { cache: "reload" })`, with
+// the cache used only as an offline fallback, so this SW can no longer serve a
+// stale chunk. 62 commits touched src/ between the v15 and v16 bumps with no
+// bump of their own and nothing broke.
+//
+// Bump it only to deliberately purge every client's cache (say, a poisoned
+// precache entry). That is three coordinated edits: add public/sw-vN.js, set
+// the matching CACHE_VERSION in the legacy public/sw.js, and update the
+// register('/sw-vN.js') call in src/app/layout.tsx.
 const CACHE_VERSION = "hidescore-v16";
 const PRECACHE_URLS = [
   "/",
