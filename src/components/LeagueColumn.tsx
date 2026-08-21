@@ -13,6 +13,7 @@ import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
+import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -1260,8 +1261,6 @@ export default function LeagueColumn({
   // Final series), so starring can't reorder anything — hide the stars there
   // (Jacob 6/11). Counts the lookahead/lookback slates too, so the upcoming
   // series rows can't sneak a second matchup past the check.
-  const matchupKey = (g: Game) =>
-    [g.homeTeam.id || g.homeTeam.abbreviation, g.awayTeam.id || g.awayTeam.abbreviation].sort().join("|");
   const distinctMatchups = new Set(
     [...league.games, ...(league.nextGameDay?.games ?? []), ...(league.previousGameDay?.games ?? [])].map(matchupKey),
   ).size;
@@ -1345,17 +1344,21 @@ export default function LeagueColumn({
     );
   };
 
-  // Render the upcoming/lookahead slate. NBA/NHL are down to a single playoff
-  // series with a few games left, so the lead game is a full card and the rest
-  // collapse to compact "@ home" rows (series state shows once, on a full card).
+  // Render the upcoming/lookahead slate. In an NBA/NHL playoff series the whole
+  // slate is one matchup, so the lead game is a full card and the rest collapse
+  // to compact "@ home" rows (series state shows once, on a full card).
   // `firstFull` makes the first game a full card — used when there's no game
   // today (the empty-day lookahead); when today already has a full card above,
-  // the whole upcoming list is compact. Every other league stays all-full.
+  // the upcoming list can go all-compact. Every other league stays all-full.
   const isCompactLeague = league.sport === "nba" || league.sport === "nhl";
-  const renderUpcomingSlate = (games: Game[], firstFull: boolean) =>
-    games.map((game, i) => {
+  // A game keeps its FULL card unless its matchup is already spelled out above
+  // it — see compactableMatchups for why a bare "@ HOME" row is only readable
+  // in that case (it drops the away team).
+  const renderUpcomingSlate = (games: Game[], firstFull: boolean, alsoShown: Game[] = []) => {
+    const named = compactableMatchups(games, firstFull, alsoShown);
+    return games.map((game, i) => {
       const nextGameDate = formatDateCompact(etDayString(game.date) || league.nextGameDay!.date);
-      if (isCompactLeague && !(firstFull && i === 0)) {
+      if (isCompactLeague && named.has(matchupKey(game)) && !(firstFull && i === 0)) {
         return (
           <CompactUpcomingCard
             key={game.id}
@@ -1384,6 +1387,7 @@ export default function LeagueColumn({
         />
       );
     });
+  };
 
   // "Last played · Mon" / "Last played · Mon 6/8" for the lookback slate's day.
   // SHORT weekday ("Mon") — the full name ("Wednesday") overflowed the narrow
@@ -1877,7 +1881,7 @@ export default function LeagueColumn({
               compact for NBA/NHL (firstFull=false). No "Upcoming" divider —
               the per-row dates already mark them (Jacob 6/4). */}
           {renderUpcoming && league.nextGameDay && league.nextGameDay.games.length > 0 &&
-            renderUpcomingSlate(league.nextGameDay.games, false)}
+            renderUpcomingSlate(league.nextGameDay.games, false, sorted)}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
             <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
               <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
