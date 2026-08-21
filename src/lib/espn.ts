@@ -3951,10 +3951,15 @@ function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
 // scoreboard accepts a DATE RANGE (`?dates=YYYYMMDD-YYYYMMDD`) returning every
 // fixture in the window in ONE request, so we can find the true next match day
 // without dozens of separate fetches. Returns the earliest future day's slate.
+// How far ahead fetchNextGameDayRange reads in ONE request. Shared with the
+// offseason-opener gate in fetchAllLeagues so the gate can never green-light a
+// league whose opener sits outside the span the fetch would actually cover.
+const RANGE_LOOKAHEAD_DAYS = 80;
+
 async function fetchNextGameDayRange(
   sport: Sport,
   fromDate?: string,
-  windowDays = 80,
+  windowDays = RANGE_LOOKAHEAD_DAYS,
   // allDays: every upcoming fixture in the window. maxDays: every fixture from
   // the first N distinct ET match-days. Default (neither): the earliest day only.
   opts?: { allDays?: boolean; maxDays?: number },
@@ -4854,7 +4859,25 @@ export async function fetchAllLeagues(
         // newly added league from the widened lookahead. SOCCER_SPORTS also
         // contains fifa, but this branch is unreachable for it: the World Cup
         // is handled above with its own 80-day maxDays:1 window.
-        if (!nextGameDay && SOCCER_SPORTS.has(cfg.sport)) {
+        // Second case for the same widening: an OFFSEASON column whose opener
+        // already falls inside the range window. The day-by-day lookahead above
+        // is 7 days, so a league whose schedule is published but whose opener is
+        // weeks out (the NBA's mid-August drop against an Oct 20 opening night)
+        // rendered a bare countdown while ESPN had the fixtures. One ranged
+        // request returns the opening-night slate instead.
+        //
+        // Gated on daysUntil, NOT on "is it offseason": a league that is MONTHS
+        // out (WNBA in November, NCAAM in July) must keep the "last game played
+        // + highlights" lookback card below rather than swap it for a fixture
+        // list half a year early — setting nextGameDay suppresses that fallback.
+        // getSeasonOpener returns null for a league inside its own window, so
+        // this can never fire mid-season. kind === "season" holds golf/tennis
+        // out: their ESPN endpoint is the whole tour, not one event, and the
+        // tennis payload is big enough to have its own retry carve-out.
+        const opener = getSeasonOpener(cfg.sport, label, viewDate);
+        const openerInRange = !!opener && opener.kind === "season"
+          && opener.daysUntil <= RANGE_LOOKAHEAD_DAYS;
+        if (!nextGameDay && (SOCCER_SPORTS.has(cfg.sport) || openerInRange)) {
           nextGameDay = await fetchNextGameDayRange(cfg.sport, date);
         }
       }

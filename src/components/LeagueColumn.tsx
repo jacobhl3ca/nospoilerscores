@@ -1478,10 +1478,10 @@ export default function LeagueColumn({
   // Same league, same offseason, two different answers (Jacob 8/10). The
   // lookback still wins where it fires, so this only shows on days that are
   // genuinely past the last highlight.
-  const seasonOpenerBlock = seasonOpener ? (
+  const seasonOpenerLines = seasonOpener ? (
     // "~" whenever the date came from the column's opening window rather than a
     // verified opening-day fixture — see SeasonOpener.
-    <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">
+    <>
       <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
         {seasonOpener.kind === "event" ? "Returns" : "Season starts"} {seasonOpener.approximate ? "~" : ""}{seasonOpener.label}
       </p>
@@ -1496,7 +1496,26 @@ export default function LeagueColumn({
           Full schedule ~{seasonOpener.scheduleOut}
         </p>
       )}
-    </div>
+    </>
+  ) : null;
+
+  // Standalone: the column bottomed out and this copy is the whole body, so it
+  // gets the vertical padding that keeps an otherwise empty column from looking
+  // collapsed.
+  const seasonOpenerBlock = seasonOpenerLines ? (
+    <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">{seasonOpenerLines}</div>
+  ) : null;
+
+  // Header variant: worn ABOVE the upcoming slate once the opener is close
+  // enough that the ranged lookahead returns opening night (see the
+  // openerInRange gate in espn.ts fetchAllLeagues). The fixture cards answer
+  // "who plays" but not "is this the start of the season", and dropping the
+  // line entirely the day the slate appears would silently lose that. Tighter
+  // padding than the standalone block — it is a caption here, not the body.
+  // Null whenever seasonOpener is (i.e. all season long), so an ordinary
+  // mid-season off-day lookahead is untouched.
+  const seasonOpenerHeader = seasonOpenerLines ? (
+    <div className="flex flex-col items-center gap-0.5 pb-1 sm:pb-2">{seasonOpenerLines}</div>
   ) : null;
 
   return (
@@ -1773,6 +1792,8 @@ export default function LeagueColumn({
             )
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
+              {/* Offseason-with-fixtures only (null in season) — see above. */}
+              {seasonOpenerHeader}
               {/* No game today → the lead upcoming game is a full card, the
                   rest compact (NBA/NHL); other leagues stay all-full. */}
               {renderUpcomingSlate(league.nextGameDay.games, true)}
