@@ -172,6 +172,8 @@ export function NewsColumnTitle({
 }) {
   const [swapOpen, setSwapOpen] = useState(false);
   const swapRef = useRef<HTMLDivElement>(null);
+  const swapPanelRef = useRef<HTMLDivElement>(null);
+  const [swapMaxH, setSwapMaxH] = useState<number>();
   useEffect(() => {
     if (!swapOpen) return;
     const onAway = (e: MouseEvent) => {
@@ -189,6 +191,36 @@ export function NewsColumnTitle({
     return () => {
       document.removeEventListener("mousedown", onAway);
       document.removeEventListener("keydown", onKey);
+    };
+  }, [swapOpen]);
+
+  // Same viewport cap the LeagueColumn switcher uses: the league list can run
+  // past the bottom of a short window, and because the column header is sticky,
+  // scrolling the page drags the panel down with it instead of revealing the
+  // tail. Cap to the room left under the trigger and scroll inside.
+  useEffect(() => {
+    if (!swapOpen) return;
+    const measure = () => {
+      const el = swapPanelRef.current;
+      if (!el) return;
+      // The mobile view-mode tab bar is fixed to the bottom at z-40, above this
+      // panel — without subtracting it the last few leagues scrolled into view
+      // but sat *behind* the bar. Both variants are in the DOM (the inline
+      // desktop one and the fixed mobile bar); only the fixed one blocks, so
+      // pick by computed position rather than assuming.
+      const nav = Array.from(document.querySelectorAll('nav[aria-label="View mode"]'))
+        .find((n) => getComputedStyle(n).position === "fixed");
+      const bottomBar = nav ? nav.getBoundingClientRect().height : 0;
+      // 12px so the panel never sits flush against the bottom edge.
+      const room = Math.max(160, window.innerHeight - bottomBar - el.getBoundingClientRect().top - 12);
+      setSwapMaxH((prev) => (prev !== undefined && Math.abs(prev - room) < 1 ? prev : room));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
     };
   }, [swapOpen]);
   const isSwappable = swappableOptions && swappableOptions.length > 0 && onSwapLeague;
@@ -229,8 +261,9 @@ export function NewsColumnTitle({
                 // app's overlays use (see DateNav's calendar popover).
                 role="dialog"
                 aria-label="Switch news league"
-                className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[120px]"
-                style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                ref={swapPanelRef}
+                className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 py-1 min-w-[120px] overflow-y-auto overscroll-contain"
+                style={{ background: "var(--bg)", border: "1px solid var(--border)", maxHeight: swapMaxH }}
               >
                 {/* Auto reverts to the in-season default for this slot. */}
                 <button
