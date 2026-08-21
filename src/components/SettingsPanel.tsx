@@ -10,7 +10,7 @@ import {
   DefaultLandingView,
   DefaultRatings,
 } from "@/lib/preferences";
-import { getAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
+import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
 // The one key that turns HideScore's self-hosted Umami off in this browser.
 // NoTrackToggle (/notrack) owns the same key — keep the two in step.
@@ -195,6 +195,11 @@ function teamSportFromId(id: string): Sport | null {
   return id.slice(0, dash) as Sport;
 }
 
+// Stand-in used while the real auth state is unknown. Everything optional is
+// left undefined so no provider button can render off it: callers must gate on
+// authKnown, not on this object.
+const AUTH_UNKNOWN: AuthState = { signedIn: false, email: null };
+
 export default function SettingsPanel({
   open,
   onClose,
@@ -274,7 +279,17 @@ export default function SettingsPanel({
 
   // Account / cross-device sync state (Sign in with Apple). Re-checked each
   // time the panel opens so the signed-in email reflects a just-finished login.
-  const [auth, setAuth] = useState<AuthState>({ signedIn: false, email: null });
+  //
+  // null means UNKNOWN, which is NOT the same as signed out. /api/me takes a
+  // couple of seconds for a signed-in user, and this used to start at
+  // { signedIn: false }, so opening Settings showed the "Sign in with Apple"
+  // buttons to someone who was already signed in and then flipped to their
+  // email once the answer landed. Seed from the cached snapshot (correct on the
+  // first frame for anyone who has opened the app before) and render a
+  // placeholder rather than the signed-out UI while we genuinely don't know.
+  const [authState, setAuthState] = useState<AuthState | null>(() => cachedAuthState());
+  const authKnown = authState !== null;
+  const auth = authState ?? AUTH_UNKNOWN;
   const [canUseGoogle, setCanUseGoogle] = useState(false);
   const [emailStep, setEmailStep] = useState<"email" | "code">("email");
   const [emailAddress, setEmailAddress] = useState("");
@@ -290,7 +305,7 @@ export default function SettingsPanel({
     setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
     setIsAndroidApp(!!cap?.isNativePlatform?.() && cap?.getPlatform?.() === "android");
     let alive = true;
-    getAuthState().then((a) => { if (alive) setAuth(a); });
+    getAuthState().then((a) => { if (alive) setAuthState(a); });
     return () => { alive = false; };
   }, [open]);
 
@@ -721,7 +736,15 @@ export default function SettingsPanel({
           {/* Account — Sign in with Apple syncs prefs across browsers/devices.
               First so the cross-device value prop is the first thing seen. */}
           <Section title="Account">
-            {auth.signedIn ? (
+            {!authKnown ? (
+              // Unknown, not signed out. A skeleton is honest; the sign-in
+              // buttons would be a lie for the ~2s /api/me can take.
+              <div className="space-y-2" aria-busy="true">
+                <div className="h-4 w-2/3 rounded animate-pulse" style={{ background: "var(--bg-card-hover)" }} />
+                <div className="h-3 w-full rounded animate-pulse" style={{ background: "var(--bg-card-hover)" }} />
+                <span className="sr-only">Checking your account</span>
+              </div>
+            ) : auth.signedIn ? (
               <div className="space-y-2">
                 <p className="text-sm" style={{ color: "var(--text)" }}>
                   Signed in{auth.email ? <> as <span className="font-medium">{auth.email}</span></> : ""}.

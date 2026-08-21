@@ -2725,7 +2725,7 @@ async function _hsResolveAccount(env, u, linkUid = null) {
 }
 
 // Read (and lazily upgrade) the record. Returns null when there's no store.
-async function _hsTouchUser(env, request, u) {
+async function _hsTouchUser(env, request, u, ctx) {
   if (!env.DATA || !u || !u.sub) return null;
   const key = `users/${u.uid || u.sub}.json`;
   let rec = null;
@@ -2751,9 +2751,16 @@ async function _hsTouchUser(env, request, u) {
     rec.lastSeen = now;
     rec.platforms[platform] = now;
     rec.counts[platform] = (rec.counts[platform] || 0) + 1;
+    // This write is bookkeeping — nothing in the caller's answer depends on it.
+    // It used to sit in the critical path of /api/me, which is the request the
+    // Settings drawer blocks on, on top of the identity/account reads already
+    // done by _hsResolveAccount. Hand it to waitUntil when the caller gave us a
+    // ctx so the response goes out first; without one, keep the old behaviour.
     try {
-      await env.DATA.put(key, JSON.stringify(rec),
+      const put = env.DATA.put(key, JSON.stringify(rec),
         { httpMetadata: { contentType: "application/json" } });
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(Promise.resolve(put).catch(() => {}));
+      else await put;
     } catch { /* analytics only — never fail the request over it */ }
   }
   return rec;
@@ -2773,7 +2780,7 @@ async function siwaMe(request, env, ctx) {
   if (!sessionUser) return _siwaJson(base);
   const u = await _hsResolveAccount(env, sessionUser).catch(() => ({ ...sessionUser, uid: sessionUser.uid || null }));
   let rec = null;
-  try { rec = await _hsTouchUser(env, request, u); } catch { /* best effort */ }
+  try { rec = await _hsTouchUser(env, request, u, ctx); } catch { /* best effort */ }
   return _siwaJson({
     ...base,
     uid: (rec && rec.uid) || (await _hsUid(env, u.sub)),
