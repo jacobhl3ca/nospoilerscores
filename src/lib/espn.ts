@@ -4822,6 +4822,28 @@ export async function fetchAllLeagues(
     const ranksPromise = RANK_LEAGUES.has(cfg.sport) ? fetchStandingsRanks(cfg.sport) : null;
     if (cfg.sport === "nhl" && date) await enrichNhlVideos(games, date);
     if (cfg.sport === "mlb" && date) await enrichMlbVideos(games, date);
+    // OFFSEASON column whose opener already falls inside the range window. The
+    // day-by-day lookahead is 7 days, so a league whose schedule is published
+    // but whose opener is weeks out (the NBA's mid-August drop against an Oct 20
+    // opening night) rendered a bare countdown while ESPN had the fixtures. One
+    // ranged request returns the opening-night slate instead.
+    //
+    // Gated on daysUntil, NOT on "is it offseason": a league that is MONTHS out
+    // (WNBA in November, NCAAM in July) must keep the "last game played +
+    // highlights" lookback card rather than swap it for a fixture list half a
+    // year early — setting nextGameDay suppresses that fallback. getSeasonOpener
+    // returns null for a league inside its own window, so this can never fire
+    // mid-season. kind === "season" holds golf/tennis out: their ESPN endpoint is
+    // the whole tour, not one event, and the tennis payload is big enough to have
+    // its own retry carve-out.
+    //
+    // Hoisted above the current-view branch because the PAST tab needs it too:
+    // defaultDateMode is "yesterday", so the landing view for most users is the
+    // past tab, and it was the last one still rendering a bare countdown.
+    const opener = getSeasonOpener(cfg.sport, label, viewDate);
+    const openerInRange = !!opener && opener.kind === "season"
+      && opener.daysUntil <= RANGE_LOOKAHEAD_DAYS;
+
     let nextGameDay: { date: string; games: Game[] } | null = null;
     // Only surface the "next game day" fallback when ESPN genuinely returned
     // an empty schedule. On a fetch failure games is also [] — falling back
@@ -4860,23 +4882,7 @@ export async function fetchAllLeagues(
         // contains fifa, but this branch is unreachable for it: the World Cup
         // is handled above with its own 80-day maxDays:1 window.
         // Second case for the same widening: an OFFSEASON column whose opener
-        // already falls inside the range window. The day-by-day lookahead above
-        // is 7 days, so a league whose schedule is published but whose opener is
-        // weeks out (the NBA's mid-August drop against an Oct 20 opening night)
-        // rendered a bare countdown while ESPN had the fixtures. One ranged
-        // request returns the opening-night slate instead.
-        //
-        // Gated on daysUntil, NOT on "is it offseason": a league that is MONTHS
-        // out (WNBA in November, NCAAM in July) must keep the "last game played
-        // + highlights" lookback card below rather than swap it for a fixture
-        // list half a year early — setting nextGameDay suppresses that fallback.
-        // getSeasonOpener returns null for a league inside its own window, so
-        // this can never fire mid-season. kind === "season" holds golf/tennis
-        // out: their ESPN endpoint is the whole tour, not one event, and the
-        // tennis payload is big enough to have its own retry carve-out.
-        const opener = getSeasonOpener(cfg.sport, label, viewDate);
-        const openerInRange = !!opener && opener.kind === "season"
-          && opener.daysUntil <= RANGE_LOOKAHEAD_DAYS;
+        // already falls inside the range window — see openerInRange above.
         if (!nextGameDay && (SOCCER_SPORTS.has(cfg.sport) || openerInRange)) {
           nextGameDay = await fetchNextGameDayRange(cfg.sport, date);
         }
@@ -4905,7 +4911,13 @@ export async function fetchAllLeagues(
       if (!previousGameDay && !nextGameDay) {
         nextGameDay = cfg.sport === "fifa"
           ? await fetchNextGameDayRange(cfg.sport, date, 80, { maxDays: 1 })
-          : await fetchNextGameDay(cfg.sport, 14, date);
+          // Offseason opener already inside the window: the 14-day day-by-day
+          // walk can't reach an Oct 20 opening night from an August past tab, so
+          // the column fell through to a bare countdown. Same ranged request the
+          // current view uses, under the same daysUntil gate.
+          : openerInRange
+            ? await fetchNextGameDayRange(cfg.sport, date)
+            : await fetchNextGameDay(cfg.sport, 14, date);
       }
     }
     // Offseason fallback (current view): no games today AND no upcoming game in
@@ -4919,7 +4931,16 @@ export async function fetchAllLeagues(
       previousGameDay = await fetchPreviousGameDayRange(cfg.sport, date);
     }
     if (ranksPromise) {
-      applyTeamRanks(cfg.sport, await ranksPromise, [games, nextGameDay?.games, previousGameDay?.games]);
+      // ⚠️ The standings endpoint keeps serving the FINISHED season's table all
+      // offseason (in Aug 2026 it still returns DET 60-22 from 2025-26), so
+      // stamping it onto an opening-night fixture printed "Celtics #4 / Pistons
+      // #3" — last season's finish, on a game from a season with no standings
+      // yet. Those cards get no rank; `games` and the lookback slate are real
+      // games from the season the table describes, so they keep theirs.
+      const rankTargets = openerInRange
+        ? [games, previousGameDay?.games]
+        : [games, nextGameDay?.games, previousGameDay?.games];
+      applyTeamRanks(cfg.sport, await ranksPromise, rankTargets);
     }
     return { sport: cfg.sport, label, games, nextGameDay, previousGameDay, fetchFailed: failed };
   };
