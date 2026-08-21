@@ -2,6 +2,8 @@
 
 import { MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sport } from "@/lib/types";
+import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
+import SensitiveHiddenNote from "@/components/SensitiveHiddenNote";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { handleExternalClick } from "@/lib/openExternal";
 
@@ -119,6 +121,12 @@ interface NewsColumnProps {
   // 🎥 Videos filter — when true, each source shows only its clip-bearing items
   // (highlights + Reddit clips) and video-less sources render nothing.
   videosOnly?: boolean;
+  // Settings → "Hide upsetting news" (see lib/sensitiveNews). The column totals
+  // what its sources dropped and prints one footer line; onShowSensitive lifts
+  // the filter for this session (the preference itself is untouched).
+  // Categories switched on by the two Settings toggles; empty = filter off.
+  hiddenCategories?: SensitiveCategory[];
+  onShowSensitive?: () => void;
   // Headline-only rows are independently hidden unless this is true.
   showTextPosts?: boolean;
   // Reverse each source's rendered order (oldest first) — the ⇅ news-header
@@ -872,7 +880,7 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
   );
 }
 
-function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean }) {
+function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, siblings, baseIndex, videosOnly, showTextPosts, oldestFirst, hiddenCategories, onSensitiveHidden }: { source: NewsSource; onPlayVideo?: PlayHandler; onItemsLoaded?: (label: string, items: NewsItem[]) => void; onRenderState?: (label: string, state: SourceRenderState) => void; siblings?: PlayOpts[] | null; baseIndex?: number | null; videosOnly?: boolean; showTextPosts?: boolean; oldestFirst?: boolean; hiddenCategories?: SensitiveCategory[]; onSensitiveHidden?: (label: string, count: number) => void }) {
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -905,20 +913,25 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   // 🎥 Videos filter: keep only clip-bearing items (includes Reddit v.redd.it
   // posts). Once loaded, a source with no videos renders nothing so the board
   // isn't full of empty cards.
-  const shown = useMemo(
+  // [rendered items, how many the sensitive filter removed]. The count is kept
+  // per source so the column can total it up in one footer line instead of
+  // repeating a note on every card.
+  const [shown, sensitiveHidden] = useMemo<[NewsItem[], number]>(
     // Videos and Text posts are independent toggles: with Videos on you get the
     // clip-bearing posts, and with Text posts ALSO on you additionally get the
     // headline-only text posts (they carry no clip, so plain videosOnly hid them
     // and the Text posts toggle was a no-op — Jacob 7/16).
     () => {
-      const kept = items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item)));
+      const preFilter = items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item)));
+      const kept = hiddenCategories?.length ? preFilter.filter((item) => !isSensitiveNews(item, hiddenCategories)) : preFilter;
       // Bottom-to-top reading order (the ⇅ control next to the funnel). Reverse
       // AFTER filtering so the flip is over what's actually on screen, and copy
       // first — items is the fetched array other memos also read.
-      return oldestFirst ? [...kept].reverse() : kept;
+      return [oldestFirst ? [...kept].reverse() : kept, preFilter.length - kept.length];
     },
-    [items, videosOnly, showTextPosts, oldestFirst],
+    [items, videosOnly, showTextPosts, oldestFirst, hiddenCategories],
   );
+  useEffect(() => { onSensitiveHidden?.(source.label, sensitiveHidden); }, [sensitiveHidden, source.label, onSensitiveHidden]);
   // Publish exactly what is rendered so modal prev/next never pages into a row
   // that the active Videos filter hid.
   useEffect(() => { onItemsLoaded?.(source.label, shown); }, [shown, source.label, onItemsLoaded]);
@@ -969,6 +982,8 @@ export default function NewsColumn({
   showTextPosts,
   oldestFirst,
   removable,
+  hiddenCategories,
+  onShowSensitive,
 }: NewsColumnProps) {
   const widthCls = widthClassName ?? "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]";
 
@@ -989,6 +1004,16 @@ export default function NewsColumn({
   // A column that is merely still loading, or that has a source rendering its
   // own "No headlines" card, must not show this.
   const allFiltered = sources.length > 0 && sources.every((s) => stateBySource[s.label] === "hidden");
+
+  // How many items the "Hide upsetting news" filter removed, per source, so the
+  // column prints ONE footer line rather than a note on every card.
+  const [sensitiveBySource, setSensitiveBySource] = useState<Record<string, number>>({});
+  const handleSensitiveHidden = useCallback((label: string, count: number) => {
+    setSensitiveBySource((prev) => (prev[label] === count ? prev : { ...prev, [label]: count }));
+  }, []);
+  // Only count sources still mounted in this column — a swapped-out league must
+  // not leave its tally behind.
+  const sensitiveHidden = sources.reduce((n, s) => n + (sensitiveBySource[s.label] ?? 0), 0);
 
   // Walk sections in render order, append every post, and record where each
   // source starts in the shared modal list.
@@ -1035,6 +1060,8 @@ export default function NewsColumn({
             videosOnly={videosOnly}
             showTextPosts={showTextPosts}
             oldestFirst={oldestFirst}
+            hiddenCategories={hiddenCategories}
+            onSensitiveHidden={handleSensitiveHidden}
           />
         ))}
         {allFiltered && (
@@ -1052,6 +1079,11 @@ export default function NewsColumn({
                 ? "Turn off Videos, or widen Source in the filter menu."
                 : "Try widening Source in the filter menu."}
             </span>
+          </div>
+        )}
+        {sensitiveHidden > 0 && (
+          <div className="pt-1 pb-2 text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
+            <SensitiveHiddenNote count={sensitiveHidden} onShow={onShowSensitive} />
           </div>
         )}
       </div>
