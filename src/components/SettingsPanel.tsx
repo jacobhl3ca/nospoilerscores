@@ -656,6 +656,8 @@ export default function SettingsPanel({
       newsHiddenSources: undefined,
       singleColumn: undefined,
       newsSingleColumn: undefined,
+      hideSensitiveNews: undefined,
+      hideCrashNews: undefined,
       timezone: undefined,
       smartCutoffHour: 13,
       newsColCount: 3,
@@ -1221,6 +1223,18 @@ export default function SettingsPanel({
               hint="Stack all news columns into one wide column instead of side-by-side."
               checked={prefs.newsSingleColumn ?? false}
               onChange={(v) => updatePrefs({ newsSingleColumn: v })}
+            />
+            <ToggleRow
+              label="Hide upsetting news"
+              hint="Filters out deaths, crashes, assault and abuse cases, getting hurt on the field (a batter hit in the head, a collision, carted off), serious illness, harm to animals and self-harm. Anything hidden is counted at the bottom of the feed, so you can still show it in one tap. Roster injury news — IL moves, return timelines — still shows."
+              checked={prefs.hideSensitiveNews ?? false}
+              onChange={(v) => updatePrefs({ hideSensitiveNews: v })}
+            />
+            <ToggleRow
+              label="Hide crashes and wrecks"
+              hint="Separate from the setting above, because a crash everyone walks away from is part of racing. On: racing wrecks, pile-ups, hard falls and bike spills are filtered out too. A crash that hurt or killed someone is already covered by the setting above."
+              checked={prefs.hideCrashNews ?? false}
+              onChange={(v) => updatePrefs({ hideCrashNews: v })}
             />
             <Field label="3rd news column" hint="Default league for the third news column">
               <select
