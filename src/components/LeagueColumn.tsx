@@ -808,6 +808,9 @@ export default function LeagueColumn({
   // as soon as the column is wide enough for unabbreviated team names.
   const headerLabel = (useAbbreviations && SHORT_LEAGUE_LABELS[league.label]) || league.label;
   const [swapOpen, setSwapOpen] = useState(false);
+  // Panel + measured height cap for the switcher — see the effect below.
+  const swapPanelRef = useRef<HTMLDivElement>(null);
+  const [swapMaxH, setSwapMaxH] = useState<number>();
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
   // Capture "now" once at mount so the day-granular "Last played" label below
   // (renderPreviousSlate) stays a pure render — reading Date.now() during render
@@ -1022,6 +1025,40 @@ export default function LeagueColumn({
     return () => {
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("keydown", onKey);
+    };
+  }, [swapOpen]);
+
+  // The switcher lists every league, so on a phone (and in any short window) it
+  // ran taller than the viewport and the tail — UFC, Remove col — sat below the
+  // fold with no way to reach it: the panel had no height cap and no scroller,
+  // and scrolling the PAGE doesn't help because the header is sticky, so the
+  // panel just travels down with it (Jacob 8/21 screenshot). Cap it to the room
+  // actually left under the trigger and let the panel scroll itself. Re-measured
+  // on resize and on scroll (capture phase, so the board's own scrollers count)
+  // since the sticky header's y position moves.
+  useIsoLayoutEffect(() => {
+    if (!swapOpen) return;
+    const measure = () => {
+      const el = swapPanelRef.current;
+      if (!el) return;
+      // The mobile view-mode tab bar is fixed to the bottom at z-40, above this
+      // panel — without subtracting it the last few leagues scrolled into view
+      // but sat *behind* the bar. Both variants are in the DOM (the inline
+      // desktop one and the fixed mobile bar); only the fixed one blocks, so
+      // pick by computed position rather than assuming.
+      const nav = Array.from(document.querySelectorAll('nav[aria-label="View mode"]'))
+        .find((n) => getComputedStyle(n).position === "fixed");
+      const bottomBar = nav ? nav.getBoundingClientRect().height : 0;
+      // 12px so the panel never sits flush against the bottom edge.
+      const room = Math.max(160, window.innerHeight - bottomBar - el.getBoundingClientRect().top - 12);
+      setSwapMaxH((prev) => (prev !== undefined && Math.abs(prev - room) < 1 ? prev : room));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
     };
   }, [swapOpen]);
 
@@ -1539,7 +1576,16 @@ export default function LeagueColumn({
         // pb-3: at pb-2 the first card's top border sat flush against the
         // subtitle line ("Big Inning · 7:30 PM ET"), so the card read as
         // clipped by the title block (Jacob 8/4).
-        <div className="league-sticky-top flex flex-col items-center pb-3 sm:pb-4 sticky z-30" style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}>
+        <div
+          // z-30 normally; z-[31] while the switcher is open. In single-column
+          // mode every league section has its OWN sticky header at z-30, so a
+          // tall switcher panel (z-50, but scoped inside THIS header's stacking
+          // context) was painted over by the NEXT section's header further down
+          // the page. One step up beats those siblings while staying under the
+          // fixed app header / seam cover / bottom nav.
+          className={`league-sticky-top flex flex-col items-center pb-3 sm:pb-4 sticky ${swapOpen ? "z-[31]" : "z-30"}`}
+          style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}
+        >
           <div
             className="flex items-center justify-center"
             style={canDrag ? { cursor: isDragging ? "grabbing" : "grab", touchAction: "pan-y" } : undefined}
@@ -1633,8 +1679,13 @@ export default function LeagueColumn({
                     // DateNav calendar and HomeContent news-filter popovers use.
                     role="dialog"
                     aria-label="Switch league"
-                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-hidden min-w-[100px]"
-                    style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                    ref={swapPanelRef}
+                    // overflow-y-auto (not overflow-hidden): the list is capped
+                    // to the viewport by swapMaxH, so it has to scroll itself.
+                    // overscroll-contain keeps that scroll from chaining out to
+                    // the board behind it once it hits either end.
+                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-y-auto overscroll-contain min-w-[100px]"
+                    style={{ background: "var(--bg)", border: "1px solid var(--border)", maxHeight: swapMaxH }}
                   >
                     {/* Auto option — always present so the dropdown is consistent per column */}
                     <button
