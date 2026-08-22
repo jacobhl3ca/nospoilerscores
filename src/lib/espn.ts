@@ -1613,7 +1613,20 @@ function calculateRating(game: RatingGame): number | null {
   // the penalty and rate 100 ("GREAT") where the identical EPL/FIFA match rates ~50.
   let lowScoringPenalty = 0;
   if (SOCCER_SPORTS.has(sport) && total < 2) {
-    lowScoringPenalty = (2 - total) * 25; // 0 goals: -50, 1 goal: -25
+    // 0-0: -50. A goalless draw really is the dull case, and demoting it below
+    // every game that produced a goal is the intent.
+    //
+    // 1-0: -10, NOT -25. A 1-0 is the TIGHTEST possible decided scoreline, but
+    // at -25 it landed on 55 while a 3-1 rated 64 and a 2-0 rated 60 — so the
+    // Rated view put two-goal wins ABOVE one-goal wins, which is the ordering
+    // complaint this fixes (Jacob 8/21). Measured with
+    // scripts/audit-rating-order.mjs on 2026-08-21: margin inversions across
+    // the nine soccer leagues with a sampled slate ran 3-27% of ranked pairs,
+    // and EVERY example was a 1-0 sinking below a bigger-margin game. -10 keeps
+    // a 1-0 (70, GOOD) under a 1-1/2-2 draw and under a late-drama 1-2 (which
+    // the bonus lifts), while putting it back above every 2+-goal result.
+    // Re-run the audit before changing this number again.
+    lowScoringPenalty = total === 0 ? 50 : 10;
   }
 
   // Late-drama bonus for soccer: a result swung late (e.g. a stoppage-time
@@ -3915,6 +3928,27 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
 // Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
 // the single-day fetch and the soccer range-lookahead so both apply the same
 // postponed/preseason/0-competitor filtering + per-event failure isolation.
+// Sports whose REGULAR slate is tagged season.type 1, so the preseason filter
+// below must not touch them.
+//
+// NFL: the type-1 slate is genuinely preseason, but LEAGUES carries a dedicated
+// "NFL Preseason" column (07-21 → 09-03) whose entire run is it. The regular NFL
+// config doesn't start until 09-04, so no type-1 event can leak into it.
+//
+// Rugby: ESPN tags EVERY rugby fixture type 1 — verified 2026-08-21 across all
+// six competitions (Six Nations, Champions Cup, Super Rugby, Rugby Tests,
+// Nations Championship, and by extension the World Cup). There is no type-2
+// rugby event anywhere in ESPN's feed, so a blanket type-1 drop emptied all six
+// columns from the day rugby shipped (2026-08-11) to the day this was found —
+// silently, because the fetch 200s and the parser is fine: eventsToGames simply
+// filtered every match out and the column rendered "Upcoming Schedule TBD".
+// Reproduce with: node scripts/audit-league-coverage.mjs (rugby rows read
+// "ESPN had finished games on <date> but fetchGames returned none").
+const SEASON_TYPE_1_IS_REGULAR = new Set<Sport>([
+  "nfl",
+  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+]);
+
 function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
   return events
     .filter((e) => {
@@ -3928,7 +3962,7 @@ function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
       // Schedule TBD" while ESPN had 49 games on the board. The regular NFL
       // config doesn't start until 09-04, so no type-1 event can leak into it.
       const seasonType = e.season?.type ?? 0;
-      if (seasonType === 1 && sport !== "nfl") return false;
+      if (seasonType === 1 && !SEASON_TYPE_1_IS_REGULAR.has(sport)) return false;
       // Tournament-wrapper events with no competitors aren't real matches.
       const competitors = e.competitions?.[0]?.competitors ?? [];
       if (competitors.length < 2) return false;
@@ -3951,10 +3985,15 @@ function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
 // scoreboard accepts a DATE RANGE (`?dates=YYYYMMDD-YYYYMMDD`) returning every
 // fixture in the window in ONE request, so we can find the true next match day
 // without dozens of separate fetches. Returns the earliest future day's slate.
+// How far ahead fetchNextGameDayRange reads in ONE request. Shared with the
+// offseason-opener gate in fetchAllLeagues so the gate can never green-light a
+// league whose opener sits outside the span the fetch would actually cover.
+const RANGE_LOOKAHEAD_DAYS = 80;
+
 async function fetchNextGameDayRange(
   sport: Sport,
   fromDate?: string,
-  windowDays = 80,
+  windowDays = RANGE_LOOKAHEAD_DAYS,
   // allDays: every upcoming fixture in the window. maxDays: every fixture from
   // the first N distinct ET match-days. Default (neither): the earliest day only.
   opts?: { allDays?: boolean; maxDays?: number },
@@ -4854,7 +4893,25 @@ export async function fetchAllLeagues(
         // newly added league from the widened lookahead. SOCCER_SPORTS also
         // contains fifa, but this branch is unreachable for it: the World Cup
         // is handled above with its own 80-day maxDays:1 window.
-        if (!nextGameDay && SOCCER_SPORTS.has(cfg.sport)) {
+        // Second case for the same widening: an OFFSEASON column whose opener
+        // already falls inside the range window. The day-by-day lookahead above
+        // is 7 days, so a league whose schedule is published but whose opener is
+        // weeks out (the NBA's mid-August drop against an Oct 20 opening night)
+        // rendered a bare countdown while ESPN had the fixtures. One ranged
+        // request returns the opening-night slate instead.
+        //
+        // Gated on daysUntil, NOT on "is it offseason": a league that is MONTHS
+        // out (WNBA in November, NCAAM in July) must keep the "last game played
+        // + highlights" lookback card below rather than swap it for a fixture
+        // list half a year early — setting nextGameDay suppresses that fallback.
+        // getSeasonOpener returns null for a league inside its own window, so
+        // this can never fire mid-season. kind === "season" holds golf/tennis
+        // out: their ESPN endpoint is the whole tour, not one event, and the
+        // tennis payload is big enough to have its own retry carve-out.
+        const opener = getSeasonOpener(cfg.sport, label, viewDate);
+        const openerInRange = !!opener && opener.kind === "season"
+          && opener.daysUntil <= RANGE_LOOKAHEAD_DAYS;
+        if (!nextGameDay && (SOCCER_SPORTS.has(cfg.sport) || openerInRange)) {
           nextGameDay = await fetchNextGameDayRange(cfg.sport, date);
         }
       }

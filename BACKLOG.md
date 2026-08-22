@@ -198,6 +198,12 @@ _src: 2026-08-03 session_
 
 - [ ] **QA + prep for the 2026 World Cup (soon).** World Cup 2026 is this summer — make sure FIFA/soccer surfacing is solid before it starts: verify the `fifa` league config + season window, the new soccer range-lookahead (`fetchNextGameDayRange`) resolves real fixtures, soccer-slot priority (UCL>UEL>MLS, EPL beats both), broadcast/watch links for WC matches, news feeds, and that the column auto-appears on match days. Do a full QA pass on the soccer path generally.
 
+- [ ] **🍎 iOS universal links for hidescore.com — the iOS half was never built.** Android App Links shipped 2026-08-16 (`6f9605fd`) and `public/.well-known/assetlinks.json` serves 200 in prod, but tapping a hidescore.com link on iPhone still opens Safari instead of the HideScore app.
+  > Audited 2026-08-18. This is NOT a server-side bug and NOT the missing AASA file alone — the iOS project has no universal-link setup at all. Verified: `find ios -name "*.entitlements"` returns nothing, and `grep -c com.apple.developer.associated-domains ios/App/App.xcodeproj/project.pbxproj` = **0**. Server side, `https://hidescore.com/.well-known/apple-app-site-association` returns **404 SPA HTML** and the root path 404s too.
+  > **Four steps, all required:** ① enable the Associated Domains capability on App ID `com.jacobhl.hidescore` (ASC app id `6766885311`) and regenerate the provisioning profile; ② add an `App.entitlements` with `com.apple.developer.associated-domains` = `applinks:hidescore.com`, wired into `project.pbxproj`; ③ serve `/.well-known/apple-app-site-association` as real `application/json` containing `<TEAMID>.com.jacobhl.hidescore` — do this as a **rewrite** in `public/_worker.js`, never a redirect (Apple's CDN follows neither redirects nor SPA fallbacks; same trap already hit on theisland.nyc); ④ new iOS build + App Store review.
+  > ⚠️ Note the shell loads the live site (`server.url: https://hidescore.com` in `capacitor.config.ts`), so steps ① ② ④ genuinely need a native rebuild — a `git push` only covers step ③.
+  > ⛔ Do not re-derive these dead ends: Early Hints / HTTP 103, robots.txt, a missing card PNG, and OG-tag truncation were all tested during the 2026-08-18 iMessage-unfurl session and are all fine. Unfurl itself works (proven with Apple's own `LPMetadataProvider`).
+
 ## 🔧 Minor — restore when convenient
 
 - [ ] **Restore the R2-upload retry loop in `news-prebake.yml`.** The 3-attempt retry-with-backoff (orig commit `93833db9`) was lost 5/30 when a linter reverted an in-progress edit during a conflict fix and the simple one-line `wrangler r2 object put` got committed to main. The cron works fine without it; this is just resilience against transient R2 5xx. Re-add the `for attempt in 1 2 3` loop to the "Upload news feeds to R2" step (it's in git history at `93833db9`), to BOTH staging + main so they don't diverge.
@@ -837,3 +843,124 @@ uses it), so the config shape is not the blocker — the missing feed is.
 rugby (Six Nations opens February) → horse racing as curated JSON before the
 2027 Derby → Olympics revisited in 2027 as Jacob suggested → WWE last, and only
 if a results source turns up.
+
+---
+
+## 2026-08-21 — NBA offseason slate: three defects, and a service-worker diagnosis that was WRONG
+
+Resumed from `~/handoffs/hidescore-opener-slate-2026-08-21.md` (now CLOSED).
+Worktree `~/hs-nba-opener` on branch `fix/nba-opener-slate`, cut from `origin/main`.
+
+### Shipped — `6b31f985` (all 4 GHA workflows green, verified live on prod)
+
+Jacob's screenshot of the NBA column held three separate bugs:
+
+**1. Cards 2 and 3 read `@ NY` and `@ SA` — the 76ers and Thunder were not on the
+board at all.** `CompactUpcomingCard` (`src/components/GameCard.tsx:243`) prints
+only the home side. That is right for a playoff series (the full lead card names
+both teams and every row repeats that matchup) and wrong for a slate of different
+matchups. The gate was `isCompactLeague` (`sport === nba || nhl`) alone, so it
+ALSO silently ate the away team on **every in-season NBA/NHL off-day lookahead**,
+not just opening night — a year-round bug, not an offseason one.
+Fix: a game compacts only when its matchup is already spelled out on a full card
+above it — the lead card `firstFull` promotes, plus (at the alongside-today call
+site) today's own slate, now passed as a new third arg `alsoShown`.
+New pure helper `src/lib/upcomingSlate.ts` (`matchupKey`, `compactableMatchups`);
+`LeagueColumn.tsx` imports it and dropped its local duplicate `matchupKey`.
+⚠️ Every playoff shape still compacts, including the conference round where two
+series share one column — that case works because both matchups are named on
+today's cards, which is exactly what `alsoShown` carries.
+
+**2. `Celtics #4 / Pistons #3` was LAST season's finish.** ESPN's standings
+endpoint keeps serving the FINISHED table all offseason — on 2026-08-21
+`/apis/v2/sports/basketball/nba/standings` still returned DET 60-22 and SA 62-20
+from 2025-26, under a `season.year: 2027` label. `applyTeamRanks` stamped that
+onto opening-night fixtures. Fix in `fetchAllLeagues` (`src/lib/espn.ts`): when
+`openerInRange`, rank targets are `[games, previousGameDay?.games]` — the opener
+slate gets no rank. Today's games and the lookback slate keep theirs; they belong
+to the season the table actually describes.
+
+**3. The Yesterday tab still showed a bare countdown** — and `defaultDateMode`
+is `"yesterday"` (`src/lib/preferences.ts:380`), so that is the landing view for
+most users. This was the handoff's NEXT. Hoisted `opener` / `openerInRange` above
+both branches (it now sits just before `let nextGameDay`), and pointed the
+past-tab fallback (`if (!previousGameDay && !nextGameDay)`) at
+`fetchNextGameDayRange(cfg.sport, date)` when `openerInRange` — its 14-day
+day-by-day walk could never reach an Oct 20 opener from an August tab.
+No UI work needed: LeagueColumn's existing `notStartedDate` branch renders the
+cards under a "Starts 10/20" header cue.
+
+Tests: `tests/upcoming-slate.test.ts`, 8 cases over the compact gate (opening
+night, off-day lookahead, series, alongside-today, conference round, blank team
+id). 47/47 unit tests pass. tsc + eslint clean, `npm run build` clean.
+
+Live read-back on hidescore.com, both tabs, at 320/360/390/430/560/900/1440 px —
+NBA reads Celtics/Pistons, 76ers/Knicks, Thunder/Spurs (abbreviations below
+~400px), no rank badges. Today tab keeps "Season starts Oct 20 · 9 weeks away";
+Yesterday tab reads "Starts 10/20".
+
+### ⚠️ `8e3e5abc` — the service-worker bump, and why the reasoning behind it was WRONG
+
+Jacob then reported the column rendering date/time/network rows with **NO team
+names at all** — a state that matches neither the before nor the after.
+
+I could not reproduce it at any viewport width on prod in a fresh profile.
+I then read the `⚠️ BUMP CACHE_VERSION` warning at the top of `public/sw-v15.js`
+("Turbopack chunk names are stable across builds… returning users keep running
+OLD chunk content until this byte-changes"), found that neither `2f4e6ed0` nor
+`6b31f985` had bumped it, and told Jacob that was the cause. Shipped `8e3e5abc`:
+new `public/sw-v16.js`, matching `CACHE_VERSION` in the legacy `public/sw.js`,
+and the `register()` call in `src/app/layout.tsx` — the same three-file bump as
+v14 → v15 (`42417bfd`). v16 is byte-identical to v15 apart from the version
+string. Deploy green; verified `caches.keys() === ["hidescore-v16"]` and
+`navigator.serviceWorker.controller` active on a second load.
+
+**⛔ That diagnosis does not hold.** That header comment is STALE — it describes
+pre-2026-07-16 behavior. Commit `381273c6` ("Prevent stale chunks from crashing
+returning clients", 2026-07-16) changed `/_next/static/` to **network-first with
+`fetch(req, {cache: "reload"})`**, cache used only as an offline fallback. HTML
+navigations are network-first too. The in-branch comment says so explicitly:
+"the old stale-while-revalidate branch could serve a returning user OLD chunk
+*content* under the same filename against fresh HTML… Going network-first here
+means the app always boots on the deployed code."
+
+So since 2026-07-16 the SW cannot serve stale chunks, the v16 bump is harmless
+hygiene rather than a fix, and **what Jacob actually saw remains unexplained and
+unreproduced.** Do not treat "reload twice" as a confirmed fix until he says the
+screen is right.
+
+Corollary: **do NOT build the CI guard I offered** (fail a deploy when `src/`
+changed but `CACHE_VERSION` didn't). It would enforce a rule the code stopped
+needing in July. 62 commits touched `src/` between the v15 bump (`42417bfd`,
+2026-08-06) and now without a bump, and that was fine.
+
+### Next
+- **Ask Jacob whether the reload actually fixed his screen.** That is the only
+  evidence that separates "transient/stale client" from "a real render bug I
+  have not found." If it is still wrong: get the device (installed app vs
+  Safari), and whether it reproduces at hidescore.com in a private window.
+- **Fix the stale `⚠️ BUMP CACHE_VERSION` header comment** in `public/sw.js` and
+  `public/sw-v16.js` so nobody re-derives tonight's wrong diagnosis from it.
+  Comment-only change, needs a deploy. ~10 min. NOT done — Jacob's call.
+- No screenshot was ever captured: Playwright `page.screenshot()` timed out at
+  30–45s on "waiting for fonts to load" against both localhost and prod, every
+  attempt. All visual verification this session was `innerText`, so the LAYOUT
+  of three full cards in a narrow column has not actually been looked at.
+
+### Gotchas worth keeping
+- `git worktree add` printed `error: could not write config file .git/config:
+  Operation not permitted` twice under the Claude sandbox. The worktree was
+  still fully functional — checkout, commits and push all worked. Ignore it.
+- `cp -al ~/nospoilerscores/node_modules` into the worktree failed on exactly two
+  files (`xmlbuilder/.vscode/launch.json`, `eslint-plugin-react/.../resolve/.gitmodules`)
+  under the sandbox deny-list. 400/400 packages landed; build and tests unaffected.
+- `npm run dev` cannot bind a port inside the Claude sandbox
+  (`listen EPERM 0.0.0.0:3117`) — needs sandbox off.
+- Column selection for headless verification: `?s=n` pins NBA to slot 1
+  (`?s=n.m.f` for three columns), `&th=d` forces dark. Seeding
+  `localStorage nss-preferences` did NOT work — the app overwrote it on mount.
+- The date tabs are buttons, no URL param. `page.get_by_text("Today", exact=True)
+  .filter(visible=True).first.click()` works; a bare `text=Today` selector
+  resolves to a hidden `<span class="hidden sm:inline">` and times out.
+- The 3:00 PM ET tip-off for BOS@DET is ESPN's own published data, not a bug.
+- The "Trades" line under the NBA header is the news subtitle, working as intended.

@@ -2391,6 +2391,11 @@ const HL_LEAGUES = [
   { sport: "libertadores", path: "/soccer/conmebol.libertadores/scoreboard",  channel: "CONMEBOL Libertadores" },
   { sport: "saudi",      path: "/soccer/ksa.1/scoreboard",                    channel: "الدوري السعودي للمحترفين - Saudi Pro League" },
   { sport: "afcon",      path: "/soccer/caf.nations/scoreboard",              channel: "CAF TV" },
+  // Little League World Series (added 2026-08-21). ESPN cuts a per-game
+  // "Full Game Highlights" for the Williamsport rounds. The names it titles
+  // with are the state/country, not ESPN's own city-based team name — see
+  // hlHighlightTeamName below and highlightTeamName in src/lib/youtube.ts.
+  { sport: "llws",   path: "/baseball/llb/scoreboard",                        channel: "ESPN" },
   { sport: "tennis", path: "/tennis/atp/scoreboard",                          channel: null },
 ];
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
@@ -2432,6 +2437,35 @@ const HL_TEAM_ALIASES = {
   Valkyries: "Golden State Valkyries",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
+// Mirror of LLWS_REGION_NAMES / highlightTeamName in src/lib/youtube.ts. ESPN
+// names an LLWS team for its city + code ("Tacoma WA") and titles its recap
+// with the state or country ("Washington vs. Alabama | Full Game Highlights |
+// Little League World Series"), so the bake has to ask — and title-check —
+// against the mapped form, exactly as the client does. Change both copies
+// together or the bake and the client will disagree on the matchup identity and
+// getChannelVerifiedBakedId will reject every entry this writes.
+const HL_LLWS_REGION_NAMES = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire",
+  NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina",
+  ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
+  RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee",
+  TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
+  WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", DC: "Washington DC",
+  AUS: "Australia", CAN: "Canada", CUW: "Curacao", CZE: "Czech Republic",
+  DOM: "Dominican Republic", ITA: "Italy", JPN: "Japan", KOR: "South Korea",
+  MEX: "Mexico", NCA: "Nicaragua", PAN: "Panama", PUR: "Puerto Rico",
+  RSA: "South Africa", TPE: "Chinese Taipei", VEN: "Venezuela",
+};
+const hlHighlightTeamName = (sport, name) => {
+  if (sport !== "llws") return name;
+  const code = String(name).trim().split(/\s+/).pop() ?? "";
+  return HL_LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
+};
 const HL_TELEMUNDO_WORLD_CUP_ALIASES = {
   Argentina: "Argentina",
   Australia: "Australia",
@@ -2731,8 +2765,11 @@ async function bakeGameHighlights() {
             if (event?.status?.type?.state !== "post") return [];
             const comp = event.competitions?.[0];
             const comps = comp?.competitors ?? [];
-            const away = comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName;
-            const home = comps.find((c) => c.homeAway === "home")?.team?.shortDisplayName;
+            // Rewritten to the uploader's title form before anything else
+            // touches it, so the query, the matchup fingerprint and the title
+            // check all agree with the client. Identity outside LLWS.
+            const away = hlHighlightTeamName(lg.sport, comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName);
+            const home = hlHighlightTeamName(lg.sport, comps.find((c) => c.homeAway === "home")?.team?.shortDisplayName);
             if (!event.id || !away || !home) return [];
             let series = null;
             for (const note of comp?.notes ?? []) {
