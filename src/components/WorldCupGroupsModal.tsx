@@ -483,16 +483,23 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
     groups && groups.length
       ? ` ${groups[0].name.replace(/^group\s*/i, "")} to ${groups[groups.length - 1].name.replace(/^group\s*/i, "")} (${groups.length})`
       : "";
+  // The leading ⚽ is decorative — it's rendered as its own aria-hidden span in
+  // the <h2> below so a screen reader reading the heading doesn't announce
+  // "soccer ball" before the title. Keep these strings glyph-free; the visible
+  // emoji comes from the span. Mirrors how every other decorative emoji in the
+  // app is handled (WorldCupMattersCard's ⚽, EventCard's sport glyph, the
+  // HomeContent view-tab icons) — this heading was the lone outlier still baking
+  // the glyph into spoken text.
   const title =
     view === "bracket"
-      ? "⚽ World Cup — Bracket"
+      ? "World Cup — Bracket"
       : view === "ranked"
         ? band === "top"
-          ? "⚽ World Cup — Top 10 by FIFA ranking"
+          ? "World Cup — Top 10 by FIFA ranking"
           : band === "bottom"
-            ? "⚽ World Cup — Bottom 10 by FIFA ranking"
-            : `⚽ World Cup — By FIFA ranking${ranked.length ? ` (${ranked.length})` : ""}`
-        : `⚽ World Cup — Groups${range}`;
+            ? "World Cup — Bottom 10 by FIFA ranking"
+            : `World Cup — By FIFA ranking${ranked.length ? ` (${ranked.length})` : ""}`
+        : `World Cup — Groups${range}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -532,7 +539,7 @@ export default function WorldCupGroupsModal({ onClose, highlightGroup, selectedD
           ✕
         </button>
         <h2 className="text-base sm:text-lg font-bold mb-3 pr-6" style={{ color: "var(--text)" }}>
-          {title}
+          <span aria-hidden="true">⚽ </span>{title}
         </h2>
 
         <div className="mb-3 space-y-2">
