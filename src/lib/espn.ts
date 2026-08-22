@@ -3912,6 +3912,29 @@ function writeScoreboardCache(sport: Sport, date: string | undefined, games: Gam
   }
 }
 
+// Sports whose REGULAR slate is tagged season.type 1, so the preseason filter
+// in eventsToGames must not touch them.
+//
+// NFL: the type-1 slate is genuinely preseason, but LEAGUES carries a dedicated
+// "NFL Preseason" column (07-21 → 09-03) whose entire run is it, so the blanket
+// filter emptied that column for its whole run — every day rendered "Upcoming
+// Schedule TBD" while ESPN had 49 games on the board. The regular NFL config
+// doesn't start until 09-04, so no type-1 event can leak into it.
+//
+// Rugby: ESPN tags EVERY rugby fixture type 1 — verified 2026-08-21 against the
+// scoreboard endpoint across all six competitions (Six Nations 15/15, Super
+// Rugby 79/79, Nations Championship 36/36, Rugby World Cup 48/48, Rugby Tests
+// 6/6 in the current window; Rugby Championship returns nothing out of season).
+// There is no type-2 rugby event anywhere in ESPN's feed, so the blanket type-1
+// drop emptied all six columns from the day rugby shipped (2026-08-11) until
+// this was found — silently, because the fetch 200s and the parser is fine:
+// eventsToGames simply filtered every match out and the column rendered
+// "Upcoming Schedule TBD".
+const SEASON_TYPE_1_IS_REGULAR = new Set<Sport>([
+  "nfl",
+  "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
+]);
+
 // Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
 // the single-day fetch and the soccer range-lookahead so both apply the same
 // postponed/preseason/0-competitor filtering + per-event failure isolation.
@@ -3921,14 +3944,11 @@ function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
       // Filter out postponed/canceled/suspended games
       const statusName = e.status?.type?.name ?? "";
       if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) return false;
-      // Filter out preseason/spring training — bad highlights, ties in records, low-quality games.
-      // EXCEPT the NFL: LEAGUES carries a dedicated "NFL Preseason" column
-      // (07-21 → 09-03) whose entire slate is seasontype 1, so this blanket
-      // filter emptied it for its whole run — every day rendered "Upcoming
-      // Schedule TBD" while ESPN had 49 games on the board. The regular NFL
-      // config doesn't start until 09-04, so no type-1 event can leak into it.
+      // Filter out preseason/spring training — bad highlights, ties in records,
+      // low-quality games. EXCEPT the sports in SEASON_TYPE_1_IS_REGULAR above,
+      // whose real slate is tagged type 1.
       const seasonType = e.season?.type ?? 0;
-      if (seasonType === 1 && sport !== "nfl") return false;
+      if (seasonType === 1 && !SEASON_TYPE_1_IS_REGULAR.has(sport)) return false;
       // Tournament-wrapper events with no competitors aren't real matches.
       const competitors = e.competitions?.[0]?.competitors ?? [];
       if (competitors.length < 2) return false;
