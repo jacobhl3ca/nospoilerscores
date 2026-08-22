@@ -50,6 +50,18 @@ const IDIOM = new RegExp(
     "sudden death",
     "dead (ball|puck|arm|red|last|money|zone|cap|weight|heat)",
     "death (valley|spiral|by a thousand|grip|star)",
+    // The single most common late-drama phrase in soccer/basketball recaps —
+    // "winner in the dying seconds", "equaliser in the dying minutes", "the
+    // dying embers of the match". `dying` is a bare death pattern, so without
+    // this the main "Hide upsetting news" toggle silently pulled ordinary game
+    // recaps as "death or tragedy". Only the sports-timing nouns are stripped, so
+    // a genuine "dying in hospice" / "his dying wish" still matches death.
+    "dying (seconds|minutes|moments|embers|stages)",
+    // "fatal error / fatal mistake / fatal blow to their title hopes" — the
+    // figurative use dwarfs the literal one, and it tripped the bare `fatal`
+    // death pattern. A real fatality still reads "fatal crash" / "fatally
+    // injured" / "fatal shooting", none of which these mistake-nouns cover.
+    "fatal (error|mistake|blow|flaw|blunder)",
     // ⚠️ Do NOT add a bare letter here. "…|b)" once matched "killed b", which
     // stripped "killed by" out of every real death headline before the patterns
     // ran ("killed by an ICE agent" scored as ordinary sports talk).

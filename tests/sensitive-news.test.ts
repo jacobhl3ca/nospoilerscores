@@ -70,6 +70,13 @@ const SAFE = [
   "Curry buries the dagger with killer instinct",
   "The moment Anthony Joshua knocked out Jake Paul",
   "Rory thins bunker shot into the grandstands, still makes birdie",
+  // Late-drama "dying <timing>" idiom — must not read as death.
+  "Winner in the dying seconds sends them top of the table",
+  "Equaliser in the dying minutes rescues a point at Anfield",
+  "United score twice in the dying embers to steal it",
+  // Figurative "fatal <mistake>" — must not read as death.
+  "Fatal error at the back gifts Arsenal the win",
+  "A fatal blow to their title hopes after the derby loss",
 ];
 
 for (const headline of SAFE) {
@@ -80,6 +87,13 @@ for (const headline of SAFE) {
 
 test("empty text is never sensitive", () => {
   assert.equal(sensitiveCategoryOf(""), null);
+});
+
+test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
+  // Only the sports-timing nouns are stripped — a genuine death context must
+  // still trip the `dying` pattern.
+  assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
+  assert.equal(sensitiveCategoryOf("Legend shares his dying wish in final interview"), "death");
 });
 
 // ── Crashes: their own opt-in toggle ────────────────────────────────────────
