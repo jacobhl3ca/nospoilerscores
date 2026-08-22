@@ -511,15 +511,15 @@ export default function GameHighlights({
               // demo scrub hides. Fall back to the same generic "Watch" wording so
               // all three stay in lockstep. Production (demoActive false) unchanged.
               aria-label={demoActive ? "Watch highlights" : `${officialChannel} highlights`}
-              // aria-busy conveys the in-flight fetch that the visible "Loading..."
+              // aria-busy conveys the in-flight fetch that the visible "Loading…"
               // swap shows sighted users; the aria-label above stays pinned to the
-              // button's purpose so the name never collapses to "Loading...".
+              // button's purpose so the name never collapses to "Loading…".
               // Matches the aria-busy pairing on EventCard's highlight buttons.
               aria-busy={fetchingOnClick === "official"}
               title={demoActive ? "Watch highlights" : `${officialChannel} highlights`}
             >
               {fetchingOnClick === "official" ? (
-                <span className="text-[10px]">Loading...</span>
+                <span className="text-[10px]">Loading…</span>
               ) : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
@@ -555,14 +555,14 @@ export default function GameHighlights({
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
               aria-label={isFifa ? "FOX full highlights" : "Official alternate highlights"}
-              // aria-busy conveys the in-flight fetch that the visible "Loading..."
+              // aria-busy conveys the in-flight fetch that the visible "Loading…"
               // swap shows sighted users; the aria-label above stays pinned so the
-              // name never collapses to "Loading...". Matches EventCard's buttons.
+              // name never collapses to "Loading…". Matches EventCard's buttons.
               aria-busy={fetchingOnClick === "search"}
               title={isFifa ? "FOX full highlights" : "Official alternate highlights"}
             >
               {fetchingOnClick === "search" ? (
-                <span className="text-[10px]">Loading...</span>
+                <span className="text-[10px]">Loading…</span>
               ) : (
                   <>
                     <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
@@ -621,7 +621,7 @@ export default function GameHighlights({
               // `fetchingOnClick` is never set on the MLB path (showYouTube needs
               // !isMlb, showTelemundo needs FIFA). Render the icon + label
               // directly — a `fetchingOnClick`-keyed loading swap here would be
-              // dead code (the button can never dim or show "Loading..."), and
+              // dead code (the button can never dim or show "Loading…"), and
               // the sibling 3m recap button above already renders without one.
               title="MLB 10 minute condensed game"
             >
@@ -662,7 +662,7 @@ export default function GameHighlights({
               aria-busy={fetchingOnClick === "telemundoShort"}
               title="Telemundo highlights"
             >
-              {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading...</span> : (
+              {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading…</span> : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                   <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 10m</span>
@@ -693,7 +693,7 @@ export default function GameHighlights({
               aria-busy={fetchingOnClick === "telemundoLong"}
               title="Telemundo extended highlights"
             >
-              {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading...</span> : (
+              {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading…</span> : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                   <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
