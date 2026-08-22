@@ -304,7 +304,13 @@ export function titleCasePlace(s: string): string {
 export function eventSubtitleVariants(venue: string, city: string, region: string): string[] {
   const v = titleCasePlace(String(venue || "").trim());
   const c = titleCasePlace(String(city || "").trim());
-  const r = String(region || "").trim();
+  // Title-case the region too. It rides the same ESPN address object as the city
+  // (F1 circuit.address.country, the generic branch's venue.address.state/country)
+  // and gets the same lowercased tail — "United arab emirates", "Saudi arabia",
+  // "North carolina" — so without this the subtitle read like a typo right after
+  // a correctly-cased city. IndyCar's hand-cased map values ("TX", "Ontario") and
+  // any already-correct region are byte-identical no-ops through titleCasePlace.
+  const r = titleCasePlace(String(region || "").trim());
   const loc = [c, r].filter(Boolean).join(", ");
   const out: string[] = [];
   const push = (x: string) => { if (x && !out.includes(x)) out.push(x); };
