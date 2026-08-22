@@ -807,6 +807,9 @@ export default function LeagueColumn({
   // as soon as the column is wide enough for unabbreviated team names.
   const headerLabel = (useAbbreviations && SHORT_LEAGUE_LABELS[league.label]) || league.label;
   const [swapOpen, setSwapOpen] = useState(false);
+  // Panel + measured height cap for the switcher — see the effect below.
+  const swapPanelRef = useRef<HTMLDivElement>(null);
+  const [swapMaxH, setSwapMaxH] = useState<number>();
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
   // Capture "now" once at mount so the day-granular "Last played" label below
   // (renderPreviousSlate) stays a pure render — reading Date.now() during render
@@ -819,6 +822,24 @@ export default function LeagueColumn({
   // arrows-branch IIFE) because "both" mode needs the SAME button flanking the
   // dropdown trigger — two copies would drift the moment either was restyled.
   const showArrows = (mode === "arrows" || mode === "both") && !!onCycleLeague;
+  // Reserved width for the league name whenever the ‹ › arrows are on screen
+  // (Jacob 8/12). Without it the arrows are glued to the label, so every press
+  // that swaps a short name for a long one ("NHL" → "Premier League") slides
+  // the › out from under the pointer — you cannot stand on one spot and click
+  // through the ring, which is the whole point of arrows mode. Reserving the
+  // width parks both arrows at a fixed x for every league in the ring.
+  // 10.5rem/168px is measured, not guessed: the widest label in ALL_LEAGUES
+  // ("Rugby World Cup") renders at 163px in Geist 700 / 18px / tracking-wide,
+  // and 168 + the two 24px arrows + the 4px of gaps = 220px, inside the 225px
+  // column. min-width (not width) so a future longer label still renders in
+  // full rather than truncating — that would move the arrows, the lesser evil.
+  //
+  // md+ ONLY. Columns are 225px from 768px up, but 192px at sm and just 114px
+  // on a phone (three columns at every width — measured on live, 2026-08-12),
+  // where reserving 168px for "NHL" would burst the column. Below md the
+  // arrows stay tight to the label exactly as before; that board is tapped,
+  // not click-hammered.
+  const titleReserve = showArrows ? "md:min-w-[10.5rem]" : "";
   const arrowBtn = (dir: 1 | -1) => (
     <button
       type="button"
@@ -1003,6 +1024,41 @@ export default function LeagueColumn({
     return () => {
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("keydown", onKey);
+    };
+  }, [swapOpen]);
+
+  // The switcher lists every league, so on a phone (and in a short window) it
+  // ran taller than the viewport and the tail — UFC, Remove col — sat below the
+  // fold with no way to reach it: the panel had no height cap and no scroller,
+  // and scrolling the PAGE doesn't help because the header is sticky, so the
+  // panel travels with it (Jacob 8/21 screenshot). Cap it to the room actually
+  // left under the trigger and let the panel scroll itself. Re-measured on
+  // resize and on scroll (capture, so the board's own scrollers count) since
+  // the sticky header's y position moves.
+  useIsoLayoutEffect(() => {
+    if (!swapOpen) return;
+    const measure = () => {
+      const el = swapPanelRef.current;
+      if (!el) return;
+      // The mobile view-mode tab bar is fixed to the bottom at z-40, above this
+      // panel — without subtracting it the last few leagues scrolled into view
+      // but sat *behind* the bar. It's inline (non-fixed) on desktop, so read
+      // the computed position instead of assuming.
+      // Both variants are in the DOM (the inline desktop one and the fixed
+      // mobile bar); only the fixed one blocks, so pick by computed position.
+      const nav = Array.from(document.querySelectorAll('nav[aria-label="View mode"]'))
+        .find((n) => getComputedStyle(n).position === "fixed");
+      const bottomBar = nav ? nav.getBoundingClientRect().height : 0;
+      // 12px so the panel never sits flush against the bottom edge.
+      const room = Math.max(160, window.innerHeight - bottomBar - el.getBoundingClientRect().top - 12);
+      setSwapMaxH((prev) => (prev !== undefined && Math.abs(prev - room) < 1 ? prev : room));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
     };
   }, [swapOpen]);
 
@@ -1460,10 +1516,10 @@ export default function LeagueColumn({
   // Same league, same offseason, two different answers (Jacob 8/10). The
   // lookback still wins where it fires, so this only shows on days that are
   // genuinely past the last highlight.
-  const seasonOpenerBlock = seasonOpener ? (
+  const seasonOpenerLines = seasonOpener ? (
     // "~" whenever the date came from the column's opening window rather than a
     // verified opening-day fixture — see SeasonOpener.
-    <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">
+    <>
       <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
         {seasonOpener.kind === "event" ? "Returns" : "Season starts"} {seasonOpener.approximate ? "~" : ""}{seasonOpener.label}
       </p>
@@ -1478,7 +1534,26 @@ export default function LeagueColumn({
           Full schedule ~{seasonOpener.scheduleOut}
         </p>
       )}
-    </div>
+    </>
+  ) : null;
+
+  // Standalone: the column bottomed out and this copy is the whole body, so it
+  // gets the vertical padding that keeps an otherwise empty column from looking
+  // collapsed.
+  const seasonOpenerBlock = seasonOpenerLines ? (
+    <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">{seasonOpenerLines}</div>
+  ) : null;
+
+  // Header variant: worn ABOVE the upcoming slate once the opener is close
+  // enough that the ranged lookahead returns opening night (see the
+  // openerInRange gate in espn.ts fetchAllLeagues). The fixture cards answer
+  // "who plays" but not "is this the start of the season", and dropping the
+  // line entirely the day the slate appears would silently lose that. Tighter
+  // padding than the standalone block — it is a caption here, not the body.
+  // Null whenever seasonOpener is (i.e. all season long), so an ordinary
+  // mid-season off-day lookahead is untouched.
+  const seasonOpenerHeader = seasonOpenerLines ? (
+    <div className="flex flex-col items-center gap-0.5 pb-1 sm:pb-2">{seasonOpenerLines}</div>
   ) : null;
 
   return (
@@ -1498,7 +1573,16 @@ export default function LeagueColumn({
         // pb-3: at pb-2 the first card's top border sat flush against the
         // subtitle line ("Big Inning · 7:30 PM ET"), so the card read as
         // clipped by the title block (Jacob 8/4).
-        <div className="league-sticky-top flex flex-col items-center pb-3 sm:pb-4 sticky z-30" style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}>
+        <div
+          // z-30 normally; z-[31] while the switcher is open. In single-column
+          // mode every league section has its OWN sticky header at z-30, so a
+          // tall switcher panel (z-50, but scoped inside THIS header's stacking
+          // context) was painted over by the next section's header further down
+          // the page. One step up is enough to win against those siblings while
+          // staying under the fixed app header / seam cover / bottom nav.
+          className={`league-sticky-top flex flex-col items-center pb-3 sm:pb-4 sticky ${swapOpen ? "z-[31]" : "z-30"}`}
+          style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}
+        >
           <div
             className="flex items-center justify-center"
             style={canDrag ? { cursor: isDragging ? "grabbing" : "grab", touchAction: "pan-y" } : undefined}
@@ -1525,7 +1609,7 @@ export default function LeagueColumn({
               // the title a dropdown trigger as well.
               <div className="flex items-center gap-0.5">
                 {arrowBtn(-1)}
-                <h2 className="text-base sm:text-lg font-bold tracking-wide px-0.5" style={{ color: "var(--text)" }}>
+                <h2 className={`text-base sm:text-lg font-bold tracking-wide px-0.5 text-center ${titleReserve}`} style={{ color: "var(--text)" }}>
                   {headerLabel}
                 </h2>
                 {arrowBtn(1)}
@@ -1538,7 +1622,11 @@ export default function LeagueColumn({
               // panel anchor is unchanged.
               <div className="flex items-center gap-0.5">
               {showArrows && mode === "both" ? arrowBtn(-1) : null}
-              <div ref={swapRef} className="relative">
+              {/* titleReserve (empty unless the ‹ › arrows are showing) parks
+                  them at a fixed x — see its definition. The dropdown panel is
+                  centred on THIS box (right-1/2 translate-x-1/2), so widening
+                  it keeps the panel centred under the name, unshifted. */}
+              <div ref={swapRef} className={`relative ${titleReserve}`}>
                 {/* Heading WRAPS the button (the WAI-ARIA disclosure pattern),
                     not the reverse: a <button>'s content model is phrasing
                     content, so an <h2> nested inside it is invalid HTML and
@@ -1553,7 +1641,7 @@ export default function LeagueColumn({
                   <button
                     type="button"
                     onClick={() => setSwapOpen(!swapOpen)}
-                    className="cursor-pointer transition-colors hover:opacity-80 flex items-center gap-1"
+                    className="cursor-pointer transition-colors hover:opacity-80 flex items-center justify-center gap-1 w-full"
                     title="Switch league"
                     aria-haspopup="dialog"
                     aria-expanded={swapOpen}
@@ -1588,8 +1676,13 @@ export default function LeagueColumn({
                     // DateNav calendar and HomeContent news-filter popovers use.
                     role="dialog"
                     aria-label="Switch league"
-                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-hidden min-w-[100px]"
-                    style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                    ref={swapPanelRef}
+                    // overflow-y-auto (not overflow-hidden): the list is capped
+                    // to the viewport by swapMaxH, so it has to scroll itself.
+                    // overscroll-contain keeps that scroll from chaining out to
+                    // the board behind it once it hits either end.
+                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-y-auto overscroll-contain min-w-[100px]"
+                    style={{ background: "var(--bg)", border: "1px solid var(--border)", maxHeight: swapMaxH }}
                   >
                     {/* Auto option — always present so the dropdown is consistent per column */}
                     <button
@@ -1751,6 +1844,8 @@ export default function LeagueColumn({
             )
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
+              {/* Offseason-with-fixtures only (null in season) — see above. */}
+              {seasonOpenerHeader}
               {/* No game today → the lead upcoming game is a full card, the
                   rest compact (NBA/NHL); other leagues stay all-full. */}
               {renderUpcomingSlate(league.nextGameDay.games, true)}

@@ -6,7 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, hasNoTrustedHighlightSource, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, hasNoTrustedHighlightSource, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
@@ -115,20 +115,27 @@ export default function GameHighlights({
   // without widening the primary button or affecting any other sport.
   const verifiedSecondaryChannel = getSecondaryChannels(game.sport, highlightLabel)[0];
   const secondaryChannel = isMlb ? undefined : (isFifa ? "FOX Sports" : (verifiedSecondaryChannel ?? primaryChannel));
+  // The names the official uploader actually TITLES with. Identity for every
+  // sport but the Little League World Series, where ESPN's team name is the
+  // city ("Tacoma WA") and its recap title is the state ("Washington"). Used for
+  // the query, the fallback YouTube URL and the baked-ID identity check alike —
+  // the prebake keys on the same rewritten pair, so the two must not diverge.
+  const hlAway = highlightTeamName(game.sport, game.awayTeam.shortDisplayName);
+  const hlHome = highlightTeamName(game.sport, game.homeTeam.shortDisplayName);
   const initialBaked = getCachedBakedHighlight(game.sport, game.id);
   // MLB's visible row is MLB.com-native; never hydrate its removed YouTube row.
   // Every other prebaked ID must carry the exact expected uploader marker.
   const initialOfficialId = !isMlb && hasOfficialButton
-    ? getChannelVerifiedBakedId(initialBaked, "official", primaryChannel, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
+    ? getChannelVerifiedBakedId(initialBaked, "official", primaryChannel, hlAway, hlHome)
     : null;
   const initialSecondaryId = !isMlb
-    ? getChannelVerifiedBakedId(initialBaked, "extended", secondaryChannel, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
+    ? getChannelVerifiedBakedId(initialBaked, "extended", secondaryChannel, hlAway, hlHome)
     : null;
   const initialTelemundoShortId = fifaTelemundoEnabled && isFifa
-    ? getChannelVerifiedBakedId(initialBaked, "telemundo", "Telemundo Deportes", game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
+    ? getChannelVerifiedBakedId(initialBaked, "telemundo", "Telemundo Deportes", hlAway, hlHome)
     : null;
   const initialTelemundoLongId = fifaTelemundoEnabled && isFifa
-    ? getChannelVerifiedBakedId(initialBaked, "telemundoExtended", "Telemundo Deportes", game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName)
+    ? getChannelVerifiedBakedId(initialBaked, "telemundoExtended", "Telemundo Deportes", hlAway, hlHome)
     : null;
   const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
   const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
@@ -235,7 +242,7 @@ export default function GameHighlights({
   // without it a league lacking an approved uploader could reach resolution.
   const noTrustedSource = hasNoTrustedHighlightSource(game.sport, highlightLabel);
   const highlightUrl = highlightsReady && !noTrustedSource
-    ? getYouTubeSearchUrl(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, competition)
+    ? getYouTubeSearchUrl(hlAway, hlHome, dateStr, game.seriesNote, competition)
     : null;
 
   // Matchup card for shared highlight links — built from the game so the
@@ -268,8 +275,8 @@ export default function GameHighlights({
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
-    const away = game.awayTeam.shortDisplayName;
-    const home = game.homeTeam.shortDisplayName;
+    const away = hlAway;
+    const home = hlHome;
     const series = game.seriesNote;
     if (officialChannel) {
       (async () => {
@@ -374,7 +381,7 @@ export default function GameHighlights({
         setSearchStatus(secondId ? "found" : "missing");
       })();
     }
-  }, [highlightUrl, game.sport, game.id, game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, weekNumber]);
+  }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, weekNumber]);
 
   // See resolvedMlb above. Fires only when the board enrich did NOT already
   // attach a recap (game.mlbRecapPlaybackUrl absent) and the highlight window
@@ -471,7 +478,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, getCompetitionTitleTokens(game.sport));
+                const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, getCompetitionTitleTokens(game.sport));
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -515,7 +522,7 @@ export default function GameHighlights({
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
                 // World Cup prefers the extended cut (see prefetch note above).
-                const id = await resolveHighlightVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition, weekNumber, getCompetitionTitleTokens(game.sport));
+                const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition, weekNumber, getCompetitionTitleTokens(game.sport));
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;
@@ -622,7 +629,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("telemundoShort");
-                const id = await resolveTelemundoWorldCupVideo(game.awayTeam.shortDisplayName, game.homeTeam.shortDisplayName, dateStr, game.seriesNote);
+                const id = await resolveTelemundoWorldCupVideo(hlAway, hlHome, dateStr, game.seriesNote);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedTelemundoShortId.current = id;

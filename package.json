@@ -17,7 +17,9 @@
     "indycar:check": "node scripts/check-indycar-tracks.mjs",
     "racetitles:check": "node scripts/check-race-titles.mjs",
     "nfl:check": "node scripts/check-nfl-weeks.mjs",
-    "nflchannels:check": "node scripts/check-nfl-team-channels.mjs"
+    "nflchannels:check": "node scripts/check-nfl-team-channels.mjs",
+    "coverage:audit": "node scripts/audit-league-coverage.mjs",
+    "ratingorder:audit": "node scripts/audit-rating-order.mjs"
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",

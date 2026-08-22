@@ -80,6 +80,16 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // AFCON: CAF's own channel ("CAFOnline" verified 0/1). Gated to 2027 in
   // ALL_LEAGUES, so this sits inert until the tournament year.
   afcon: "CAF TV",
+  // Little League World Series: ESPN holds the US broadcast AND posts a
+  // per-game "Full Game Highlights" cut. This was written off as no-uploader on
+  // 2026-08-12 (see the removed NO_HIGHLIGHT_FALLBACK note) because the probe
+  // used ESPN's own team names — and those never appear in the titles. Titles
+  // name the STATE or COUNTRY: "Washington vs. Alabama | Full Game Highlights |
+  // Little League World Series". With highlightTeamName() rewriting the query,
+  // re-verified 2026-08-21 against the live worker with strict=1 over all 11
+  // completed 2026 fixtures: 8 hits, 0 wrong match. The three misses are early
+  // pool games ESPN never cut, which is a hidden button, not a wrong video.
+  llws: "ESPN",
   // ── Rugby, added 2026-08-12. The six sports shipped on 8/11 went out with NO
   // entries at all, so all six fell through to the unscoped search. Verified
   // END-TO-END against the LIVE worker with strict=1 on 5 real completed
@@ -212,12 +222,11 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // still resolve strictly against that channel. A league with no verified entry
 // stays fully dark. See hasNoTrustedHighlightSource below.
 //
-// llws (Little League World Series): verified 2026-08-12 against the two real
-// completed 2026 fixtures, while the tournament was live. Little League's own
-// channel and "ESPN" both resolved 0/2 on strict — ESPN holds the broadcast but
-// posts no per-game cut. The unscoped search returned "Matt H" for BOTH games,
-// a fan aggregator, exactly the re-upload the gate exists to stop. So the LLWS
-// card shows its scorecard + rating and no highlight button.
+// llws: NO LONGER DARK — see OFFICIAL_CHANNELS.llws. The 2026-08-12 "0/2 on
+// strict, ESPN posts no per-game cut" finding was wrong, and wrong in an
+// instructive way: the probe queried ESPN's team names ("Tacoma WA"), which
+// appear in no ESPN title. ESPN titles by state/country, so the channel was
+// right and the QUERY was the failure. Fixed by highlightTeamName().
 //
 // rugbychamp (Investec Champions Cup): 0/5 on "Investec Champions Cup",
 // "EPCR Rugby" and "Champions Cup". There is no competition-level uploader —
@@ -239,7 +248,6 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "esports",
   "laliga",
   "ligue1",
-  "llws",
   "rugbychamp",
   "rugbytest",
 ]);
@@ -474,6 +482,43 @@ const TEAM_NAME_ALIASES: Record<string, string> = {
 
 function aliasTeam(name: string): string {
   return TEAM_NAME_ALIASES[name] ?? name;
+}
+
+// Little League World Series: ESPN names a team for its CITY plus a state or
+// country code — "Tacoma WA", "Leon NCA". ESPN's own recap titles use neither;
+// they name the state or the country outright ("Washington vs. Alabama | Full
+// Game Highlights | Little League World Series"). So the highlight query, the
+// "open on YouTube" URL and the prebake's title check all have to ask for the
+// mapped form. Keyed on the CODE, not the city: the qualifying city changes
+// every year, the code does not.
+//
+// ⚠️ scripts/prebake-news.mjs mirrors this (hlHighlightTeamName). Change both.
+const LLWS_REGION_NAMES: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire",
+  NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina",
+  ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
+  RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee",
+  TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
+  WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", DC: "Washington DC",
+  // International brackets. Every code below was read off ESPN's own 2026 LLWS
+  // feed (scripts audit, 2026-08-21) plus the regions that recur most years.
+  AUS: "Australia", CAN: "Canada", CUW: "Curacao", CZE: "Czech Republic",
+  DOM: "Dominican Republic", ITA: "Italy", JPN: "Japan", KOR: "South Korea",
+  MEX: "Mexico", NCA: "Nicaragua", PAN: "Panama", PUR: "Puerto Rico",
+  RSA: "South Africa", TPE: "Chinese Taipei", VEN: "Venezuela",
+};
+
+// Rewrite a team name into the form the sport's official uploader puts in its
+// titles. Identity for every sport but LLWS, so nothing else can regress.
+export function highlightTeamName(sport: string, name: string): string {
+  if (sport !== "llws") return name;
+  const code = name.trim().split(/\s+/).pop() ?? "";
+  return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
 }
 
 function buildQuery(awayTeam: string, homeTeam: string, dateStr: string, seriesNote?: string | null, competition?: string | null): string {
