@@ -361,6 +361,21 @@ export interface Preferences {
   // what "start from the bottom" means. Lives next to the funnel in the news
   // header rather than in Settings, since it's a per-session reading choice.
   newsOldestFirst?: boolean;
+  // Hide upsetting news items — deaths, fatal crashes, assault/abuse cases,
+  // on-field injuries (hit in the head, collisions, carted off), serious
+  // illness, harm to animals, self-harm (Jacob 8/21). Matching lives in
+  // lib/sensitiveNews.ts and reads headline + description only. Opt-in:
+  // undefined/false = show everything (unchanged default); true = filter, with a
+  // "N hidden — Show" line in the news view so a false positive is one tap from
+  // being visible again. Roster injury news (IL moves, return timelines) is
+  // deliberately NOT matched — only the moment of getting hurt.
+  hideSensitiveNews?: boolean;
+  // Separate opt-in for racing wrecks and hard falls (Jacob 8/21: "fights fine
+  // if nothing terrible, crashes can have option to hide"). Independent of
+  // hideSensitiveNews — either toggle works on its own — because a crash
+  // everyone walks away from is the sport, while a fatal one is already covered
+  // by the death/injury categories of the main toggle.
+  hideCrashNews?: boolean;
 }
 
 const defaults: Preferences = {

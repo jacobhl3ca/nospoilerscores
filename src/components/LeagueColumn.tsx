@@ -13,6 +13,7 @@ import { getGolfSubtitle } from "@/lib/golf";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { getEtServiceDate, getTimeZone, etSlateYmd } from "@/lib/etDay";
 import GameCard, { CompactUpcomingCard } from "./GameCard";
+import { matchupKey, compactableMatchups } from "@/lib/upcomingSlate";
 import GolfLeaderboard from "./GolfLeaderboard";
 import EventCard from "./EventCard";
 import TeamView from "./TeamView";
@@ -834,6 +835,9 @@ export default function LeagueColumn({
   // as soon as the column is wide enough for unabbreviated team names.
   const headerLabel = (useAbbreviations && SHORT_LEAGUE_LABELS[league.label]) || league.label;
   const [swapOpen, setSwapOpen] = useState(false);
+  // Panel + measured height cap for the switcher — see the effect below.
+  const swapPanelRef = useRef<HTMLDivElement>(null);
+  const [swapMaxH, setSwapMaxH] = useState<number>();
   const [teamViewTeam, setTeamViewTeam] = useState<Team | null>(null);
   // Capture "now" once at mount so the day-granular "Last played" label below
   // (renderPreviousSlate) stays a pure render — reading Date.now() during render
@@ -1048,6 +1052,40 @@ export default function LeagueColumn({
     return () => {
       document.removeEventListener("mousedown", handler);
       document.removeEventListener("keydown", onKey);
+    };
+  }, [swapOpen]);
+
+  // The switcher lists every league, so on a phone (and in any short window) it
+  // ran taller than the viewport and the tail — UFC, Remove col — sat below the
+  // fold with no way to reach it: the panel had no height cap and no scroller,
+  // and scrolling the PAGE doesn't help because the header is sticky, so the
+  // panel just travels down with it (Jacob 8/21 screenshot). Cap it to the room
+  // actually left under the trigger and let the panel scroll itself. Re-measured
+  // on resize and on scroll (capture phase, so the board's own scrollers count)
+  // since the sticky header's y position moves.
+  useIsoLayoutEffect(() => {
+    if (!swapOpen) return;
+    const measure = () => {
+      const el = swapPanelRef.current;
+      if (!el) return;
+      // The mobile view-mode tab bar is fixed to the bottom at z-40, above this
+      // panel — without subtracting it the last few leagues scrolled into view
+      // but sat *behind* the bar. Both variants are in the DOM (the inline
+      // desktop one and the fixed mobile bar); only the fixed one blocks, so
+      // pick by computed position rather than assuming.
+      const nav = Array.from(document.querySelectorAll('nav[aria-label="View mode"]'))
+        .find((n) => getComputedStyle(n).position === "fixed");
+      const bottomBar = nav ? nav.getBoundingClientRect().height : 0;
+      // 12px so the panel never sits flush against the bottom edge.
+      const room = Math.max(160, window.innerHeight - bottomBar - el.getBoundingClientRect().top - 12);
+      setSwapMaxH((prev) => (prev !== undefined && Math.abs(prev - room) < 1 ? prev : room));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
     };
   }, [swapOpen]);
 
@@ -1300,8 +1338,6 @@ export default function LeagueColumn({
   // Final series), so starring can't reorder anything — hide the stars there
   // (Jacob 6/11). Counts the lookahead/lookback slates too, so the upcoming
   // series rows can't sneak a second matchup past the check.
-  const matchupKey = (g: Game) =>
-    [g.homeTeam.id || g.homeTeam.abbreviation, g.awayTeam.id || g.awayTeam.abbreviation].sort().join("|");
   const distinctMatchups = new Set(
     [...league.games, ...(league.nextGameDay?.games ?? []), ...(league.previousGameDay?.games ?? [])].map(matchupKey),
   ).size;
@@ -1385,17 +1421,21 @@ export default function LeagueColumn({
     );
   };
 
-  // Render the upcoming/lookahead slate. NBA/NHL are down to a single playoff
-  // series with a few games left, so the lead game is a full card and the rest
-  // collapse to compact "@ home" rows (series state shows once, on a full card).
+  // Render the upcoming/lookahead slate. In an NBA/NHL playoff series the whole
+  // slate is one matchup, so the lead game is a full card and the rest collapse
+  // to compact "@ home" rows (series state shows once, on a full card).
   // `firstFull` makes the first game a full card — used when there's no game
   // today (the empty-day lookahead); when today already has a full card above,
-  // the whole upcoming list is compact. Every other league stays all-full.
+  // the upcoming list can go all-compact. Every other league stays all-full.
   const isCompactLeague = league.sport === "nba" || league.sport === "nhl";
-  const renderUpcomingSlate = (games: Game[], firstFull: boolean) =>
-    games.map((game, i) => {
+  // A game keeps its FULL card unless its matchup is already spelled out above
+  // it — see compactableMatchups for why a bare "@ HOME" row is only readable
+  // in that case (it drops the away team).
+  const renderUpcomingSlate = (games: Game[], firstFull: boolean, alsoShown: Game[] = []) => {
+    const named = compactableMatchups(games, firstFull, alsoShown);
+    return games.map((game, i) => {
       const nextGameDate = formatDateCompact(etDayString(game.date) || league.nextGameDay!.date);
-      if (isCompactLeague && !(firstFull && i === 0)) {
+      if (isCompactLeague && named.has(matchupKey(game)) && !(firstFull && i === 0)) {
         return (
           <CompactUpcomingCard
             key={game.id}
@@ -1424,6 +1464,7 @@ export default function LeagueColumn({
         />
       );
     });
+  };
 
   // "Last played · Mon" / "Last played · Mon 6/8" for the lookback slate's day.
   // SHORT weekday ("Mon") — the full name ("Wednesday") overflowed the narrow
@@ -1518,10 +1559,10 @@ export default function LeagueColumn({
   // Same league, same offseason, two different answers (Jacob 8/10). The
   // lookback still wins where it fires, so this only shows on days that are
   // genuinely past the last highlight.
-  const seasonOpenerBlock = seasonOpener ? (
+  const seasonOpenerLines = seasonOpener ? (
     // "~" whenever the date came from the column's opening window rather than a
     // verified opening-day fixture — see SeasonOpener.
-    <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">
+    <>
       <p className="text-center text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
         {seasonOpener.kind === "event" ? "Returns" : "Season starts"} {seasonOpener.approximate ? "~" : ""}{seasonOpener.label}
       </p>
@@ -1536,7 +1577,26 @@ export default function LeagueColumn({
           Full schedule ~{seasonOpener.scheduleOut}
         </p>
       )}
-    </div>
+    </>
+  ) : null;
+
+  // Standalone: the column bottomed out and this copy is the whole body, so it
+  // gets the vertical padding that keeps an otherwise empty column from looking
+  // collapsed.
+  const seasonOpenerBlock = seasonOpenerLines ? (
+    <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">{seasonOpenerLines}</div>
+  ) : null;
+
+  // Header variant: worn ABOVE the upcoming slate once the opener is close
+  // enough that the ranged lookahead returns opening night (see the
+  // openerInRange gate in espn.ts fetchAllLeagues). The fixture cards answer
+  // "who plays" but not "is this the start of the season", and dropping the
+  // line entirely the day the slate appears would silently lose that. Tighter
+  // padding than the standalone block — it is a caption here, not the body.
+  // Null whenever seasonOpener is (i.e. all season long), so an ordinary
+  // mid-season off-day lookahead is untouched.
+  const seasonOpenerHeader = seasonOpenerLines ? (
+    <div className="flex flex-col items-center gap-0.5 pb-1 sm:pb-2">{seasonOpenerLines}</div>
   ) : null;
 
   return (
@@ -1556,7 +1616,16 @@ export default function LeagueColumn({
         // pb-3: at pb-2 the first card's top border sat flush against the
         // subtitle line ("Big Inning · 7:30 PM ET"), so the card read as
         // clipped by the title block (Jacob 8/4).
-        <div className="league-sticky-top flex flex-col items-center pb-3 sm:pb-4 sticky z-30" style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}>
+        <div
+          // z-30 normally; z-[31] while the switcher is open. In single-column
+          // mode every league section has its OWN sticky header at z-30, so a
+          // tall switcher panel (z-50, but scoped inside THIS header's stacking
+          // context) was painted over by the NEXT section's header further down
+          // the page. One step up beats those siblings while staying under the
+          // fixed app header / seam cover / bottom nav.
+          className={`league-sticky-top flex flex-col items-center pb-3 sm:pb-4 sticky ${swapOpen ? "z-[31]" : "z-30"}`}
+          style={{ background: "var(--bg)", paddingTop: condense ? "0.5rem" : "1.75rem" }}
+        >
           <div
             className="flex items-center justify-center"
             style={canDrag ? { cursor: isDragging ? "grabbing" : "grab", touchAction: "pan-y" } : undefined}
@@ -1650,8 +1719,13 @@ export default function LeagueColumn({
                     // DateNav calendar and HomeContent news-filter popovers use.
                     role="dialog"
                     aria-label="Switch league"
-                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-hidden min-w-[100px]"
-                    style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                    ref={swapPanelRef}
+                    // overflow-y-auto (not overflow-hidden): the list is capped
+                    // to the viewport by swapMaxH, so it has to scroll itself.
+                    // overscroll-contain keeps that scroll from chaining out to
+                    // the board behind it once it hits either end.
+                    className="absolute top-full mt-1 right-1/2 translate-x-1/2 rounded-lg shadow-lg z-50 overflow-y-auto overscroll-contain min-w-[100px]"
+                    style={{ background: "var(--bg)", border: "1px solid var(--border)", maxHeight: swapMaxH }}
                   >
                     {/* Auto option — always present so the dropdown is consistent per column */}
                     <button
@@ -1813,6 +1887,8 @@ export default function LeagueColumn({
             )
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
+              {/* Offseason-with-fixtures only (null in season) — see above. */}
+              {seasonOpenerHeader}
               {/* No game today → the lead upcoming game is a full card, the
                   rest compact (NBA/NHL); other leagues stay all-full. */}
               {renderUpcomingSlate(league.nextGameDay.games, true)}
@@ -1899,7 +1975,7 @@ export default function LeagueColumn({
               compact for NBA/NHL (firstFull=false). No "Upcoming" divider —
               the per-row dates already mark them (Jacob 6/4). */}
           {renderUpcoming && league.nextGameDay && league.nextGameDay.games.length > 0 &&
-            renderUpcomingSlate(league.nextGameDay.games, false)}
+            renderUpcomingSlate(league.nextGameDay.games, false, sorted)}
           {showFinalSeparator && postGames.length > 0 && (liveGames.length > 0 || preGames.length > 0) && (
             <div className="flex items-center gap-1.5 my-0.5" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
               <div className="flex-1 h-px" style={{ background: "var(--border)" }} />

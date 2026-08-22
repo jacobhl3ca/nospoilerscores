@@ -167,6 +167,45 @@ export default {
    try {
     const url = new URL(request.url);
 
+    // --- iOS universal links. Served from the worker, NOT from public/, and
+    // never as a redirect: Apple's CDN fetches this file itself and follows
+    // neither a redirect nor an SPA 404 fallback, which is exactly why the path
+    // 404'd for months while public/.well-known/assetlinks.json (Android, a
+    // real .json file) served fine. An extensionless static file would also
+    // land with the wrong Content-Type; Apple requires application/json.
+    //
+    // Team V45QZXMDAW + PRODUCT_BUNDLE_IDENTIFIER com.jacobhl.hidescore, both
+    // read out of ios/App/App.xcodeproj/project.pbxproj. This file alone does
+    // NOT enable universal links — the app must also carry the matching
+    // com.apple.developer.associated-domains entitlement and ship a build.
+    //
+    // /auth/* is excluded so the Sign in with Apple / Google web callbacks stay
+    // in the browser that started them; bouncing mid-flow into the app breaks
+    // the handoff. /api/* is machine traffic and /.well-known/* must stay
+    // fetchable by Apple and Google themselves.
+    if (url.pathname === "/.well-known/apple-app-site-association" ||
+        url.pathname === "/apple-app-site-association") {
+      return new Response(JSON.stringify({
+        applinks: {
+          details: [{
+            appIDs: ["V45QZXMDAW.com.jacobhl.hidescore"],
+            components: [
+              { "/": "/auth/*",        exclude: true },
+              { "/": "/api/*",         exclude: true },
+              { "/": "/.well-known/*", exclude: true },
+              { "/": "/*" },
+            ],
+          }],
+        },
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
+    }
+
     // --- Sign in with Apple (web) + cross-device preference sync. See the
     // SIWA_* helpers at the bottom of this file. These routes are inert until
     // the APPLE_* / SESSION_SECRET env vars are set (handlers 503 otherwise),
@@ -2725,7 +2764,7 @@ async function _hsResolveAccount(env, u, linkUid = null) {
 }
 
 // Read (and lazily upgrade) the record. Returns null when there's no store.
-async function _hsTouchUser(env, request, u) {
+async function _hsTouchUser(env, request, u, ctx) {
   if (!env.DATA || !u || !u.sub) return null;
   const key = `users/${u.uid || u.sub}.json`;
   let rec = null;
@@ -2751,9 +2790,16 @@ async function _hsTouchUser(env, request, u) {
     rec.lastSeen = now;
     rec.platforms[platform] = now;
     rec.counts[platform] = (rec.counts[platform] || 0) + 1;
+    // This write is bookkeeping — nothing in the caller's answer depends on it.
+    // It used to sit in the critical path of /api/me, which is the request the
+    // Settings drawer blocks on, on top of the identity/account reads already
+    // done by _hsResolveAccount. Hand it to waitUntil when the caller gave us a
+    // ctx so the response goes out first; without one, keep the old behaviour.
     try {
-      await env.DATA.put(key, JSON.stringify(rec),
+      const put = env.DATA.put(key, JSON.stringify(rec),
         { httpMetadata: { contentType: "application/json" } });
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(Promise.resolve(put).catch(() => {}));
+      else await put;
     } catch { /* analytics only — never fail the request over it */ }
   }
   return rec;
@@ -2773,7 +2819,7 @@ async function siwaMe(request, env, ctx) {
   if (!sessionUser) return _siwaJson(base);
   const u = await _hsResolveAccount(env, sessionUser).catch(() => ({ ...sessionUser, uid: sessionUser.uid || null }));
   let rec = null;
-  try { rec = await _hsTouchUser(env, request, u); } catch { /* best effort */ }
+  try { rec = await _hsTouchUser(env, request, u, ctx); } catch { /* best effort */ }
   return _siwaJson({
     ...base,
     uid: (rec && rec.uid) || (await _hsUid(env, u.sub)),

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect, type ReactNode } from "react";
 import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types";
 import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
+import { enabledCategories } from "@/lib/sensitiveNews";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
@@ -503,7 +504,32 @@ export default function HomeContent({
   // league" (seeded, so the request is filable) and the quiet Feedback link in
   // the legal row (empty, because it's a general-purpose report).
   const [feedbackPrefill, setFeedbackPrefill] = useState(FEEDBACK_LEAGUE_PREFILL);
-  const [videoModal, setVideoModal] = useState<{ videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] } | null>(null);
+  type VideoModalState = { videoId: string; fallbackUrl: string; playbackUrl?: string | null; imageUrl?: string | null; images?: string[] | null; embedUrl?: string | null; poster?: string | null; sourceLabel?: string | null; headline?: string | null; byline?: string | null; published?: string | null; body?: string | null; siblings?: PlayOpts[] | null; sibIndex?: number | null; shareCard?: ShareCardMeta | null; alternates?: { label: string; videoId: string }[] };
+  const [videoModal, setVideoModal] = useState<VideoModalState | null>(null);
+  // Undo-close for that modal. Its whole surface dismisses on click (backdrop,
+  // image, headline, the area around the player), so one mis-tap while reading
+  // a story or watching a highlight dumps you back to the board with no way
+  // back — the news list may have re-rendered and the item can be pages away.
+  // Every close therefore parks the payload for REOPEN_MS and offers a one-tap
+  // Reopen. The ref mirrors the live payload so the popstate handler (Back /
+  // Android back gesture) can capture what it is closing without re-subscribing
+  // on every modal change.
+  const REOPEN_MS = 8000;
+  const videoModalRef = useRef<VideoModalState | null>(null);
+  useEffect(() => { videoModalRef.current = videoModal; }, [videoModal]);
+  const [reopenVideo, setReopenVideo] = useState<VideoModalState | null>(null);
+  const reopenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearReopen = useCallback(() => {
+    if (reopenTimerRef.current) clearTimeout(reopenTimerRef.current);
+    reopenTimerRef.current = null;
+    setReopenVideo(null);
+  }, []);
+  const armReopen = useCallback((m: VideoModalState) => {
+    if (reopenTimerRef.current) clearTimeout(reopenTimerRef.current);
+    setReopenVideo(m);
+    reopenTimerRef.current = setTimeout(() => { reopenTimerRef.current = null; setReopenVideo(null); }, REOPEN_MS);
+  }, []);
+  useEffect(() => () => { if (reopenTimerRef.current) clearTimeout(reopenTimerRef.current); }, []);
   // Spoiler-safe game-details popup, opened by tapping a score card body.
   const [detailGame, setDetailGame] = useState<Game | null>(null);
   // The same, for the EVENT tiles (races, UFC bouts, boxing, chess, poker).
@@ -875,19 +901,21 @@ export default function HomeContent({
   }, []);
 
   const openVideoModal = useCallback((videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null, alternates?: { label: string; videoId: string }[]) => {
+    clearReopen();
     setVideoModal({ videoId, fallbackUrl, shareCard, alternates });
     const href = modalShareHref({ videoId, fallbackUrl, shareCard });
     if (href) window.history.pushState({ videoModal: true }, "", href);
-  }, [modalShareHref]);
+  }, [modalShareHref, clearReopen]);
 
   // Game-card click → play a non-YouTube embed (NHL recaps via Brightcove)
   // inside the same modal. Pushes the shareable deep-link (?he=…&c=…) so Back /
   // Esc dismiss it AND copying the URL bar matches Copy link (the matchup card).
   const openEmbedModal = useCallback((embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => {
+    clearReopen();
     setVideoModal({ videoId: "", fallbackUrl, embedUrl, playbackUrl: playbackUrl || null, poster: poster || null, sourceLabel, shareCard });
     const href = modalShareHref({ embedUrl, fallbackUrl, playbackUrl: playbackUrl || null, sourceLabel, shareCard });
     window.history.pushState({ videoModal: true }, "", href ?? window.location.href);
-  }, [modalShareHref]);
+  }, [modalShareHref, clearReopen]);
 
   // News-card click → open the in-app modal. The shared payload covers YouTube,
   // HLS, embeds, images, and headline-only text posts.
@@ -911,6 +939,7 @@ export default function HomeContent({
   }), []);
   const playNewsVideo = useCallback<PlayHandler>((opts) => {
     const m = optsToModal(opts);
+    clearReopen();
     setVideoModal(m);
     // Sync the address bar to the share link for EVERY news item (pics, redd.it
     // videos, NHL embeds — not just YouTube), so copying the URL bar previews the
@@ -918,7 +947,7 @@ export default function HomeContent({
     // via the popstate handler below, which fires on any non-?v entry).
     const href = modalShareHref(m);
     if (href) window.history.pushState({ videoModal: true }, "", href);
-  }, [optsToModal, modalShareHref]);
+  }, [optsToModal, modalShareHref, clearReopen]);
   // Page to the previous/next post in the same news list without closing the
   // modal (dir = -1 / +1). No-op past either edge. replaceState (not push) keeps
   // the URL bar pointed at the post you're actually looking at, without spamming
@@ -937,22 +966,73 @@ export default function HomeContent({
     });
   }, [optsToModal, modalShareHref]);
 
-  const closeVideoModal = useCallback(() => {
-    setVideoModal(null);
-    if (typeof window !== "undefined" && window.history.state?.videoModal) {
-      window.history.back();
+  // Wipe the highlight deep-link params (?v / ?h* / ?c) out of the address bar,
+  // leaving anything else on the URL alone. Used on every dismiss that does NOT
+  // rewind history — a COLD-LOADED share link has no videoModal entry to pop,
+  // so before this the params survived the close and any refresh (or a logo tap,
+  // which only toggles the view) reopened the very item you just dismissed.
+  const stripHighlightParams = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    let changed = false;
+    for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c"]) {
+      if (params.has(k)) { params.delete(k); changed = true; }
     }
+    if (!changed) return;
+    const qs = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      qs ? `${window.location.pathname}?${qs}` : window.location.pathname,
+    );
   }, []);
+
+  // Reopen exactly what was just closed, re-pushing its share URL so Back / Esc
+  // dismiss it again the same way the original open did.
+  const reopenVideoModal = useCallback(() => {
+    const m = reopenVideo;
+    if (!m) return;
+    clearReopen();
+    setVideoModal(m);
+    if (typeof window !== "undefined") {
+      const href = modalShareHref(m);
+      // Skip the push when the address bar is already on this item — closing a
+      // COLD-LOADED share link never rewinds history (there's no videoModal
+      // entry to pop), so re-pushing the identical URL would just stack a
+      // duplicate entry that Back can't do anything useful with.
+      const here = window.location.pathname + window.location.search;
+      if (href && href !== here) window.history.pushState({ videoModal: true }, "", href);
+    }
+  }, [reopenVideo, clearReopen, modalShareHref]);
+
+  const closeVideoModal = useCallback(() => {
+    const closing = videoModalRef.current;
+    if (closing) armReopen(closing);
+    setVideoModal(null);
+    if (typeof window === "undefined") return;
+    if (window.history.state?.videoModal) window.history.back();
+    else stripHighlightParams();
+  }, [armReopen, stripHighlightParams]);
 
   // Sync modal with browser back/forward — close if ?v disappears from URL
   useEffect(() => {
     const handler = () => {
       const params = new URLSearchParams(window.location.search);
-      if (!params.has("v")) setVideoModal(null);
+      if (!params.has("v")) {
+        // Back / the Android back gesture is the other accidental dismiss, so it
+        // arms the same undo. closeVideoModal's own history.back() lands here
+        // too, by which point the ref is already null — no double-arm.
+        const closing = videoModalRef.current;
+        if (closing) armReopen(closing);
+        setVideoModal(null);
+        // Back can land ON the cold-load entry, whose URL still carries the
+        // h*-params — the same stuck-refresh trap, so clear them here too.
+        stripHighlightParams();
+      }
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
-  }, []);
+  }, [armReopen, stripHighlightParams]);
 
   // Safety net so the skeleton can never be permanent. The scoreboard +
   // enrichment fetches in lib/espn.ts are each individually bounded now, but
@@ -1857,6 +1937,24 @@ export default function HomeContent({
   // new key and remount, which re-runs their fetch effects). Cleaner than
   // wiring imperative refresh signals through every news component.
   const [newsRefreshKey, setNewsRefreshKey] = useState(0);
+  // Settings → "Hide upsetting news" has a per-session escape hatch: the
+  // "N hidden — Show" line under the feed flips this on, which un-hides the
+  // filtered posts until the app is reopened. Deliberately NOT persisted — the
+  // stored preference stays true, so the filter is back on next launch and the
+  // Settings toggle remains the one durable control.
+  const [showSensitiveNews, setShowSensitiveNews] = useState(false);
+  // The two toggles resolve to one category list the news surfaces filter on.
+  // Memoized so it is a stable dependency for their filter memos.
+  const hiddenNewsCategories = useMemo(
+    () => (showSensitiveNews ? [] : enabledCategories(prefs.hideSensitiveNews, prefs.hideCrashNews)),
+    [showSensitiveNews, prefs.hideSensitiveNews, prefs.hideCrashNews],
+  );
+  const showSensitive = useCallback(() => setShowSensitiveNews(true), []);
+  // Re-arm the escape hatch whenever the preference is turned back on in
+  // Settings, so a session override can't silently defeat a fresh opt-in.
+  useEffect(() => {
+    if (prefs.hideSensitiveNews || prefs.hideCrashNews) setShowSensitiveNews(false);
+  }, [prefs.hideSensitiveNews, prefs.hideCrashNews]);
   const [pullDelta, setPullDelta] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const pullStartYRef = useRef<number | null>(null);
@@ -2140,6 +2238,10 @@ export default function HomeContent({
                 e.preventDefault();
                 setShowNews(false);
                 updatePrefs({ showNews: false });
+                // Going "home" must also drop any highlight deep-link params —
+                // preventDefault means the URL is never replaced, so without
+                // this a refresh reopens the shared item you just left.
+                stripHighlightParams();
                 window.scrollTo({ top: 0, behavior: "auto" });
               }
             }}
@@ -2953,6 +3055,8 @@ export default function HomeContent({
                 showTextPosts={!!prefs.showTextPosts}
                 videosOnly={!!prefs.newsVideosOnly}
                 oldestFirst={!!prefs.newsOldestFirst}
+                hiddenCategories={hiddenNewsCategories}
+                onShowSensitive={showSensitive}
               />
             );
           }
@@ -3003,6 +3107,7 @@ export default function HomeContent({
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
+                    hiddenCategories={hiddenNewsCategories}
                     oldestFirst={!!prefs.newsOldestFirst}
                   />
                 </>
@@ -3029,6 +3134,8 @@ export default function HomeContent({
                     videosOnly={!!prefs.newsVideosOnly}
                     showTextPosts={!!prefs.showTextPosts}
                     oldestFirst={!!prefs.newsOldestFirst}
+                    hiddenCategories={hiddenNewsCategories}
+                    onShowSensitive={showSensitive}
                   />
                 ) : renderedEntries.map((entry, idx) => {
                   const otherSports = renderedEntries
@@ -3055,6 +3162,8 @@ export default function HomeContent({
                       videosOnly={!!prefs.newsVideosOnly}
                       showTextPosts={!!prefs.showTextPosts}
                       oldestFirst={!!prefs.newsOldestFirst}
+                      hiddenCategories={hiddenNewsCategories}
+                      onShowSensitive={showSensitive}
                       // Subtle × to drop this column, only when more than one is
                       // showing (never remove the last — Jacob 7/16).
                       removable={renderedEntries.length > 1}
@@ -3826,6 +3935,39 @@ export default function HomeContent({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Undo-close pill. Deliberately says nothing about WHAT was closed — a
+          highlight's title is a spoiler (that's why VideoModal masks it), so the
+          label stays generic. Sits above the favorites toast when both show. */}
+      {reopenVideo && !videoModal && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed ${showFavToast ? "bottom-28" : "bottom-6"} left-1/2 -translate-x-1/2 z-50 rounded-xl shadow-lg animate-fade-in flex items-center gap-1 pl-1.5 pr-1 py-1`}
+          style={{ background: "linear-gradient(var(--bg-card), var(--bg-card)), var(--bg)", border: "1px solid var(--border)" }}
+        >
+          <button
+            type="button"
+            onClick={reopenVideoModal}
+            className="flex items-center gap-1.5 rounded-lg px-3.5 min-h-[44px] text-sm font-medium cursor-pointer"
+            style={{ background: "var(--accent)", color: "white" }}
+            aria-label="Reopen what you just closed"
+          >
+            {/* \uFE0E forces text presentation — bare U+21A9 renders as a boxed emoji arrow on macOS/iOS. */}
+            <span aria-hidden="true">{"\u21A9\uFE0E"}</span>
+            Reopen
+          </button>
+          <button
+            type="button"
+            onClick={clearReopen}
+            className="px-2 min-h-[44px] min-w-[36px] text-xs cursor-pointer"
+            style={{ color: "var(--text-muted)" }}
+            aria-label="Dismiss"
+          >
+            {"\u2715"}
+          </button>
         </div>
       )}
 
