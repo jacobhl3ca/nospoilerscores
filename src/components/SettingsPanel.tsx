@@ -445,6 +445,17 @@ export default function SettingsPanel({
     prefs.fifthLeague,
   ];
 
+  // Whether a catalog row is currently ticked. Same rule the checkbox itself
+  // renders from — pulled out so the offseason filter below can ask the
+  // question without duplicating (and drifting from) the logic.
+  const isSwitcherChecked = (option: LeagueOption) => {
+    const hidden = prefs.hiddenLeagues?.includes(option.sport) ?? false;
+    const shown = prefs.shownLeagues?.includes(option.sport) ?? false;
+    const pinned = slotValues.includes(option.sport);
+    const preferred = option.defaultInSwitcher !== false || pinned || prefs.favoriteLeagues.includes(option.sport);
+    return !hidden && (shown || preferred);
+  };
+
   // The league catalog, sectioned by KIND of sport rather than by season
   // (Jacob 8/11). The old split was "In season" / "Offseason", which answered a
   // question nobody was asking here: Settings is the durable catalog, you come
@@ -477,15 +488,33 @@ export default function SettingsPanel({
     });
   }, [leagueOptions]);
 
+  // "Hide offseason" — a Settings-ONLY view filter over the catalog above
+  // (Jacob 8/22). Twenty-odd rows reading "· offseason" in August is most of
+  // what makes this list long, and none of them are what he came here to
+  // change. Two rules keep it honest: a row the user has CHECKED always stays
+  // listed (hiding a ticked league would leave no way to untick it, and an
+  // in-switcher league is never noise), and the control states how many rows
+  // it is holding back, so the shortened list can't read as the whole catalog.
+  // Groups emptied by the filter drop out with their heading.
+  const hideOffseason = !!prefs.hideOffseasonInCatalog;
+  const offseasonRowCount = leagueOptions.filter((option) => option.offseason).length;
+  const hiddenOffseasonCount = leagueOptions.filter(
+    (option) => option.offseason && !isSwitcherChecked(option),
+  ).length;
+  const visibleLeagueGroups = hideOffseason
+    ? groupedLeagueOptions.flatMap((group) => {
+        const options = group.options.filter((option) => !option.offseason || isSwitcherChecked(option));
+        return options.length ? [{ ...group, options }] : [];
+      })
+    : groupedLeagueOptions;
+
   const optionText = (option: LeagueOption) =>
     `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : ""}`;
 
   const renderSwitcherToggle = (option: LeagueOption) => {
-    const hidden = prefs.hiddenLeagues?.includes(option.sport) ?? false;
-    const shown = prefs.shownLeagues?.includes(option.sport) ?? false;
     const pinned = slotValues.includes(option.sport);
     const preferred = option.defaultInSwitcher !== false || pinned || prefs.favoriteLeagues.includes(option.sport);
-    const checked = !hidden && (shown || preferred);
+    const checked = isSwitcherChecked(option);
     return (
       <label key={option.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
         <input
@@ -1091,7 +1120,27 @@ export default function SettingsPanel({
             </Field>
             <Field label="Leagues in the switcher" hint="Core leagues start checked; choose any others you want in the header switcher">
               <div className="space-y-3">
-                {groupedLeagueOptions.map((group) => (
+                {(offseasonRowCount > 0 || hideOffseason) && (
+                  <label
+                    className="flex items-center justify-end gap-2 text-[11px] cursor-pointer select-none"
+                    style={{ color: "var(--text-muted)" }}
+                    title="Leagues you have checked stay listed even when they are between seasons"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={hideOffseason}
+                      onChange={(event) =>
+                        updatePrefs({ hideOffseasonInCatalog: event.target.checked ? true : undefined })
+                      }
+                      className="cursor-pointer accent-[var(--accent)]"
+                    />
+                    <span>
+                      Hide offseason
+                      {hideOffseason && hiddenOffseasonCount > 0 && ` · ${hiddenOffseasonCount} hidden`}
+                    </span>
+                  </label>
+                )}
+                {visibleLeagueGroups.map((group) => (
                   <div key={group.key}>
                     <p className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>{group.label}</p>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
