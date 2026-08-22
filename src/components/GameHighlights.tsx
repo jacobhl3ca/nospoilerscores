@@ -503,13 +503,20 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
-              aria-label={`${officialChannel} highlights`}
+              // Under ?demo=1 the visible badge is scrubbed to "Watch" (below) so
+              // the button doesn't reveal the sport/league of an anonymized
+              // column — but the accessible name and the hover tooltip still named
+              // the real rightsholder ("NBA highlights", "LCK highlights"), leaking
+              // via a VISIBLE tooltip and to screen readers the exact identity the
+              // demo scrub hides. Fall back to the same generic "Watch" wording so
+              // all three stay in lockstep. Production (demoActive false) unchanged.
+              aria-label={demoActive ? "Watch highlights" : `${officialChannel} highlights`}
               // aria-busy conveys the in-flight fetch that the visible "Loading..."
               // swap shows sighted users; the aria-label above stays pinned to the
               // button's purpose so the name never collapses to "Loading...".
               // Matches the aria-busy pairing on EventCard's highlight buttons.
               aria-busy={fetchingOnClick === "official"}
-              title={`${officialChannel} highlights`}
+              title={demoActive ? "Watch highlights" : `${officialChannel} highlights`}
             >
               {fetchingOnClick === "official" ? (
                 <span className="text-[10px]">Loading...</span>
