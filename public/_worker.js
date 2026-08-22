@@ -167,6 +167,45 @@ export default {
    try {
     const url = new URL(request.url);
 
+    // --- iOS universal links. Served from the worker, NOT from public/, and
+    // never as a redirect: Apple's CDN fetches this file itself and follows
+    // neither a redirect nor an SPA 404 fallback, which is exactly why the path
+    // 404'd for months while public/.well-known/assetlinks.json (Android, a
+    // real .json file) served fine. An extensionless static file would also
+    // land with the wrong Content-Type; Apple requires application/json.
+    //
+    // Team V45QZXMDAW + PRODUCT_BUNDLE_IDENTIFIER com.jacobhl.hidescore, both
+    // read out of ios/App/App.xcodeproj/project.pbxproj. This file alone does
+    // NOT enable universal links — the app must also carry the matching
+    // com.apple.developer.associated-domains entitlement and ship a build.
+    //
+    // /auth/* is excluded so the Sign in with Apple / Google web callbacks stay
+    // in the browser that started them; bouncing mid-flow into the app breaks
+    // the handoff. /api/* is machine traffic and /.well-known/* must stay
+    // fetchable by Apple and Google themselves.
+    if (url.pathname === "/.well-known/apple-app-site-association" ||
+        url.pathname === "/apple-app-site-association") {
+      return new Response(JSON.stringify({
+        applinks: {
+          details: [{
+            appIDs: ["V45QZXMDAW.com.jacobhl.hidescore"],
+            components: [
+              { "/": "/auth/*",        exclude: true },
+              { "/": "/api/*",         exclude: true },
+              { "/": "/.well-known/*", exclude: true },
+              { "/": "/*" },
+            ],
+          }],
+        },
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
+    }
+
     // --- Sign in with Apple (web) + cross-device preference sync. See the
     // SIWA_* helpers at the bottom of this file. These routes are inert until
     // the APPLE_* / SESSION_SECRET env vars are set (handlers 503 otherwise),
