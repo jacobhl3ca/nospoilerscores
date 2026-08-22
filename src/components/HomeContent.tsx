@@ -938,22 +938,48 @@ export default function HomeContent({
     });
   }, [optsToModal, modalShareHref]);
 
+  // Wipe the highlight deep-link params (?v / ?h* / ?c) out of the address bar,
+  // leaving anything else on the URL alone. Used on every dismiss that does NOT
+  // rewind history — a COLD-LOADED share link has no videoModal entry to pop,
+  // so before this the params survived the close and any refresh (or a logo tap,
+  // which only toggles the view) reopened the very item you just dismissed.
+  const stripHighlightParams = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    let changed = false;
+    for (const k of ["v", "hs", "he", "hi", "hp", "hu", "hl", "ht", "c"]) {
+      if (params.has(k)) { params.delete(k); changed = true; }
+    }
+    if (!changed) return;
+    const qs = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      qs ? `${window.location.pathname}?${qs}` : window.location.pathname,
+    );
+  }, []);
+
   const closeVideoModal = useCallback(() => {
     setVideoModal(null);
-    if (typeof window !== "undefined" && window.history.state?.videoModal) {
-      window.history.back();
-    }
-  }, []);
+    if (typeof window === "undefined") return;
+    if (window.history.state?.videoModal) window.history.back();
+    else stripHighlightParams();
+  }, [stripHighlightParams]);
 
   // Sync modal with browser back/forward — close if ?v disappears from URL
   useEffect(() => {
     const handler = () => {
       const params = new URLSearchParams(window.location.search);
-      if (!params.has("v")) setVideoModal(null);
+      if (!params.has("v")) {
+        setVideoModal(null);
+        // Back can land ON the cold-load entry, whose URL still carries the
+        // h*-params — the same stuck-refresh trap, so clear them here too.
+        stripHighlightParams();
+      }
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
-  }, []);
+  }, [stripHighlightParams]);
 
   // Safety net so the skeleton can never be permanent. The scoreboard +
   // enrichment fetches in lib/espn.ts are each individually bounded now, but
@@ -2159,6 +2185,10 @@ export default function HomeContent({
                 e.preventDefault();
                 setShowNews(false);
                 updatePrefs({ showNews: false });
+                // Going "home" must also drop any highlight deep-link params —
+                // preventDefault means the URL is never replaced, so without
+                // this a refresh reopens the shared item you just left.
+                stripHighlightParams();
                 window.scrollTo({ top: 0, behavior: "auto" });
               }
             }}
