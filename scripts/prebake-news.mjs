@@ -84,6 +84,11 @@ async function fetchStreaminMp4(pageUrl) {
 // .mp4 to get the direct video, which serves 206 + video/mp4 and plays in
 // <video> with no CORS needed (verified). Mirrors fetchStreaminMp4; null on any
 // failure so the post just stays link-only.
+// Escape a literal (a clip id from a URL) for embedding in a RegExp.
+function escapeRe(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 async function fetchStreamffMp4(pageUrl) {
   try {
     const res = await fetch(pageUrl, {
@@ -92,14 +97,39 @@ async function fetchStreamffMp4(pageUrl) {
     });
     if (!res.ok) return null;
     const html = await res.text();
+    // The CDN host DRIFTS independently of the site domain (cdn.streamff.one →
+    // cdn.hostedhost.top as of 8/21/26), so match ANY host — but only when the
+    // image filename is the clip id from the /v/<id> URL, which keeps a logo or
+    // error-page og:image from being mistaken for the poster.
+    const vid = (pageUrl.match(/\/v\/([a-z0-9]+)/i) || [])[1] || "";
+    const idRe = vid ? escapeRe(vid) : "[a-z0-9]+";
     const m =
-      html.match(/property="og:image"\s+content="(https?:\/\/cdn\.streamff\.\w+\/[^"]+)"/i) ||
-      html.match(/(https?:\/\/cdn\.streamff\.\w+\/[a-z0-9]+\.(?:jpe?g|png|webp))/i);
+      html.match(
+        new RegExp(
+          `property="og:image(?::secure_url)?"\\s+content="(https?://[^"]+/${idRe}\\.(?:jpe?g|png|webp))"`,
+          "i",
+        ),
+      ) || html.match(new RegExp(`(https?://[a-z0-9.-]+/${idRe}\\.(?:jpe?g|png|webp))`, "i"));
     if (!m) return null;
     // The same og:image doubles as the row poster — keep it alongside the mp4
     // (just swap the extension) so r/soccer clip posts render a preview tile.
     const thumb = m[1].split(/[?#]/)[0];
-    return { mp4: thumb.replace(/\.(?:jpe?g|png|webp)$/i, ".mp4"), thumb };
+    const mp4 = thumb.replace(/\.(?:jpe?g|png|webp)$/i, ".mp4");
+    // streamff serves a 200 page with a TEMPLATED og:image for ids that do not
+    // exist (deleted clips), so the ext-swap can name a 404. Confirm the mp4 is
+    // really there before handing it to the row — but only reject on a real
+    // negative answer; a network blip falls through and keeps the clip.
+    try {
+      const head = await fetch(mp4, {
+        method: "GET",
+        headers: { "User-Agent": UA, Range: "bytes=0-1", Referer: "https://streamff.com/" },
+        signal: AbortSignal.timeout(6000),
+      });
+      if (head.status >= 400) return null;
+    } catch {
+      /* unreachable check — keep the clip rather than dropping a good one */
+    }
+    return { mp4, thumb };
   } catch {
     return null;
   }
