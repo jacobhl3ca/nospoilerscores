@@ -62,6 +62,15 @@ const IDIOM = new RegExp(
     // death pattern. A real fatality still reads "fatal crash" / "fatally
     // injured" / "fatal shooting", none of which these mistake-nouns cover.
     "fatal (error|mistake|blow|flaw|blunder)",
+    // "playoff hopes / season / title defense on life support" is the staple
+    // sports cliché for a team on the brink of elimination — the figurative use
+    // of the medical `life support` pattern, which pulled ordinary standings
+    // recaps under "serious illness" for anyone who enabled the filter. Stripped
+    // ONLY when a team-fortunes noun (hopes, season, bid, dynasty, …) is the
+    // subject, with just linking words allowed in between, so a real "midfielder
+    // on life support" / "the driver is on life support" still matches (the
+    // person subject isn't one of these nouns).
+    "(hopes?|chances?|dreams?|aspirations?|bid|campaign|defen[cs]e|dynasty|title|playoffs?|postseason|season|series) ((is|are|now|still|all but|officially|basically|practically|barely|remains?|sits?|hangs?|hanging|left|already|essentially|firmly|clinging|but|no longer|almost|nearly) )*on life[ -]support",
     // ⚠️ Do NOT add a bare letter here. "…|b)" once matched "killed b", which
     // stripped "killed by" out of every real death headline before the patterns
     // ran ("killed by an ICE agent" scored as ordinary sports talk).

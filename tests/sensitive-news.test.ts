@@ -77,6 +77,12 @@ const SAFE = [
   // Figurative "fatal <mistake>" — must not read as death.
   "Fatal error at the back gifts Arsenal the win",
   "A fatal blow to their title hopes after the derby loss",
+  // Figurative "<team fortunes> on life support" — must not read as medical.
+  "Playoff hopes on life support after another loss",
+  "Season on life support as the skid hits six",
+  "Their title defense is on life support",
+  "Championship dreams all but on life support after Game 5",
+  "The dynasty is on life support",
 ];
 
 for (const headline of SAFE) {
@@ -94,6 +100,15 @@ test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
   // still trip the `dying` pattern.
   assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
   assert.equal(sensitiveCategoryOf("Legend shares his dying wish in final interview"), "death");
+});
+
+test("the 'on life support' idiom strip does not swallow a real medical event", () => {
+  // Only a team-fortunes subject is stripped — a person on life support (no
+  // hopes/season/bid noun as the subject) must still trip the `medical` pattern,
+  // even when an abstract noun coincidentally appears elsewhere in the headline.
+  assert.equal(sensitiveCategoryOf("Midfielder on life support after collapsing on the pitch"), "medical");
+  assert.equal(sensitiveCategoryOf("Driver on life support following the crash"), "medical");
+  assert.equal(sensitiveCategoryOf("After a strong title run, the driver is on life support"), "medical");
 });
 
 // ── Crashes: their own opt-in toggle ────────────────────────────────────────
