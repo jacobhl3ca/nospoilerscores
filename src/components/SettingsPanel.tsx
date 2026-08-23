@@ -718,6 +718,17 @@ export default function SettingsPanel({
       newsOldestFirst: undefined,
       newsTypeFilterOrder: undefined,
       newsHiddenSources: undefined,
+      // Two legacy news prefs whose UI was removed (the per-sport source
+      // drag-reorder, and the news "focus league" pill). The render path now
+      // ignores each — HomeContent forces newsFocusLeague to undefined and skips
+      // a stale newsSourceOrder so a retired control can't silently reorder or
+      // bury a source — but a value written by an earlier build still lingers in
+      // a user's (synced) prefs blob with no UI to clear it, so "Reset to
+      // defaults" is the only way out. Clear both here so a reset mirrors a
+      // genuine fresh install, matching the newsHiddenSources reason above.
+      // Read-inert today, so this only tidies the persisted blob.
+      newsSourceOrder: undefined,
+      newsFocusLeague: undefined,
       singleColumn: undefined,
       newsSingleColumn: undefined,
       hideSensitiveNews: undefined,
