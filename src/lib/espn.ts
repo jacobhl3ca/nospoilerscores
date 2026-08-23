@@ -4459,7 +4459,15 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
     case "nhl":
     case "nfl":
       return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
+    // NCAAM / NCAAW / NCAAF share ESPN's single college institution namespace:
+    // one `/i/teamlogos/ncaa/500/{id}.png` directory keyed by the school's id,
+    // regardless of which college sport's teams endpoint returned it. Only ncaam
+    // was wired here, so the NCAAF/NCAAW team-picker tabs (fetchSportTeams uses
+    // logoForTeam as its ONLY logo source — the core-API payload carries none)
+    // rendered every school logo-less while the sibling NCAAM tab showed them.
     case "ncaam":
+    case "ncaaw":
+    case "ncaaf":
       return `https://a.espncdn.com/i/teamlogos/ncaa/500/${rawId}.png`;
     // Cricket follows the soccer convention (team id under its own sport path).
     case "cricket":
