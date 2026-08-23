@@ -79,6 +79,12 @@ const SAFE = [
   "Arsenal rescue a point with the late equaliser",
   "Man United and the late show strike again",
   "Drama in the late stages as City hold on",
+  // "the late <game/window/slate/…>" scheduling sense — the evening slot of a
+  // doubleheader or TV slate must not read as death.
+  "Everything you need to know for the late game",
+  "Chiefs-Bills headlines the late window on Sunday",
+  "How to watch the late slate of Week 12",
+  "Lakers and Warriors clash in the late fixture tonight",
   // Figurative "fatal <mistake>" — must not read as death.
   "Fatal error at the back gifts Arsenal the win",
   "A fatal blow to their title hopes after the derby loss",
@@ -140,6 +146,9 @@ test("the 'the late <game event>' idiom strip does not swallow a real death", ()
   assert.equal(sensitiveCategoryOf("Fenway pays tribute to the late Bill Buckner"), "death");
   assert.equal(sensitiveCategoryOf("The late great Diego Maradona remembered"), "death");
   assert.equal(sensitiveCategoryOf("Club statement on the passing of the late owner"), "death");
+  // The scheduling nouns added to the strip ("the late game/window/…") must not
+  // punch a hole in a real death that happens to sit beside one of them.
+  assert.equal(sensitiveCategoryOf("Legendary broadcaster dies before the late game"), "death");
 });
 
 test("the 'charged with <task>' idiom strip does not swallow a real criminal charge", () => {
