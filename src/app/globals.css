@@ -517,3 +517,16 @@ iframe#yt-player {
      transition-all remains a no-op once there's no scale change to animate. */
   .hover\:scale-110:hover, .hover\:scale-105:hover { scale: none; }
 }
+
+/* STANDALONE DOC PAGES (/faq, /privacy, the SEO landing routes).
+   These render without the app header, so their first line starts at the very
+   top of the viewport. In the native iOS shell that top edge is under the
+   status bar — the FAQ H1 was drawing straight through the clock and the
+   battery. The app screens already inset themselves (the fixed header pads by
+   env(safe-area-inset-top)); these routes had nothing, because on the web the
+   inset is 0 and the bug is invisible. Replaces the plain `py-10` those pages
+   used, adding the inset on top of the same 2.5rem of breathing room. */
+.doc-page {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem);
+}

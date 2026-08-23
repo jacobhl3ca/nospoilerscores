@@ -3669,7 +3669,13 @@ export default function HomeContent({
             <summary className="cursor-pointer select-none underline underline-offset-2 marker:content-none [&::-webkit-details-marker]:hidden" style={{ color: "var(--text-muted)" }}>
               About
             </summary>
-            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(42rem,90vw)] max-h-[60vh] overflow-y-auto text-left text-xs leading-relaxed space-y-2 z-20 rounded-lg p-3 shadow-lg" style={{ color: "var(--text-muted)", background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            {/* Opaque --bg, not --bg-card: in dark mode --bg-card is
+                rgba(255,255,255,0.05), so this panel was 95% see-through and
+                the game cards it opens over showed straight through the copy
+                (unreadable — Jacob 8/22). z-50 matches the app's other
+                popovers (news source filter, league swap menu); at z-20 the
+                sticky league rows (z-30) painted over the panel as well. */}
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(42rem,90vw)] max-h-[60vh] overflow-y-auto text-left text-xs leading-relaxed space-y-2 z-50 rounded-lg p-3 shadow-lg" style={{ color: "var(--text-muted)", background: "var(--bg)", border: "1px solid var(--border)" }}>
             <p>
               HideScore is the spoiler-free way to follow sports. Check scores for the NBA, NFL, NHL,
               MLB, MLS, the Premier League, La Liga, Serie A, the Bundesliga, Ligue 1, the Champions
