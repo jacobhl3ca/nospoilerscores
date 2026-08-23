@@ -59,13 +59,17 @@ const IDIOM = new RegExp(
     "dying (seconds|minutes|moments|embers|stages)",
     // "the late winner / the late equaliser / the late drama / the late show" —
     // the staple soccer/basketball framing for something that happened in the
-    // closing minutes. `the late` is a bare death pattern (meant for "the late
-    // <Name>", i.e. the deceased), so without this the main "Hide upsetting
-    // news" toggle silently pulled these ordinary late-drama recaps under "death
-    // or tragedy". Stripped ONLY before a game-event noun, so a genuine "the late
-    // <Name>" / "the late great" / "the late owner/coach/legend" (none of these
-    // nouns) still matches death — matching the "dying <timing>" strip above.
-    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?off|substitutions?|subs?|swap|changes?|withdrawals?)",
+    // closing minutes — AND the scheduling sense "the late game / the late window
+    // / the late slate / the late fixture", the standard label for the second,
+    // evening slot of a doubleheader or a day's TV slate ("everything you need to
+    // know for the late game", "Chiefs-Bills headlines the late window"). `the
+    // late` is a bare death pattern (meant for "the late <Name>", i.e. the
+    // deceased), so without this the main "Hide upsetting news" toggle silently
+    // pulled these ordinary previews/recaps under "death or tragedy". Stripped
+    // ONLY before a game-event or scheduling noun, so a genuine "the late <Name>"
+    // / "the late great" / "the late owner/coach/legend" (none of these nouns)
+    // still matches death — matching the "dying <timing>" strip above.
+    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
     // "fatal error / fatal mistake / fatal blow to their title hopes" — the
     // figurative use dwarfs the literal one, and it tripped the bare `fatal`
     // death pattern. A real fatality still reads "fatal crash" / "fatally
