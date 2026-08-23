@@ -99,6 +99,14 @@ const SAFE = [
   "Rookie QB faces trial by fire in his first start",
   "Teenage keeper faces trial by fire on his Champions League debut",
   "A trial by fire awaits the young side in the group of death",
+  // Figurative "<performance> collapse" — a team throwing away a position must
+  // not read as a medical collapse.
+  "Batting collapse on day three hands India the win",
+  "Second-half collapse at home costs United the game",
+  "Stunning top-order collapse leaves the chase in tatters",
+  "Late collapse during the run-in sinks their playoff hopes",
+  "Dramatic middle-order collapse as they lose six for twelve",
+  "Defensive collapse at the death gifts City the title",
 ];
 
 for (const headline of SAFE) {
@@ -140,6 +148,14 @@ test("the 'trial by fire' idiom strip does not swallow a real criminal trial", (
   // pattern.
   assert.equal(sensitiveCategoryOf("Star forward faces trial on assault charges next month"), "violence");
   assert.equal(sensitiveCategoryOf("Coach faces trial over the betting scandal"), "violence");
+});
+
+test("the '<performance> collapse' idiom strip does not swallow a real medical collapse", () => {
+  // Only a performance-modifier form is stripped — a PERSON collapsing (no such
+  // modifier before "collapse") must still trip the `medical` pattern.
+  assert.equal(sensitiveCategoryOf("Midfielder collapsed on the pitch, taken to hospital"), "medical");
+  assert.equal(sensitiveCategoryOf("Player collapsed during the warmup and was rushed to hospital"), "medical");
+  assert.equal(sensitiveCategoryOf("Coach collapsed at the training ground, in critical condition"), "medical");
 });
 
 test("the 'on life support' idiom strip does not swallow a real medical event", () => {
