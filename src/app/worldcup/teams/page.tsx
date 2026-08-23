@@ -31,7 +31,7 @@ export const metadata: Metadata = {
 
 export default function WorldCupTeamsPage() {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10 text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+    <main className="mx-auto max-w-3xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <p className="mb-3 text-sm font-semibold" style={{ color: "var(--accent)" }}>
         HideScore
       </p>

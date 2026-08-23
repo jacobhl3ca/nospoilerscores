@@ -196,6 +196,13 @@ export interface Preferences {
   // marked excludeFromAuto start unchecked, so this separate allowlist lets a
   // user enable one durably without making every future opt-in league visible.
   shownLeagues?: Sport[];
+  // Settings-only view filter for the "Leagues in the switcher" catalog: hide
+  // the rows currently marked "· offseason". Purely cosmetic — it changes which
+  // rows that one list DRAWS, never which leagues are in the switcher, so a
+  // checked offseason league (NBA in August) stays listed and stays uncheckable
+  // by hand. Off by default: Settings is the durable catalog and a first-time
+  // visitor should see everything HideScore carries.
+  hideOffseasonInCatalog?: boolean;
   // v2 changed opt-in leagues from implicitly checked to default-off. A saved
   // version means this prefs blob has either received the one-time legacy
   // preservation migration or was created after the new defaults launched.

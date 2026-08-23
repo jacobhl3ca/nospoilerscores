@@ -42,7 +42,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
+    <main className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed" style={{ color: "var(--text)" }}>
       <h1 className="text-2xl font-bold mb-2">Privacy Policy</h1>
       <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>Last updated: <time dateTime={PRIVACY_UPDATED}>{PRIVACY_UPDATED}</time></p>
 
