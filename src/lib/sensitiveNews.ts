@@ -123,6 +123,14 @@ const IDIOM = new RegExp(
     // wreck that reads "crashed to the ground" / "crashed to a halt" (no such noun)
     // still matches the crash pattern.
     "crash(es|ed|ing)? to ((a|an|the|their|another|yet another) )?([\\w'-]+ ){0,3}(defeat|defeats|loss|losses)",
+    // "a crash course in <X>" is the universal idiom for an intensive, learn-on-
+    // the-fly introduction — a rookie's crash course in playoff hockey, a debut
+    // crash course in the Premier League. It has nothing to do with a wreck, yet
+    // the bare `crash` crash pattern pulled these ordinary previews/recaps out of
+    // the feed for anyone with the opt-in "hide crashes" toggle on. A real racing
+    // wreck never reads "crash course", so unlike the noun-scoped elimination and
+    // result idioms above the phrase is safe to strip outright.
+    "crash courses?",
     "(wreck|wrecked|wrecking) (them|him|her|it|the|that)",
     "trainwreck|train wreck",
     // Suicide as tactic.
