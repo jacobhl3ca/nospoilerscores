@@ -463,6 +463,11 @@ const POPULAR_WORLD_CUP_TEAMS = [
   { name: "Canada", slug: "canada", flag: "🇨🇦" },
 ];
 
+// How long the first-run league picker waits on the sign-in reconcile before
+// giving up and opening anyway. Long enough for /api/me on a normal connection,
+// short enough that a new user never notices the hold.
+const PICKER_AUTH_GRACE_MS = 1500;
+
 export default function HomeContent({
   initialOffset,
   worldCupHub,
@@ -593,6 +598,9 @@ export default function HomeContent({
   // kickoff banner did after being dismissed, or after the league was added
   // (Jacob 8/9). This flips true once the stored blob is in state.
   const [prefsHydrated, setPrefsHydrated] = useState(false);
+  // Whether the sign-in reconcile has had its say about this device's prefs.
+  // Only the first-run league picker waits on it — see the mount effect.
+  const [authSettled, setAuthSettled] = useState(false);
   // A signed-in account that has already used the iPhone app does not need an
   // install prompt on the web. This is account history from /api/me, not a
   // guess based on the current browser's user agent.
@@ -735,6 +743,18 @@ export default function HomeContent({
     // in a separate effect below.
     firstRunRef.current = noStored && !loaded.leaguesOnboarded;
 
+    // Hold the first-run picker until the sign-in reconcile below has had its
+    // say. firstRunRef is armed off localStorage ALONE, so a SIGNED-IN user on a
+    // fresh browser profile (or after clearing site data) saw the picker before
+    // their synced prefs — which may already carry leaguesOnboarded and a chosen
+    // set of columns — came back, and picking again overwrote the setup they
+    // already had on another device. Capped by a grace timer so a slow or
+    // hanging /api/me can never withhold onboarding from a genuinely new user:
+    // whichever lands first wins, and the picker opens at most PICKER_AUTH_GRACE_MS late.
+    let settled = false;
+    const settleAuth = () => { if (!settled) { settled = true; setAuthSettled(true); } };
+    const graceTimer = window.setTimeout(settleAuth, PICKER_AUTH_GRACE_MS);
+
     // Cross-device preference sync (Sign in with Apple). Entirely a no-op for
     // signed-out users: getAuthState() reports signedIn:false and we stop, so
     // anonymous behavior (localStorage only) is unchanged. For signed-in users
@@ -758,8 +778,11 @@ export default function HomeContent({
         }
       } catch {
         /* sync is best-effort; the app stays fully functional without it */
+      } finally {
+        settleAuth();
       }
     })();
+    return () => window.clearTimeout(graceTimer);
   }, []);
 
   // Cross-device sync on RESUME. The mount effect above only reconciles with the
@@ -1498,11 +1521,11 @@ export default function HomeContent({
   // (thirdLeagueOptions populates after selectedDate resolves). firstRunRef was
   // armed at mount for new installs only; clearing it here opens exactly once.
   useEffect(() => {
-    if (firstRunRef.current && !prefs.leaguesOnboarded && thirdLeagueOptions.length > 0) {
+    if (firstRunRef.current && authSettled && !prefs.leaguesOnboarded && thirdLeagueOptions.length > 0) {
       firstRunRef.current = false;
       setShowLeaguePicker(true);
     }
-  }, [thirdLeagueOptions, prefs.leaguesOnboarded]);
+  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled]);
 
   // How many leagues the picker lets you take = how many columns this viewport
   // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
@@ -3840,11 +3863,19 @@ export default function HomeContent({
             role="dialog"
             aria-modal="true"
             aria-labelledby="league-picker-title"
-            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
+            // Capped to the viewport (the backdrop's p-4 is the 2rem) and laid
+            // out as a column so the league grid — not the dialog — absorbs the
+            // overflow. Without this the modal simply grew past a short window
+            // and, because the backdrop is a non-scrolling fixed layer, the
+            // "Use defaults" / confirm row below was unreachable: Escape or a
+            // backdrop click were the only ways out (Jacob 8/23, small Firefox
+            // window). Worse on desktop than phone, since pickerMax = slotCount
+            // offers five slots and a longer list on a wide viewport.
+            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl flex flex-col max-h-[calc(100dvh-2rem)]"
             style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-center mb-2">
+            <div className="flex justify-center mb-2 shrink-0">
               <svg className="w-9 h-9" viewBox="0 0 32 32" fill="none" aria-hidden>
                 <rect width="32" height="32" rx="6" className="header-logo-bg" />
                 <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
@@ -3860,7 +3891,12 @@ export default function HomeContent({
                 and the order badge lives in a fixed-width slot that is present
                 (blank) on every pill — the old `1. ` prefix grew the pill on
                 click, which reflowed the wrap and made unrelated pills jump. */}
-            <div className="flex flex-wrap justify-center gap-2 mb-4">
+            {/* The only scrolling part: min-h-0 lets this flex child shrink
+                below its content height (without it the grid keeps its natural
+                size and the cap above does nothing), and the negative-margin /
+                padding pair keeps the pills' focus rings from being clipped by
+                the new overflow box. */}
+            <div className="flex flex-wrap justify-center gap-2 mb-4 overflow-y-auto min-h-0 -mx-1 px-1">
               {pickerOptions.map((o) => {
                 const idx = pickerSel.indexOf(o.sport);
                 const on = idx >= 0;
@@ -3923,7 +3959,7 @@ export default function HomeContent({
                 );
               })}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <button
                 type="button"
                 onClick={skipLeaguePicker}
