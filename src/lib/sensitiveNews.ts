@@ -155,6 +155,15 @@ const IDIOM = new RegExp(
     "(stole|steal|stealing|robbed|robbery|heist) (the|a|him|them|second|third|home|bases?)",
     "(assault|assaulting|assaulted) (on|the) (record|rim|basket|standings|leaderboard|title|field)",
     "battery (mate|of pitchers)",
+    // Baseball's "hit-and-run" is an offensive play (the runner breaks as the
+    // batter swings to protect him), spelled exactly like the vehicular crime the
+    // violence filter's `hit.and.run` pattern is meant to catch — so recaps like
+    // "Astros put on the hit-and-run", "a hit-and-run single" read as a crime for
+    // anyone with the main filter on. Stripped ONLY when a baseball cue frames it:
+    // a play-calling verb before it, or a baseball noun after it. A real
+    // "hit-and-run driver / crash / suspect" carries neither, so it still matches.
+    "(put on|puts on|putting on|flashed|flashes|flashing|botched|botches|botching|executed|executes|executing|signall?ed|signals?|signall?ing) (the |a |an )?hit.?and.?run",
+    "hit.?and.?run (plays?|signs?|signals?|singles?|grounders?|steals?)",
     // "arrest the slide / slump / decline / rot / skid / freefall" is the staple
     // English-football framing for a team trying to halt a bad run — the
     // figurative use of the bare `arrest` crime pattern, which pulled ordinary
