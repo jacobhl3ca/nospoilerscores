@@ -395,10 +395,22 @@ function VideoRow({ item, isFirst, onPlay, siblings, index }: { item: NewsItem; 
       </button>
     );
   }
+  if (item.articleUrl) {
+    return (
+      <a key={item.id} href={item.articleUrl} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
+        {body}
+      </a>
+    );
+  }
+  // No external URL (some ESPN "now" items carry articleUrl=""). href={url ||
+  // undefined} would drop the attribute, leaving an href-less <a> that isn't
+  // keyboard-focusable and no-ops on click (WCAG 2.1.1 / 4.1.2). Render a
+  // non-interactive wrapper instead — the row still shows, sans dead control.
+  // Mirrors the href-less-anchor guard NewsFeed already documents.
   return (
-    <a key={item.id} href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={commonCls} style={commonStyle}>
+    <div key={item.id} className="block w-full text-left" style={commonStyle}>
       {body}
-    </a>
+    </div>
   );
 }
 
@@ -473,10 +485,23 @@ function CompactTailRow({ item, isFirst, onPlay, siblings, index }: { item: News
       </button>
     );
   }
+  if (item.articleUrl) {
+    return (
+      <a href={item.articleUrl} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
+        {thumb}
+        <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
+      </a>
+    );
+  }
+  // No external URL — render a non-interactive wrapper rather than an href-less
+  // <a> (unfocusable, no-op on click; WCAG 2.1.1 / 4.1.2), mirroring the VideoRow
+  // twin above and NewsFeed's documented guard. Drop the hover affordance since
+  // there's nothing to activate.
+  const staticCls = rowCls.replace(" transition-colors hover:bg-[var(--bg-card-hover)]", "");
   return (
-    <a href={item.articleUrl || undefined} target="_blank" rel="noopener noreferrer" onClick={handleExternalClick(item.articleUrl)} className={rowCls} style={rowStyle}>
+    <div className={staticCls} style={rowStyle}>
       {thumb}
       <span className="news-title min-w-0 line-clamp-2">{item.headline}</span>
-    </a>
+    </div>
   );
 }
