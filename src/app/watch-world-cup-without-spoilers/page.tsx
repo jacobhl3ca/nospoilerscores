@@ -110,7 +110,7 @@ const TIPS: { h: string; p: string }[] = [
 export default function WatchWorldCupWithoutSpoilersPage() {
   return (
     <main
-      className="mx-auto max-w-2xl px-4 py-10 text-[15px] leading-relaxed"
+      className="mx-auto max-w-2xl px-4 doc-page text-[15px] leading-relaxed"
       style={{ color: "var(--text)" }}
     >
       <h1 className="text-2xl font-bold mb-4">How to watch the 2026 World Cup without spoilers</h1>
