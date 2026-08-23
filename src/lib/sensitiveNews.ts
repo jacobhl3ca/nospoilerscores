@@ -80,6 +80,18 @@ const IDIOM = new RegExp(
     // on life support" / "the driver is on life support" still matches (the
     // person subject isn't one of these nouns).
     "(hopes?|chances?|dreams?|aspirations?|bid|campaign|defen[cs]e|dynasty|title|playoffs?|postseason|season|series) ((is|are|now|still|all but|officially|basically|practically|barely|remains?|sits?|hangs?|hanging|left|already|essentially|firmly|clinging|but|no longer|almost|nearly) )*on life[ -]support",
+    // A "batting collapse", "second-half collapse" or "top-order collapse" is the
+    // staple sports-performance idiom (cricket especially, but soccer/basketball
+    // too) for a side throwing away a position — the figurative use of the medical
+    // `collapsed? (on|during|at|mid)` pattern, which pulled ordinary match reports
+    // under "serious illness" for anyone with the main filter on ("batting collapse
+    // on day three", "second-half collapse at home"). Stripped ONLY when a
+    // performance modifier precedes "collapse", so a real "midfielder collapsed on
+    // the pitch" / "player collapsed during the warmup" (a PERSON, with no such
+    // modifier) still matches — and a genuine on-field medical scene also carries
+    // the feed's other medical cues (rushed to hospital, critical condition,
+    // stretchered off) even if this phrase is stripped.
+    "(batting|bowling|top[ -]?order|middle[ -]?order|lower[ -]?order|first[ -]?half|second[ -]?half|third[ -]?quarter|fourth[ -]?quarter|defensive|offensive|late|dramatic|stunning|spectacular|shock|shocking|epic|historic|total|complete) collapse",
     // ⚠️ Do NOT add a bare letter here. "…|b)" once matched "killed b", which
     // stripped "killed by" out of every real death headline before the patterns
     // ran ("killed by an ICE agent" scored as ordinary sports talk).
