@@ -215,6 +215,29 @@ test("a real wipeout still matches after the comeback-idiom strip", () => {
   }
 });
 
+test("result-framing idiom (crashing to a defeat/loss) survives the crash toggle", () => {
+  for (const h of [
+    "Arsenal crash to 3-0 defeat at Manchester City",
+    "Liverpool crash to defeat at Anfield",
+    "England crash to a humiliating loss",
+    "Spurs crashed to a shock 4-0 defeat",
+    "Villa crash to yet another defeat",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), null, h);
+  }
+});
+
+test("a real wreck still matches after the crash-to-defeat strip", () => {
+  // Only "crash to <defeat/loss>" is stripped — a wreck described as crashing to
+  // the ground / to a halt (no result noun) must still trip the crash pattern.
+  for (const h of [
+    "Rider crashed to the ground at turn four",
+    "Car crashed to a halt against the barrier",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), "crash", h);
+  }
+});
+
 test("plain fights and KOs stay visible, a fight that goes bad does not", () => {
   assert.equal(sensitiveCategoryOf("GOALIE FIGHT: Nedeljkovic vs Bobrovsky"), null);
   assert.equal(sensitiveCategoryOf("The moment Joshua knocked out Jake Paul"), null);
