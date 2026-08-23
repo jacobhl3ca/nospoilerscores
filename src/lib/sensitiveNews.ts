@@ -181,6 +181,18 @@ const IDIOM = new RegExp(
     // the crime as a noun (or a crime gerund kept off this list), never as one of
     // these turn-the-team-around verbs.
     "charged with (turning|righting|steering|guiding|leading|rebuilding|reviving|restoring|resurrecting|overhauling|transforming|reshaping|revamping|reversing|halting|ending|snapping|maintaining|defending|protecting|managing|developing|mentoring|anchoring|uniting|rallying|motivating|navigating|salvaging|steadying|stabili[sz]ing|revitali[sz]ing|moderni[sz]ing)",
+    // "Sentenced to relegation / the drop / mid-table mediocrity / another season
+    // in the Championship" is the staple English-football framing for a club whose
+    // fate is now sealed — the figurative use of the bare `sentenced to` crime
+    // pattern, which pulled ordinary relegation recaps under "violence, crime or
+    // abuse" for anyone with the main filter on. Stripped ONLY before a sporting-
+    // fate object (relegation, the drop, obscurity, a season/campaign in a lower
+    // tier …), so a real "sentenced to 15 years" / "sentenced to a year in prison"
+    // / "sentenced to prison" — which name a term or place, never these football
+    // fates — still matches. `season`/`campaign` are the only "… in the" nouns
+    // allowed on purpose: nobody is "sentenced to a season in jail", but "a stint
+    // in jail" is a real sentence, so `stint`/`spell` stay off the list.
+    "sentenced to (a |an |the |another |yet another |more )?(relegation|demotion|drop|drop zone|mid[ -]?table|mediocrity|obscurity|oblivion|irrelevance|purgatory|wilderness|(season|campaign) in the)",
     // Abuse of a rule/loophole, not a person.
     "abus(e|ed|ing) (the|a) (rule|loophole|system|clock|zone)",
   ].join("|"),

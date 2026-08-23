@@ -121,6 +121,13 @@ const SAFE = [
   "Skipper vows to arrest the rot before the derby",
   "United arrest a worrying skid with a win at home",
   "Rookie keeper helps arrest the freefall down the standings",
+  // Figurative "sentenced to <relegation/the drop/…>" — a club whose fate is
+  // sealed must not read as a criminal sentence.
+  "Burnley sentenced to relegation after final-day defeat",
+  "Leeds sentenced to the drop as their rivals survive",
+  "Rooney's side sentenced to another season in the Championship",
+  "Struggling giants sentenced to mid-table mediocrity",
+  "Once-proud club sentenced to obscurity in the lower leagues",
 ];
 
 for (const headline of SAFE) {
@@ -165,6 +172,15 @@ test("the 'arrest the <slide>' idiom strip does not swallow a real arrest", () =
   assert.equal(sensitiveCategoryOf("Quarterback arrested on domestic violence charge"), "violence");
   assert.equal(sensitiveCategoryOf("Winger arrested after an altercation outside the stadium"), "violence");
   assert.equal(sensitiveCategoryOf("Two arrested over the assault on a referee"), "violence");
+});
+
+test("the 'sentenced to <relegation>' idiom strip does not swallow a real sentence", () => {
+  // Only sporting-fate objects are stripped — a real sentence names a term or a
+  // place ("years", "a year in prison", "prison"), never these football fates,
+  // so it must still trip the `sentenced to` pattern.
+  assert.equal(sensitiveCategoryOf("Former player sentenced to 15 years in prison"), "violence");
+  assert.equal(sensitiveCategoryOf("Ex-agent sentenced to a year in prison for fraud"), "violence");
+  assert.equal(sensitiveCategoryOf("Coach sentenced to prison after the trial"), "violence");
 });
 
 test("the 'trial by fire' idiom strip does not swallow a real criminal trial", () => {
