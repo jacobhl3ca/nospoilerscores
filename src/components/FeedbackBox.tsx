@@ -192,10 +192,17 @@ export default function FeedbackBox({ openSignal, prefill }: { openSignal?: numb
     <div className="inline-flex items-center justify-center">
       {sent ? (
         // role=status/aria-live so screen readers hear the optimistic
-        // confirmation — the submit gives no other feedback (matches the
-        // SettingsPanel ZIP-status pattern).
-        <div role="status" aria-live="polite" className="inline-flex items-center gap-1.5">
-          <span>Thanks</span>
+        // confirmation — the submit gives no other feedback. The live region
+        // wraps ONLY the "Thanks" text, not the "Add more feedback" button:
+        // per the WAI-ARIA APG a live region shouldn't contain an interactive
+        // control, or it re-announces the button's own accessible name as part
+        // of the status update ("Thanks, Add more feedback"). The button keeps
+        // its own label and stays a sibling outside the region, so the
+        // confirmation is announced cleanly. Same fix already applied to
+        // SensitiveHiddenNote and NoTrackToggle; the wrapping flex container is
+        // unchanged, so the layout renders byte-for-byte identically.
+        <div className="inline-flex items-center gap-1.5">
+          <span role="status" aria-live="polite">Thanks</span>
           <button
             type="button"
             onClick={() => { setSent(false); setOpen(true); }}
