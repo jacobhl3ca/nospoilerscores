@@ -83,6 +83,12 @@ const SAFE = [
   "Their title defense is on life support",
   "Championship dreams all but on life support after Game 5",
   "The dynasty is on life support",
+  // Figurative "charged with <a task>" — the hiring/management framing must not
+  // read as a criminal charge.
+  "New coach charged with turning the franchise around",
+  "GM charged with rebuilding the roster this offseason",
+  "Interim boss charged with reviving a stalling season",
+  "Skipper charged with restoring the club's fortunes",
 ];
 
 for (const headline of SAFE) {
@@ -100,6 +106,14 @@ test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
   // still trip the `dying` pattern.
   assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
   assert.equal(sensitiveCategoryOf("Legend shares his dying wish in final interview"), "death");
+});
+
+test("the 'charged with <task>' idiom strip does not swallow a real criminal charge", () => {
+  // Only management verbs are stripped — an actual charge names the crime (as a
+  // noun, or a crime gerund kept off the strip list) and must still match.
+  assert.equal(sensitiveCategoryOf("Quarterback charged with domestic violence"), "violence");
+  assert.equal(sensitiveCategoryOf("Player charged with assaulting a fan"), "violence");
+  assert.equal(sensitiveCategoryOf("Defender charged with fixing matches"), "violence");
 });
 
 test("the 'on life support' idiom strip does not swallow a real medical event", () => {
