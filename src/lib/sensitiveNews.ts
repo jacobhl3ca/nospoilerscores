@@ -151,7 +151,16 @@ const IDIOM = new RegExp(
     "(stole|steal|stealing|robbed|robbery|heist) (the|a|him|them|second|third|home|bases?)",
     "(assault|assaulting|assaulted) (on|the) (record|rim|basket|standings|leaderboard|title|field)",
     "battery (mate|of pitchers)",
-    "arrest(ed|ing)? the slide",
+    // "arrest the slide / slump / decline / rot / skid / freefall" is the staple
+    // English-football framing for a team trying to halt a bad run — the
+    // figurative use of the bare `arrest` crime pattern, which pulled ordinary
+    // form recaps under "violence, crime or abuse" for anyone with the main
+    // filter on ("desperate to arrest the slump", "boss aims to arrest the
+    // rot"). Stripped ONLY when a decline noun is the object of "arrest …", with
+    // a couple of article/adjective words allowed in between, so a real "player
+    // arrested on assault charges" / "arrested after the match" (no such noun)
+    // still matches the crime pattern.
+    "arrest(s|ed|ing)? (the|their|its|his|her|a|an|this|that) ([\\w'-]+ ){0,2}(slide|slump|decline|rot|skid|freefall|free.?fall|spiral|rut|drop)",
     // "faces a trial by fire" is the staple rookie-debut framing — a young QB,
     // keeper or teenager thrown in against tough opposition. It tripped the
     // `faces? trial` crime pattern ("faces trial by fire" → "faces trial") and
