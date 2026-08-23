@@ -195,6 +195,26 @@ test("a real racing wreck still matches after the elimination-idiom strip", () =
   }
 });
 
+test("comeback idiom (wiping out a lead/deficit) survives the crash toggle", () => {
+  for (const h of [
+    "Chelsea wipe out a two-goal deficit in stoppage time",
+    "United's two-goal lead was wiped out in the final minutes",
+    "Warriors wiped out the Nuggets' 20-point advantage",
+    "Late equaliser wipes out their advantage",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), null, h);
+  }
+});
+
+test("a real wipeout still matches after the comeback-idiom strip", () => {
+  for (const h of [
+    "Huge wipeout at Pipeline",
+    "Rider wiped out on the final lap",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), "crash", h);
+  }
+});
+
 test("plain fights and KOs stay visible, a fight that goes bad does not", () => {
   assert.equal(sensitiveCategoryOf("GOALIE FIGHT: Nedeljkovic vs Bobrovsky"), null);
   assert.equal(sensitiveCategoryOf("The moment Joshua knocked out Jake Paul"), null);
