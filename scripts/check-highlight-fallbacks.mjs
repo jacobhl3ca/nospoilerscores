@@ -117,10 +117,9 @@ const OFFICIAL_CHANNELS = {
   afcon: "CAF TV",
   // Little League World Series, verified 2026-08-21: ESPN strict, 8 hits and 0
   // wrong over the 11 completed 2026 fixtures — but ONLY once the query names
-  // the state/country instead of ESPN's city-based team name. See
-  // highlightTeamName in src/lib/youtube.ts; this checker builds its queries
-  // from ESPN names, so an llws probe here will under-report until it mirrors
-  // that rewrite too.
+  // the state/country instead of ESPN's city-based team name. extractTeams now
+  // applies that rewrite (highlightTeamName above), so this probe sees what the
+  // client sees.
   llws: "ESPN",
   // Rugby, verified 2026-08-12 (see the block in src/lib/youtube.ts).
   // rugbychamp and rugbytest deliberately have NO entry — they are in
@@ -303,15 +302,28 @@ function saveIncidentState(state) {
   fs.writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
 }
 
-function extractTeams(ev) {
+// Same file src/lib/youtube.ts and prebake-news.mjs read — see highlightTeamName
+// there. This checker probes the SAME queries the client will issue, so it has to
+// apply the same rewrite or it reports a league dark that actually resolves: LLWS
+// under-reported here for exactly that reason until this was wired up.
+const LLWS_REGION_NAMES = JSON.parse(
+  fs.readFileSync(new URL("../src/lib/llwsRegions.json", import.meta.url), "utf8"),
+);
+function highlightTeamName(sport, name) {
+  if (sport !== "llws") return name;
+  const code = String(name ?? "").trim().split(/\s+/).pop() ?? "";
+  return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
+}
+
+function extractTeams(ev, sport) {
   const comp = ev?.competitions?.[0];
   if (!comp) return null;
   const away = comp.competitors.find((c) => c.homeAway === "away");
   const home = comp.competitors.find((c) => c.homeAway === "home");
   if (!away || !home) return null;
   return {
-    away: away.team.shortDisplayName ?? away.team.displayName,
-    home: home.team.shortDisplayName ?? home.team.displayName,
+    away: highlightTeamName(sport, away.team.shortDisplayName ?? away.team.displayName),
+    home: highlightTeamName(sport, home.team.shortDisplayName ?? home.team.displayName),
     awayScore: away.score,
     homeScore: home.score,
   };
@@ -892,7 +904,7 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
     for (const ev of events) {
       if (!isFinished(ev)) continue;
       if (!endedWithinLookback(ev)) continue;
-      const teams = extractTeams(ev);
+      const teams = extractTeams(ev, sport);
       if (!teams) continue;
       if (!highlightsReady(ev, sport)) {
         deferred++;

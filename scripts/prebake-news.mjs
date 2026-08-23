@@ -4,6 +4,7 @@
 // plus the ESPN homepage "TOP HEADLINES" widget (scraped from HTML for exact order).
 
 import { writeFile, readFile, mkdir } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 const OUT_DIR = "public/news";
@@ -2467,30 +2468,13 @@ const HL_TEAM_ALIASES = {
   Valkyries: "Golden State Valkyries",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
-// Mirror of LLWS_REGION_NAMES / highlightTeamName in src/lib/youtube.ts. ESPN
-// names an LLWS team for its city + code ("Tacoma WA") and titles its recap
-// with the state or country ("Washington vs. Alabama | Full Game Highlights |
-// Little League World Series"), so the bake has to ask — and title-check —
-// against the mapped form, exactly as the client does. Change both copies
-// together or the bake and the client will disagree on the matchup identity and
-// getChannelVerifiedBakedId will reject every entry this writes.
-const HL_LLWS_REGION_NAMES = {
-  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
-  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
-  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
-  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
-  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
-  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire",
-  NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina",
-  ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
-  RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee",
-  TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
-  WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", DC: "Washington DC",
-  AUS: "Australia", CAN: "Canada", CUW: "Curacao", CZE: "Czech Republic",
-  DOM: "Dominican Republic", ITA: "Italy", JPN: "Japan", KOR: "South Korea",
-  MEX: "Mexico", NCA: "Nicaragua", PAN: "Panama", PUR: "Puerto Rico",
-  RSA: "South Africa", TPE: "Chinese Taipei", VEN: "Venezuela",
-};
+// The LLWS code->state/country table is the SAME FILE src/lib/youtube.ts reads,
+// not a copy: the bake and the client have to agree on matchup identity or
+// getChannelVerifiedBakedId rejects every entry written here. See the comment on
+// highlightTeamName in src/lib/youtube.ts for why the rewrite exists at all.
+const HL_LLWS_REGION_NAMES = JSON.parse(
+  readFileSync(new URL("../src/lib/llwsRegions.json", import.meta.url), "utf8"),
+);
 const hlHighlightTeamName = (sport, name) => {
   if (sport !== "llws") return name;
   const code = String(name).trim().split(/\s+/).pop() ?? "";
