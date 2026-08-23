@@ -103,6 +103,15 @@ const IDIOM = new RegExp(
     "(assault|assaulting|assaulted) (on|the) (record|rim|basket|standings|leaderboard|title|field)",
     "battery (mate|of pitchers)",
     "arrest(ed|ing)? the slide",
+    // "Charged with <a task>" is the staple hiring/management framing — a coach
+    // "charged with turning the club around", a GM "charged with rebuilding the
+    // roster". It tripped the bare `charged with` crime pattern and hid ordinary
+    // front-office news under "violence, crime or abuse". Stripped ONLY before a
+    // management verb, so a real "charged with assault" / "charged with DUI" /
+    // "charged with assaulting an official" still matches — an actual charge names
+    // the crime as a noun (or a crime gerund kept off this list), never as one of
+    // these turn-the-team-around verbs.
+    "charged with (turning|righting|steering|guiding|leading|rebuilding|reviving|restoring|resurrecting|overhauling|transforming|reshaping|revamping|reversing|halting|ending|snapping|maintaining|defending|protecting|managing|developing|mentoring|anchoring|uniting|rallying|motivating|navigating|salvaging|steadying|stabili[sz]ing|revitali[sz]ing|moderni[sz]ing)",
     // Abuse of a rule/loophole, not a person.
     "abus(e|ed|ing) (the|a) (rule|loophole|system|clock|zone)",
   ].join("|"),
