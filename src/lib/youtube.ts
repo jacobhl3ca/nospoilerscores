@@ -1,3 +1,9 @@
+import llwsRegions from "./llwsRegions.json";
+
+// The JSON import types as a literal object, which cannot be indexed by an
+// arbitrary string; the codes come from ESPN at runtime, so widen it once here.
+const LLWS_REGION_NAMES: Record<string, string> = llwsRegions;
+
 // Official YouTube channel names per league
 const OFFICIAL_CHANNELS: Record<string, string> = {
   nba: "NBA",
@@ -492,26 +498,11 @@ function aliasTeam(name: string): string {
 // mapped form. Keyed on the CODE, not the city: the qualifying city changes
 // every year, the code does not.
 //
-// ⚠️ scripts/prebake-news.mjs mirrors this (hlHighlightTeamName). Change both.
-const LLWS_REGION_NAMES: Record<string, string> = {
-  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
-  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
-  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
-  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
-  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
-  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire",
-  NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina",
-  ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
-  RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee",
-  TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
-  WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming", DC: "Washington DC",
-  // International brackets. Every code below was read off ESPN's own 2026 LLWS
-  // feed (scripts audit, 2026-08-21) plus the regions that recur most years.
-  AUS: "Australia", CAN: "Canada", CUW: "Curacao", CZE: "Czech Republic",
-  DOM: "Dominican Republic", ITA: "Italy", JPN: "Japan", KOR: "South Korea",
-  MEX: "Mexico", NCA: "Nicaragua", PAN: "Panama", PUR: "Puerto Rico",
-  RSA: "South Africa", TPE: "Chinese Taipei", VEN: "Venezuela",
-};
+// The table itself lives in llwsRegions.json so the two plain-node scripts that
+// need it (prebake-news.mjs, check-highlight-fallbacks.mjs) read the SAME bytes
+// this module does — they cannot import a .ts file, and hand-kept copies drifting
+// apart would make the bake and the client disagree on matchup identity, at which
+// point getChannelVerifiedBakedId rejects every entry the bake writes.
 
 // Rewrite a team name into the form the sport's official uploader puts in its
 // titles. Identity for every sport but LLWS, so nothing else can regress.
