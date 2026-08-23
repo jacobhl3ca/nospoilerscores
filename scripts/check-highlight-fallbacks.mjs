@@ -115,8 +115,15 @@ const OFFICIAL_CHANNELS = {
   libertadores: "CONMEBOL Libertadores",
   saudi: "الدوري السعودي للمحترفين - Saudi Pro League",
   afcon: "CAF TV",
+  // Little League World Series, verified 2026-08-21: ESPN strict, 8 hits and 0
+  // wrong over the 11 completed 2026 fixtures — but ONLY once the query names
+  // the state/country instead of ESPN's city-based team name. See
+  // highlightTeamName in src/lib/youtube.ts; this checker builds its queries
+  // from ESPN names, so an llws probe here will under-report until it mirrors
+  // that rewrite too.
+  llws: "ESPN",
   // Rugby, verified 2026-08-12 (see the block in src/lib/youtube.ts).
-  // llws, rugbychamp and rugbytest deliberately have NO entry — they are in
+  // rugbychamp and rugbytest deliberately have NO entry — they are in
   // NO_HIGHLIGHT_FALLBACK instead, because their only uploaders are fan
   // channels or one of the two clubs in the match.
   sixnations: "Guinness Men's Six Nations",
