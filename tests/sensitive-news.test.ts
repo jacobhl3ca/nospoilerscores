@@ -148,6 +148,26 @@ test("basketball and hockey idiom survive the crash toggle", () => {
   }
 });
 
+test("knockout-elimination idiom survives the crash toggle", () => {
+  for (const h of [
+    "England crashed out of the World Cup on penalties",
+    "Spurs crashed out of the Champions League",
+    "Djokovic crashed out in the quarter-finals",
+    "City crashed out of the cup to a League Two side",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), null, h);
+  }
+});
+
+test("a real racing wreck still matches after the elimination-idiom strip", () => {
+  for (const h of [
+    "Verstappen crashed out at Eau Rouge",
+    "Leclerc crashed out of the race while leading",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), "crash", h);
+  }
+});
+
 test("plain fights and KOs stay visible, a fight that goes bad does not", () => {
   assert.equal(sensitiveCategoryOf("GOALIE FIGHT: Nedeljkovic vs Bobrovsky"), null);
   assert.equal(sensitiveCategoryOf("The moment Joshua knocked out Jake Paul"), null);

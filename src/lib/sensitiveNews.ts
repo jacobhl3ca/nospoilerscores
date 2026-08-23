@@ -85,6 +85,15 @@ const IDIOM = new RegExp(
     // the boards/net/party is basketball, hockey and playoff talk.
     "collision course",
     "crash(es|ed|ing)? (the|a) ([\\w'-]+ ){0,4}(boards|net|party|glass|crease|gate|rim|presser|press conference|event|meeting|interview|stage|wedding)",
+    // "crashed out of the World Cup / the tournament / the Champions League /
+    // the playoffs" is the universal knockout-elimination idiom (soccer, tennis,
+    // cricket, darts, snooker) — it has nothing to do with a wreck, yet the bare
+    // `crashed out` crash pattern pulled these ordinary elimination recaps out of
+    // the feed for anyone who enabled the opt-in "hide crashes" toggle. Stripped
+    // ONLY when a competition/round noun is the object, so a real racing wreck
+    // ("crashed out at Eau Rouge", "crashed out on lap 3", "crashed out of the
+    // race") still matches — "race" is deliberately NOT in the noun list.
+    "crashed out (of|in) (the )?([\\w'-]+ ){0,3}(tournament|competition|cup|euros?|championship|champions league|europa league|conference league|playoffs?|postseason|quarter.?finals?|semi.?finals?|last (16|32|eight|four)|group stage|contention|running)",
     "(wreck|wrecked|wrecking) (them|him|her|it|the|that)",
     "trainwreck|train wreck",
     // Suicide as tactic.
