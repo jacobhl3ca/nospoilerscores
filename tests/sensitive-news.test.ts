@@ -107,6 +107,14 @@ const SAFE = [
   "Late collapse during the run-in sinks their playoff hopes",
   "Dramatic middle-order collapse as they lose six for twelve",
   "Defensive collapse at the death gifts City the title",
+  // Figurative "arrest the <slide/slump/…>" — a team halting a bad run must not
+  // read as a criminal arrest.
+  "Boss desperate to arrest the slide after four straight defeats",
+  "New manager aims to arrest the slump at the bottom of the table",
+  "Can anyone arrest their alarming decline?",
+  "Skipper vows to arrest the rot before the derby",
+  "United arrest a worrying skid with a win at home",
+  "Rookie keeper helps arrest the freefall down the standings",
 ];
 
 for (const headline of SAFE) {
@@ -140,6 +148,14 @@ test("the 'charged with <task>' idiom strip does not swallow a real criminal cha
   assert.equal(sensitiveCategoryOf("Quarterback charged with domestic violence"), "violence");
   assert.equal(sensitiveCategoryOf("Player charged with assaulting a fan"), "violence");
   assert.equal(sensitiveCategoryOf("Defender charged with fixing matches"), "violence");
+});
+
+test("the 'arrest the <slide>' idiom strip does not swallow a real arrest", () => {
+  // Only a decline noun as the object is stripped — a real arrest names what the
+  // person was arrested for / when, so it must still trip the `arrest` pattern.
+  assert.equal(sensitiveCategoryOf("Quarterback arrested on domestic violence charge"), "violence");
+  assert.equal(sensitiveCategoryOf("Winger arrested after an altercation outside the stadium"), "violence");
+  assert.equal(sensitiveCategoryOf("Two arrested over the assault on a referee"), "violence");
 });
 
 test("the 'trial by fire' idiom strip does not swallow a real criminal trial", () => {
