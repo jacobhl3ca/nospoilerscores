@@ -128,6 +128,13 @@ const SAFE = [
   "Rooney's side sentenced to another season in the Championship",
   "Struggling giants sentenced to mid-table mediocrity",
   "Once-proud club sentenced to obscurity in the lower leagues",
+  // Baseball's "hit-and-run" play — must not read as the vehicular crime.
+  "Astros put on the hit-and-run and it works to perfection",
+  "A perfectly executed hit-and-run scores the go-ahead run",
+  "Altuve laces a hit-and-run single to right",
+  "Manager flashed the hit-and-run sign in the ninth",
+  "The hit-and-run play catches the defense napping",
+  "Botched hit-and-run leads to an inning-ending double play",
 ];
 
 for (const headline of SAFE) {
@@ -206,6 +213,15 @@ test("the 'on life support' idiom strip does not swallow a real medical event", 
   assert.equal(sensitiveCategoryOf("Midfielder on life support after collapsing on the pitch"), "medical");
   assert.equal(sensitiveCategoryOf("Driver on life support following the crash"), "medical");
   assert.equal(sensitiveCategoryOf("After a strong title run, the driver is on life support"), "medical");
+});
+
+test("the baseball 'hit-and-run' idiom strip does not swallow a real hit-and-run", () => {
+  // Only a play-calling verb before or a baseball noun after is stripped — a
+  // real vehicular hit-and-run carries neither and must still match violence
+  // (or death, when it killed someone).
+  assert.equal(sensitiveCategoryOf("Star arrested after a hit-and-run outside the arena"), "violence");
+  assert.equal(sensitiveCategoryOf("Coach involved in a hit-and-run, police say"), "violence");
+  assert.equal(sensitiveCategoryOf("Cyclist killed in a hit-and-run near the stadium"), "death");
 });
 
 // ── Crashes: their own opt-in toggle ────────────────────────────────────────
