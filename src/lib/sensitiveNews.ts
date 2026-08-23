@@ -105,6 +105,15 @@ const IDIOM = new RegExp(
     // still matches the crash pattern.
     "wipe(s|d)? out (a|an|the|their|his|her|its|our|any|that|another) ([\\w'-]+ ){0,3}(lead|leads|deficit|deficits|advantage|advantages|gap|gaps|margin|margins|cushion|cushions|arrears)",
     "(lead|leads|deficit|deficits|advantage|advantages|gap|gaps|margin|margins|cushion|cushions|arrears|scoreline) ([\\w'-]+ ){0,3}wiped out",
+    // "crash to (a) defeat/loss" is the staple result-framing headline idiom for
+    // a team losing (soccer/rugby/cricket especially: "Arsenal crash to 3-0
+    // defeat", "England crash to a humiliating loss") — the figurative use of the
+    // bare `crash` crash pattern, which pulled ordinary match-report recaps under
+    // "a crash or wreck" for anyone with the opt-in crash toggle on. Stripped ONLY
+    // when a result noun (defeat/loss) is the object of "crash to …", so a real
+    // wreck that reads "crashed to the ground" / "crashed to a halt" (no such noun)
+    // still matches the crash pattern.
+    "crash(es|ed|ing)? to ((a|an|the|their|another|yet another) )?([\\w'-]+ ){0,3}(defeat|defeats|loss|losses)",
     "(wreck|wrecked|wrecking) (them|him|her|it|the|that)",
     "trainwreck|train wreck",
     // Suicide as tactic.
