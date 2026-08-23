@@ -251,6 +251,24 @@ test("a real wreck still matches after the crash-to-defeat strip", () => {
   }
 });
 
+test("'crash course' idiom survives the crash toggle", () => {
+  for (const h of [
+    "Rookie QB gets a crash course in playoff football",
+    "A crash course in the Premier League for the promoted side",
+    "Teenage keeper handed a crash course on his debut",
+    "Front office takes a crash course in salary-cap gymnastics",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), null, h);
+  }
+});
+
+test("a real wreck still matches after the crash-course strip", () => {
+  // Only the "crash course" idiom is stripped — a genuine wreck must still trip
+  // the crash pattern.
+  assert.equal(sensitiveCategoryOf("Huge crash on the opening lap collects five cars", BOTH), "crash");
+  assert.equal(sensitiveCategoryOf("Rider came off his bike at turn four", BOTH), "crash");
+});
+
 test("plain fights and KOs stay visible, a fight that goes bad does not", () => {
   assert.equal(sensitiveCategoryOf("GOALIE FIGHT: Nedeljkovic vs Bobrovsky"), null);
   assert.equal(sensitiveCategoryOf("The moment Joshua knocked out Jake Paul"), null);
