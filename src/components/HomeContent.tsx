@@ -3835,11 +3835,19 @@ export default function HomeContent({
             role="dialog"
             aria-modal="true"
             aria-labelledby="league-picker-title"
-            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl"
+            // Capped to the viewport (the backdrop's p-4 is the 2rem) and laid
+            // out as a column so the league grid — not the dialog — absorbs the
+            // overflow. Without this the modal simply grew past a short window
+            // and, because the backdrop is a non-scrolling fixed layer, the
+            // "Use defaults" / confirm row below was unreachable: Escape or a
+            // backdrop click were the only ways out (Jacob 8/23, small Firefox
+            // window). Worse on desktop than phone, since pickerMax = slotCount
+            // offers five slots and a longer list on a wide viewport.
+            className="relative rounded-xl p-5 max-w-sm w-full shadow-xl flex flex-col max-h-[calc(100dvh-2rem)]"
             style={{ background: "var(--bg)", border: "2px solid var(--accent)", outline: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-center mb-2">
+            <div className="flex justify-center mb-2 shrink-0">
               <svg className="w-9 h-9" viewBox="0 0 32 32" fill="none" aria-hidden>
                 <rect width="32" height="32" rx="6" className="header-logo-bg" />
                 <text x="16" y="22" textAnchor="middle" fontSize="16" fontWeight="700" fontFamily="system-ui" className="header-logo-text">H</text>
@@ -3855,7 +3863,12 @@ export default function HomeContent({
                 and the order badge lives in a fixed-width slot that is present
                 (blank) on every pill — the old `1. ` prefix grew the pill on
                 click, which reflowed the wrap and made unrelated pills jump. */}
-            <div className="flex flex-wrap justify-center gap-2 mb-4">
+            {/* The only scrolling part: min-h-0 lets this flex child shrink
+                below its content height (without it the grid keeps its natural
+                size and the cap above does nothing), and the negative-margin /
+                padding pair keeps the pills' focus rings from being clipped by
+                the new overflow box. */}
+            <div className="flex flex-wrap justify-center gap-2 mb-4 overflow-y-auto min-h-0 -mx-1 px-1">
               {pickerOptions.map((o) => {
                 const idx = pickerSel.indexOf(o.sport);
                 const on = idx >= 0;
@@ -3918,7 +3931,7 @@ export default function HomeContent({
                 );
               })}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <button
                 type="button"
                 onClick={skipLeaguePicker}
