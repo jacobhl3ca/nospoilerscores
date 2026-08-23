@@ -673,6 +673,12 @@ export default function SettingsPanel({
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
       shownLeagues: undefined,
+      // The "Hide offseason" view filter over the league catalog (rendered in this
+      // same panel) persists to prefs and was omitted here, so "Reset all settings
+      // to defaults" left a user's catalog collapsed to in-season leagues only. It
+      // ships off by default and reads as `!!prefs.hideOffseasonInCatalog`, so
+      // clearing to undefined restores the fresh-install "show everything" catalog.
+      hideOffseasonInCatalog: undefined,
       // The spoiler-protection + layout controls the panel also exposes were
       // omitted here, so "Reset all settings to defaults" left them at whatever
       // the user had set — a reset could keep the video title strip revealed,
