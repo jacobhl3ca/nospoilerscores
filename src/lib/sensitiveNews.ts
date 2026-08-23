@@ -94,6 +94,17 @@ const IDIOM = new RegExp(
     // ("crashed out at Eau Rouge", "crashed out on lap 3", "crashed out of the
     // race") still matches — "race" is deliberately NOT in the noun list.
     "crashed out (of|in) (the )?([\\w'-]+ ){0,3}(tournament|competition|cup|euros?|championship|champions league|europa league|conference league|playoffs?|postseason|quarter.?finals?|semi.?finals?|last (16|32|eight|four)|group stage|contention|running)",
+    // A team "wiping out" an opponent's lead is the staple comeback idiom, not a
+    // crash — but the opt-in "hide crashes" toggle's bare `wipe ?out` /
+    // `wiped out (on|in|at)` patterns pulled these recaps under "a crash or
+    // wreck" ("Chelsea wipe out a two-goal deficit", "United's lead was wiped
+    // out in stoppage time"). Stripped ONLY when a lead/deficit-type noun is the
+    // object (verb → object) or the subject (subject → passive), with a couple of
+    // adjective/linking words allowed in between, so a real "huge wipeout at
+    // Pipeline" / "rider wiped out on the final lap" (no such noun attached)
+    // still matches the crash pattern.
+    "wipe(s|d)? out (a|an|the|their|his|her|its|our|any|that|another) ([\\w'-]+ ){0,3}(lead|leads|deficit|deficits|advantage|advantages|gap|gaps|margin|margins|cushion|cushions|arrears)",
+    "(lead|leads|deficit|deficits|advantage|advantages|gap|gaps|margin|margins|cushion|cushions|arrears|scoreline) ([\\w'-]+ ){0,3}wiped out",
     "(wreck|wrecked|wrecking) (them|him|her|it|the|that)",
     "trainwreck|train wreck",
     // Suicide as tactic.
