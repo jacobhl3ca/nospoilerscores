@@ -74,6 +74,11 @@ const SAFE = [
   "Winner in the dying seconds sends them top of the table",
   "Equaliser in the dying minutes rescues a point at Anfield",
   "United score twice in the dying embers to steal it",
+  // "the late <game event>" late-drama idiom — must not read as death.
+  "Liverpool snatch the late winner at Anfield",
+  "Arsenal rescue a point with the late equaliser",
+  "Man United and the late show strike again",
+  "Drama in the late stages as City hold on",
   // Figurative "fatal <mistake>" — must not read as death.
   "Fatal error at the back gifts Arsenal the win",
   "A fatal blow to their title hopes after the derby loss",
@@ -111,6 +116,14 @@ test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
   // still trip the `dying` pattern.
   assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
   assert.equal(sensitiveCategoryOf("Legend shares his dying wish in final interview"), "death");
+});
+
+test("the 'the late <game event>' idiom strip does not swallow a real death", () => {
+  // Only game-event nouns are stripped — "the late <person>" still names the
+  // deceased and must trip the death pattern.
+  assert.equal(sensitiveCategoryOf("Fenway pays tribute to the late Bill Buckner"), "death");
+  assert.equal(sensitiveCategoryOf("The late great Diego Maradona remembered"), "death");
+  assert.equal(sensitiveCategoryOf("Club statement on the passing of the late owner"), "death");
 });
 
 test("the 'charged with <task>' idiom strip does not swallow a real criminal charge", () => {
