@@ -624,7 +624,12 @@ export default function HomeContent({
         if (decoded.slotLeagues) {
           loaded.firstLeague = decoded.slotLeagues[0];
           loaded.secondLeague = decoded.slotLeagues[1];
-          if (decoded.slotLeagues[2]) loaded.thirdLeague = decoded.slotLeagues[2];
+          // Assign the third slot unconditionally, like the other four: when `s` is
+          // present it is the source of truth for every slot, and slot[2] always
+          // mirrors what the legacy `t` param carries (both come from thirdLeague).
+          // Guarding it (the old behavior) let a shared Auto third column silently
+          // keep the recipient's own stored override instead of resetting to Auto.
+          loaded.thirdLeague = decoded.slotLeagues[2];
           loaded.fourthLeague = decoded.slotLeagues[3];
           loaded.fifthLeague = decoded.slotLeagues[4];
         }
