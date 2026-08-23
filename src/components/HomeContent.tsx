@@ -463,6 +463,11 @@ const POPULAR_WORLD_CUP_TEAMS = [
   { name: "Canada", slug: "canada", flag: "🇨🇦" },
 ];
 
+// How long the first-run league picker waits on the sign-in reconcile before
+// giving up and opening anyway. Long enough for /api/me on a normal connection,
+// short enough that a new user never notices the hold.
+const PICKER_AUTH_GRACE_MS = 1500;
+
 export default function HomeContent({
   initialOffset,
   worldCupHub,
@@ -593,6 +598,9 @@ export default function HomeContent({
   // kickoff banner did after being dismissed, or after the league was added
   // (Jacob 8/9). This flips true once the stored blob is in state.
   const [prefsHydrated, setPrefsHydrated] = useState(false);
+  // Whether the sign-in reconcile has had its say about this device's prefs.
+  // Only the first-run league picker waits on it — see the mount effect.
+  const [authSettled, setAuthSettled] = useState(false);
   // A signed-in account that has already used the iPhone app does not need an
   // install prompt on the web. This is account history from /api/me, not a
   // guess based on the current browser's user agent.
@@ -730,6 +738,18 @@ export default function HomeContent({
     // in a separate effect below.
     firstRunRef.current = noStored && !loaded.leaguesOnboarded;
 
+    // Hold the first-run picker until the sign-in reconcile below has had its
+    // say. firstRunRef is armed off localStorage ALONE, so a SIGNED-IN user on a
+    // fresh browser profile (or after clearing site data) saw the picker before
+    // their synced prefs — which may already carry leaguesOnboarded and a chosen
+    // set of columns — came back, and picking again overwrote the setup they
+    // already had on another device. Capped by a grace timer so a slow or
+    // hanging /api/me can never withhold onboarding from a genuinely new user:
+    // whichever lands first wins, and the picker opens at most PICKER_AUTH_GRACE_MS late.
+    let settled = false;
+    const settleAuth = () => { if (!settled) { settled = true; setAuthSettled(true); } };
+    const graceTimer = window.setTimeout(settleAuth, PICKER_AUTH_GRACE_MS);
+
     // Cross-device preference sync (Sign in with Apple). Entirely a no-op for
     // signed-out users: getAuthState() reports signedIn:false and we stop, so
     // anonymous behavior (localStorage only) is unchanged. For signed-in users
@@ -753,8 +773,11 @@ export default function HomeContent({
         }
       } catch {
         /* sync is best-effort; the app stays fully functional without it */
+      } finally {
+        settleAuth();
       }
     })();
+    return () => window.clearTimeout(graceTimer);
   }, []);
 
   // Cross-device sync on RESUME. The mount effect above only reconciles with the
@@ -1493,11 +1516,11 @@ export default function HomeContent({
   // (thirdLeagueOptions populates after selectedDate resolves). firstRunRef was
   // armed at mount for new installs only; clearing it here opens exactly once.
   useEffect(() => {
-    if (firstRunRef.current && !prefs.leaguesOnboarded && thirdLeagueOptions.length > 0) {
+    if (firstRunRef.current && authSettled && !prefs.leaguesOnboarded && thirdLeagueOptions.length > 0) {
       firstRunRef.current = false;
       setShowLeaguePicker(true);
     }
-  }, [thirdLeagueOptions, prefs.leaguesOnboarded]);
+  }, [thirdLeagueOptions, prefs.leaguesOnboarded, authSettled]);
 
   // How many leagues the picker lets you take = how many columns this viewport
   // will actually render (3 phone / 5 wide). It said "up to 3" on a desktop that
