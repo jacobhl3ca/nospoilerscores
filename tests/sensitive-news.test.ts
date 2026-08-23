@@ -89,6 +89,11 @@ const SAFE = [
   "GM charged with rebuilding the roster this offseason",
   "Interim boss charged with reviving a stalling season",
   "Skipper charged with restoring the club's fortunes",
+  // Figurative "trial by fire" — the rookie-debut framing must not read as a
+  // criminal trial.
+  "Rookie QB faces trial by fire in his first start",
+  "Teenage keeper faces trial by fire on his Champions League debut",
+  "A trial by fire awaits the young side in the group of death",
 ];
 
 for (const headline of SAFE) {
@@ -114,6 +119,14 @@ test("the 'charged with <task>' idiom strip does not swallow a real criminal cha
   assert.equal(sensitiveCategoryOf("Quarterback charged with domestic violence"), "violence");
   assert.equal(sensitiveCategoryOf("Player charged with assaulting a fan"), "violence");
   assert.equal(sensitiveCategoryOf("Defender charged with fixing matches"), "violence");
+});
+
+test("the 'trial by fire' idiom strip does not swallow a real criminal trial", () => {
+  // Only the "trial by fire" idiom is stripped — a genuine court date names the
+  // charge (or the offence it is over) and must still trip the `faces? trial`
+  // pattern.
+  assert.equal(sensitiveCategoryOf("Star forward faces trial on assault charges next month"), "violence");
+  assert.equal(sensitiveCategoryOf("Coach faces trial over the betting scandal"), "violence");
 });
 
 test("the 'on life support' idiom strip does not swallow a real medical event", () => {

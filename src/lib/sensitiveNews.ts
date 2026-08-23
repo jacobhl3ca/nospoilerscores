@@ -103,6 +103,13 @@ const IDIOM = new RegExp(
     "(assault|assaulting|assaulted) (on|the) (record|rim|basket|standings|leaderboard|title|field)",
     "battery (mate|of pitchers)",
     "arrest(ed|ing)? the slide",
+    // "faces a trial by fire" is the staple rookie-debut framing — a young QB,
+    // keeper or teenager thrown in against tough opposition. It tripped the
+    // `faces? trial` crime pattern ("faces trial by fire" → "faces trial") and
+    // hid ordinary previews under "violence, crime or abuse". Stripped here so
+    // a real "faces trial on assault charges" / "faces trial over the scandal"
+    // still matches — an actual court date never reads "trial by fire".
+    "trials? by fire",
     // "Charged with <a task>" is the staple hiring/management framing — a coach
     // "charged with turning the club around", a GM "charged with rebuilding the
     // roster". It tripped the bare `charged with` crime pattern and hid ordinary
