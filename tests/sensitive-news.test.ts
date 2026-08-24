@@ -166,6 +166,13 @@ const SAFE = [
   "Marquee collision between two of the league's best offenses",
   "Tactical collision between two very different coaches",
   "When two philosophies collided at Wembley",
+  // Basketball/soccer "opened fire from deep/downtown/three/distance" — a
+  // long-range shooting barrage must not read as violence.
+  "Warriors opened fire from deep and never looked back",
+  "Curry opened fire from downtown, hitting six threes in the third",
+  "The visitors opened fire from beyond the arc to blow it open",
+  "Bench unit opens fire from three to swing the momentum",
+  "Midfielder opened fire from distance to level it at Anfield",
 ];
 
 for (const headline of SAFE) {
@@ -176,6 +183,16 @@ for (const headline of SAFE) {
 
 test("empty text is never sensitive", () => {
   assert.equal(sensitiveCategoryOf(""), null);
+});
+
+test("the 'opened fire from <long range>' idiom strip does not swallow a real shooting", () => {
+  // Only the long-range-shooting objects are stripped — a real shooting reads
+  // "opened fire at/on/outside <place>" or "from a car / close range", none of
+  // which those objects cover, so it must still trip the `opened fire` pattern.
+  assert.equal(sensitiveCategoryOf("Gunman opened fire outside the arena, police say"), "violence");
+  assert.equal(sensitiveCategoryOf("Suspect opened fire at a crowd near the stadium"), "violence");
+  assert.equal(sensitiveCategoryOf("Shooter opened fire from a moving car"), "violence");
+  assert.equal(sensitiveCategoryOf("Attacker opened fire from close range"), "violence");
 });
 
 test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
