@@ -605,6 +605,10 @@ export default function HomeContent({
   // install prompt on the web. This is account history from /api/me, not a
   // guess based on the current browser's user agent.
   const [hasIosAccountUse, setHasIosAccountUse] = useState(false);
+  // Plain "is there an account behind this session", separate from the iOS
+  // history above. The footer's Play badge only offers its dismiss control to
+  // signed-in users, since only they sync the prefs blob that records it.
+  const [isSignedIn, setIsSignedIn] = useState(false);
 
   useEffect(() => {
     const loaded = migrateLegacySwitcherPreferences(loadPreferences());
@@ -760,6 +764,7 @@ export default function HomeContent({
     (async () => {
       try {
         const auth = await getAuthState();
+        setIsSignedIn(Boolean(auth.signedIn));
         setHasIosAccountUse(Boolean(auth.signedIn && auth.platforms?.ios));
         if (!auth.signedIn) return;
         setRemoteSync(pushRemotePrefs);
@@ -795,6 +800,7 @@ export default function HomeContent({
       if (document.visibilityState !== "visible") return;
       try {
         const auth = await getAuthState();
+        setIsSignedIn(Boolean(auth.signedIn));
         setHasIosAccountUse(Boolean(auth.signedIn && auth.platforms?.ios));
         if (!auth.signedIn || !alive) return;
         const remote = await fetchRemotePrefs();
@@ -3745,34 +3751,14 @@ export default function HomeContent({
             <span>Settings</span>
           </button>
           <a href="/privacy" className="underline underline-offset-2 hover:opacity-80" style={{ color: "var(--text-muted)" }}>Privacy</a>
-          {!isNativeApp && !hasIosAccountUse && (
-            <a
-              href="https://apps.apple.com/app/hidescore/id6766885311"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
-              data-umami-event="install-appstore"
-            >
-              App Store
-            </a>
-          )}
-          {!isNativeApp && (
-            <a
-              href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:opacity-80"
-              style={{ color: "var(--text-muted)" }}
-              data-umami-event="install-googleplay"
-            >
-              Google Play
-            </a>
-          )}
+          {/* The "App Store" and "Google Play" text links used to sit here.
+              Both are gone (Jacob 8/24): each said exactly what the badge below
+              already says, and of the two the badge is the better surface. */}
         </div>
 
-        {/* Compact custom Apple-logo pill — replaced by the footer text link
-                above. Kept commented in case we want the smaller text version back.
+        {/* Compact custom Apple-logo pill — superseded by the real App Store
+                badge below. Kept commented in case we want a smaller text-and-
+                glyph version back.
             <a
               href="https://apps.apple.com/app/hidescore/id6766885311"
               target="_blank"
@@ -3793,21 +3779,70 @@ export default function HomeContent({
               <span>App Store</span>
             </a>
             */}
-        {/* Android download — live on Google Play since 2026-08-23, so the
-                badge is no longer hidden. Points at the Play listing, not the
-                /HideScore.apk sideload. Hidden inside the native shell, which
-                is already installed. */}
-        {!isNativeApp && (
+        {/* Store badges, both at the standard 40px height. The row is hidden
+                inside the native shell (already installed) and for any account
+                whose history shows iPhone-app use — that account has the app,
+                so neither badge is an offer worth making. That is the same
+                audience test the old App Store text link carried; the Play
+                badge now shares it, because pushing Android at a known iPhone
+                app user is the one case Jacob called out.
+
+                The Play badge alone can be dismissed. The control renders only
+                when signed in, since the flag rides the prefs blob and only a
+                signed-in account pushes that blob to the server — dismissing
+                while signed out would look identical but silently stay on one
+                device. Signed-out visitors therefore see both badges and no
+                dismiss control, which is the intended default.
+
+                prefsHydrated gates the Play badge for the reason spelled out
+                where that flag is declared: prefs land in an effect, so reading
+                the dismissal before hydration would flash the badge back on for
+                one paint on every reload. */}
+        {!isNativeApp && !hasIosAccountUse && (
+          <div className="flex items-center justify-center gap-3 flex-wrap">
             <a
-              href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
+              href="https://apps.apple.com/app/hidescore/id6766885311"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Get HideScore on Google Play"
+              aria-label="Download HideScore on the App Store"
               className="inline-block transition-opacity hover:opacity-80"
-              data-umami-event="install-googleplay-badge"
+              data-umami-event="install-appstore-badge"
             >
-              <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
+              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
             </a>
+            {prefsHydrated && !prefs.playBadgeDismissed && (
+              /* relative + an absolutely placed dismiss control, the same shape
+                 the World Cup banner uses. In-flow it would push the pair off
+                 centre by half its width, which read as a misaligned footer. */
+              <span className="relative inline-flex items-center">
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Get HideScore on Google Play"
+                  className="inline-block transition-opacity hover:opacity-80"
+                  data-umami-event="install-googleplay-badge"
+                >
+                  <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
+                </a>
+                {isSignedIn && (
+                  <button
+                    type="button"
+                    onClick={() => updatePrefs({ playBadgeDismissed: true })}
+                    data-umami-event="play-badge-dismiss"
+                    aria-label="Hide the Google Play badge"
+                    title="Hide"
+                    className="absolute left-full ml-1 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
+                    style={{ color: "var(--text-muted)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
         )}
 
         {/* Tip jar — temporarily hidden 2026-06-24; restore by un-commenting:
