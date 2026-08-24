@@ -20,7 +20,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Is HideScore free?",
-    a: "Yes. HideScore is free, has no ads, and works in any browser. There is also a free iOS app on the App Store.",
+    a: "Yes. HideScore is free, has no ads, and works in any browser. There is also a free app on the App Store and on Google Play.",
   },
 ];
 
