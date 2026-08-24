@@ -601,10 +601,19 @@ export default function HomeContent({
   // Whether the sign-in reconcile has had its say about this device's prefs.
   // Only the first-run league picker waits on it — see the mount effect.
   const [authSettled, setAuthSettled] = useState(false);
-  // A signed-in account that has already used the iPhone app does not need an
-  // install prompt on the web. This is account history from /api/me, not a
+  // A signed-in account that has already used the downloaded app does not need
+  // an install prompt on the web. This is account history from /api/me, not a
   // guess based on the current browser's user agent.
-  const [hasIosAccountUse, setHasIosAccountUse] = useState(false);
+  //
+  // null means UNKNOWN, which is NOT the same as "no app" — /api/me takes about
+  // a second and a half to answer for a signed-in account, and starting at
+  // false meant the footer asserted "you don't have the app" for that whole
+  // window and then took it back. The pre-paint script in layout.tsx covers the
+  // gap from the cached answer; the effect below hands the class back once this
+  // is no longer null. Widened from ios-only to either platform on 2026-08-24,
+  // when the Play listing went public: an Android app user signed in on the web
+  // was still being offered both stores.
+  const [appAccountUse, setAppAccountUse] = useState<boolean | null>(null);
   // Plain "is there an account behind this session", separate from the iOS
   // history above. The footer's Play badge only offers its dismiss control to
   // signed-in users, since only they sync the prefs blob that records it.
@@ -765,7 +774,7 @@ export default function HomeContent({
       try {
         const auth = await getAuthState();
         setIsSignedIn(Boolean(auth.signedIn));
-        setHasIosAccountUse(Boolean(auth.signedIn && auth.platforms?.ios));
+        setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn) return;
         setRemoteSync(pushRemotePrefs);
         const remote = await fetchRemotePrefs();
@@ -785,6 +794,23 @@ export default function HomeContent({
     return () => window.clearTimeout(graceTimer);
   }, []);
 
+  // The pre-paint scripts in layout.tsx hide the store badges from a cached
+  // guess. React owns them from the moment it has a real answer, so drop each
+  // class then — otherwise a stale nss-auth blob (signed out on another device,
+  // app deleted) would keep the badges hidden with nothing left to correct it.
+  // Ordering matters: by the time these run, the state they defer to has already
+  // been committed, so the row is either unmounted or correctly rendered and
+  // uncovering it cannot flash.
+  useEffect(() => {
+    if (appAccountUse === null) return;
+    document.documentElement.classList.remove("hs-has-app");
+  }, [appAccountUse]);
+
+  useEffect(() => {
+    if (!prefsHydrated) return;
+    document.documentElement.classList.remove("hs-play-dismissed");
+  }, [prefsHydrated]);
+
   // Cross-device sync on RESUME. The mount effect above only reconciles with the
   // server on a COLD launch, so a change made on another device — e.g. removing
   // a league column on the web — never reached an already-open app (a backgrounded
@@ -801,7 +827,7 @@ export default function HomeContent({
       try {
         const auth = await getAuthState();
         setIsSignedIn(Boolean(auth.signedIn));
-        setHasIosAccountUse(Boolean(auth.signedIn && auth.platforms?.ios));
+        setAppAccountUse(Boolean(auth.signedIn && (auth.platforms?.ios || auth.platforms?.android)));
         if (!auth.signedIn || !alive) return;
         const remote = await fetchRemotePrefs();
         if (!remote || !alive || Object.keys(remote).length === 0) return;
@@ -3781,7 +3807,7 @@ export default function HomeContent({
             */}
         {/* Store badges, both at the standard 40px height. The row is hidden
                 inside the native shell (already installed) and for any account
-                whose history shows iPhone-app use — that account has the app,
+                whose history shows iPhone- OR Android-app use — that account has the app,
                 so neither badge is an offer worth making. That is the same
                 audience test the old App Store text link carried; the Play
                 badge now shares it, because pushing Android at a known iPhone
@@ -3794,12 +3820,12 @@ export default function HomeContent({
                 device. Signed-out visitors therefore see both badges and no
                 dismiss control, which is the intended default.
 
-                prefsHydrated gates the Play badge for the reason spelled out
-                where that flag is declared: prefs land in an effect, so reading
-                the dismissal before hydration would flash the badge back on for
-                one paint on every reload. */}
-        {!isNativeApp && !hasIosAccountUse && (
-          <div className="flex items-center justify-center gap-1 flex-wrap">
+                Neither badge waits on state that lands after the first paint.
+                The row is hidden pre-paint by .hs-store-badges/.hs-has-app for a
+                cached app user, and the Play badge by .hs-play-dismissed for a
+                dismissed one — see the inline scripts in layout.tsx. */}
+        {!isNativeApp && appAccountUse !== true && (
+          <div className="hs-store-badges flex items-center justify-center gap-1 flex-wrap">
             <a
               href="https://apps.apple.com/app/hidescore/id6766885311"
               target="_blank"
@@ -3810,11 +3836,16 @@ export default function HomeContent({
             >
               <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
             </a>
-            {prefsHydrated && !prefs.playBadgeDismissed && (
+            {!(prefsHydrated && prefs.playBadgeDismissed) && (
               /* relative + an absolutely placed dismiss control, the same shape
                  the World Cup banner uses. In-flow it would push the pair off
-                 centre by half its width, which read as a misaligned footer. */
-              <span className="relative inline-flex items-center">
+                 centre by half its width, which read as a misaligned footer.
+
+                 Rendered before prefs hydrate, not after: gating on prefsHydrated
+                 kept it out of the static HTML, so it popped in ~120ms after the
+                 App Store badge and dragged the pair sideways on every load. The
+                 dismissed case is covered pre-paint by .hs-play-dismissed. */
+              <span className="hs-play-badge relative inline-flex items-center">
                 <a
                   href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
                   target="_blank"
