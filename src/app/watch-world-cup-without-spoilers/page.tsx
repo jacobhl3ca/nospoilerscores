@@ -3,7 +3,7 @@ import Link from "next/link";
 
 const TITLE = "How to Watch the 2026 World Cup Without Spoilers | HideScore";
 const DESC =
-  "A simple guide to following the 2026 FIFA World Cup spoiler-free: hide scores until you tap, see which matches were classics without learning who won, and avoid spoilers when you watch on delay.";
+  "A simple guide to following the 2026 FIFA World Cup spoiler-free: hide scores until you tap and see which matches were classics without learning who won.";
 // Guide publish / last-revised dates (the file's real git create + last-edit
 // days). Single source of truth: the openGraph article:* tags below AND the
 // Article JSON-LD's datePublished/dateModified both read these, so the two
