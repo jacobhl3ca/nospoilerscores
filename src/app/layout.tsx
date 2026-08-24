@@ -189,11 +189,27 @@ const JSON_LD = {
       publisher: { "@id": "https://hidescore.com/#organization" },
     },
     {
-      // No Android MobileApplication node: the Google Play listing is still a
-      // non-public closed test (the footer's Play badge stays commented out in
-      // HomeContent, and the "iOS only" copy is the shipped truth). Declaring it
-      // here would advertise a native app crawlers/users following the URL can't
-      // install. Restore this node alongside the iOS one when Play goes public.
+      // Android sibling of the iOS MobileApplication node above. This was held
+      // back while the Play listing was a non-public closed test, because the
+      // node would have advertised an app that crawlers and users following the
+      // installUrl could not actually install. The listing went public on
+      // 2026-08-23 and now serves a real store page, so the node is restored and
+      // the @graph describes both native products instead of only the iOS one.
+      "@type": "MobileApplication",
+      name: "HideScore",
+      operatingSystem: "Android",
+      applicationCategory: "SportsApplication",
+      url: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
+      installUrl: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
+      // Same description/inLanguage/offers/publisher shape the iOS node carries,
+      // so the two product nodes read as one pair rather than a rich iOS entry
+      // and a thin Android afterthought.
+      description: SITE_DESC,
+      inLanguage: "en",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      publisher: { "@id": "https://hidescore.com/#organization" },
+    },
+    {
       "@type": "Organization",
       // Stable @id so the WebApplication/WebSite nodes above can reference this
       // Organization as their `publisher`, linking the @graph into one entity.
@@ -207,8 +223,11 @@ const JSON_LD = {
       // place and matches the <meta name="description"> and OG/Twitter copy.
       description: SITE_DESC,
       logo: "https://hidescore.com/icon-512.png",
+      // Both store listings, so the Organization resolves to the same entity
+      // whichever storefront a crawler arrives from.
       sameAs: [
         "https://apps.apple.com/app/hidescore/id6766885311",
+        "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
       ],
     },
   ],

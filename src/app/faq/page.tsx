@@ -68,7 +68,7 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   },
   {
     q: "Is there a HideScore app?",
-    a: "Yes. HideScore is a free iOS app on the App Store, and it also works in any web browser at hidescore.com.",
+    a: "Yes. HideScore is a free app on the App Store and on Google Play, and it also works in any web browser at hidescore.com.",
   },
   {
     q: "Who makes HideScore?",

@@ -1365,7 +1365,7 @@ export default function HomeContent({
         title: "Tomorrow's World Cup, spoiler-free",
         body:
           "Plan the next World Cup match day without seeing scores or headlines. Match times, teams and watch links stay safe, and ratings appear only after games finish.",
-        note: "Free · no tracking cookies · works in any browser or the iOS app.",
+        note: "Free · no tracking cookies · works in any browser or the iPhone and Android apps.",
       };
     }
     if (worldCupHubMode === "highlights") {
@@ -1380,7 +1380,7 @@ export default function HomeContent({
       title: "2026 World Cup, spoiler-free",
       body:
         "104 matches, June 11 - July 19, across the US, Canada and Mexico - most kicking off at 1, 4 and 7 PM ET on weekdays. Watch every match on your own schedule: scores stay hidden until you tap, and the competitiveness rating tells you which games were instant classics without revealing who won.",
-      note: "Free · no tracking cookies · also on the App Store.",
+      note: "Free · no tracking cookies · also on the App Store and Google Play.",
     };
   }, [worldCupHubMode]);
 
@@ -3711,7 +3711,7 @@ export default function HomeContent({
               spoilers and skip the duds — all without learning the final score.
             </p>
             <p>
-              It&apos;s free, has no tracking cookies, and works in any browser or as an iOS app. Jump to{" "}
+              It&apos;s free, has no tracking cookies, and works in any browser or as an iPhone or Android app. Jump to{" "}
               <a href="/today" style={{ textDecoration: "underline" }}>today&apos;s games</a>,{" "}
               <a href="/tomorrow" style={{ textDecoration: "underline" }}>tomorrow&apos;s schedule</a>,{" "}
               <a href="/yesterday" style={{ textDecoration: "underline" }}>yesterday&apos;s results</a>, the{" "}
