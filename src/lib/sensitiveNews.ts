@@ -109,6 +109,16 @@ const IDIOM = new RegExp(
     // these nouns) still matches. "stand" is deliberately OUT — a literal grandstand
     // collapsing is a real disaster the feed should keep flagged.
     "(innings|run.?chase|chase|batting|bowling|top.?order|middle.?order|lower.?order|partnership|deal|move|transfer|takeover|merger|talks|negotiations|bid|campaign|challenge|defen[cs]e|resistance) collapse[sd]?",
+    // The BARE-SUBJECT form of the same cricket idiom: a side named directly —
+    // "Australia collapsed on day three", "England collapsed on the final day" —
+    // with no innings/order/chase noun for the two strips above to catch, so it
+    // slipped straight through to the bare `collapsed? (on|during|at|mid)`
+    // medical pattern and read as a player collapsing. It is still the
+    // batting-collapse sense. Stripped ONLY before a cricket match-day marker
+    // ("day three", "the final day"), so a real "collapsed on the pitch/field/
+    // court" or "collapsed during training" (a person, no match day) still trips
+    // medical — a genuine on-field collapse names a place, never a day number.
+    "collapse[sd]? on (day (one|two|three|four|five|\\d+)|the (final|last|opening|first|second|third|fourth|fifth) day)",
     // ⚠️ Do NOT add a bare letter here. "…|b)" once matched "killed b", which
     // stripped "killed by" out of every real death headline before the patterns
     // ran ("killed by an ICE agent" scored as ordinary sports talk).
