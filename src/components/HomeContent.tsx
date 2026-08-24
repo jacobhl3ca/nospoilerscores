@@ -3813,7 +3813,7 @@ export default function HomeContent({
               className="inline-block transition-opacity hover:opacity-80"
               data-umami-event="install-appstore-badge"
             >
-              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+              <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
             </a>
             {prefsHydrated && !prefs.playBadgeDismissed && (
               /* relative + an absolutely placed dismiss control, the same shape
@@ -3828,7 +3828,7 @@ export default function HomeContent({
                   className="inline-block transition-opacity hover:opacity-80"
                   data-umami-event="install-googleplay-badge"
                 >
-                  <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
+                  <img src="/google-play-badge.svg" alt="Get it on Google Play" width={138} height={40} className="block h-10 w-auto" />
                 </a>
                 {isSignedIn && (
                   <button
