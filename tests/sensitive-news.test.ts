@@ -158,6 +158,14 @@ const SAFE = [
   "Manager flashed the hit-and-run sign in the ninth",
   "The hit-and-run play catches the defense napping",
   "Botched hit-and-run leads to an inning-ending double play",
+  // Figurative "collision" matchup previews — a big-match buildup framed as a
+  // clash of styles/titans must not read as an on-field injury.
+  "A collision of styles in Saturday's title fight",
+  "Heavyweight collision headlines the card in Riyadh",
+  "A collision of titans as the top two meet at the Emirates",
+  "Marquee collision between two of the league's best offenses",
+  "Tactical collision between two very different coaches",
+  "When two philosophies collided at Wembley",
 ];
 
 for (const headline of SAFE) {
@@ -388,6 +396,17 @@ test("a real wreck still matches after the crash-course strip", () => {
   // the crash pattern.
   assert.equal(sensitiveCategoryOf("Huge crash on the opening lap collects five cars", BOTH), "crash");
   assert.equal(sensitiveCategoryOf("Rider came off his bike at turn four", BOTH), "crash");
+});
+
+test("the figurative 'collision' idiom strip does not swallow a real collision", () => {
+  // Only the matchup framings (a collision of/between an abstract noun, a
+  // matchup-adjective collision) are stripped — a physical collision, one of
+  // heads, or a bare "collided" between people must still trip the `injury`
+  // pattern.
+  assert.equal(sensitiveCategoryOf("Catcher carted off after a violent collision at the plate"), "injury");
+  assert.equal(sensitiveCategoryOf("Sickening collision of heads forces both players off"), "injury");
+  assert.equal(sensitiveCategoryOf("The two players collided going for the header"), "injury");
+  assert.equal(sensitiveCategoryOf("Outfielders collided and one stayed down on the warning track"), "injury");
 });
 
 test("plain fights and KOs stay visible, a fight that goes bad does not", () => {
