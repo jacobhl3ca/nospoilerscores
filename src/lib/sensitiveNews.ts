@@ -75,6 +75,17 @@ const IDIOM = new RegExp(
     // death pattern. A real fatality still reads "fatal crash" / "fatally
     // injured" / "fatal shooting", none of which these mistake-nouns cover.
     "fatal (error|mistake|blow|flaw|blunder)",
+    // "tragic own goal / tragic error / tragically sliced into his own net" —
+    // the figurative use of `tragic` for a costly game-mistake, the everyday
+    // stuff of match reports. It tripped the bare `tragic(ally)?` death pattern
+    // and pulled ordinary recaps under "death or tragedy" for anyone with the
+    // main filter on. Stripped ONLY before a game-mistake noun, or before a
+    // sporting verb in the adverb form — so a real "tragic accident / tragic
+    // crash / tragically died / tragically lost his life" (none of these nouns
+    // or verbs) still matches. And an actual tragedy carries its own stronger
+    // cues (died, killed, crash) that survive this strip regardless.
+    "tragic(ally)? (own goals?|errors?|mistakes?|blunders?|misses?|slips?|gaffes?|mix.?ups?|giveaways?|howlers?)",
+    "tragically (missed|misses|missing|conceded|concedes|slipped|slips|fumbled|fumbles|dropped|drops|spurned|spurns|squandered|squanders|skied|sliced|slices|shanked|blazed|blazes|wasted|wastes)",
     // "playoff hopes / season / title defense on life support" is the staple
     // sports cliché for a team on the brink of elimination — the figurative use
     // of the medical `life support` pattern, which pulled ordinary standings

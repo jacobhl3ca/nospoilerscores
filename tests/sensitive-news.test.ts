@@ -88,6 +88,13 @@ const SAFE = [
   // Figurative "fatal <mistake>" — must not read as death.
   "Fatal error at the back gifts Arsenal the win",
   "A fatal blow to their title hopes after the derby loss",
+  // Figurative "tragic <game mistake>" / "tragically <verb>" — a costly on-field
+  // error must not read as death.
+  "Tragic own goal hands rivals the derby",
+  "A tragic error in stoppage time costs them the title",
+  "Keeper's tragic blunder gifts the equaliser",
+  "Striker tragically missed a sitter with the goal gaping",
+  "Full-back tragically sliced into his own net",
   // Figurative "<team fortunes> on life support" — must not read as medical.
   "Playoff hopes on life support after another loss",
   "Season on life support as the skid hits six",
@@ -179,6 +186,14 @@ test("the 'the late <game event>' idiom strip does not swallow a real death", ()
   // The scheduling nouns added to the strip ("the late game/window/…") must not
   // punch a hole in a real death that happens to sit beside one of them.
   assert.equal(sensitiveCategoryOf("Legendary broadcaster dies before the late game"), "death");
+});
+
+test("the 'tragic <mistake>' idiom strip does not swallow a real tragedy", () => {
+  // Only game-mistake nouns / sporting verbs are stripped — a genuine tragedy
+  // still trips the death pattern.
+  assert.equal(sensitiveCategoryOf("Tragic accident at the circuit claims a driver"), "death");
+  assert.equal(sensitiveCategoryOf("Young prospect tragically died in a car crash"), "death");
+  assert.equal(sensitiveCategoryOf("Club mourns the tragic passing of its captain"), "death");
 });
 
 test("the 'charged with <task>' idiom strip does not swallow a real criminal charge", () => {
