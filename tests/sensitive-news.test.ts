@@ -173,6 +173,16 @@ const SAFE = [
   "The visitors opened fire from beyond the arc to blow it open",
   "Bench unit opens fire from three to swing the momentum",
   "Midfielder opened fire from distance to level it at Anfield",
+  // Soccer's "stabbed home / stabbed it in / stabbed past the keeper" finishing
+  // idiom — a goal, not a knife attack — must not read as violence.
+  "Kane stabbed home the winner at the death",
+  "Rashford stabbed the ball past the keeper from six yards",
+  "Substitute stabbed home an equaliser in stoppage time",
+  "Defender stabbed it in from close range after a scramble",
+  "Keeper stabbed the loose ball home under pressure",
+  "He stabbed at the ball but could only find the side netting",
+  "Winger stabbed it wide from a promising position",
+  "A clever stabbing finish settles a tight derby",
 ];
 
 for (const headline of SAFE) {
@@ -295,6 +305,17 @@ test("the baseball 'hit-and-run' idiom strip does not swallow a real hit-and-run
   assert.equal(sensitiveCategoryOf("Star arrested after a hit-and-run outside the arena"), "violence");
   assert.equal(sensitiveCategoryOf("Coach involved in a hit-and-run, police say"), "violence");
   assert.equal(sensitiveCategoryOf("Cyclist killed in a hit-and-run near the stadium"), "death");
+});
+
+test("the soccer 'stabbed home' idiom strip does not swallow a real stabbing", () => {
+  // Only a scoring direction / ball object is stripped — a real stabbing reads
+  // "stabbed to death", "stabbed in the <body part>", "stabbed over <a
+  // dispute>", or "stabbing attack/incident", none of which the strip covers,
+  // so it must still trip the `stabb(ed|ing)` violence pattern.
+  assert.equal(sensitiveCategoryOf("Player stabbed in the chest outside a nightclub"), "violence");
+  assert.equal(sensitiveCategoryOf("Suspect stabbed a fan over a parking dispute"), "violence");
+  assert.equal(sensitiveCategoryOf("Stabbing attack near the stadium leaves three hurt"), "violence");
+  assert.equal(sensitiveCategoryOf("Former captain stabbed to death, police confirm"), "violence");
 });
 
 // ── Crashes: their own opt-in toggle ────────────────────────────────────────

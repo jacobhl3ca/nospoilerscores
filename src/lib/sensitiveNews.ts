@@ -217,6 +217,23 @@ const IDIOM = new RegExp(
     "(stole|steal|stealing|robbed|robbery|heist) (the|a|him|them|second|third|home|bases?)",
     "(assault|assaulting|assaulted) (on|the) (record|rim|basket|standings|leaderboard|title|field)",
     "battery (mate|of pitchers)",
+    // Soccer's finishing idiom: a striker "stabbed home", "stabbed the ball in",
+    // "stabbed it past the keeper", "stabbed wide", or a defender "stabbed at the
+    // ball / at a cross" in a goalmouth scramble. It reads exactly like the
+    // violence filter's `stabb(ed|ing)` knife pattern, so ordinary goal recaps
+    // were pulled under "violence, crime or abuse" for anyone with the main
+    // filter on — and the World Cup and soccer columns produce this phrasing
+    // constantly. Stripped ONLY before a scoring direction (home, wide,
+    // goalwards, past the keeper, into the net) or the "at the ball" clearance
+    // sense, and "in" only with a ball/rebound object before it — a real
+    // "stabbed to death / stabbed in the chest / stabbed over a dispute /
+    // stabbing attack" carries none of these and still matches. "over" and a
+    // bare "stabbed in" are deliberately OUT (a person is "stabbed over <a
+    // dispute>" and "stabbed in the <neck>"), so those keep tripping violence.
+    "stabb(ed|es|ing) (the ball |it |a shot |an effort |the rebound |the loose ball )?(home|wide|goalwards?|past (the |a )?(keeper|goalkeeper|goalie)|into (an|the) (empty )?net)",
+    "stabb(ed|es|ing) (it|the ball|the rebound) in\\b",
+    "stabb(ed|es|ing) at (the |a |the loose )?(ball|cross|rebound|delivery)",
+    "stabbing (finish|effort|volley|attempt)",
     // Baseball's "hit-and-run" is an offensive play (the runner breaks as the
     // batter swings to protect him), spelled exactly like the vehicular crime the
     // violence filter's `hit.and.run` pattern is meant to catch — so recaps like
