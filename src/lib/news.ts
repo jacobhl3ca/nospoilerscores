@@ -193,7 +193,13 @@ export async function fetchLeagueNews(sport: Sport, limit = 20): Promise<NewsIte
       if (!res.ok) return [];
       const doc = new DOMParser().parseFromString(await res.text(), "text/xml");
       if (doc.querySelector("parsererror")) return [];
-      return [...doc.querySelectorAll("item")].slice(0, limit).map((item) => {
+      // Filter BEFORE slicing so the `limit` counts VALID items, not raw <item>
+      // nodes. Slicing first would let a malformed entry (missing <title>/<link>)
+      // in the first `limit` positions silently drop the result below the
+      // requested count even when valid items sit further down the feed. Mapping
+      // the whole (small) RSS list is negligible, and when every item is valid —
+      // the common case — the output is identical to before.
+      return [...doc.querySelectorAll("item")].map((item) => {
         const value = (tag: string) => item.getElementsByTagName(tag)[0]?.textContent?.trim() ?? "";
         const articleUrl = value("link");
         return {
@@ -206,7 +212,7 @@ export async function fetchLeagueNews(sport: Sport, limit = 20): Promise<NewsIte
           byline: value("dc:creator"),
           section: "Boxing",
         };
-      }).filter((item) => item.headline && item.articleUrl);
+      }).filter((item) => item.headline && item.articleUrl).slice(0, limit);
     } catch {
       return [];
     }
