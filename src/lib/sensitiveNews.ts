@@ -46,6 +46,18 @@ const IDIOM = new RegExp(
     "(hot|cold|poor|great|good|clutch|efficient|elite|red.?hot|ice.?cold) shooting",
     "shooting (the|it) (ball|lights out|well|poorly)",
     "shooting (up|for) (the|a) ",
+    // A team "opening fire from deep / from downtown / from three / from beyond
+    // the arc / from distance" is the staple basketball (and soccer) recap idiom
+    // for a barrage of long-range shots — the figurative use of the violence
+    // filter's `opened fire` gun pattern, which pulled ordinary NBA shooting
+    // nights and long-shot flurries under "violence, crime or abuse" for anyone
+    // with the main filter on ("Warriors opened fire from deep", "he opened fire
+    // from distance"). Stripped ONLY before an unambiguous long-range-shooting
+    // object (deep, downtown, three, beyond the arc, distance …) — a phrasing
+    // never used for a real shooting, which reads "opened fire at/on/outside a
+    // <place>" or "from a car / from close range", none of which these objects
+    // cover — so a genuine "gunman opened fire from a moving car" still matches.
+    "open(s|ed|ing)? fire from ((way |right )?downtown|deep|(the )?three|threes|3|beyond the arc|outside the arc|the perimeter|distance)",
     // Death idiom.
     "sudden death",
     "dead (ball|puck|arm|red|last|money|zone|cap|weight|heat)",
