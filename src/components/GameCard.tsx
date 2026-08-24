@@ -526,7 +526,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
 
   const logo = (team: typeof game.awayTeam, isTBD: boolean) =>
     isTBD ? (
-      <span className="w-4 h-4 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-xs rounded" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>
+      <span aria-hidden="true" className="w-4 h-4 sm:w-6 sm:h-6 flex items-center justify-center text-[10px] sm:text-xs rounded" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>
     ) : team.logo ? (
       // Decorative: the team name renders beside this logo (see the row at the
       // logo() call site), so alt="" avoids a duplicate screen-reader read of
