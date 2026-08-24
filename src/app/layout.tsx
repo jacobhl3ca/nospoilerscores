@@ -189,11 +189,26 @@ const JSON_LD = {
       publisher: { "@id": "https://hidescore.com/#organization" },
     },
     {
-      // No Android MobileApplication node: the Google Play listing is still a
-      // non-public closed test (the footer's Play badge stays commented out in
-      // HomeContent, and the "iOS only" copy is the shipped truth). Declaring it
-      // here would advertise a native app crawlers/users following the URL can't
-      // install. Restore this node alongside the iOS one when Play goes public.
+      // Android product node, mirroring the iOS one above. Google Play went
+      // public on the production track 2026-08-23 (the footer now carries a Play
+      // badge and text link beside the App Store ones), so the native app that
+      // crawlers and users reach from this URL is really installable — the
+      // condition the old "no Android node until Play goes public" note waited on.
+      "@type": "MobileApplication",
+      name: "HideScore",
+      operatingSystem: "Android",
+      applicationCategory: "SportsApplication",
+      url: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
+      installUrl: "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
+      // Same recommended description + locale + offer + publisher signals the
+      // iOS node carries, so both native product nodes read as one linked
+      // entity. Reuse SITE_DESC to keep the app summary in one place.
+      description: SITE_DESC,
+      inLanguage: "en",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      publisher: { "@id": "https://hidescore.com/#organization" },
+    },
+    {
       "@type": "Organization",
       // Stable @id so the WebApplication/WebSite nodes above can reference this
       // Organization as their `publisher`, linking the @graph into one entity.
@@ -209,6 +224,7 @@ const JSON_LD = {
       logo: "https://hidescore.com/icon-512.png",
       sameAs: [
         "https://apps.apple.com/app/hidescore/id6766885311",
+        "https://play.google.com/store/apps/details?id=com.jacobhl.hidescore",
       ],
     },
   ],
