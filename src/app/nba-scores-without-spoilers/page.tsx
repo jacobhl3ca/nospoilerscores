@@ -6,7 +6,7 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // the phrase people actually scan for ("Highlights") was buried in the description.
 const TITLE = "NBA Highlights and Scores Without Spoilers | HideScore";
 const DESC =
-  "Watch NBA highlights, recaps, and game ratings without spoilers. HideScore keeps basketball scores and winners hidden until you reveal them, so you can pick a game before you know who won.";
+  "Watch NBA highlights, recaps, and game ratings without spoilers. HideScore keeps basketball scores and winners hidden until you reveal them.";
 const CANONICAL = "/nba-scores-without-spoilers";
 
 const FAQ = [
