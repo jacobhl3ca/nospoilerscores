@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 const TITLE = "Spoiler-Free Sports Scores and Highlights | HideScore";
+// Kept under ~155 chars so Google doesn't truncate the tail of the description
+// (this DESC is reused verbatim for openGraph + twitter below). Dropped the
+// "results, headlines" restatement and "choose to" — "Scores and highlights
+// stay hidden until you reveal them" already carries the promise.
 const DESC =
-  "HideScore is a spoiler-free sports app for NBA, NFL, NHL, MLB, soccer, golf, and World Cup fans. Scores, results, headlines, and highlights stay hidden until you choose to reveal them.";
+  "HideScore is a spoiler-free sports app for NBA, NFL, NHL, MLB, soccer, golf, and World Cup fans. Scores and highlights stay hidden until you reveal them.";
 
 const FAQ: { q: string; a: string }[] = [
   {
