@@ -3811,6 +3811,7 @@ export default function HomeContent({
               className="inline-block transition-opacity hover:opacity-80"
               data-umami-event="install-googleplay-badge"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
             </a>
         )}
