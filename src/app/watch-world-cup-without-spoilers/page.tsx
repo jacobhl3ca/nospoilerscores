@@ -76,7 +76,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Is there a World Cup app?",
-    a: "HideScore is a free iOS app on the App Store and also works in any web browser at hidescore.com/worldcup. Both hide scores until you choose to reveal them.",
+    a: "HideScore is a free app on the App Store and on Google Play, and also works in any web browser at hidescore.com/worldcup. Both hide scores until you choose to reveal them.",
   },
   {
     q: "What time are 2026 World Cup matches in the US?",
@@ -137,7 +137,7 @@ export default function WatchWorldCupWithoutSpoilersPage() {
           HideScore&apos;s spoiler-free World Cup hub
         </Link>{" "}
         shows the entire schedule with every score hidden until you tap to reveal it. There is no login, no tracking,
-        and nothing to pay. It works in any browser at hidescore.com/worldcup and as a free iOS app, so you can check
+        and nothing to pay. It works in any browser at hidescore.com/worldcup and as a free app on iPhone and Android, so you can check
         what&apos;s on without risking the result.
       </p>
 
