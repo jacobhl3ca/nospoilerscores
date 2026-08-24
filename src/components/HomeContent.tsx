@@ -3811,8 +3811,14 @@ export default function HomeContent({
               className="inline-block transition-opacity hover:opacity-80"
               data-umami-event="install-googleplay-badge"
             >
+              {/* width matches the badge SVG's 138×40 intrinsic size so the
+                  browser can reserve the badge's box from the aspect ratio
+                  before the SVG loads — height alone left w-auto with no ratio,
+                  so the footer reflowed when the badge popped in (CLS). The
+                  h-10 w-auto classes still drive the rendered size, so it looks
+                  identical; this only supplies the space-reservation hint. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
+              <img src="/google-play-badge.svg" alt="Get it on Google Play" width={138} height={40} className="block h-10 w-auto" />
             </a>
         )}
 
