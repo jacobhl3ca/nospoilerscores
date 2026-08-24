@@ -642,6 +642,11 @@ export default function SettingsPanel({
       // season-kickoff banner too, so clear the per-kickoff dismissal list.
       // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
       kickoffBannersDismissed: undefined,
+      // Sibling of the two dismissal flags above: the footer's Google Play badge
+      // hides once the user dismisses it (read as `!prefs.playBadgeDismissed`), so
+      // a full reset — which restores every other dismissed banner/badge — left it
+      // hidden. Clearing to undefined restores the fresh-install "badge shown".
+      playBadgeDismissed: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
       shownLeagues: undefined,
