@@ -330,13 +330,13 @@ function applyOrder<T extends { label: string }>(sources: T[], order: string[] |
 // one slot has been emptied. Click repopulates that slot with the first
 // eligible league. Narrow column-shaped target so it visually slots into
 // the grid without dominating it.
-function AddColumnButton({ onClick }: { onClick: () => void }) {
+function AddColumnButton({ onClick, label = "Add a league column" }: { onClick: () => void; label?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title="Add a league column"
-      aria-label="Add a league column"
+      title={label}
+      aria-label={label}
       className="flex items-center justify-center rounded-lg cursor-pointer transition-colors"
       style={{
         width: "44px",
@@ -3207,9 +3207,9 @@ export default function HomeContent({
                 })}
                 {newsOnAddColumn && (
                   effectiveColCount === 1 ? (
-                    <div className="mt-2"><AddColumnButton onClick={newsOnAddColumn} /></div>
+                    <div className="mt-2"><AddColumnButton onClick={newsOnAddColumn} label="Add a news column" /></div>
                   ) : (
-                    <div className="flex items-start pt-7 shrink-0"><AddColumnButton onClick={newsOnAddColumn} /></div>
+                    <div className="flex items-start pt-7 shrink-0"><AddColumnButton onClick={newsOnAddColumn} label="Add a news column" /></div>
                   )
                 )}
               </div>
