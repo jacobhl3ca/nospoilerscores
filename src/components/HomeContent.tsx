@@ -3757,6 +3757,18 @@ export default function HomeContent({
               App Store
             </a>
           )}
+          {!isNativeApp && (
+            <a
+              href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:opacity-80"
+              style={{ color: "var(--text-muted)" }}
+              data-umami-event="install-googleplay"
+            >
+              Google Play
+            </a>
+          )}
         </div>
 
         {/* Compact custom Apple-logo pill — replaced by the footer text link
@@ -3781,20 +3793,22 @@ export default function HomeContent({
               <span>App Store</span>
             </a>
             */}
-        {/* Android download — HIDDEN until the Play Store closed test is
-                public. When it ships, this becomes the OFFICIAL Google Play
-                badge linking the Play listing (not the /HideScore.apk sideload).
-                Un-comment + swap href to the Play URL once it's live.
+        {/* Android download — live on Google Play since 2026-08-23, so the
+                badge is no longer hidden. Points at the Play listing, not the
+                /HideScore.apk sideload. Hidden inside the native shell, which
+                is already installed. */}
+        {!isNativeApp && (
             <a
               href="https://play.google.com/store/apps/details?id=com.jacobhl.hidescore"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Get HideScore on Google Play"
               className="inline-block transition-opacity hover:opacity-80"
+              data-umami-event="install-googleplay-badge"
             >
               <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
             </a>
-            */}
+        )}
 
         {/* Tip jar — temporarily hidden 2026-06-24; restore by un-commenting:
         <a
