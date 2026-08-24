@@ -421,12 +421,19 @@ let cachedBigInningSchedule: BigInningSchedule | null = null;
 // and the header slot is otherwise rendering a transparent spacer). By
 // construction it can never displace an existing italic subtitle, because it is
 // only consulted when `tiers` came back empty.
-function PlayoffSubtitle({ sport, selectedDate, games, onClick, fallbackText }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string }) {
+// `startsLabel` is the compact season-opener cue ("Starts 10/20"). It used to
+// render as its own <span> that REPLACED this component outright, which cost an
+// offseason NBA column its "Trades" link for the whole summer (Jacob 8/23). It
+// now enters as a base tier instead, so the widest-first probe below can offer
+// "Starts 10/20 · Trades" on a wide column and shed the promo first on a narrow
+// one. Only consulted when the column has no subtitle of its own — a playoff
+// round or a Big Inning line is live information and outranks a start date.
+function PlayoffSubtitle({ sport, selectedDate, games, onClick, fallbackText, startsLabel }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string; startsLabel?: string }) {
   if (isDemoModeActive()) return null;
-  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} fallbackText={fallbackText} />;
+  return <PlayoffSubtitleInner sport={sport} selectedDate={selectedDate} games={games} onClick={onClick} fallbackText={fallbackText} startsLabel={startsLabel} />;
 }
 
-function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackText }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string }) {
+function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackText, startsLabel }: { sport: Sport; selectedDate: string; games?: Game[]; onClick?: () => void; fallbackText?: string; startsLabel?: string }) {
   const ref = useRef<HTMLElement>(null);
   const [bigInningSchedule, setBigInningSchedule] = useState<BigInningSchedule | null>(cachedBigInningSchedule);
 
@@ -472,7 +479,9 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
   }, [needsBigInningTick]);
 
   const result = getPlayoffSubtitle(sport, selectedDate, games, bigInningSchedule);
-  const baseTiers = result?.tiers ?? [];
+  // A real subtitle (playoff round, Big Inning) wins; the start cue only fills an
+  // otherwise empty slot, so this can never displace live information.
+  const baseTiers = result?.tiers ?? (startsLabel ? [startsLabel] : []);
   const tradePromo = tradeBoardPromo(sport);
   // Widest-first: every "<label> · Trades" pairing, then the bare labels. The
   // probe takes the first that fits, so the promo is preferred but is the first
@@ -1547,17 +1556,22 @@ export default function LeagueColumn({
     <div className="flex flex-col items-center gap-0.5 py-6 sm:py-8">{seasonOpenerLines}</div>
   ) : null;
 
-  // Header variant: worn ABOVE the upcoming slate once the opener is close
-  // enough that the ranged lookahead returns opening night (see the
-  // openerInRange gate in espn.ts fetchAllLeagues). The fixture cards answer
-  // "who plays" but not "is this the start of the season", and dropping the
-  // line entirely the day the slate appears would silently lose that. Tighter
-  // padding than the standalone block — it is a caption here, not the body.
-  // Null whenever seasonOpener is (i.e. all season long), so an ordinary
-  // mid-season off-day lookahead is untouched.
-  const seasonOpenerHeader = seasonOpenerLines ? (
-    <div className="flex flex-col items-center gap-0.5 pb-1 sm:pb-2">{seasonOpenerLines}</div>
-  ) : null;
+  // Same information as the block above, in the column HEADER, for the case
+  // where the ranged lookahead already returns opening night (see the
+  // openerInRange gate in espn.ts fetchAllLeagues) so the body is a real slate.
+  // Until 8/23 the current view wore a two-line "Season starts Oct 20 / 8 weeks
+  // away" banner ABOVE that slate while the past tab wore a one-line
+  // "Starts 10/20" in the header — same league, same day, two different
+  // answers, and on a phone the banner pushed the very fixtures it was
+  // captioning below the fold (Jacob 8/23). Both tabs now use the header cue,
+  // which also lets the trade-board promo back in as "Starts 10/20 · Trades".
+  // Gated on seasonOpener (null all season long), so an ordinary mid-season
+  // off-day lookahead can never caption itself "Starts".
+  const openerSlateDate = !isPastDate && seasonOpener && league.games.length === 0
+    && !(league.previousGameDay?.games?.length) && league.nextGameDay?.games?.length
+    ? formatDateCompact(league.nextGameDay.date)
+    : null;
+  const headerStartsLabel = notStartedDate ?? openerSlateDate;
 
   return (
     <div
@@ -1767,10 +1781,8 @@ export default function LeagueColumn({
             // Big Inning line) so the F1/UFC card tops line up with neighbours
             // instead of riding ~16px higher.
             <span aria-hidden className="text-[9px] sm:text-[10px] mt-0.5 block whitespace-nowrap">{" "}</span>
-          ) : notStartedDate ? (
-            <span className="text-[9px] sm:text-[10px] mt-0.5 whitespace-nowrap block max-w-full overflow-hidden text-center pr-0.5 italic" style={{ color: "var(--text-muted)" }}>Starts {notStartedDate}</span>
           ) : (
-            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : undefined} fallbackText={lastPlayedLabel} />
+            <PlayoffSubtitle sport={league.sport} selectedDate={selectedDate} games={league.games.length ? league.games : (league.previousGameDay?.games ?? [])} onClick={league.sport === "fifa" ? onShowGroups : undefined} fallbackText={lastPlayedLabel} startsLabel={headerStartsLabel ? `Starts ${headerStartsLabel}` : undefined} />
           )}
         </div>
       )}
@@ -1847,8 +1859,8 @@ export default function LeagueColumn({
             )
           ) : league.nextGameDay ? (
             <div className="flex flex-col gap-1.5 sm:gap-2">
-              {/* Offseason-with-fixtures only (null in season) — see above. */}
-              {seasonOpenerHeader}
+              {/* No banner here: the offseason opener rides in the header as
+                  "Starts 10/20" — see headerStartsLabel above. */}
               {/* No game today → the lead upcoming game is a full card, the
                   rest compact (NBA/NHL); other leagues stay all-full. */}
               {renderUpcomingSlate(league.nextGameDay.games, true)}
