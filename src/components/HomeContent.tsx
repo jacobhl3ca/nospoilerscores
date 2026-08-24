@@ -3799,7 +3799,7 @@ export default function HomeContent({
                 the dismissal before hydration would flash the badge back on for
                 one paint on every reload. */}
         {!isNativeApp && !hasIosAccountUse && (
-          <div className="flex items-center justify-center gap-3 flex-wrap">
+          <div className="flex items-center justify-center gap-1 flex-wrap">
             <a
               href="https://apps.apple.com/app/hidescore/id6766885311"
               target="_blank"
@@ -3823,7 +3823,14 @@ export default function HomeContent({
                   className="inline-block transition-opacity hover:opacity-80"
                   data-umami-event="install-googleplay-badge"
                 >
-                  <img src="/google-play-badge.svg" alt="Get it on Google Play" height={40} className="block h-10 w-auto" />
+                  <img src="/google-play-badge.png" alt="Get it on Google Play" width={155} height={59.5}
+                       /* Google's own artwork, unmodified. Its 646x250 canvas carries 41px
+                          of required clear space on every side, so the visible pill is 168 of
+                          250. Rendering the whole file at 59.5px puts that pill at exactly 40,
+                          matching the App Store badge beside it; dropping it in at 40 like a
+                          normal badge would shrink the pill to 27 and make Play look like the
+                          lesser option. */
+                       className="block w-auto h-[59.5px]" />
                 </a>
                 {isSignedIn && (
                   <button
@@ -3832,7 +3839,7 @@ export default function HomeContent({
                     data-umami-event="play-badge-dismiss"
                     aria-label="Hide the Google Play badge"
                     title="Hide"
-                    className="absolute left-full ml-1 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
+                    className="absolute left-full -ml-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full cursor-pointer transition-colors"
                     style={{ color: "var(--text-muted)" }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-card-hover)"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
