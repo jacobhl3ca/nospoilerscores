@@ -223,6 +223,12 @@ export interface Preferences {
   // August's Premier League banner doesn't silence next August's, and capped to
   // the last dozen keys so this can't grow without bound in a synced prefs blob.
   kickoffBannersDismissed?: string[];
+  // The footer's Google Play badge, hidden by its own dismiss control. Only
+  // signed-in users are given that control, because the dismissal rides this
+  // prefs blob and only a signed-in account pushes the blob to the server — a
+  // signed-out dismissal would be silently device-only, which is not what
+  // "stays removed on their account" is supposed to mean.
+  playBadgeDismissed?: boolean;
   newsThirdLeague?: Sport; // user-chosen league for news col 3 (undefined = top headlines)
   // The generic "News" column is independent of scores slot 3. It appears by
   // default; true means the user explicitly removed it from the news board.
