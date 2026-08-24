@@ -113,6 +113,15 @@ const SAFE = [
   "Late collapse during the run-in sinks their playoff hopes",
   "Dramatic middle-order collapse as they lose six for twelve",
   "Defensive collapse at the death gifts City the title",
+  // The subject-verb "<innings/deal/bid> collapsed" form of the same idiom — a
+  // side, a transfer, or a title bid falling apart must not read as a medical
+  // collapse.
+  "The innings collapsed on day four as India romp home",
+  "The run chase collapsed at the death and Australia sneak it",
+  "United's title bid collapsed at Anfield with a late defeat",
+  "The deal collapsed during negotiations, agent confirms",
+  "Striker's transfer collapsed at the eleventh hour",
+  "Their defence collapsed in the second half at the Emirates",
   // Figurative "arrest the <slide/slump/…>" — a team halting a bad run must not
   // read as a criminal arrest.
   "Boss desperate to arrest the slide after four straight defeats",
@@ -204,6 +213,15 @@ test("the '<performance> collapse' idiom strip does not swallow a real medical c
   assert.equal(sensitiveCategoryOf("Midfielder collapsed on the pitch, taken to hospital"), "medical");
   assert.equal(sensitiveCategoryOf("Player collapsed during the warmup and was rushed to hospital"), "medical");
   assert.equal(sensitiveCategoryOf("Coach collapsed at the training ground, in critical condition"), "medical");
+});
+
+test("the '<innings/deal> collapsed' idiom strip does not swallow a real medical collapse", () => {
+  // The subject-verb strip removes only a non-person subject collapsing (an
+  // innings, a deal, a bid). A PERSON collapsing (a batsman, a keeper — none of
+  // the stripped nouns) must still trip the `medical` pattern, even when a
+  // collapse-idiom noun sits elsewhere in the same headline.
+  assert.equal(sensitiveCategoryOf("Batsman collapsed at the crease and was stretchered off"), "medical");
+  assert.equal(sensitiveCategoryOf("Keeper collapsed on the pitch as the run chase reached its climax"), "medical");
 });
 
 test("the 'on life support' idiom strip does not swallow a real medical event", () => {

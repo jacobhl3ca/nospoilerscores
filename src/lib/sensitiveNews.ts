@@ -96,6 +96,19 @@ const IDIOM = new RegExp(
     // the feed's other medical cues (rushed to hospital, critical condition,
     // stretchered off) even if this phrase is stripped.
     "(batting|bowling|top[ -]?order|middle[ -]?order|lower[ -]?order|first[ -]?half|second[ -]?half|third[ -]?quarter|fourth[ -]?quarter|defensive|offensive|late|dramatic|stunning|spectacular|shock|shocking|epic|historic|total|complete) collapse",
+    // The SUBJECT-VERB partner to the "<modifier> collapse" NOUN strip above: a
+    // cricket innings/run-chase, a transfer/takeover, or a title bid "collapsing"
+    // is the same fall-apart idiom in verb form — the figurative use of the medical
+    // `collapsed? (on|during|at|mid)` pattern, which pulled ordinary match reports
+    // and transfer news under "serious illness" for anyone with the main filter on
+    // ("the innings collapsed on day four", "the run chase collapsed at the death",
+    // "the deal collapsed during talks", "United's title bid collapsed at Anfield").
+    // Stripped ONLY when a non-person subject is what collapsed (an innings, a
+    // chase, a deal, a bid, a defence — never a player), so a real "midfielder
+    // collapsed on the pitch" / "player collapsed at training" (a PERSON, none of
+    // these nouns) still matches. "stand" is deliberately OUT — a literal grandstand
+    // collapsing is a real disaster the feed should keep flagged.
+    "(innings|run.?chase|chase|batting|bowling|top.?order|middle.?order|lower.?order|partnership|deal|move|transfer|takeover|merger|talks|negotiations|bid|campaign|challenge|defen[cs]e|resistance) collapse[sd]?",
     // ⚠️ Do NOT add a bare letter here. "…|b)" once matched "killed b", which
     // stripped "killed by" out of every real death headline before the patterns
     // ran ("killed by an ICE agent" scored as ordinary sports talk).
