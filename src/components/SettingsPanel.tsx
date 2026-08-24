@@ -12,10 +12,6 @@ import {
 } from "@/lib/preferences";
 import { getAuthState, cachedAuthState, hasNativeGoogleBridge, signInWithApple, signInWithGoogle, requestEmailCode, verifyEmailCode, signOut, deleteAccount, type AuthState } from "@/lib/prefsSync";
 
-// The one key that turns HideScore's self-hosted Umami off in this browser.
-// NoTrackToggle (/notrack) owns the same key — keep the two in step.
-const UMAMI_DISABLED_KEY = "umami.disabled";
-
 interface LeagueOption {
   sport: Sport;
   label: string;
@@ -221,30 +217,6 @@ export default function SettingsPanel({
   // Auto resolves to. Computed at render (client) so it reflects their device.
   let deviceTimeZone = "";
   try { deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* ignore */ }
-  // Analytics opt-out, mirrored from the SAME localStorage key the /notrack
-  // page writes and the Umami script reads — this is a second door onto one
-  // switch, not a second setting. Deliberately not in `prefs`: it must not sync
-  // to the account or ride a settings-share link, because it is a per-browser
-  // choice about that browser. Read on open (not on mount) so the toggle is
-  // right even if /notrack was used in another tab since.
-  const [noTrack, setNoTrack] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    try { setNoTrack(window.localStorage.getItem(UMAMI_DISABLED_KEY) === "1"); }
-    catch { setNoTrack(false); }
-  }, [open]);
-  const applyNoTrack = (next: boolean) => {
-    try {
-      if (next) window.localStorage.setItem(UMAMI_DISABLED_KEY, "1");
-      else window.localStorage.removeItem(UMAMI_DISABLED_KEY);
-      setNoTrack(next);
-    } catch {
-      // Private mode / storage disabled: re-read rather than assume the write
-      // took, so the checkbox never claims a state that isn't persisted.
-      try { setNoTrack(window.localStorage.getItem(UMAMI_DISABLED_KEY) === "1"); }
-      catch { setNoTrack(false); }
-    }
-  };
   // ZIP → time zone helper state (Settings → Time zone).
   const [zip, setZip] = useState("");
   const [zipBusy, setZipBusy] = useState(false);
@@ -1498,19 +1470,6 @@ export default function SettingsPanel({
               </p>
             </div>
           )}
-
-          {/* The opt-out was live at /notrack the whole time, but that page is
-              noindex and linked only from the privacy policy — so in practice
-              nobody could find it. A visible switch is also the thing App
-              Review and privacy regulators look for. */}
-          <Section title="Privacy">
-            <ToggleRow
-              label="Don't count my visits"
-              hint="Turns off our self-hosted traffic measurement in this browser. Set per browser; clearing site data resets it."
-              checked={noTrack}
-              onChange={applyNoTrack}
-            />
-          </Section>
 
           {/* Legal row — last, and deliberately quiet: muted, small, underlined
               text, never a button. Privacy previously lived ONLY in the page
