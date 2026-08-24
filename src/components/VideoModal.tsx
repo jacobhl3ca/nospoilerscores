@@ -429,6 +429,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // the bottom Prev/Next buttons and the desktop ← → keys). Inside a gallery it
   // walks the pictures first and only leaves the post at either end, so a swipe
   // never skips over photos the user hasn't seen.
+  // The modal ROOT — see the fullscreen block further down. Declared up here
+  // because the paging helpers below hand fullscreen to it.
+  const fsHostRef = useRef<HTMLDivElement>(null);
+  // Paging between posts must not drop fullscreen. Each post type mounts a
+  // DIFFERENT player (YouTube wrapper / native <video> / image / text card), so
+  // when the fullscreen element is one that's about to unmount — the native
+  // <video> the browser's own fullscreen button targets, say — hand fullscreen
+  // to the root FIRST. Re-requesting on another element while already fullscreen
+  // TRANSFERS it with no exit; letting the old one unmount instead drops the
+  // browser all the way back out, which is what made a Reddit text post kick you
+  // out mid-column (Jacob 8/23).
+  const carryFullscreen = useCallback(() => {
+    const fsEl = document.fullscreenElement;
+    const host = fsHostRef.current;
+    if (!fsEl || !host || fsEl === host || !host.contains(fsEl)) return;
+    host.requestFullscreen?.().catch(() => {});
+  }, []);
+  const goPrev = useCallback(() => { if (!onPrev) return; carryFullscreen(); onPrev(); }, [onPrev, carryFullscreen]);
+  const goNext = useCallback(() => { if (!onNext) return; carryFullscreen(); onNext(); }, [onNext, carryFullscreen]);
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
   const onSwipeStart = (e: React.TouchEvent) => {
     swipeRef.current = e.touches.length === 1
@@ -446,10 +465,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     if (dx < 0) {
       if (stepGallery(1)) return;
-      onNext?.();
+      goNext();
     } else {
       if (stepGallery(-1)) return;
-      onPrev?.();
+      goPrev();
     }
   };
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -586,12 +605,19 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // "fade it out during playback" scheme leaks the title (the whole point of
   // the app is no spoilers). We keep it permanently covered and sized tight to
   // the title block so it costs almost no footage.
-  // Fullscreen. nativeFs tracks the Fullscreen API on the player WRAPPER —
-  // fullscreening the wrapper (not the bare iframe) keeps the spoiler mask and
-  // the control strip on top, so YouTube's title stays covered in fullscreen
-  // too. fakeFs is the CSS-overlay fallback for iPhone Safari / the iOS app's
-  // WKWebView, where element fullscreen on a non-<video> element doesn't exist.
-  const fsWrapRef = useRef<HTMLDivElement>(null);
+  // Fullscreen. nativeFs tracks the Fullscreen API on the modal ROOT — never on
+  // the bare iframe, so the spoiler mask and the control strip ride along and
+  // YouTube's title stays covered in fullscreen too.
+  //
+  // The root is also the ONLY element that survives every post type: the
+  // player, the image lightbox and the text card are sibling branches that
+  // mount and unmount underneath it. Fullscreening the player wrapper meant
+  // paging a Reddit column from a clip onto a text post pulled the fullscreen
+  // element out of the DOM, and the browser dropped straight back out of
+  // fullscreen. Hosting it on the root keeps fullscreen across the whole column
+  // (Jacob 8/23). fakeFs is the CSS-overlay fallback for iPhone Safari / the
+  // iOS app's WKWebView, where element fullscreen on a non-<video> element
+  // doesn't exist.
   const [nativeFs, setNativeFs] = useState(false);
   const [fakeFs, setFakeFs] = useState(false);
   const fsActive = nativeFs || fakeFs;
@@ -923,14 +949,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     setVolLevel(Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * 100);
   }, [setVolLevel]);
 
-  // Toggle fullscreen. For YouTube we expand the WRAPPER (so the spoiler mask
-  // and control bar ride along and the title stays hidden); native element
-  // fullscreen first, CSS-overlay fallback on iOS where it's unavailable.
-  // HLS/embed keep plain element fullscreen — those have no spoiler title.
+  // Toggle fullscreen. YouTube, the image lightbox and Reddit text posts all
+  // expand the modal ROOT (so the spoiler mask, control bar and pager ride
+  // along, the title stays hidden, and stepping between post types doesn't drop
+  // out of fullscreen); native element fullscreen first, CSS-overlay fallback on
+  // iOS where it's unavailable. HLS/embed keep plain element fullscreen — those
+  // have no spoiler title and want the browser's own native player chrome.
   const toggleFullscreen = useCallback(() => {
-    if (!ytMode) {
+    if (hlsMode || embedMode) {
       if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-      const el = (hlsMode ? videoRef.current : embedMode ? iframeRef.current : null) as
+      const el = (hlsMode ? videoRef.current : iframeRef.current) as
         (HTMLElement & { webkitEnterFullscreen?: () => void; webkitRequestFullscreen?: () => void }) | null;
       if (!el) return;
       if (typeof el.requestFullscreen === "function") el.requestFullscreen().catch(() => {});
@@ -940,16 +968,16 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     }
     if (fakeFs) { setFakeFs(false); return; }
     if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
-    const wrap = fsWrapRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
-    if (!wrap) return;
-    if (typeof wrap.requestFullscreen === "function") {
-      wrap.requestFullscreen().catch(() => setFakeFs(true));
-    } else if (typeof wrap.webkitRequestFullscreen === "function") {
-      wrap.webkitRequestFullscreen();
+    const host = fsHostRef.current as (HTMLDivElement & { webkitRequestFullscreen?: () => void }) | null;
+    if (!host) return;
+    if (typeof host.requestFullscreen === "function") {
+      host.requestFullscreen().catch(() => setFakeFs(true));
+    } else if (typeof host.webkitRequestFullscreen === "function") {
+      host.webkitRequestFullscreen();
     } else {
       setFakeFs(true); // iOS Safari / WKWebView — no element fullscreen
     }
-  }, [ytMode, hlsMode, embedMode, fakeFs]);
+  }, [hlsMode, embedMode, fakeFs]);
 
   // ── Double-tap-to-seek on the video surface (mobile) ──────────────────
   // Tapping the left/right side of the clip jumps ∓5s — the gesture every
@@ -1009,7 +1037,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   useEffect(() => {
     const onFsChange = () => {
       const fsEl = (document.fullscreenElement || (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement) ?? null;
-      const active = !!fsEl && fsEl === fsWrapRef.current;
+      const active = !!fsEl && fsEl === fsHostRef.current;
       setNativeFs(active);
       if (!active) fsExitAtRef.current = Date.now();
     };
@@ -1049,8 +1077,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // Inside a gallery the arrows walk its pictures first (same rule as
         // swipe), then continue on to the neighbouring post at either end.
         if (stepGallery(e.key === "ArrowLeft" ? -1 : 1)) { e.preventDefault(); return; }
-        if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); onPrev(); }
-        else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); onNext(); }
+        if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); goPrev(); }
+        else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); goNext(); }
         // hlsMode included: MLB/Reddit direct streams seek through the <video>
         // element now (see seekBy), so ← → skip on them like they do on YouTube.
         else if (ytMode || hlsMode) { e.preventDefault(); seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP); }
@@ -1067,7 +1095,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, hlsMode, seekBy, togglePlay, onPrev, onNext, stepGallery]);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, hlsMode, seekBy, togglePlay, onPrev, onNext, goPrev, goNext, stepGallery]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -1633,7 +1661,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Space reserved below the fullscreen video for the control bar — drops to a
   // sliver when the controls are hidden so the video fills (mobile fullscreen).
   const FS_BAR_RESERVE = controlsHidden ? 8 : 64;
-  const fsMediaWidth = `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`;
+  // The YouTube path draws OUR control bar under the video, so it gives back
+  // that strip. HLS/embed use the browser's native player chrome inside the
+  // frame, so they take the whole screen.
+  const fsMediaWidth = ytMode
+    ? `min(100vw, calc((100vh - ${FS_BAR_RESERVE}px) * 16 / 9))`
+    : `min(100vw, calc(100vh * 16 / 9))`;
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
   const hasPager = !!(onPrev || onNext);
@@ -1710,13 +1743,13 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // reach; desktop gets subtle side chevrons so the footer links never overlap.
   const mobilePager = hasPager ? (
     <div className="fixed left-1/2 -translate-x-1/2 z-[60] flex sm:hidden items-center justify-center gap-2" style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }} onClick={(e) => e.stopPropagation()}>
-      <button type="button" onClick={(e) => { e.stopPropagation(); onPrev?.(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
+      <button type="button" onClick={(e) => { e.stopPropagation(); goPrev(); }} disabled={!onPrev} aria-label="Previous post" title="Previous post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         Prev
       </button>
-      <button type="button" onClick={(e) => { e.stopPropagation(); onNext?.(); }} disabled={!onNext} aria-label="Next post" title="Next post"
+      <button type="button" onClick={(e) => { e.stopPropagation(); goNext(); }} disabled={!onNext} aria-label="Next post" title="Next post"
         className="inline-flex items-center gap-1 px-4 py-2 rounded-full text-xs font-semibold text-white/90 hover:text-white disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.65)", border: "1px solid rgba(255,255,255,0.25)" }}>
         Next
@@ -1727,7 +1760,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const desktopPager = hasPager ? (
     <>
       <button type="button"
-        onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
+        onClick={(e) => { e.stopPropagation(); goPrev(); }}
         disabled={!onPrev}
         aria-label="Previous post"
         title="Previous post"
@@ -1737,7 +1770,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
       </button>
       <button type="button"
-        onClick={(e) => { e.stopPropagation(); onNext?.(); }}
+        onClick={(e) => { e.stopPropagation(); goNext(); }}
         disabled={!onNext}
         aria-label="Next post"
         title="Next post"
@@ -1751,6 +1784,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
 
   return (
     <div
+      // This is also the fullscreen host (see fsHostRef) — it outlives every
+      // per-mode branch below, so fullscreen survives paging across a mixed
+      // Reddit column of clips, images and text posts.
+      ref={fsHostRef}
       // Media modes (image / video) are capped to fit the viewport, so they
       // never scroll — only a long Reddit text post scrolls (its card scrolls
       // internally, and the wrapper below can grow past the viewport for it).
@@ -2018,10 +2055,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             </div>
           </div>
         ) : ytMode ? (
-          // YouTube clip. The wrapper is what we fullscreen (so the mask + the
-          // control bar come along and the title stays covered in fullscreen).
+          // YouTube clip. In fullscreen this wrapper spreads to cover the screen
+          // (the mask + the control bar come along, so the title stays covered);
+          // the element handed to the Fullscreen API is the modal root above.
           <div
-            ref={fsWrapRef}
             // A click on the dark margin BESIDE the centred video (target is this
             // wrapper itself, not a child) dismisses when not fullscreen; clicks
             // bubbling up from the player/controls still stop here so they keep
@@ -2530,6 +2567,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             </>)}
           </div>
         ) : (
+          // Direct stream / third-party embed. Same fullscreen treatment as the
+          // YouTube wrapper: in fullscreen this spreads over the padded, pager-
+          // reserved layout so the frame really fills the screen rather than
+          // sitting in the middle of it.
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={fsActive ? {
+              position: "fixed", inset: 0, zIndex: 10000, background: "#000",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            } : undefined}
+          >
           <div ref={containerRef} className="group relative mx-auto w-full rounded-lg overflow-hidden bg-black" style={{ width: mediaFrameWidth, aspectRatio: "16 / 9" }} onClick={(e) => e.stopPropagation()}>
             {hlsMode ? (
               <video
@@ -2601,6 +2649,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 </button>
               </div>
             )}
+          </div>
           </div>
         )}
         {/* Footer — headline + source/copy actions. The pre-7/13 look Jacob
