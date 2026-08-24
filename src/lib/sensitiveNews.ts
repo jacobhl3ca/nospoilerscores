@@ -144,6 +144,22 @@ const IDIOM = new RegExp(
     // the boards/net/party is basketball, hockey and playoff talk.
     "collision course",
     "crash(es|ed|ing)? (the|a) ([\\w'-]+ ){0,4}(boards|net|party|glass|crease|gate|rim|presser|press conference|event|meeting|interview|stage|wedding)",
+    // A big-match PREVIEW framed as a "collision" — "a collision of styles",
+    // "heavyweight collision", "a collision of titans", "when two philosophies
+    // collided" — is the staple combat-sports / marquee-fixture buildup, not
+    // someone getting hurt. The injury filter's bare `collision`/`collided`
+    // pattern pulled these ordinary previews out of the feed for anyone with the
+    // main filter on. Stripped ONLY for the figurative matchup framings: a
+    // "collision of/between <abstract noun>" (styles, titans, philosophies,
+    // eras…), a matchup-adjective "<stylistic|marquee|heavyweight|…> collision",
+    // or one of those abstract nouns "collided". Every noun here is an
+    // abstraction or a whole-team label, never a body part or a player — so a
+    // real "violent collision at the plate", "collision of heads", "the two
+    // players collided", or a bare "collided" (a physical event) still matches
+    // injury. `course` stays with its own entry above.
+    "collision (of|between) (styles?|titans|heavyweights|giants|philosoph(?:y|ies)|ideolog(?:y|ies)|cultures?|generations?|eras?|worlds?|egos?|systems?|approaches?|identities)",
+    "(stylistic|tactical|philosophical|ideological|generational|cultural|marquee|blockbuster|heavyweight|title|top.?two|number.?one|east.?west) collision",
+    "(styles?|titans|heavyweights|giants|philosoph(?:y|ies)|ideolog(?:y|ies)|cultures?|egos?|systems?|worlds?|approaches?|generations?) (have |had |finally |once )?collided",
     // "crashed out of the World Cup / the tournament / the Champions League /
     // the playoffs" is the universal knockout-elimination idiom (soccer, tennis,
     // cricket, darts, snooker) — it has nothing to do with a wreck, yet the bare
