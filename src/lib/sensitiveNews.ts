@@ -247,6 +247,17 @@ const IDIOM = new RegExp(
     "(murder|murdered|murdering|killed|killing) (them|him|her|it|that)",
     "drop dead",
     "over my dead body",
+    // Alonzo Mourning — Hall-of-Fame center and current Miami Heat executive —
+    // is a PERSON's name, not the grief word. His surname is the `-ing` form of
+    // the bare `mourn(s|ing|ed)?` death pattern, so ordinary Heat news that
+    // merely mentions him ("Alonzo Mourning honored at halftime", "Zo Mourning
+    // on the rebuild") scored as "death or tragedy" and vanished for anyone with
+    // the main "Hide upsetting news" toggle on. Stripped ONLY when his first name
+    // or the "Zo" nickname precedes it, so genuine grief phrasing — "the club is
+    // in mourning", "a day of mourning", "mourning the loss" — carries no such
+    // qualifier and still matches death. A real death headline about him ("Alonzo
+    // Mourning died at …") also keeps its own stronger cue (died) after the strip.
+    "(alonzo|zo) mourning",
     // A team "on a collision course" is a standings story, not a crash. Crashing
     // the boards/net/party is basketball, hockey and playoff talk.
     "collision course",

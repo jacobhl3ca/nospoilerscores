@@ -259,6 +259,11 @@ const SAFE = [
   "United look hostage to fortune with that lineup gamble",
   "A season held hostage by injuries to its best players",
   "Young side looked hostage to their nerves in the second half",
+  // Alonzo "Zo" Mourning — a person's surname, not the grief word — must not
+  // read as "death or tragedy" when Heat news merely mentions him.
+  "Alonzo Mourning honored at halftime as the Heat retire his number",
+  "Zo Mourning weighs in on the Heat's rebuild",
+  "Alonzo Mourning reflects on his Hall of Fame career",
 ];
 
 for (const headline of SAFE) {
@@ -304,6 +309,17 @@ test("the 'dying quail/seagull' bloop-hit idiom strip does not swallow a real de
   // context still reads "dying of/in" and must trip the death pattern.
   assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
   assert.equal(sensitiveCategoryOf("Legend dying of cancer, family confirms"), "death");
+});
+
+test("the 'Alonzo/Zo Mourning' name strip does not swallow genuine grief", () => {
+  // Only the first-name-qualified surname is stripped — real grief phrasing
+  // ("in mourning", "a day of mourning", "mourning the loss") carries no such
+  // qualifier and must still trip the death pattern, and a real death headline
+  // about the man himself keeps its own stronger cue after the strip.
+  assert.equal(sensitiveCategoryOf("The club is in mourning after the tragic news"), "death");
+  assert.equal(sensitiveCategoryOf("A day of mourning at the stadium"), "death");
+  assert.equal(sensitiveCategoryOf("The sport is mourning the loss of a legend"), "death");
+  assert.equal(sensitiveCategoryOf("Alonzo Mourning died at 55, the Heat confirm"), "death");
 });
 
 test("the 'dying to/for' eagerness idiom strip does not swallow a real death", () => {
