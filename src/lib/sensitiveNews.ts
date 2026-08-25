@@ -118,6 +118,18 @@ const IDIOM = new RegExp(
     // late red card that swung the derby", "the late save from the keeper" — and
     // carry no death sense, so they join the strip on the same reasoning.
     "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
+    // "the late bloomer / the late developer / the late starter" — the staple
+    // profile framing for a player who came good later than usual (a career
+    // narrative, a draft-sleeper feature), never a deceased person. Like the
+    // "the late <game event>" strip above, this trips the bare `the late` death
+    // pattern (meant for "the late <Name>", i.e. the deceased), so without it the
+    // main "Hide upsetting news" toggle silently pulled these ordinary features
+    // under "death or tragedy". Stripped ONLY before a late-career player-type
+    // noun, so a genuine "the late <Name>" / "the late great" / "the late owner/
+    // coach/legend" (none of these nouns) still matches death — the same scoping
+    // the game-event strip above uses. Note "a late bloomer" (article "a") never
+    // tripped `the late` to begin with; only the "the late …" form needed this.
+    "the late (bloomers?|developers?|starters?)",
     // "fatal error / fatal mistake / fatal blow to their title hopes" — the
     // figurative use dwarfs the literal one, and it tripped the bare `fatal`
     // death pattern. A real fatality still reads "fatal crash" / "fatally

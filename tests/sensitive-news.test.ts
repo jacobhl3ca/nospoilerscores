@@ -109,6 +109,12 @@ const SAFE = [
   "The late red card to Smith changed the whole game",
   "Dramatic finish decided by the late save from Courtois",
   "The late sending-off left them a man down",
+  // "the late bloomer/developer/starter" late-career player-type idiom — a
+  // player who peaked late, not a death.
+  "The late bloomer finally gets his shot in the starting XI",
+  "How the late bloomer became the league MVP",
+  "Profile: the late developer who took the long road to the top",
+  "Once the late starter, he's now the ace of the rotation",
   // Figurative "fatal <mistake>" — must not read as death.
   "Fatal error at the back gifts Arsenal the win",
   "A fatal blow to their title hopes after the derby loss",
@@ -299,6 +305,10 @@ test("the 'the late <game event>' idiom strip does not swallow a real death", ()
   // Likewise the on-field-incident nouns (own goal / red card / save) must not
   // shield a real death sitting next to one of them.
   assert.equal(sensitiveCategoryOf("Referee who gave the late red card has died, league says"), "death");
+  // And the player-type nouns (bloomer/developer/starter) must not shield a real
+  // "the late <person>" naming the deceased.
+  assert.equal(sensitiveCategoryOf("Tributes for the late Gordon Banks, the goalkeeper who died today"), "death");
+  assert.equal(sensitiveCategoryOf("The late developer of the club's academy has passed away"), "death");
 });
 
 test("the 'heart attack <finish>' idiom strip does not swallow a real cardiac event", () => {
