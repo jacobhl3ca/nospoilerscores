@@ -92,6 +92,12 @@ const SAFE = [
   "Chiefs-Bills headlines the late window on Sunday",
   "How to watch the late slate of Week 12",
   "Lakers and Warriors clash in the late fixture tonight",
+  // "the late <on-field incident>" — own goal / red card / sending-off / save is
+  // a match-report staple, not a death.
+  "Rovers snatch it with the late own goal at the Kop end",
+  "The late red card to Smith changed the whole game",
+  "Dramatic finish decided by the late save from Courtois",
+  "The late sending-off left them a man down",
   // Figurative "fatal <mistake>" — must not read as death.
   "Fatal error at the back gifts Arsenal the win",
   "A fatal blow to their title hopes after the derby loss",
@@ -259,6 +265,9 @@ test("the 'the late <game event>' idiom strip does not swallow a real death", ()
   // The scheduling nouns added to the strip ("the late game/window/…") must not
   // punch a hole in a real death that happens to sit beside one of them.
   assert.equal(sensitiveCategoryOf("Legendary broadcaster dies before the late game"), "death");
+  // Likewise the on-field-incident nouns (own goal / red card / save) must not
+  // shield a real death sitting next to one of them.
+  assert.equal(sensitiveCategoryOf("Referee who gave the late red card has died, league says"), "death");
 });
 
 test("the 'heart attack <finish>' idiom strip does not swallow a real cardiac event", () => {
