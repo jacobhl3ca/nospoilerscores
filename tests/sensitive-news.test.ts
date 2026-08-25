@@ -35,6 +35,7 @@ const SENSITIVE: [string, string][] = [
   ["Rookie in hospital after dislocating his ankle", "injury"],
   ["Defensive tackle spits on the quarterback and is ejected", "violence"],
   ["Star pitcher opens up about his overdose", "selfharm"],
+  ["Beloved former captain dying in hospice, club confirms", "death"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
@@ -81,6 +82,11 @@ const SAFE = [
   "Rookie dying to prove himself in his first start",
   "Fans dying for a win after six straight defeats",
   "He's dying for another shot at the title",
+  // "a dying breed" / "a dying art" rarity idiom — a style or player type
+  // becoming rare must not read as death.
+  "Old-fashioned target men are a dying breed in the modern game",
+  "The dying art of the sweeper keeper is making a comeback",
+  "One-club players are a dying breed these days",
   // "the late <game event>" late-drama idiom — must not read as death.
   "Liverpool snatch the late winner at Anfield",
   "Arsenal rescue a point with the late equaliser",
