@@ -93,8 +93,17 @@ export async function fetchCuratedBoxingEvent(date?: string): Promise<EventFetch
     if (!chosen) return EMPTY;
 
     const now = Date.now();
+    // Curated dates are the fight's LOCAL calendar day, but dateMs anchors each
+    // to noon UTC, so `endDate + DAY_MS/2` closed the live window at endDate
+    // 24:00 UTC — 5 pm PT / 8 pm ET on fight day. A US card's main event runs in
+    // the evening local time, i.e. the late-night/early-morning UTC of the NEXT
+    // day, so from ~5 pm PT onward the tile flipped to "Final" (and surfaced the
+    // finished-fight highlight button) while the fight was still ahead or under
+    // way — spoiler-adjacent. Extend the tail a full day to endDate+1 12:00 UTC
+    // (≈ next-morning local) so it stays "Live" through a late US main event and
+    // only reads "Final" the following morning. The "pre" edge is unchanged.
     const starts = dateMs(chosen.startDate) - DAY_MS / 2;
-    const ends = dateMs(chosen.endDate) + DAY_MS / 2;
+    const ends = dateMs(chosen.endDate) + DAY_MS;
     const state: "pre" | "in" | "post" = now < starts ? "pre" : now <= ends ? "in" : "post";
     const card: LeagueEventCard = {
       kind: "boxing",
