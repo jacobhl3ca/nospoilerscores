@@ -161,7 +161,7 @@ export default function GameHighlights({
   const prefetchedTelemundoShortId = useRef<string | null>(initialTelemundoShortId);
   const prefetchedTelemundoLongId = useRef<string | null>(initialTelemundoLongId);
   const prefetchStarted = useRef(false);
-  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | "telemundoLong" | null>(null);
+  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | null>(null);
   // "loading" while prefetch (or click-time chain) is running. "found" once
   // resolveHighlightVideo returns an id. "missing" once the full retry chain
   // strict channel lookup has been exhausted — the button is hidden so the user
@@ -703,17 +703,15 @@ export default function GameHighlights({
               }}
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-0.5 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "telemundoLong" ? 0.5 : undefined }}
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="Telemundo extended highlights"
-              aria-busy={fetchingOnClick === "telemundoLong"}
               title="Telemundo extended highlights"
             >
-              {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading…</span> : (
-                <>
-                  <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
-                </>
-              )}
+              {/* No loading state: the extended cut plays directly from the
+                  prefetched ref (see the click handler above), so this button
+                  never enters a click-time fetch. */}
+              <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
             </button>
           )}
         </div>
