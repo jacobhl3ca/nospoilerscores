@@ -209,6 +209,17 @@ const IDIOM = new RegExp(
     // wreck never reads "crash course", so unlike the noun-scoped elimination and
     // result idioms above the phrase is safe to strip outright.
     "crash courses?",
+    // A "fixture pile-up", "pile-up of fixtures/games", or "injury pile-up" is the
+    // staple congestion idiom for a crowded schedule or a run of injuries — it has
+    // nothing to do with a wreck, yet the opt-in "hide crashes" toggle's bare
+    // `pile.?up` pattern pulled these ordinary schedule/squad stories out of the
+    // feed ("fixture pile-up leaves City facing seven games in 21 days", "an
+    // injury pile-up forces United into the market"). Stripped ONLY when a
+    // schedule/squad noun frames it, so a real "multi-car pile-up on lap one" /
+    // "huge pile-up at Turn 1" (car/vehicle/bike/lap — none of these nouns) still
+    // matches the crash pattern.
+    "(fixture|game|match|injury|goal|point|card|draw|defeat|win)s? pile.?up",
+    "pile.?up of (fixtures|games|matches|injuries|goals|points|cards|draws|defeats|wins)",
     "(wreck|wrecked|wrecking) (them|him|her|it|the|that)",
     "trainwreck|train wreck",
     // Suicide as tactic.

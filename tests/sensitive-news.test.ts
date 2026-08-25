@@ -436,6 +436,32 @@ test("a real wreck still matches after the crash-course strip", () => {
   assert.equal(sensitiveCategoryOf("Rider came off his bike at turn four", BOTH), "crash");
 });
 
+test("'fixture/injury pile-up' idiom survives the crash toggle", () => {
+  // A crowded schedule or a run of injuries is a "pile-up" in ordinary usage —
+  // nothing to do with a wreck — so the opt-in crash toggle must not hide it.
+  for (const h of [
+    "Fixture pile-up leaves City facing seven games in 21 days",
+    "A pile-up of fixtures over the festive period worries managers",
+    "Injury pile-up forces United into the transfer market",
+    "Guardiola bemoans the fixture pileup in December",
+    "A pile-up of games has stretched the squad thin",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), null, h);
+  }
+});
+
+test("a real pile-up still matches after the fixture-pile-up strip", () => {
+  // Only a schedule/squad-noun pile-up is stripped — a genuine multi-car or
+  // peloton pile-up must still trip the crash pattern.
+  for (const h of [
+    "Huge pile-up on lap one takes out five cars",
+    "Massive pile-up at Turn 1 red-flags the race",
+    "Nasty pile up in the peloton on the final climb",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), "crash", h);
+  }
+});
+
 test("the figurative 'collision' idiom strip does not swallow a real collision", () => {
   // Only the matchup framings (a collision of/between an abstract noun, a
   // matchup-adjective collision) are stripped — a physical collision, one of
