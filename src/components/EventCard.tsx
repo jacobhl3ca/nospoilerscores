@@ -106,7 +106,7 @@ function FittedLine({
           }
         }
       }
-      document.body.removeChild(probe);
+      probe.remove();
       setFit((prev) => (prev.text === chosen.text && prev.size === chosen.size ? prev : chosen));
     };
 
