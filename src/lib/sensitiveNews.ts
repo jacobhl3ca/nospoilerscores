@@ -81,6 +81,16 @@ const IDIOM = new RegExp(
     // article) all still match death.
     "dying to [a-z][\\w'-]*",
     "dying for (a|an|another|some) [\\w'-]+",
+    // "a dying breed" (old-school No. 9s, one-club men, proper hard men) and
+    // "a dying art" (the drop goal, the target-man header, real shot-stopping)
+    // are the staple sports-feature idioms for a style or player type becoming
+    // rare — never a real death, yet `dying` is a bare death pattern, so the
+    // main "Hide upsetting news" toggle silently pulled these ordinary
+    // features/columns under "death or tragedy". Stripped ONLY before
+    // "breed"/"art", so a real "dying in hospice" / "his dying wish" (dying
+    // of/in/<possessive>) still matches death — matching the "dying <timing>"
+    // and "dying to <verb>" strips above.
+    "dying (breeds?|arts?)",
     // "the late winner / the late equaliser / the late drama / the late show" —
     // the staple soccer/basketball framing for something that happened in the
     // closing minutes — AND the scheduling sense "the late game / the late window
