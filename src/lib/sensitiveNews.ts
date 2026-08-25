@@ -91,6 +91,16 @@ const IDIOM = new RegExp(
     // of/in/<possessive>) still matches death — matching the "dying <timing>"
     // and "dying to <verb>" strips above.
     "dying (breeds?|arts?)",
+    // Baseball's "dying quail" (also "dying seagull") — the staple name for a
+    // weakly-hit bloop that drops in front of the outfielders for a cheap hit
+    // ("Judge lifts a dying quail into shallow center", "a pair of dying quails
+    // fall in during the rally"). `dying` is a bare death pattern, so without
+    // this the main "Hide upsetting news" toggle silently pulled ordinary MLB
+    // recaps under "death or tragedy". The phrase names a batted ball, never a
+    // person, so — like "dying seconds" above — it is safe to strip outright: a
+    // real "dying in hospice" / "his dying wish" (dying of/in/<possessive>)
+    // carries none of these bird nouns and still matches death.
+    "dying (quails?|seagulls?)",
     // "the late winner / the late equaliser / the late drama / the late show" —
     // the staple soccer/basketball framing for something that happened in the
     // closing minutes — AND the scheduling sense "the late game / the late window

@@ -87,6 +87,11 @@ const SAFE = [
   "Old-fashioned target men are a dying breed in the modern game",
   "The dying art of the sweeper keeper is making a comeback",
   "One-club players are a dying breed these days",
+  // Baseball's "dying quail" / "dying seagull" bloop-hit idiom — a weakly hit
+  // ball, not a death.
+  "Judge lifts a dying quail into shallow center for the go-ahead single",
+  "A pair of dying quails fall in as the Yankees rally in the eighth",
+  "Bloop single, a real dying seagull, drops in front of the outfielders",
   // "the late <game event>" late-drama idiom — must not read as death.
   "Liverpool snatch the late winner at Anfield",
   "Arsenal rescue a point with the late equaliser",
@@ -255,6 +260,13 @@ test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
   // still trip the `dying` pattern.
   assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
   assert.equal(sensitiveCategoryOf("Legend shares his dying wish in final interview"), "death");
+});
+
+test("the 'dying quail/seagull' bloop-hit idiom strip does not swallow a real death", () => {
+  // Only the "dying <bird>" bloop-hit nouns are stripped — a genuine death
+  // context still reads "dying of/in" and must trip the death pattern.
+  assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
+  assert.equal(sensitiveCategoryOf("Legend dying of cancer, family confirms"), "death");
 });
 
 test("the 'dying to/for' eagerness idiom strip does not swallow a real death", () => {
