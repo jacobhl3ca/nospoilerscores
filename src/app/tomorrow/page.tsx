@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/tomorrow" },
   openGraph: {
     title: "Tomorrow's Sports Schedule — No Spoilers | HideScore",
-    description: "Tomorrow's games, spoiler-free.",
+    description: "Tomorrow's games, spoiler-free. Plan what to watch with match times and previews.",
     url: "https://hidescore.com/tomorrow",
     siteName: "HideScore",
     // og:locale matches the site-level Open Graph block in layout.tsx. A page's
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Tomorrow's Sports Schedule — No Spoilers | HideScore",
-    description: "Tomorrow's games, spoiler-free.",
+    description: "Tomorrow's games, spoiler-free. Plan what to watch with match times and previews.",
     images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — tomorrow's sports schedule, spoiler-free" }],
   },
 };

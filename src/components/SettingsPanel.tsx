@@ -629,14 +629,33 @@ export default function SettingsPanel({
       defaultRatings: "auto",
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
+      // Sibling of hideTeamStars (rendered directly beneath it in the panel) and
+      // a documented second-order spoiler (see showTeamRecords in preferences.ts:
+      // today's W-L record encodes whether the team won last night). It ships
+      // default-off and reads everywhere as `!!prefs.showTeamRecords`, but was
+      // omitted here — so a user who turned records ON kept them revealed through
+      // "Reset all settings to defaults," which is meant to restore the no-spoiler
+      // defaults. Clearing to undefined restores the fresh-install off state.
+      showTeamRecords: undefined,
       wcBannerDismissed: undefined,
       // Sibling of wcBannerDismissed: a full reset should bring back every
       // season-kickoff banner too, so clear the per-kickoff dismissal list.
       // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
       kickoffBannersDismissed: undefined,
+      // Sibling of the two dismissal flags above: the footer's Google Play badge
+      // hides once the user dismisses it (read as `!prefs.playBadgeDismissed`), so
+      // a full reset — which restores every other dismissed banner/badge — left it
+      // hidden. Clearing to undefined restores the fresh-install "badge shown".
+      playBadgeDismissed: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
       shownLeagues: undefined,
+      // The "Hide offseason" view filter over the league catalog (rendered in this
+      // same panel) persists to prefs and was omitted here, so "Reset all settings
+      // to defaults" left a user's catalog collapsed to in-season leagues only. It
+      // ships off by default and reads as `!!prefs.hideOffseasonInCatalog`, so
+      // clearing to undefined restores the fresh-install "show everything" catalog.
+      hideOffseasonInCatalog: undefined,
       // The spoiler-protection + layout controls the panel also exposes were
       // omitted here, so "Reset all settings to defaults" left them at whatever
       // the user had set — a reset could keep the video title strip revealed,
@@ -644,11 +663,14 @@ export default function SettingsPanel({
       // no-spoiler defaults a reset is supposed to restore. Clearing each to
       // undefined mirrors a fresh install: JSON.stringify drops undefined keys,
       // and every read falls back to its documented default (`?? true`/`?? false`
-      // /`?? "both"` /`!!`). The three prefs with an explicit non-undefined
+      // /`?? "both"` /`!!`). The prefs with an explicit non-undefined
       // default in `defaults` (smartCutoffHour: 13, newsColCount: 3,
-      // newsTypeFilter: "reddit") can't rely on that undefined fallback, so reset
-      // each to its documented default value instead — otherwise a user's chosen
-      // news source-type filter (e.g. "ESPN only") survived "Reset to defaults".
+      // newsTypeFilter: "reddit", showTextPosts: true) can't rely on that
+      // undefined fallback, so reset each to its documented default value
+      // instead — otherwise a user's chosen news source-type filter (e.g.
+      // "ESPN only") survived "Reset to defaults", and clearing showTextPosts to
+      // undefined read back as `!!undefined` === false, hiding the text posts a
+      // fresh install shows on by default.
       maskVideoTitle: undefined,
       youtubeNativeControls: undefined,
       videoSeekControl: undefined,
@@ -656,20 +678,34 @@ export default function SettingsPanel({
       videoAllowEnd: undefined,
       videoWarnHalfway: undefined,
       revealNewsTitles: undefined,
-      showTextPosts: undefined,
       revealNewsMedia: undefined,
       // The remaining news-view state the toolbar persists was still omitted, so
-      // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, and
-      // their drag-reordered source-type order. newsHiddenSources belongs here
-      // too: it has no live setter, but it is still APPLIED as a source filter, so
-      // a value left in localStorage from an earlier build hides sources with no
-      // UI to clear it — a reset is the only way out. All four have no non-
-      // undefined default, so clearing to undefined restores the fresh-install
-      // default (Cards view, no video filter, default order, nothing hidden).
+      // a reset kept the user's Feed-vs-Cards view, the 🎥 Videos-only filter, the
+      // ⇅ oldest-first sort, and their drag-reordered source-type order.
+      // newsHiddenSources belongs here too: it has no live setter, but it is still
+      // APPLIED as a source filter, so a value left in localStorage from an earlier
+      // build hides sources with no UI to clear it — a reset is the only way out.
+      // All five have no non-undefined default, so clearing to undefined restores
+      // the fresh-install default (Cards view, no video filter, newest-first,
+      // default order, nothing hidden). newsOldestFirst was the lone news-header
+      // toolbar toggle still missing here — its ⇅ pill persists to prefs like
+      // newsFeedView/newsVideosOnly, so a reset otherwise left the feed reversed.
       newsFeedView: undefined,
       newsVideosOnly: undefined,
+      newsOldestFirst: undefined,
       newsTypeFilterOrder: undefined,
       newsHiddenSources: undefined,
+      // Two legacy news prefs whose UI was removed (the per-sport source
+      // drag-reorder, and the news "focus league" pill). The render path now
+      // ignores each — HomeContent forces newsFocusLeague to undefined and skips
+      // a stale newsSourceOrder so a retired control can't silently reorder or
+      // bury a source — but a value written by an earlier build still lingers in
+      // a user's (synced) prefs blob with no UI to clear it, so "Reset to
+      // defaults" is the only way out. Clear both here so a reset mirrors a
+      // genuine fresh install, matching the newsHiddenSources reason above.
+      // Read-inert today, so this only tidies the persisted blob.
+      newsSourceOrder: undefined,
+      newsFocusLeague: undefined,
       singleColumn: undefined,
       newsSingleColumn: undefined,
       hideSensitiveNews: undefined,
@@ -678,6 +714,7 @@ export default function SettingsPanel({
       smartCutoffHour: 13,
       newsColCount: 3,
       newsTypeFilter: "reddit",
+      showTextPosts: true,
       newsTypeFilters: undefined,
     });
   };
@@ -1299,7 +1336,7 @@ export default function SettingsPanel({
           {/* Player choice leads; the custom-only controls below stay visible
               but disabled in YouTube mode so the relationship is obvious. */}
           <Section title="Highlight video player">
-            <Field label="Player" hint="Spoiler-safe is the default; YouTube trades protection for familiar controls">
+            <Field label="Player" hint="YouTube's familiar controls are the default; Spoiler-safe hides progress and the ending">
               <RadioGroup
                 label="Highlight video player"
                 value={(prefs.youtubeNativeControls ?? true) ? "youtube" : "safe"}

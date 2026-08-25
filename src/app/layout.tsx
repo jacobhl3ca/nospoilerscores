@@ -503,10 +503,10 @@ export default function RootLayout({
         />
         {/* The Capacitor shells load this site remotely (server.url), so every app
             open lands in Umami as an ordinary web visit and there is no way to tell
-            them apart. That is not academic: the Play closed test (15 paid testers,
-            from Aug 5 2026) pushed tonightnyc.com's homepage 57 -> 211 views and the
-            weekly insights job scored it a #1 "breakout" worth chasing. Tag app
-            traffic so web numbers stay web numbers.
+            them apart. That is not academic: from Aug 5 2026 the Play closed test made
+            it material — app opens masked hidescore's real web visits falling from 735
+            to 545, so web-only numbers read lower than they were. Tag app traffic so
+            web numbers stay web numbers.
 
             This runs as a before-send hook rather than a load-time data-tag attribute
             on purpose: the tracker reads data-tag once when it loads, which races the
