@@ -924,18 +924,34 @@ function VideoSourceCard({ label, logoUrl, items, loading, onPlay, siblings, bas
                 </button>
               );
             }
+            if (item.articleUrl) {
+              return (
+                <a
+                  key={item.id}
+                  href={item.articleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={handleExternalClick(item.articleUrl)}
+                  className={commonCls}
+                  style={commonStyle}
+                >
+                  {body}
+                </a>
+              );
+            }
+            // No external URL (some ESPN "now" items carry articleUrl=""). Keeping
+            // href={item.articleUrl || undefined} would drop the attribute, leaving
+            // an href-less <a> that isn't keyboard-focusable and no-ops on click
+            // (WCAG 2.1.1 / 4.1.2) while still showing commonCls's cursor-pointer.
+            // Render a non-interactive wrapper instead — the row still shows, sans
+            // dead control. Mirrors the href-less-anchor guard AlignedVideoStrip's
+            // VideoRow and NewsFeed already document. (This branch only runs when
+            // onPlay is absent; both production call sites pass onPlayVideo, so it
+            // hardens the latent case rather than changing today's behavior.)
             return (
-              <a
-                key={item.id}
-                href={item.articleUrl || undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleExternalClick(item.articleUrl)}
-                className={commonCls}
-                style={commonStyle}
-              >
+              <div key={item.id} className="block w-full text-left" style={commonStyle}>
                 {body}
-              </a>
+              </div>
             );
           })}
         </div>
