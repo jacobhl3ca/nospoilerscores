@@ -399,6 +399,16 @@ const IDIOM = new RegExp(
     "sentenced to (a |an |the |another |yet another |more )?(relegation|demotion|drop|drop zone|mid[ -]?table|mediocrity|obscurity|oblivion|irrelevance|purgatory|wilderness|(season|campaign) in the)",
     // Abuse of a rule/loophole, not a person.
     "abus(e|ed|ing) (the|a) (rule|loophole|system|clock|zone)",
+    // "held hostage by penalties / by VAR / by the weather" and "hostage to
+    // fortune / to their nerves" — the staple figurative complaint about a team
+    // or a game held back by something out of its control, never a real captive.
+    // It tripped the bare `hostage` crime pattern and pulled ordinary recaps
+    // under "violence, crime or abuse" for anyone with the main filter on.
+    // Stripped ONLY when the captor is an abstract game/condition noun — so a
+    // real "held hostage by armed men", "taken hostage", or a "hostage
+    // situation/crisis" (a person or no captor at all, never one of these nouns)
+    // still matches violence, matching the scoping the strips above use.
+    "hostage (by|to) (the |their |its |his |her |our |a |an )?(turnovers?|penalt(?:y|ies)|fouls?|foul trouble|injur(?:y|ies)|weather|rain|wind|conditions|VAR|video reviews?|replay reviews?|reviews?|the schedule|the fixture list|the clock|the calendar|nerves?|fear|doubt|indecision|momentum|officiating|fortune)",
   ].join("|"),
   "gi",
 );
