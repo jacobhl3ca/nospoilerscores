@@ -69,6 +69,18 @@ const IDIOM = new RegExp(
     // recaps as "death or tragedy". Only the sports-timing nouns are stripped, so
     // a genuine "dying in hospice" / "his dying wish" still matches death.
     "dying (seconds|minutes|moments|embers|stages)",
+    // "dying to play / dying to prove himself / dying to get back out there", and
+    // "dying for a chance / for another shot / for some game time" — the everyday
+    // eagerness idiom for a player or fanbase impatient for something, the stuff
+    // of returning-star quotes and season previews. `dying` is a bare death
+    // pattern, so without this the main "Hide upsetting news" toggle silently
+    // pulled these ordinary quotes/previews under "death or tragedy". Stripped
+    // ONLY in the "dying to <verb>" desire form and "dying for <a|an|another|
+    // some> <thing>", so a real "dying of cancer" / "dying in hospice" (dying
+    // of/in) and "he had been dying for months" ("dying for <duration>", no
+    // article) all still match death.
+    "dying to [a-z][\\w'-]*",
+    "dying for (a|an|another|some) [\\w'-]+",
     // "the late winner / the late equaliser / the late drama / the late show" —
     // the staple soccer/basketball framing for something that happened in the
     // closing minutes — AND the scheduling sense "the late game / the late window

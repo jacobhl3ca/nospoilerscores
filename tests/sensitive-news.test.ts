@@ -74,6 +74,13 @@ const SAFE = [
   "Winner in the dying seconds sends them top of the table",
   "Equaliser in the dying minutes rescues a point at Anfield",
   "United score twice in the dying embers to steal it",
+  // "dying to <verb>" / "dying for <a|an|another|some> <thing>" eagerness idiom
+  // — an impatient player or fanbase must not read as death.
+  "New signing dying to make his debut for the club",
+  "I'm dying to get back out there, says returning striker",
+  "Rookie dying to prove himself in his first start",
+  "Fans dying for a win after six straight defeats",
+  "He's dying for another shot at the title",
   // "the late <game event>" late-drama idiom — must not read as death.
   "Liverpool snatch the late winner at Anfield",
   "Arsenal rescue a point with the late equaliser",
@@ -217,6 +224,15 @@ test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
   // still trip the `dying` pattern.
   assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
   assert.equal(sensitiveCategoryOf("Legend shares his dying wish in final interview"), "death");
+});
+
+test("the 'dying to/for' eagerness idiom strip does not swallow a real death", () => {
+  // Only the desire forms ("dying to <verb>", "dying for <a|an|another|some>
+  // <thing>") are stripped — a real death reads "dying of/in", or "dying for
+  // <duration>" with no article, so it must still trip the death pattern.
+  assert.equal(sensitiveCategoryOf("Legend dying of cancer, family confirms"), "death");
+  assert.equal(sensitiveCategoryOf("Beloved coach dying in a hospice bed, family says"), "death");
+  assert.equal(sensitiveCategoryOf("He had been dying for months before he passed"), "death");
 });
 
 test("the 'the late <game event>' idiom strip does not swallow a real death", () => {
