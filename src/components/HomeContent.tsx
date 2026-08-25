@@ -330,13 +330,13 @@ function applyOrder<T extends { label: string }>(sources: T[], order: string[] |
 // one slot has been emptied. Click repopulates that slot with the first
 // eligible league. Narrow column-shaped target so it visually slots into
 // the grid without dominating it.
-function AddColumnButton({ onClick }: { onClick: () => void }) {
+function AddColumnButton({ onClick, label = "Add a league column" }: { onClick: () => void; label?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title="Add a league column"
-      aria-label="Add a league column"
+      title={label}
+      aria-label={label}
       className="flex items-center justify-center rounded-lg cursor-pointer transition-colors"
       style={{
         width: "44px",
@@ -645,7 +645,12 @@ export default function HomeContent({
         if (decoded.slotLeagues) {
           loaded.firstLeague = decoded.slotLeagues[0];
           loaded.secondLeague = decoded.slotLeagues[1];
-          if (decoded.slotLeagues[2]) loaded.thirdLeague = decoded.slotLeagues[2];
+          // Assign the third slot unconditionally, like the other four: when `s` is
+          // present it is the source of truth for every slot, and slot[2] always
+          // mirrors what the legacy `t` param carries (both come from thirdLeague).
+          // Guarding it (the old behavior) let a shared Auto third column silently
+          // keep the recipient's own stored override instead of resetting to Auto.
+          loaded.thirdLeague = decoded.slotLeagues[2];
           loaded.fourthLeague = decoded.slotLeagues[3];
           loaded.fifthLeague = decoded.slotLeagues[4];
         }
@@ -700,8 +705,8 @@ export default function HomeContent({
     // spoiler-safety logic.
     //   Ratings on launch: respect defaultRatings pref.
     //     auto (default) → keep the morning-safety reset (off before noon ET)
-    //     off            → always off on launch
-    //     on             → always on on launch
+    //     off            → always off
+    //     on             → always on
     //   News view does NOT reset — it's a viewer choice, not a spoiler surface.
     const applyLaunchState = (p: Preferences) => {
       const landing = p.defaultLandingView ?? "remember";
@@ -3234,9 +3239,9 @@ export default function HomeContent({
                 })}
                 {newsOnAddColumn && (
                   effectiveColCount === 1 ? (
-                    <div className="mt-2"><AddColumnButton onClick={newsOnAddColumn} /></div>
+                    <div className="mt-2"><AddColumnButton onClick={newsOnAddColumn} label="Add a news column" /></div>
                   ) : (
-                    <div className="flex items-start pt-7 shrink-0"><AddColumnButton onClick={newsOnAddColumn} /></div>
+                    <div className="flex items-start pt-7 shrink-0"><AddColumnButton onClick={newsOnAddColumn} label="Add a news column" /></div>
                   )
                 )}
               </div>
@@ -3834,7 +3839,8 @@ export default function HomeContent({
               className="inline-block transition-opacity hover:opacity-80"
               data-umami-event="install-appstore-badge"
             >
-              <img src="/app-store-badge.svg" alt="Download on the App Store" height={40} className="block h-10 w-auto" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
             </a>
             {!(prefsHydrated && prefs.playBadgeDismissed) && (
               /* relative + an absolutely placed dismiss control, the same shape
@@ -3854,6 +3860,7 @@ export default function HomeContent({
                   className="inline-block transition-opacity hover:opacity-80"
                   data-umami-event="install-googleplay-badge"
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/google-play-badge.png" alt="Get it on Google Play" width={155} height={59.5}
                        /* Google's own artwork, unmodified. Its 646x250 canvas carries 41px
                           of required clear space on every side, so the visible pill is 168 of

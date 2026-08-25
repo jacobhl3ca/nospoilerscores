@@ -146,7 +146,16 @@ function parseFixtures(data: unknown): Fixture[] {
       homeName: String(ht?.displayName ?? ""),
       awayName: String(at?.displayName ?? ""),
       state: (status?.type?.state as Fixture["state"]) ?? "pre",
-      knockoutLabel: /round of|final|quarter|semi|knockout|playoff/i.test(headline)
+      // Word-boundary the round names so they match whole words, not unrelated
+      // substrings — the same fix the sibling playoff detector in espn.ts's
+      // parseGame already carries. Unbounded, `final` hit "finale", `semi` hit
+      // "seminal", and `quarter` hit "headquarters", giving a group-stage
+      // fixture a spurious knockoutLabel that misroutes it into the knockouts
+      // bucket below (win-or-out copy instead of group-qualification analysis)
+      // and renders the stray headline as its label. Every real knockout
+      // headline still matches ("Round of 32", "Quarterfinal", "Semifinal",
+      // "Final", "Play-off").
+      knockoutLabel: /\bround of\b|\bfinals?\b|\bquarter-?finals?\b|\bsemi-?finals?\b|\bknockout\b|\bplay-?offs?\b/i.test(headline)
         ? headline
         : null,
       roundSlug: String(season?.slug ?? ""),
@@ -320,7 +329,7 @@ function copyFor(tier: WcTier, away: Side, home: Side, group: string): string {
     return `${through} and ${out[0].name} are out — the result only affects ${s.name}'s seeding, so top ${group} for an easier path.`;
   }
   // Both sides are already out — the ONLY combination left in this tier once
-  // safe===2 (line 299) and safe===1/out===1 (line 302) are handled above: the
+  // the safe===2 and safe===1/out===1 branches above are handled: the
   // seeding tier is reached only when live.length===0 (see tierFor), so every
   // side is safe or eliminated, and with two sides that leaves out.length===2 as
   // the exhaustive remainder. Neither team can advance, so there is nothing at

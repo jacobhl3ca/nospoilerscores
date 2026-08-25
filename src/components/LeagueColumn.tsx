@@ -244,6 +244,24 @@ function fifaRoundTiers(label: string): string[] {
   return short !== label ? [label, short] : [label];
 }
 
+// How deep in the bracket a knockout round sits, for picking the deepest round
+// to show when a single day mixes them. Tolerates ESPN's spelling the SAME way
+// fifaRoundTiers above and espn.ts's deriveStage already do — game.stage
+// carries ESPN's own wording, which varies ("Quarterfinal" vs "Quarterfinals",
+// "Semi-Final", "Third Place Match", hyphenated or not; see the note above). An
+// exact-string lookup scored those variants as unknown, so a mixed-round day
+// could mis-rank the deepest. Checks run most-specific first — "final" last,
+// since "Semifinal"/"Quarterfinal" both contain it. Group/unknown stages → 0.
+function fifaRoundDepth(stage: string): number {
+  if (/^round of 32/i.test(stage)) return 1;
+  if (/^round of 16/i.test(stage)) return 2;
+  if (/quarter-?finals?/i.test(stage)) return 3;
+  if (/semi-?finals?/i.test(stage)) return 4;
+  if (/third place/i.test(stage)) return 5;
+  if (/final/i.test(stage)) return 6;
+  return 0;
+}
+
 // Parse "9:00 PM" / "11:30 AM" into 24-hour {h, m}. Returns null on bad input.
 function parseEtTime(s: string): { h: number; m: number } | null {
   const m = s.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -302,8 +320,7 @@ function getPlayoffSubtitle(
     if (!stages.length) return null;
     const rounds = stages.filter((s) => !/^group/i.test(s));
     if (rounds.length) {
-      const order = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Third Place", "Final"];
-      const deepest = rounds.reduce((best, r) => (order.indexOf(r) > order.indexOf(best) ? r : best), rounds[0]);
+      const deepest = rounds.reduce((best, r) => (fifaRoundDepth(r) > fifaRoundDepth(best) ? r : best), rounds[0]);
       return { tiers: fifaRoundTiers(deepest) };
     }
     return { tiers: ["Group Stage", "Groups"] };
@@ -573,7 +590,17 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
       // is `display: inline-block`, the parent's hover:underline won't
       // draw a line under the dot or the gap \u2014 only under the text that
       // follows.
-      return <><span className="live-pulse-dot" aria-hidden="true">{"\u25CF\u00A0"}</span>{t.slice(2)}</>;
+      //
+      // The green pulse dot is the ONLY live cue on the narrowest fitted tier
+      // ("\u25CF Big Inning", chosen when the column is too tight for the
+      // "\u00B7 LIVE"/"live" tiers), and it's aria-hidden \u2014 so a screen
+      // reader there hears just "Big Inning" with no hint the whip-around is on
+      // air (WCAG 1.1.1 / 4.1.2). Add an sr-only "Live" whenever the visible
+      // text doesn't already spell it, mirroring the FightCard/EventCard live
+      // tiles. Guarded on /live/i so the wider tiers (which show "LIVE"/"live"
+      // in the visible text) aren't announced twice. sr-only \u2014 no visual
+      // change, and zero width so the layout probe stays exact.
+      return <><span className="live-pulse-dot" aria-hidden="true">{"\u25CF\u00A0"}</span>{!/live/i.test(t) && <span className="sr-only">Live </span>}{t.slice(2)}</>;
     }
     return t;
   };
@@ -1082,7 +1109,14 @@ export default function LeagueColumn({
   const checkIfFullNamesFit = useCallback(() => {
     const el = columnRef.current;
     if (!el) return;
-    requestAnimationFrame(() => {
+    // Return the frame id so the callers can cancel it on cleanup — the same
+    // paired requestAnimationFrame/cancelAnimationFrame the sibling measurers
+    // use (EventCard's FittedLine, WorldCupBracket's focus scroll). Without it a
+    // frame queued right before an unmount or a league swap fires against the
+    // now-detached `el`, does its body's document.body probe append/remove, and
+    // set-states a gone column. `undefined` (the early return above) means
+    // nothing was scheduled, so the callers skip the cancel.
+    const raf = requestAnimationFrame(() => {
       // Find a team-name cell to measure available width
       // The name sits in a flex container: [name] [star], inside a grid cell (1fr)
       const nameContainers = el.querySelectorAll(".team-name-container");
@@ -1142,20 +1176,26 @@ export default function LeagueColumn({
 
       setUseAbbreviations(longestWidth > availableWidth);
     });
+    return raf;
   }, [league.games, league.nextGameDay, league.previousGameDay, league.sport]);
 
   // Re-check when the rendered games change
   useEffect(() => {
-    checkIfFullNamesFit();
+    const raf = checkIfFullNamesFit();
+    return () => { if (raf !== undefined) cancelAnimationFrame(raf); };
   }, [checkIfFullNamesFit]);
 
   // Re-check on resize
   useEffect(() => {
     const el = columnRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => checkIfFullNamesFit());
+    let raf: number | undefined;
+    const ro = new ResizeObserver(() => { raf = checkIfFullNamesFit(); });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (raf !== undefined) cancelAnimationFrame(raf);
+    };
   }, [checkIfFullNamesFit]);
 
   // Report the abbreviation state up (see onAbbrevReport in the props). Keyed
@@ -1890,6 +1930,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              leagueLabel={league.label}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={isPastDate}
@@ -1911,6 +1952,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              leagueLabel={league.label}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
@@ -1928,6 +1970,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              leagueLabel={league.label}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
@@ -1959,6 +2002,7 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
+              leagueLabel={league.label}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={false}

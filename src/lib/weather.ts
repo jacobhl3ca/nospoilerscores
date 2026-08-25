@@ -16,7 +16,7 @@ export interface GameWeather {
   icon: string; // emoji condition glyph
   label: string; // "Partly cloudy"
   rainPct: number; // gametime chance
-  timeline: WeatherHour[]; // 9 AM–11 PM local, for the rain bar chart
+  timeline: WeatherHour[]; // every fetched hour of the venue-local day; the rain block windows this around gametime
   gameHour24: number; // venue-local start hour (0-23), for the game-time window
   // Live "right now" conditions at the venue (Open-Meteo `current` block). The
   // gametime fields above are the forecast frozen at first pitch, so a drizzle
@@ -130,9 +130,23 @@ async function geocode(city: string, region: string): Promise<Geo | null> {
       d.results ?? [];
     const reg = region.toLowerCase();
     // Disambiguate same-named cities by matching the venue's state/country
-    // ("St. Louis, Missouri" → the Missouri hit, not PEI). Fall back to the
-    // top result (Open-Meteo ranks by prominence).
+    // ("St. Louis, Missouri" → the Missouri hit, not PEI). Prefer an EXACT
+    // admin1/country match, then fall back to a substring match, then to the
+    // top result (Open-Meteo ranks by prominence). The substring fallback is
+    // deliberate — it lets a shorter ESPN region match a longer official name
+    // ("Madrid" ⊆ "Community of Madrid") — but must not run first: as a bare
+    // substring test it also false-matches a region that is a substring of a
+    // DIFFERENT admin1 ("Kansas" ⊆ "Arkansas", "Mexico" ⊆ "New Mexico"), which
+    // could geocode a venue to the wrong same-named city. Trying exact first
+    // resolves those collisions to the right region while leaving the
+    // shorter-⊆-longer case unchanged.
     const pick =
+      (reg &&
+        list.find(
+          (x) =>
+            (x.admin1 ?? "").toLowerCase() === reg ||
+            (x.country ?? "").toLowerCase() === reg,
+        )) ||
       (reg &&
         list.find(
           (x) =>
@@ -271,7 +285,15 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
   for (let i = 0; i < times.length; i++) {
     const hr = parseInt(times[i].slice(11, 13), 10);
     if (!isNaN(localHour) && hr === localHour) gameIdx = i;
-    if (hr >= 9 && hr <= 23) {
+    // Keep every fetched hour (0–23) rather than only 9 AM–11 PM. The consumer
+    // (GameDetailModal's rainWindow) already slices this to ±1h around gametime,
+    // so a 9-AM floor never trimmed a normal daytime/evening game — but it did
+    // drop the gametime hours of an early-morning venue-local start (an Asian /
+    // Australian cricket or soccer match shown to US users), silently hiding the
+    // rain block for exactly the games it's meant to warn about. The `<= 23`
+    // upper guard also drops the "24" some ICU builds emit for midnight, matching
+    // the localHour `% 24` guard above.
+    if (hr >= 0 && hr <= 23) {
       const rp = Math.round(rains[i] ?? 0);
       timeline.push({ hour24: hr, label: hourLabel(hr), rainPct: rp });
     }

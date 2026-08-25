@@ -57,14 +57,24 @@ check("parseGame populates Game.weekNumber", /weekNumber: gridironWeekNumber\(sp
 
 const youtube = readFileSync("src/lib/youtube.ts", "utf8");
 check("fetchFirstVideoId forwards week", /url \+= `&week=\$\{weekNumber\}`/.test(youtube));
-check("resolveHighlightVideo takes weekNumber", /weekNumber\?: number \| null,\n\): Promise<string \| null> \{/.test(youtube));
+// `weekNumber?: number | null` is no longer the FINAL parameter — a later
+// `compTokens?: string[]` was appended after it — so the old regex, which
+// pinned weekNumber immediately before `): Promise<…>`, went stale and failed
+// even though the param is still declared. Allow any trailing params between
+// weekNumber and the return type so the guard tracks the real signature.
+check("resolveHighlightVideo takes weekNumber", /weekNumber\?: number \| null,\n(?:\s*\w+\??:[^\n]*\n)*\): Promise<string \| null> \{/.test(youtube));
 
 const gh = readFileSync("src/components/GameHighlights.tsx", "utf8");
 check("GameHighlights carries nss_week on the modal fallback", /nss_week=\$\{weekNumber\}/.test(gh));
 check(
   "every GameHighlights resolve passes the week",
+  // Match weekNumber whether it's the last argument (`…, weekNumber)`) or now
+  // followed by the trailing compTokens arg (`…, weekNumber, compTokens)`) —
+  // the same signature shift the resolveHighlightVideo check above accounts
+  // for. Pinning `weekNumber\)` assumed week was last and matched zero of the
+  // real call sites once compTokens landed.
   gh.match(/resolveHighlightVideo\(/g)?.length ===
-    gh.match(/resolveHighlightVideo\([^;]*?weekNumber\)/gs)?.length,
+    gh.match(/resolveHighlightVideo\([^;]*?weekNumber[,)]/gs)?.length,
   `${gh.match(/resolveHighlightVideo\(/g)?.length ?? 0} call sites`,
 );
 
