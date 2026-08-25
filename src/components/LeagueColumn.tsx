@@ -521,7 +521,7 @@ function PlayoffSubtitleInner({ sport, selectedDate, games, onClick, fallbackTex
       const w = probe.getBoundingClientRect().width;
       if (w <= available - 2) { chosen = i; break; }
     }
-    document.body.removeChild(probe);
+    probe.remove();
     return chosen;
   };
 
@@ -1138,7 +1138,7 @@ export default function LeagueColumn({
         probe.textContent = name;
         if (probe.offsetWidth > longestWidth) longestWidth = probe.offsetWidth;
       }
-      document.body.removeChild(probe);
+      probe.remove();
 
       setUseAbbreviations(longestWidth > availableWidth);
     });
