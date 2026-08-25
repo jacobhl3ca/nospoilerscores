@@ -133,6 +133,12 @@ const SAFE = [
   "GM charged with rebuilding the roster this offseason",
   "Interim boss charged with reviving a stalling season",
   "Skipper charged with restoring the club's fortunes",
+  // Figurative "charged with <emotion>" — a highly-charged occasion must not
+  // read as a criminal charge.
+  "A derby charged with emotion ends all square",
+  "A cup final charged with tension and history",
+  "The atmosphere was charged with drama from the first whistle",
+  "A reunion charged with significance for both managers",
   // Figurative "trial by fire" — the rookie-debut framing must not read as a
   // criminal trial.
   "Rookie QB faces trial by fire in his first start",
@@ -294,6 +300,14 @@ test("the 'charged with <task>' idiom strip does not swallow a real criminal cha
   assert.equal(sensitiveCategoryOf("Quarterback charged with domestic violence"), "violence");
   assert.equal(sensitiveCategoryOf("Player charged with assaulting a fan"), "violence");
   assert.equal(sensitiveCategoryOf("Defender charged with fixing matches"), "violence");
+});
+
+test("the 'charged with <emotion>' idiom strip does not swallow a real criminal charge", () => {
+  // Only emotion/atmosphere nouns are stripped — a real charge names the offence
+  // and must still trip the `charged with` pattern.
+  assert.equal(sensitiveCategoryOf("Striker charged with assault after the incident"), "violence");
+  assert.equal(sensitiveCategoryOf("Player charged with DUI overnight"), "violence");
+  assert.equal(sensitiveCategoryOf("Coach charged with battery following an altercation"), "violence");
 });
 
 test("the 'arrest the <slide>' idiom strip does not swallow a real arrest", () => {
