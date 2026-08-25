@@ -95,6 +95,12 @@ const SAFE = [
   // Figurative "fatal <mistake>" — must not read as death.
   "Fatal error at the back gifts Arsenal the win",
   "A fatal blow to their title hopes after the derby loss",
+  // Figurative "fatally <verb/adjective>" — a decisive tactical failing, not a
+  // death.
+  "United's high line looks fatally flawed against the counter",
+  "Game plan fatally undermined by the early red card",
+  "Keeper fatally misjudged the cross for the winner",
+  "Defence fatally exposed on the break time and again",
   // Figurative "tragic <game mistake>" / "tragically <verb>" — a costly on-field
   // error must not read as death.
   "Tragic own goal hands rivals the derby",
@@ -233,6 +239,15 @@ test("the 'dying to/for' eagerness idiom strip does not swallow a real death", (
   assert.equal(sensitiveCategoryOf("Legend dying of cancer, family confirms"), "death");
   assert.equal(sensitiveCategoryOf("Beloved coach dying in a hospice bed, family says"), "death");
   assert.equal(sensitiveCategoryOf("He had been dying for months before he passed"), "death");
+});
+
+test("the 'fatally <verb>' idiom strip does not swallow a real fatality", () => {
+  // Only decisive-tactical-failing words are stripped — a genuine fatality reads
+  // "fatally injured / wounded / shot / stabbed / hurt", none of which are on
+  // the strip list, so it must still trip the death pattern.
+  assert.equal(sensitiveCategoryOf("Cyclist fatally injured in a training crash"), "death");
+  assert.equal(sensitiveCategoryOf("Fan fatally shot outside the stadium, police say"), "death");
+  assert.equal(sensitiveCategoryOf("Driver fatally wounded in a pit-lane accident"), "death");
 });
 
 test("the 'the late <game event>' idiom strip does not swallow a real death", () => {

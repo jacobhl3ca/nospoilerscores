@@ -99,6 +99,19 @@ const IDIOM = new RegExp(
     // death pattern. A real fatality still reads "fatal crash" / "fatally
     // injured" / "fatal shooting", none of which these mistake-nouns cover.
     "fatal (error|mistake|blow|flaw|blunder)",
+    // The ADVERB companion to the "fatal <mistake>" strip above: "fatally flawed
+    // tactics", "a game plan fatally undermined by the red card", "the keeper
+    // fatally misjudged the cross", "fatally exposed at the back" — the everyday
+    // figurative use of `fatally` for a decisive tactical failing, the stuff of
+    // match analysis. It tripped the bare `fatal(ly)?` death pattern and pulled
+    // ordinary tactical recaps under "death or tragedy" for anyone with the main
+    // filter on. This mirrors the existing `tragic`/`tragically` pairing below.
+    // Stripped ONLY before a plan/action word that describes a strategy or an
+    // on-field decision — never a person — so a real "fatally injured / fatally
+    // wounded / fatally shot / fatally stabbed / fatally hurt" still matches
+    // death (none of those verbs are on this list, and a genuine fatality also
+    // carries its own stronger cues — died, killed — that survive the strip).
+    "fatally (flawed|undermined|misjudged|misread|mistimed|exposed)",
     // "tragic own goal / tragic error / tragically sliced into his own net" —
     // the figurative use of `tragic` for a costly game-mistake, the everyday
     // stuff of match reports. It tripped the bare `tragic(ally)?` death pattern
