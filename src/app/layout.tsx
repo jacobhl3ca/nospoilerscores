@@ -443,6 +443,29 @@ export default function RootLayout({
             __html: `(function(){try{var v=localStorage.getItem('nss-last-view');if(v==='scores-plain'||v==='scores-rated'||v==='news'){document.documentElement.setAttribute('data-view',v);return}}catch(e){}document.documentElement.setAttribute('data-view','scores-plain')})()`,
           }}
         />
+        {/* Footer store badges, pre-paint. The row is in the static HTML, so
+            anything that decides NOT to show it has to decide before the first
+            paint or the badges are visibly there and then gone.
+
+            1. nss-auth is prefsSync's cached /api/me answer (90-day TTL, only
+               ever written from a real 200). If it says this account has used
+               the downloaded app on either platform, hide the row now — /api/me
+               takes ~1.5s to re-confirm that for a signed-in user, and that was
+               1.5s of Google Play badge sitting in the footer of someone who
+               already has the app (Jacob 8/24).
+            2. playBadgeDismissed rides the prefs blob, which lands in an effect.
+               The Play badge is rendered unconditionally so it does not pop in
+               and shove the App Store badge off-centre; this hides it for the
+               dismissed case over the same pre-hydration window.
+
+            Both classes are advisory only — HomeContent removes them as soon as
+            the real answers land, so a stale cache can never keep the badges
+            hidden from someone who should be seeing them. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var d=document.documentElement;try{var a=localStorage.getItem('nss-auth');if(a){var j=JSON.parse(a);var st=j&&j.state;if(st&&st.signedIn&&st.platforms&&(st.platforms.ios||st.platforms.android)){d.classList.add('hs-has-app')}}}catch(e){}try{var t=localStorage.getItem('nss-preferences');if(t){var p=JSON.parse(t);if(p.playBadgeDismissed===true){d.classList.add('hs-play-dismissed')}}}catch(e){}})()`,
+          }}
+        />
         {/* Self-heal watchdog. Recovers a wedged install with no user action —
             no "delete & reinstall the app" step. Two triggers, both engine- and
             SW-version-independent because this runs inline in every network-first

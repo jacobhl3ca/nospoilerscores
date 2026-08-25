@@ -119,6 +119,24 @@ html:not(.show-text-posts) .news-card-alltext {
   display: none;
 }
 
+/* Store badges, hidden pre-paint. Both classes are set by inline scripts in
+   layout.tsx and removed by HomeContent the moment React has the real answer,
+   so they only ever cover the window between first paint and hydration:
+
+   .hs-has-app       the cached account says this person already uses the
+                     downloaded app, so the whole badge row is not an offer
+                     worth making. Without this the row paints, sits there for
+                     the ~1.5s /api/me takes for a signed-in account, and then
+                     vanishes (Jacob 8/24).
+   .hs-play-dismissed  they pressed the badge's ✕. The Play badge is in the
+                     static HTML so it does not shove the App Store badge
+                     sideways when prefs land; this keeps it invisible for the
+                     one paint before React can unmount it. */
+html.hs-has-app .hs-store-badges,
+html.hs-play-dismissed .hs-play-badge {
+  display: none;
+}
+
 /* Optional media spoiler mask. Put this class only on actual post previews —
    never source/league logos — and clip the small scale-up inside the wrapper. */
 .news-media-preview {
