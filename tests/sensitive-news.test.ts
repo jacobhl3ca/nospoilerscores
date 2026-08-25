@@ -252,6 +252,13 @@ const SAFE = [
   "He stabbed at the ball but could only find the side netting",
   "Winger stabbed it wide from a promising position",
   "A clever stabbing finish settles a tight derby",
+  // Figurative "held hostage by <penalties/VAR/…>" / "hostage to fortune" — a
+  // team or game held back by something out of its control, not a real captive.
+  "Offense held hostage by penalties all night",
+  "The game was held hostage by VAR reviews",
+  "United look hostage to fortune with that lineup gamble",
+  "A season held hostage by injuries to its best players",
+  "Young side looked hostage to their nerves in the second half",
 ];
 
 for (const headline of SAFE) {
@@ -272,6 +279,17 @@ test("the 'opened fire from <long range>' idiom strip does not swallow a real sh
   assert.equal(sensitiveCategoryOf("Suspect opened fire at a crowd near the stadium"), "violence");
   assert.equal(sensitiveCategoryOf("Shooter opened fire from a moving car"), "violence");
   assert.equal(sensitiveCategoryOf("Attacker opened fire from close range"), "violence");
+});
+
+test("the figurative 'hostage' idiom strip does not swallow a real hostage taking", () => {
+  // Only an abstract game/condition captor is stripped — a real hostage taking
+  // names a person captor or no captor at all ("held hostage by armed men",
+  // "taken hostage", "hostage situation"), none of which the strip covers, so
+  // it must still trip the `hostage` violence pattern.
+  assert.equal(sensitiveCategoryOf("Gunmen held fans hostage inside the stadium"), "violence");
+  assert.equal(sensitiveCategoryOf("Player taken hostage in an armed robbery"), "violence");
+  assert.equal(sensitiveCategoryOf("Hostage situation near the arena ends peacefully"), "violence");
+  assert.equal(sensitiveCategoryOf("Coach held hostage by armed men for hours"), "violence");
 });
 
 test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
