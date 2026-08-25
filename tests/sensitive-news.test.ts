@@ -36,6 +36,7 @@ const SENSITIVE: [string, string][] = [
   ["Defensive tackle spits on the quarterback and is ejected", "violence"],
   ["Star pitcher opens up about his overdose", "selfharm"],
   ["Beloved former captain dying in hospice, club confirms", "death"],
+  ["Club pays tribute to the late chairman ahead of kickoff", "death"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
@@ -109,6 +110,12 @@ const SAFE = [
   "The late red card to Smith changed the whole game",
   "Dramatic finish decided by the late save from Courtois",
   "The late sending-off left them a man down",
+  // "the late tackle/challenge/foul/booking" — the foul that draws the card is
+  // the same on-field-incident idiom, not a death.
+  "Sent off for the late tackle that swung the derby",
+  "The late challenge earned him a straight red",
+  "Punished for the late foul on the edge of the box",
+  "The late booking rules him out of the final",
   // "the late bloomer/developer/starter" late-career player-type idiom — a
   // player who peaked late, not a death.
   "The late bloomer finally gets his shot in the starting XI",
