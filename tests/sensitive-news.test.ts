@@ -116,6 +116,12 @@ const SAFE = [
   "The late challenge earned him a straight red",
   "Punished for the late foul on the edge of the box",
   "The late booking rules him out of the final",
+  // "the late brace/consolation/cameo/flourish" — a late scoring or impact
+  // moment, not a death.
+  "Haaland seals it with the late brace at the Etihad",
+  "United grab only the late consolation in a 3-1 defeat",
+  "The late cameo off the bench turned the game around",
+  "City's late flourish puts the result beyond doubt",
   // "the late bloomer/developer/starter" late-career player-type idiom — a
   // player who peaked late, not a death.
   "The late bloomer finally gets his shot in the starting XI",

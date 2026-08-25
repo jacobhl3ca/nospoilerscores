@@ -119,7 +119,13 @@ const IDIOM = new RegExp(
     // "the late red card that swung the derby", "the late save from the keeper",
     // "sent off for the late tackle", "the late foul on the edge of the box" —
     // and carry no death sense, so they join the strip on the same reasoning.
-    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
+    // The late scoring/impact nouns are the same late-drama staple — "the late
+    // brace" (two goals), "the late consolation" (a consolation goal), "the late
+    // cameo" (a substitute's brief appearance), "the late flourish" — each names
+    // a game moment, never a person, so a genuine "the late <Name>" / "the late
+    // great" / "the late owner/coach/legend" still matches death exactly as the
+    // game-event and scheduling nouns above do.
+    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|braces?|consolations?|cameos?|flourish(?:es)?|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
     // "the late bloomer / the late developer / the late starter" — the staple
     // profile framing for a player who came good later than usual (a career
     // narrative, a draft-sleeper feature), never a deceased person. Like the
