@@ -107,6 +107,19 @@ const IDIOM = new RegExp(
     // on life support" / "the driver is on life support" still matches (the
     // person subject isn't one of these nouns).
     "(hopes?|chances?|dreams?|aspirations?|bid|campaign|defen[cs]e|dynasty|title|playoffs?|postseason|season|series) ((is|are|now|still|all but|officially|basically|practically|barely|remains?|sits?|hangs?|hanging|left|already|essentially|firmly|clinging|but|no longer|almost|nearly) )*on life[ -]support",
+    // A "heart-attack finish", "heart attack football", or a nail-biter that
+    // "gave the fans a heart attack" is the staple tense-ending idiom — the
+    // figurative use of the medical `heart attack` pattern, which pulled ordinary
+    // stoppage-time recaps under "serious illness" for anyone with the main filter
+    // on ("heart attack finish as United win it late", "that comeback nearly gave
+    // the fans a heart attack"). Stripped ONLY in its two figurative forms: an
+    // adjectival "heart attack <game noun>" (finish, football, ending, stuff …),
+    // and "gave/give <someone> a heart attack". A real cardiac event reads
+    // "suffered a heart attack", "had a heart attack", "collapsed with a heart
+    // attack" or "died of a heart attack" — none of these forms — so it still
+    // matches. `had` is deliberately OUT (a real one reads "had a heart attack").
+    "heart[ -]attack (finish(es)?|ending|football|stuff|material|inducing|mode|territory|drama|escape|thriller|win|victory|comeback|scenes?|special)",
+    "(gave|give|gives|giving|handed|hands|hand) ((me|us|us all|him|her|them|everyone)|((the|their|his|her|its|our|my) )?(fans?|supporters?|crowd|faithful|neutrals?|viewers?|players?)) (a|another) heart attack",
     // A "batting collapse", "second-half collapse" or "top-order collapse" is the
     // staple sports-performance idiom (cricket especially, but soccer/basketball
     // too) for a side throwing away a position — the figurative use of the medical

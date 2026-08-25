@@ -101,6 +101,13 @@ const SAFE = [
   "Their title defense is on life support",
   "Championship dreams all but on life support after Game 5",
   "The dynasty is on life support",
+  // Figurative "heart attack finish / football" and "gave the fans a heart
+  // attack" — a tense finish must not read as a medical emergency.
+  "Heart attack finish as United win it in stoppage time",
+  "Pure heart attack football from Sunderland again",
+  "A heart attack ending sees City hold on at the death",
+  "That comeback nearly gave the fans a heart attack",
+  "City give their supporters a heart attack before holding on",
   // Figurative "charged with <a task>" — the hiring/management framing must not
   // read as a criminal charge.
   "New coach charged with turning the franchise around",
@@ -221,6 +228,16 @@ test("the 'the late <game event>' idiom strip does not swallow a real death", ()
   // The scheduling nouns added to the strip ("the late game/window/…") must not
   // punch a hole in a real death that happens to sit beside one of them.
   assert.equal(sensitiveCategoryOf("Legendary broadcaster dies before the late game"), "death");
+});
+
+test("the 'heart attack <finish>' idiom strip does not swallow a real cardiac event", () => {
+  // Only the figurative forms are stripped — a real cardiac event reads
+  // "suffered/had a heart attack", "collapsed with a heart attack" or "died of a
+  // heart attack", so it must still trip the medical (or death) pattern.
+  assert.equal(sensitiveCategoryOf("Midfielder suffered a heart attack during the warmup"), "medical");
+  assert.equal(sensitiveCategoryOf("Player collapsed with a heart attack in training"), "medical");
+  assert.equal(sensitiveCategoryOf("Legend had a heart attack on the touchline, in hospital"), "medical");
+  assert.equal(sensitiveCategoryOf("Former striker died of a heart attack aged 59"), "death");
 });
 
 test("the 'tragic <mistake>' idiom strip does not swallow a real tragedy", () => {
