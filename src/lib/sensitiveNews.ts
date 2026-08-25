@@ -184,6 +184,19 @@ const IDIOM = new RegExp(
     // court" or "collapsed during training" (a person, no match day) still trips
     // medical — a genuine on-field collapse names a place, never a day number.
     "collapse[sd]? on (day (one|two|three|four|five|\\d+)|the (final|last|opening|first|second|third|fourth|fifth) day)",
+    // "collapsed at the death" — a side named directly conceding or losing wickets
+    // in the closing moments ("Spurs collapse at the death again", "United
+    // collapsed at the death to lose it 2-1", "England collapsed at the death
+    // chasing 180"). "the death" is the sports-timing noun for the final minutes
+    // (the same closing-moments sense as the "dying seconds/minutes" strip above),
+    // but with a bare team subject there is no modifier or innings/chase noun for
+    // the two collapse strips above to catch, so it slipped straight through to
+    // the bare `collapsed? (on|during|at|mid)` medical pattern via the `at` branch
+    // and read as a player collapsing. Stripped ONLY before "the death", so a real
+    // "collapsed at the training ground / at the crease / at Anfield" (a person at
+    // a PLACE, never a timing noun) still trips medical — a genuine on-field
+    // collapse names where it happened, matching the day-marker reasoning above.
+    "collapse[sd]? at the death",
     // ⚠️ Do NOT add a bare letter here. "…|b)" once matched "killed b", which
     // stripped "killed by" out of every real death headline before the patterns
     // ran ("killed by an ICE agent" scored as ordinary sports talk).

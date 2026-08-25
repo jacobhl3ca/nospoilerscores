@@ -168,6 +168,13 @@ const SAFE = [
   "England collapsed on the final day at Lord's",
   "India collapsed on day 4 chasing a modest 250",
   "South Africa collapsed on the last day to lose the series",
+  // The BARE-SUBJECT "<side> collapsed at the death" late-collapse form — a team
+  // conceding or losing wickets in the closing moments, with no modifier or
+  // innings/chase noun the strips above catch — must not read as a player
+  // medically collapsing. "the death" is the closing-minutes timing noun.
+  "Spurs collapse at the death again as City snatch the win",
+  "United collapsed at the death to lose it 2-1",
+  "England collapsed at the death chasing 180",
   // Figurative "arrest the <slide/slump/…>" — a team halting a bad run must not
   // read as a criminal arrest.
   "Boss desperate to arrest the slide after four straight defeats",
@@ -358,6 +365,14 @@ test("the '<side> collapsed on day N' idiom strip does not swallow a real medica
   // names no match day and must still trip the `medical` pattern.
   assert.equal(sensitiveCategoryOf("Bowler collapsed on the pitch on day three, taken to hospital"), "medical");
   assert.equal(sensitiveCategoryOf("Umpire collapsed during play and was rushed to hospital"), "medical");
+});
+
+test("the '<side> collapsed at the death' idiom strip does not swallow a real medical collapse", () => {
+  // Only the "the death" closing-minutes timing noun is stripped — a person
+  // collapsing at a PLACE (the crease, the training ground, a venue) names no
+  // timing noun and must still trip the `medical` pattern.
+  assert.equal(sensitiveCategoryOf("Batsman collapsed at the crease and was stretchered off"), "medical");
+  assert.equal(sensitiveCategoryOf("Midfielder collapsed at the training ground, in critical condition"), "medical");
 });
 
 test("the 'on life support' idiom strip does not swallow a real medical event", () => {
