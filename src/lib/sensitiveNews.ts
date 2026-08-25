@@ -114,10 +114,12 @@ const IDIOM = new RegExp(
     // / "the late great" / "the late owner/coach/legend" (none of these nouns)
     // still matches death — matching the "dying <timing>" strip above. The
     // on-field-incident nouns (own goal / red card / sending-off / dismissal /
-    // save) are match-report staples too — "decided by the late own goal", "the
-    // late red card that swung the derby", "the late save from the keeper" — and
-    // carry no death sense, so they join the strip on the same reasoning.
-    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
+    // save, plus the foul that draws the card — late tackle / challenge / foul /
+    // booking) are match-report staples too — "decided by the late own goal",
+    // "the late red card that swung the derby", "the late save from the keeper",
+    // "sent off for the late tackle", "the late foul on the edge of the box" —
+    // and carry no death sense, so they join the strip on the same reasoning.
+    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
     // "the late bloomer / the late developer / the late starter" — the staple
     // profile framing for a player who came good later than usual (a career
     // narrative, a draft-sleeper feature), never a deceased person. Like the
