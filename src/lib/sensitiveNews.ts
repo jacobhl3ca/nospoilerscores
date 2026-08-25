@@ -322,6 +322,16 @@ const IDIOM = new RegExp(
     // the crime as a noun (or a crime gerund kept off this list), never as one of
     // these turn-the-team-around verbs.
     "charged with (turning|righting|steering|guiding|leading|rebuilding|reviving|restoring|resurrecting|overhauling|transforming|reshaping|revamping|reversing|halting|ending|snapping|maintaining|defending|protecting|managing|developing|mentoring|anchoring|uniting|rallying|motivating|navigating|salvaging|steadying|stabili[sz]ing|revitali[sz]ing|moderni[sz]ing)",
+    // "A derby charged with emotion", "an atmosphere charged with tension", "a
+    // final charged with significance/history/drama" — the staple match-report
+    // framing for a highly-charged occasion. It tripped the same bare `charged
+    // with` crime pattern as the management-verb form above and hid ordinary
+    // build-ups/recaps under "violence, crime or abuse" for anyone with the main
+    // filter on. Stripped ONLY before an emotion/atmosphere noun, so a real
+    // "charged with assault / DUI / battery / murder / possession" — which names
+    // the offence, never one of these feelings — still matches. ("emotionally
+    // charged" isn't touched: it never reads `charged with`, so it never tripped.)
+    "charged with (emotion|emotions|tension|drama|significance|meaning|history|intensity|passion|atmosphere|electricity|feeling|feelings|nostalgia|needle|spice|edge|importance|energy|expectation|expectations|symbolism|jeopardy|occasion|sentiment|anticipation|excitement|menace|romance|controversy)",
     // "Sentenced to relegation / the drop / mid-table mediocrity / another season
     // in the Championship" is the staple English-football framing for a club whose
     // fate is now sealed — the figurative use of the bare `sentenced to` crime
