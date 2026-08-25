@@ -294,6 +294,12 @@ export default function GameHighlights({
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
+    // Guard the post-await status writes against a mid-flight unmount (modal
+    // close, board scroll/date-nav) — each resolve is a multi-second live
+    // YouTube scrape. Mirrors the `cancelled` flag on the MLB effect right
+    // below. prefetchStarted keeps this effect to one run, so there is no
+    // stale-vs-fresh race; this only drops the writes once the card is gone.
+    let cancelled = false;
     const away = hlAway;
     const home = hlHome;
     const series = game.seriesNote;
@@ -381,13 +387,14 @@ export default function GameHighlights({
             }
             prefetchedTelemundoShortId.current = telemundoShortId;
             prefetchedTelemundoLongId.current = telemundoLongId;
+            if (cancelled) return;
             setTelemundoShortStatus(telemundoShortId ? "found" : "missing");
             setTelemundoLongStatus(telemundoLongId ? "found" : "missing");
           })();
         }
         const officialId = await officialP;
         prefetchedOfficialId.current = officialId;
-        setOfficialStatus(officialId ? "found" : "missing");
+        if (!cancelled) setOfficialStatus(officialId ? "found" : "missing");
         let secondId = await secondP;
         if (!bakedSecondary && secondId && officialId && secondId === officialId) {
           // Collision — the parallel (unexcluded) 2nd landed the same clip as the
@@ -397,9 +404,10 @@ export default function GameHighlights({
           secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended, weekNumber, compTokens);
         }
         prefetchedVideoId.current = secondId;
-        setSearchStatus(secondId ? "found" : "missing");
+        if (!cancelled) setSearchStatus(secondId ? "found" : "missing");
       })();
     }
+    return () => { cancelled = true; };
   }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, weekNumber]);
 
   // See resolvedMlb above. Fires only when the board enrich did NOT already
