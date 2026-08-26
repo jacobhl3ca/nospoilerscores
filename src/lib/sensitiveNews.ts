@@ -145,7 +145,14 @@ const IDIOM = new RegExp(
     // "the late blow" (a late setback or goal — "the late blow of a stoppage-time
     // equaliser"). None of run/runs, wicket/wickets, or blow can name a deceased
     // person, so a real "the late <Name>" / "the late great" still matches death.
-    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|runs?|wickets?|blows?|braces?|consolations?|cameos?|flourish(?:es)?|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
+    // The US-sports scoring plays belong here for the identical reason, and the
+    // app runs NFL/NBA/MLB columns that produce this exact phrasing constantly:
+    // "the late touchdown", "the late field goal", "the late three-pointer", "the
+    // late basket/bucket/layup/jumper", "the late home run", "the late grand
+    // slam". Each names a scoring play, never a person, so a genuine "the late
+    // <Name>" / "the late chairman" (a role/name, none of these nouns) still
+    // matches death — the same scoping every noun above uses.
+    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|runs?|wickets?|blows?|braces?|consolations?|cameos?|flourish(?:es)?|touchdowns?|field goals?|home runs?|grand slams?|three.?pointers?|baskets?|buckets?|layups?|jumpers?|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
     // "the late bloomer / the late developer / the late starter" — the staple
     // profile framing for a player who came good later than usual (a career
     // narrative, a draft-sleeper feature), never a deceased person. Like the
