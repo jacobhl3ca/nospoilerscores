@@ -179,7 +179,15 @@ export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> 
 
     const now = Date.now();
     const starts = chosen.startTime ? new Date(chosen.startTime).getTime() : dateMs(chosen.startDate) - DAY_MS / 2;
-    const ends = chosen.endTime ? new Date(chosen.endTime).getTime() : dateMs(chosen.endDate) + DAY_MS / 2;
+    // No-endTime fallback: dateMs anchors endDate to noon UTC, so `+ DAY_MS/2`
+    // closed the live window at endDate 24:00 UTC — 5 pm PT / 8 pm ET on the
+    // final day. A major's final table plays that evening local time (late-night
+    // UTC of the next day), so from ~5 pm PT the tile flipped to "Final" and
+    // surfaced the finished-event replay while play was still under way —
+    // spoiler-adjacent. Extend the tail a full day to endDate+1 12:00 UTC
+    // (≈ next-morning local), matching boxing.ts's documented fix; records with
+    // an exact endTime are unaffected, and the "pre" edge is unchanged.
+    const ends = chosen.endTime ? new Date(chosen.endTime).getTime() : dateMs(chosen.endDate) + DAY_MS;
     const state: "pre" | "in" | "post" = now < starts ? "pre" : now <= ends ? "in" : "post";
     const exactBroadcast = !!chosen.startTime;
     const card: LeagueEventCard = {
