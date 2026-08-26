@@ -346,8 +346,20 @@ const IDIOM = new RegExp(
     // or vehicle-modified wreck) still matches, matching the scoping the strips
     // above use.
     "(nervous|emotional) wrecks?",
-    // Suicide as tactic.
-    "suicide (squeeze|pass|sprints?|drills?|line)",
+    // Suicide as tactic / figurative doomed-or-reckless play. "suicide squeeze"
+    // (baseball), "suicide pass"/"suicide sprints"/"suicide drills" (conditioning)
+    // sit alongside the figurative "suicide mission" (a doomed task — "a suicide
+    // mission at the Bernabeu"), "suicide pace" (going out recklessly fast, the
+    // staple distance-running / cycling framing), and "suicide run" (a reckless
+    // attacking run) — all sports idiom, never a real self-harm event. `suicide`
+    // is a bare self-harm pattern, so without this the main "Hide upsetting news"
+    // toggle silently pulled these ordinary tactics/recaps under "self-harm or
+    // addiction". Stripped ONLY before these tactic/tempo nouns, so a real
+    // "suicide attempt", "suicide prevention", "died by suicide", or "suicidal"
+    // (none of these nouns — "suicidal" isn't even the "suicide " form) still
+    // matches. The bare "suicides" conditioning drill never tripped (the pattern
+    // word-boundaries "suicide"), so it needs no entry here.
+    "suicide (squeeze|pass|sprints?|drills?|line|mission|pace|runs?)",
     // Crime idiom.
     "(stole|steal|stealing|robbed|robbery|heist) (the|a|him|them|second|third|home|bases?)",
     "(assault|assaulting|assaulted) (on|the) (record|rim|basket|standings|leaderboard|title|field)",
