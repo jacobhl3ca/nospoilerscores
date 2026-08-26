@@ -124,8 +124,16 @@ const IDIOM = new RegExp(
     // cameo" (a substitute's brief appearance), "the late flourish" — each names
     // a game moment, never a person, so a genuine "the late <Name>" / "the late
     // great" / "the late owner/coach/legend" still matches death exactly as the
-    // game-event and scheduling nouns above do.
-    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|braces?|consolations?|cameos?|flourish(?:es)?|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
+    // game-event and scheduling nouns above do. Cricket's own late-drama pair —
+    // "the late runs" (a flurry of scoring off the last few overs) and "the late
+    // wickets" (a burst of dismissals to close an innings) — belong here for the
+    // same reason: "the late runs off the last over proved decisive", "England
+    // grabbed the late wickets to seal victory". So does the general "the late
+    // run" (a side's closing charge — "survived the late run to hold on") and
+    // "the late blow" (a late setback or goal — "the late blow of a stoppage-time
+    // equaliser"). None of run/runs, wicket/wickets, or blow can name a deceased
+    // person, so a real "the late <Name>" / "the late great" still matches death.
+    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|runs?|wickets?|blows?|braces?|consolations?|cameos?|flourish(?:es)?|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
     // "the late bloomer / the late developer / the late starter" — the staple
     // profile framing for a player who came good later than usual (a career
     // narrative, a draft-sleeper feature), never a deceased person. Like the

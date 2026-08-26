@@ -122,6 +122,14 @@ const SAFE = [
   "United grab only the late consolation in a 3-1 defeat",
   "The late cameo off the bench turned the game around",
   "City's late flourish puts the result beyond doubt",
+  // Cricket's "the late runs/wickets" late-drama pair, the general "the late run"
+  // closing charge, and "the late blow" setback — game moments, not a death.
+  "England grabbed the late wickets to seal victory",
+  "The late wicket that changed the whole complexion of the Test",
+  "Australia's late runs off the final over proved decisive",
+  "The late runs from the tail frustrated the bowlers",
+  "Spurs survived the late run to hold on for the win",
+  "Undone by the late blow of a stoppage-time equaliser",
   // "the late bloomer/developer/starter" late-career player-type idiom — a
   // player who peaked late, not a death.
   "The late bloomer finally gets his shot in the starting XI",
@@ -356,6 +364,10 @@ test("the 'the late <game event>' idiom strip does not swallow a real death", ()
   // "the late <person>" naming the deceased.
   assert.equal(sensitiveCategoryOf("Tributes for the late Gordon Banks, the goalkeeper who died today"), "death");
   assert.equal(sensitiveCategoryOf("The late developer of the club's academy has passed away"), "death");
+  // And the cricket run/wicket and "the late blow" nouns must not shield a real
+  // "the late <person>" or a death cue sitting next to one of them.
+  assert.equal(sensitiveCategoryOf("Umpire who signalled the late wicket has died, board says"), "death");
+  assert.equal(sensitiveCategoryOf("Tributes to the late Shane Warne pour in from around the world"), "death");
 });
 
 test("the 'heart attack <finish>' idiom strip does not swallow a real cardiac event", () => {
