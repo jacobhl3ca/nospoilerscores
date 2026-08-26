@@ -149,6 +149,13 @@ const SAFE = [
   "The late runs from the tail frustrated the bowlers",
   "Spurs survived the late run to hold on for the win",
   "Undone by the late blow of a stoppage-time equaliser",
+  // "the late <US scoring play>" — the NFL/NBA/MLB late-drama phrasing the app's
+  // own columns produce, a game moment and never a death.
+  "Chiefs win it with the late touchdown at Arrowhead",
+  "Mahomes seals it with the late field goal as time expires",
+  "Curry drills the late three-pointer to steal the game",
+  "The late basket at the buzzer sends it to overtime",
+  "Judge wins it with the late home run in the ninth",
   // "the late bloomer/developer/starter" late-career player-type idiom — a
   // player who peaked late, not a death.
   "The late bloomer finally gets his shot in the starting XI",
