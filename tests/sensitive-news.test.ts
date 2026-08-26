@@ -272,6 +272,11 @@ const SAFE = [
   "Alonzo Mourning honored at halftime as the Heat retire his number",
   "Zo Mourning weighs in on the Heat's rebuild",
   "Alonzo Mourning reflects on his Hall of Fame career",
+  // Figurative "suicide mission / pace / run" — a doomed task, a reckless early
+  // tempo, or a reckless attacking run must not read as self-harm.
+  "United face a suicide mission at the Bernabeu",
+  "The leaders went off at a suicide pace and paid for it late",
+  "A suicide run down the wing nearly gifts a goal on the break",
 ];
 
 for (const headline of SAFE) {
@@ -279,6 +284,17 @@ for (const headline of SAFE) {
     assert.equal(sensitiveCategoryOf(headline), null);
   });
 }
+
+test("the 'suicide <tactic>' idiom strip does not swallow a real self-harm item", () => {
+  // Only the tactic/tempo nouns are stripped — a genuine self-harm item reads
+  // "suicide attempt", "suicide prevention", "died by suicide" or "suicidal",
+  // none of which carry these nouns, so it must still trip the self-harm (or
+  // death) pattern.
+  assert.equal(sensitiveCategoryOf("Player opens up about his suicide attempt"), "selfharm");
+  assert.equal(sensitiveCategoryOf("Club backs a suicide prevention campaign"), "selfharm");
+  assert.equal(sensitiveCategoryOf("He has battled suicidal thoughts for years"), "selfharm");
+  assert.equal(sensitiveCategoryOf("Former athlete died by suicide, family says"), "death");
+});
 
 test("empty text is never sensitive", () => {
   assert.equal(sensitiveCategoryOf(""), null);
