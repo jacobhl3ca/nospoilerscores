@@ -327,6 +327,21 @@ const IDIOM = new RegExp(
     // wreck that reads "crashed to the ground" / "crashed to a halt" (no such noun)
     // still matches the crash pattern.
     "crash(es|ed|ing)? to ((a|an|the|their|another|yet another) )?([\\w'-]+ ){0,3}(defeat|defeats|loss|losses)",
+    // "a car crash of a performance", "a car-crash first half", "car-crash
+    // defending", "their season is a car crash", "the interview was an absolute
+    // car crash" — the ubiquitous idiom for a shambolic showing, not a road
+    // accident. `car crash` sits in the DEATH pattern (to catch a real fatal
+    // crash), so the figurative use pulled ordinary match reports and columns
+    // under "death or tragedy" for anyone with the main "Hide upsetting news"
+    // toggle on — and under the opt-in crash toggle too. Stripped ONLY in the
+    // three figurative frames — "car crash of a <noun>", a predicate "<is/was/
+    // been …> a car crash", and an adjectival "car-crash <shambles noun>" — so a
+    // real "killed in a car crash", "died in a car crash", "tragic car crash",
+    // "car crash that killed", or "victims of a car crash" (a road accident named
+    // as the circumstance, never as a performance verdict) still matches death.
+    "car.?crash of (a|an|the) ",
+    "(is|was|were|been|being|becomes?|becoming|remains?|looked?|looks|feels?|felt|seem(?:s|ed)?|turn(?:s|ed|ing)? into|descend(?:s|ed|ing)? into) (?:like )?(?:a |an |another |one )?(?:absolute |total |complete |utter |slow.?motion |proper |right |sheer |pure )?car.?crash\\b",
+    "car.?crash (performances?|displays?|showings?|defending|defen[cs]es?|football|goalkeeping|tackling|passing|finishing|refereeing|officiating|management|interviews?|pressers?|afternoons?|evenings?|starts?|first half|second half|opening|ending|seasons?|campaigns?|sagas?)",
     // "a crash course in <X>" is the universal idiom for an intensive, learn-on-
     // the-fly introduction — a rookie's crash course in playoff hockey, a debut
     // crash course in the Premier League. It has nothing to do with a wreck, yet
