@@ -15,6 +15,9 @@ const SENSITIVE: [string, string][] = [
   ["Two hurt in a shooting outside the stadium", "violence"],
   ["Pitcher charged with DUI after early-morning stop", "violence"],
   ["Hall of Famer diagnosed with pancreatic cancer", "medical"],
+  // The `diagnosed with` catch-all must survive the injury-diagnosis strip for
+  // an illness with no dedicated keyword.
+  ["Veteran keeper diagnosed with a heart condition", "medical"],
   ["Midfielder collapsed on the pitch, taken to hospital", "medical"],
   ["Defenseman in critical condition after skate cut", "medical"],
   ["Two horses euthanized after breakdowns on the card", "animal"],
@@ -64,6 +67,15 @@ const SAFE = [
   "Torn ACL ends his season",
   "Dodgers place struggling closer on the injured list",
   "Star winger out 4-6 weeks with a hamstring strain",
+  // A routine injury diagnosis is roster news, not "serious illness" — the
+  // `diagnosed with` medical catch-all used to hide all of these.
+  "Midfielder diagnosed with a hamstring strain, out two weeks",
+  "Guard diagnosed with a high ankle sprain",
+  "Quarterback diagnosed with a torn ACL, season over",
+  "Winger diagnosed with a grade 2 calf strain",
+  "Striker diagnosed with a fractured metatarsal",
+  "Rookie diagnosed with a dislocated shoulder",
+  "Fullback diagnosed with a nasty groin problem",
   "Two teams on a collision course for the division title",
   "Header off the head of the captain wins it at the death",
   "Team fires head coach after 2-9 start",

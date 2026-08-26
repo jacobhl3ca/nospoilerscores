@@ -462,6 +462,22 @@ const IDIOM = new RegExp(
     // situation/crisis" (a person or no captor at all, never one of these nouns)
     // still matches violence, matching the scoping the strips above use.
     "hostage (by|to) (the |their |its |his |her |our |a |an )?(turnovers?|penalt(?:y|ies)|fouls?|foul trouble|injur(?:y|ies)|weather|rain|wind|conditions|VAR|video reviews?|replay reviews?|reviews?|the schedule|the fixture list|the clock|the calendar|nerves?|fear|doubt|indecision|momentum|officiating|fortune)",
+    // "diagnosed with a hamstring strain / a high ankle sprain / a torn ACL / a
+    // fractured metatarsal" — the routine injury-diagnosis update that fills a
+    // sports feed. `diagnosed with` is the medical catch-all for an unnamed
+    // illness (cancer, ALS, a heart condition etc. carry their own cues), so a
+    // plain muscle/joint diagnosis tripped it and read as "serious illness" for
+    // anyone with the main filter on — exactly the roster-injury news the module
+    // deliberately keeps VISIBLE (see the injury note: "torn ACL ends his season"
+    // stays readable). Stripped ONLY when the object is a musculoskeletal injury:
+    // a body part followed by an injury noun ("hamstring strain", "knee injury"),
+    // or an injury adjective followed by a body part ("torn ACL", "fractured
+    // metatarsal"). Head/neck/spine/organs and every named illness are left off
+    // the body-part list, so "diagnosed with a concussion" (its own injury cue),
+    // "diagnosed with a heart condition" and "diagnosed with pancreatic cancer"
+    // all still match. `_bp` and `_adj` are inlined into both forms below.
+    "diagnosed with (a |an |his |her |their |the )?([\\w'-]+ ){0,3}(hamstrings?|quads?|quadriceps|calf|calves|groin|hips?|glutes?|obliques?|adductors?|abductors?|thighs?|shins?|hip.?flexors?|knees?|ankles?|shoulders?|wrists?|thumbs?|fingers?|hands?|foot|feet|elbows?|toes?|forearms?|biceps?|triceps?|ribs?|collar.?bones?|clavicles?|kneecaps?|patella|meniscus|acl|mcl|pcl|lcl|achilles|metatarsals?|ligaments?|tendons?|cartilage|rotator cuff|labrum) (strains?|sprains?|tears?|knocks?|niggles?|injur(?:y|ies)|problems?|issues?|complaints?|damage|tightness|soreness|fractures?|ruptures?|contusions?|bruis(?:e|es|ing)|tweaks?|pulls?|inflammation|tendin?itis)",
+    "diagnosed with (a |an |his |her |their |the )?([\\w'-]+ ){0,3}(torn|ruptured|fractured|broken|sprained|strained|dislocated|bruised|pulled|tweaked|cracked|twisted|damaged|inflamed) (a |an |his |her |their |the )?(hamstrings?|quads?|quadriceps|calf|calves|groin|hips?|glutes?|obliques?|adductors?|abductors?|thighs?|shins?|hip.?flexors?|knees?|ankles?|shoulders?|wrists?|thumbs?|fingers?|hands?|foot|feet|elbows?|toes?|forearms?|biceps?|triceps?|ribs?|collar.?bones?|clavicles?|kneecaps?|patella|meniscus|acl|mcl|pcl|lcl|achilles|metatarsals?|ligaments?|tendons?|cartilage|rotator cuff|labrum)",
   ].join("|"),
   "gi",
 );
