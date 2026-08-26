@@ -801,17 +801,33 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Jump to a fraction of the clip. Works off the YouTube player's reported
   // duration so no timeline is ever revealed.
   const seekToPct = useCallback((pct: number) => {
+    const target = Math.min(pct / 100, seekCap);
+    // Direct-stream clips (MLB .m3u8, v.redd.it, streamff) have no YouTube
+    // player — playerRef is null, so this jump silently did nothing on them
+    // while the ±5s buttons beside it worked (seekBy already branches on
+    // hlsMode). Seek the in-document <video> instead; same seekCap and
+    // warn-halfway guard.
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const d = v.duration;
+      if (!d || !isFinite(d) || d <= 0) return;
+      guardSeek(target, () => {
+        v.currentTime = d * target;
+        void v.play().catch(() => { /* autoplay prompt already covers this */ });
+        setProgress(target);
+      });
+      return;
+    }
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
     const d = p.getDuration();
     if (!d || d <= 0) return;
-    const target = Math.min(pct / 100, seekCap);
     guardSeek(target, () => {
       p.seekTo(d * target, true);
       p.playVideo?.();
       setProgress(target);
     });
-  }, [seekCap, guardSeek]);
+  }, [seekCap, guardSeek, hlsMode]);
 
   // Fraction (capped) for a given pointer x on the bar — shared by the seek and
   // the warn-guard so they agree on the target.
@@ -828,15 +844,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // ever shown. The warn-halfway confirm is gated at pointer-DOWN (below), not
   // here, so an active drag isn't interrupted.
   const seekFromClientX = useCallback((clientX: number) => {
+    const frac = fracFromClientX(clientX);
+    // Same direct-stream case as seekToPct/seekBy: no YouTube player, so drag
+    // the in-document <video>. frac is already capped at seekCap by
+    // fracFromClientX, so the ending still can't be scrubbed to.
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const d = v.duration;
+      if (!d || !isFinite(d) || d <= 0) return;
+      v.currentTime = d * frac;
+      void v.play().catch(() => { /* autoplay prompt already covers this */ });
+      setProgress(frac);
+      return;
+    }
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
-    const frac = fracFromClientX(clientX);
     const d = p.getDuration();
     if (!d || d <= 0) return;
     p.seekTo(d * frac, true);
     p.playVideo?.();
     setProgress(frac);
-  }, [fracFromClientX]);
+  }, [fracFromClientX, hlsMode]);
 
   // Skip back/forward by SEEK_STEP seconds — drives the ←/→ arrow keys and the
   // on-screen ±5s buttons. Unlike a jump or a bar-drag, stepping ±5s isn't a
