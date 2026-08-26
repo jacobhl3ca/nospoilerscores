@@ -257,6 +257,22 @@ const IDIOM = new RegExp(
     // a PLACE, never a timing noun) still trips medical — a genuine on-field
     // collapse names where it happened, matching the day-marker reasoning above.
     "collapse[sd]? at the death",
+    // "clubhouse cancer" / "a cancer in the locker room" / "a cancer in the
+    // dressing room" / "a cancer on the roster" — the staple sports idiom for a
+    // disruptive, morale-poisoning player (baseball's "clubhouse cancer" most of
+    // all, but every sport uses "a cancer in the team"). `cancer` is a bare
+    // medical pattern, so without this the main "Hide upsetting news" toggle
+    // silently pulled ordinary locker-room-drama and roster stories under
+    // "serious illness" for anyone with the filter on. Stripped ONLY in the two
+    // figurative frames — a compound "<team-place> cancer", and "cancer in/on
+    // <the/a/…> <team-place>" where the container is a room or whole-team noun a
+    // person is never literally "inside" — so a real "diagnosed with cancer",
+    // "cancer diagnosis", "cancer battle", or "prostate cancer" (which name the
+    // illness directly, never as a person in a locker room) still matches
+    // medical. "family"/"body" and every anatomical site are deliberately OFF
+    // the noun list, so a genuine "cancer in the family" still matches.
+    "(locker.?room|clubhouse|dressing.?room|dug.?out) cancer",
+    "cancer (in|on) (the |their |his |her |its |a |this |that |such an? )?([\\w'-]+ ){0,2}(locker.?room|clubhouse|dressing.?room|dug.?out|team|teams|side|squad|roster|franchise)",
     // ⚠️ Do NOT add a bare letter here. "…|b)" once matched "killed b", which
     // stripped "killed by" out of every real death headline before the patterns
     // ran ("killed by an ICE agent" scored as ordinary sports talk).

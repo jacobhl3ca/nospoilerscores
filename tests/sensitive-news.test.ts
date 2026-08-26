@@ -309,6 +309,14 @@ const SAFE = [
   "A car-crash first half leaves them 3-0 down",
   "Car-crash defending gifts the winner",
   "That was car-crash football from start to finish",
+  // Figurative "clubhouse cancer" / "a cancer in the locker room" — the staple
+  // idiom for a disruptive player, not a real illness. "cancer" lives in the
+  // medical pattern, so these must not read as "serious illness".
+  "He became a clubhouse cancer and the front office moved on",
+  "A cancer in the locker room, sources say",
+  "Why the veteran was a cancer in the dressing room",
+  "A cancer on the roster the team finally cut loose",
+  "Manager calls the winger a cancer in the team",
 ];
 
 for (const headline of SAFE) {
