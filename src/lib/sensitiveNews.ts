@@ -101,6 +101,18 @@ const IDIOM = new RegExp(
     // real "dying in hospice" / "his dying wish" (dying of/in/<possessive>)
     // carries none of these bird nouns and still matches death.
     "dying (quails?|seagulls?)",
+    // Cricket's "death overs" — the final overs of a limited-overs innings — and
+    // everything about them: "death bowling", "death bowler", "death hitting", "a
+    // fine death spell", "his death-over execution", "their death-overs specialist".
+    // A bare "death overs / death bowling" never tripped (no death pattern matches
+    // "death <noun>"), but the possessive form "his/her/their death <phase noun>"
+    // hit the bare `(his|her|their) death` death pattern and pulled ordinary cricket
+    // previews/recaps under "death or tragedy" for anyone with the main "Hide
+    // upsetting news" toggle on — and the app runs a cricket/IPL column. Stripped
+    // ONLY before a cricket death-phase noun, so a real "his death shocked the
+    // sport" / "what caused his death" (a verb or clause, never one of these nouns)
+    // still matches death — the same possessive-scoping the strips above use.
+    "(his|her|their|its) death[ -](overs?|bowling|bowlers?|batting|hitting|slog|spell|phase|specialist|expert|yorkers?)",
     // "the late winner / the late equaliser / the late drama / the late show" —
     // the staple soccer/basketball framing for something that happened in the
     // closing minutes — AND the scheduling sense "the late game / the late window

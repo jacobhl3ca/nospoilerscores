@@ -93,6 +93,13 @@ const SAFE = [
   "Judge lifts a dying quail into shallow center for the go-ahead single",
   "A pair of dying quails fall in as the Yankees rally in the eighth",
   "Bloop single, a real dying seagull, drops in front of the outfielders",
+  // Cricket's "death overs" phase in the possessive form ("his/her/their death
+  // <phase noun>") — the final-overs game state, not a death.
+  "Bumrah at his best as his death bowling seals a tense IPL win",
+  "India need to fix their death bowling before the World Cup",
+  "Her death overs went for just four runs in the final",
+  "Their death-over execution let them down in the super over",
+  "Russell's death hitting drags the chase over the line",
   // "the late <game event>" late-drama idiom — must not read as death.
   "Liverpool snatch the late winner at Anfield",
   "Arsenal rescue a point with the late equaliser",
