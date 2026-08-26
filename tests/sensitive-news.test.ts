@@ -635,6 +635,32 @@ test("a real pile-up still matches after the fixture-pile-up strip", () => {
   }
 });
 
+test("'nervous/emotional wreck' idiom survives the crash toggle", () => {
+  // A person (or fanbase) in a state of distress is a "nervous wreck" / an
+  // "emotional wreck" — nothing to do with a vehicle wreck — so the opt-in
+  // crash toggle must not hide it.
+  for (const h of [
+    "The closer was a nervous wreck on the mound in the ninth",
+    "United fans are nervous wrecks after another late collapse",
+    "He was an emotional wreck after the final whistle",
+    "Manager admits he's a nervous wreck watching penalties",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), null, h);
+  }
+});
+
+test("a real wreck still matches after the nervous-wreck strip", () => {
+  // Only "nervous"/"emotional wreck" is stripped — a bare or vehicle-modified
+  // wreck must still trip the crash pattern.
+  for (const h of [
+    "Huge wreck at Daytona collects five cars",
+    "Multi-car wreck on the opening lap",
+    "The wreckage was strewn across the track",
+  ]) {
+    assert.equal(sensitiveCategoryOf(h, BOTH), "crash", h);
+  }
+});
+
 test("the figurative 'collision' idiom strip does not swallow a real collision", () => {
   // Only the matchup framings (a collision of/between an abstract noun, a
   // matchup-adjective collision) are stripped — a physical collision, one of

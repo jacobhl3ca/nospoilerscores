@@ -336,6 +336,16 @@ const IDIOM = new RegExp(
     "pile.?up of (fixtures|games|matches|injuries|goals|points|cards|draws|defeats|wins)",
     "(wreck|wrecked|wrecking) (them|him|her|it|the|that)",
     "trainwreck|train wreck",
+    // "a nervous wreck" / "an emotional wreck" — the everyday idiom for someone
+    // (a closer on the mound, a manager watching penalties, a fanbase) in a state
+    // of distress, never a vehicle wreck, yet it tripped the opt-in "hide crashes"
+    // toggle's bare `wreck(s|ed|age)?` pattern and pulled ordinary nerves/reaction
+    // pieces under "a crash or wreck". Stripped ONLY after "nervous"/"emotional" —
+    // adjectives that describe a person's state and never precede a real wreck —
+    // so a genuine "huge wreck at Daytona" / "multi-car wreck on lap one" (a bare
+    // or vehicle-modified wreck) still matches, matching the scoping the strips
+    // above use.
+    "(nervous|emotional) wrecks?",
     // Suicide as tactic.
     "suicide (squeeze|pass|sprints?|drills?|line)",
     // Crime idiom.
