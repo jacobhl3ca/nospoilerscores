@@ -296,6 +296,19 @@ const SAFE = [
   "United face a suicide mission at the Bernabeu",
   "The leaders went off at a suicide pace and paid for it late",
   "A suicide run down the wing nearly gifts a goal on the break",
+  // Figurative "car crash" — the ubiquitous idiom for a shambolic showing, not a
+  // road accident. "car crash" lives in the DEATH pattern (to catch a real fatal
+  // crash), so these must not read as "death or tragedy".
+  "A car crash of a performance from United",
+  "Their season is a car crash",
+  "The interview was an absolute car crash",
+  "A slow-motion car crash of a title defence",
+  "United's campaign has been a total car crash",
+  "A car crash of an afternoon at the Bridge",
+  "Their defending has become a car crash",
+  "A car-crash first half leaves them 3-0 down",
+  "Car-crash defending gifts the winner",
+  "That was car-crash football from start to finish",
 ];
 
 for (const headline of SAFE) {
@@ -421,6 +434,19 @@ test("the 'tragic <mistake>' idiom strip does not swallow a real tragedy", () =>
   assert.equal(sensitiveCategoryOf("Tragic accident at the circuit claims a driver"), "death");
   assert.equal(sensitiveCategoryOf("Young prospect tragically died in a car crash"), "death");
   assert.equal(sensitiveCategoryOf("Club mourns the tragic passing of its captain"), "death");
+});
+
+test("the figurative 'car crash' idiom strip does not swallow a real fatal crash", () => {
+  // Only the three figurative frames — "car crash of a <noun>", a predicate
+  // "<is/was/been …> a car crash", and an adjectival "car-crash <shambles noun>"
+  // — are stripped. A real road accident names the crash as the circumstance
+  // ("killed in / died in a car crash", "car crash that killed", "victims of a
+  // car crash"), never as a performance verdict, so it must still trip death.
+  assert.equal(sensitiveCategoryOf("Former player killed in a car crash aged 40"), "death");
+  assert.equal(sensitiveCategoryOf("Two teenagers die in a car crash near the stadium"), "death");
+  assert.equal(sensitiveCategoryOf("Car crash that killed the coach under investigation"), "death");
+  assert.equal(sensitiveCategoryOf("Fans mourn the victims of a car crash outside the ground"), "death");
+  assert.equal(sensitiveCategoryOf("Tragic car crash claims a rising star"), "death");
 });
 
 test("the 'charged with <task>' idiom strip does not swallow a real criminal charge", () => {
