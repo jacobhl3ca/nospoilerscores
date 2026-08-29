@@ -770,7 +770,14 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         document.body.appendChild(ta);
         ta.select();
         document.execCommand("copy");
-        document.body.removeChild(ta);
+        // `ta.remove()`, not `document.body.removeChild(ta)`: the copy already
+        // succeeded by this line, but removeChild throws "NotFoundError" if the
+        // DOM was reparented out from under us (a page-translation extension is
+        // the common cause) — the throw would skip the setCopied(true) below and
+        // swallow the "Copied!" confirmation for a copy that actually worked.
+        // remove() detaches the node from wherever it sits (or no-ops) and never
+        // throws, matching the measurement probes across the app.
+        ta.remove();
       }
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
