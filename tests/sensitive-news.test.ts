@@ -156,6 +156,20 @@ const SAFE = [
   "Curry drills the late three-pointer to steal the game",
   "The late basket at the buzzer sends it to overtime",
   "Judge wins it with the late home run in the ninth",
+  // "the late <golf/basketball/motorsport moment>" — the same late-drama shape
+  // the golf leaderboard, NBA columns and racing tiles produce, a game moment
+  // and never a death.
+  "Scheffler's late birdie at 17 forces a playoff",
+  "The late eagle stuns the field at Augusta",
+  "The late double bogey drops him down the leaderboard",
+  "Woods rolls in the late putt to make the cut",
+  "The late chip-in sparks the comeback",
+  "The late dunk brings the crowd to its feet",
+  "The late block preserves the one-point lead",
+  "The late steal ends it for the Celtics",
+  "The late caution shook up the finish at Daytona",
+  "Verstappen denied by the late restart",
+  "The late overtake seals the podium at Monza",
   // "the late bloomer/developer/starter" late-career player-type idiom — a
   // player who peaked late, not a death.
   "The late bloomer finally gets his shot in the starting XI",
