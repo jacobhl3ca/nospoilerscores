@@ -216,6 +216,12 @@ const SAFE = [
   "GM charged with rebuilding the roster this offseason",
   "Interim boss charged with reviving a stalling season",
   "Skipper charged with restoring the club's fortunes",
+  // Figurative "charged with <a task>" in the noun-object form — the mandate of
+  // a new appointment must not read as a criminal charge.
+  "New manager charged with the task of avoiding relegation",
+  "GM charged with the job of rebuilding a young roster",
+  "New coach charged with the unenviable responsibility of following a legend",
+  "Captain charged with the mission of ending the trophy drought",
   // Figurative "charged with <emotion>" — a highly-charged occasion must not
   // read as a criminal charge.
   "A derby charged with emotion ends all square",
@@ -499,6 +505,13 @@ test("the 'charged with <task>' idiom strip does not swallow a real criminal cha
   assert.equal(sensitiveCategoryOf("Quarterback charged with domestic violence"), "violence");
   assert.equal(sensitiveCategoryOf("Player charged with assaulting a fan"), "violence");
   assert.equal(sensitiveCategoryOf("Defender charged with fixing matches"), "violence");
+});
+
+test("the 'charged with the <task>' noun-object strip does not swallow a real criminal charge", () => {
+  // Only a duty/mandate noun as the object is stripped — a real charge names the
+  // offence directly (never one of those nouns), so it must still match.
+  assert.equal(sensitiveCategoryOf("Winger charged with the assault of a steward"), "violence");
+  assert.equal(sensitiveCategoryOf("Owner charged with the kidnapping of a rival's son"), "violence");
 });
 
 test("the 'charged with <emotion>' idiom strip does not swallow a real criminal charge", () => {
