@@ -498,7 +498,13 @@ const IDIOM = new RegExp(
     // "charged with assault / DUI / battery / murder / possession" — which names
     // the offence, never one of these feelings — still matches. ("emotionally
     // charged" isn't touched: it never reads `charged with`, so it never tripped.)
-    "charged with (emotion|emotions|tension|drama|significance|meaning|history|intensity|passion|atmosphere|electricity|feeling|feelings|nostalgia|needle|spice|edge|importance|energy|expectation|expectations|symbolism|jeopardy|occasion|sentiment|anticipation|excitement|menace|romance|controversy)",
+    // The second noun group is the same idiom's energised-side sense — "a team
+    // charged with confidence / belief / adrenaline / purpose", the staple
+    // framing for a side coming out full of running — which read as a criminal
+    // charge for the same reason. `intent` and `possession` are deliberately
+    // OFF this list (both are real charge objects: "charged with intent to
+    // supply", "charged with possession"), so a genuine charge still matches.
+    "charged with (emotion|emotions|tension|drama|significance|meaning|history|intensity|passion|atmosphere|electricity|feeling|feelings|nostalgia|needle|spice|edge|importance|energy|expectation|expectations|symbolism|jeopardy|occasion|sentiment|anticipation|excitement|menace|romance|controversy|confidence|belief|self.?belief|adrenaline?|purpose|momentum|desire|aggression|urgency|positivity|optimism|swagger|determination|hope|hunger|verve|venom)",
     // "charged with the task of avoiding relegation", "charged with the job of
     // rebuilding", "charged with the responsibility of leading a young squad" —
     // the appointment/mandate framing for a new coach, captain or GM, the stuff
