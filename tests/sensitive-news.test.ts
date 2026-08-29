@@ -105,6 +105,11 @@ const SAFE = [
   "Judge lifts a dying quail into shallow center for the go-ahead single",
   "A pair of dying quails fall in as the Yankees rally in the eighth",
   "Bloop single, a real dying seagull, drops in front of the outfielders",
+  // "passing of the torch/baton/ball" — the generational-handover cliché, the
+  // relay handover, and a player's distribution — not "the passing of <a person>".
+  "The passing of the torch from Manning to Mahomes is finally complete",
+  "A seamless passing of the baton to the next generation of stars",
+  "His passing of the ball was the best on the pitch all afternoon",
   // Cricket's "death overs" phase in the possessive form ("his/her/their death
   // <phase noun>") — the final-overs game state, not a death.
   "Bumrah at his best as his death bowling seals a tense IPL win",
@@ -445,6 +450,16 @@ test("the 'the late <game event>' idiom strip does not swallow a real death", ()
   // "the late <person>" or a death cue sitting next to one of them.
   assert.equal(sensitiveCategoryOf("Umpire who signalled the late wicket has died, board says"), "death");
   assert.equal(sensitiveCategoryOf("Tributes to the late Shane Warne pour in from around the world"), "death");
+});
+
+test("the 'passing of the torch' idiom strip does not swallow a real death", () => {
+  // Only torch/baton/ball are stripped — "the passing of <a person/role>" names
+  // the deceased and must still trip the death pattern.
+  assert.equal(sensitiveCategoryOf("The passing of Pele shocked the football world"), "death");
+  assert.equal(sensitiveCategoryOf("Fans mourn the passing of a legend"), "death");
+  assert.equal(sensitiveCategoryOf("The club announced the passing of their former owner"), "death");
+  // And a real death cue sitting beside the idiom must survive the strip.
+  assert.equal(sensitiveCategoryOf("His passing of the ball was sublime; the great man has died"), "death");
 });
 
 test("the 'heart attack <finish>' idiom strip does not swallow a real cardiac event", () => {

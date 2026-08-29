@@ -101,6 +101,20 @@ const IDIOM = new RegExp(
     // real "dying in hospice" / "his dying wish" (dying of/in/<possessive>)
     // carries none of these bird nouns and still matches death.
     "dying (quails?|seagulls?)",
+    // "passing of the torch" (the generational handover — a veteran giving way to
+    // the next star, the single most common framing of it in the NFL/NBA/tennis
+    // feeds), "passing of the baton" (the relay handover and its figurative twin),
+    // and "passing of the ball" (a player's distribution — "his passing of the
+    // ball was the best on the pitch"). All three trip the bare `passing of` death
+    // pattern (meant for "the passing of <Name/a legend>", i.e. someone who died),
+    // so without this the main "Hide upsetting news" toggle silently pulled these
+    // ordinary handover columns and skill notes under "death or tragedy". Stripped
+    // ONLY before torch/baton/ball — a real "the passing of a legend" / "passing
+    // of their former owner" names a person or role, never one of these objects,
+    // so it still matches death. And a genuine obituary that happens to mention the
+    // phrase keeps its own stronger death cues (died, mourn, obituary) after the
+    // strip, so removing the idiom can't hide a real one.
+    "passing of the (torch|baton|ball)",
     // Cricket's "death overs" — the final overs of a limited-overs innings — and
     // everything about them: "death bowling", "death bowler", "death hitting", "a
     // fine death spell", "his death-over execution", "their death-overs specialist".
