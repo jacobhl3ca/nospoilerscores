@@ -245,7 +245,15 @@ export default function TeamView({
       probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-size:1.125rem;font-weight:700;letter-spacing:0.025em;";
       document.body.appendChild(probe);
       const nameFullW = probe.offsetWidth;
-      document.body.removeChild(probe);
+      // `probe.remove()`, not `document.body.removeChild(probe)`: this runs in a
+      // ResizeObserver callback with no try/catch, so an uncaught throw here
+      // reaches Sentry. If the DOM has been reparented out from under us — a
+      // page-translation extension is the common cause — removeChild throws
+      // "NotFoundError: The object can not be found here." because the probe is
+      // no longer a direct child of <body>; remove() detaches it from wherever
+      // it sits (or no-ops) and never throws. Matches the measurement probes in
+      // EventCard/LeagueColumn/GolfLeaderboard.
+      probe.remove();
 
       const hostW = host.clientWidth;
       const backW = back.getBoundingClientRect().width;
