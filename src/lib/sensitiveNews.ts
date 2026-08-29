@@ -152,7 +152,16 @@ const IDIOM = new RegExp(
     // slam". Each names a scoring play, never a person, so a genuine "the late
     // <Name>" / "the late chairman" (a role/name, none of these nouns) still
     // matches death — the same scoping every noun above uses.
-    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|runs?|wickets?|blows?|braces?|consolations?|cameos?|flourish(?:es)?|touchdowns?|field goals?|home runs?|grand slams?|three.?pointers?|baskets?|buckets?|layups?|jumpers?|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
+    //
+    // Golf, basketball and motorsport add the same late-drama shape the app's
+    // own columns emit. Golf's leaderboard produces "the late birdie/eagle/
+    // bogey/putt/chip-in" ("the late birdie at 17 to force a playoff");
+    // basketball's late defensive/finishing plays are "the late dunk/block/
+    // steal"; and the racing tiles' recaps hinge on "the late caution/restart/
+    // overtake" ("the late caution shook up the finish"). Each names a game
+    // moment, never a person — so a genuine "the late <Name>" / "the late great"
+    // still matches death, exactly as the scoring nouns above do.
+    "the late (goals?|winner|equali[sz]ers?|levell?ers?|drama|show|surge|rally|rallies|comeback|collapse|fightback|heroics|twist|scare|wobble|charge|push|flurry|burst|blitz|onslaught|strike|header|runs?|wickets?|blows?|braces?|consolations?|cameos?|flourish(?:es)?|touchdowns?|field goals?|home runs?|grand slams?|three.?pointers?|baskets?|buckets?|layups?|jumpers?|dunks?|blocks?|steals?|birdies?|eagles?|(?:double )?bogeys?|putts?|chip.?ins?|cautions?|restarts?|overtakes?|safety cars?|own[- ]?goals?|red cards?|sending[- ]?offs?|dismissals?|saves?|tackles?|challenges?|fouls?|bookings?|penalt(y|ies)|free.?kicks?|corner|chances?|stages?|innings?|minutes?|moments?|kick.?offs?|substitutions?|subs?|swap|changes?|withdrawals?|games?|windows?|slates?|fixtures?|match(?:es)?|ties?|sets?|sessions?|slots?)",
     // "the late bloomer / the late developer / the late starter" — the staple
     // profile framing for a player who came good later than usual (a career
     // narrative, a draft-sleeper feature), never a deceased person. Like the
