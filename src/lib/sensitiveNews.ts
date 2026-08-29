@@ -499,6 +499,25 @@ const IDIOM = new RegExp(
     // the offence, never one of these feelings — still matches. ("emotionally
     // charged" isn't touched: it never reads `charged with`, so it never tripped.)
     "charged with (emotion|emotions|tension|drama|significance|meaning|history|intensity|passion|atmosphere|electricity|feeling|feelings|nostalgia|needle|spice|edge|importance|energy|expectation|expectations|symbolism|jeopardy|occasion|sentiment|anticipation|excitement|menace|romance|controversy)",
+    // "charged with the task of avoiding relegation", "charged with the job of
+    // rebuilding", "charged with the responsibility of leading a young squad" —
+    // the appointment/mandate framing for a new coach, captain or GM, the stuff
+    // of every managerial-hire and captaincy story. The VERB form ("charged with
+    // turning the club around") is stripped above, but the noun-object form puts
+    // "the task"/"the job" between "with" and the verb, so it slipped past that
+    // verb strip and tripped the bare `charged with` crime pattern, hiding
+    // ordinary hiring/leadership news under "violence, crime or abuse" for anyone
+    // with the main filter on. Stripped ONLY before a duty/mandate noun (with a
+    // couple of adjective words allowed in between — "the unenviable task", "the
+    // sole responsibility") — none of which is ever a crime — so a real "charged
+    // with assault / DUI / possession / a crime" (an offence named directly)
+    // still matches, matching the emotion-noun scoping above.
+    // "role"/"goal" are deliberately OFF the noun list: "charged with a role in
+    // the assault" / "charged with a goal to end the abuse" would otherwise strip
+    // "charged with" and leave an unqualified crime word that no longer trips the
+    // (qualifier-scoped) violence pattern. task/job/responsibility/mission/mandate
+    // carry no such "<noun> in the <crime>" idiom, so they stay.
+    "charged with (a|an|the|their|its|his|her|another|this|that) ([\\w'-]+ ){0,2}(task|tasks|job|jobs|responsibilit(?:y|ies)|dut(?:y|ies)|mission|missions|mandate|mandates|brief|briefs|remit|remits|assignment|assignments|objective|objectives|challenge|challenges|honou?r of)\\b",
     // "Sentenced to relegation / the drop / mid-table mediocrity / another season
     // in the Championship" is the staple English-football framing for a club whose
     // fate is now sealed — the figurative use of the bare `sentenced to` crime
