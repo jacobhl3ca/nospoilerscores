@@ -820,7 +820,15 @@ export default function EventCard({
       probe.style.letterSpacing = "";
       const pillW = pillText + (isMobile ? 12 : 16);
       const bcW = event.broadcasts.length ? maxW([event.broadcasts[0]], metaFs) : 0;
-      document.body.removeChild(probe);
+      // `probe.remove()`, not `document.body.removeChild(probe)`: this runs in a
+      // bare rAF (no try/catch), so an uncaught throw here reaches Sentry. If the
+      // DOM has been reparented out from under us — a page-translation extension
+      // is the common cause — removeChild throws "NotFoundError: The object can
+      // not be found here." because the probe is no longer a direct child of
+      // <body>; remove() detaches it from wherever it sits (or no-ops) and never
+      // throws. Matches the sibling probe above (widthAt) and the other
+      // measurement probes across the app.
+      probe.remove();
       const metaGaps = isMobile ? 4 : 6; // gap-x-1 / sm:gap-x-1.5
       const metaAvail = colWidth - cardPadding - 2;
       // Ladder — always ONE line, never a wrap (Jacob 7/19: a card that grew a
