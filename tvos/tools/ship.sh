@@ -7,6 +7,20 @@
 # Cloud signing needs an ADMIN App Store Connect API key — an App Manager key
 # uploads fine but cannot create the iOS/tvOS Distribution certificate, and the
 # failure lands on the EXPORT step, not the archive.
+#
+# Two things here look wrong and are not:
+#
+#  1. The ARCHIVE is unsigned. Automatic signing provisions an archive for
+#     DEVELOPMENT, and a development profile cannot be issued to a team with no
+#     registered devices — which is us, since nothing here is ever side-loaded.
+#     Forcing CODE_SIGN_IDENTITY=Apple Distribution instead trips "conflicting
+#     provisioning settings". So the archive carries no signature and the export
+#     step applies the real App Store one, which is the only signature that ships.
+#
+#  2. The EXPORT runs with a system-only PATH. exportArchive shells out to rsync,
+#     and Homebrew's rsync 3.4.x fails it with a bare "Copy failed" (the real
+#     error, "syntax or usage error (code 1)", is buried in the xcdistributionlogs
+#     bundle). Apple's /usr/bin/rsync is openrsync and works.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
@@ -35,14 +49,11 @@ xcodebuild archive \
   -project "$PROJ" -scheme HideScoreTV -configuration Release \
   -destination 'generic/platform=tvOS' -archivePath "$ARCHIVE" \
   -derivedDataPath "$ROOT/build/dd" \
-  -allowProvisioningUpdates \
-  -authenticationKeyPath "$KEY" \
-  -authenticationKeyID "$ASC_KEY_ID" \
-  -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-  DEVELOPMENT_TEAM=V45QZXMDAW
+  DEVELOPMENT_TEAM=V45QZXMDAW \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
 echo "→ exporting + uploading"
-xcodebuild -exportArchive \
+PATH=/usr/bin:/bin:/usr/sbin:/sbin xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" -exportPath "$ROOT/build/export" \
   -exportOptionsPlist "$ROOT/ExportOptions.plist" \
   -allowProvisioningUpdates \

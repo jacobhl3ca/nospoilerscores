@@ -69,6 +69,23 @@ def localization(version_id):
     }})["data"]
 
 
+def app_info_localization():
+    """The privacy policy TEXT hangs off the app info, not off the version.
+
+    An Apple TV can't open a browser, so App Store Connect wants the policy as
+    text as well as a URL, and refuses to review a tvOS version without it. Only
+    the app info still in PREPARE_FOR_SUBMISSION is editable — the other one is
+    the copy that is live on the store.
+    """
+    for info in call("GET", f"/apps/{APP}/appInfos?limit=10")["data"]:
+        if info["attributes"].get("state") != "PREPARE_FOR_SUBMISSION":
+            continue
+        for loc in call("GET", f"/appInfos/{info['id']}/appInfoLocalizations")["data"]:
+            if loc["attributes"]["locale"] == LOCALE:
+                return loc
+    raise SystemExit("no editable app info localization for " + LOCALE)
+
+
 # ── commands ───────────────────────────────────────────────────────────────────
 
 def cmd_status():
@@ -80,7 +97,10 @@ def cmd_status():
         print(f"  attached build: {build['attributes']['version']}")
     except Exception:
         print("  attached build: none")
-    builds = call("GET", f"/builds?filter[app]={APP}&limit=10&sort=-uploadedDate")["data"]
+    # Without the platform filter this lists the iOS builds too, which share
+    # the app record and the build-number sequence — build 1 exists twice.
+    builds = call("GET", f"/builds?filter[app]={APP}&filter[preReleaseVersion.platform]={PLATFORM}"
+                         f"&limit=10&sort=-uploadedDate")["data"]
     for b in builds:
         pre = b.get("relationships", {})
         print(f"  build {b['attributes']['version']:>4}  {b['attributes']['processingState']}  "
@@ -121,6 +141,12 @@ def cmd_metadata():
             "type": "appStoreReviewDetails", "attributes": detail,
             "relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": v["id"]}}}}})
     print("review notes pushed")
+
+    info_loc = app_info_localization()
+    call("PATCH", f"/appInfoLocalizations/{info_loc['id']}", {"data": {
+        "type": "appInfoLocalizations", "id": info_loc["id"],
+        "attributes": {"privacyPolicyText": s["privacy policy text"]}}})
+    print("privacy policy text pushed")
 
 
 def cmd_screenshots(directory):
