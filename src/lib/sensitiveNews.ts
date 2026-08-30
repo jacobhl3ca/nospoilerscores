@@ -357,6 +357,19 @@ const IDIOM = new RegExp(
     "collision (of|between) (styles?|titans|heavyweights|giants|philosoph(?:y|ies)|ideolog(?:y|ies)|cultures?|generations?|eras?|worlds?|egos?|systems?|approaches?|identities)",
     "(stylistic|tactical|philosophical|ideological|generational|cultural|marquee|blockbuster|heavyweight|title|top.?two|number.?one|east.?west) collision",
     "(styles?|titans|heavyweights|giants|philosoph(?:y|ies)|ideolog(?:y|ies)|cultures?|egos?|systems?|worlds?|approaches?|generations?) (have |had |finally |once )?collided",
+    // "fixture collision", "scheduling collision", "calendar collision", "date
+    // collision", "TV/broadcast collision" — the staple congestion idiom for two
+    // games (or competitions, or broadcasts) landing on the same day/slot, the
+    // schedule-clash sense and never a physical one. The injury filter's bare
+    // `collision` pattern pulled these ordinary scheduling/broadcast stories out
+    // of the feed for anyone with the main filter on ("Champions League and
+    // Premier League fixture collision forces a reshuffle") — and the app runs
+    // many league columns whose World-Cup-year reshuffles produce this phrasing.
+    // Stripped ONLY when a schedule/broadcast noun frames it — none of which ever
+    // precedes a real "violent collision" / "collision at the plate" / "collision
+    // of heads" — so a genuine on-field collision still matches injury, matching
+    // the "fixture pile-up" strip's scoping for the crash toggle.
+    "(fixtures?|schedule|scheduling|calendars?|dates?|kick.?offs?|time.?slots?|tv|broadcasts?|television) collision",
     // "crashed out of the World Cup / the tournament / the Champions League /
     // the playoffs" is the universal knockout-elimination idiom (soccer, tennis,
     // cricket, darts, snooker) — it has nothing to do with a wreck, yet the bare
