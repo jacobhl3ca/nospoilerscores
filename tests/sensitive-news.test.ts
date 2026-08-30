@@ -49,6 +49,13 @@ const SENSITIVE: [string, string][] = [
   ["Former NFL star murdered her before turning the gun on himself", "death"],
   ["Athlete found to have murdered them in cold blood, prosecutors say", "death"],
   ["Man charged after he murdered him outside the arena", "death"],
+  // The gerund "murdering" in a legal frame. The death list catches the bare
+  // noun/past forms but not the gerund, so these real homicides used to leak
+  // past "Hide upsetting news"; a scoped violence frame now catches them.
+  ["Ex-NFL star admits murdering his girlfriend", "violence"],
+  ["Former athlete accused of murdering a rival, court hears", "violence"],
+  ["Retired boxer jailed for murdering his neighbour", "violence"],
+  ["Onetime prospect confesses to murdering two people", "violence"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
@@ -71,6 +78,13 @@ const SAFE = [
   // Mic-drop / blowout hyperbole with a non-victim object stays visible.
   "He absolutely murdered it on the mic at media day",
   "Star player murdered that putt from 40 feet",
+  // Blowout-hyperbole "murdering" (the gerund) with no legal frame stays
+  // visible — the new "<accused of|admits|jailed for|…> murdering" homicide
+  // pattern must not reach these.
+  "Liverpool are murdering United at Anfield",
+  "City murdering the competition in the title race",
+  "He's absolutely murdering it off the tee today",
+  "Warriors murdering them from deep in the third quarter",
   "Rookie buried the shot at the buzzer",
   "Runner steals second, then third, in the same inning",
   "Dead ball ruling costs them a run",

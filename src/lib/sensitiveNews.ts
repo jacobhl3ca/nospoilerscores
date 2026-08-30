@@ -607,6 +607,21 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\brape(d)?\b|\bmolest(ed|ation|ing)?\b|\bgroom(ing|ed) (a )?(minor|child)\b|\bchild abuse\b|\bsex (crime|trafficking|abuse)\b/i,
     /\b(abuse|abusive) (allegations?|claims?|scandal|case|survivors?|victims?)\b|\b(racial|verbal|physical|emotional) abuse\b/i,
     /\barrest(ed|s)?\b|\bindict(ed|ment)\b|\bcharged with\b|\bpleads? guilty\b|\bfound guilty\b|\bconvicted\b|\bsentenced to\b|\bfaces? (charges|trial|prison)\b/i,
+    // A homicide in the GERUND form, "murdering", inside an unambiguous
+    // accusation/conviction frame. The death list catches "murder"/"murdered"/
+    // "murders" (checked first, with the bare noun) but NOT the gerund, and the
+    // "accused of (assault|abuse|…)" list below never included homicide — so a
+    // real "admits murdering his wife", "accused of murdering a rival" or
+    // "jailed for murdering" slipped past "Hide upsetting news" entirely. Some
+    // frames ("charged with murdering", "pleaded guilty to murdering") already
+    // trip the line above; this closes the ones that don't. Scoped to a legal
+    // frame + "murdering" because that phrasing is only ever a real homicide —
+    // "killing" / "strangling" / "suffocating" are deliberately OUT, each having
+    // a staple game-idiom sense ("killing the clock", "suffocating defense")
+    // this frame can't safely disambiguate. A blowout "murdering it/them/the
+    // competition" carries no such frame (and "it/that" is already idiom-
+    // stripped), so it stays visible.
+    /\b(accused of|admits|admitted|confess(?:es|ed)? to|jailed for|imprisoned for) murdering\b/i,
     /\bmass shooting\b|\bfatal shooting\b|\bshooting (death|suspect|victim|rampage|spree|incident|outside|at a|near)\b|\bshot and (killed|wounded)\b|\bopened fire\b|\bgunman\b|\bgun violence\b/i,
     /\bstabb(ed|ing)\b|\bbeaten (up|unconscious)\b|\bbrutal(ly)? (attack|beat)/i,
     /\bkidnap(ped|ping)?\b|\bhostage\b|\bhuman trafficking\b/i,
