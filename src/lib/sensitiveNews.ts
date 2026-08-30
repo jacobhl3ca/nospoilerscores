@@ -677,7 +677,21 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
   medical: [
     /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill\b/i,
     /\bALS\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
-    /\bcardiac (arrest|event|episode)\b|\bheart attack\b|\bstroke suffered\b|\bsuffered a stroke\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
+    /\bcardiac (arrest|event|episode)\b|\bheart attack\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
+    // A cerebrovascular stroke. The old `suffered a stroke` had two faults. It
+    // over-hid: "suffered a stroke of luck / of genius / of misfortune" — the
+    // staple sports idiom for a fortunate or brilliant turn — tripped it and
+    // pulled ordinary recaps under "serious illness" for anyone with the main
+    // filter on. And it under-hid: only the exact past tense matched, so a real
+    // "suffers a stroke", "suffering a stroke" or "suffered a minor/massive
+    // stroke" (an adjective between "a" and "stroke") slipped straight past
+    // "Hide upsetting news". This covers the verb tenses and a closed list of
+    // severity adjectives, and the `(?! of)` lookahead drops the "stroke of
+    // <luck/genius/…>" idiom — a phrasing a real cerebrovascular stroke never
+    // takes. Golf/swimming "stroke" carries none of the `suffer(s|ed|ing) a …
+    // stroke` frame ("two-stroke penalty", "smooth stroke", "backstroke"), so
+    // it stays visible.
+    /\bstroke suffered\b|\bsuffer(s|ed|ing)? a (minor |mild |major |massive |severe |serious |second |fatal |near.?fatal |life.?threatening )?stroke\b(?! of\b)/i,
     /\bcollapsed? (on|during|at|mid)/i,
     /\bcritical condition\b|\blife support\b|\bintensive care\b|\bin a coma\b|\bcomatose\b|\blife.threatening\b|\bfighting for (his|her|their) life\b/i,
     /\bparalyz(ed|ing)\b|\bparalysis\b|\bspinal (injury|cord)\b|\bamputat(ed|ion)\b/i,
