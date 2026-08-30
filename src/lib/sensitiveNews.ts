@@ -310,7 +310,20 @@ const IDIOM = new RegExp(
     // "destroyed BY the Lakers" is a scoreline; "killed BY an ICE agent" is not,
     // so `by` is allowed only for the verbs that are purely scoreline idiom.
     "(slaughtered|destroyed|buried|thrashed|dismantled) (them|him|her|it|the|that|by)",
-    "(murder|murdered|murdering|killed|killing) (them|him|her|it|that)",
+    // Blowout / mic-drop hyperbole ("City killed them 5-0", "he murdered it on
+    // the mic", "murdered that putt"). `killed|killing + pronoun` is safe to
+    // strip wholesale — nothing flags a bare "killed them" anyway (death's
+    // `killed` pattern needs a following preposition, and violence has no bare
+    // `killed`). But `murder(ed)` matches the death and violence patterns
+    // UNCONDITIONALLY (see both below), so stripping "murdered her/him/them"
+    // deleted the only cue on a real homicide that named its victim with a bare
+    // pronoun ("… murdered her before turning the gun on himself"), leaking it
+    // straight past "Hide upsetting news". Strip only the non-victim objects
+    // `it`/`that` for the murder verbs, so a genuine "murdered her/them" re-trips
+    // (matching "murdered his wife", which already flags); a literal "we murdered
+    // them 5-0" re-flagging is the tolerated over-hide, not the cardinal leak.
+    "(killed|killing) (them|him|her|it|that)",
+    "(murder|murdered|murdering) (it|that)",
     "drop dead",
     "over my dead body",
     // Alonzo Mourning — Hall-of-Fame center and current Miami Heat executive —

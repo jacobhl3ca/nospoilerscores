@@ -43,6 +43,12 @@ const SENSITIVE: [string, string][] = [
   ["Star pitcher opens up about his overdose", "selfharm"],
   ["Beloved former captain dying in hospice, club confirms", "death"],
   ["Club pays tribute to the late chairman ahead of kickoff", "death"],
+  // A real homicide that names its victim with a bare pronoun must not have its
+  // only cue stripped by the blowout-hyperbole idiom ("murdered it/that"). The
+  // `murder(ed)` cue is shared by death and violence; death is checked first.
+  ["Former NFL star murdered her before turning the gun on himself", "death"],
+  ["Athlete found to have murdered them in cold blood, prosecutors say", "death"],
+  ["Man charged after he murdered him outside the arena", "death"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
@@ -62,6 +68,9 @@ const SAFE = [
   "Sudden death overtime decides the semifinal",
   "Suicide squeeze in the ninth wins it",
   "He killed it in his first start since the call-up",
+  // Mic-drop / blowout hyperbole with a non-victim object stays visible.
+  "He absolutely murdered it on the mic at media day",
+  "Star player murdered that putt from 40 feet",
   "Rookie buried the shot at the buzzer",
   "Runner steals second, then third, in the same inning",
   "Dead ball ruling costs them a run",
