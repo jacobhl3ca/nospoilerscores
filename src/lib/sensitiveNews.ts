@@ -623,7 +623,22 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\bunresponsive\b|\bnever regained consciousness\b|\bbrain bleed\b|\bflatlined\b|\bhospitali[sz]ed after the (fight|bout|match|game)\b/i,
     /\bcollision\b|\bcollided\b|\bviolent(ly)? (fall|crash|hit|tackle)\b/i,
     /\b(gruesome|horrific|grisly|scary|sickening|ugly) (injury|scene|moment|fall|crash|collision|hit|landing)\b/i,
-    /\b(forced to leave|leaves|left|exits|exited) the (game|match|field|ice|court|track)\b(?=[^.]*\b(after|with|hurt|injur|hit|pain|blood))/i,
+    // A player leaving the game HURT. The lookahead requires a genuine injury
+    // cue somewhere after the departure — "hurt", "in pain", blood, a knock, a
+    // limp, being stretchered/carted, a strain/tear/fracture, etc. The bare
+    // words `after`, `with` and `hit` used to sit here too, but they carry no
+    // injury meaning on their own and appear in the most ordinary exit lines a
+    // sports feed runs — "leaves the game with a 5-run lead", "exits the game
+    // with a save", "leaves the game after six shutout innings" — so every one
+    // of those pitching-line recaps read as "an on-field injury" and vanished
+    // for anyone with the main "Hide upsetting news" toggle on. Dropping them
+    // and keeping the specific cues below matches the module rule that a pattern
+    // fire only on a phrase specific enough to describe an actual event: a real
+    // "leaves the game after taking a knock to the head" / "left the field with
+    // a hamstring strain" still trips, while "with the win" / "after 100
+    // pitches" no longer does. (A blow to the head that ends a game is caught by
+    // the head-impact patterns above regardless of where "leave" sits.)
+    /\b(forced to leave|leaves|left|exits|exited) the (game|match|field|ice|court|track)\b(?=[^.]*\b(hurt|injur|pain|blood|bleeding|concuss|knock|limp|hobbl|grimac|winc|clutching|holding (his|her|their)|down injured|in distress|discomfort|stretcher(ed)?|carted|dazed|woozy|winded|cramp|strains?|sprains?|tears?|torn|fractures?|dislocat|ruptur|collision|collided))/i,
     /\b(compound|orbital|facial|jaw|nose|skull) fracture\b|\bdislocat(ed|ing) (his|her|their|an?)\b|\bbloodied\b|\bopen wound\b/i,
     /\bblows? to the (back of the )?head\b|\bshots? to the back of the head\b/i,
   ],
