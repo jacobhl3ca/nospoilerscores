@@ -669,6 +669,18 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // A fight is only filtered when it ends badly — plain fights and KOs are the
     // sport and stay visible (Jacob 8/21).
     /\bunresponsive\b|\bnever regained consciousness\b|\bbrain bleed\b|\bflatlined\b|\bhospitali[sz]ed after the (fight|bout|match|game)\b/i,
+    // "critically injured / wounded" — a life-threatening injury, the sibling of
+    // the medical list's "critical condition" cue. None of the other injury cues
+    // names it on its own, so a real "Driver critically injured in a crash" /
+    // "Two fans critically injured when the stand collapsed" read as an ordinary
+    // headline and slipped straight past "Hide upsetting news" (the crash itself
+    // is opt-in `crash`, off by default). Scoped to injured/wounded because those
+    // verbs only ever take a real body — you do not "critically injure a lead" —
+    // whereas "hurt" freely takes an abstract object ("critically hurt his title
+    // chances"), which would pull an ordinary recap under "injury"; and unlike a
+    // bare "seriously injured" (routine roster news the module keeps visible)
+    // "critically" marks the emergency this list exists for.
+    /\bcritically (injured|wounded)\b/i,
     /\bcollision\b|\bcollided\b|\bviolent(ly)? (fall|crash|hit|tackle)\b/i,
     /\b(gruesome|horrific|grisly|scary|sickening|ugly) (injury|scene|moment|fall|crash|collision|hit|landing)\b/i,
     // A player leaving the game HURT. The lookahead requires a genuine injury

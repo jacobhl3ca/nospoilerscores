@@ -39,6 +39,12 @@ const SENSITIVE: [string, string][] = [
   ["Striker left the field with a hamstring strain, in visible pain", "injury"],
   ["Winger leaves the game after taking a knock to the head", "injury"],
   ["Rookie in hospital after dislocating his ankle", "injury"],
+  // A life-threatening injury reads as flinch-worthy, not roster news. The
+  // crash/fall itself is opt-in `crash` (off by default), so without a
+  // "critically injured" cue these leaked past the main "Hide upsetting news".
+  ["Driver critically injured in a horror crash at Turn 3", "injury"],
+  ["Two fans critically injured when the stand collapsed", "injury"],
+  ["Boxer critically wounded, rushed straight to surgery", "injury"],
   ["Defensive tackle spits on the quarterback and is ejected", "violence"],
   ["Star pitcher opens up about his overdose", "selfharm"],
   ["Beloved former captain dying in hospice, club confirms", "death"],
@@ -102,6 +108,10 @@ const SAFE = [
   "Striker diagnosed with a fractured metatarsal",
   "Rookie diagnosed with a dislocated shoulder",
   "Fullback diagnosed with a nasty groin problem",
+  // "critically" hides a life-threatening injury, but "hurt" takes abstract
+  // objects — the "critically injured/wounded" cue deliberately excludes it so
+  // this figurative recap stays visible.
+  "That double bogey critically hurt his title chances",
   "Two teams on a collision course for the division title",
   "Header off the head of the captain wins it at the death",
   "Team fires head coach after 2-9 start",
