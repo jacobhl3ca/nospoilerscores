@@ -35,6 +35,9 @@ const SENSITIVE: [string, string][] = [
   ["Star was held at gunpoint outside the arena", "violence"],
   ["Ex-coach detained by police, turned over for investigation", "violence"],
   ["Fighter talks about the illegal blows to the back of the head", "injury"],
+  // Leaving the game HURT still trips, on a genuine injury cue after the exit.
+  ["Striker left the field with a hamstring strain, in visible pain", "injury"],
+  ["Winger leaves the game after taking a knock to the head", "injury"],
   ["Rookie in hospital after dislocating his ankle", "injury"],
   ["Defensive tackle spits on the quarterback and is ejected", "violence"],
   ["Star pitcher opens up about his overdose", "selfharm"],
@@ -355,6 +358,15 @@ const SAFE = [
   "Why the veteran was a cancer in the dressing room",
   "A cancer on the roster the team finally cut loose",
   "Manager calls the winger a cancer in the team",
+  // A pitcher leaving the game with a lead/win/save or after a batch of innings
+  // is the most ordinary recap line there is — it must not read as "an on-field
+  // injury". The departure pattern's lookahead used to fire on a bare "with" or
+  // "after", quietly hiding every one of these.
+  "Ace leaves the game with a 5-run lead in the seventh",
+  "Verlander leaves the game with the win in hand",
+  "Closer exits the game with a save",
+  "Starter exits the game after six shutout innings",
+  "Scherzer left the game with a no-hitter intact",
 ];
 
 for (const headline of SAFE) {
