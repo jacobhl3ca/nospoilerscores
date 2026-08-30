@@ -326,6 +326,15 @@ const SAFE = [
   "Marquee collision between two of the league's best offenses",
   "Tactical collision between two very different coaches",
   "When two philosophies collided at Wembley",
+  // Schedule-sense "collision" — a fixture/scheduling/calendar/date/broadcast
+  // clash of two games on the same day or slot, not a physical one, must not
+  // read as an on-field injury.
+  "Champions League and Premier League fixture collision forces a reshuffle",
+  "Scheduling collision leaves fans choosing between two games",
+  "A calendar collision between the Euros and the Olympics looms in 2028",
+  "A date collision forces the FA to move the replay",
+  "TV collision as both title races finish in the same slot",
+  "Broadcast collision means one game moves to Monday",
   // Basketball/soccer "opened fire from deep/downtown/three/distance" — a
   // long-range shooting barrage must not read as violence.
   "Warriors opened fire from deep and never looked back",
@@ -415,6 +424,17 @@ test("the 'suicide <tactic>' idiom strip does not swallow a real self-harm item"
   assert.equal(sensitiveCategoryOf("Club backs a suicide prevention campaign"), "selfharm");
   assert.equal(sensitiveCategoryOf("He has battled suicidal thoughts for years"), "selfharm");
   assert.equal(sensitiveCategoryOf("Former athlete died by suicide, family says"), "death");
+});
+
+test("the schedule-sense 'collision' strip does not swallow a real on-field collision", () => {
+  // Only a schedule/broadcast noun before "collision" is stripped — a genuine
+  // on-field collision reads "violent collision", "collision at the plate",
+  // "collision of heads", or "two players collided", none of which carry those
+  // nouns, so it must still trip the injury pattern.
+  assert.equal(sensitiveCategoryOf("Violent collision at the plate leaves the catcher down"), "injury");
+  assert.equal(sensitiveCategoryOf("Sickening collision of heads forces both players off"), "injury");
+  assert.equal(sensitiveCategoryOf("Two players collided going for the same ball"), "injury");
+  assert.equal(sensitiveCategoryOf("Nasty collision in midfield, one player stretchered off"), "injury");
 });
 
 test("empty text is never sensitive", () => {
