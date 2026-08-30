@@ -1,0 +1,732 @@
+{
+  "schema": 1,
+  "espnBase": "https://site.web.api.espn.com/apis/site/v2/sports",
+  "ratingTiers": [
+    {
+      "min": 85,
+      "label": "GREAT",
+      "color": "#16A34A"
+    },
+    {
+      "min": 70,
+      "label": "GOOD",
+      "color": "#CA8A04"
+    },
+    {
+      "min": 50,
+      "label": "MEH",
+      "color": "#EA580C"
+    },
+    {
+      "min": 0,
+      "label": "SKIP",
+      "color": "#B91C1C"
+    }
+  ],
+  "leagues": [
+    {
+      "key": "ncaam",
+      "label": "NCAAM",
+      "path": "/basketball/mens-college-basketball/scoreboard",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+      "defaultOn": false,
+      "season": {
+        "start": "11-01",
+        "end": "04-06",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5.5,
+        "overtimeBonus": 15,
+        "scoringDivisor": 30,
+        "regulationPeriods": 2,
+        "periodSeconds": 1200,
+        "soccer": false
+      }
+    },
+    {
+      "key": "nba",
+      "label": "NBA",
+      "path": "/basketball/nba/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
+      "defaultOn": true,
+      "season": {
+        "start": "10-20",
+        "end": "06-22",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 4.5,
+        "overtimeBonus": 15,
+        "scoringDivisor": 40,
+        "regulationPeriods": 4,
+        "periodSeconds": 720,
+        "soccer": false
+      }
+    },
+    {
+      "key": "mlb",
+      "label": "MLB",
+      "path": "/baseball/mlb/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
+      "defaultOn": true,
+      "season": {
+        "start": "03-20",
+        "end": "11-01",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 14,
+        "overtimeBonus": 15,
+        "scoringDivisor": 3,
+        "regulationPeriods": 9,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    },
+    {
+      "key": "nhl",
+      "label": "NHL",
+      "path": "/hockey/nhl/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
+      "defaultOn": true,
+      "season": {
+        "start": "09-27",
+        "end": "06-24",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 18,
+        "overtimeBonus": 20,
+        "scoringDivisor": 1.5,
+        "regulationPeriods": 3,
+        "periodSeconds": 1200,
+        "soccer": false
+      }
+    },
+    {
+      "key": "nfl",
+      "label": "NFL",
+      "path": "/football/nfl/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
+      "defaultOn": true,
+      "season": {
+        "start": "09-07",
+        "end": "02-16",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 15,
+        "scoringDivisor": 8,
+        "regulationPeriods": 4,
+        "periodSeconds": 900,
+        "soccer": false
+      }
+    },
+    {
+      "key": "fifa",
+      "label": "World Cup",
+      "path": "/soccer/fifa.world/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
+      "defaultOn": false,
+      "season": {
+        "start": "06-04",
+        "end": "07-19",
+        "cycleMod": 4,
+        "cycleAnchor": 2026
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 25,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "epl",
+      "label": "Premier League",
+      "path": "/soccer/eng.1/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-19",
+        "end": "05-31",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "ucl",
+      "label": "UCL",
+      "path": "/soccer/uefa.champions/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png",
+      "defaultOn": false,
+      "season": {
+        "start": "09-06",
+        "end": "06-06",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "uel",
+      "label": "UEL",
+      "path": "/soccer/uefa.europa/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/2310.png",
+      "defaultOn": false,
+      "season": {
+        "start": "09-14",
+        "end": "05-28",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "laliga",
+      "label": "La Liga",
+      "path": "/soccer/esp.1/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/15.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-15",
+        "end": "05-30",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "seriea",
+      "label": "Serie A",
+      "path": "/soccer/ita.1/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/12.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-22",
+        "end": "05-30",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "bundesliga",
+      "label": "Bundesliga",
+      "path": "/soccer/ger.1/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/10.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-28",
+        "end": "05-22",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "ligue1",
+      "label": "Ligue 1",
+      "path": "/soccer/fra.1/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/9.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-21",
+        "end": "05-29",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "ligamx",
+      "label": "Liga MX",
+      "path": "/soccer/mex.1/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/22.png",
+      "defaultOn": false,
+      "season": {
+        "start": "01-05",
+        "end": "12-15",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "nwsl",
+      "label": "NWSL",
+      "path": "/soccer/usa.nwsl/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/2323.png",
+      "defaultOn": false,
+      "season": {
+        "start": "03-13",
+        "end": "11-22",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "efl",
+      "label": "Championship",
+      "path": "/soccer/eng.2/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/24.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-14",
+        "end": "05-26",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "libertadores",
+      "label": "Libertadores",
+      "path": "/soccer/conmebol.libertadores/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/58.png",
+      "defaultOn": false,
+      "season": {
+        "start": "02-01",
+        "end": "11-30",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 25,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "euro",
+      "label": "Euro",
+      "path": "/soccer/uefa.euro/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/74.png",
+      "defaultOn": false,
+      "season": {
+        "start": "06-01",
+        "end": "07-15",
+        "cycleMod": 4,
+        "cycleAnchor": 2028
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 25,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "afcon",
+      "label": "AFCON",
+      "path": "/soccer/caf.nations/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/76.png",
+      "defaultOn": false,
+      "season": {
+        "start": "06-17",
+        "end": "07-19",
+        "cycleMod": 2,
+        "cycleAnchor": 2027
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 25,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "saudi",
+      "label": "Saudi PL",
+      "path": "/soccer/ksa.1/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/2488.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-13",
+        "end": "05-28",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "cricket",
+      "label": "IPL",
+      "path": "/cricket/8048/scoreboard",
+      "logo": "https://a.espncdn.com/i/leaguelogos/cricket/500/8048.png",
+      "defaultOn": false,
+      "season": {
+        "start": "03-28",
+        "end": "05-31",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "cricket",
+        "multiplier": 1,
+        "overtimeBonus": 0,
+        "scoringDivisor": 1,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    },
+    {
+      "key": "mls",
+      "label": "MLS",
+      "path": "/soccer/usa.1/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
+      "defaultOn": false,
+      "season": {
+        "start": "02-21",
+        "end": "12-20",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 22,
+        "overtimeBonus": 20,
+        "scoringDivisor": 0.5,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": true
+      }
+    },
+    {
+      "key": "ncaaf",
+      "label": "NCAAF",
+      "path": "/football/college-football/scoreboard",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-27",
+        "end": "01-28",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 15,
+        "scoringDivisor": 8,
+        "regulationPeriods": 4,
+        "periodSeconds": 900,
+        "soccer": false
+      }
+    },
+    {
+      "key": "ncaaw",
+      "label": "NCAAW",
+      "path": "/basketball/womens-college-basketball/scoreboard",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+      "defaultOn": false,
+      "season": {
+        "start": "11-01",
+        "end": "04-06",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5.5,
+        "overtimeBonus": 15,
+        "scoringDivisor": 25,
+        "regulationPeriods": 4,
+        "periodSeconds": 600,
+        "soccer": false
+      }
+    },
+    {
+      "key": "wnba",
+      "label": "WNBA",
+      "path": "/basketball/wnba/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
+      "defaultOn": false,
+      "season": {
+        "start": "05-16",
+        "end": "10-19",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 4.5,
+        "overtimeBonus": 15,
+        "scoringDivisor": 28,
+        "regulationPeriods": 4,
+        "periodSeconds": 600,
+        "soccer": false
+      }
+    },
+    {
+      "key": "llws",
+      "label": "Little League",
+      "path": "/baseball/llb/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png",
+      "defaultOn": false,
+      "season": {
+        "start": "08-10",
+        "end": "08-30",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 9,
+        "overtimeBonus": 15,
+        "scoringDivisor": 5,
+        "regulationPeriods": 6,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    },
+    {
+      "key": "sixnations",
+      "label": "Six Nations",
+      "path": "/rugby/180659/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "season": {
+        "start": "02-05",
+        "end": "03-14",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    },
+    {
+      "key": "rugbywc",
+      "label": "Rugby World Cup",
+      "path": "/rugby/164205/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "season": {
+        "start": "10-01",
+        "end": "11-13",
+        "cycleMod": 4,
+        "cycleAnchor": 2027
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    },
+    {
+      "key": "rugbychamp",
+      "label": "Champions Cup",
+      "path": "/rugby/271937/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "season": {
+        "start": "12-05",
+        "end": "05-23",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    },
+    {
+      "key": "superrugby",
+      "label": "Super Rugby",
+      "path": "/rugby/242041/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "season": {
+        "start": "02-13",
+        "end": "06-20",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    },
+    {
+      "key": "rugbytest",
+      "label": "Rugby Tests",
+      "path": "/rugby/289234/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "season": {
+        "start": "04-03",
+        "end": "11-13",
+        "cycleMod": 2,
+        "cycleAnchor": 2027
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    },
+    {
+      "key": "nationschamp",
+      "label": "Rugby Nations",
+      "path": "/rugby/17567/scoreboard",
+      "logo": "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png",
+      "defaultOn": false,
+      "season": {
+        "start": "07-04",
+        "end": "11-29",
+        "cycleMod": 2,
+        "cycleAnchor": 2026
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 5,
+        "overtimeBonus": 20,
+        "scoringDivisor": 8,
+        "regulationPeriods": 2,
+        "periodSeconds": null,
+        "soccer": false
+      }
+    }
+  ]
+}
