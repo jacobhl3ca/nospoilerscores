@@ -810,7 +810,12 @@ export default function EventCard({
       // card that was really rendering 12px — and the row wrapped anyway.
       const metaEl = rootRef.current?.querySelector(".game-meta-row");
       const metaFs = metaEl ? parseFloat(getComputedStyle(metaEl).fontSize) || 12 : 12;
-      const statusMax = maxW(fights.map((f) => f.state === "post" ? "Final" : f.state === "in" ? "Live" : whenLabel(f.date, selectedDate) || f.statusDetail), metaFs);
+      // Measure the live state as "" to match what FightCard actually renders: a
+      // live bout shows only the green dot, not the word "Live" (see the `isLive
+      // ? ""` status above). Measuring it as "Live" over-reserved ~24px of the
+      // status slot for text that never paints, which could drop the Main/Co-Main
+      // pill or the broadcaster one column-width sooner than necessary.
+      const statusMax = maxW(fights.map((f) => f.state === "post" ? "Final" : f.state === "in" ? "" : whenLabel(f.date, selectedDate) || f.statusDetail), metaFs);
       probe.style.fontWeight = "600";
       probe.style.textTransform = "uppercase";
       probe.style.letterSpacing = "0.025em";
