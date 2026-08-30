@@ -47,6 +47,14 @@ const SENSITIVE: [string, string][] = [
   ["Boxer critically wounded, rushed straight to surgery", "injury"],
   ["Defensive tackle spits on the quarterback and is ejected", "violence"],
   ["Star pitcher opens up about his overdose", "selfharm"],
+  // Addiction itself — the other half of the "self-harm or addiction" label.
+  // Only its endpoints (overdose, rehab) matched before, so these ordinary
+  // personal-struggle stories used to leak past "Hide upsetting news".
+  ["Guard opens up about his gambling addiction", "selfharm"],
+  ["Former MVP reveals a long battle with alcohol addiction", "selfharm"],
+  ["Reliever enters treatment for alcoholism", "selfharm"],
+  ["Prospect confronts an opioid addiction after a career-ending injury", "selfharm"],
+  ["His addiction recovery is going well, the agent says", "selfharm"],
   ["Beloved former captain dying in hospice, club confirms", "death"],
   ["Club pays tribute to the late chairman ahead of kickoff", "death"],
   // A real homicide that names its victim with a bare pronoun must not have its
@@ -80,6 +88,14 @@ const SAFE = [
   "Career-best 3-point shooting has him in the All-Star talk",
   "Sudden death overtime decides the semifinal",
   "Suicide squeeze in the ninth wins it",
+  // The addiction cue reads a real personal struggle, so the leagues' "substance
+  // ABUSE policy/program" and the "addicted/addictive to <sport>" metaphors —
+  // none of which use the noun "addiction" in a struggle frame — stay visible.
+  "Outfielder suspended under the substance abuse policy",
+  "Reliever enrolled in the league's substance abuse program",
+  "Fans are addicted to this team",
+  "This offense is absolutely addictive to watch",
+  "He is addicted to winning and it shows",
   "He killed it in his first start since the call-up",
   // Mic-drop / blowout hyperbole with a non-victim object stays visible.
   "He absolutely murdered it on the mic at media day",
@@ -434,6 +450,20 @@ test("the 'suicide <tactic>' idiom strip does not swallow a real self-harm item"
   assert.equal(sensitiveCategoryOf("Club backs a suicide prevention campaign"), "selfharm");
   assert.equal(sensitiveCategoryOf("He has battled suicidal thoughts for years"), "selfharm");
   assert.equal(sensitiveCategoryOf("Former athlete died by suicide, family says"), "death");
+});
+
+test("the addiction cue flags a real struggle but spares the 'substance abuse policy' and 'addicted to' metaphors", () => {
+  // Real personal-struggle stories — the other half of the "self-harm or
+  // addiction" label — now flag instead of leaking past "Hide upsetting news".
+  assert.equal(sensitiveCategoryOf("Reliever battled a cocaine addiction for years"), "selfharm");
+  assert.equal(sensitiveCategoryOf("Veteran is a recovering alcoholic, book reveals"), "selfharm");
+  assert.equal(sensitiveCategoryOf("Star discusses his addiction battle openly"), "selfharm");
+  // The leagues' "substance ABUSE policy/program" is not "substance ADDICTION",
+  // and "addicted/addictive to <sport>" never uses the noun in a struggle frame,
+  // so ordinary suspension news and metaphors stay visible.
+  assert.equal(sensitiveCategoryOf("Reliever suspended under the substance abuse policy"), null);
+  assert.equal(sensitiveCategoryOf("Fans are addicted to this team's late drama"), null);
+  assert.equal(sensitiveCategoryOf("This offense is absolutely addictive to watch"), null);
 });
 
 test("the schedule-sense 'collision' strip does not swallow a real on-field collision", () => {

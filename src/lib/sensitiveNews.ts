@@ -747,6 +747,22 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\btook (his|her|their) own life\b/i,
     /\boverdose(d)?\b|\bfatal overdose\b/i,
     /\bmental health crisis\b|\bchecked into rehab\b|\beating disorder\b/i,
+    // Addiction itself — the other half of this category's label ("self-harm or
+    // addiction"). Until now only its endpoints matched (an `overdose`, a
+    // `checked into rehab`), so an ordinary "opens up about his gambling
+    // addiction", "battled alcoholism" or "reveals a drug addiction" — the exact
+    // personal-struggle story the toggle exists to spare someone — leaked
+    // straight past "Hide upsetting news". Three scoped forms, none of which the
+    // benign uses take: a substance modifier + "addiction" (a compound never used
+    // figuratively — note it is "substance addiction", not the leagues' "substance
+    // ABUSE policy", which stays visible); "addiction" as the subject of a
+    // battle/recovery/treatment noun or a struggle/disclosure verb (so "addicted
+    // to winning" / "addictive to watch" — which never use the noun "addiction" —
+    // stay visible); and bare "alcoholism", which carries no figurative sense.
+    /\b(drug|alcohol|substance|gambling|opioid|opiate|cocaine|heroin|painkiller|prescription|betting) addiction\b/i,
+    /\baddiction (battle|struggle|recovery|treatment|counsell?ing|problem|issues?|clinic|relapse)\b/i,
+    /\b(battl(?:e|ed|es|ing)|struggl(?:e|ed|es|ing)|grappl(?:e|ed|es|ing)|wrestl(?:e|ed|es|ing)|overcome|overcame|beat|beaten|recovering from|reveal(?:s|ed)?|admits?|admitted|confess(?:es|ed)?|open(?:s|ed)? up about) (?:a |an |his |her |their |serious |severe |secret |long )*addiction\b/i,
+    /\balcoholism\b|\brecovering alcoholic\b/i,
   ],
 };
 
