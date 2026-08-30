@@ -118,7 +118,12 @@ def imagestack(name, w, h, idiom, scales):
         images = []
         for scale in scales:
             fn = "layer@%dx.png" % scale if scale > 1 else "layer.png"
-            image.resize((w * scale, h * scale), Image.LANCZOS).save(os.path.join(content, fn))
+            out = image.resize((w * scale, h * scale), Image.LANCZOS)
+            # The bottom layer of a tvOS icon may not carry an alpha channel;
+            # the layers above it must, or the parallax has nothing to float.
+            if layer_name == "Back":
+                out = out.convert("RGB")
+            out.save(os.path.join(content, fn))
             images.append({"filename": fn, "idiom": idiom, "scale": "%dx" % scale})
         write(os.path.join(content, "Contents.json"), {"images": images, "info": INFO})
 
@@ -141,14 +146,19 @@ def main():
     write(os.path.join(OUT, "Contents.json"), {"info": INFO})
 
     imagestack("App Icon", 400, 240, "tv", [1, 2])
-    imagestack("App Icon - App Store", 1280, 768, "tv-marketing", [1])
+    # 1280x768 is the App Store icon. Its idiom is "tv" like everything
+    # else here: "tv-marketing" (the tvOS analogue of ios-marketing) is
+    # accepted by actool without a warning, lands in Assets.car under the
+    # "marketing" idiom, and is then invisible to App Store validation,
+    # which rejects the upload with "Missing Image Asset ... App Store Icon".
+    imagestack("App Icon - App Store", 1280, 768, "tv", [1])
     imageset("Top Shelf Image", 1920, 720, [1, 2])
     imageset("Top Shelf Image Wide", 2320, 720, [1, 2])
 
     write(os.path.join(BRAND, "Contents.json"), {
         "assets": [
             {"filename": "App Icon.imagestack", "idiom": "tv", "role": "primary-app-icon", "size": "400x240"},
-            {"filename": "App Icon - App Store.imagestack", "idiom": "tv-marketing", "role": "primary-app-icon", "size": "1280x768"},
+            {"filename": "App Icon - App Store.imagestack", "idiom": "tv", "role": "primary-app-icon", "size": "1280x768"},
             {"filename": "Top Shelf Image Wide.imageset", "idiom": "tv", "role": "top-shelf-image-wide", "size": "2320x720"},
             {"filename": "Top Shelf Image.imageset", "idiom": "tv", "role": "top-shelf-image", "size": "1920x720"},
         ],
