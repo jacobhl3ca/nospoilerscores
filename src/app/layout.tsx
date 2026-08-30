@@ -379,8 +379,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         {/* iOS Safari Smart App Banner. The site already promotes the HideScore
             iOS app everywhere else — the footer "also on the App Store" link, the
-            MobileApplication JSON-LD node above, the manifest's sameAs — but this
-            was the one surface still missing Apple's own native banner, the
+            MobileApplication JSON-LD node above, the Organization JSON-LD's sameAs —
+            but this was the one surface still missing Apple's own native banner, the
             highest-intent install prompt (it deep-links to Open when the app is
             already installed, App Store otherwise). app-id is the same App Store
             ID (6766885311) used by those other references, so app promotion stays
