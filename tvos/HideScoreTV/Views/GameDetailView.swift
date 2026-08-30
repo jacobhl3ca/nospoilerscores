@@ -1,0 +1,131 @@
+import SwiftUI
+
+/// The full card, opened with Select. Still hidden — revealing is a separate,
+/// deliberate press, because the whole point is that you can look at a game
+/// without being told how it ended.
+struct GameDetailView: View {
+    let game: Game
+    let catalog: Catalog
+    @Environment(\.dismiss) private var dismiss
+    @State private var revealed = DemoMode.revealsDetail
+
+    var body: some View {
+        ZStack {
+            Brand.background.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 28) {
+                header
+                teams
+                if let rating = game.rating {
+                    verdict(rating)
+                }
+                details
+                Spacer(minLength: 0)
+                controls
+            }
+            .padding(.horizontal, 90)
+            .padding(.vertical, 60)
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 18) {
+            Text(game.leagueLabel.uppercased())
+                .font(.system(size: 26, weight: .heavy, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(Brand.secondary)
+            if game.isLive { LivePip() }
+            Spacer()
+            Text(game.isFinal ? "Final" : (game.start?.clockTime() ?? game.statusDetail))
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(Brand.secondary)
+        }
+    }
+
+    private var teams: some View {
+        VStack(spacing: 20) {
+            teamRow(game.away)
+            teamRow(game.home)
+        }
+    }
+
+    private func teamRow(_ team: GameTeam) -> some View {
+        HStack(spacing: 22) {
+            TeamMark(team: team, size: 72)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(team.displayName).font(.system(size: 40, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.6)
+                if let record = team.record, !record.isEmpty {
+                    Text(record).font(.system(size: 22)).foregroundStyle(Brand.secondary)
+                }
+            }
+            Spacer()
+            if game.state != "pre" {
+                Text(revealed ? (team.score.map(String.init) ?? "—") : "•••")
+                    .font(.system(size: 46, weight: .heavy, design: .rounded))
+                    .foregroundStyle(revealed ? .white : Brand.secondary)
+                    .contentTransition(.opacity)
+            }
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 18)
+        .background(Brand.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func verdict(_ rating: Int) -> some View {
+        HStack(spacing: 18) {
+            RatingBadge(rating: rating, catalog: catalog)
+            Text(verdictCopy(rating))
+                .font(.system(size: 24))
+                .foregroundStyle(Brand.secondary)
+            Spacer()
+        }
+    }
+
+    /// Describes the rating without describing the game.
+    private func verdictCopy(_ rating: Int) -> String {
+        switch catalog.tier(for: rating)?.label {
+        case "GREAT": return "Close the whole way. Worth your time."
+        case "GOOD":  return "Competitive. A solid watch."
+        case "MEH":   return "It got away from someone."
+        case "SKIP":  return "One-sided. Save the two hours."
+        default:      return "Not enough of the game has been played to judge."
+        }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !game.broadcasts.isEmpty {
+                detailRow("tv", game.broadcasts.joined(separator: ", "))
+            }
+            if !game.venue.isEmpty {
+                detailRow("mappin.and.ellipse", game.venue)
+            }
+            if let note = game.note, !note.isEmpty {
+                detailRow("trophy", note)
+            }
+            if let start = game.start {
+                detailRow("clock", start.formatted(date: .abbreviated, time: .shortened))
+            }
+        }
+    }
+
+    private func detailRow(_ symbol: String, _ text: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol).frame(width: 34).foregroundStyle(Brand.secondary)
+            Text(text).font(.system(size: 24)).foregroundStyle(Brand.secondary).lineLimit(2)
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 28) {
+            if game.state != "pre" {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { revealed.toggle() }
+                } label: {
+                    Label(revealed ? "Hide score" : "Show score",
+                          systemImage: revealed ? "eye.slash" : "eye")
+                }
+            }
+            Button("Done") { dismiss() }
+        }
+    }
+}

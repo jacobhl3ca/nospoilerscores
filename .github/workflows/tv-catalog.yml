@@ -1,0 +1,34 @@
+# Keeps the Apple TV app's league catalog honest.
+#
+# public/tv/catalog.json is generated from src/lib/espn.ts and fetched by the
+# tvOS app on every launch. If a league is added to the website and the catalog
+# is not regenerated, the TV silently never sees it — the worst kind of bug,
+# because nothing anywhere goes red. This does.
+#
+# Deliberately a SEPARATE workflow from deploy.yml: a stale TV catalog must be
+# loud, but it must never block a website deploy. It also needs no npm install —
+# the generator is node builtins only — so it costs a few seconds of CI.
+name: TV catalog
+
+on:
+  push:
+    paths:
+      - 'src/lib/espn.ts'
+      - 'src/lib/news.ts'
+      - 'public/tv/catalog.json'
+      - 'scripts/build-tv-catalog.mjs'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Catalog matches espn.ts
+        run: node scripts/build-tv-catalog.mjs --check
+      - if: failure()
+        run: |
+          echo "::error::public/tv/catalog.json is stale. Run 'npm run tv:catalog' and commit the result — the Apple TV app reads this file and will not see your league change without it."
