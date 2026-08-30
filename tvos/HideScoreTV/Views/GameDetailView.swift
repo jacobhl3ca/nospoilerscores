@@ -7,7 +7,7 @@ struct GameDetailView: View {
     let game: Game
     let catalog: Catalog
     @Environment(\.dismiss) private var dismiss
-    @State private var revealed = false
+    @State private var revealed = DemoMode.revealsDetail
 
     var body: some View {
         ZStack {

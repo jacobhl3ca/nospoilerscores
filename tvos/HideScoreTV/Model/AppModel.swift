@@ -3,7 +3,7 @@ import Combine
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published private(set) var catalog: Catalog = CatalogLoader.bundled()
+    @Published private(set) var catalog: Catalog = DemoMode.apply(CatalogLoader.bundled())
     @Published private(set) var days: [String: [LeagueSlate]] = [:]   // ymd → slates
     @Published private(set) var loading: Set<String> = []             // ymd currently in flight
     @Published private(set) var lastUpdated: Date?
@@ -54,7 +54,7 @@ final class AppModel: ObservableObject {
     // MARK: Loading
 
     func bootstrap() async {
-        catalog = await CatalogLoader.load()
+        catalog = DemoMode.apply(await CatalogLoader.load())
         await load(day: today)
         await load(day: ServiceDay.offset(-1, from: today))
         startAutoRefresh()

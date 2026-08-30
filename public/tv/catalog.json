@@ -28,8 +28,8 @@
       "key": "ncaam",
       "label": "NCAAM",
       "path": "/basketball/mens-college-basketball/scoreboard",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
-      "defaultOn": false,
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/500px-NCAA_logo.svg.png",
+      "defaultOn": true,
       "season": {
         "start": "11-01",
         "end": "04-06",
@@ -50,7 +50,7 @@
       "key": "nba",
       "label": "NBA",
       "path": "/basketball/nba/scoreboard",
-      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=200&h=200&transparent=true",
       "defaultOn": true,
       "season": {
         "start": "10-20",
@@ -72,7 +72,7 @@
       "key": "mlb",
       "label": "MLB",
       "path": "/baseball/mlb/scoreboard",
-      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=40&h=40&transparent=true",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mlb.png&w=200&h=200&transparent=true",
       "defaultOn": true,
       "season": {
         "start": "03-20",
@@ -94,7 +94,7 @@
       "key": "nhl",
       "label": "NHL",
       "path": "/hockey/nhl/scoreboard",
-      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=200&h=200&transparent=true",
       "defaultOn": true,
       "season": {
         "start": "09-27",
@@ -116,7 +116,7 @@
       "key": "nfl",
       "label": "NFL",
       "path": "/football/nfl/scoreboard",
-      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=200&h=200&transparent=true",
       "defaultOn": true,
       "season": {
         "start": "09-07",
@@ -138,7 +138,7 @@
       "key": "fifa",
       "label": "World Cup",
       "path": "/soccer/fifa.world/scoreboard",
-      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=200&h=200&transparent=true",
       "defaultOn": false,
       "season": {
         "start": "06-04",
@@ -161,7 +161,7 @@
       "label": "Premier League",
       "path": "/soccer/eng.1/scoreboard",
       "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
-      "defaultOn": false,
+      "defaultOn": true,
       "season": {
         "start": "08-19",
         "end": "05-31",
@@ -183,7 +183,7 @@
       "label": "UCL",
       "path": "/soccer/uefa.champions/scoreboard",
       "logo": "https://a.espncdn.com/i/leaguelogos/soccer/500/2.png",
-      "defaultOn": false,
+      "defaultOn": true,
       "season": {
         "start": "09-06",
         "end": "06-06",
@@ -490,8 +490,8 @@
       "key": "mls",
       "label": "MLS",
       "path": "/soccer/usa.1/scoreboard",
-      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
-      "defaultOn": false,
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=200&h=200&transparent=true",
+      "defaultOn": true,
       "season": {
         "start": "02-21",
         "end": "12-20",
@@ -512,8 +512,8 @@
       "key": "ncaaf",
       "label": "NCAAF",
       "path": "/football/college-football/scoreboard",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
-      "defaultOn": false,
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/500px-NCAA_logo.svg.png",
+      "defaultOn": true,
       "season": {
         "start": "08-27",
         "end": "01-28",
@@ -534,7 +534,7 @@
       "key": "ncaaw",
       "label": "NCAAW",
       "path": "/basketball/womens-college-basketball/scoreboard",
-      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/500px-NCAA_logo.svg.png",
       "defaultOn": false,
       "season": {
         "start": "11-01",
@@ -556,8 +556,8 @@
       "key": "wnba",
       "label": "WNBA",
       "path": "/basketball/wnba/scoreboard",
-      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
-      "defaultOn": false,
+      "logo": "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=200&h=200&transparent=true",
+      "defaultOn": true,
       "season": {
         "start": "05-16",
         "end": "10-19",

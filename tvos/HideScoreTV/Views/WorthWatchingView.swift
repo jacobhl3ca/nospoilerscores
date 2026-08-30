@@ -48,6 +48,8 @@ struct WorthWatchingView: View {
         .task {
             await model.load(day: model.today)
             await model.load(day: ServiceDay.offset(-1, from: model.today))
+            // Screenshot staging only — see DemoMode.
+            if DemoMode.opensDetail { selected = model.worthWatching().first }
         }
     }
 }

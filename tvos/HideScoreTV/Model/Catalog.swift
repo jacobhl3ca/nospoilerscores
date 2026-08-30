@@ -79,7 +79,13 @@ enum CatalogLoader {
 
     /// Bundled copy — always present, always valid, never newer than the binary.
     static func bundled() -> Catalog {
-        guard let url = Bundle.main.url(forResource: "catalog", withExtension: "json"),
+        // Xcode's synchronized groups may flatten `Resources/` into the bundle
+        // root or keep it as a directory depending on how the folder is typed,
+        // and a catalog that silently fails to load would leave the app with no
+        // leagues at all. Look in both places.
+        let url = Bundle.main.url(forResource: "catalog", withExtension: "json")
+            ?? Bundle.main.url(forResource: "catalog", withExtension: "json", subdirectory: "Resources")
+        guard let url,
               let data = try? Data(contentsOf: url),
               let catalog = try? JSONDecoder().decode(Catalog.self, from: data) else {
             // The bundled catalog is a build input, so this is unreachable in a
