@@ -1,0 +1,9 @@
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+**/xcuserdata/
+**/project.xcworkspace/xcuserdata/
+tools/parity/fixtures/
+tools/parity/ts-ratings.json
+tools/parity/swift-ratings.json
