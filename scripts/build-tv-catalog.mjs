@@ -83,8 +83,25 @@ const SUPPORTED = new Set([
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
 ]);
 
-// The four leagues the Apple TV opens on before anyone has picked anything.
-const DEFAULT_ON = new Set(["mlb", "nba", "nfl", "nhl"]);
+// What the Apple TV opens on before anyone has picked anything. It has to be a
+// SEASON-SPANNING set, not just the big four: the app hides out-of-season
+// leagues, so a four-league default leaves the board nearly empty for most of
+// the year (on 8/29 only baseball would have survived it). These ten overlap
+// enough that something is always on.
+const DEFAULT_ON = new Set([
+  "mlb", "nba", "nfl", "nhl",     // the majors
+  "ncaaf", "ncaam", "wnba",       // fill the gaps the majors leave
+  "epl", "ucl", "mls",            // soccer, near year-round between them
+]);
+
+// The website asks for 40px league badges; a television needs 4x that or the
+// shelf headings render soft on a 4K panel. Both hosts take a size in the URL.
+function tvLogo(url) {
+  if (!url) return null;
+  return url
+    .replace(/([?&])w=\d+/, "$1w=200").replace(/([?&])h=\d+/, "$1h=200")
+    .replace(/\/(\d+)px-/, "/500px-");
+}
 
 const leagues = [];
 const seen = new Set();
@@ -100,7 +117,7 @@ for (const l of ALL_LEAGUES) {
     key: l.sport,
     label: l.label,
     path: SPORT_PATHS[l.sport],
-    logo: LOGOS[l.sport] ?? null,
+    logo: tvLogo(LOGOS[l.sport]),
     defaultOn: DEFAULT_ON.has(l.sport),
     season: { start: l.startDate ?? null, end: l.endDate ?? null,
               cycleMod: l.yearCycle?.mod ?? null, cycleAnchor: l.yearCycle?.anchor ?? null },

@@ -36,7 +36,19 @@ struct GameCardView: View {
                 .foregroundStyle(Brand.secondary)
             Spacer()
             if game.isLive {
-                LivePip()
+                HStack(spacing: 12) {
+                    LivePip()
+                    // Safe to show while a game is in progress — a period or an
+                    // inning says how far along it is, not who is winning. It is
+                    // suppressed on finals on purpose: ESPN writes "Final/10"
+                    // there, which leaks that the game went long.
+                    if !game.statusDetail.isEmpty {
+                        Text(game.statusDetail)
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(Brand.secondary)
+                            .lineLimit(1)
+                    }
+                }
             } else {
                 Text(headerRight)
                     .font(.system(size: 21, weight: .semibold))
