@@ -456,16 +456,20 @@ const IDIOM = new RegExp(
     // violence filter's `stabb(ed|ing)` knife pattern, so ordinary goal recaps
     // were pulled under "violence, crime or abuse" for anyone with the main
     // filter on — and the World Cup and soccer columns produce this phrasing
-    // constantly. Stripped ONLY before a scoring direction (home, wide,
-    // goalwards, past the keeper, into the net) or the "at the ball" clearance
-    // sense, and "in" only with a ball/rebound object before it — a real
-    // "stabbed to death / stabbed in the chest / stabbed over a dispute /
-    // stabbing attack" carries none of these and still matches. "over" and a
-    // bare "stabbed in" are deliberately OUT (a person is "stabbed over <a
-    // dispute>" and "stabbed in the <neck>"), so those keep tripping violence.
-    "stabb(ed|es|ing) (the ball |it |a shot |an effort |the rebound |the loose ball )?(home|wide|goalwards?|past (the |a )?(keeper|goalkeeper|goalie)|into (an|the) (empty )?net)",
-    "stabb(ed|es|ing) (it|the ball|the rebound) in\\b",
-    "stabb(ed|es|ing) at (the |a |the loose )?(ball|cross|rebound|delivery)",
+    // constantly. Hockey uses the identical idiom around the puck — "stabbed the
+    // puck home", "stabbed the puck in", "stabbed at the (loose) puck" in a
+    // crease scramble or poke-check — and the app runs NHL columns, so `puck`
+    // joins each strip's object list for the same reason. Stripped ONLY before a
+    // scoring direction (home, wide, goalwards, past the keeper, into the net) or
+    // the "at the ball/puck" clearance sense, and "in" only with a ball/puck/
+    // rebound object before it — a real "stabbed to death / stabbed in the chest /
+    // stabbed over a dispute / stabbing attack" carries none of these and still
+    // matches. "over" and a bare "stabbed in" are deliberately OUT (a person is
+    // "stabbed over <a dispute>" and "stabbed in the <neck>"), so those keep
+    // tripping violence.
+    "stabb(ed|es|ing) (the ball |it |a shot |an effort |the rebound |the loose ball |the puck )?(home|wide|goalwards?|past (the |a )?(keeper|goalkeeper|goalie)|into (an|the) (empty )?net)",
+    "stabb(ed|es|ing) (it|the ball|the rebound|the puck) in\\b",
+    "stabb(ed|es|ing) at (the |a |the loose )?(ball|cross|rebound|delivery|puck)",
     "stabbing (finish|effort|volley|attempt)",
     // Baseball's "hit-and-run" is an offensive play (the runner breaks as the
     // batter swings to protect him), spelled exactly like the vehicular crime the

@@ -329,6 +329,14 @@ const SAFE = [
   "He stabbed at the ball but could only find the side netting",
   "Winger stabbed it wide from a promising position",
   "A clever stabbing finish settles a tight derby",
+  // Hockey's identical "stabbed the puck home / in", "stabbed at the (loose)
+  // puck" idiom — a goal or a poke-check, not a knife attack — must not read as
+  // violence either. The app runs NHL columns.
+  "McDavid stabbed the puck past the goalie for the winner",
+  "Forward stabbed the puck home from the crease",
+  "Defenseman stabbed the puck in off a scramble",
+  "Marchand stabbed at the puck but the goalie smothered it",
+  "He stabbed at the loose puck in the slot",
   // Figurative "held hostage by <penalties/VAR/…>" / "hostage to fortune" — a
   // team or game held back by something out of its control, not a real captive.
   "Offense held hostage by penalties all night",
