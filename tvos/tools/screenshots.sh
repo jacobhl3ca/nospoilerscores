@@ -34,6 +34,7 @@ xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
 
 echo "→ building for the simulator"
+mkdir -p "$ROOT/build"
 DD="$ROOT/build/shots-dd"
 xcodebuild -project "$ROOT/HideScoreTV.xcodeproj" -scheme HideScoreTV -configuration Debug \
   -destination "id=$UDID" -derivedDataPath "$DD" \

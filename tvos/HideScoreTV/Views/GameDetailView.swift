@@ -25,6 +25,9 @@ struct GameDetailView: View {
             .padding(.horizontal, 90)
             .padding(.vertical, 60)
         }
+        // Without this the Menu button falls through the cover to the system and
+        // drops the viewer on the Home screen instead of back to the board.
+        .onExitCommand { dismiss() }
     }
 
     private var header: some View {
@@ -52,12 +55,18 @@ struct GameDetailView: View {
         HStack(spacing: 22) {
             TeamMark(team: team, size: 72)
             VStack(alignment: .leading, spacing: 4) {
-                Text(team.displayName).font(.system(size: 40, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.6)
+                // No minimumScaleFactor. A detail row is ~1,100pt wide, so a name
+                // never needs to shrink — and when it was allowed to, SwiftUI
+                // scaled the two rows by different amounts and the home team
+                // rendered a visible size smaller than the away team.
+                Text(team.displayName).font(.system(size: 40, weight: .semibold)).lineLimit(1)
                 if let record = team.record, !record.isEmpty {
-                    Text(record).font(.system(size: 22)).foregroundStyle(Brand.secondary)
+                    Text(record).font(.system(size: 22)).foregroundStyle(Brand.secondary).lineLimit(1)
                 }
             }
-            Spacer()
+            // A greedy leading frame instead of a trailing Spacer, so both rows
+            // are proposed the same width no matter what sits to their right.
+            .frame(maxWidth: .infinity, alignment: .leading)
             if game.state != "pre" {
                 Text(revealed ? (team.score.map(String.init) ?? "—") : "•••")
                     .font(.system(size: 46, weight: .heavy, design: .rounded))

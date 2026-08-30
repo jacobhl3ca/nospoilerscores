@@ -56,6 +56,48 @@ rejected twice under 4.1(a) for exactly that):
 xcrun simctl launch booted com.jacobhl.hidescore -HSDemoMode YES
 ```
 
+## Shipping
+
+```bash
+tvos/tools/ship.sh          # archive + upload at the current version/build
+tvos/tools/ship.sh 1.1 2    # bump marketing version / build first
+/opt/homebrew/bin/python3 tvos/tools/submit.py status
+```
+
+Three things about a tvOS upload that are not guessable, all now encoded in the
+scripts so the next release doesn't rediscover them:
+
+- **The App Store icon's idiom is `tv`, not `tv-marketing`.** The 1280x768 stack
+  compiles without a single actool warning under `tv-marketing` and lands in
+  `Assets.car` at the right size — and is then invisible to App Store validation,
+  which rejects the upload with *Missing Image Asset ... App Store Icon*. One
+  word in the brand assets' `Contents.json` is the whole difference.
+- **The archive is unsigned and the export signs it.** Automatic signing
+  provisions an archive for *development*, and a development profile can't be
+  issued to a team with no registered devices — which is this one, since nothing
+  here is ever side-loaded. Forcing `CODE_SIGN_IDENTITY=Apple Distribution`
+  instead trips "conflicting provisioning settings".
+- **`exportArchive` needs Apple's rsync.** Homebrew's rsync 3.4.x fails it with a
+  bare `Copy failed`; the real error is buried in the `.xcdistributionlogs`
+  bundle. `ship.sh` runs the export with a system-only `PATH`.
+
+## Proof, not assertion
+
+Both pins are things you can run, and both were run before the app shipped:
+
+```
+$ npm run tv:parity          # 10 days, every league, live ESPN payloads
+compared 411 games · 0 mismatched · 0 not parsed by Swift
+
+$ tvos/tools/smoke/smoke.sh  # the real catalog, the real requests, the real board
+catalog: schema 1 · 32 leagues · base https://site.web.api.espn.com/apis/site/v2/sports
+default leagues in season on 20260829: MLB, Premier League, MLS, NCAAF, WNBA
+total 37 games · 30 rated · 0 league fetch failures
+```
+
+`smoke.sh` deliberately prints no scores. It is checking the board, and the board
+never shows one.
+
 ## Scope
 
 v1 covers the 32 leagues that parse out of ESPN's standard two-competitor

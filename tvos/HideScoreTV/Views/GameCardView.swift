@@ -75,10 +75,13 @@ struct GameCardView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if let record = team.record, !record.isEmpty, !game.isFinal {
-                    Text(record).font(.system(size: 17)).foregroundStyle(Brand.secondary)
+                    Text(record).font(.system(size: 17)).foregroundStyle(Brand.secondary).lineLimit(1)
                 }
             }
-            Spacer(minLength: 8)
+            // Greedy frame rather than a Spacer, so both rows on a card are
+            // proposed the same width and a long name shrinks by the same step
+            // on each. Cards are narrow, so here the name really can need it.
+            .frame(maxWidth: .infinity, alignment: .leading)
             if game.state == "pre" {
                 EmptyView()
             } else {
