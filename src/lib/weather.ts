@@ -290,9 +290,13 @@ async function computeWeather(venueLocation: string, gameDateISO: string): Promi
     // so a 9-AM floor never trimmed a normal daytime/evening game — but it did
     // drop the gametime hours of an early-morning venue-local start (an Asian /
     // Australian cricket or soccer match shown to US users), silently hiding the
-    // rain block for exactly the games it's meant to warn about. The `<= 23`
-    // upper guard also drops the "24" some ICU builds emit for midnight, matching
-    // the localHour `% 24` guard above.
+    // rain block for exactly the games it's meant to warn about. The `0–23`
+    // bounds are a validity check on the parsed hour, not a trim: `times[i]` is
+    // Open-Meteo's own ISO string ("2026-08-30T00:00"), whose HH field is
+    // always "00".."23", so a well-formed entry always passes. What the guard
+    // actually earns its keep on is a malformed timestamp — `parseInt` returns
+    // NaN, and `NaN >= 0` is false — so a bad row can't push a garbage hour
+    // into the timeline.
     if (hr >= 0 && hr <= 23) {
       const rp = Math.round(rains[i] ?? 0);
       timeline.push({ hour24: hr, label: hourLabel(hr), rainPct: rp });
