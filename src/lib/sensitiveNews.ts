@@ -493,16 +493,19 @@ const IDIOM = new RegExp(
     // "hit-and-run driver / crash / suspect" carries neither, so it still matches.
     "(put on|puts on|putting on|flashed|flashes|flashing|botched|botches|botching|executed|executes|executing|signall?ed|signals?|signall?ing) (the |a |an )?hit.?and.?run",
     "hit.?and.?run (plays?|signs?|signals?|singles?|grounders?|steals?)",
-    // "arrest the slide / slump / decline / rot / skid / freefall" is the staple
-    // English-football framing for a team trying to halt a bad run — the
-    // figurative use of the bare `arrest` crime pattern, which pulled ordinary
-    // form recaps under "violence, crime or abuse" for anyone with the main
-    // filter on ("desperate to arrest the slump", "boss aims to arrest the
-    // rot"). Stripped ONLY when a decline noun is the object of "arrest …", with
-    // a couple of article/adjective words allowed in between, so a real "player
-    // arrested on assault charges" / "arrested after the match" (no such noun)
-    // still matches the crime pattern.
-    "arrest(s|ed|ing)? (the|their|its|his|her|a|an|this|that) ([\\w'-]+ ){0,2}(slide|slump|decline|rot|skid|freefall|free.?fall|spiral|rut|drop)",
+    // "arrest the slide / slump / decline / rot / skid / freefall / losing streak
+    // / run of defeats / tailspin / nosedive / downturn" is the staple English-
+    // football framing for a team trying to halt a bad run — the figurative use
+    // of the bare `arrest` crime pattern, which pulled ordinary form recaps under
+    // "violence, crime or abuse" for anyone with the main filter on ("desperate
+    // to arrest the slump", "boss aims to arrest the rot", "must arrest the losing
+    // streak"). Stripped ONLY when a decline noun is the object of "arrest …",
+    // with a couple of article/adjective words allowed in between (so "losing
+    // streak" / "run of three straight defeats" land on streak/run), and every
+    // listed noun names a slump, never a person — so a real "player arrested on
+    // assault charges" / "arrested after the match" (no such noun) still matches
+    // the crime pattern.
+    "arrest(s|ed|ing)? (the|their|its|his|her|a|an|this|that) ([\\w'-]+ ){0,2}(slide|slump|decline|rot|skid|freefall|free.?fall|spiral|rut|drop|streaks?|runs?|tailspin|nose.?dives?|downturn)",
     // "faces a trial by fire" is the staple rookie-debut framing — a young QB,
     // keeper or teenager thrown in against tough opposition. It tripped the
     // `faces? trial` crime pattern ("faces trial by fire" → "faces trial") and
