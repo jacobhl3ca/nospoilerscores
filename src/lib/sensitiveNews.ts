@@ -798,7 +798,14 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\bblows? to the (back of the )?head\b|\bshots? to the back of the head\b/i,
   ],
   medical: [
-    /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill\b/i,
+    // `ill(ness)?` so the noun form "terminal illness" is caught alongside the
+    // adjective "terminally ill" / "terminal ill". `\bterminal(ly)? ill\b` alone
+    // stopped at the word boundary after "ill", so "diagnosed with a terminal
+    // illness" (the more common phrasing in an obituary-adjacent story) slipped
+    // straight past "Hide upsetting news". "terminal illness"/"terminally ill"
+    // carry no sports idiom — a "terminal" on its own (velocity, bus/airport
+    // terminal) never takes this object — so the noun form is safe to add.
+    /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill(ness)?\b/i,
     /\bALS\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
     // `s?` so the plural "cardiac arrests/events/episodes" is caught too: the
     // violence list's `(?<!cardiac )` carve-out excludes those from crime, so the

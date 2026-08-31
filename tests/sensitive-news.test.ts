@@ -18,6 +18,10 @@ const SENSITIVE: [string, string][] = [
   // The `diagnosed with` catch-all must survive the injury-diagnosis strip for
   // an illness with no dedicated keyword.
   ["Veteran keeper diagnosed with a heart condition", "medical"],
+  // The noun form of the "terminally ill" cue — the phrasing an obituary-adjacent
+  // story actually uses ("diagnosed with a terminal illness"). It stopped at the
+  // word boundary after "ill" before the `ill(ness)?` widening.
+  ["Beloved coach diagnosed with a terminal illness", "medical"],
   ["Midfielder collapsed on the pitch, taken to hospital", "medical"],
   ["Defenseman in critical condition after skate cut", "medical"],
   ["Two horses euthanized after breakdowns on the card", "animal"],
