@@ -700,7 +700,16 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\bkilled (in|by|when|after|during|at)\b|\bwas killed\b|\bkills? (\d+|several|dozens)\b/i,
     /\bmurder(ed|s)?\b|\bhomicide\b|\bmanslaughter\b/i,
     /\bmourn(s|ing|ed)?\b|\bgrieving\b|\btribute to the late\b|\bthe late\b/i,
-    /\bplane crash\b|\bhelicopter crash\b|\bcar crash\b|\bfatal crash\b|\bcrash that killed\b/i,
+    // `bus crash` joins the vehicle-crash cues: a team-bus crash is a recurring,
+    // grievous sports tragedy (a junior/amateur squad wiped out on the road — the
+    // Humboldt Broncos the best-known), yet without the word it only caught when
+    // the headline also said "fatal"/"killed"/"dead", so anniversary and survivor
+    // coverage ("remembers the team bus crash five years on") slipped past the
+    // main "Hide upsetting news" toggle — the crash itself being opt-in `crash`,
+    // off by default. Unlike its neighbour `car crash` (whose "was a car crash"
+    // shambles idiom needs the strip above), "bus crash" carries no figurative
+    // sports sense, so it needs no idiom carve-out and is safe as a bare phrase.
+    /\bplane crash\b|\bhelicopter crash\b|\bcar crash\b|\bbus crash\b|\bfatal crash\b|\bcrash that killed\b/i,
     /\btragedy\b|\btragic(ally)?\b/i,
     /\bR\.?I\.?P\.?\b/,
   ],
