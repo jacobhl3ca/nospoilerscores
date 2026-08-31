@@ -438,6 +438,17 @@ const SAFE = [
   "United face a suicide mission at the Bernabeu",
   "The leaders went off at a suicide pace and paid for it late",
   "A suicide run down the wing nearly gifts a goal on the break",
+  // Adjectival "suicidal <tactic>" — the staple football idiom for recklessly
+  // risky play, not a real self-harm event. "suicidal" lives in the self-harm
+  // pattern, so these ordinary match reports must not read as "self-harm or
+  // addiction".
+  "United's suicidal defending gifted City three goals",
+  "A suicidal back-pass hands the striker a tap-in",
+  "That was a suicidal challenge from the full-back",
+  "Arsenal's suicidal high line was punished again",
+  "The keeper's suicidal pass out from the back nearly cost them",
+  "Their suicidal marking at set pieces is a problem",
+  "A suicidal lunge earns the defender a straight red",
   // Figurative "car crash" — the ubiquitous idiom for a shambolic showing, not a
   // road accident. "car crash" lives in the DEATH pattern (to catch a real fatal
   // crash), so these must not read as "death or tragedy".
@@ -490,6 +501,15 @@ test("the 'suicide <tactic>' idiom strip does not swallow a real self-harm item"
   assert.equal(sensitiveCategoryOf("Club backs a suicide prevention campaign"), "selfharm");
   assert.equal(sensitiveCategoryOf("He has battled suicidal thoughts for years"), "selfharm");
   assert.equal(sensitiveCategoryOf("Former athlete died by suicide, family says"), "death");
+});
+
+test("the 'suicidal <tactic>' idiom strip does not swallow a real self-harm item", () => {
+  // Only the tactical-play nouns are stripped — a genuine self-harm item reads
+  // "suicidal thoughts", "suicidal ideation" or "feeling suicidal", none of
+  // which carry these nouns, so it must still trip the self-harm pattern.
+  assert.equal(sensitiveCategoryOf("Star reveals his suicidal ideation during the lockdown"), "selfharm");
+  assert.equal(sensitiveCategoryOf("Coach admits feeling suicidal after his lowest ebb"), "selfharm");
+  assert.equal(sensitiveCategoryOf("Athlete opens up on being suicidal at his lowest point"), "selfharm");
 });
 
 test("the addiction cue flags a real struggle but spares the 'substance abuse policy' and 'addicted to' metaphors", () => {
