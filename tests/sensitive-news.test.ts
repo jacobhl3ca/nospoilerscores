@@ -618,6 +618,18 @@ test("the 'heart attack <finish>' idiom strip does not swallow a real cardiac ev
   assert.equal(sensitiveCategoryOf("Former striker died of a heart attack aged 59"), "death");
 });
 
+test("a real cardiac arrest reads as medical, not a criminal arrest", () => {
+  // The violence list's bare `arrest` used to fire on "cardiac arrest" and — as
+  // violence is checked before medical — mislabel the emergency "violence, crime
+  // or abuse". The `(?<!cardiac )` carve-out lets it fall through to the medical
+  // "cardiac arrest" cue (plural included), while a genuine arrest still reads as
+  // violence.
+  assert.equal(sensitiveCategoryOf("Veteran midfielder suffers cardiac arrest in training"), "medical");
+  assert.equal(sensitiveCategoryOf("Coach went into cardiac arrest on the touchline"), "medical");
+  assert.equal(sensitiveCategoryOf("Two players suffered cardiac arrests this season"), "medical");
+  assert.equal(sensitiveCategoryOf("Quarterback arrested on domestic violence charge"), "violence");
+});
+
 test("the 'tragic <mistake>' idiom strip does not swallow a real tragedy", () => {
   // Only game-mistake nouns / sporting verbs are stripped — a genuine tragedy
   // still trips the death pattern.
