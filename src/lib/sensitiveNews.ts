@@ -635,7 +635,16 @@ const IDIOM = new RegExp(
 const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
   death: [
     /\b(dies|died|dying)\b/i,
-    /\bdead at\b|\bfound dead\b|\bpronounced dead\b|\bshot dead\b/i,
+    // "found lifeless" is the euphemistic sibling of "found dead" — the phrasing
+    // outlets reach for on exactly these stories ("Star found lifeless in his
+    // hotel room", "found lifeless by team staff") — yet only "found dead" was
+    // listed, so a real death written this way slipped straight past "Hide
+    // upsetting news", the module's cardinal failure. It is added as the whole
+    // phrase, NOT a bare `lifeless`: on its own "lifeless" is a staple flat-
+    // performance idiom ("a lifeless display", "the crowd was lifeless") that a
+    // bare word would pull under "death or tragedy". "found lifeless" carries no
+    // such figurative sense — it names a person discovered dead — so it is safe.
+    /\bdead at\b|\bfound dead\b|\bfound lifeless\b|\bpronounced dead\b|\bshot dead\b/i,
     /\bdeath of\b|\b(his|her|their) death\b|\bcause of death\b|\bdeath (toll|investigation|certificate)\b/i,
     /\bpass(es|ed) away\b|\bpassing of\b|\buntimely (death|passing)\b/i,
     /\bobituary\b|\bin memoriam\b|\bmemorial (service|for)\b|\bfuneral\b|\bposthumous(ly)?\b/i,

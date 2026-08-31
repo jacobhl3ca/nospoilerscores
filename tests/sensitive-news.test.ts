@@ -73,6 +73,10 @@ const SENSITIVE: [string, string][] = [
   ["Former athlete accused of murdering a rival, court hears", "violence"],
   ["Retired boxer jailed for murdering his neighbour", "violence"],
   ["Onetime prospect confesses to murdering two people", "violence"],
+  // "found lifeless" — the euphemistic sibling of "found dead". Only the latter
+  // was listed, so a real death written this way used to leak past the filter.
+  ["Former player found lifeless in his hotel room, police say", "death"],
+  ["Beloved coach was found lifeless at home, club confirms", "death"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
@@ -455,6 +459,11 @@ const SAFE = [
   "Closer exits the game with a save",
   "Starter exits the game after six shutout innings",
   "Scherzer left the game with a no-hitter intact",
+  // "found lifeless" is added to the death list as the whole phrase — bare
+  // "lifeless" is a staple flat-performance idiom and must stay visible.
+  "A lifeless first-half display from the champions",
+  "The crowd was lifeless until the late winner",
+  "A lifeless attack that never threatened the goal",
 ];
 
 for (const headline of SAFE) {
