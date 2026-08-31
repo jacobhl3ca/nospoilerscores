@@ -24,6 +24,10 @@ const SENSITIVE: [string, string][] = [
   ["Beloved coach diagnosed with a terminal illness", "medical"],
   ["Midfielder collapsed on the pitch, taken to hospital", "medical"],
   ["Defenseman in critical condition after skate cut", "medical"],
+  // A ventilator is the same critical-ICU state as `life support`/`intensive
+  // care`. "after collapse" is a bare noun, so the `collapsed (on|during|at)`
+  // cue doesn't fire — without the `ventilator` cue this had no other flag.
+  ["Coach on a ventilator after collapse, club asks for privacy", "medical"],
   ["Two horses euthanized after breakdowns on the card", "animal"],
   ["Owner banned for life over animal cruelty conviction", "animal"],
   ["Teammates open up a year after his suicide", "selfharm"],
@@ -110,6 +114,9 @@ const SAFE = [
   "Career-best 3-point shooting has him in the All-Star talk",
   "Sudden death overtime decides the semifinal",
   "Suicide squeeze in the ninth wins it",
+  // The medical `ventilator` cue is a whole word — a venue's "ventilation"
+  // system is a different word it never matches, so arena-upgrade news stays up.
+  "New ventilation system installed at the arena keeps fans cool",
   // The addiction cue reads a real personal struggle, so the leagues' "substance
   // ABUSE policy/program" and the "addicted/addictive to <sport>" metaphors —
   // none of which use the noun "addiction" in a struggle frame — stay visible.

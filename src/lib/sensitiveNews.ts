@@ -839,7 +839,16 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // stroke penalty", "smooth stroke", "backstroke"), so it stays visible.
     /\bstroke suffered\b|\bsuffer(s|ed|ing)? a (minor |mild |major |massive |severe |serious |second |fatal |near.?fatal |life.?threatening |suspected |possible )?stroke\b(?! of\b)/i,
     /\bcollapsed? (on|during|at|mid)/i,
-    /\bcritical condition\b|\blife support\b|\bintensive care\b|\bin a coma\b|\bcomatose\b|\blife.threatening\b|\bfighting for (his|her|their) life\b/i,
+    // `ventilator` joins the emergency-state cues alongside `life support` and
+    // `intensive care`: someone on a ventilator is in the same critical ICU
+    // situation. None of the other cues names it on its own, so a real "Coach on
+    // a ventilator after collapse" / "Boxer placed on a ventilator following the
+    // bout" slipped straight past "Hide upsetting news" — `collapse`/`bout` as
+    // bare nouns don't trip the `collapsed? (on|during|at|mid)` cue, so the item
+    // had no other flag. Safe as a bare word like its cluster-mates: sports has
+    // no figurative "ventilator" (a venue's "ventilation system" is a different
+    // word `\bventilator\b` never matches), so it needs no idiom carve-out.
+    /\bcritical condition\b|\blife support\b|\bventilators?\b|\bintensive care\b|\bin a coma\b|\bcomatose\b|\blife.threatening\b|\bfighting for (his|her|their) life\b/i,
     /\bparalyz(ed|ing)\b|\bparalysis\b|\bspinal (injury|cord)\b|\bamputat(ed|ion)\b/i,
     /\bdiagnosed with\b|\bhospitali[sz]ed\b|\brushed to (the )?hospital\b|\bemergency surgery\b/i,
     /\bseizure\b|\bstretchered off\b|\bcarted off\b/i,
