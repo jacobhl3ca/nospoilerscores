@@ -785,6 +785,20 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // bare "seriously injured" (routine roster news the module keeps visible)
     // "critically" marks the emergency this list exists for.
     /\bcritically (injured|wounded)\b/i,
+    // "life-changing injuries" — the phrase serious reporting reaches for when a
+    // fall, collision or crash leaves someone permanently harmed (a rugby, cycling
+    // or motorsport spinal or limb injury): "Rider suffers life-changing injuries",
+    // "Boxer left with life-changing injuries after the bout". It is exactly the
+    // catastrophic-harm wince this list targets — the sibling of "critically
+    // injured" above and the medical list's "paralyzed" — yet none of the other
+    // cues names it, so unless the headline also said "collision"/"critically" it
+    // slipped straight past "Hide upsetting news". Scoped to the object "injury"/
+    // "injuries": a bare "life-changing" is a staple upside idiom ("a life-changing
+    // payday", "life-changing money", "a life-changing moment"), but that sense
+    // never takes "injury" as its object — "life-changing injuries" is only ever
+    // the literal, permanent kind — so the phrase is safe while the idiom stays
+    // visible. `.?` spans the "life changing" / "life-changing" spellings.
+    /\blife.?changing injur(y|ies)\b/i,
     /\bcollision\b|\bcollided\b|\bviolent(ly)? (fall|crash|hit|tackle)\b/i,
     /\b(gruesome|horrific|grisly|scary|sickening|ugly) (injury|scene|moment|fall|crash|collision|hit|landing)\b/i,
     // A player leaving the game HURT. The lookahead requires a genuine injury
