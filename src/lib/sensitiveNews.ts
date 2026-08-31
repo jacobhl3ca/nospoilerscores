@@ -695,6 +695,19 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\bdead at\b|\bfound dead\b|\bfound lifeless\b|\bpronounced dead\b|\bshot dead\b/i,
     /\bdeath of\b|\b(his|her|their) death\b|\bcause of death\b|\bdeath (toll|investigation|certificate)\b/i,
     /\bpass(es|ed) away\b|\bpassing of\b|\buntimely (death|passing)\b/i,
+    // "lost his/her/their life" (and the plural "lost their lives") — the death
+    // euphemism serious reporting reaches for when someone is killed in a fall,
+    // crash or disaster ("Cyclist who lost his life in the crash remembered",
+    // "Two supporters lost their lives"). None of the cues above names it: a
+    // tribute or anniversary piece written this way carries no died/killed/fatal/
+    // obituary word, and the crash itself is opt-in `crash` (off by default), so
+    // it slipped straight past "Hide upsetting news" — the module's cardinal
+    // failure. Scoped to a PERSON subject (his/her/their, never "its"), so a team
+    // that "lost its spark" is untouched, and a negative lookahead drops the
+    // money sense ("lost his life savings/earnings/fortune betting") — a real
+    // death never takes those objects — so that gambling-loss story is not
+    // mislabelled "death or tragedy".
+    /\blost (his|her|their) (life|lives)\b(?!\s+(savings|earnings|fortunes?|deposits?|money|insurance|policy|policies|nest egg))/i,
     /\bobituary\b|\bin memoriam\b|\bmemorial (service|for)\b|\bfuneral\b|\bposthumous(ly)?\b/i,
     /\bfatal(ly)?\b|\bfatalit(y|ies)\b/i,
     /\bkilled (in|by|when|after|during|at)\b|\bwas killed\b|\bkills? (\d+|several|dozens)\b/i,

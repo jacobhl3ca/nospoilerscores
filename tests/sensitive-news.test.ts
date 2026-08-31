@@ -10,6 +10,11 @@ const SENSITIVE: [string, string][] = [
   ["Racing world mourns driver killed in practice crash", "death"],
   ["Tributes pour in after tragic accident at the circuit", "death"],
   ["Club releases statement on the passing of its longtime scout", "death"],
+  // The "lost his/her/their life/lives" euphemism — a tribute/anniversary piece
+  // written this way carries no died/killed/fatal/obituary cue, and the crash is
+  // opt-in, so it had no other flag.
+  ["Cyclist who lost his life in the crash remembered a year on", "death"],
+  ["Two supporters lost their lives in the stadium tragedy", "death"],
   ["Quarterback arrested on domestic violence charge", "violence"],
   ["Lawsuit alleging sexual assault filed against former coach", "violence"],
   ["Two hurt in a shooting outside the stadium", "violence"],
@@ -555,6 +560,17 @@ test("the '<game thing> died' idiom strip does not swallow a real death", () => 
   assert.equal(sensitiveCategoryOf("Youth match abandoned after a player died on the pitch"), "death");
   assert.equal(sensitiveCategoryOf("Game called off after a fan died in the crowd"), "death");
   assert.equal(sensitiveCategoryOf("The horse died after a fall at Becher's Brook"), "death");
+});
+
+test("the 'lost his life' death cue flags a real death but spares the money sense", () => {
+  // A person losing their life is a death; the negative lookahead keeps the
+  // financial "lost his life savings/earnings/fortune" out of "death or tragedy".
+  assert.equal(sensitiveCategoryOf("Fans mourn the supporter who lost his life at the ground"), "death");
+  assert.equal(sensitiveCategoryOf("Marshal who lost her life at the circuit is honoured"), "death");
+  assert.equal(sensitiveCategoryOf("Reliever lost his life savings betting on games"), null);
+  assert.equal(sensitiveCategoryOf("Veteran lost his life earnings to a con artist"), null);
+  // A team subject ("its", not a person) is never this cue.
+  assert.equal(sensitiveCategoryOf("The side lost its life and lost the game"), null);
 });
 
 test("the 'suicide <tactic>' idiom strip does not swallow a real self-harm item", () => {
