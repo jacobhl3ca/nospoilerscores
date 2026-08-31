@@ -218,7 +218,12 @@ export default function GameHighlights({
     // !isPlayoff). Every other sport and playoff NHL are byte-for-byte unchanged.
     const rawOt = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
     const otPeriods = game.sport === "nhl" && !game.isPlayoff ? Math.min(rawOt, 1) : rawOt;
-    const otExtra = otPeriods * (game.sport === "mlb" ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
+    // Baseball extra innings are short (~15min) vs. a 30-min OT period, so both
+    // baseball sports take the 0.25 factor. llws is 6-inning baseball — inert
+    // today (NO_HIGHLIGHT_FALLBACK, no button renders) but grouped with mlb here
+    // for the same reason regulationPeriods/highlightBufferHours already list it:
+    // so it can't misfire with a phantom ~30min-per-inning pad if ever un-gated.
+    const otExtra = otPeriods * (game.sport === "mlb" || game.sport === "llws" ? 0.25 : 0.5);
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
     return nowMs > gameStart + bufferMs;
   })();
