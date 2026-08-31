@@ -86,6 +86,12 @@ const SENSITIVE: [string, string][] = [
   // to leak past "Hide upsetting news".
   ["Legendary manager rushed to hospital after suffering a suspected stroke", "medical"],
   ["Club confirms coach suffered a possible stroke and is under observation", "medical"],
+  // A team-bus crash is a recurring sports tragedy, but it only tripped `death`
+  // when the headline also said "fatal"/"killed"/"dead". The bare `bus crash`
+  // cue (a sibling of the existing car/plane/helicopter crash cues) catches the
+  // anniversary/survivor framing that used to leak past "Hide upsetting news".
+  ["Community remembers the team bus crash five years on", "death"],
+  ["Survivors of the youth team bus crash reunite ahead of the season", "death"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
