@@ -69,6 +69,23 @@ const IDIOM = new RegExp(
     // recaps as "death or tragedy". Only the sports-timing nouns are stripped, so
     // a genuine "dying in hospice" / "his dying wish" still matches death.
     "dying (seconds|minutes|moments|embers|stages)",
+    // The season-scale cousin of the late-drama strip above: "the dying days of
+    // the season", "the dying weeks of the transfer window", "the dying days of
+    // the title race", "the dying hours of deadline day". `days`/`weeks`/`hours`
+    // are deliberately absent from the "dying <timing>" strip above — a bare
+    // "his dying days" is more often the literal end-of-life sense than the
+    // single-match "dying seconds" is — so this needs its own entry scoped to the
+    // FOLLOWING object: a competition/period noun a real death never takes.
+    // Without it the main "Hide upsetting news" toggle silently pulled ordinary
+    // run-in and transfer-window features under "death or tragedy" (`dying` is a
+    // bare death pattern), and the app runs many league columns whose late-season
+    // and deadline-day stories produce this phrasing constantly. Stripped ONLY
+    // before a season/window/race/tenure-type object (a couple of words allowed
+    // in between, for "of his final campaign", "of the summer transfer window"),
+    // so a genuine "his dying days at the hospice" / "the dying days of his life"
+    // (object "life", never one of these nouns) still matches death — the same
+    // following-object scoping the "dying breed/art" and "dying quail" strips use.
+    "dying (days|weeks|hours) of (the |their |this |its |his |her |our |a |an )?([\\w'-]+ ){0,3}(seasons?|campaigns?|windows?|races?|contests?|tenures?|reigns?|eras?|regimes?|deals?|contracts?|tournaments?|competitions?|cups?|playoffs?|postseason|terms?|careers?|title race|group stage|regular season)",
     // "dying to play / dying to prove himself / dying to get back out there", and
     // "dying for a chance / for another shot / for some game time" — the everyday
     // eagerness idiom for a player or fanbase impatient for something, the stuff
