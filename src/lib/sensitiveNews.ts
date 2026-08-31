@@ -224,8 +224,25 @@ const IDIOM = new RegExp(
     // ONLY when a team-fortunes noun (hopes, season, bid, dynasty, …) is the
     // subject, with just linking words allowed in between, so a real "midfielder
     // on life support" / "the driver is on life support" still matches (the
-    // person subject isn't one of these nouns).
-    "(hopes?|chances?|dreams?|aspirations?|bid|campaign|defen[cs]e|dynasty|title|playoffs?|postseason|season|series) ((is|are|now|still|all but|officially|basically|practically|barely|remains?|sits?|hangs?|hanging|left|already|essentially|firmly|clinging|but|no longer|almost|nearly) )*on life[ -]support",
+    // person subject isn't one of these nouns). push/charge/challenge/hunt/chase/
+    // run/quest/tilt/pursuit/reign join the noun list for the same reason — a
+    // "playoff push / title charge / promotion run on life support" is the
+    // identical elimination idiom, never a person.
+    "(hopes?|chances?|dreams?|aspirations?|bid|campaign|defen[cs]e|dynasty|title|playoffs?|postseason|season|series|push|charge|challenge|hunt|chase|run|quest|tilt|pursuit|reign) ((is|are|now|still|all but|officially|basically|practically|barely|remains?|sits?|hangs?|hanging|left|already|essentially|firmly|clinging|but|no longer|almost|nearly) )*on life[ -]support",
+    // The other figurative shape, where the subject is a bare TEAM name rather
+    // than a fortunes noun — "The Reds are on life support in the title race",
+    // "Dodgers on life support in the NL West race", "Spurs on life support in
+    // the top-four chase". No fortunes noun precedes "on life support" for the
+    // strip above to key on, so it slipped straight through to the medical
+    // `life support` pattern and read as "serious illness" for anyone with the
+    // main filter on. Here the tell is what FOLLOWS: a standings/race context
+    // (in/for the … race, hunt, chase, push, charge, contention, running …) that
+    // a real patient's "on life support" is never chased by — nobody is "on life
+    // support in the title race" — so stripping the whole span is leak-free. A
+    // genuine "midfielder on life support after collapse" / "on life support in
+    // intensive care" / "fighting for his life" carries no such trailing race
+    // noun and still matches medical.
+    "on life[ -]support,?( still| now| again| once more| barely| already| officially)? (in|for) (the |their |our |a )?([\\w'-]+ ){0,3}(races?|hunts?|chases?|picture|pushes?|charges?|scraps?|contention|running|standings|spots?|berths?|qualification|places?)",
     // A "heart-attack finish", "heart attack football", or a nail-biter that
     // "gave the fans a heart attack" is the staple tense-ending idiom — the
     // figurative use of the medical `heart attack` pattern, which pulled ordinary

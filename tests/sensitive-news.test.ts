@@ -258,6 +258,18 @@ const SAFE = [
   "Their title defense is on life support",
   "Championship dreams all but on life support after Game 5",
   "The dynasty is on life support",
+  // Same idiom with the new fortunes nouns (push/charge/challenge/run …).
+  "Their playoff push is on life support",
+  "United's title charge is on life support",
+  "Liverpool's title challenge on life support after the derby loss",
+  "Their promotion run on life support with three games to go",
+  // Same idiom where the subject is a bare TEAM name, told apart by the
+  // standings/race context that follows — never how a real patient is described.
+  "The Reds are on life support in the title race",
+  "Dodgers on life support in the NL West race",
+  "Spurs on life support in the top-four chase",
+  "City on life support in the race for Champions League football",
+  "Barca on life support in the Liga title hunt",
   // Figurative "heart attack finish / football" and "gave the fans a heart
   // attack" — a tense finish must not read as a medical emergency.
   "Heart attack finish as United win it in stoppage time",
@@ -711,6 +723,12 @@ test("the 'on life support' idiom strip does not swallow a real medical event", 
   assert.equal(sensitiveCategoryOf("Midfielder on life support after collapsing on the pitch"), "medical");
   assert.equal(sensitiveCategoryOf("Driver on life support following the crash"), "medical");
   assert.equal(sensitiveCategoryOf("After a strong title run, the driver is on life support"), "medical");
+  // The trailing standings-race strip is scoped to a race/hunt/chase noun, which
+  // a real patient's "on life support" is never followed by — a person in
+  // hospital / intensive care / fighting for his life still trips medical.
+  assert.equal(sensitiveCategoryOf("Boxer on life support in intensive care after the bout"), "medical");
+  assert.equal(sensitiveCategoryOf("Rider remains on life support in a stable but critical condition"), "medical");
+  assert.equal(sensitiveCategoryOf("Player on life support, family says he is fighting for his life"), "medical");
 });
 
 test("the baseball 'hit-and-run' idiom strip does not swallow a real hit-and-run", () => {
