@@ -118,6 +118,24 @@ const IDIOM = new RegExp(
     // real "dying in hospice" / "his dying wish" (dying of/in/<possessive>)
     // carries none of these bird nouns and still matches death.
     "dying (quails?|seagulls?)",
+    // "<game thing> died" — the pitch/surface going slow and lifeless (cricket:
+    // "the pitch died after tea", "the ball died on the batsman"), a fixture
+    // fizzling as a contest ("the game died as a spectacle", "the tie died after
+    // the red card"), a passage of play breaking down ("the move died on the edge
+    // of the box", "the attack died", "the rally died"), or the energy in the
+    // ground dropping ("the atmosphere died", "momentum died", "the crowd died
+    // down"). All the past/present of the bare `(dies|died|dying)` death pattern —
+    // `dying` is already covered by the strips above, but the `<noun> died` form
+    // was not, so the main "Hide upsetting news" toggle silently pulled ordinary
+    // cricket and soccer recaps under "death or tragedy", and the app runs several
+    // such columns. Stripped ONLY when one of these inanimate game nouns is the
+    // immediate subject of died/dies — never a person — so a real "striker died at
+    // 72", "a player died on the pitch", or "a fan died in the crowd" (the subject
+    // is the person, not one of these nouns) still matches death, and a genuine
+    // death also keeps its own stronger cues (died at, obituary, mourning) that
+    // survive the strip. The animal list's "(horse|dog|…) died" is untouched — none
+    // of those nouns is here — so an animal death still flags too.
+    "(pitch|wicket|surface|track|game|match|contest|tie|fixture|spectacle|occasion|ball|delivery|rally|move|attack|run|spell|innings|passage|atmosphere|momentum|tempo|mood|buzz|energy|crowd|noise) (dies|died)",
     // "passing of the torch" (the generational handover — a veteran giving way to
     // the next star, the single most common framing of it in the NFL/NBA/tennis
     // feeds), "passing of the baton" (the relay handover and its figurative twin),

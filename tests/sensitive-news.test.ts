@@ -484,6 +484,16 @@ const SAFE = [
   "A lifeless first-half display from the champions",
   "The crowd was lifeless until the late winner",
   "A lifeless attack that never threatened the goal",
+  // "<game thing> died" — a slow surface, a fixture fizzling as a contest, a
+  // passage of play breaking down, or the energy dropping — not a death.
+  "The pitch died after tea and the run rate crawled",
+  "The ball died on the batsman on a slow surface",
+  "The game died as a contest once they lost early wickets",
+  "The tie died as a spectacle after the red card",
+  "The move died on the edge of the box",
+  "United's momentum died in a scrappy second half",
+  "The atmosphere died once the home side went two down",
+  "The crowd died down after the equaliser",
 ];
 
 for (const headline of SAFE) {
@@ -491,6 +501,18 @@ for (const headline of SAFE) {
     assert.equal(sensitiveCategoryOf(headline), null);
   });
 }
+
+test("the '<game thing> died' idiom strip does not swallow a real death", () => {
+  // Only an inanimate game noun as the subject of died/dies is stripped — a
+  // genuine death names a PERSON (or an animal), so the bare `died` survives and
+  // still trips death, and a real death also keeps its own stronger cues intact.
+  // (The horse case is caught by death too — checked before animal — because its
+  // "horse" subject isn't on the strip list, so the bare "died" is left intact.)
+  assert.equal(sensitiveCategoryOf("Former striker died at 72 after a short illness"), "death");
+  assert.equal(sensitiveCategoryOf("Youth match abandoned after a player died on the pitch"), "death");
+  assert.equal(sensitiveCategoryOf("Game called off after a fan died in the crowd"), "death");
+  assert.equal(sensitiveCategoryOf("The horse died after a fall at Becher's Brook"), "death");
+});
 
 test("the 'suicide <tactic>' idiom strip does not swallow a real self-harm item", () => {
   // Only the tactic/tempo nouns are stripped — a genuine self-harm item reads
