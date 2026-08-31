@@ -660,7 +660,16 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\b(sexual(ly)? (assault|abuse|misconduct|harassment)|aggravated assault|assault charges?|assault case|assaulting|assaulted|assault and battery|domestic (violence|assault|abuse))\b/i,
     /\brape(d)?\b|\bmolest(ed|ation|ing)?\b|\bgroom(ing|ed) (a )?(minor|child)\b|\bchild abuse\b|\bsex (crime|trafficking|abuse)\b/i,
     /\b(abuse|abusive) (allegations?|claims?|scandal|case|survivors?|victims?)\b|\b(racial|verbal|physical|emotional) abuse\b/i,
-    /\barrest(ed|s)?\b|\bindict(ed|ment)\b|\bcharged with\b|\bpleads? guilty\b|\bfound guilty\b|\bconvicted\b|\bsentenced to\b|\bfaces? (charges|trial|prison)\b/i,
+    // `(?<!cardiac )` keeps the crime sense of "arrest" while letting the medical
+    // one fall through. Without it a real "suffers cardiac arrest" headline tripped
+    // this bare `\barrest\b` and — because violence is checked before medical in
+    // BASE_CATEGORIES — was labelled "violence, crime or abuse" instead of "serious
+    // illness", even though the medical list below names cardiac arrest outright.
+    // The item is hidden either way (both categories are on under the main toggle),
+    // so this corrects the exported CATEGORY, not visibility. Only "cardiac " is
+    // carved out — the medical pattern recovers exactly that phrase (plural too) —
+    // so every genuine "player arrested / arrests / arrested on …" still trips here.
+    /\b(?<!cardiac )arrest(ed|s)?\b|\bindict(ed|ment)\b|\bcharged with\b|\bpleads? guilty\b|\bfound guilty\b|\bconvicted\b|\bsentenced to\b|\bfaces? (charges|trial|prison)\b/i,
     // A homicide in the GERUND form, "murdering", inside an unambiguous
     // accusation/conviction frame. The death list catches "murder"/"murdered"/
     // "murders" (checked first, with the bare noun) but NOT the gerund, and the
@@ -743,7 +752,10 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
   medical: [
     /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill\b/i,
     /\bALS\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
-    /\bcardiac (arrest|event|episode)\b|\bheart attack\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
+    // `s?` so the plural "cardiac arrests/events/episodes" is caught too: the
+    // violence list's `(?<!cardiac )` carve-out excludes those from crime, so the
+    // medical rule must recover the plural or a plural cardiac headline would leak.
+    /\bcardiac (arrest|event|episode)s?\b|\bheart attack\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
     // A cerebrovascular stroke. The old `suffered a stroke` had two faults. It
     // over-hid: "suffered a stroke of luck / of genius / of misfortune" — the
     // staple sports idiom for a fortunate or brilliant turn — tripped it and
