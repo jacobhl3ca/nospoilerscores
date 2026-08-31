@@ -25,6 +25,9 @@ const SENSITIVE: [string, string][] = [
   ["Teammates open up a year after his suicide", "selfharm"],
   ["Wade Meckler is hit in the head by a pitch and forced to leave the game", "injury"],
   ["Catcher carted off after a violent collision at the plate", "injury"],
+  // A real player collision must still trip — the matchup-subject strip
+  // (sides/teams/clubs collided) never covers "players".
+  ["The two players collided going for the header and both went down", "injury"],
   ["Pitcher struck by a line drive, bloodied on the mound", "injury"],
   ["Winger placed in concussion protocol after a helmet-to-helmet hit", "injury"],
   ["Fan struck by a foul ball taken to hospital", "injury"],
@@ -352,6 +355,13 @@ const SAFE = [
   "Marquee collision between two of the league's best offenses",
   "Tactical collision between two very different coaches",
   "When two philosophies collided at Wembley",
+  // The verb-form matchup framing with an institutional collective subject —
+  // a side/team/club/nation names a whole competitor, never a body, so it must
+  // not read as an on-field injury.
+  "When the two sides collided, sparks flew",
+  "Two unbeaten teams collided in a Sunday classic",
+  "The two clubs collided again after last season's playoff epic",
+  "When the two nations collided at the World Cup, the world watched",
   // Schedule-sense "collision" — a fixture/scheduling/calendar/date/broadcast
   // clash of two games on the same day or slot, not a physical one, must not
   // read as an on-field injury.
