@@ -31,6 +31,11 @@ const SENSITIVE: [string, string][] = [
   ["Two horses euthanized after breakdowns on the card", "animal"],
   ["Owner banned for life over animal cruelty conviction", "animal"],
   ["Teammates open up a year after his suicide", "selfharm"],
+  // The "take one's own life" euphemism in every tense — only the past tense
+  // matched before, so a present-tense obit headline and an attempt in the
+  // infinitive both leaked past the toggle.
+  ["Ex-player takes his own life at 38, family confirms", "selfharm"],
+  ["Former captain tried to take his own life, book reveals", "selfharm"],
   ["Wade Meckler is hit in the head by a pitch and forced to leave the game", "injury"],
   ["Catcher carted off after a violent collision at the plate", "injury"],
   // A real player collision must still trip — the matchup-subject strip

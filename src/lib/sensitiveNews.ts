@@ -871,7 +871,15 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
   ],
   selfharm: [
     /\bsuicide\b|\bsuicidal\b|\bdied by suicide\b|\bself.harm\b/i,
-    /\btook (his|her|their) own life\b/i,
+    // "<took|takes|take|taking> his/her/their own life" — the standard obituary
+    // euphemism for a suicide. Only the PAST tense matched before, so an obit
+    // written in the headline present ("Ex-player takes his own life at 38") or
+    // the infinitive after an attempt verb ("tried to take his own life") — both
+    // ordinary phrasings — leaked straight past "Hide upsetting news". "take one's
+    // own life" carries no figurative sports sense in any tense, so broadening the
+    // verb adds no false-positive risk. Mirrors the tense-coverage fixes already
+    // applied elsewhere in this file (the stroke/died pattern families).
+    /\b(took|takes?|taking) (his|her|their) own life\b/i,
     /\boverdose(d)?\b|\bfatal overdose\b/i,
     /\bmental health crisis\b|\bchecked into rehab\b|\beating disorder\b/i,
     // Addiction itself — the other half of this category's label ("self-harm or
