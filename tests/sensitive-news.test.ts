@@ -81,6 +81,11 @@ const SENSITIVE: [string, string][] = [
   // was listed, so a real death written this way used to leak past the filter.
   ["Former player found lifeless in his hotel room, police say", "death"],
   ["Beloved coach was found lifeless at home, club confirms", "death"],
+  // A stroke is usually first reported unconfirmed. "suspected"/"possible" were
+  // absent from the closed severity list, so these breaking-news phrasings used
+  // to leak past "Hide upsetting news".
+  ["Legendary manager rushed to hospital after suffering a suspected stroke", "medical"],
+  ["Club confirms coach suffered a possible stroke and is under observation", "medical"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
@@ -498,6 +503,11 @@ const SAFE = [
   "United's momentum died in a scrappy second half",
   "The atmosphere died once the home side went two down",
   "The crowd died down after the equaliser",
+  // "a stroke of luck/genius" — the fortunate/brilliant-turn idiom — must stay
+  // visible; the `(?! of)` guard holds even with the "suspected"/"possible"
+  // qualifiers now in the stroke severity list.
+  "A possible stroke of genius from the manager at half-time",
+  "That substitution was a suspected stroke of luck more than a plan",
 ];
 
 for (const headline of SAFE) {

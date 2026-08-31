@@ -821,10 +821,14 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // "Hide upsetting news". This covers the verb tenses and a closed list of
     // severity adjectives, and the `(?! of)` lookahead drops the "stroke of
     // <luck/genius/…>" idiom — a phrasing a real cerebrovascular stroke never
-    // takes. Golf/swimming "stroke" carries none of the `suffer(s|ed|ing) a …
-    // stroke` frame ("two-stroke penalty", "smooth stroke", "backstroke"), so
-    // it stays visible.
-    /\bstroke suffered\b|\bsuffer(s|ed|ing)? a (minor |mild |major |massive |severe |serious |second |fatal |near.?fatal |life.?threatening )?stroke\b(?! of\b)/i,
+    // takes. "suspected"/"possible" join the list because a stroke is most often
+    // first reported unconfirmed ("understood to have suffered a suspected
+    // stroke", "rushed to hospital with a possible stroke") — the exact breaking-
+    // news phrasing that otherwise slipped straight past the filter — and the
+    // `(?! of)` guard still drops "a possible stroke of genius". Golf/swimming
+    // "stroke" carries none of the `suffer(s|ed|ing) a … stroke` frame ("two-
+    // stroke penalty", "smooth stroke", "backstroke"), so it stays visible.
+    /\bstroke suffered\b|\bsuffer(s|ed|ing)? a (minor |mild |major |massive |severe |serious |second |fatal |near.?fatal |life.?threatening |suspected |possible )?stroke\b(?! of\b)/i,
     /\bcollapsed? (on|during|at|mid)/i,
     /\bcritical condition\b|\blife support\b|\bintensive care\b|\bin a coma\b|\bcomatose\b|\blife.threatening\b|\bfighting for (his|her|their) life\b/i,
     /\bparalyz(ed|ing)\b|\bparalysis\b|\bspinal (injury|cord)\b|\bamputat(ed|ion)\b/i,
