@@ -61,6 +61,12 @@ const SENSITIVE: [string, string][] = [
   ["Driver critically injured in a horror crash at Turn 3", "injury"],
   ["Two fans critically injured when the stand collapsed", "injury"],
   ["Boxer critically wounded, rushed straight to surgery", "injury"],
+  // "life-changing injuries" — permanent, catastrophic harm, the sibling of
+  // "critically injured". Without a "collision"/"critically" cue in the same
+  // headline these leaked past "Hide upsetting news".
+  ["Rider suffers life-changing injuries in the peloton pile-up", "injury"],
+  ["Boxer left with life-changing injuries after the bout", "injury"],
+  ["Winger faces a life changing injury following the fall", "injury"],
   ["Defensive tackle spits on the quarterback and is ejected", "violence"],
   ["Star pitcher opens up about his overdose", "selfharm"],
   // Addiction itself — the other half of the "self-harm or addiction" label.
@@ -162,6 +168,11 @@ const SAFE = [
   // objects — the "critically injured/wounded" cue deliberately excludes it so
   // this figurative recap stays visible.
   "That double bogey critically hurt his title chances",
+  // "life-changing injuries" hides catastrophic harm, but the bare "life-changing"
+  // upside idiom never takes "injury" as its object, so these stay visible.
+  "A life-changing payday awaits the tournament winner",
+  "This trade could be life-changing for the franchise",
+  "The buzzer-beater was a life-changing moment for the rookie",
   "Two teams on a collision course for the division title",
   "Header off the head of the captain wins it at the death",
   "Team fires head coach after 2-9 start",
