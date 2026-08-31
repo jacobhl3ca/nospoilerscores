@@ -147,6 +147,15 @@ const SAFE = [
   "Winner in the dying seconds sends them top of the table",
   "Equaliser in the dying minutes rescues a point at Anfield",
   "United score twice in the dying embers to steal it",
+  // Season-scale "dying days/weeks/hours of the <season|window|race|…>" idiom —
+  // the run-in and deadline-day framing, scoped to its competition object so a
+  // real "dying days of his life" still reads as death.
+  "United fading in the dying days of the season",
+  "A frantic close to the dying weeks of the transfer window",
+  "Deadline drama in the dying hours of the window",
+  "Klopp reflecting on the dying days of his reign at Anfield",
+  "The veteran comes good in the dying days of his career",
+  "City limp through the dying weeks of the title race",
   // "dying to <verb>" / "dying for <a|an|another|some> <thing>" eagerness idiom
   // — an impatient player or fanbase must not read as death.
   "New signing dying to make his debut for the club",
@@ -538,6 +547,13 @@ test("the 'dying <timing>' idiom strip does not swallow a real death", () => {
   // still trip the `dying` pattern.
   assert.equal(sensitiveCategoryOf("Beloved coach dying in hospice, family says"), "death");
   assert.equal(sensitiveCategoryOf("Legend shares his dying wish in final interview"), "death");
+});
+
+test("the 'dying days/weeks of the <season>' idiom strip does not swallow a real death", () => {
+  // Only a competition/period object is stripped — a genuine "dying days" about
+  // a person (object "life"/"hospice", never a season) still reads as death.
+  assert.equal(sensitiveCategoryOf("A look back at the dying days of his life"), "death");
+  assert.equal(sensitiveCategoryOf("Family gather in his dying days at the hospice"), "death");
 });
 
 test("the 'dying quail/seagull' bloop-hit idiom strip does not swallow a real death", () => {
