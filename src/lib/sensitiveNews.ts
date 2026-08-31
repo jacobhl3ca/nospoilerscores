@@ -356,7 +356,19 @@ const IDIOM = new RegExp(
     // injury. `course` stays with its own entry above.
     "collision (of|between) (styles?|titans|heavyweights|giants|philosoph(?:y|ies)|ideolog(?:y|ies)|cultures?|generations?|eras?|worlds?|egos?|systems?|approaches?|identities)",
     "(stylistic|tactical|philosophical|ideological|generational|cultural|marquee|blockbuster|heavyweight|title|top.?two|number.?one|east.?west) collision",
-    "(styles?|titans|heavyweights|giants|philosoph(?:y|ies)|ideolog(?:y|ies)|cultures?|egos?|systems?|worlds?|approaches?|generations?) (have |had |finally |once )?collided",
+    // The verb form of the matchup framing — "when the two sides collided", "two
+    // unbeaten teams collided on Sunday", "the two clubs collided again", "when
+    // the two nations collided at the World Cup". Alongside the abstractions and
+    // team-labels above (styles/titans/heavyweights…), these institutional
+    // collective subjects — a side/team/club/nation — name a whole competitor,
+    // never a physical body, so a bare "collided" they front is always the
+    // fixture-clash idiom, not an on-field crash. The injury filter's bare
+    // `collided` pattern otherwise pulled these ordinary previews/recaps under
+    // "an on-field injury" for anyone with the main filter on. Scoped to the
+    // subject noun exactly like the abstractions, so a real "the two players
+    // collided", "collided with the keeper", or "collision of heads" (a player,
+    // a body, or "collided with …" — none of these nouns) still matches injury.
+    "(styles?|titans|heavyweights|giants|sides?|teams?|clubs?|nations?|philosoph(?:y|ies)|ideolog(?:y|ies)|cultures?|egos?|systems?|worlds?|approaches?|generations?) (have |had |finally |once )?collided",
     // "fixture collision", "scheduling collision", "calendar collision", "date
     // collision", "TV/broadcast collision" — the staple congestion idiom for two
     // games (or competitions, or broadcasts) landing on the same day/slot, the
