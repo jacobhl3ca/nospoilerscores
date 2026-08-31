@@ -505,6 +505,19 @@ const IDIOM = new RegExp(
     // matches. The bare "suicides" conditioning drill never tripped (the pattern
     // word-boundaries "suicide"), so it needs no entry here.
     "suicide (squeeze|pass|sprints?|drills?|line|mission|pace|runs?)",
+    // The ADJECTIVE cousin of the "suicide <tactic>" strip above: "suicidal
+    // defending", "a suicidal back-pass", "a suicidal challenge", "suicidal
+    // marking", "their suicidal high line", "a suicidal lunge" — the staple
+    // (English-football especially) idiom for recklessly risky play, never a
+    // real self-harm event. `suicidal` is a bare self-harm pattern, so without
+    // this the main "Hide upsetting news" toggle silently pulled ordinary match
+    // reports under "self-harm or addiction" — and the app runs many soccer
+    // columns whose recaps produce this phrasing constantly. Stripped ONLY
+    // before a tactical-play noun a real self-harm story never takes, so
+    // "suicidal thoughts", "suicidal ideation", "feeling suicidal", or a bare
+    // "suicidal" (none of these nouns) still matches — mirroring the "suicide
+    // <tactic>" scoping above.
+    "suicidal (defen[cs]e|defending|passes|pass|back.?passes|back.?pass|challenges?|tackl(?:es|e|ing)|marking|high line|clearances?|lunges?)",
     // Crime idiom.
     "(stole|steal|stealing|robbed|robbery|heist) (the|a|him|them|second|third|home|bases?)",
     "(assault|assaulting|assaulted) (on|the) (record|rim|basket|standings|leaderboard|title|field)",
