@@ -336,8 +336,14 @@ export default function TeamView({
           <div className="flex items-center justify-center min-w-0">
             <span className="text-sm invisible mr-1" aria-hidden="true">★</span>
             {team.logo && (
+              // onSelectTeam switches team without remounting TeamView, so React
+              // reuses this same <img> node and just swaps src. onError sets an
+              // inline display:none that React doesn't manage, so once one team's
+              // logo 404s the next team's valid logo would inherit that none and
+              // stay hidden. Clear it on every successful load so the reused node
+              // recovers.
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={team.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+              <img src={team.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 mr-1" onLoad={(e) => { e.currentTarget.style.display = ""; }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
             )}
             <h2 className="text-base sm:text-lg font-bold tracking-wide" style={{ color: "var(--text)" }} title={team.displayName}>
               {headerAbbrev ? team.abbreviation : (team.shortDisplayName || team.displayName)}
