@@ -313,6 +313,32 @@ test("'sunk' does not swallow the whole-word-safe neighbours", () => {
   }
 });
 
+// "run away with (it / the game / the title)" is the third "run"-headed blowout
+// idiom beside riot/rampant — the decisive-lead reveal a title carries with no
+// digits for SCORE_RX to catch. Each of these leaked before the entry was added.
+test("a run-away-with result never reads as a clean title", () => {
+  for (const title of [
+    "City run away with the title | Premier League",
+    "Verstappen runs away with the Dutch Grand Prix",
+    "United ran away with the game at Old Trafford",
+    "Barca running away with La Liga",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The "with" tail keeps it clear of bare "run away"/"runaway"; the only benign
+// sense ("imagination run away with you") never appears in a highlight title.
+test("'run away with' does not swallow non-result titles", () => {
+  for (const title of [
+    "Runaway train derails near depot | News",
+    "The runaway favorite for the Ballon d'Or",
+    "Away Day Guide: Anfield | Fan Vlog",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
