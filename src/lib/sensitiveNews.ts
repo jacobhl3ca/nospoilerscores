@@ -708,6 +708,18 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // death never takes those objects — so that gambling-loss story is not
     // mislabelled "death or tragedy".
     /\blost (his|her|their) (life|lives)\b(?!\s+(savings|earnings|fortunes?|deposits?|money|insurance|policy|policies|nest egg))/i,
+    // "succumbed to his injuries / to a long illness / to the disease" — the
+    // death euphemism reporting reaches for when someone dies of what hurt or
+    // sickened them ("Rider succumbed to his injuries", "Legend succumbs to
+    // cancer at 71", "succumbed to injuries sustained in the crash" — the crash
+    // itself being opt-in `crash`, off by default). None of the cues above names
+    // it, so a story written this way slipped past "Hide upsetting news". `succumb`
+    // is heavy sports idiom on its own, though — a team "succumbs to a late
+    // winner / to pressure / to a 3-0 defeat" — so this is scoped to the objects a
+    // real death takes and those idioms never do (injuries, wounds, an illness,
+    // a disease, cancer, complications, an infection); "a late winner"/"pressure"/
+    // "a defeat" carry none of them, so those recaps stay visible.
+    /\bsuccumb(s|ed|ing)? to (?:his |her |their |the |a |an |long |serious |severe |lengthy |brief |brave |year.?long )*(injur(y|ies)|wounds?|illness|disease|cancer|complications|infection)\b/i,
     /\bobituary\b|\bin memoriam\b|\bmemorial (service|for)\b|\bfuneral\b|\bposthumous(ly)?\b/i,
     /\bfatal(ly)?\b|\bfatalit(y|ies)\b/i,
     /\bkilled (in|by|when|after|during|at)\b|\bwas killed\b|\bkills? (\d+|several|dozens)\b/i,

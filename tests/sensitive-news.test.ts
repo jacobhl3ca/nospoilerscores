@@ -573,6 +573,21 @@ test("the 'lost his life' death cue flags a real death but spares the money sens
   assert.equal(sensitiveCategoryOf("The side lost its life and lost the game"), null);
 });
 
+test("the 'succumbed to <fatal thing>' death cue fires but spares the sports idiom", () => {
+  // "succumbed to his injuries / to a long illness / to cancer" is a death; the
+  // pattern is scoped to the fatal objects a "team succumbed to a defeat" idiom
+  // never takes, so ordinary result recaps stay visible.
+  assert.equal(sensitiveCategoryOf("Rider succumbed to his injuries days after the crash"), "death");
+  assert.equal(sensitiveCategoryOf("Cyclist succumbs to injuries sustained in the fall"), "death");
+  assert.equal(sensitiveCategoryOf("Beloved coach succumbed to a long illness at 64"), "death");
+  assert.equal(sensitiveCategoryOf("Boxer succumbed to his wounds"), "death");
+  assert.equal(sensitiveCategoryOf("Star succumbed to complications from surgery"), "death");
+  // The sports "succumbed to <result>" idiom is not a death and stays visible.
+  assert.equal(sensitiveCategoryOf("Rangers succumbed to a late winner"), null);
+  assert.equal(sensitiveCategoryOf("United succumbed to their first defeat of the season"), null);
+  assert.equal(sensitiveCategoryOf("The favourites succumbed to the pressure of the occasion"), null);
+});
+
 test("the 'suicide <tactic>' idiom strip does not swallow a real self-harm item", () => {
   // Only the tactic/tempo nouns are stripped — a genuine self-harm item reads
   // "suicide attempt", "suicide prevention", "died by suicide" or "suicidal",
