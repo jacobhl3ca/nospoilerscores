@@ -92,6 +92,34 @@ test("'claim' does not swallow non-result titles", () => {
   }
 });
 
+// "golden goal" is the specific sudden-death term "sudden[- ]?death" missed: a
+// golden goal ends the match the instant it's scored, so naming it reveals the
+// game went the distance AND is over with a winner. Each of these leaked before
+// it was added.
+test("a golden goal never reads as a clean title", () => {
+  for (const title of [
+    "Iniesta golden goal wins it for Spain",
+    "Golden goal sends France through",
+    "The golden-goal that decided the final",
+    "Top 10 Golden Goals in World Cup History",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory trailing "goal" is what keeps it safe: the in-scope "Golden
+// State" (Warriors/Valkyries) and "golden boot" are never followed by "goal",
+// so a spoiler-free highlight naming them stays clean.
+test("'golden' does not swallow non-result titles", () => {
+  for (const title of [
+    "Golden State Valkyries vs Aces | Full Game",
+    "Golden State Warriors Full Highlights",
+    "Golden Boot contenders ahead of the tournament",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
