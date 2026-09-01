@@ -720,7 +720,18 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // a disease, cancer, complications, an infection); "a late winner"/"pressure"/
     // "a defeat" carry none of them, so those recaps stay visible.
     /\bsuccumb(s|ed|ing)? to (?:his |her |their |the |a |an |long |serious |severe |lengthy |brief |brave |year.?long )*(injur(y|ies)|wounds?|illness|disease|cancer|complications|infection)\b/i,
-    /\bobituary\b|\bin memoriam\b|\bmemorial (service|for)\b|\bfuneral\b|\bposthumous(ly)?\b/i,
+    // "in loving memory" — the tribute-graphic and memorial-post phrasing a
+    // club, teammate or fan reaches for on a death ("In loving memory of a club
+    // legend", "In Loving Memory, 1975–2026"). It sits in the same family as the
+    // obituary/in memoriam/memorial cues beside it, but none of them catches it:
+    // "in memoriam" is the Latin form and "memorial service/for" needs the word
+    // "memorial", so a tribute written this way — carrying no died/passing/
+    // obituary/tragedy cue of its own — slipped straight past "Hide upsetting
+    // news", the module's cardinal failure. Unlike a bare "memory" (staple sports
+    // idiom: "muscle memory", "the best in recent memory", "a memory to cherish"),
+    // the full phrase "in loving memory" is only ever a memorial, so it needs no
+    // carve-out and is safe as a bare phrase — matching "rest in peace" above.
+    /\bobituary\b|\bin memoriam\b|\bin loving memory\b|\bmemorial (service|for)\b|\bfuneral\b|\bposthumous(ly)?\b/i,
     // "laid to rest" — the burial euphemism a funeral story reaches for in the
     // headline ("Beloved coach laid to rest as thousands line the streets",
     // "Legend laid to rest in his hometown"). It sits in the same family as the

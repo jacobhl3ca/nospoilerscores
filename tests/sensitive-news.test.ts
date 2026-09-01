@@ -23,6 +23,11 @@ const SENSITIVE: [string, string][] = [
   // died/passing/obituary cue of its own, so only the RIP abbreviation had
   // caught it before.
   ["Rest in peace to a true great of the game", "death"],
+  // "in loving memory" — a tribute-graphic / memorial-post phrasing that carries
+  // no died/passing/obituary cue of its own, and is distinct from "in memoriam"
+  // (Latin) and "memorial service/for", so it had no other flag before.
+  ["In loving memory of a club legend, gone but never forgotten", "death"],
+  ["Fans unveil banner: In Loving Memory of their captain", "death"],
   ["Quarterback arrested on domestic violence charge", "violence"],
   ["Lawsuit alleging sexual assault filed against former coach", "violence"],
   ["Two hurt in a shooting outside the stadium", "violence"],
@@ -149,6 +154,10 @@ const SAFE = [
   "Late winner laid to rest the doubts over his fitness",
   "Derby win finally laid to rest the ghosts of last season",
   "Emphatic display laid to rest any questions about his form",
+  // The death `in loving memory` cue is the full phrase — a bare "memory" idiom
+  // ("best in recent memory", "muscle memory") must stay in the feed.
+  "Best defensive display in recent memory shuts out the visitors",
+  "Rookie's muscle memory takes over on the game-winning putt",
   "Shooting guard drops 40 in a road win",
   "Cold shooting night sinks the Knicks in Boston",
   "Career-best 3-point shooting has him in the All-Star talk",
