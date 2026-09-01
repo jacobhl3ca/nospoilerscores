@@ -755,6 +755,16 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\bplane crash\b|\bhelicopter crash\b|\bcar crash\b|\bbus crash\b|\bfatal crash\b|\bcrash that killed\b/i,
     /\btragedy\b|\btragic(ally)?\b/i,
     /\bR\.?I\.?P\.?\b/,
+    // "rest in peace" spelled OUT — the tribute a club/fan post or headline
+    // reaches for on a death ("Rest in peace, legend", "Rest In Peace to a true
+    // great"). The line above catches only the RIP / R.I.P. abbreviation, so a
+    // tribute written in full — carrying no died/passing/obituary/tragedy cue of
+    // its own — slipped past "Hide upsetting news", the module's cardinal
+    // failure. Unlike its burial-euphemism neighbour "laid to rest", the full
+    // phrase "rest in peace" has no settle-a-debate idiom sense (that idiom is
+    // "put to rest" / "lay to rest", never "rest in peace"), so it needs no
+    // carve-out and is safe as a bare phrase.
+    /\brest in peace\b/i,
   ],
   violence: [
     /\b(sexual(ly)? (assault|abuse|misconduct|harassment)|aggravated assault|assault charges?|assault case|assaulting|assaulted|assault and battery|domestic (violence|assault|abuse))\b/i,

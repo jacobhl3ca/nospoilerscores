@@ -19,6 +19,10 @@ const SENSITIVE: [string, string][] = [
   // need not carry a funeral/died/obituary word, so it had no other flag.
   ["Beloved coach laid to rest as thousands line the streets", "death"],
   ["Club legend laid to rest in his hometown", "death"],
+  // "rest in peace" spelled out — a tribute written in full carries no
+  // died/passing/obituary cue of its own, so only the RIP abbreviation had
+  // caught it before.
+  ["Rest in peace to a true great of the game", "death"],
   ["Quarterback arrested on domestic violence charge", "violence"],
   ["Lawsuit alleging sexual assault filed against former coach", "violence"],
   ["Two hurt in a shooting outside the stadium", "violence"],
