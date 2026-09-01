@@ -339,6 +339,34 @@ test("'run away with' does not swallow non-result titles", () => {
   }
 });
 
+// "claim/take the spoils" is the winning-side sibling of the already-caught
+// draw idiom "share the spoils" — one side took everything, so it names the
+// winner with no scoreline and slipped past every keyword and SCORE_RX.
+test("a claimed-the-spoils result never reads as a clean title", () => {
+  for (const title of [
+    "Inter claim the spoils at San Siro",
+    "Arsenal claimed the spoils in the derby",
+    "Liverpool take the spoils | Premier League",
+    "Chelsea took the spoils at the Bridge",
+    "Everton taking the spoils in a tense finale",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory "the spoils" tail keeps the winning verbs clear of their
+// everyday uses ("Take a look…", "Claim your free ticket"); and the draw sense
+// ("share the spoils") is a different verb, so it stays caught on its own rule.
+test("'claim'/'take' do not swallow non-result titles", () => {
+  for (const title of [
+    "Take a look at the new home kit reveal",
+    "Claim your free matchday ticket | Giveaway",
+    "The spoils of war | Documentary Trailer",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
