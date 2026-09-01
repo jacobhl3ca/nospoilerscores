@@ -287,6 +287,32 @@ test("'run' does not swallow non-result titles", () => {
   }
 });
 
+// "sunk" is the past participle "sinks?"/"sank" missed: the passive defeat-reveal
+// British recap titles lean on ("X sunk by a late goal") never reads the active
+// "sank", so it slipped past the sink/sinks/sank set. Each named the losing side
+// yet leaked before it was added beside its siblings.
+test("a sunk side never reads as a clean title", () => {
+  for (const title of [
+    "Arsenal sunk by a late Rodri goal",
+    "Liverpool sunk at the death",
+    "United sunk without a fight",
+    "Late header sunk the Dodgers",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// Whole-word \bsunk\b keeps it clear of "sunken", and the only benign senses
+// ("sunk cost", a literal ship) never appear in a per-match highlight title.
+test("'sunk' does not swallow the whole-word-safe neighbours", () => {
+  for (const title of [
+    "The sunken garden at the training ground",
+    "Sunken pitch drainage explained | Groundskeeping",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
