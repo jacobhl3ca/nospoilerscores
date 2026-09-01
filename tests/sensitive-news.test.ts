@@ -33,6 +33,12 @@ const SENSITIVE: [string, string][] = [
   // care`. "after collapse" is a bare noun, so the `collapsed (on|during|at)`
   // cue doesn't fire — without the `ventilator` cue this had no other flag.
   ["Coach on a ventilator after collapse, club asks for privacy", "medical"],
+  // `motor neurone disease` / `MND` is ALS by its British name — the form the
+  // soccer/rugby/cricket feeds use. Like ALS it must match without a "diagnosed
+  // with" cue, so a fundraiser, tribute or "battle" feature is caught too.
+  ["Rugby league legend continues his brave MND battle", "medical"],
+  ["Charity match raises millions for motor neurone disease research", "medical"],
+  ["Former captain living with motor neuron disease honoured with statue", "medical"],
   ["Two horses euthanized after breakdowns on the card", "animal"],
   ["Owner banned for life over animal cruelty conviction", "animal"],
   ["Teammates open up a year after his suicide", "selfharm"],

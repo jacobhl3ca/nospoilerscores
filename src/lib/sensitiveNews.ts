@@ -854,7 +854,18 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // carry no sports idiom — a "terminal" on its own (velocity, bus/airport
     // terminal) never takes this object — so the noun form is safe to add.
     /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill(ness)?\b/i,
-    /\bALS\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
+    // `motor neurone disease` / `MND` is ALS by its British name — the form the
+    // app's soccer, rugby and cricket feeds actually use (Rob Burrow, Doddie
+    // Weir, Stephen Darby). ALS is listed as a named disease precisely so the
+    // non-"diagnosed with" phrasings match too — a fundraiser, a tribute, a
+    // "living with"/"battle" feature — yet its far more common British name was
+    // absent, so those exact stories ("continues his brave MND battle", "raising
+    // millions for motor neurone disease research", "honoured as an MND
+    // campaigner") slipped straight past "Hide upsetting news". `neurone?` spans
+    // the British "neurone" and American "neuron" spellings. `MND` is a bare
+    // acronym like its list-mates ALS/CTE: it carries no sports sense a word-
+    // bounded, all-caps token would hit, so it is safe without a carve-out.
+    /\bALS\b|\bmotor neurone? disease\b|\bMND\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
     // `s?` so the plural "cardiac arrests/events/episodes" is caught too: the
     // violence list's `(?<!cardiac )` carve-out excludes those from crime, so the
     // medical rule must recover the plural or a plural cardiac headline would leak.
