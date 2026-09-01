@@ -63,6 +63,35 @@ test("bare 'squeak' does not swallow ordinary titles", () => {
   }
 });
 
+// "claim the title/crown/trophy/…" is the coronation reveal the crowned/lift/
+// hoist cluster missed — "claim" is one of the commonest title-winning verbs,
+// yet each of these named the champion and leaked before it was added.
+test("a claimed title never reads as a clean title", () => {
+  for (const title of [
+    "Spain claim the title",
+    "City claim the crown",
+    "Verstappen claims the championship",
+    "Nadal claimed the trophy",
+    "Liverpool claim silverware",
+    "Yankees claim the pennant",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory silverware object is what keeps "claim" safe: a bare "claim" is
+// far too common in non-result headlines to fire on its own.
+test("'claim' does not swallow non-result titles", () => {
+  for (const title of [
+    "Referee claims a foul in the box",
+    "Club claims responsibility for the delay",
+    "Star player claims he was fit to play",
+    "He lays claim to the title of best ever",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
