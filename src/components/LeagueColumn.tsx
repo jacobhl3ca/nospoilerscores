@@ -1232,10 +1232,7 @@ export default function LeagueColumn({
       checkIfFullNamesFit();
     });
     ro.observe(el);
-    return () => {
-      ro.disconnect();
-      if (raf !== undefined) cancelAnimationFrame(raf);
-    };
+    return () => ro.disconnect();
   }, [checkIfFullNamesFit]);
 
   // Report the abbreviation state up (see onAbbrevReport in the props). Keyed
