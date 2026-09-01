@@ -776,6 +776,21 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // "put to rest" / "lay to rest", never "rest in peace"), so it needs no
     // carve-out and is safe as a bare phrase.
     /\brest in peace\b/i,
+    // "gone too soon" — the tribute-post and headline phrasing outlets and clubs
+    // reach for when a young athlete dies ("A true great, gone too soon", "The
+    // football world remembers a legend gone far too soon at 24"). It sits in the
+    // same family as "the late" / "in loving memory" / "rest in peace" beside it,
+    // but none of those has to appear for a paper or fan account to run this one,
+    // so a tribute written this way — carrying no died/passing/obituary/tragedy
+    // cue of its own — slipped straight past "Hide upsetting news", the module's
+    // cardinal failure. Kept a bare phrase like its tribute neighbours: the
+    // 3-word "gone too soon" is overwhelmingly the death sense. Its close cousins
+    // are deliberately OUT because each collides with a high-frequency sports
+    // idiom a bare phrase would over-hide — "taken too soon" is draft-grade talk
+    // ("taken too soon in the draft"), and "taken from us" is the officiating-
+    // grievance staple ("three points taken from us by a VAR call") — so neither
+    // is added here.
+    /\bgone (far |much |all )?too soon\b/i,
   ],
   violence: [
     /\b(sexual(ly)? (assault|abuse|misconduct|harassment)|aggravated assault|assault charges?|assault case|assaulting|assaulted|assault and battery|domestic (violence|assault|abuse))\b/i,
