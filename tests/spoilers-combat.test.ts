@@ -63,6 +63,34 @@ test("bare 'squeak' does not swallow ordinary titles", () => {
   }
 });
 
+// "scrape past/by/through" is the literal narrow-win idiom the squeak/sneak/
+// slip/squeeze family paraphrases — the plainest way a recap title says a side
+// just barely got the result. Each named a winner or an advancing side yet
+// leaked before it was added.
+test("a scraped-out result never reads as a clean title", () => {
+  for (const title of [
+    "Arsenal scrape past Palace",
+    "Napoli scrape by Roma",
+    "Inter scraped through to the final",
+    "USA scrapes past Canada",
+    "Warriors scraping by the Nuggets",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory past/by/through connector keeps the bare word safe: "scrape" /
+// "scrap" alone must never fire on the everyday non-result uses.
+test("bare 'scrape' does not swallow ordinary titles", () => {
+  for (const title of [
+    "Scraping the barrel: worst lineups of the week",
+    "How they scraped together a starting XI",
+    "A scrappy first half with plenty of fouls",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // "claim the title/crown/trophy/…" is the coronation reveal the crowned/lift/
 // hoist cluster missed — "claim" is one of the commonest title-winning verbs,
 // yet each of these named the champion and leaked before it was added.
