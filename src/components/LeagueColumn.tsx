@@ -795,9 +795,34 @@ function formatDateCompact(yyyymmdd: string): string {
 
 // Short header forms for league labels too long to sit on one line in a narrow
 // column. Keyed on the exact LEAGUES label; anything absent renders in full.
+//
+// The budget is 99px: a phone column measures 114px (three columns at every
+// width — 390px viewport, measured on live 2026-09-01) minus the 11px ▾ chevron
+// and the 4px gap it sits behind. Every label below busts it in Geist 700 /
+// 16px / tracking-wide, and every short form here is measured under it. The two
+// single-word labels ("Championship" 117px, "Libertadores" 105px) have no space
+// to break at, so they overflowed the column rather than wrapping — same fix.
 const SHORT_LEAGUE_LABELS: Record<string, string> = {
-  "NFL Preseason": "NFL Pre",
+  "Champions Cup": "Champ Cup",   // 128 → 94  (rugby)
+  "Championship": "EFL",          // 117 → 30  (matches the sport key, and the UCL/UEL house style)
+  "French Open": "French",        // 103 → 56
+  "Libertadores": "Copa Lib",     // 105 → 71
+  "Little League": "LLWS",        // 107 → 44  (matches the sport key)
+  "NFL Preseason": "NFL Pre",     // 122 → 63
+  "Premier League": "EPL",        // 128 → 31  (matches the sport key, and the UCL/UEL house style)
+  "Rugby Nations": "Nations",     // 119 → 63
+  "Rugby Tests": "Tests",         // 100 → 45
+  "Rugby World Cup": "Rugby WC",  // 141 → 84
+  "Super Rugby": "S. Rugby",      // 105 → 71
 };
+
+// Below this column width the header falls back to SHORT_LEAGUE_LABELS. The
+// widest full label ("Rugby World Cup") needs 141px + the 15px of chevron and
+// gap = 156px, so 160 clears every current label with 4px to spare — and sits
+// well clear of both real column widths: 114px on a phone, 192px at sm, 225px+
+// from md up. Single-column ("condense") mode is a full-width column, so it
+// lands on the far side of this and keeps the full name.
+const HEADER_SHORT_LABEL_MAX_PX = 160;
 
 export default function LeagueColumn({
   league,
@@ -839,10 +864,18 @@ export default function LeagueColumn({
   const [useAbbreviations, setUseAbbreviations] = useState(true); // start abbreviated, expand if room
   // A long league name ("NFL Preseason") wraps to two lines in a narrow mobile
   // column and collides with its own ▾ chevron and the + add-column button
-  // (Jacob 8/4). Reuse the column's existing narrow-width signal so the short
-  // form only appears when space is actually tight — the full name comes back
-  // as soon as the column is wide enough for unabbreviated team names.
-  const headerLabel = (useAbbreviations && SHORT_LEAGUE_LABELS[league.label]) || league.label;
+  // (Jacob 8/4).
+  //
+  // This used to key off `useAbbreviations`, but that is a TEAM-NAME fit signal,
+  // not a header one: it measures the longest team name in the slate against the
+  // name cell. Wrong question, and answered from data — a matchday of long club
+  // names would shorten the header on a desktop column with room to spare, while
+  // an empty column (the measure bails with no names to probe) leaves it stuck at
+  // its initial `true`. The header's own fit depends only on the column width, so
+  // measure that instead. Starts `true` so the first paint is short and the label
+  // only ever grows — the same no-flash direction the old flag had.
+  const [narrowColumn, setNarrowColumn] = useState(true);
+  const headerLabel = (narrowColumn && SHORT_LEAGUE_LABELS[league.label]) || league.label;
   const [swapOpen, setSwapOpen] = useState(false);
   // Panel + measured height cap for the switcher — see the effect below.
   const swapPanelRef = useRef<HTMLDivElement>(null);
@@ -1185,12 +1218,19 @@ export default function LeagueColumn({
     return () => { if (raf !== undefined) cancelAnimationFrame(raf); };
   }, [checkIfFullNamesFit]);
 
-  // Re-check on resize
+  // Re-check on resize. The same observer carries the header-label width gate
+  // (see HEADER_SHORT_LABEL_MAX_PX) — it reads the column box directly rather
+  // than going through checkIfFullNamesFit, which bails early on a column with
+  // no games to measure and would strand the header at its initial short form.
+  // ResizeObserver fires once on observe, so this also serves as the first
+  // measurement; no separate mount effect.
   useEffect(() => {
     const el = columnRef.current;
     if (!el) return;
-    let raf: number | undefined;
-    const ro = new ResizeObserver(() => { raf = checkIfFullNamesFit(); });
+    const ro = new ResizeObserver(() => {
+      setNarrowColumn(el.clientWidth < HEADER_SHORT_LABEL_MAX_PX);
+      checkIfFullNamesFit();
+    });
     ro.observe(el);
     return () => {
       ro.disconnect();
