@@ -204,6 +204,33 @@ test("'walk' does not swallow non-result titles", () => {
   }
 });
 
+// "run rampant" is the sibling of the already-covered "run riot": the same
+// one-sided-win idiom soccer/World Cup recaps lean on for a side scoring freely,
+// carrying no digits when the score is dropped. Each names the dominant side yet
+// leaked before "rampant" was added beside "riot" on the shared "run" anchor.
+test("a run-rampant blowout never reads as a clean title", () => {
+  for (const title of [
+    "Liverpool run rampant at Anfield",
+    "Man City ran rampant in a 5-0 win",
+    "Mbappé runs rampant against Marseille",
+    "Spain running rampant | World Cup Highlights",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory trailing "rampant" keeps the bare word safe: the everyday
+// non-result "run" uses must never fire on their own.
+test("'run' does not swallow non-result titles", () => {
+  for (const title of [
+    "A great run of form heading into the playoffs",
+    "Running the channels: a tactical breakdown",
+    "He ran at the defence all night | Player Preview",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
