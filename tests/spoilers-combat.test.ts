@@ -148,6 +148,33 @@ test("'golden' does not swallow non-result titles", () => {
   }
 });
 
+// "overrun/overran" is the overwhelmed-in-open-play blowout verb the clobber/
+// shellac/thrash/smash family missed: a side that is overrun has been swamped,
+// so the word names the loser of a lopsided game. The past tense breaks the
+// stem (over+ran), so it needs its own alternate. Each of these leaked before.
+test("an overrun side never reads as a clean title", () => {
+  for (const title of [
+    "City overrun United in midfield",
+    "Arsenal overran 4-1 at the Etihad",
+    "Barca overran again at the Bernabeu",
+    "Bayern overrunning Dortmund in the second half",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The verb only ever describes a team being swamped in a match title; the
+// non-result "overrun budget/schedule" sense never appears in a highlight
+// title, and no in-scope club or nation begins with "overr".
+test("'overrun' does not swallow non-result titles", () => {
+  for (const title of [
+    "Chiefs vs Bills | Full Game Highlights",
+    "Real Madrid Training Session | Matchday -1",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // "pull away" is the pull-away idiom the comfortable-win family (cruise/canter/
 // coast/…) missed: a side that pulls away has opened a decisive lead, so the
 // phrase names the winner. Each of these leaked before it was added.
