@@ -10,6 +10,17 @@ Sentry.init({
     /EmptyRanges/,
     /runtime\.sendMessage/,
     /Unable to load image data:image\/svg\+xml/,
+    // ResizeObserver's spec-mandated safety valve, not a HideScore fault: the
+    // browser fires it when a resize callback dirties layout again and the loop
+    // has not settled inside one frame. Nothing throws in our code, nothing is
+    // left broken, and the next frame reconciles — it is in Sentry's own
+    // recommended ignoreErrors. Filtered 2026-09-01 after JAVASCRIPT-NEXTJS-NY-K
+    // reported 6 events from a single Android 12 WebView inside four minutes,
+    // 0 users affected. Not scoped to development: this one is genuinely
+    // unactionable in production too, unlike the detailEvent rule below.
+    // Chrome says "loop limit exceeded"; Firefox and newer Chrome say
+    // "loop completed with undelivered notifications".
+    /ResizeObserver loop (limit exceeded|completed with undelivered notifications)/,
     // ⛔ The old comment here claimed detailEvent "has never existed in HideScore
     // source" and called this injected-extension noise. That is wrong, and the
     // 2026-08-16 Sentry audit caught it: `detailEvent` is declared at
