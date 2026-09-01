@@ -1289,16 +1289,18 @@ export default function HomeContent({
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text x="16" y="24" text-anchor="middle" font-size="28">${emoji}</text></svg>`;
     const blob = new Blob([svg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
-    let link = document.querySelector('link[rel="icon"][type="image/svg+xml"]') as HTMLLinkElement;
-    if (link) {
-      link.href = url;
-    } else {
+    // Use a stable id so we never match the React 19-managed SSR link; mutating
+    // that element causes React's head reconciler to throw NotFoundError (#54).
+    const FAVICON_ID = "hs-dyn-favicon";
+    let link = document.getElementById(FAVICON_ID) as HTMLLinkElement | null;
+    if (!link) {
       link = document.createElement("link");
+      link.id = FAVICON_ID;
       link.rel = "icon";
       link.type = "image/svg+xml";
-      link.href = url;
       document.head.appendChild(link);
     }
+    link.href = url;
     return () => URL.revokeObjectURL(url);
   }, [prefs.showRatings]);
 
