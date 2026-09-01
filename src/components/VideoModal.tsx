@@ -119,7 +119,9 @@ interface YTPlayerEvent {
 // from https://www.youtube.com/iframe_api, so it isn't in any @types package.
 interface YTNamespace {
   Player: new (
-    elementId: string,
+    // An element, not just an id: we hand YT a node we created ourselves so it
+    // has something of its own to replace. See ytHostRef.
+    elementId: string | HTMLElement,
     config: {
       width?: string | number;
       height?: string | number;
@@ -392,6 +394,10 @@ function ArticleMeta({ byline, published, className, style }: {
 
 export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
+  // The React-owned box the YouTube player lives INSIDE. React renders this and
+  // nothing else touches it; the #yt-player node YT destroys is a plain DOM
+  // child we append below. See initPlayer for why that separation matters.
+  const ytHostRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // The dialog root (role="dialog") — used by the focus-management effect below
   // to seat focus inside the modal on open, trap Tab within it, and restore it
@@ -1389,6 +1395,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
     if (hlsMode || embedMode || imageMode || textMode) return; // HLS / iframe / image / text branches handle rendering instead
+    // Captured for the cleanup, which runs after React has already detached the
+    // ref on a real unmount. Clearing the host only actually matters on a
+    // post-to-post step, where this is the same live node either way.
+    const hostAtMount = ytHostRef.current;
     // Channels that refuse embeds on every upload (F1) can only end at the
     // "Watch on YouTube" card, so go there on the first frame instead of
     // mounting a player that will black-screen, error 150, and then walk a
@@ -1487,10 +1497,32 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       if (!YT) return;
       // The iframe_api script can finish downloading AFTER the modal has closed
       // (fast Esc on a cold load). By then this effect's cleanup has run and the
-      // #yt-player mount is gone, so `new YT.Player("yt-player", …)` would build
-      // against a missing element and throw. Bail if the mount is no longer there.
-      if (!document.getElementById("yt-player")) return;
-      playerRef.current = new YT.Player("yt-player", {
+      // host is gone, so building a player would throw. Bail if it went away.
+      // Read the ref live rather than the captured node: this can fire long
+      // after the effect that scheduled it, and isConnected is the direct
+      // question the old `document.getElementById` guard was really asking —
+      // is there still a mount point in the document to build into.
+      const host = ytHostRef.current;
+      if (!host || !host.isConnected) return;
+      // ⛔ Never hand YT a node React rendered. The IFrame API REPLACES the
+      // element it is given with its <iframe> (globals.css says so too, for the
+      // styling half of the same fact) — but React's fiber goes on holding the
+      // ORIGINAL div, which is now detached. Unmounting that subtree then calls
+      // removeChild on a node that is no longer its parent's child:
+      // `NotFoundError: The object can not be found here.`, DOMException code 8
+      // — Sentry JAVASCRIPT-NEXTJS-NY-G (8/18) and NY-J (8/24), both iPhone,
+      // both one tap on the pager while a ?v= YouTube post was open, stepping
+      // to a post of another type so this whole branch unmounts. Paging YouTube
+      // to YouTube never unmounts it, which is why it only showed twice.
+      //
+      // So: React owns `host` and never learns about the child. YT is free to
+      // replace, and React only ever removes a node it really does own. The id
+      // rides on the child because the CSS pins the iframe by it.
+      host.textContent = "";
+      const mount = document.createElement("div");
+      mount.id = "yt-player";
+      host.appendChild(mount);
+      playerRef.current = new YT.Player(mount, {
         width: "100%",
         height: "100%",
         videoId: currentId,
@@ -1642,6 +1674,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // (which re-subscribes on ytMode, not currentId) can't call methods on it
       // during a fallback swap before the replacement player is built.
       playerRef.current = null;
+      // Whatever YT left in the host — its iframe, or our mount if it never got
+      // that far — is ours to clear, and clearing it is safe precisely because
+      // React is not tracking any of it. This also gives the next post a clean
+      // host: the old code re-looked-up `#yt-player` after destroy() had already
+      // removed it, found nothing, and silently built no player at all.
+      hostAtMount?.replaceChildren();
     };
     // titleAlwaysMasked is derived from fallbackUrl (already a dep), so it can
     // never change on its own — listed to keep exhaustive-deps quiet.
@@ -2100,7 +2138,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 ? { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: 0 }
                 : { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
-              <div id="yt-player" className="absolute inset-0 w-full h-full" />
+              <div ref={ytHostRef} className="absolute inset-0 w-full h-full" />
               {/* Embed-blocked / unplayable fallback — covers YouTube's own
                   "Video unavailable" screen with a clean prompt + a Watch-on-
                   YouTube button (opens the YT app on native via openExternal). */}
