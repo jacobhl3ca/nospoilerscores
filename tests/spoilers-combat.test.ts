@@ -175,6 +175,35 @@ test("'pull' does not swallow non-result titles", () => {
   }
 });
 
+// "walk it off" is the idiom form of the already-covered "walk-off": MLB and
+// softball highlight titles overwhelmingly phrase a game-ending hit this way,
+// and the intervening "it" slips past the bare "walk[- ]?off" entry (which needs
+// walk and off adjacent). Each names the winner outright yet leaked before it
+// was added.
+test("a walk-it-off win never reads as a clean title", () => {
+  for (const title of [
+    "Yankees walk it off in the 9th",
+    "Aaron Judge walks it off",
+    "Astros walked it off against the Rangers",
+    "WALK IT OFF! Braves stun the Mets",
+    "Dodgers walking it off in extras",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory "it off" tail keeps the bare word safe: the everyday non-result
+// "walk" uses must never fire on their own.
+test("'walk' does not swallow non-result titles", () => {
+  for (const title of [
+    "A walk in the park for the coaching staff",
+    "He drew a leadoff walk to start the inning",
+    "Fans walk up to the stadium early",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
