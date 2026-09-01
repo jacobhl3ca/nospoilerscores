@@ -55,6 +55,11 @@ const SENSITIVE: [string, string][] = [
   // infinitive both leaked past the toggle.
   ["Ex-player takes his own life at 38, family confirms", "selfharm"],
   ["Former captain tried to take his own life, book reveals", "selfharm"],
+  // The "end one's own life" euphemism — sibling of "take one's own life"
+  // above. "ended" is not "took", and a report written this way carries no bare
+  // suicide/self-harm word, so it leaked past the toggle entirely.
+  ["Former striker ended his own life at 34, family confirms", "selfharm"],
+  ["Ex-keeper tried to end his own life last year, he reveals", "selfharm"],
   ["Wade Meckler is hit in the head by a pitch and forced to leave the game", "injury"],
   ["Catcher carted off after a violent collision at the plate", "injury"],
   // A real player collision must still trip — the matchup-subject strip
@@ -639,6 +644,11 @@ test("the addiction cue flags a real struggle but spares the 'substance abuse po
   assert.equal(sensitiveCategoryOf("Reliever suspended under the substance abuse policy"), null);
   assert.equal(sensitiveCategoryOf("Fans are addicted to this team's late drama"), null);
   assert.equal(sensitiveCategoryOf("This offense is absolutely addictive to watch"), null);
+  // "end one's own life" is only ever a real suicide — the streak/eagerness
+  // idioms take a different object ("ended his own drought/dry spell/wait",
+  // never "life"), so ordinary recaps stay visible while the euphemism flags.
+  assert.equal(sensitiveCategoryOf("Rookie ended his own drought with a late winner"), null);
+  assert.equal(sensitiveCategoryOf("Veteran ends his own dry spell in style"), null);
 });
 
 test("the schedule-sense 'collision' strip does not swallow a real on-field collision", () => {
