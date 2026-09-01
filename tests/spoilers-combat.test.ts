@@ -148,6 +148,33 @@ test("'golden' does not swallow non-result titles", () => {
   }
 });
 
+// "pull away" is the pull-away idiom the comfortable-win family (cruise/canter/
+// coast/…) missed: a side that pulls away has opened a decisive lead, so the
+// phrase names the winner. Each of these leaked before it was added.
+test("a pull-away lead never reads as a clean title", () => {
+  for (const title of [
+    "Celtics pull away late",
+    "Warriors pulled away in the fourth quarter",
+    "Verstappen pulls away from the field",
+    "City are pulling away at the top",
+    "Chiefs pull-away in the second half",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory trailing "away" keeps the bare word safe: the everyday
+// non-result "pull" uses must never fire on their own.
+test("'pull' does not swallow non-result titles", () => {
+  for (const title of [
+    "Pull quote from the coach's presser",
+    "How the Chiefs could pull off a trade",
+    "Fans pull up to the stadium early",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
