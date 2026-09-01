@@ -15,6 +15,10 @@ const SENSITIVE: [string, string][] = [
   // opt-in, so it had no other flag.
   ["Cyclist who lost his life in the crash remembered a year on", "death"],
   ["Two supporters lost their lives in the stadium tragedy", "death"],
+  // The "laid to rest" burial euphemism — a funeral-day story written this way
+  // need not carry a funeral/died/obituary word, so it had no other flag.
+  ["Beloved coach laid to rest as thousands line the streets", "death"],
+  ["Club legend laid to rest in his hometown", "death"],
   ["Quarterback arrested on domestic violence charge", "violence"],
   ["Lawsuit alleging sexual assault filed against former coach", "violence"],
   ["Two hurt in a shooting outside the stadium", "violence"],
@@ -131,6 +135,11 @@ for (const [headline, category] of SENSITIVE) {
 // a naive keyword list and quietly gut the feed.
 
 const SAFE = [
+  // "laid to rest" in its figurative dispute-settling sense — the death cue's
+  // negative lookahead drops an abstract-argument object so these recaps stay up.
+  "Late winner laid to rest the doubts over his fitness",
+  "Derby win finally laid to rest the ghosts of last season",
+  "Emphatic display laid to rest any questions about his form",
   "Shooting guard drops 40 in a road win",
   "Cold shooting night sinks the Knicks in Boston",
   "Career-best 3-point shooting has him in the All-Star talk",

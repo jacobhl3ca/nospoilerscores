@@ -721,6 +721,24 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // "a defeat" carry none of them, so those recaps stay visible.
     /\bsuccumb(s|ed|ing)? to (?:his |her |their |the |a |an |long |serious |severe |lengthy |brief |brave |year.?long )*(injur(y|ies)|wounds?|illness|disease|cancer|complications|infection)\b/i,
     /\bobituary\b|\bin memoriam\b|\bmemorial (service|for)\b|\bfuneral\b|\bposthumous(ly)?\b/i,
+    // "laid to rest" — the burial euphemism a funeral story reaches for in the
+    // headline ("Beloved coach laid to rest as thousands line the streets",
+    // "Legend laid to rest in his hometown"). It sits in the same family as the
+    // obituary/funeral/memorial cue above, but none of those words has to appear
+    // for a paper to run this one, so a burial-day tribute written this way
+    // slipped straight past "Hide upsetting news" — the module's cardinal
+    // failure. The catch is that "lay/laid to rest" is also a staple figurative
+    // idiom for settling a dispute ("laid to rest the doubts over his fitness",
+    // "finally laid to rest the ghosts of last season", "laid to rest the debate",
+    // "laid to rest talk of a move"), which a bare phrase would pull under "death
+    // or tragedy". The negative lookahead drops exactly that sense — an
+    // abstract-argument object (doubts, debate, questions, ghosts, demons, fears,
+    // concerns, talk, speculation, rumours, myth, nerves), with an optional
+    // determiner/qualifier in front — a real burial never takes those objects
+    // (it is followed by a time, a place, "as …", or a person), so the funeral
+    // sense matches while the idiom stays visible. Same negative-lookahead shape
+    // as the "lost his life savings" money-sense guard above.
+    /\blaid to rest\b(?!\s+(?:the |any |all |those |these |some |lingering |longstanding |long.?running |old )*(?:doubts?|debates?|questions?|ghosts?|demons?|fears?|concerns?|talk|speculation|rumou?rs?|myths?|nerves?|arguments?))/i,
     /\bfatal(ly)?\b|\bfatalit(y|ies)\b/i,
     /\bkilled (in|by|when|after|during|at)\b|\bwas killed\b|\bkills? (\d+|several|dozens)\b/i,
     /\bmurder(ed|s)?\b|\bhomicide\b|\bmanslaughter\b/i,
