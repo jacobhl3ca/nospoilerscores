@@ -202,6 +202,35 @@ test("'pull' does not swallow non-result titles", () => {
   }
 });
 
+// "make light/hard work of" is the comfortable-/scrappy-win idiom the same
+// family covered by "pull away"/"…past" missed: it only ever precedes the beaten
+// side, so it names the winner and the margin without a scoreline. Each leaked
+// before it was added.
+test("a make-light/hard-work-of win never reads as a clean title", () => {
+  for (const title of [
+    "Barcelona make light work of Getafe",
+    "City made light work of it",
+    "Spain making light work of the group",
+    "USA make hard work of Panama",
+    "Chelsea makes light work of the tie",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory "work of" tail keeps the bare words safe: the everyday
+// non-result uses of make/light/hard/work must never fire on their own.
+test("'make'/'light'/'hard'/'work' do not swallow non-result titles", () => {
+  for (const title of [
+    "They make the playoffs for the first time",
+    "The hard work behind the scenes",
+    "A light-hearted look at the season",
+    "How the crew shares the workload",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // "walk it off" is the idiom form of the already-covered "walk-off": MLB and
 // softball highlight titles overwhelmingly phrase a game-ending hit this way,
 // and the intervening "it" slips past the bare "walk[- ]?off" entry (which needs
