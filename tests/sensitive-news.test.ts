@@ -136,6 +136,11 @@ const SENSITIVE: [string, string][] = [
   // anniversary/survivor framing that used to leak past "Hide upsetting news".
   ["Community remembers the team bus crash five years on", "death"],
   ["Survivors of the youth team bus crash reunite ahead of the season", "death"],
+  // "gone too soon" — a tribute-graphic / memorial-post phrasing that carries no
+  // died/passing/obituary cue of its own (a sibling of "in loving memory" and
+  // "rest in peace"), so a tribute written this way had no other flag before.
+  ["Football world remembers a club legend gone too soon", "death"],
+  ["Tributes for the young star, gone far too soon at 24", "death"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
@@ -575,6 +580,12 @@ const SAFE = [
   // qualifiers now in the stroke severity list.
   "A possible stroke of genius from the manager at half-time",
   "That substitution was a suspected stroke of luck more than a plan",
+  // The "gone too soon" death cue is deliberately scoped to that exact phrase —
+  // its close cousins are left out because each collides with a high-frequency
+  // sports idiom, so a draft-grade "taken too soon" and an officiating-grievance
+  // "taken from us" must stay visible.
+  "Prospect taken too soon in the draft is still finding his feet",
+  "Three points taken from us by a shocking VAR call, says the boss",
 ];
 
 for (const headline of SAFE) {
