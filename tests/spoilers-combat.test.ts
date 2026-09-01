@@ -36,6 +36,33 @@ test("the combat words do not swallow ordinary highlight titles", () => {
   }
 });
 
+// "squeak past/by/through" is the just-scraped-a-result idiom — the narrow-win
+// sibling of the sneak/slip/squeeze family, which only knew "past". Each of
+// these named a winner (or an advancing side) yet leaked before it was added.
+test("a squeaked-out result never reads as a clean title", () => {
+  for (const title of [
+    "France squeak past Belgium in extra time",
+    "Chiefs squeak by the Broncos",
+    "Real Madrid squeaked through to the semis",
+    "USA squeaks past Canada",
+    "Warriors squeaking by the Nuggets",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The mandatory past/by/through connector is what keeps the bare word safe:
+// "squeak" alone must never fire on the everyday non-result uses.
+test("bare 'squeak' does not swallow ordinary titles", () => {
+  for (const title of [
+    "Squeaky clean defense keeps it tidy",
+    "Not a squeak out of the visiting bench",
+    "The floorboards squeak under the sneakers",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
