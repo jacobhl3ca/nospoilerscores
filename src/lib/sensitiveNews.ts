@@ -958,6 +958,18 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // verb adds no false-positive risk. Mirrors the tense-coverage fixes already
     // applied elsewhere in this file (the stroke/died pattern families).
     /\b(took|takes?|taking) (his|her|their) own life\b/i,
+    // "ended his/her/their own life" — the other standard suicide euphemism
+    // reporting reaches for, the direct sibling of "took his own life" above
+    // ("Former striker ended his own life at 34", and the infinitive after an
+    // attempt verb "tried to end his own life"). None of the cues above names
+    // it — "ended" is not "took", and a report written this way carries no bare
+    // `suicide`/`self-harm` word of its own — so it leaked straight past "Hide
+    // upsetting news", the module's cardinal failure. "end one's own life" is
+    // only ever a real suicide and has no figurative sports sense in any tense:
+    // the eagerness/streak idioms take a different object ("ended his own
+    // drought/dry spell/wait", never "life"), so broadening the verb adds no
+    // false-positive risk, exactly as the "took/takes/taking" tenses above.
+    /\bend(s|ed|ing)? (his|her|their) own life\b/i,
     /\boverdose(d)?\b|\bfatal overdose\b/i,
     /\bmental health crisis\b|\bchecked into rehab\b|\beating disorder\b/i,
     // Addiction itself — the other half of this category's label ("self-harm or
