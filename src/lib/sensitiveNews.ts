@@ -745,6 +745,24 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // a disease, cancer, complications, an infection); "a late winner"/"pressure"/
     // "a defeat" carry none of them, so those recaps stay visible.
     /\bsuccumb(s|ed|ing)? to (?:his |her |their |the |a |an |long |serious |severe |lengthy |brief |brave |year.?long )*(injur(y|ies)|wounds?|illness|disease|cancer|complications|infection)\b/i,
+    // "lost/loses his battle with cancer" — the obituary euphemism reporting
+    // reaches for when someone dies of a long illness ("Club legend loses long
+    // battle with illness", "Former striker lost his brave battle with cancer",
+    // "loses her fight against leukaemia"). It is the twin of "succumbed to <a
+    // long illness>" above, and the cues elsewhere miss it: without a specific
+    // disease word the bare `cancer` medical pattern never fires, so a generic
+    // "battle with illness/disease" carried no died/passing/obituary cue and
+    // slipped past "Hide upsetting news" — the module's cardinal failure; and a
+    // "battle with cancer" only landed under "serious illness" (medical), not
+    // "death", though the person has died. `battle`/`fight` is heavy sports idiom
+    // on its own — a "relegation battle", a "battle with injury/form/his weight",
+    // "loses the battle for a starting spot" — so this is scoped tight: only the
+    // death verbs (lost/loses/losing) paired with a battle/fight WITH/AGAINST/TO
+    // an ILLNESS object (never "injury", which is recovery talk, and never a
+    // team-place, a rival or an abstract goal), so those living-with and
+    // competitive "battle" stories stay visible. "continues his brave MND battle"
+    // (someone still fighting) carries no death verb and stays medical.
+    /\b(?:lost|loses|losing) (?:his |her |their |the |a |an |another )*(?:brave |long |lengthy |courageous |hard[- ]?fought |tough |private |secret |brief |year.?long |two.?year |[\w-]+.?year )*(?:battle|fight) (?:with|against|to) (?:a |an |the |his |her |their |long |serious |severe |lengthy |brief |brave |rare |aggressive |terminal )*(?:cancer|illness|disease|leuk(?:ae|e)mia|tumou?rs?|dementia|alzheimer'?s?|parkinson'?s?|motor neurone disease|MND|ALS)\b/i,
     // "in loving memory" — the tribute-graphic and memorial-post phrasing a
     // club, teammate or fan reaches for on a death ("In loving memory of a club
     // legend", "In Loving Memory, 1975–2026"). It sits in the same family as the

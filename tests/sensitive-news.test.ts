@@ -650,6 +650,23 @@ test("the 'succumbed to <fatal thing>' death cue fires but spares the sports idi
   assert.equal(sensitiveCategoryOf("The favourites succumbed to the pressure of the occasion"), null);
 });
 
+test("the 'lost his battle with <illness>' death cue fires but spares the sports idiom", () => {
+  // The obituary euphemism — "lost/loses/losing (a brave/long) battle/fight
+  // with/against/to <an illness>" — is a death. Scoped to the death verbs plus
+  // an illness object, so living-with and competitive "battle" stories stay put.
+  assert.equal(sensitiveCategoryOf("Club legend loses long battle with illness"), "death");
+  assert.equal(sensitiveCategoryOf("Former striker lost his brave battle with cancer"), "death");
+  assert.equal(sensitiveCategoryOf("Legend loses her fight against leukaemia"), "death");
+  assert.equal(sensitiveCategoryOf("Coach loses his battle with motor neurone disease"), "death");
+  assert.equal(sensitiveCategoryOf("Icon loses battle to cancer at 62"), "death");
+  // "battle"/"fight" as ordinary sports idiom — no death verb, no illness object,
+  // or someone still fighting — stays visible.
+  assert.equal(sensitiveCategoryOf("United's battle with relegation goes to the final day"), null);
+  assert.equal(sensitiveCategoryOf("Prospect loses the battle for a starting spot"), null);
+  assert.equal(sensitiveCategoryOf("Striker continues his battle with injury"), null);
+  assert.equal(sensitiveCategoryOf("Rugby league legend continues his brave MND battle"), "medical");
+});
+
 test("the 'suicide <tactic>' idiom strip does not swallow a real self-harm item", () => {
   // Only the tactic/tempo nouns are stripped — a genuine self-harm item reads
   // "suicide attempt", "suicide prevention", "died by suicide" or "suicidal",
