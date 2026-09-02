@@ -263,7 +263,19 @@ const IDIOM = new RegExp(
     // run/quest/tilt/pursuit/reign join the noun list for the same reason — a
     // "playoff push / title charge / promotion run on life support" is the
     // identical elimination idiom, never a person.
-    "(hopes?|chances?|dreams?|aspirations?|bid|campaign|defen[cs]e|dynasty|title|playoffs?|postseason|season|series|push|charge|challenge|hunt|chase|run|quest|tilt|pursuit|reign) ((is|are|now|still|all but|officially|basically|practically|barely|remains?|sits?|hangs?|hanging|left|already|essentially|firmly|clinging|but|no longer|almost|nearly) )*on life[ -]support",
+    // The team-UNIT nouns (offense/defence, midfield, back-line, bullpen, power
+    // play, penalty kill, special teams, rotation) and "comeback" join for the
+    // same reason: a "defense was on life support in the fourth", "the bullpen is
+    // on life support", "the comeback looked on life support" is the identical
+    // brink-of-elimination idiom about a phase of play, never a person — so it
+    // reads as "serious illness" for anyone with the main filter on, yet none of
+    // these nouns can be the subject of a real "on life support" (that is always a
+    // person: "midfielder / driver / fan on life support"). was/were and the
+    // perception copulas (looks/looked, seem(s/ed), appear(s/ed), stay(s/ed)) join
+    // the linking-word list so the past-tense and "looked … on life support" forms
+    // strip too — a real patient's "on life support" is likewise never fronted by
+    // one of these unit nouns, so extending the leak-free strip stays leak-free.
+    "(hopes?|chances?|dreams?|aspirations?|bid|campaign|defen[cs]e|offen[cs]e|dynasty|title|playoffs?|postseason|season|series|push|charge|challenge|hunt|chase|run|quest|tilt|pursuit|reign|midfield|back.?line|bullpen|power.?play|penalty kill|special teams|rotation|comeback) ((is|are|was|were|now|still|all but|officially|basically|practically|barely|remains?|sits?|hangs?|hanging|left|already|essentially|firmly|clinging|but|no longer|almost|nearly|looks?|looked|seem(?:s|ed)?|appear(?:s|ed)?|stays?|stayed) )*on life[ -]support",
     // The other figurative shape, where the subject is a bare TEAM name rather
     // than a fortunes noun — "The Reds are on life support in the title race",
     // "Dodgers on life support in the NL West race", "Spurs on life support in
