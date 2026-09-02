@@ -362,6 +362,14 @@ const SAFE = [
   "United's title charge is on life support",
   "Liverpool's title challenge on life support after the derby loss",
   "Their promotion run on life support with three games to go",
+  // Same idiom with a team-UNIT subject and past-tense / perception copulas —
+  // a phase of play on the brink, never a person.
+  "Defense was on life support in the fourth quarter",
+  "The offense is on life support after three straight three-and-outs",
+  "Bullpen on life support after another blown save",
+  "The power play looked on life support all night",
+  "The comeback is on life support",
+  "Their midfield was on life support against the press",
   // Same idiom where the subject is a bare TEAM name, told apart by the
   // standings/race context that follows — never how a real patient is described.
   "The Reds are on life support in the title race",
@@ -941,6 +949,11 @@ test("the 'on life support' idiom strip does not swallow a real medical event", 
   assert.equal(sensitiveCategoryOf("Boxer on life support in intensive care after the bout"), "medical");
   assert.equal(sensitiveCategoryOf("Rider remains on life support in a stable but critical condition"), "medical");
   assert.equal(sensitiveCategoryOf("Player on life support, family says he is fighting for his life"), "medical");
+  // The team-unit nouns added to the strip (offense/defence, midfield, bullpen …)
+  // are never a person, so a real patient's "on life support" — always a person —
+  // is untouched even when a unit noun appears elsewhere in the headline.
+  assert.equal(sensitiveCategoryOf("Defenseman on life support after collapsing at practice"), "medical");
+  assert.equal(sensitiveCategoryOf("Reliever on life support following the incident in the bullpen"), "medical");
 });
 
 test("the baseball 'hit-and-run' idiom strip does not swallow a real hit-and-run", () => {
