@@ -3753,8 +3753,12 @@ export default function HomeContent({
               <a href="/how-to-watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>how to watch sports highlights without spoilers</a>,{" "}
               <a href="/watch-sports-highlights-without-spoilers" style={{ textDecoration: "underline" }}>spoiler-free highlights</a>,{" "}
               <a href="/mlb-highlights-without-spoilers" style={{ textDecoration: "underline" }}>MLB highlights</a>,{" "}
-              <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>, or{" "}
-              <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a>, plus spoiler-free{" "}
+              <a href="/nfl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NFL highlights</a>,{" "}
+              <a href="/nhl-highlights-without-spoilers" style={{ textDecoration: "underline" }}>NHL highlights</a>, or{" "}
+              <a href="/soccer-highlights-without-spoilers" style={{ textDecoration: "underline" }}>soccer highlights</a> — including the{" "}
+              <a href="/premier-league-without-spoilers" style={{ textDecoration: "underline" }}>Premier League</a>,{" "}
+              <a href="/liga-mx-scores-without-spoilers" style={{ textDecoration: "underline" }}>Liga MX</a> and{" "}
+              <a href="/cricket-highlights-without-spoilers" style={{ textDecoration: "underline" }}>cricket</a> — plus spoiler-free{" "}
               <a href="/nba-scores-without-spoilers" style={{ textDecoration: "underline" }}>NBA scores</a> and{" "}
               <a href="/nhl-scores-without-spoilers" style={{ textDecoration: "underline" }}>NHL scores</a>. Also see the{" "}
               <a href="/faq" style={{ textDecoration: "underline" }}>FAQ</a>. Or read our{" "}
