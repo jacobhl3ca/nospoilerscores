@@ -57,6 +57,11 @@ const SENSITIVE: [string, string][] = [
   ["Rugby league legend continues his brave MND battle", "medical"],
   ["Charity match raises millions for motor neurone disease research", "medical"],
   ["Former captain living with motor neuron disease honoured with statue", "medical"],
+  // British "leukaemia" spelling, the form the soccer/rugby/cricket feeds use.
+  // Like the MND cases, a "battle"/fundraiser feature carries no "diagnosed
+  // with" cue, so only the American "leukemia" spelling matched before.
+  ["Former winger continues his brave leukaemia battle", "medical"],
+  ["Charity match raises millions for leukaemia research", "medical"],
   ["Two horses euthanized after breakdowns on the card", "animal"],
   ["Owner banned for life over animal cruelty conviction", "animal"],
   ["Teammates open up a year after his suicide", "selfharm"],

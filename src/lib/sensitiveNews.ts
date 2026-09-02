@@ -963,7 +963,15 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // straight past "Hide upsetting news". "terminal illness"/"terminally ill"
     // carry no sports idiom — a "terminal" on its own (velocity, bus/airport
     // terminal) never takes this object — so the noun form is safe to add.
-    /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill(ness)?\b/i,
+    // `leuka?emia` spans the British "leukaemia" and American "leukemia"
+    // spellings, the same both-spellings widening `tumou?r` and `neurone?`
+    // already carry. The app's soccer/rugby/cricket feeds use the British
+    // form, and — exactly like the MND case below — a tribute, fundraiser or
+    // "battle" feature carries no "diagnosed with" cue, so "continues his brave
+    // leukaemia battle" / "raising millions for leukaemia research" slipped
+    // straight past "Hide upsetting news" while the American spelling matched.
+    // "leukaemia" is only ever the disease, so it adds no false-positive risk.
+    /\bcancer\b|\btumou?r\b|\bleuka?emia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill(ness)?\b/i,
     // `motor neurone disease` / `MND` is ALS by its British name — the form the
     // app's soccer, rugby and cricket feeds actually use (Rob Burrow, Doddie
     // Weir, Stephen Darby). ALS is listed as a named disease precisely so the
