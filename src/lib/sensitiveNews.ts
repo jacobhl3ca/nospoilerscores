@@ -797,6 +797,19 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\bkilled (in|by|when|after|during|at)\b|\bwas killed\b|\bkills? (\d+|several|dozens)\b/i,
     /\bmurder(ed|s)?\b|\bhomicide\b|\bmanslaughter\b/i,
     /\bmourn(s|ing|ed)?\b|\bgrieving\b|\btribute to the late\b|\bthe late\b/i,
+    // "condolences" — the sympathy-on-a-death word a club, league or the wider
+    // sport reaches for when someone connected to it dies ("The club sends its
+    // condolences to the family", "Messages of condolence pour in for the late
+    // captain", "Federation offers condolences following the sudden loss"). It
+    // sits in the same family as the mourn/grieving/tribute cues beside it, but
+    // none of them has to appear for a statement written this way to run: a bare
+    // "offers its condolences" carries no died/passing/obituary/tragedy cue of
+    // its own, so a bereavement notice framed only this way slipped straight past
+    // "Hide upsetting news" — the module's cardinal failure. Safe as a bare word:
+    // "condolence(s)" is only ever an expression of sympathy for a death or
+    // bereavement — it has no figurative sports sense the way "battle" / "the
+    // late" / "memory" do — so it needs no idiom carve-out.
+    /\bcondolences?\b/i,
     // `bus crash` joins the vehicle-crash cues: a team-bus crash is a recurring,
     // grievous sports tragedy (a junior/amateur squad wiped out on the road — the
     // Humboldt Broncos the best-known), yet without the word it only caught when
