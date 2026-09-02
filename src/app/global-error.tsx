@@ -86,11 +86,11 @@ export default function GlobalError({
             {/* Plain anchor (full reload) — after a root-layout failure a clean
                 navigation is safer than client-side routing, and next/link's
                 router context isn't guaranteed here since this REPLACES the root
-                layout. No eslint-disable is needed: @next/next/no-html-link-for-pages
-                only flags links to routes defined under a `pages/` directory, and
-                this App-Router-only project has none, so the rule never fires on
-                this link. (A disable directive here was flagged unused and removed;
-                don't re-add one.) */}
+                layout. @next/next/no-html-link-for-pages DOES fire on this
+                internal `/` link — verified: `npm run lint` reports it as an
+                error, not a warning — so the disable directive below is REQUIRED
+                and is not unused. Do not remove it (doing so breaks lint). */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a className="ge-btn ge-btn--secondary" href="/">
               Back to HideScore
             </a>
