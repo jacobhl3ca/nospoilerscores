@@ -1,135 +1,136 @@
-# HideScore Weekly Advisory
-
-> Prioritized product improvement proposals. Highest-impact items first.
-> Each run prepends a new dated section; roughly the last 4 weeks are kept.
+# HideScore — Weekly Product Advisory
 
 ---
 
-## 2026-09-02
+## 2026-08-19
 
-### 1. Push Notifications for Game Starts & Live Events — **IMPACT: Very High | Effort: M**
-
-**Why it matters:** The app's core promise is "watch without spoilers." Users currently have to remember to check HideScore *before* looking at social media. A "Game starting in 30 min" notification keeps them on the right path and drives daily active use better than any other single feature.
-
-**Detail:** Capacitor already wraps both iOS and Android — native push is one plugin away (`@capacitor/push-notifications`). On web, the Push API works in Chrome/Edge without a native shell. A lightweight preference ("Notify me when: [my teams start] [any game goes to overtime] [game on my watchlist is about to start]") stored in existing prefs sync. Worker-side: a scheduled Cloudflare Cron Trigger reads upcoming slates and enqueues pushes ~30 min before kickoff via a push delivery service (e.g. Firebase FCM, which Capacitor supports, or OneSignal). The upcomingSlate infrastructure already partly exists. No new data sources required.
-
-**Effort breakdown:** Capacitor plugin install + FCM credential setup (S), preference UI (S), server-side push dispatch cron (M), web push service worker integration (M). Total: ~M.
+### Summary
+HideScore has exceptional core mechanics — spoiler-safe scores, quality ratings, and highlight masking — running on a lean, fast static stack. The biggest near-term leverage is **distribution** (Android public launch, push notifications, viral sharing) and **retention** (personalized daily digest, alerts on favorite teams). The World Cup 2026 window is an enormous SEO/traffic event that should be milked hard. Below are proposals ranked by impact.
 
 ---
 
-### 2. "My Teams" Dedicated View — **IMPACT: High | Effort: S**
+### 1. Launch Android publicly on the Play Store _(Impact: HIGH | Effort: S)_
 
-**Why it matters:** Power users with favorites across 4–5 sports currently have to scan every column to find their teams' games. A "My Teams" pseudo-column — or a first-tab board that shows only games involving favorited teams, sorted by start time — turns the app into a personalized dashboard and dramatically reduces friction for the core returning-user loop.
+**Why it matters**: The Play Store badge is commented out in `HomeContent.tsx` — the listing exists in closed testing but no one can find it organically. iOS has a full App Store listing and JSON-LD `MobileApplication` schema. Android gets neither, leaving a large audience untapped and the existing Capacitor work sitting idle.
 
-**Detail:** All the data is already in memory. Favorite teams are tracked in `preferences.favoriteTeams`. A new view mode (4th tab: "⭐ My Teams") would filter across all fetched games, dedup by team, and render them in a single scrollable column with sport badges. No new fetches. Could also be the default for users who have ≥2 favorite teams — auto-surface on first launch after adding a 2nd favorite. The share-URL encoder already handles favoriteTeams, so custom setups remain shareable.
-
-**Effort:** ~S. Mostly a filter + render pass over already-fetched data. UI tab addition + preference-aware default.
+**Detail**: Promote the closed test to production, uncomment the badge, and add an `android` node to the `MobileApplication` schema alongside the iOS node. The Capacitor shell already points to `hidescore.com` so every push to `main` is effectively already shipping to Android users — the only blocker is the store listing itself.
 
 ---
 
-### 3. Watch Later / "Haven't Watched Yet" Persistence — **IMPACT: High | Effort: M**
+### 2. Push notifications: "Game worth watching" alerts _(Impact: HIGH | Effort: M)_
 
-**Why it matters:** The #1 accidental spoiler scenario is: user finishes watching a game, comes back to HideScore the next day to check other scores, and accidentally sees a "GREAT" rating badge or a score on a game they DVR'd. There's no way to tell HideScore "I haven't watched this yet — hold spoilers for this specific game."
+**Why it matters**: Users open the app *hoping* a great game happened. Push notifications let HideScore reach them *before* they accidentally see a score elsewhere — which is the entire product promise. The service worker (sw-v15.js) is already installed, so the browser infrastructure is there.
 
-**Detail:** A long-press or right-click on a game card opens a menu: "Mark as Watched" / "Add to Watch Later." Games on the Watch Later list stay in full spoiler-hide mode regardless of board-wide reveal state, and show a small bookmark icon. "Watched" dismisses the bookmark. The list is keyed by `gameId` (already present in ESPN data), stored in prefs (synced cross-device), and auto-expires entries older than 7 days. Pairs naturally with the push-notification feature: "You have 2 unwatched games from yesterday."
-
-**Effort:** ~M. Requires per-game state persistence, new card interaction (long-press/right-click menu on GameCard), and a minor prefs schema extension.
+**Detail**: Add a `subscribe-to-alerts` setting that lets users opt into end-of-game pushes for their favorite teams or leagues. Payload: "Lakers game last night: ⭐ GREAT (no score). Worth watching!" The push logic could live in the existing Cloudflare Worker since it already runs cron-adjacent work. Opt-in only, one push per finished game per user.
 
 ---
 
-### 4. 7-Day Schedule / "Games This Week" View — **IMPACT: High | Effort: M**
+### 3. Personalized "Worth watching tonight" digest email _(Impact: HIGH | Effort: M)_
 
-**Why it matters:** Today/Tomorrow navigation is the full extent of forward visibility. Sports fans plan their week — they want to know "is there an NBA game on Thursday I need to avoid Twitter for?" A weekly schedule view, spoiler-free (shows matchups and times but hides past scores), addresses this directly and adds SEO value ("nba schedule this week without spoilers").
+**Why it matters**: Email is a habit-forming re-engagement loop. The quality rating data + favorite team prefs are already computed; the only missing piece is a delivery mechanism. Users who sign in (Apple/Google/email) already have an email address.
 
-**Detail:** ESPN's scoreboard API accepts any date offset. Extend DateNav to support a "This Week" calendar strip (7 small day pills, Mon–Sun) in addition to the existing yesterday/today/tomorrow pills. Tapping a future day fetches that day's schedule — no scores to hide yet, just matchups and start times. Past days show scores hidden (same as today). The calendar dropdown already exists; surface it inline as a strip. Week view could also be a shareable URL (`/week` or `?week=2026-09-01`).
-
-**Effort:** ~M. Fetch layer change is small; UI requires a responsive 7-day strip that works on mobile (horizontal scroll) and doesn't crowd the existing DateNav.
+**Detail**: Nightly email (sent ~11 pm local time based on stored timezone pref) listing today's finished games with quality badges but no scores. Subject line: "3 GREAT games from last night — spoiler-free." One-click unsubscribe, no third-party ESP required if sending via Cloudflare Email Workers. Start with opt-in at sign-in time.
 
 ---
 
-### 5. PWA Install Prompt for Desktop (Chrome / Edge) — **IMPACT: Medium-High | Effort: S**
+### 4. "Game of the Day" pinned card _(Impact: MEDIUM-HIGH | Effort: S)_
 
-**Why it matters:** The Play Store badge drives Android installs, and the Apple Smart App Banner drives iOS installs. There is no install nudge for desktop Chrome/Edge users, who can install HideScore as a PWA and get it in their taskbar/dock. These users are likely high-intent (they keep a browser tab open all season). PWA install drives repeat visits and eliminates tab-close churn.
+**Why it matters**: After a big day of games, finding the best one requires scanning all columns. A single pinned "Game of the Day" card surfaced above the columns — showing only the rating badge and matchup, no score — gives casual visitors immediate value and a clear CTA to reveal and watch.
 
-**Detail:** Listen for the `beforeinstallprompt` event (already suppressed by default in Chrome). Show a subtle banner or the ⚙️ settings footer button: "Add HideScore to your desktop." Store the deferred prompt, call `.prompt()` on click. Add a `manifest.json` if not present (or verify the existing one has `display: "standalone"`, correct `start_url`, icons). One-time dismissal stored in localStorage. The existing "play badge dismissed" pattern in prefs is a template for the dismiss UX.
-
-**Effort:** ~S. ~50 lines of JS + manifest check. No backend work.
+**Detail**: Add a `pinned` banner section between the DateNav and the column grid. Show the highest-rated finished game. On mobile single-column layout this is especially valuable since users can't see all columns at once. Collapse it with a chevron for users who prefer the existing layout.
 
 ---
 
-### 6. Score Reveal Animation — **IMPACT: Medium | Effort: S**
+### 5. World Cup 2026 — capitalize on the traffic window _(Impact: HIGH | Effort: M)_
 
-**Why it matters:** The core "reveal" moment is the emotional heart of the product. Right now it's presumably an instant show/hide. A 300ms blur-dissolve or card-flip animation makes the reveal feel intentional, satisfying, and premium — differentiating HideScore from a browser extension that just hides elements.
+**Why it matters**: The 2026 FIFA World Cup runs June 11 – July 19, 2026 in North America (US, Canada, Mexico). It is the single largest sports-viewing event in the world and a generational opportunity: the host-country audience is massive and largely unfamiliar with the sport, meaning they will be searching for exactly what HideScore offers. The `/worldcup` page already exists.
 
-**Detail:** When `scoreRevealed` transitions false→true on a `GameCard`, animate the score container: `filter: blur(8px) → blur(0)` with a 250ms ease-out, combined with a scale from 0.95→1.0. For the ratings view (GREAT/GOOD/MEH/SKIP badge), fade-in the badge from opacity 0. Use CSS transitions (Tailwind `transition-all duration-300`). Optionally add a subtle haptic via the Capacitor Haptics plugin on mobile (one light tap on reveal).
-
-**Effort:** ~S. Pure CSS/Tailwind transition additions + one Capacitor haptic call. Totally non-breaking.
-
----
-
-### 7. Playoff/Standings Context on Game Cards — **IMPACT: Medium | Effort: S–M**
-
-**Why it matters:** "Team A vs Team B" has very different stakes depending on whether it's a regular-season throwaway or a must-win for a playoff spot. Showing "GB: 2.0 WC" or "🔥 Must-win (8th seed)" on the card subtitle would help users prioritize which games to watch without revealing scores.
-
-**Detail:** Standings data is already fetched per league (W-L record, overall rank `#N`). Extend this fetch to include games-back-from-playoffs (ESPN's standings API includes this). Show a small contextual chip on game cards for high-stakes games: "Elimination game," "Clincher," "Series tied 2-2." For playoff series specifically, ESPN's scoreboard already returns series status — surface it on the card subtitle below the matchup. No additional API calls needed; it's already in the payload.
-
-**Effort:** ~S to surface series status (already in payload); ~M to add games-back standings context (one extra standings endpoint field).
+**Detail**:
+- Add 3–5 more targeted SEO landing pages: `/world-cup-2026-scores`, `/watch-world-cup-highlights-without-spoilers`, `/fifa-world-cup-spoiler-free`. Use FAQ schema and team/matchup structured data.
+- On the `/worldcup` hub, surface the Group Stage / Knockout bracket prominently (already partially built per the codebase) with team flags.
+- Add `WorldCup2026` JSON-LD `Event` markup on the hub page.
+- Consider a dedicated email capture ("Get spoiler-free WC alerts") for the months before the tournament to build a list.
 
 ---
 
-### 8. NFL Highlights — Partial Recovery via Team Channels — **IMPACT: Medium | Effort: S**
+### 6. Safari/WebKit testing parity _(Impact: MEDIUM-HIGH | Effort: M)_
 
-**Why it matters:** NFL highlights are blocked league-wide from the official NFL YouTube channel, which is why the homepage title omits NFL. However, many individual team YouTube channels post shorter clips (big plays, press conferences, "Top 5 moments") that are not blocked. Also, NFL Films and NFL Network post condensed games on their channels. A curated list of 32 team channel IDs + NFL Films would surface something where currently nothing appears.
+**Why it matters**: The iOS native app loads `hidescore.com` in a WKWebView, which is WebKit. Multiple BACKLOG entries confirm the 2026-08-04 onboarding, modal bars, and empty-state card have never been verified on WebKit. Bugs here affect every iOS App Store user.
 
-**Detail:** Add 32 NFL team channel IDs to the `YOUTUBE_CHANNELS` map (currently has NBA, MLB, NHL entries). The highlight search query already runs per sport; per-team channel targeting via `channelId` parameter increases precision. NFL Films channel (`UCJObhbqrNJmEn9k-ncl3nFg`) posts full condensed games. The spoiler regex already filters title text — apply it to NFL too. Set user expectation with a small disclaimer chip: "Clips from team channels — limited availability." This won't match the NHL/NBA experience but is better than nothing for NFL's 50M+ fans.
-
-**Effort:** ~S. 32 channel ID entries + enabling the YouTube search path for NFL (it may be conditionally skipped today).
+**Detail**: Expand Playwright tests to include a WebKit browser target (Playwright ships `webkit` out of the box — no new install needed since `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`; just add `{ name: 'webkit' }` to `playwright.config.ts`). Add smoke tests for: onboarding flow at 390×844 (iPhone 14 viewport), GameDetailModal open/close, VideoModal seek-cap behavior. Run these in the existing `smoke.yml` GHA step.
 
 ---
 
-### 9. Accessibility — Keyboard Navigation & Screen Reader Labels — **IMPACT: Medium | Effort: M**
+### 7. Viral sharing — spoiler-safe "matchup card" share flow _(Impact: MEDIUM | Effort: S)_
 
-**Why it matters:** The spoiler-reveal interaction (tap to reveal) is the core mechanic but it's currently built on div/button taps. Screen reader users and keyboard-only users have a degraded experience. WCAG 2.1 AA compliance is also increasingly expected for app store listings and B2B/enterprise contexts.
+**Why it matters**: The `hidescore.com/?c=<key>` share link already generates an OG matchup card PNG (via CI, stored in R2) that unfurls cleanly in iMessage and Slack without revealing the score. But there is no prominent "Share this game" UI affordance in the main game card — only in the VideoModal. Users who haven't opened a highlight don't see a share button at all.
 
-**Detail:**
-- Every `GameCard` reveal target should have `role="button"`, `aria-label="Reveal score for [Team A] vs [Team B]"` (pre-reveal) / `aria-label="Score: hidden" aria-pressed="false"` (post-reveal). Screen readers should announce the reveal result.
-- `tab` navigation should reach all interactive elements: date pills, league switcher, settings toggle, score reveal, video buttons.
-- The video modal needs `aria-modal="true"`, `role="dialog"`, and focus trapping.
-- Color contrast: verify that rating badge colors (GREAT/GOOD/MEH/SKIP) meet 4.5:1 contrast ratio on both dark and light themes.
-- Run `axe-core` as part of the Playwright test suite (single new test file) to catch regressions.
-
-**Effort:** ~M. Systematic audit + fixes across GameCard, VideoModal, and SettingsPanel. New axe-core Playwright spec.
+**Detail**: Add a share icon (sheet icon, not a link icon) to every finished GameCard. On tap, copy the share link to clipboard and show a brief "Link copied — spoiler-free!" toast. On iOS/Android, use the native Web Share API (`navigator.share`) when available so it drops into the native share sheet. This turns every finished game into a low-friction sharing moment.
 
 ---
 
-### 10. Spoiler Regex Single-Source-of-Truth — **IMPACT: Medium (DX) | Effort: S**
+### 8. Reddit OAuth for in-app comments _(Impact: MEDIUM | Effort: S)_
 
-**Why it matters:** `SCORE_RX` and `SPOILER_RX` are duplicated between `lib/spoilers.ts` and `public/_worker.js`, with a code comment noting they must stay in sync manually. A divergence silently breaks either client-side or server-side spoiler filtering — the kind of bug that's nearly impossible to catch in testing.
+**Why it matters**: The comments UI is built but silently produces no content because the Mac mini doesn't have Reddit OAuth credentials configured. Post-game Reddit discussion is one of the highest-value, most-engaged content types for sports fans. It's effectively a free engagement feature sitting dormant.
 
-**Detail:** The Cloudflare Worker can import from the Next.js source via a build step, or the regex patterns can be extracted into a standalone JSON/JS file (`lib/spoiler-patterns.json`) that is imported by both `lib/spoilers.ts` and bundled into `_worker.js` via esbuild. Add a unit test that imports both and asserts `spoilers_client.SCORE_RX.source === spoilers_worker.SCORE_RX.source`. This is a DX/reliability improvement that prevents future regression.
-
-**Effort:** ~S. Requires understanding the worker's build pipeline, but the change itself is small.
+**Detail**: Register a Reddit script app at `reddit.com/prefs/apps` (read-only scope is sufficient), set `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` on the Mac mini cron environment, and verify the `NWSL`, `NASCAR`, and `IndyCar` feeds produce baked JSON. Add a monitoring step to the `staleness-check.yml` GHA to alert when a news feed has been empty for >24 h.
 
 ---
 
-### 11. Personalized "For You" News Feed — **IMPACT: Medium | Effort: M**
+### 9. Patch Dependabot vulnerabilities _(Impact: MEDIUM | Effort: S)_
 
-**Why it matters:** The News tab currently shows all sources for the active leagues. Users with 3–5 leagues get an undifferentiated firehose. Filtering news to "sources about my favorited teams only" would make the News tab 5× more relevant for returning users.
+**Why it matters**: 4 open Dependabot findings — 3 high-severity `postcss` and 1 high-severity `sharp` — all from Next.js transitive dependencies. The `output: "export"` mode means the production server is safe, but CI pipelines and local dev environments are exposed. More importantly, unaddressed security advisories create noise that obscures real new ones.
 
-**Detail:** When `favoriteTeams` is non-empty and the user is in News mode, add a toggle chip at the top of each news column: "All / My Teams." "My Teams" filters the feed to only stories containing any favorited team name or abbreviation (simple string match against headline + source team tag). Default stays "All" to preserve current behavior. The filter runs client-side on already-fetched news data — no API changes needed.
-
-**Effort:** ~M. Client-side filter + toggle chip UI + preference to remember the selection per column.
+**Detail**: Upgrade to `next@16.3.0` (or whichever patch bumps the affected transitive deps). The breaking-changes guide in `node_modules/next/dist/docs/` should be consulted before upgrading. Add `npm audit` as a step in the `deploy.yml` GHA so new high-severity deps fail the build.
 
 ---
 
-### 12. "Share This Game" Deep Link from Game Card — **IMPACT: Low-Medium | Effort: S**
+### 10. In-app rating explainer / onboarding tooltip _(Impact: MEDIUM | Effort: S)_
 
-**Why it matters:** Users want to send "hey, watch this game tonight" to friends. The existing share-link encodes the full board setup, but there's no way to share a single game or matchup. A per-game share action would surface HideScore to new users via a "game preview" link that loads with that game highlighted.
+**Why it matters**: The game quality rating (0–100) is HideScore's biggest differentiator but it is invisible by default (requires switching to the Ratings tab). New visitors who land on the Scores tab and leave never discover the feature. The existing onboarding was reworked 2026-08-04 but there are BACKLOG notes that it was only verified at desktop.
 
-**Detail:** Add a share icon (chain link) to the three-dot overflow menu on `GameCard`. It copies `https://hidescore.com/today?game=<gameId>` (or the date-specific URL). On load, the board auto-scrolls to and highlights the referenced game card. The pre-baked OG card (`/cards/<key>.png`) already exists for matchup previews — use it as the OG image for the share URL. No backend work beyond URL param parsing.
-
-**Effort:** ~S. URL param reading + scroll-to-game on mount + share clipboard action.
+**Detail**: On the first visit with the Scores tab selected, show a single dismissible tooltip or bottom-sheet: "Tap Ratings to see how good each game was — no score revealed." One appearance, stored in `localStorage`. Alternatively, show the Ratings tab as the default for new visitors (since yesterday's slate is always complete, ratings are immediately meaningful).
 
 ---
 
-*Previous sections will be appended here as the advisory runs weekly.*
+### 11. Esports coverage expansion _(Impact: MEDIUM | Effort: M)_
+
+**Why it matters**: Esports (`Sport` union includes `esports`, keyed by `esportsLeague`) is defined in the type system and has a PandaScore integration noted in the codebase, but it is not surfaced in the default league picker or auto-selector. The audience skews young and digitally native — exactly the demographic that cares about spoilers.
+
+**Detail**: Add 2–3 top esports leagues (League of Legends Worlds, CS2 Majors, Valorant Champions) to `ALL_LEAGUES` with appropriate season windows. The PandaScore API is free-tier and has good structured data. Add `/esports-scores-without-spoilers` SEO landing page to capture that query intent.
+
+---
+
+### 12. Timezone-aware "Last night" default date _(Impact: MEDIUM | Effort: S)_
+
+**Why it matters**: The app defaults to yesterday, which is the right call since overnight games will have finished. But for users in UTC+10 (Australia, east Asia), "yesterday" in their local timezone is often still "today" in US Eastern time where most sports are played. This means those users see tomorrow's empty slate when they want finished games.
+
+**Detail**: The timezone pref and ZIP lookup are already implemented. Use the stored timezone to compute "last night's games" relative to the user's local midnight rather than UTC midnight. This is a one-line change in the date-default logic but meaningfully improves the experience for international users.
+
+---
+
+### 13. SEO — sport-specific structured data on landing pages _(Impact: MEDIUM | Effort: S)_
+
+**Why it matters**: The existing landing pages (`/nba-scores-without-spoilers`, etc.) already have `FAQPage` and `WebPage` schema. Adding `SportsOrganization` and `SportsEvent` structured data would give Google more signal for sports-intent queries and could unlock rich result features (event carousels).
+
+**Detail**: On sport-specific landing pages, add a `SportsOrganization` JSON-LD block for the league (NBA, NHL, etc.) and a handful of `SportsEvent` blocks for upcoming marquee matchups (pulled at build time from the ESPN API). This is purely additive to the existing schema and requires no UI changes.
+
+---
+
+### 14. "Skip" game ratings — community signal integration _(Impact: LOW-MEDIUM | Effort: L)_
+
+**Why it matters**: The current quality rating is algorithmic (score closeness, comeback index, etc.). Adding a lightweight thumbs-up/thumbs-down after a user watches highlights would create a community-weighted rating layer that improves over time. This also gives signed-in users a reason to engage post-watch.
+
+**Detail**: Add a ±1 vote stored in Cloudflare D1 (already set up for auth). Weight the community signal at 20% of the displayed rating. Show vote counts as a subtle "(23 agreed)" subtitle on GREAT/SKIP badges. Privacy: votes are anonymous by game ID, not linked to user identity in the display.
+
+---
+
+### 15. Offline/PWA improvement — stale-while-revalidate for scores _(Impact: LOW | Effort: M)_
+
+**Why it matters**: The service worker (sw-v15.js) handles offline mode for static assets, but ESPN API responses are not cached. On a flaky connection (subway, stadium) the app shows an error spinner rather than showing the last known scores with a "last updated X min ago" badge.
+
+**Detail**: In the service worker, add a stale-while-revalidate strategy for ESPN scoreboard API responses, keyed by date + league. Cache TTL: 5 minutes. On cache hit, render immediately and trigger a background refresh. Show a subtle "⟳ Updated 3 min ago" timestamp on the column header when serving from cache. This is especially valuable for the iOS and Android native apps running in poor-signal venues.
+
+---
+
+*Next advisory: 2026-08-26*
