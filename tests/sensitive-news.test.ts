@@ -146,6 +146,10 @@ const SENSITIVE: [string, string][] = [
   // "rest in peace"), so a tribute written this way had no other flag before.
   ["Football world remembers a club legend gone too soon", "death"],
   ["Tributes for the young star, gone far too soon at 24", "death"],
+  // "condolences" — a bereavement statement whose only death cue is the sympathy
+  // word itself (no died/passing/obituary), so it had no other flag before.
+  ["Club sends its condolences to the family of a beloved former captain", "death"],
+  ["Messages of condolence pour in across the sport", "death"],
 ];
 
 for (const [headline, category] of SENSITIVE) {
