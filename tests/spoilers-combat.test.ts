@@ -36,6 +36,21 @@ test("the combat words do not swallow ordinary highlight titles", () => {
   }
 });
 
+// "outbox" is the combat-sports sibling of "outpoint" in the outXXX family: to
+// outbox an opponent is to beat them on skill over the distance, so a boxing
+// recap names the winner outright with it. Each of these leaked before it was
+// added — the filter knew TKO/KO/stops/outpoint but not this everyday verb.
+test("an outboxed decision never reads as a clean title", () => {
+  for (const title of [
+    "Canelo outboxes Charlo over 12 rounds",
+    "Crawford outboxed Madrimov",
+    "Lomachenko outboxing Lopez | Full Fight",
+    "Usyk outbox Fury in the rematch",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
 // "squeak past/by/through" is the just-scraped-a-result idiom — the narrow-win
 // sibling of the sneak/slip/squeeze family, which only knew "past". Each of
 // these named a winner (or an advancing side) yet leaked before it was added.
