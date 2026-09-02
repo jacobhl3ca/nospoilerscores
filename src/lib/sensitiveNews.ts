@@ -708,6 +708,19 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // death never takes those objects — so that gambling-loss story is not
     // mislabelled "death or tragedy".
     /\blost (his|her|their) (life|lives)\b(?!\s+(savings|earnings|fortunes?|deposits?|money|insurance|policy|policies|nest egg))/i,
+    // "claimed the life/lives of" — the death euphemism serious reporting reaches
+    // for when a disaster or fatal incident kills someone ("The stampede claimed
+    // the lives of 39", "Avalanche claims the life of a mountaineer", "the crash
+    // that claimed the lives of three players"). It is the fatal-event twin of
+    // "lost his life" above (there the victim is the subject; here the disaster
+    // is), and none of the cues above has to name it: an anniversary or tribute
+    // piece written this way can carry no died/killed/fatal/obituary word — and
+    // the crash itself is opt-in `crash` (off by default) — so it slipped past
+    // "Hide upsetting news", the module's cardinal failure. Safe as a bare
+    // phrase: "claim the life/lives of" is only ever a real fatality (the
+    // winner-reveal "claim the title/win" idiom takes a trophy noun, never
+    // "the life/lives of"), so it needs no idiom carve-out.
+    /\bclaim(s|ed|ing)? the (life|lives) of\b/i,
     // "succumbed to his injuries / to a long illness / to the disease" — the
     // death euphemism reporting reaches for when someone dies of what hurt or
     // sickened them ("Rider succumbed to his injuries", "Legend succumbs to
