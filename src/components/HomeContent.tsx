@@ -3841,6 +3841,15 @@ export default function HomeContent({
               className="inline-block transition-opacity hover:opacity-80"
               data-umami-event="install-appstore-badge"
             >
+              {/* Declare width alongside height so the browser can reserve the
+                  badge's box from the aspect ratio before the SVG downloads —
+                  without it only height was known, so the footer row had no
+                  horizontal space held and shifted when the badge painted (CLS).
+                  The asset's intrinsic box is 119.66×40 (viewBox 0 0 119.66407
+                  40), so 120×40 matches its ~3:1 ratio; CSS `w-auto h-10` still
+                  governs the final render, so this only feeds the pre-load
+                  reservation. Mirrors the Google Play badge beside it, which
+                  already carries both width and height. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
             </a>
