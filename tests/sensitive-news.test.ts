@@ -15,6 +15,11 @@ const SENSITIVE: [string, string][] = [
   // opt-in, so it had no other flag.
   ["Cyclist who lost his life in the crash remembered a year on", "death"],
   ["Two supporters lost their lives in the stadium tragedy", "death"],
+  // "claimed the life/lives of" — the fatal-event twin of "lost his life", where
+  // the disaster is the subject. A tribute written this way can carry no died/
+  // killed/fatal/obituary word, so it had no other flag.
+  ["The stampede that claimed the lives of dozens, remembered 30 years on", "death"],
+  ["Avalanche claims the life of a veteran mountaineer", "death"],
   // The "laid to rest" burial euphemism — a funeral-day story written this way
   // need not carry a funeral/died/obituary word, so it had no other flag.
   ["Beloved coach laid to rest as thousands line the streets", "death"],
@@ -586,6 +591,11 @@ const SAFE = [
   // "taken from us" must stay visible.
   "Prospect taken too soon in the draft is still finding his feet",
   "Three points taken from us by a shocking VAR call, says the boss",
+  // The "claimed the life/lives of" death cue is scoped to that object — the
+  // winner-reveal "claim the title/crown/trophy" idiom takes a trophy noun, never
+  // "the life/lives of", so a coronation headline stays visible here.
+  "City claim the title with a game to spare",
+  "Verstappen claims the crown for a fourth straight year",
 ];
 
 for (const headline of SAFE) {
