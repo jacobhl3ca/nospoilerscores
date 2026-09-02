@@ -367,6 +367,36 @@ test("'claim'/'take' do not swallow non-result titles", () => {
   }
 });
 
+// "outpoint" is the combat-sports member of the outXXX family (outscore/outgun/
+// outclass/outduel): to outpoint an opponent is to win a fight on the judges'
+// scorecards, so a boxing/MMA recap title names the winner outright with it. It
+// carries no digits for SCORE_RX and sat beside the covered TKO/KO/decision set
+// yet leaked before it was added.
+test("an outpointed result never reads as a clean title", () => {
+  for (const title of [
+    "Crawford outpoints Madrimov | Full Fight Highlights",
+    "Katie Taylor outpointed Amanda Serrano",
+    "Canelo outpointing Charlo on the cards",
+    "Usyk outpoints Fury in a classic",
+    "GB boxer outpoints the favourite for gold",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// "outpoint" has no non-result sense in a highlight title (its only meaning is to
+// score more points than / outdo), and no in-scope fighter or team is named
+// anything beginning with it, so the bare-word neighbours stay clean.
+test("'outpoint' does not swallow non-result titles", () => {
+  for (const title of [
+    "Fury vs Usyk | Official Weigh-in",
+    "Canelo Full Fight Preview | DAZN",
+    "The best counterpunchers in the division",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
