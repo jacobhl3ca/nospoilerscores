@@ -804,8 +804,8 @@ function formatDateCompact(yyyymmdd: string): string {
 // to break at, so they overflowed the column rather than wrapping — same fix.
 const SHORT_LEAGUE_LABELS: Record<string, string> = {
   "Champions Cup": "Champ Cup",   // 128 → 94  (rugby)
-  "Championship": "EFL",          // 117 → 30  (matches the sport key, and the UCL/UEL house style)
-  "French Open": "French",        // 103 → 56
+  "Championship": "EFL Champ",    // 117 → 91  (the division; bare "EFL" is the governing body, which also runs League One and Two)
+  "French Open": "Fr. Open",      // 103 → 68  (keeps the noun, like the sibling "Aus Open"/"US Open"/"The Open")
   "Libertadores": "Copa Lib",     // 105 → 71
   "Little League": "LLWS",        // 107 → 44  (matches the sport key)
   "NFL Preseason": "NFL Pre",     // 122 → 63
