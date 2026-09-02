@@ -3855,7 +3855,7 @@ export default function HomeContent({
                   reservation. Mirrors the Google Play badge beside it, which
                   already carries both width and height. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/app-store-badge.svg" alt="Download on the App Store" width={120} height={40} className="block h-10 w-auto" />
+              <img src="/app-store-badge.svg" alt="Download on the App Store" loading="lazy" decoding="async" width={120} height={40} className="block h-10 w-auto" />
             </a>
             {!(prefsHydrated && prefs.playBadgeDismissed) && (
               /* relative + an absolutely placed dismiss control, the same shape
@@ -3876,7 +3876,7 @@ export default function HomeContent({
                   data-umami-event="install-googleplay-badge"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/google-play-badge.png" alt="Get it on Google Play" width={155} height={59.5}
+                  <img src="/google-play-badge.png" alt="Get it on Google Play" loading="lazy" decoding="async" width={155} height={59.5}
                        /* Google's own artwork, unmodified. Its 646x250 canvas carries 41px
                           of required clear space on every side, so the visible pill is 168 of
                           250. Rendering the whole file at 59.5px puts that pill at exactly 40,
