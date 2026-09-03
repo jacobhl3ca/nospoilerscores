@@ -1017,7 +1017,17 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // no figurative "ventilator" (a venue's "ventilation system" is a different
     // word `\bventilator\b` never matches), so it needs no idiom carve-out.
     /\bcritical condition\b|\blife support\b|\bventilators?\b|\bintensive care\b|\bin a coma\b|\bcomatose\b|\blife.threatening\b|\bfighting for (his|her|their) life\b/i,
-    /\bparalyz(ed|ing)\b|\bparalysis\b|\bspinal (injury|cord)\b|\bamputat(ed|ion)\b/i,
+    // `paraly[sz](ed|ing)` spans the British "paralysed"/"paralysing" and
+    // American "paralyzed"/"paralyzing" spellings, the same both-spellings
+    // widening `hospitali[sz]ed` and `euthani[sz]ed` already carry. The app's
+    // soccer/rugby/cricket feeds use the British `s` form ("winger left
+    // paralysed from the waist down", "paralysed in a horror crash"), so those
+    // exact stories slipped straight past "Hide upsetting news" while only the
+    // American `z` spelling matched. The suffix requirement is what keeps
+    // "Paralympics"/"Paralympic" out (no `[sz]` + ed/ing follows "paraly"), and
+    // the British spelling carries no sports sense the American one doesn't
+    // already, so the parity adds no new false-positive risk.
+    /\bparaly[sz](ed|ing)\b|\bparalysis\b|\bspinal (injury|cord)\b|\bamputat(ed|ion)\b/i,
     /\bdiagnosed with\b|\bhospitali[sz]ed\b|\brushed to (the )?hospital\b|\bemergency surgery\b/i,
     /\bseizure\b|\bstretchered off\b|\bcarted off\b/i,
   ],
