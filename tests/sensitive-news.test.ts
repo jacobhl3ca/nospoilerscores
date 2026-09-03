@@ -62,6 +62,11 @@ const SENSITIVE: [string, string][] = [
   // with" cue, so only the American "leukemia" spelling matched before.
   ["Former winger continues his brave leukaemia battle", "medical"],
   ["Charity match raises millions for leukaemia research", "medical"],
+  // British "paralysed"/"paralysing" spelling — the form the soccer/rugby/
+  // cricket feeds use. Only the American "paralyzed"/"paralyzing" spelling
+  // matched before, so a British-spelt injury tragedy leaked past the toggle.
+  ["Winger left paralysed from the waist down after scrum collapse", "medical"],
+  ["Fans rally around fly-half paralysed in a horror crash", "medical"],
   ["Two horses euthanized after breakdowns on the card", "animal"],
   ["Owner banned for life over animal cruelty conviction", "animal"],
   ["Teammates open up a year after his suicide", "selfharm"],
@@ -179,6 +184,11 @@ const SAFE = [
   "Rookie's muscle memory takes over on the game-winning putt",
   "Shooting guard drops 40 in a road win",
   "Cold shooting night sinks the Knicks in Boston",
+  // "Paralympic(s)" shares the "paraly…" stem the medical `paraly[sz](ed|ing)`
+  // cue matches, but the required `[sz]` + ed/ing suffix never follows, so this
+  // routine Games coverage must stay in the feed.
+  "Paralympics team named for the Games",
+  "Paralympic gold medallist returns to the track",
   "Career-best 3-point shooting has him in the All-Star talk",
   "Sudden death overtime decides the semifinal",
   "Suicide squeeze in the ninth wins it",
