@@ -62,6 +62,12 @@ const SENSITIVE: [string, string][] = [
   // with" cue, so only the American "leukemia" spelling matched before.
   ["Former winger continues his brave leukaemia battle", "medical"],
   ["Charity match raises millions for leukaemia research", "medical"],
+  // `multiple sclerosis` joins the named-disease list like ALS/MND — a chronic
+  // illness that reaches the feed through "living with"/fundraiser features
+  // carrying no "diagnosed with"/hospital cue, so it must match on the disease
+  // name alone.
+  ["Former captain continues to live with multiple sclerosis", "medical"],
+  ["Charity ride raises millions for multiple sclerosis research", "medical"],
   // British "paralysed"/"paralysing" spelling — the form the soccer/rugby/
   // cricket feeds use. Only the American "paralyzed"/"paralyzing" spelling
   // matched before, so a British-spelt injury tragedy leaked past the toggle.
@@ -583,6 +589,12 @@ const SAFE = [
   "Why the veteran was a cancer in the dressing room",
   "A cancer on the roster the team finally cut loose",
   "Manager calls the winger a cancer in the team",
+  // Only the FULL phrase "multiple sclerosis" is a medical cue — the bare
+  // acronym "MS" is deliberately left off the named-disease list (it collides
+  // with the Mississippi State abbreviation, "manuscript" and the "Ms."
+  // honorific), so these stay visible.
+  "MS wins the SEC opener on a walk-off single",
+  "Ms. Smith named the league's new commissioner",
   // A pitcher leaving the game with a lead/win/save or after a batch of innings
   // is the most ordinary recap line there is — it must not read as "an on-field
   // injury". The departure pattern's lookahead used to fire on a bare "with" or

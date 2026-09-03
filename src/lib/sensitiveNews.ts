@@ -983,7 +983,17 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // the British "neurone" and American "neuron" spellings. `MND` is a bare
     // acronym like its list-mates ALS/CTE: it carries no sports sense a word-
     // bounded, all-caps token would hit, so it is safe without a carve-out.
-    /\bALS\b|\bmotor neurone? disease\b|\bMND\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
+    // `multiple sclerosis` joins the same named-disease list for the same
+    // reason ALS/MND are on it: a chronic degenerative illness that reaches the
+    // feed through "living with"/fundraiser/tribute features carrying no
+    // "diagnosed with"/hospital/critical cue ("continues to live with multiple
+    // sclerosis", "charity ride raises millions for multiple sclerosis
+    // research"), so those stories slipped straight past "Hide upsetting news".
+    // Only the FULL phrase is added, never the acronym "MS": unlike the
+    // all-caps MND, a bare "MS" collides with the US state abbreviation
+    // (Mississippi), "manuscript" and the "Ms." honorific, so it needs no
+    // carve-out precisely because the unambiguous full name is the only token.
+    /\bALS\b|\bmotor neurone? disease\b|\bMND\b|\bmultiple sclerosis\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
     // `s?` so the plural "cardiac arrests/events/episodes" is caught too: the
     // violence list's `(?<!cardiac )` carve-out excludes those from crime, so the
     // medical rule must recover the plural or a plural cardiac headline would leak.
