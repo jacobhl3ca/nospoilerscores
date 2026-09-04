@@ -5,6 +5,7 @@ import { LeagueData, Sport, Game, LeagueEventCard, FightBout } from "@/lib/types
 import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
+import { sessionLaunchPatch } from "@/lib/sessionVisits";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
@@ -738,14 +739,29 @@ export default function HomeContent({
       document.documentElement.classList.toggle("show-text-posts", !!p.showTextPosts);
       document.documentElement.classList.toggle("blur-news-media", p.revealNewsMedia !== true);
     };
+    // Stars on game cards teach a brand-new user which cards are theirs. By the
+    // third visit that lesson has landed and the ★ is just noise, so the app
+    // turns it off itself, once, at the start of that session (Jacob 8/31).
+    // Guard rails:
+    //  - only when hideTeamStars is still undefined, i.e. the user has never
+    //    touched the toggle. An explicit choice either way is never overridden.
+    //  - counting stops at STARS_AUTO_HIDE_SESSION, so this can fire at most
+    //    once: turn stars back on afterwards and they stay on.
+    //  - a "session" needs a 30-minute gap, so refreshes and tab revisits
+    //    inside one sitting don't burn through the count in a minute.
+    // Applied to `loaded` BEFORE applyLaunchState so the very first render is
+    // already starless — no frame where the stars flash and vanish.
+    const sessionPatch = sessionLaunchPatch(loaded, Date.now());
+    if (sessionPatch.hideTeamStars) loaded.hideTeamStars = true;
     const storedShowRatings = loaded.showRatings;
     applyLaunchState(loaded);
     // Stamp today's open so the next launch can detect a day rollover. Persist
     // lastOpenDay but NOT the morning ratings reset applyLaunchState applied (a
     // view-only reset, not a settings change) so the stored showRatings is intact.
     const todayOpen = getDateString(0);
-    savePreferences({ ...loaded, showRatings: storedShowRatings, lastOpenDay: todayOpen });
+    savePreferences({ ...loaded, showRatings: storedShowRatings, lastOpenDay: todayOpen, ...sessionPatch });
     loaded.lastOpenDay = todayOpen;
+    Object.assign(loaded, sessionPatch);
     // Arm the first-run league picker for genuinely new installs. The actual
     // open waits until the in-season league list (thirdLeagueOptions) is ready,
     // in a separate effect below.

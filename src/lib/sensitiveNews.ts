@@ -31,8 +31,11 @@ export type SensitiveCategory = "death" | "violence" | "injury" | "medical" | "a
 // What the main "Hide upsetting news" toggle covers. `crash` is deliberately
 // absent: a racing wreck is the sport, so it gets its own opt-in toggle
 // (Jacob 8/21 — "fights fine if nothing terrible, crashes can have option to
-// hide"). A crash that killed or hospitalized someone still matches `death` /
-// `injury`, so it is caught by the main toggle regardless.
+// hide"). A crash that killed, hurt or hospitalized someone still matches
+// `death` / `injury`, so it is caught by the main toggle regardless. That last
+// part used to say "killed or hospitalized" and it was the gap: "injured in a
+// crash" named no mechanism the injury list knew, so it fell through to
+// `crash`-only. See the two wreck patterns in `injury`.
 export const BASE_CATEGORIES: SensitiveCategory[] = ["death", "violence", "injury", "medical", "animal", "selfharm"];
 
 // Sports idiom that reads as violence but isn't. Removed from the text before
@@ -133,6 +136,15 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // sport and stay visible (Jacob 8/21).
     /\bunresponsive\b|\bnever regained consciousness\b|\bbrain bleed\b|\bflatlined\b|\bhospitali[sz]ed after the (fight|bout|match|game)\b/i,
     /\bcollision\b|\bcollided\b|\bviolent(ly)? (fall|crash|hit|tackle)\b/i,
+    // Someone HURT in a wreck. `crash` is opt-in, so before this a rider
+    // "injured in a crash" tripped neither toggle's default and sat in the feed
+    // (Jacob 8/31 — Pogacar abandoning the Vuelta, on r/sports). Both Settings
+    // hints promise the main toggle covers a crash that hurt someone; these two
+    // patterns are what make that true. Deliberately requires BOTH a
+    // getting-hurt word and a wreck word, so roster injury news ("on the
+    // injured list", "out 4-6 weeks") still reads.
+    /\b(injur(ed|y|ies)|hurt|banged up|broke|broken|fractured?|dislocated?)\b[^.]{0,60}\b(crash|wreck|collision|pile.?up|high.?side|spill|shunt)\b/i,
+    /\b(crash|wreck|collision|pile.?up|shunt)\b[^.]{0,60}\b(injur(ed|y|ies)|hurt|taken to hospital)\b/i,
     /\b(gruesome|horrific|grisly|scary|sickening|ugly) (injury|scene|moment|fall|crash|collision|hit|landing)\b/i,
     /\b(forced to leave|leaves|left|exits|exited) the (game|match|field|ice|court|track)\b(?=[^.]*\b(after|with|hurt|injur|hit|pain|blood))/i,
     /\b(compound|orbital|facial|jaw|nose|skull) fracture\b|\bdislocat(ed|ing) (his|her|their|an?)\b|\bbloodied\b|\bopen wound\b/i,
@@ -140,7 +152,10 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
   ],
   medical: [
     /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill\b/i,
-    /\bALS\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
+    // MND is what the UK/AU press calls ALS, and it is how rugby/cricket
+    // stories are always headlined — "MND-diagnosed" also misses the
+    // "diagnosed with" pattern below, so the bare acronym has to be here.
+    /\bALS\b|\bMND\b|\bmotor neuron[e]? disease\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
     /\bcardiac (arrest|event|episode)\b|\bheart attack\b|\bstroke suffered\b|\bsuffered a stroke\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
     /\bcollapsed? (on|during|at|mid)/i,
     /\bcritical condition\b|\blife support\b|\bintensive care\b|\bin a coma\b|\bcomatose\b|\blife.threatening\b|\bfighting for (his|her|their) life\b/i,
