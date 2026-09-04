@@ -484,6 +484,11 @@ const TEAM_NAME_ALIASES: Record<string, string> = {
   // clubs. The strict resolver requires both teams, so query the title form.
   "Tempo": "Toronto Tempo",
   "Valkyries": "Golden State Valkyries",
+  // ESPN's shortDisplayName is "Boro"; EFL titles the club in full
+  // ("Burnley v Middlesbrough Highlights"). Querying "Boro" returns nothing
+  // from the EFL channel, so every Middlesbrough match stayed dark despite a
+  // baked clip existing. The strict both-teams gate still applies.
+  "Boro": "Middlesbrough",
 };
 
 function aliasTeam(name: string): string {
