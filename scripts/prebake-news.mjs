@@ -2428,7 +2428,35 @@ const HL_LEAGUES = [
   // hlHighlightTeamName below and highlightTeamName in src/lib/youtube.ts.
   { sport: "llws",   path: "/baseball/llb/scoreboard",                        channel: "ESPN" },
   { sport: "tennis", path: "/tennis/atp/scoreboard",                          channel: null },
+  // Rugby union (added 2026-09-04). These four already had an approved uploader
+  // in OFFICIAL_CHANNELS and a 3-hour buffer in highlightBufferHours, but were
+  // never baked — so every rugby card fell through to a LIVE per-card
+  // /api/youtube scrape, the same slow path Liga MX was pulled off on 2026-08-11.
+  // Worse than slow: check-highlight-fallbacks.mjs pacing exists because bursts
+  // of live lookups soft-block the Worker's SHARED IP, and a Six Nations Saturday
+  // is ~3 matches x N readers all scraping at once.
+  //
+  // rugbychamp + rugbytest are deliberately absent, matching NO_HIGHLIGHT_FALLBACK:
+  // neither has a single uploader that owns its window (Champions Cup resolved to
+  // one of the two CLUBS; the November tests to fan channels). A league with no
+  // approved channel must not be baked — there is nothing to bake it against.
+  { sport: "sixnations",   path: "/rugby/180659/scoreboard",                   channel: "Guinness Men's Six Nations" },
+  { sport: "superrugby",   path: "/rugby/242041/scoreboard",                   channel: "Super Rugby Pacific" },
+  { sport: "rugbywc",      path: "/rugby/164205/scoreboard",                   channel: "World Rugby" },
+  // Nations Championship shares the World Rugby channel with the U20 Junior
+  // World Championships — same nations, same window — so it is the one league
+  // here that MUST carry the competition title gate. Its 2nd slot is Super Rugby
+  // Pacific, which posts the southern-hemisphere host fixtures (mirrors
+  // SECONDARY_CHANNELS.nationschamp).
+  { sport: "nationschamp", path: "/rugby/17567/scoreboard",                    channel: "World Rugby", secondaryChannel: "Super Rugby Pacific" },
 ];
+
+// Competition token required in the winning video's TITLE. Mirrors
+// COMPETITION_TITLE_TOKENS in src/lib/youtube.ts — keep the two in sync, or the
+// bake will write clips the client would have refused to resolve live.
+const HL_COMPETITION_TOKENS = {
+  nationschamp: ["nations championship"],
+};
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
 
@@ -2522,10 +2550,19 @@ function hlTelemundoWorldCupQuery(away, home, dateStr, series) {
 
 // One /api/youtube call mirroring youtube.ts fetchFirstVideoId (q, channel,
 // exclude, prefer=extended). Returns a raw video id or null.
-async function hlFetchId(query, { channel, exclude, preferExtended, strict, week } = {}) {
+async function hlFetchId(query, { channel, exclude, preferExtended, strict, week, compTokens } = {}) {
   try {
     let url = `https://hidescore.com/api/youtube?q=${encodeURIComponent(query)}`;
     if (channel) url += `&channel=${encodeURIComponent(channel)}`;
+    // Competition TITLE gate — mirrors the `comp=` param in fetchFirstVideoId
+    // (src/lib/youtube.ts) and COMPETITION_TITLE_TOKENS. The bake has to send it
+    // for the same reason it sends `week`: one official channel that uploads more
+    // than one competition between the same two nations. World Rugby carries both
+    // the Nations Championship and the U20 Junior World Championships, so an
+    // ungated bake can write an U20 clip that clears the uploader gate AND the
+    // both-teams gate — and getChannelVerifiedBakedId does NOT re-check the
+    // competition on the client, so a bad bake would be served as-is.
+    if (compTokens?.length) url += `&comp=${encodeURIComponent(compTokens.join("|"))}`;
     // Gridiron week gate — mirrors fetchFirstVideoId in src/lib/youtube.ts. The
     // bake has to send it too: carried entries are revalidated against uploader
     // + matchup only, and BOTH meetings of a division rival pass that check, so
@@ -2605,6 +2642,23 @@ async function hlVideoMatchesWeek(id, week) {
   return !tok || parseInt(tok[1], 10) === week;
 }
 
+// Competition check for CARRIED entries — the analogue of hlVideoMatchesWeek one
+// competition up. Mirrors compTitleMatches in public/_worker.js: no tokens means
+// no gate, and unlike the week check a title that names NO competition is
+// REJECTED, not waved through, because "Italy v Japan | Junior World
+// Championships" and the senior fixture are the same two nations on the same
+// weekend and the token is the only thing that tells them apart.
+async function hlVideoMatchesComp(id, compTokens) {
+  if (!compTokens?.length) return true;
+  const meta = await hlOembedMeta(id);
+  const title = String(meta?.title ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!title) return false;
+  return compTokens.some((tok) => {
+    const t = String(tok || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return t && title.includes(t);
+  });
+}
+
 async function hlVideoMatchesChannel(id, channel) {
   const meta = await hlOembedMeta(id);
   return String(meta?.author ?? "").toLowerCase() === String(channel ?? "").toLowerCase();
@@ -2616,10 +2670,10 @@ async function hlIsTelemundoVideo(id) {
 
 // Mirror resolveHighlightVideo: one dated query, one exact uploader, no
 // unscoped retry tier.
-async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended, week) {
+async function hlResolve(away, home, dateStr, series, channel, exclude, competition, preferExtended, week, compTokens) {
   const dated = hlQuery(away, home, dateStr, series, competition, true);
   if (!channel) return null;
-  return hlFetchId(dated, { channel, exclude, preferExtended, strict: true, week });
+  return hlFetchId(dated, { channel, exclude, preferExtended, strict: true, week, compTokens });
 }
 
 async function hlResolveTelemundoWorldCup(away, home, dateStr, series, exclude, preferExtended) {
@@ -2816,6 +2870,7 @@ async function bakeGameHighlights() {
         }
         const dateStr = hlDateStr(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
+        const compTokens = HL_COMPETITION_TOKENS[lg.sport] ?? null;
         const preferExtended = !!competition;
         const primaryChannel = item.channel;
         const secondaryChannel = isFifa ? "FOX Sports" : (lg.secondaryChannel ?? primaryChannel);
@@ -2834,30 +2889,30 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
-        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, primaryChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week)))) {
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, primaryChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week)) || !(await hlVideoMatchesComp(prevOfficial, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
-        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week)))) {
+        if (prevExtended && (!(await hlVideoMatchesChannel(prevExtended, secondaryChannel)) || !(await hlVideoMatchesTeams(prevExtended, away, home)) || !(await hlVideoMatchesWeek(prevExtended, week)) || !(await hlVideoMatchesComp(prevExtended, compTokens)))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} extended=${prevExtended} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevExtended = null;
         }
 
         let official = prevOfficial ?? null;
         if (!official) {
-          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week);
-          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week)))) {
+          official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, compTokens);
+          if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week)) || !(await hlVideoMatchesComp(official, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
           }
         }
         let extended = prevExtended ?? null;
         if (!extended) {
-          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week);
+          extended = await hlResolve(away, home, dateStr, series, secondaryChannel, undefined, competition, preferExtended, week, compTokens);
           if (extended && official && extended === official) {
-            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, week);
+            extended = await hlResolve(away, home, dateStr, series, secondaryChannel, [official], competition, preferExtended, week, compTokens);
           }
-          if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week)))) {
+          if (extended && (!(await hlVideoMatchesTeams(extended, away, home)) || !(await hlVideoMatchesWeek(extended, week)) || !(await hlVideoMatchesComp(extended, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved extended=${extended} (${away} vs ${home})`);
             extended = null;
           }
