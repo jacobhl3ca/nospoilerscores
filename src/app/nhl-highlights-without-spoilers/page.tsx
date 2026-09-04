@@ -6,11 +6,17 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // Google was serving for it was the HOMEPAGE — whose title leads with scores and
 // lists five leagues, so it answers the query only incidentally. MLB, NFL,
 // soccer and cricket already had dedicated highlights routes; NHL, the query
-// with the most demand of the lot, did not. Same standalone-demand test the
-// Liga MX / cricket / Premier League routes had to pass, and it clears it by a
-// wide margin. /nhl-scores-without-spoilers is a SCORES page and stays separate:
-// "scores" and "highlights" are different intents (check a result vs. pick
-// something to watch), which is exactly the split the other leagues use.
+// with the most demand of the lot, did not. /nhl-scores-without-spoilers is a
+// SCORES page and stays separate: "scores" and "highlights" are different
+// intents (check a result vs. pick something to watch).
+//
+// Deepened 2026-09-03. By then the query was at 367 impressions / 90d, still
+// position 6.9, still zero clicks — and Google had never once crawled this page
+// (coverage "Discovered - currently not indexed", lastCrawlTime never), because
+// two of its four inbound links came from pages Google had not crawled either.
+// Fixed by Request Indexing plus a homepage link, and the page brought up to the
+// depth that makes /premier-league-without-spoilers convert at 24.2%. Season
+// dates and networks verified against ESPN's hockey/nhl scoreboard 2026-09-03.
 const TITLE = "NHL Highlights Without Spoilers | HideScore";
 const DESC =
   "Watch NHL highlights and catch up on hockey games without seeing scores, winners, or spoiler headlines first. HideScore keeps results hidden until you tap.";
@@ -18,24 +24,36 @@ const CANONICAL = "/nhl-highlights-without-spoilers";
 
 const FAQ = [
   {
-    q: "Can I watch NHL highlights without spoilers?",
-    a: "Yes. HideScore gives you a spoiler-free starting point for hockey games before you open highlights, recaps, or a full replay.",
+    q: "How do I watch NHL highlights without spoilers?",
+    a: "Open them from a covered game card instead of from a search box. Searching is where people actually get spoiled: the video title carries the final score and the thumbnail carries the celebration. HideScore drops clips whose titles give the result away and masks the title on the ones it keeps, so a game's highlights are one tap from its card.",
   },
   {
-    q: "How do I find which NHL games were worth watching?",
-    a: "Competitiveness ratings flag close games, overtime, and comeback finishes without revealing who won, so you can pick a game to watch on its merits.",
+    q: "When does the 2026-27 NHL season start?",
+    a: "Opening night is Tuesday, September 29, 2026, with five games — Florida at Carolina, Montreal at Toronto, the Rangers at Boston, Vancouver at Edmonton, and Chicago at Vegas. The schedule widens to eight games on Thursday, October 1.",
   },
   {
-    q: "Does it help with late West Coast games?",
-    a: "Yes. That is the main reason people use it. A 10pm Eastern puck drop finishes after most fans are asleep, and by morning the result is in push alerts, tickers, and thumbnails. HideScore keeps it hidden until you choose to look.",
+    q: "How do I find the good hockey games without learning who won?",
+    a: "A spoiler-free rating on each finished game tells you it was tight, high-scoring, or went to overtime — without naming the winner or the score. Hockey needs this more than most sports: on a covered board a 2-1 overtime classic and a 6-1 blowout look exactly the same until the rating separates them.",
   },
   {
-    q: "Does this work for the playoffs and the Stanley Cup Final?",
-    a: "Yes. Playoff hockey is where spoilers hurt most, because overtime games are the ones you most want to watch unspoiled and the ones most likely to be spoiled before you get to them.",
+    q: "Why do YouTube highlights spoil the game before I press play?",
+    a: "Because the scoreline is usually in the title, and often in the thumbnail as well. Even a careful search result spoils the game in the preview text. Starting from a game card rather than a search means the first thing you see is the matchup, not the ending.",
   },
   {
-    q: "Will it tell me a game went to overtime?",
-    a: "Only if you want it to. Game state is treated as part of the result, so it stays hidden alongside the score until you reveal it.",
+    q: "Can I watch condensed games and recaps this way too?",
+    a: "Yes. Condensed games and recaps are the format most people use to catch up on a night they missed, and they carry the same spoiler risk in their titles. They open the same way — from the covered card, with the result still hidden.",
+  },
+  {
+    q: "Does this work for late West Coast games?",
+    a: "That is where it helps most. A 10:30 pm ET puck drop finishes around 1:00 am in the East, so almost nobody watches it live — the result has all night to reach you before you get to the highlights the next morning.",
+  },
+  {
+    q: "Does it work through the Stanley Cup playoffs?",
+    a: "Yes, and the postseason is the hardest case on the calendar. Games run late, overtime can add an hour without warning, and in a seven-game series every result reframes the next one. The board stays covered all the way through the Final.",
+  },
+  {
+    q: "Is HideScore free?",
+    a: "Yes. HideScore is free on the web and in the iPhone app, and works without an account. Signing in only syncs your league columns and preferences across devices.",
   },
 ];
 
@@ -43,11 +61,13 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESC,
   keywords: [
-    "spoiler free nhl highlights",
     "nhl highlights without spoilers",
+    "spoiler free nhl highlights",
     "hockey highlights without spoilers",
-    "nhl scores no spoilers",
+    "nhl highlights no spoilers",
     "watch nhl highlights without score",
+    "nhl condensed games without spoilers",
+    "how to watch hockey highlights without spoilers",
   ],
   alternates: { canonical: CANONICAL },
   openGraph: {
@@ -55,11 +75,6 @@ export const metadata: Metadata = {
     description: DESC,
     url: `https://hidescore.com${CANONICAL}`,
     siteName: "HideScore",
-    // og:locale matches the site-level Open Graph block in layout.tsx and the
-    // World Cup/date routes. A page's openGraph replaces the parent's wholesale
-    // (Next merges metadata per top-level field, not deep), so without this these
-    // SEO landing pages emitted no og:locale for social unfurlers (Facebook/
-    // LinkedIn/Slack/iMessage).
     locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: TITLE }],
@@ -77,43 +92,59 @@ export default function NhlHighlightsWithoutSpoilersPage() {
     <SeoLandingPage
       h1="NHL highlights without spoilers"
       intro={[
-        "Hockey is the sport spoilers ruin fastest. Games end late, half the league plays after midnight Eastern, and by the time you open your phone the final is already in a push alert, a ticker, a fantasy app, or a thumbnail.",
-        "HideScore lets you catch up from a hidden-score board first, so you can choose which NHL highlights or replays to watch without the result being spoiled.",
+        "Hockey highlights are almost impossible to search for safely. Type the matchup into YouTube and the top result tells you the final score in its title, the thumbnail shows whoever scored the winner celebrating, and the preview text underneath finishes the job. You wanted to watch the game; you have already been told how it went.",
+        "HideScore fixes the starting point. You open highlights from a covered game card instead of from a search box — the matchup is visible, the result is not, and clips whose titles give the score away are filtered out before they reach you. The ones that remain have their titles masked.",
+        "The 2026-27 season opens on Tuesday, September 29, 2026, with five games, widening to eight on Thursday, October 1.",
       ]}
       sections={[
         {
-          h: "Catch up on last night's games",
-          p: "A full NHL slate can run a dozen games across four time zones. HideScore keeps every final hidden until you reveal it, so you can work through last night without one glance blowing up the game you actually saved.",
+          h: "The search box is the problem, not the highlights",
+          p: "Nearly everyone who gets spoiled on a hockey game gets spoiled in the two seconds between typing the team name and pressing play. Titles carry the scoreline, thumbnails carry the celebration, and sidebar recommendations carry both. Starting from a game card removes that step entirely.",
         },
         {
-          h: "Ratings for overtime and comebacks",
-          p: "A rating can tell you a game was tight, went the distance, or turned late, all without telling you who won. That is exactly what you need to pick a spoiler-free highlight package or a condensed replay.",
+          h: "Ratings tell you which night was worth replaying",
+          p: "A spoiler-free rating marks the games that were tight, high-scoring, or went to overtime — without naming the winner. Hockey rewards this more than most sports, because so many games turn in the last two minutes or after them. On a covered board an overtime classic and a blowout look identical until the rating separates them.",
         },
         {
-          h: "Built for the playoffs",
-          p: "Stanley Cup overtime is the best hockey there is and the easiest to have ruined for you. Reveal each series game on your own schedule instead of racing the internet home from work.",
+          h: "Condensed games and recaps, same protection",
+          p: "The condensed game is how most people actually catch up on a night they missed, and it carries exactly the same spoiler risk in its title and thumbnail. Recaps and condensed replays open from the same covered card, with the result still hidden until you choose to see it.",
+        },
+        {
+          h: "Late games are the ones you will watch tomorrow",
+          p: "A 10:30 pm Eastern puck drop ends around 1:00 am. Almost nobody watches that live, so it becomes a next-morning highlights job — which is the longest and most dangerous gap on the schedule between a game ending and you seeing it.",
+        },
+        {
+          h: "A route to the broadcaster, not to a box score",
+          p: "When a full replay is what you want, national coverage runs across TNT and truTV, and ESPN with ESPN+, Hulu, and Disney+, with regional networks on the rest. The watch link sends you toward whoever carried the game rather than onto a results page that spoils it as it loads.",
+        },
+        {
+          h: "Through the Stanley Cup playoffs",
+          p: "Postseason highlights are the hardest to reach safely, because the result of one game is a spoiler for the stakes of the next. Everything above holds through the playoffs and the Final.",
         },
       ]}
       bullets={[
-        "NHL scores hidden until tap.",
-        "Spoiler-free ratings for completed hockey games.",
-        "Safer entry point for highlights, recaps, and condensed replays.",
-        "Overtime and shootout results stay hidden with the score.",
-        "Useful for late West Coast starts, back-to-backs, and the Stanley Cup Playoffs.",
+        "NHL highlights opened from a covered card, not a search box.",
+        "Clips filtered when the title gives the score away; titles masked on the rest.",
+        "Spoiler-free ratings — tight, high-scoring, went to overtime.",
+        "Condensed games and recaps protected the same way.",
+        "Built for late West Coast games watched the next morning.",
+        "Works the same through the Stanley Cup playoffs.",
       ]}
-      ctaLabel="Open NHL highlights"
+      ctaLabel="Open NHL highlights without spoilers"
       ctaHref="/yesterday"
       links={[
         { href: "/nhl-scores-without-spoilers", label: "NHL scores" },
+        { href: "/nba-scores-without-spoilers", label: "NBA" },
+        { href: "/nfl-highlights-without-spoilers", label: "NFL highlights" },
+        { href: "/mlb-highlights-without-spoilers", label: "MLB highlights" },
         { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/no-spoiler-scores", label: "No-spoiler scores" },
-        { href: "/today", label: "Today" },
       ]}
       faq={FAQ}
       schemaName={TITLE}
       schemaDescription={DESC}
       canonical={CANONICAL}
-      about={["NHL highlights without spoilers", "hockey scores without spoilers", "spoiler-free NHL highlights"]}
+      about={["NHL highlights without spoilers", "spoiler-free NHL highlights", "hockey highlights without spoilers"]}
     />
   );
 }
