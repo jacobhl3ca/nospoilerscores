@@ -412,6 +412,35 @@ test("'outpoint' does not swallow non-result titles", () => {
   }
 });
 
+// "perfect game" is the rarest, biggest pitching-feat reveal in the baseball
+// highlight stream: the opponent reached base zero times, so the phrase alone
+// reveals the pitcher's side won and shut the other out with no baserunner. It
+// carries no digits (SCORE_RX misses it), and the streak group's "perfect" is
+// anchored to run/streak/start/record — so "perfect game" leaked before it was
+// added.
+test("a perfect game never reads as a clean title", () => {
+  for (const title of [
+    "Domingo Germán throws a PERFECT GAME! | Yankees vs A's",
+    "A perfect-game for the ages",
+    "Two perfect games in one week",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The trailing "game" keeps it clear of "gameplay"/"gameplan" (no boundary after
+// "game" there) and \bperfect can't fire inside "imperfect", so the bare-word
+// neighbours stay clean.
+test("'perfect game' does not swallow non-result titles", () => {
+  for (const title of [
+    "Perfect gameplay from both sides all night",
+    "Building the perfect gameplan | Coaches Film",
+    "An imperfect but entertaining night of baseball",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
+
 // The Cloudflare worker carries its own copy of this pattern because it masks
 // titles before the page ever loads. A copy that drifts is a copy that leaks on
 // exactly one of the two paths, silently — so pin them together.
