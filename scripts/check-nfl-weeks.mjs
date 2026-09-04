@@ -57,14 +57,24 @@ check("parseGame populates Game.weekNumber", /weekNumber: gridironWeekNumber\(sp
 
 const youtube = readFileSync("src/lib/youtube.ts", "utf8");
 check("fetchFirstVideoId forwards week", /url \+= `&week=\$\{weekNumber\}`/.test(youtube));
-check("resolveHighlightVideo takes weekNumber", /weekNumber\?: number \| null,\n\): Promise<string \| null> \{/.test(youtube));
+// ⚠️ Anchored on the parameter alone, NOT on it being the last one. The
+// original regex required `weekNumber?: number | null,` to be immediately
+// followed by the closing `): Promise<string | null> {`, so adding the later
+// `compTokens?: string[]` param turned this into a FAIL while the week was
+// still being taken and forwarded perfectly (2026-09-04). A signature check
+// that breaks when an unrelated argument is appended reports noise.
+check("resolveHighlightVideo takes weekNumber", /weekNumber\?: number \| null,/.test(youtube));
 
 const gh = readFileSync("src/components/GameHighlights.tsx", "utf8");
 check("GameHighlights carries nss_week on the modal fallback", /nss_week=\$\{weekNumber\}/.test(gh));
+// Same trap as above: this counted only call sites where `weekNumber` was the
+// FINAL argument, so appending compTokens to all five made it read 5 !== 0 and
+// fail (2026-09-04) even though every site passes the week. Match weekNumber
+// anywhere in the argument list instead — that is the property being asserted.
 check(
   "every GameHighlights resolve passes the week",
   gh.match(/resolveHighlightVideo\(/g)?.length ===
-    gh.match(/resolveHighlightVideo\([^;]*?weekNumber\)/gs)?.length,
+    gh.match(/resolveHighlightVideo\([^;]*?\bweekNumber\b[^;]*?\)/gs)?.length,
   `${gh.match(/resolveHighlightVideo\(/g)?.length ?? 0} call sites`,
 );
 

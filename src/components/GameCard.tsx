@@ -708,6 +708,29 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           );
         return (
           <div className="game-meta-row relative flex flex-wrap items-center mb-1 sm:mb-2 text-xs min-h-[18px] gap-x-1 gap-y-0.5 sm:gap-x-1.5" style={{ color: "var(--text-muted)" }}>
+            {/* PRE — an exhibition, not a game that counts. Only the NFL gets
+                here (every other sport's season.type 1 is filtered at the
+                fetch). Suppressed when the column header ALREADY says it: the
+                dedicated "NFL Preseason" column runs 07-21 → 09-03 and would
+                otherwise repeat the word on all sixteen cards. What is left is
+                exactly the two places nothing else says it — a team's schedule,
+                where preseason, regular season and playoffs share one list, and
+                a board column that has fallen back to "last game played" after
+                the preseason window closed (on 2026-09-04 that is an Aug 29
+                exhibition sitting under a header reading plain "NFL").
+                Rides inside the existing flex-wrap meta row rather than taking a
+                banner row of its own, so it costs no card height. */}
+            {game.isPreseason && !/preseason/i.test(leagueLabel ?? "") && (
+              <span
+                className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                title="Preseason — an exhibition game"
+                role="img"
+                aria-label="Preseason exhibition game"
+              >
+                Pre
+              </span>
+            )}
             {/* Date/time never shrinks or clips (shrink-0) so the time always
                 shows in full — including the ":00". When it + a wide network
                 ("Sun 12:00PM" + "FS1 +2") can't share one line on a narrow mobile
@@ -1020,15 +1043,26 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   </button>
                 );
               })()}
-              {/* Ranking chip (#N) next to the name. World Cup uses the static
-                  FIFA world ranking — a fixed pre-tournament fact, spoiler-safe
-                  in every stage (its live group standing would NOT be). Every
-                  other league uses its current overall standings rank, hidden on
-                  finished/past cards — the same spoiler gate the W-L record below
-                  uses (!effectivePastDate && !isFinished) — so it leaks no more
-                  than the record does. The record is additionally hidden on
-                  upcoming cards (its extra !isFuture); the rank still shows there,
-                  since a pre-game standing isn't a spoiler. */}
+              {/* Ranking chip (#N) next to the name. THREE cases, and the split
+                  is about whether the number is fixed before kickoff or moves
+                  with the result.
+                  • World Cup — the static FIFA world ranking, a fixed
+                    pre-tournament fact, spoiler-safe in every stage (its live
+                    group standing would NOT be). Shown always.
+                  • NCAAF — the AP / CFP poll rank ESPN freezes onto the event
+                    itself (parseTeam), not a live table. Same character as the
+                    FIFA case, so it is also shown always, finished and past
+                    cards included: a #7 that lost is still stored as the #7 it
+                    was at kickoff, so the chip cannot hint at the outcome. It is
+                    also the whole reason a college card is worth a look — "#3 vs
+                    #7" is how the sport advertises a game.
+                  • Everyone else — the current overall standings rank, which
+                    DOES move with results, so it is hidden on finished/past
+                    cards behind the same gate the W-L record below uses
+                    (!effectivePastDate && !isFinished). The record is
+                    additionally hidden on upcoming cards (its extra !isFuture);
+                    the rank still shows there, since a pre-game standing isn't
+                    a spoiler. */}
               {(() => {
                 if (isTBD) return null;
                 let rank: number | null = null;
@@ -1041,6 +1075,15 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // would bake a literal "#null" into it if that guard ever
                   // moved. Set it only when we actually have a rank.
                   if (rank != null) title = `FIFA world ranking: #${rank}`;
+                } else if (game.sport === "ncaaf") {
+                  // No date/finished gate — see the NCAAF bullet above. The
+                  // tooltip stays poll-neutral because ESPN's curated rank is
+                  // the AP Top 25 until December and the CFP committee's
+                  // ranking after it; naming one would be wrong half the year.
+                  // ?? null because Team.rank is optional — the other branch
+                  // narrows it with its own `!= null` guard, this one doesn't.
+                  rank = team.rank ?? null;
+                  if (rank != null) title = `Top 25 ranking: #${rank}`;
                 } else if (team.rank != null && !effectivePastDate && !isFinished) {
                   rank = team.rank;
                   title = `${leagueLabel || "League"} standing: #${rank}`;
