@@ -332,6 +332,26 @@ body {
   outline-offset: 2px;
 }
 
+/* Score/event CARD roots. These are divs with role="button" + tabIndex=0, and a
+   div with a tabindex takes focus on MOUSEDOWN — so every ordinary tap left a
+   light-blue ring painted around the card, still there once the details sheet
+   it opened had closed: "idk how a card can even get this blue highlight ...
+   i think no highlight is better in general" (Jacob 9/4). Suppress it for
+   pointer input and re-add the app's own accent ring for keyboard nav only —
+   dropping the indicator outright would fail WCAG 2.4.7 for anyone tabbing the
+   board.
+   :focus-visible alone is NOT enough here, which is the whole reason this needs
+   the [data-kbd-nav] gate that app/keyboard-nav.tsx sets: Chromium matches
+   :focus-visible for a pointer click on a div[tabindex] (it withholds the ring
+   only for natively clickable controls), so the real <button> classes above can
+   key off :focus-visible and these cards cannot. */
+.ns-card-focus:focus,
+.ns-card-focus:focus-visible { outline: none; }
+html[data-kbd-nav] .ns-card-focus:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(8px); }

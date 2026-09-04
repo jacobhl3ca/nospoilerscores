@@ -299,7 +299,7 @@ export function CompactUpcomingCard({
   ) : null;
   return (
     <div
-      className={`flex flex-col gap-0.5 rounded-md px-2 sm:px-4 py-1 overflow-hidden transition-colors${cardClickable ? " cursor-pointer" : ""}`}
+      className={`ns-card-focus flex flex-col gap-0.5 rounded-md px-2 sm:px-4 py-1 overflow-hidden transition-colors${cardClickable ? " cursor-pointer" : ""}`}
       style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onPointerEnter={cardClickable ? () => prefetchGameWeather(game) : undefined}
       onPointerDown={cardClickable ? () => prefetchGameWeather(game) : undefined}
@@ -561,7 +561,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
   const cardLabel = cardAwayName && cardHomeName ? `${cardAwayName} at ${cardHomeName} — game details` : "Game details";
   return (
     <div
-      className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${cardClickable ? " cursor-pointer" : ""}`}
+      className={`ns-card-focus rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${cardClickable ? " cursor-pointer" : ""}`}
       style={{
         background: "var(--bg-card)",
         border: "1px solid var(--border)",

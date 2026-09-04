@@ -1,7 +1,12 @@
 {
   "schemaVersion": 1,
-  "verifiedAt": "2026-08-06",
-  "coverage": ["WSOP", "WPT", "EPT", "Triton"],
+  "verifiedAt": "2026-09-04",
+  "coverage": [
+    "WSOP",
+    "WPT",
+    "EPT",
+    "Triton"
+  ],
   "events": [
     {
       "id": "wsop-main-final-table-2026-08-03",
@@ -12,7 +17,9 @@
       "startTime": "2026-08-04T01:00:00Z",
       "endTime": "2026-08-04T04:00:00Z",
       "location": "Las Vegas",
-      "broadcasts": ["ESPN2"],
+      "broadcasts": [
+        "ESPN2"
+      ],
       "eventUrl": "https://www.wsop.com/news/2026-world-series-of-poker/",
       "officialChannel": "World Series of Poker",
       "officialLabel": "WSOP",
@@ -28,7 +35,9 @@
       "startTime": "2026-08-05T01:00:00Z",
       "endTime": "2026-08-05T04:00:00Z",
       "location": "Las Vegas",
-      "broadcasts": ["ESPN"],
+      "broadcasts": [
+        "ESPN"
+      ],
       "eventUrl": "https://www.wsop.com/news/2026-world-series-of-poker/",
       "officialChannel": "World Series of Poker",
       "officialLabel": "WSOP",
@@ -44,7 +53,9 @@
       "startTime": "2026-08-06T02:30:00Z",
       "endTime": "2026-08-06T05:30:00Z",
       "location": "Las Vegas",
-      "broadcasts": ["ESPN"],
+      "broadcasts": [
+        "ESPN"
+      ],
       "eventUrl": "https://www.wsop.com/news/2026-world-series-of-poker/",
       "officialChannel": "World Series of Poker",
       "officialLabel": "WSOP",
@@ -58,7 +69,9 @@
       "startDate": "2026-08-16",
       "endDate": "2026-08-29",
       "location": "Casino Barcelona",
-      "broadcasts": ["PokerStars"],
+      "broadcasts": [
+        "PokerStars"
+      ],
       "eventUrl": "https://www.pokerstarslive.com/ept/barcelona/",
       "officialChannel": "PokerStars",
       "officialLabel": "EPT",
@@ -72,25 +85,13 @@
       "startDate": "2026-08-19",
       "endDate": "2026-08-24",
       "location": "Chamada Prestige · Cyprus",
-      "broadcasts": ["WPT"],
+      "broadcasts": [
+        "WPT"
+      ],
       "eventUrl": "https://www.worldpokertour.com/event/main-tour-wpt-cyprus-championship-season-2026",
       "officialChannel": "World Poker Tour",
       "officialLabel": "WPT",
       "highlightQuery": "WPT Cyprus Championship 2026 highlights",
-      "priority": 70
-    },
-    {
-      "id": "wpt-bestbet-2026",
-      "tour": "WPT",
-      "title": "WPT bestbet Scramble",
-      "startDate": "2026-09-04",
-      "endDate": "2026-09-09",
-      "location": "bestbet Jacksonville",
-      "broadcasts": ["WPT livestream"],
-      "eventUrl": "https://www.worldpokertour.com/tours/main-tour",
-      "officialChannel": "World Poker Tour",
-      "officialLabel": "WPT",
-      "highlightQuery": "WPT bestbet Scramble 2026 highlights",
       "priority": 70
     },
     {
@@ -100,26 +101,110 @@
       "startDate": "2026-09-04",
       "endDate": "2026-09-17",
       "location": "Shinhwa World · Jeju",
-      "broadcasts": ["Triton Poker"],
-      "eventUrl": "https://www.tritonpokerseries.com/en-US/news/first-ever-in-asia-triton-invitational-comes-to-jeju-apply-to-be-an-invitee",
+      "broadcasts": [
+        "Triton Poker"
+      ],
+      "eventUrl": "https://www.tritonpokerseries.com/en-US/events",
       "officialChannel": "Triton Poker",
       "officialLabel": "Triton",
       "highlightQuery": "Triton Poker Jeju 2026 highlights",
       "priority": 90
     },
     {
+      "id": "wpt-bestbet-2026",
+      "tour": "WPT",
+      "title": "WPT bestbet Scramble",
+      "startDate": "2026-09-04",
+      "endDate": "2026-09-09",
+      "location": "bestbet Jacksonville",
+      "broadcasts": [
+        "WPT livestream"
+      ],
+      "eventUrl": "https://www.worldpokertour.com/event/main-tour-wpt-bestbet-scramble-championship-season-2026",
+      "officialChannel": "World Poker Tour",
+      "officialLabel": "WPT",
+      "highlightQuery": "WPT bestbet Scramble 2026 highlights",
+      "priority": 70
+    },
+    {
       "id": "wpt-australia-2026",
       "tour": "WPT",
       "title": "WPT Australia Championship",
-      "startDate": "2026-09-23",
+      "startDate": "2026-09-24",
       "endDate": "2026-09-30",
       "location": "The Star Sydney",
-      "broadcasts": ["WPT livestream"],
+      "broadcasts": [
+        "WPT livestream"
+      ],
       "eventUrl": "https://www.worldpokertour.com/event/main-tour-wpt-australia-championship-season-2026",
       "officialChannel": "World Poker Tour",
       "officialLabel": "WPT",
       "highlightQuery": "WPT Australia Championship 2026 highlights",
       "priority": 70
+    },
+    {
+      "id": "wpt-bay101-2026",
+      "tour": "WPT",
+      "title": "WPT Bay 101 Shooting Star Championship",
+      "startDate": "2026-10-23",
+      "endDate": "2026-10-27",
+      "location": "Bay 101 · San Jose",
+      "broadcasts": [
+        "WPT livestream"
+      ],
+      "eventUrl": "https://www.worldpokertour.com/event/main-tour-wpt-bay-101-shooting-star-championship-season-2026",
+      "officialChannel": "World Poker Tour",
+      "officialLabel": "WPT",
+      "highlightQuery": "WPT Bay 101 Shooting Star Championship 2026 highlights",
+      "priority": 70
+    },
+    {
+      "id": "triton-ncyprus-one-2026",
+      "tour": "Triton",
+      "title": "Triton ONE",
+      "startDate": "2026-11-05",
+      "endDate": "2026-11-15",
+      "location": "North Cyprus",
+      "broadcasts": [
+        "Triton Poker"
+      ],
+      "eventUrl": "https://www.tritonpokerseries.com/en-US/events",
+      "officialChannel": "Triton Poker",
+      "officialLabel": "Triton",
+      "highlightQuery": "Triton ONE North Cyprus 2026 highlights",
+      "priority": 90
+    },
+    {
+      "id": "wpt-venetian-fall-2026",
+      "tour": "WPT",
+      "title": "WPT Venetian Las Vegas Fall Championship",
+      "startDate": "2026-11-05",
+      "endDate": "2026-11-10",
+      "location": "The Venetian · Las Vegas",
+      "broadcasts": [
+        "WPT livestream"
+      ],
+      "eventUrl": "https://www.worldpokertour.com/event/main-tour-wpt-venetian-las-vegas-fall-championship-season-2026",
+      "officialChannel": "World Poker Tour",
+      "officialLabel": "WPT",
+      "highlightQuery": "WPT Venetian Las Vegas Fall Championship 2026 highlights",
+      "priority": 70
+    },
+    {
+      "id": "triton-ncyprus-shrs-2026",
+      "tour": "Triton",
+      "title": "Triton Super High Roller",
+      "startDate": "2026-11-15",
+      "endDate": "2026-11-30",
+      "location": "North Cyprus",
+      "broadcasts": [
+        "Triton Poker"
+      ],
+      "eventUrl": "https://www.tritonpokerseries.com/en-US/events",
+      "officialChannel": "Triton Poker",
+      "officialLabel": "Triton",
+      "highlightQuery": "Triton Super High Roller North Cyprus 2026 highlights",
+      "priority": 90
     },
     {
       "id": "ept-prague-2026",
@@ -128,7 +213,9 @@
       "startDate": "2026-12-02",
       "endDate": "2026-12-13",
       "location": "Prague",
-      "broadcasts": ["PokerStars"],
+      "broadcasts": [
+        "PokerStars"
+      ],
       "eventUrl": "https://www.pokerstarslive.com/ept/prague/",
       "officialChannel": "PokerStars",
       "officialLabel": "EPT",
@@ -139,15 +226,33 @@
       "id": "wsop-paradise-2026",
       "tour": "WSOP",
       "title": "WSOP Paradise",
-      "startDate": "2026-12-03",
+      "startDate": "2026-12-02",
       "endDate": "2026-12-17",
       "location": "Baha Mar · Bahamas",
-      "broadcasts": ["WSOP"],
+      "broadcasts": [
+        "WSOP"
+      ],
       "eventUrl": "https://www.wsop.com/tournaments/2026-wsop-paradise/",
       "officialChannel": "World Series of Poker",
       "officialLabel": "WSOP",
       "highlightQuery": "WSOP Paradise 2026 highlights",
       "priority": 100
+    },
+    {
+      "id": "wpt-cambodia-2027",
+      "tour": "WPT",
+      "title": "WPT Cambodia Championship",
+      "startDate": "2027-01-27",
+      "endDate": "2027-02-01",
+      "location": "Cambodia",
+      "broadcasts": [
+        "WPT livestream"
+      ],
+      "eventUrl": "https://www.worldpokertour.com/event/main-tour-wpt-cambodia-championship-season-2027",
+      "officialChannel": "World Poker Tour",
+      "officialLabel": "WPT",
+      "highlightQuery": "WPT Cambodia Championship 2027 highlights",
+      "priority": 70
     }
   ]
 }

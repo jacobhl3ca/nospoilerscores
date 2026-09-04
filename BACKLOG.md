@@ -1,5 +1,108 @@
 # HideScore — Master Backlog
 
+## 2026-09-04 — Grand Slam cards were dark for four tournaments; rugby joins the bake; three open calls on uploader gaps
+
+✅ **The bug Jacob reported ("us open highlights for yesterday not showing up properly …
+cards not same size as MLB cards") was one missing prop, in four places.**
+`LeagueColumn`'s **main-slate** `<GameCard>` call sites — past-date, live, pre and finished —
+never passed `leagueLabel`, while the three helper paths (`renderCondensed`,
+`renderUpcomingSlate`, `renderPreviousSlate`) always did. For every league whose approved
+uploader is keyed on the **sport** (`OFFICIAL_CHANNELS.wnba`, `.mlb`, …) the omission costs
+nothing, because `getOfficialChannelName` falls through to the bare sport key. **Tennis and
+golf are the only sports whose channel exists ONLY under `${sport}_${label}`**, so
+`getOfficialChannelName("tennis", undefined)` returned null →
+`hasNoTrustedHighlightSource` went true → `highlightUrl` was nulled → the prefetch effect
+returned before ever reading the manifest. Every Slam card lost its button, and because that
+row is what makes a finished card full height, sat one row shorter than the MLB cards beside
+it. Fixed in `e7c8ed47`; live read-back after deploy shows **30 `US Open Tennis Championships
+highlights` buttons at card height 109**, identical to MLB and WNBA.
+
+⚠️ **Why it survived four Grand Slams.** Single-column mode DID pass the label, so the bug was
+invisible on a phone. And `scripts/check-highlight-fallbacks.mjs` resolves against the
+tournament channel **directly**, so the monitor that exists to catch exactly this never
+exercised the UI's label plumbing at all. A green monitor was reporting on a code path no
+reader was using. The guard added below asserts the prop, not the lookup.
+
+✅ **Rugby is in the bake** (`1b230e39`). Six Nations, Super Rugby Pacific, Rugby World Cup and
+the Nations Championship each already had an approved uploader and a highlight buffer, but
+were never in `HL_LEAGUES` — so every rugby card fell through to a **live per-card
+`/api/youtube` scrape**, the same slow path Liga MX was pulled off on 2026-08-11. That is
+worse than slow: bursts of live lookups soft-block the Worker's **shared IP**, which breaks
+highlights for real readers, and a Six Nations Saturday is three matches times every reader.
+Nations Championship also needed the competition gate to come with it — World Rugby uploads
+the **U20 Junior World Championships between the same nations** in the same window, and
+neither the uploader gate nor the both-teams gate separates them. `hlFetchId` now sends
+`comp=` the way it already sent `week=`, and carried entries revalidate through
+`hlVideoMatchesComp`. `rugbychamp` and `rugbytest` stay out, matching `NO_HIGHLIGHT_FALLBACK`:
+no approved channel means nothing to bake against.
+
+📊 Verified against **real finished fixtures**, not "the path returns 200": Six Nations
+2026-03-14 3/3, Super Rugby 2026-06-20 1/1, Nations Championship 2026-07-11 4/6 — every hit
+oEmbed-checked for uploader, both teams, and the competition token. The two misses have no
+clip at all. First mini bake carrying this code finished **1:07 pm, zero errors**; rugby keys
+are legitimately 0 today because no rugby competition is in season.
+
+✅ **`tests/label-keyed-channels.test.ts`** — hermetic, in the suite that gates the deploy.
+Three assertions, each proven to fail when its bug is reintroduced: every `<GameCard>` in
+`LeagueColumn` is handed its league label; every label-keyed `OFFICIAL_CHANNELS` entry is
+reachable from a label that still exists (unless a reachable sibling names the same channel);
+and **the set of sports with no bare key is exactly `{esports, golf, tennis}`**, so adding a
+fourth has to be a decision rather than an accident. `unit-tests.yml` also gained
+`LeagueColumn.tsx` / `GameHighlights.tsx` in its path filter — without them the one file the
+guard watches was the one file that could not trigger it on a PR.
+
+🗑️ **A spec had been failing for three and a half weeks and it was not a regression.** "NFL
+embed failure retry preserves the NFL channel gate" broke at `bf2d2ec6` (2026-08-10), which
+put `"NFL"` in `EMBED_BLOCKED_CHANNELS`: `VideoModal` short-circuits to the "Watch on YouTube"
+card on the first frame and never mounts a player, so there is no `onError`, no retry, and no
+request to assert on. Retargeted to WNBA, plus a new NFL test for what it actually does.
+⚠️ Separately, the six `league-switcher-defaults` failures were **60-second timeouts from
+running `fullyParallel` against one dev server** — at `--workers=1` all eight pass in 22s.
+Harness contention, not product. Re-run that suite single-worker before believing it.
+
+⭐ **`npm run gaps:audit`** (`scripts/audit-highlight-gaps.mjs`) — a missing highlight button
+has four causes that look identical from outside, so the script names which: **BAKED** /
+**BAKE-GAP** (bake missed it, live lookup still finds it) / **NO-RECAP** (uploader has
+nothing — the button is supposed to be missing) / **WRONG-OWNER** (a clip exists but on the
+wrong channel). Only WRONG-OWNER needs a person. It reads `SPORT_PATHS` and
+`OFFICIAL_CHANNELS` **out of the app** rather than keeping a third copy, because a drifted
+copy is what let `check-highlight-fallbacks.mjs` call tennis healthy while every Slam card was
+dark. Paced at 8s/lookup with a hard floor — same shared-IP reason as above.
+Sep 3: `BAKED 6 · NO-RECAP 6 · WRONG-OWNER 2 · BAKE-GAP 0`. Sep 2: `BAKED 1 · WRONG-OWNER 3`.
+
+### Three open calls, all needing Jacob
+
+⚠️ **1. `Boro` never matches `Middlesbrough` — every Middlesbrough match is dark even though
+EFL posted it.** ESPN's `shortDisplayName` is "Boro"; EFL titles it "Burnley v Middlesbrough
+Highlights". Proven Sep 2: strict `channel=EFL` query returns **none** for `Boro v Burnley`
+and **`d-FQ6il01As` (EFL)** for `Middlesbrough v Burnley`. The worker has no boro/middlesbrough
+alias at all. One alias entry.
+⛔ **Correction for anyone reading the chat log: the EFL channel is NOT stale or empty.** An
+earlier probe of `youtube.com/@EFL` found a different, uploadless channel with the same
+handle and briefly suggested swapping the channel string — wrong. The manifest carries **11
+baked `efl:` entries** with `officialChannel: "EFL"`, most recent 2026-09-02, oEmbed-confirmed
+as author `EFL`. Do not touch the channel string. The other two Sep-2 misses (Wrexham v
+Millwall, Cardiff v QPR) are genuine: EFL did not post them, only the club channels did.
+
+⚠️ **2. La Liga's stated reason in the repo is out of date.** `LALIGA EA SPORTS`
+(UCTv-XvfzLX3i4IGWAm4sbmA) **does** post a per-match resumen daily (e.g. "REAL SOCIEDAD 0 - 0
+CELTA | RESUMEN LALIGA EA SPORTS", 2026-09-03), and `isScoreSpoiler` already flags those
+titles so the bar would stay masked. It is dark because our query is **English + dated** while
+their titles are **Spanish + undated**, plus name drift ("Celta Vigo" vs "CELTA") — strict
+lookups 404'd on all three fixtures tried. Needs a Spanish query variant + alias map, the same
+shape as the existing Telemundo World Cup path. The comment claiming "Spanish-language full
+matches rather than clean per-match highlights" should be corrected either way.
+
+⚠️ **3. Two NCAAF games are owned by Conference USA, not ESPN College Football**
+(Merrimack v Delaware, West Georgia v Kennesaw St, 2026-09-03). Either add C-USA as a
+secondary NCAAF channel or accept those staying dark. ✅ **Ligue 1 needs nothing** — channel
+is `Ligue 1 McDonald's` (curly apostrophe, UCQsH5XtIc9hONE1BQjucM0g), feed is shorts, clips
+and documentaries only, no per-match recaps. Correctly dark.
+
+⚠️ **Two Claude sessions pushed to `main` concurrently this afternoon** (`c1aaa94e`,
+`b373ffc2` landed mid-session; `b373ffc2` refines the same highlight-gaps spec touched here).
+Nothing was lost, but rebase before assuming your worktree is current.
+
 ## 2026-08-13 — `rugbytest` gated to ODD years (closes the empty-column question)
 
 ✅ **The open call from the 8/12 entry is decided: gate it, don't leave it.** `rugbytest`

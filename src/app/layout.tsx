@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import BootBeacon from "./boot-beacon";
+import KeyboardNavFlag from "./keyboard-nav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -488,6 +489,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <BootBeacon />
+        <KeyboardNavFlag />
         {children}
         {/* GoatCounter analytics — live at hidescore.goatcounter.com, privacy-first */}
         {/* Explicit https (not protocol-relative //) so the loader still resolves
