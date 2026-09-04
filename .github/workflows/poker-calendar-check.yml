@@ -1,0 +1,47 @@
+name: Poker calendar runway
+
+# public/poker-events.json is HAND-curated — a closed tour map, an official-host
+# URL per record, an exact oEmbed channel string (see src/lib/poker.ts) — and
+# until now nothing watched it. It was last verified 2026-08-06 and by 2026-09-04
+# had a two-month hole: nothing between WPT Australia (Sep 30) and EPT Prague
+# (Dec 2), so October and November had no major to show.
+#
+# Why a runway check and not a scraper: measured 2026-09-04, only two of the four
+# tours will hand a schedule to a script. wsop.com and pokerstarslive.com answer
+# plain curl; tritonpokerseries.com needs a headless browser; worldpokertour.com
+# is behind Cloudflare (403 to curl, and it rate-limited a real browser after one
+# event page). A scraper across those would fail silently and leave the file
+# exactly as stale as it already was, with a green check on top. So this watches
+# the SHAPE of the file — how much calendar is left, and how long since a human
+# last read the tour schedules — and the refresh stays manual.
+#
+# Weekly, not hourly: the failure it catches takes weeks to develop, and the
+# threshold (45 days of runway) is itself the lead time.
+#
+# Alerting is the plain GitHub Actions failure email to the repo owner. NOT ntfy
+# — the topic in staleness-check.yml has been inert since that service was
+# retired, so a push there would be a check that quietly alerts nobody.
+
+on:
+  schedule:
+    - cron: "20 14 * * 1"   # Mondays, 10:20am ET (14:20 UTC)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "public/poker-events.json"
+      - "scripts/check-poker-events.mjs"
+      - ".github/workflows/poker-calendar-check.yml"
+
+jobs:
+  runway:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      # No `npm ci` on purpose — the checker imports nothing but node:fs.
+      - run: node scripts/check-poker-events.mjs
