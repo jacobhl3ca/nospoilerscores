@@ -96,8 +96,47 @@ function displayWindow(start: string, end: string): string {
   return `${fmt(start)}–${fmt(end, !sameMonth)}`;
 }
 
+// Longest-first renderings of the tile's two lines — the same ladder racing
+// hands EventCard from lib/eventTiles.ts. Poker shipped ONE string per line, so
+// a narrow column had nothing to trade away and went straight to shrinking the
+// font; on a 135px card (two columns at 414px) even the 11px floor still
+// clipped "Triton Super High Roller · Jeju" (Jacob 9/4). Each rung drops only a
+// segment the OTHER line already carries, so no rung loses information the tile
+// isn't still showing.
+const segments = (text: string): string[] => text.split(" · ").map((part) => part.trim()).filter(Boolean);
+
+// Tours repeat the host city in their own event names — "Triton Super High
+// Roller · Jeju" sits directly above "Shinhwa World · Jeju". Drop those trailing
+// segments, never the first one: segment 0 IS the event.
+// The 3-char floor keeps a short, genuinely load-bearing tail ("Day 1", "Ep 2")
+// from being swallowed by an incidental substring hit in the venue.
+export function pokerTitleVariants(title: string, location: string): string[] {
+  const loc = location.toLowerCase();
+  const kept = segments(title);
+  const out = [title];
+  while (kept.length > 1) {
+    const tail = kept[kept.length - 1];
+    if (tail.length < 3 || !loc.includes(tail.toLowerCase())) break;
+    kept.pop();
+    out.push(kept.join(" · "));
+  }
+  return [...new Set(out)];
+}
+
+// Venue line: full venue + dates, then the venue's leading segment + dates,
+// then the dates alone. The dates are the last thing to go because they are the
+// only part a live tile's meta row does NOT already repeat.
+export function pokerSubtitleVariants(location: string, dateWindow: string): string[] {
+  const lead = segments(location)[0];
+  return [...new Set([
+    [location, dateWindow].filter(Boolean).join(" · "),
+    [lead, dateWindow].filter(Boolean).join(" · "),
+    dateWindow,
+  ].filter(Boolean))];
+}
+
 // How far back a PAST board date will walk to find the event that had already
-// happened. Matches the 45-day window fetchLeagueEvent uses for F1/UFC/NASCAR
+// happened."" Matches the 45-day window fetchLeagueEvent uses for F1/UFC/NASCAR
 // (see the past-date lookback in lib/espn.ts) — long enough to bridge the gap
 // between poker majors, short enough that a pre-season date still reads as
 // upcoming rather than dredging up last year's series.
@@ -133,8 +172,33 @@ export function selectPokerEvent(
     .filter((event) => event.endDate < targetYmd && target - dateMs(event.endDate) <= windowDays * DAY_MS)
     .sort((a, b) => b.endDate.localeCompare(a.endDate) || b.priority - a.priority);
 
-  const ordered = preferPast ? [recent[0], upcoming[0]] : [upcoming[0], recent[0]];
-  return ordered.find(Boolean) ?? null;
+  // NEAREST IN TIME wins — not a fixed past-then-future preference.
+  //
+  // The fixed order let a finished series own every board date right up to the
+  // day the next one started: EPT Barcelona ended Aug 29 and still rendered
+  // "Final" on Aug 30, 31, Sep 1, 2 and 3, while Triton Jeju was ONE day out on
+  // Sep 3 (Jacob 9/4: "shouldn't it be the final video and done? it's not the
+  // last one"). Poker majors sit weeks apart, so `recent` first — copied from
+  // leagues that run every week — reads as a stale board rather than a replay.
+  //
+  // Distance keeps the 2026-08-09 fix this walk-back was written for: the day
+  // after the WSOP Main Event final table, the finished WSOP is 1 day back and
+  // EPT Barcelona 10 days out, so the replay still wins. It also makes the
+  // forward path do what RECENT_DAYS already claimed — "Final + replay" stays
+  // on the board the day after a series ends, which the old
+  // [upcoming, recent] order never actually allowed whenever ANY major was
+  // scheduled inside 120 days (i.e. almost always).
+  //
+  // Eligibility is still the asymmetric window above: a past date may reach 45
+  // days back, a today/future date only 7. Ties go the way the viewed date
+  // leans — a past date keeps the finished event, today/future takes the next.
+  const next = upcoming[0];
+  const last = recent[0];
+  if (!next || !last) return next ?? last ?? null;
+  const toNext = dateMs(next.startDate) - target;
+  const toLast = target - dateMs(last.endDate);
+  if (toNext === toLast) return preferPast ? last : next;
+  return toLast < toNext ? last : next;
 }
 
 export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> {
@@ -159,19 +223,23 @@ export async function fetchPokerEvent(date?: string): Promise<EventFetchResult> 
     const ends = chosen.endTime ? new Date(chosen.endTime).getTime() : dateMs(chosen.endDate) + DAY_MS / 2;
     const state: "pre" | "in" | "post" = now < starts ? "pre" : now <= ends ? "in" : "post";
     const exactBroadcast = !!chosen.startTime;
+    const dateWindow = displayWindow(chosen.startDate, chosen.endDate);
+    const title = `${chosen.tour} ${chosen.title}`.replace(new RegExp(`^${chosen.tour} ${chosen.tour}\\b`), chosen.tour);
     const card: LeagueEventCard = {
       kind: "poker",
-      title: `${chosen.tour} ${chosen.title}`.replace(new RegExp(`^${chosen.tour} ${chosen.tour}\\b`), chosen.tour),
-      subtitle: [chosen.location, displayWindow(chosen.startDate, chosen.endDate)].filter(Boolean).join(" · "),
+      title,
+      titleVariants: pokerTitleVariants(title, chosen.location),
+      subtitle: [chosen.location, dateWindow].filter(Boolean).join(" · "),
+      subtitleVariants: pokerSubtitleVariants(chosen.location, dateWindow),
       state,
-      statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : displayWindow(chosen.startDate, chosen.endDate),
+      statusDetail: state === "in" ? "Live" : state === "post" ? "Final" : dateWindow,
       date: chosen.startTime ?? `${chosen.startDate}T12:00:00Z`,
       broadcasts: chosen.broadcasts,
       highlightQuery: chosen.highlightQuery,
       officialChannel: chosen.officialChannel,
       officialLabel: chosen.officialLabel,
       eventUrl: chosen.eventUrl,
-      scheduleLabel: exactBroadcast ? undefined : displayWindow(chosen.startDate, chosen.endDate),
+      scheduleLabel: exactBroadcast ? undefined : dateWindow,
     };
     return { card, failed: false };
   } catch {

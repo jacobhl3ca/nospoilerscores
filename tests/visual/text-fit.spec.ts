@@ -189,3 +189,135 @@ for (const width of WIDTHS) {
     }
   });
 }
+
+// ── The font step has to reach the DOM, not just the component's state ──────
+//
+// Every case above resolves by SHORTENING (the race has a variants ladder), so
+// the whole suite only ever exercised answers of `size: null` — and `null`
+// re-clears the same empty inline style the measure pass had just cleared. The
+// one path it never covered was the one that matters: a line with nothing left
+// to drop, which has to shrink the FONT.
+//
+// That path was broken. `measure` clears node.style.fontSize to read the size
+// cap off the DOM, and React only rewrites that style when `fit` actually
+// changes — so the second pass, which lands on the same answer, bailed out of
+// setFit, rendered nothing, and left the cleared size in place. Shrinking the
+// font changes the span's height, the ResizeObserver re-measures, and the fit
+// undid itself: "Triton Super High Roller · Jeju" measured a clean 12px fit on
+// every pass and still painted clipped at 14px (Jacob 9/4).
+//
+// So this asserts BOTH halves — the line fits, and it is genuinely smaller than
+// the size its class asks for. Checking "not clipped" alone would have passed
+// with a shortened variant and missed the bug entirely.
+function unshortenablePokerSeries() {
+  return JSON.stringify({
+    schemaVersion: 1,
+    verifiedAt: "2026-08-06",
+    coverage: ["WSOP", "WPT", "EPT", "Triton"],
+    events: [{
+      id: "triton-fit-2026",
+      tour: "Triton",
+      // No " · " tail, and no segment the venue repeats, so pokerTitleVariants
+      // has exactly one rung and the ladder MUST fall through to the font step.
+      // Long enough that 14px overflows, short enough that the ladder lands
+      // inside its 11px floor — the band where a step is the RIGHT answer.
+      // Past the floor, truncation is the documented last resort, not a bug.
+      title: "Invitational Super High Roller Series",
+      startDate: "2026-08-08",
+      endDate: "2026-08-14",
+      location: "Shinhwa World",
+      broadcasts: ["Triton Poker"],
+      eventUrl: "https://www.tritonpokerseries.com/en-US/",
+      officialChannel: "Triton Poker",
+      officialLabel: "Triton",
+      highlightQuery: "Triton highlights",
+      priority: 90,
+    }],
+  });
+}
+
+test("a tile title with nothing to shorten shrinks in the DOM instead of clipping", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-08-10T16:00:00-04:00"));
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await setLeagues(page, ["poker", "mlb"]);
+  await page.route("**/poker-events.json", route => route.fulfill({
+    status: 200, contentType: "application/json", body: unshortenablePokerSeries(),
+  }));
+  await page.route("**/baseball/mlb/scoreboard**", route => route.fulfill({
+    status: 200, contentType: "application/json", body: longNamedGames(),
+  }));
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Poker" })).toBeVisible();
+  await expect.poll(async () => (await fittedLines(page)).length, { timeout: 15_000 }).toBeGreaterThan(0);
+  await page.waitForTimeout(400);
+
+  const title = (await fittedLines(page)).find((l) => l.kind === "title" && l.text.includes("Super High Roller"));
+  expect(title, "the poker tile rendered no title line").toBeTruthy();
+  expect(title!.overflowPx, `title "${title!.text}" is cut off by ${title!.overflowPx}px`).toBeLessThanOrEqual(0);
+  // text-sm is 14px; anything at 14 means the measured step never landed.
+  expect(title!.fontPx, "the fitted size never reached the DOM").toBeLessThan(14);
+});
+
+// ── The narrow board wraps instead of clipping, and pays for it in place ─────
+//
+// A 122px card (three columns on a 414px phone) has no size at which a real
+// event name fits on one line: "Triton Super High Roller · Jeju" still clipped
+// sitting at the 11px floor, and shortening it far enough to fit meant dropping
+// the tour's own name. So the compact tile wraps to two lines — under one
+// condition, which is the whole test: "only if its same height of a card as 1
+// mlb card" (Jacob 9/4). The second line is traded out of the meta row above,
+// not added to the card.
+//
+// The horizontal check in the tests above cannot catch a regression here: a
+// wrapped line's scrollWidth always equals its clientWidth, so a -webkit-line-clamp
+// that bites looks identical to text that fits. Assert the VERTICAL overflow,
+// the full string, and the height parity together.
+test("the 3-column phone tile wraps the whole name at MLB card height", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-04T16:00:00-04:00"));
+  await page.setViewportSize({ width: 414, height: 900 });
+  await setLeagues(page, ["poker", "mlb"]);
+  // A third column is what squeezes the board to .ns-board-tight.
+  await page.addInitScript(() => {
+    const raw = localStorage.getItem("nss-preferences");
+    if (!raw) return;
+    localStorage.setItem("nss-preferences", JSON.stringify({
+      ...JSON.parse(raw), favoriteLeagues: ["poker", "mlb", "nfl"], thirdLeague: "nfl",
+    }));
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Poker" })).toBeVisible();
+  await expect.poll(async () => (await fittedLines(page)).length, { timeout: 15_000 }).toBeGreaterThan(0);
+  await page.waitForTimeout(400);
+
+  const tile = await page.evaluate(() => {
+    const title = [...document.querySelectorAll<HTMLElement>('[data-fit-line="title"]')]
+      .find((el) => /Super High Roller/.test(el.textContent ?? ""));
+    if (!title) return null;
+    const card = title.closest<HTMLElement>("div.rounded-lg");
+    const mlb = [...document.querySelectorAll<HTMLElement>("div.rounded-lg")]
+      .find((el) => el.style.background.includes("--bg-card") && el.querySelector(".team-name"));
+    return {
+      text: title.textContent ?? "",
+      full: title.getAttribute("title") ?? "",
+      clampedPx: title.scrollHeight - title.clientHeight,
+      clippedPx: title.scrollWidth - title.clientWidth,
+      cardH: Math.round(card!.getBoundingClientRect().height),
+      cardW: Math.round(card!.getBoundingClientRect().width),
+      mlbH: mlb ? Math.round(mlb.getBoundingClientRect().height) : null,
+    };
+  });
+
+  expect(tile, "no poker tile on the board").toBeTruthy();
+  expect(tile!.cardW, "this board is not the tight one this test is about").toBeLessThan(155);
+  expect(tile!.text, "the tile dropped part of the name").toBe(tile!.full);
+  expect(tile!.clippedPx, "the title still overflows sideways").toBeLessThanOrEqual(0);
+  // Tolerance, not zero: a -webkit-box reports scrollHeight 1px over its own
+  // two 14px line boxes from font-metric rounding, with nothing actually hidden.
+  // What this has to catch is a THIRD line being clamped away, which shows up as
+  // a full line-height (14px) of overflow — an order of magnitude above the noise.
+  expect(tile!.clampedPx, `line-clamp cut ${tile!.clampedPx}px off the bottom of the title`).toBeLessThan(7);
+  expect(tile!.mlbH, "no MLB card to compare against").toBeTruthy();
+  expect(tile!.cardH, "the wrapped tile no longer matches an MLB card's height").toBe(tile!.mlbH);
+});
