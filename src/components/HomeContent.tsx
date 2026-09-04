@@ -1455,16 +1455,34 @@ export default function HomeContent({
     if (!selectedDate) return [];
     const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
     // Get active leagues plus the NBA exception, deduplicated by sport.
-    const seen = new Set<Sport>();
-    const options: { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string; defaultInSwitcher: boolean }[] = [];
+    //
+    // ⚠️ An IN-SEASON config outranks an upcoming one for the same sport, and
+    // that is not a tidy-up — first-config-wins produced a row that named the
+    // wrong league. A sport can hold several seasonal configs, and NFL holds two
+    // whose windows nearly touch: "NFL" (09-07 → 02-16) and "NFL Preseason"
+    // (07-21 → 09-03). "NFL" sorts first in ALL_LEAGUES, so from the moment the
+    // regular season became UPCOMING (~Aug 22) through Sep 3 the switcher row
+    // read "NFL · 9/9" — telling you the league had not started — while the
+    // column that click opened was the LIVE preseason one, correctly headed
+    // "NFL Preseason" and full of games being played that week. Two names for
+    // one click, and the wrong one was the one you chose from.
+    // resolveSlot (lib/espn.ts) already prefers the active config; this is the
+    // options list finally agreeing with it.
+    // Map, not an array + Set: re-setting an existing key keeps its original
+    // insertion position, so upgrading a row's label cannot reorder the
+    // switcher out from under someone mid-scroll.
+    const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string; defaultInSwitcher: boolean }>();
+    const satisfiedByActive = new Set<Sport>();
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
-      if (seen.has(league.sport)) continue;
       const active = isLeagueActive(league, viewDate);
       const upcoming = !active && isLeagueUpcoming(league, viewDate);
       if (!active && !upcoming && league.sport !== "nba") continue;
-      seen.add(league.sport);
-      options.push({
+      // Keep the row we have unless this config is active and the incumbent
+      // was not — i.e. only an in-season config may displace an existing row.
+      if (options.has(league.sport) && (satisfiedByActive.has(league.sport) || !active)) continue;
+      if (active) satisfiedByActive.add(league.sport);
+      options.set(league.sport, {
         sport: league.sport,
         label: league.label,
         offseason: !active && !upcoming,
@@ -1476,7 +1494,7 @@ export default function HomeContent({
         defaultInSwitcher: !league.excludeFromAuto,
       });
     }
-    return options;
+    return [...options.values()];
   }, [selectedDate]);
 
   // First-run picker order (Jacob 8/9). ALL_LEAGUES is ordered for the *season

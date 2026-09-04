@@ -19,9 +19,27 @@ const transformed = await transform(youtubeSource, {
   module: { type: "es6" },
 });
 const tempModule = join(tmpdir(), `hidescore-youtube-${process.pid}.mjs`);
-writeFileSync(tempModule, transformed.code);
+// youtube.ts imports ./llwsRegions.json, and the transpiled copy keeps that
+// RELATIVE specifier — so it resolves against tmpdir, not src/lib, and the
+// import threw ERR_MODULE_NOT_FOUND for the whole script (this check had been
+// silently unrunnable since the LLWS region table moved into its own JSON).
+// Park a copy of the data file beside the temp module rather than writing the
+// temp module into src/, which would leave debris in the repo on a crash.
+const tempRegions = join(tmpdir(), "llwsRegions.json");
+writeFileSync(tempRegions, readFileSync("src/lib/llwsRegions.json", "utf8"));
+// …and Node then demands an import attribute on a JSON specifier in ESM
+// (ERR_IMPORT_ATTRIBUTE_MISSING) — SWC's transform doesn't add one, so stamp it
+// onto the emitted specifier. Both halves are needed; either alone still throws.
+writeFileSync(
+  tempModule,
+  transformed.code.replace(
+    /(from\s*")(\.[^"]*\.json)(")/g,
+    '$1$2$3 with { type: "json" }',
+  ),
+);
 const youtube = await import(pathToFileURL(tempModule).href);
 unlinkSync(tempModule);
+unlinkSync(tempRegions);
 
 check(
   "WNBA expansion names use official title forms",
