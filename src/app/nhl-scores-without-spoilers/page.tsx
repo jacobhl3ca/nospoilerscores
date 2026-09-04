@@ -2,30 +2,53 @@ import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
 // Deliberately does NOT say "Highlights": the highlights queries that reach hockey
-// ("nhl highlights no spoilers", "spoiler free nhl highlights") now have their own
+// ("nhl highlights no spoilers", "spoiler free nhl highlights") have their own
 // route at /nhl-highlights-without-spoilers, and two pages competing on one phrase
 // splits the signal instead of doubling it. This page keeps the scores intent.
+//
+// Rebuilt 2026-09-03. It was 267 words converting 1.8% from position 13.9, against
+// /premier-league-without-spoilers at 734 words and 24.2% from 6.2 — the gap is
+// substance, not ranking. Opening-night dates, times and networks verified against
+// ESPN's hockey/nhl scoreboard on 2026-09-03: the 2026-27 regular season opens
+// Tuesday Sep 29 2026 with five games, and national coverage runs across
+// TNT/truTV and ESPN/ESPN+/Hulu/Disney+.
 const TITLE = "NHL Scores Without Spoilers | HideScore";
 const DESC =
-  "Check NHL scores, playoff games, recaps, and highlights without spoilers. HideScore keeps hockey results hidden until you reveal them.";
+  "Check NHL scores, standings, and playoff results without seeing who won. HideScore keeps every hockey result hidden until you tap, so you can pick a game worth watching first.";
 const CANONICAL = "/nhl-scores-without-spoilers";
 
 const FAQ = [
   {
+    q: "When does the 2026-27 NHL season start?",
+    a: "Opening night is Tuesday, September 29, 2026, with five games: Florida at Carolina at 5:00 pm ET, Montreal at Toronto at 7:00, the Rangers at Boston at 8:00, Vancouver at Edmonton at 10:00, and Chicago at Vegas at 10:30. The schedule widens to eight games on Thursday, October 1.",
+  },
+  {
     q: "Can I check NHL scores without seeing the final?",
-    a: "Yes. HideScore keeps NHL scores and winners hidden until you reveal each game.",
+    a: "Yes. Every NHL game on HideScore opens with the score covered. The matchup, the puck-drop time, and whether the game has ended are all visible — the scoreline appears only when you tap it, so you can look at the whole night without learning how any of it went.",
   },
   {
-    q: "Can I find good hockey games without spoilers?",
-    a: "Yes. Competitiveness ratings help you spot tight games, overtime, and comeback-worthy matchups without seeing who won.",
+    q: "How do I avoid spoilers on a late West Coast game?",
+    a: "Opening night alone has puck drops at 10:00 and 10:30 pm ET. Those games end around 1:00 am in the East, so almost nobody watches them live — which makes them the most reliably spoiled games on the schedule. A covered board is what lets you come to one the next morning without knowing the result.",
   },
   {
-    q: "Is this useful for Stanley Cup playoff games?",
-    a: "Yes. Playoff games are one of the best fits because fans often watch late games or condensed replays on delay.",
+    q: "Which hockey games were actually worth watching?",
+    a: "A spoiler-free rating on each finished game tells you it was tight, high-scoring, or went to overtime — without naming the winner or the score. Hockey rewards this more than most sports: a 2-1 game that went to OT and a 6-1 blowout look identical on a covered card until the rating tells you which was which.",
   },
   {
-    q: "Can I catch up on NHL highlights safely?",
-    a: "HideScore lets you start from a spoiler-free game card before opening highlights or recaps.",
+    q: "Do the standings give the result away?",
+    a: "Yes, and they are treated as a spoiler in their own right. In a league decided by two or three points over a season, a division table tells you exactly how last night ended. Standings stay covered alongside scores.",
+  },
+  {
+    q: "Where can I watch NHL games in the US in 2026-27?",
+    a: "National coverage runs mainly across TNT and truTV, and ESPN with its streaming side on ESPN+, Hulu, and Disney+, with regional networks carrying the rest. HideScore's watch link points you at the broadcaster rather than at a gamecast or a results page that spoils the game the moment it loads.",
+  },
+  {
+    q: "Is this useful for the Stanley Cup playoffs?",
+    a: "It is the best fit on the calendar. Playoff hockey runs late, overtime can add an hour with no warning, and in a seven-game series every result changes the stakes of the next one. Fans watching on delay or on a condensed replay are exactly who this is built for.",
+  },
+  {
+    q: "Is HideScore free?",
+    a: "Yes. HideScore is free on the web and in the iPhone app, and works without an account. Signing in only syncs your league columns and preferences across devices.",
   },
 ];
 
@@ -34,10 +57,12 @@ export const metadata: Metadata = {
   description: DESC,
   keywords: [
     "nhl scores without spoilers",
-    "nhl scores no spoilers",
     "spoiler free nhl scores",
-    "nhl highlights without spoilers",
-    "spoiler free nhl recaps",
+    "nhl without spoilers",
+    "hockey scores without spoilers",
+    "nhl no spoilers",
+    "check nhl scores without seeing who won",
+    "when does the 2026-27 nhl season start",
   ],
   alternates: { canonical: CANONICAL },
   openGraph: {
@@ -45,11 +70,6 @@ export const metadata: Metadata = {
     description: DESC,
     url: `https://hidescore.com${CANONICAL}`,
     siteName: "HideScore",
-    // og:locale matches the site-level Open Graph block in layout.tsx and the
-    // World Cup/date routes. A page's openGraph replaces the parent's wholesale
-    // (Next merges metadata per top-level field, not deep), so without this these
-    // SEO landing pages emitted no og:locale for social unfurlers (Facebook/
-    // LinkedIn/Slack/iMessage).
     locale: "en_US",
     type: "website",
     images: [{ url: "https://hidescore.com/og-image.png", width: 1200, height: 630, alt: TITLE }],
@@ -67,38 +87,59 @@ export default function NhlScoresWithoutSpoilersPage() {
     <SeoLandingPage
       h1="NHL scores without spoilers"
       intro={[
-        "Hockey spoilers are brutal because one overtime goal or third-period comeback changes the entire night. Normal recaps and scoreboards reveal that instantly.",
-        "HideScore keeps NHL scores hidden while you decide what to watch, then lets you reveal the result only when you are ready.",
+        "Hockey has a scheduling problem that no other league quite matches: a normal night runs from a 5:00 pm Eastern puck drop to a 10:30 pm one out west, so the games finish across an eight-hour span. If you are following more than one team, something has always already ended by the time you sit down — and the result reaches you by push alert, ticker, or group chat long before the game does.",
+        "HideScore is a scoreboard built the other way around. Every game opens with the score covered, so you can scan the whole night — who played, what has finished, what is still on — without learning a single result. A spoiler-free rating tells you which games were tight or went to overtime; it never tells you who won.",
+        "The 2026-27 season opens on Tuesday, September 29, 2026 with five games, widening to eight on Thursday, October 1.",
       ]}
       sections={[
         {
-          h: "Great for playoff catch-up",
-          p: "During the Stanley Cup playoffs, late starts and overlapping games make spoiler-free catch-up especially useful. HideScore lets you pick the best games without seeing the final.",
+          h: "A full night of hockey, all of it covered",
+          p: "Matchups, puck-drop times, and which games have gone final are all visible on a HideScore board. The scores are not. That is enough to plan what to watch and nothing that tells you how any of it ended — including the games that finished while you were watching a different one.",
         },
         {
-          h: "Ratings before recaps",
-          p: "Use ratings to decide whether a game was a close finish, an overtime watch, or a blowout before opening highlights or recaps.",
+          h: "The 10:30 pm puck drop, where the gap is widest",
+          p: "A late western game ends around 1:00 am Eastern. Almost nobody watches those live, which makes them the most reliably spoiled games on the schedule — a result that has had all night to reach you before you press play the next morning. This is the case the covered board exists for.",
+        },
+        {
+          h: "Overtime is the whole point of not knowing",
+          p: "Hockey punishes spoilers more than most sports, because so much of it is decided in the last two minutes or after them. A spoiler-free rating marks the games that were tight, high-scoring, or went to overtime, so you can find the one worth your evening — and still not know how it ends when it starts.",
+        },
+        {
+          h: "The standings give it away too",
+          p: "In a league where a season comes down to two or three points, a division table is a scoreboard by another name. If a team moved up a spot, last night's result is out. Standings are covered with the same care as scores, so checking the race does not cost you the game you were saving.",
+        },
+        {
+          h: "A route to the broadcaster, not to a box score",
+          p: "National coverage runs across TNT and truTV, and ESPN with ESPN+, Hulu, and Disney+, with regional networks on the rest. The watch link sends you toward whoever is carrying the game rather than dropping you on a results page that spoils it as it loads.",
+        },
+        {
+          h: "Through the Stanley Cup playoffs",
+          p: "Postseason hockey is the hardest thing on the calendar to watch on delay: games run late, overtime can add an hour without warning, and every result in a seven-game series reframes the next one. The same covered board carries all the way through the Final.",
         },
       ]}
       bullets={[
-        "NHL scores hidden until tap.",
-        "Spoiler-free game ratings for finished hockey games.",
-        "Highlights and recaps after you choose what to watch.",
-        "Useful for regular season, playoffs, and late West Coast starts.",
+        "NHL scores hidden until you tap.",
+        "The whole night on one board, from the 5:00 pm start to the 10:30 pm one.",
+        "Spoiler-free ratings — tight, high-scoring, went to overtime.",
+        "Standings treated as a spoiler, not as neutral information.",
+        "Watch links that point at a broadcaster, not a box score.",
+        "Works the same through the Stanley Cup playoffs.",
       ]}
-      ctaLabel="Open NHL scores"
+      ctaLabel="Open the NHL without spoilers"
       ctaHref="/yesterday"
       links={[
-        { href: "/no-spoiler-scores", label: "No-spoiler scores" },
         { href: "/nhl-highlights-without-spoilers", label: "NHL highlights" },
-        { href: "/watch-sports-highlights-without-spoilers", label: "Highlights" },
+        { href: "/nba-scores-without-spoilers", label: "NBA scores" },
+        { href: "/nfl-highlights-without-spoilers", label: "NFL highlights" },
+        { href: "/no-spoiler-scores", label: "No-spoiler scores" },
+        { href: "/watch-sports-highlights-without-spoilers", label: "All highlights" },
         { href: "/today", label: "Today" },
       ]}
       faq={FAQ}
       schemaName={TITLE}
       schemaDescription={DESC}
       canonical={CANONICAL}
-      about={["NHL scores without spoilers", "NHL highlights without spoilers", "spoiler-free NHL recaps"]}
+      about={["NHL scores without spoilers", "spoiler-free NHL", "hockey scores without spoilers"]}
     />
   );
 }
