@@ -19,6 +19,7 @@
     "nfl:check": "node scripts/check-nfl-weeks.mjs",
     "nflchannels:check": "node scripts/check-nfl-team-channels.mjs",
     "coverage:audit": "node scripts/audit-league-coverage.mjs",
+    "gaps:audit": "node scripts/audit-highlight-gaps.mjs",
     "ratingorder:audit": "node scripts/audit-rating-order.mjs",
     "tv:catalog": "node scripts/build-tv-catalog.mjs",
     "tv:catalog:check": "node scripts/build-tv-catalog.mjs --check",
