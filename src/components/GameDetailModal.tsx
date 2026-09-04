@@ -357,8 +357,12 @@ export default function GameDetailModal({
           >
             {game.stage}
           </button>
-        ) : game.playoffLabel || game.stage ? (
-          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage}</div>
+        ) : game.playoffLabel || game.stage || game.isPreseason ? (
+          // The modal's round line. isPreseason is last because a game can only
+          // be one of these — an exhibition has no playoff round and no cup
+          // stage — but the two real labels stay ahead of it so a future data
+          // shape that set both never hides the more specific one.
+          <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{game.playoffLabel || game.stage || "Preseason"}</div>
         ) : null}
 
         {/* Venue — name · city/region — with the ESPN-style gametime weather

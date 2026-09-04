@@ -1,4 +1,5 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout } from "./types";
+import { collegeFootballPollRank } from "./pollRank";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
@@ -1113,6 +1114,10 @@ type RawCompetitor = {
   records?: { summary?: string }[];
   score?: string;
   winner?: boolean;
+  // ESPN's "curated" poll rank for the team AS OF THIS EVENT — the AP Top 25
+  // in the regular season, the CFP committee ranking once that starts. 1-25,
+  // or 99 for unranked. Present on the college scoreboards; see parseTeam.
+  curatedRank?: { current?: number };
 };
 
 // ESPN's cricket `score` is a whole sentence, not a score:
@@ -1146,7 +1151,10 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     score: formatScore(competitor.score ?? "0", sport),
     winner: competitor.winner ?? false,
     record,
-    rank: null, // hydrated post-fetch from the standings endpoint
+    // Non-NCAAF: hydrated post-fetch from the standings endpoint. NCAAF fills
+    // it here from the poll instead — see lib/pollRank.ts for why the standings
+    // path cannot work for that one sport.
+    rank: collegeFootballPollRank(competitor, sport),
   };
 }
 
@@ -1787,6 +1795,7 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
     // playoff round. isPlayoff stays false — tennis isn't a playoff "series".
     playoffLabel: match.round?.displayName ?? null,
     isPlayoff: false,
+    isPreseason: false,
     recapUrl: null,
     rating,
     decidingSet,
@@ -2038,6 +2047,11 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   if (event.season?.type === 3) {
     isPlayoff = true;
   }
+  // Type 1 is the exhibition slate. Only NFL games ever carry it this far (the
+  // preseason filter in eventsToGames drops it for every other sport), but the
+  // flag is derived generically so a future carve-out doesn't have to remember
+  // to add itself here. See Game.isPreseason for why the card needs this at all.
+  const isPreseason = event.season?.type === 1;
 
   // Playoff series summary (e.g. "BOS leads series 3-1", "Series tied 2-2").
   // Only present on playoff competitions; regular-season series has no field.
@@ -2132,6 +2146,7 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     seriesNote,
     weekNumber: gridironWeekNumber(sport, event),
     isPlayoff,
+    isPreseason,
     playoffLabel,
     seriesStatus,
     recapUrl,
@@ -3242,6 +3257,8 @@ export async function fetchEsportsGames(date?: string): Promise<Game[]> {
         // Tier s is a major (Worlds, MSI, an EWC final); tier a is a top
         // domestic league. Both read as "this one matters".
         isPlayoff: g.tier === "s",
+        // PandaScore has no exhibition concept — every match it returns counts.
+        isPreseason: false,
         playoffLabel: null,
         seriesStatus: null,
         recapUrl: null,
@@ -5020,8 +5037,12 @@ export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>
 // excluded on purpose: it uses the static FIFA world ranking (fifaRankings.ts),
 // since its live group standing would be a spoiler. Golf/tennis/F1/UFC aren't
 // team standings and never reach this path.
+// ⛔ NCAAF is NOT here on purpose: college football's rank comes from the poll
+// on the event (parseTeam), not from standings — the standings feed has no
+// `winPercent` stat, so this path returned an empty map for it. Listing it
+// would also re-open the door to applyTeamRanks clobbering the poll rank.
 const RANK_LEAGUES = new Set<Sport>([
-  "mlb", "nba", "wnba", "ncaam", "ncaaw", "ncaaf", "nfl", "nhl", "epl", "mls", "ucl", "uel",
+  "mlb", "nba", "wnba", "ncaam", "ncaaw", "nfl", "nhl", "epl", "mls", "ucl", "uel",
   // Single-table domestic leagues — ESPN's standings carry a real league-wide
   // `rank`, so they need no RANK_METRIC entry (same as EPL).
   "laliga", "seriea", "bundesliga", "ligue1",
@@ -5041,7 +5062,9 @@ const RANK_LEAGUES = new Set<Sport>([
 const RANK_METRIC: Partial<Record<Sport, "points" | "winPercent">> = {
   nhl: "points", mls: "points",
   nba: "winPercent", wnba: "winPercent", mlb: "winPercent", nfl: "winPercent",
-  ncaam: "winPercent", ncaaw: "winPercent", ncaaf: "winPercent",
+  // ncaaf omitted with intent — see RANK_LEAGUES above. Men's and women's
+  // college basketball DO expose winPercent, so those two stay.
+  ncaam: "winPercent", ncaaw: "winPercent",
 };
 
 type StandingEntry = {
@@ -5141,23 +5164,53 @@ export async function fetchTeamSchedule(
   await Promise.all(
     years.map(async (year) => {
       const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
-      const url = new URL(
-        `${BASE_URL}${sportPath}/teams/${espnTeamId}/schedule`
-      );
-      url.searchParams.set("season", String(year));
-      let res: Response;
-      try {
-        res = await fetchWithRetry(url.toString());
-      } catch {
-        return;
-      }
-      if (!res.ok) return;
-      const data = await res.json();
-      const events = data.events ?? data.team?.events ?? [];
+      // ⚠️ This endpoint returns ONE season type per call and picks the default
+      // itself — not the union. Between the last preseason game and Week 1
+      // (measured 2026-09-04) it answered `requestedSeason: {type: 1}`, so a
+      // Lions schedule was THREE August exhibitions and not one of the 17 real
+      // games. Asking explicitly for 1/2/3 returns 3 / 17 / 0 for that same
+      // team, and `seen` already dedups the overlap.
+      // Gridiron only: it is the sport whose preseason the app deliberately
+      // keeps (LEAGUES carries an "NFL Preseason" column), and the sport whose
+      // default flipped underneath us. Every other sport still makes the single
+      // call it always made — no extra requests, no new behaviour to re-verify.
+      const seasonTypes = sport === "nfl" || sport === "ncaaf" ? [1, 2, 3] : [undefined];
+      const pages = await Promise.all(seasonTypes.map(async (seasonType) => {
+        const url = new URL(
+          `${BASE_URL}${sportPath}/teams/${espnTeamId}/schedule`
+        );
+        url.searchParams.set("season", String(year));
+        if (seasonType != null) url.searchParams.set("seasontype", String(seasonType));
+        try {
+          const r = await fetchWithRetry(url.toString());
+          if (!r.ok) return [];
+          const d = await r.json();
+          return d.events ?? d.team?.events ?? [];
+        } catch {
+          // One season type failing must not lose the others — a 500 on the
+          // (empty) postseason call should never blank out the regular season.
+          return [];
+        }
+      }));
+      const events = pages.flat();
       for (const e of events) {
         // Team-schedule events nest status inside competitions[0] and use
         // different shapes for broadcasts / records / logos vs scoreboard.
         // Reshape to match the scoreboard shape so parseGame works uniformly.
+        // ⚠️ SEASON TYPE LIVES SOMEWHERE ELSE HERE. The scoreboard puts it at
+        // `event.season.type`; this endpoint's `season` is only
+        // {year, displayName} and the type sits on a sibling `seasonType`
+        // object ({id, type, name, abbreviation}). So the pre-existing
+        // `e.season?.type ?? 0` below read 0 for EVERY team-schedule event —
+        // which silently disabled both the preseason carve-out (other sports'
+        // exhibitions were never filtered out of a team schedule the way they
+        // are on the board) and parseGame's `season.type === 3` playoff flag
+        // (a postseason game was only ever caught by the notes regex).
+        // Copy it across before parseGame runs, same as the reshapes below.
+        const resolvedSeasonType = e.seasonType?.type ?? e.season?.type;
+        if (typeof resolvedSeasonType === "number") {
+          e.season = { ...(e.season ?? {}), type: resolvedSeasonType };
+        }
         const comp = (e.competitions ?? [])[0] ?? {};
         if (!e.status || !e.status.type) e.status = comp.status ?? {};
         // Broadcasts: scoreboard uses { names: [] }; schedule uses { media: { shortName } }
@@ -5190,7 +5243,7 @@ export async function fetchTeamSchedule(
         }
         const statusName = e.status?.type?.name ?? "";
         if (statusName.includes("POSTPONED") || statusName.includes("CANCELED") || statusName.includes("SUSPENDED")) continue;
-        const seasonType = e.season?.type ?? 0;
+        const seasonType = resolvedSeasonType ?? 0;
         // Same NFL-preseason carve-out as eventsToGames — a team's schedule
         // should list its preseason games while the Preseason column is live.
         if (seasonType === 1 && sport !== "nfl") continue;
