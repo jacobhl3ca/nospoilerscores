@@ -23,6 +23,14 @@ on:
     paths:
       - 'src/lib/**'
       - 'public/_worker.js'
+      # tests/label-keyed-channels.test.ts reads these two components as text --
+      # it is the guard on LeagueColumn handing every GameCard its league label,
+      # which is what tennis and golf highlight buttons hang off. Without these
+      # two lines the one file the guard watches is the one file that can't
+      # trigger it. The deploy gate in deploy.yml runs the suite on every push
+      # regardless; these paths are what give a PR the same answer.
+      - 'src/components/LeagueColumn.tsx'
+      - 'src/components/GameHighlights.tsx'
       - 'tests/*.test.ts'
       - 'tests/*.test.mjs'
       - 'package.json'
@@ -31,6 +39,8 @@ on:
     paths:
       - 'src/lib/**'
       - 'public/_worker.js'
+      - 'src/components/LeagueColumn.tsx'
+      - 'src/components/GameHighlights.tsx'
       - 'tests/*.test.ts'
       - 'tests/*.test.mjs'
       - 'package.json'
