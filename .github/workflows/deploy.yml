@@ -28,6 +28,23 @@ jobs:
 
       - run: npm ci
 
+      # The unit suite GATES the deploy instead of racing it. unit-tests.yml
+      # still runs the same suite on PRs and path-filtered pushes; this step is
+      # what makes a red test actually stop a release -- the difference between
+      # a guard and a notification. Before this, a bad league label (or a drift
+      # between the two copies of SPOILER_RX) shipped and the test told you
+      # afterwards.
+      #
+      # It is free: npm ci already ran above, and the suite is ~1s with no
+      # browser and no network.
+      #
+      # Keep it that way. Only fast, hermetic tests belong in test:unit -- a
+      # network- or browser-dependent test in here would start failing for
+      # reasons that are not the commit's fault, and a gate that cries wolf is
+      # a gate someone eventually removes. Slow checks (lighthouse.yml, the
+      # visual tests) stay in their own alerting workflows on purpose.
+      - run: npm run test:unit
+
       # NEXT_PUBLIC_BUILD_SHA is inlined into the client bundle and rides along
       # on every feedback submission, so a bug report says which build it came
       # from without a round-trip. A local build leaves it unset → "dev".
