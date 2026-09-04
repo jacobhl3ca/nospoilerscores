@@ -195,6 +195,11 @@ test("an embed failure retries within the same approved channel, never unscoped"
 // is the only place the clip exists and there is nothing to fall back TO.
 test("an embed-blocked league goes straight to the YouTube card, no retry chain", async ({ page }) => {
   const requests: string[] = [];
+  // The IFrame API script is only fetched when the effect is actually going to
+  // build a player, so an empty list here is the strongest proof the
+  // short-circuit fired — stronger than anything readable off the DOM.
+  const playerApiLoads: string[] = [];
+  page.on("request", (r) => { if (r.url().includes("youtube.com/iframe_api")) playerApiLoads.push(r.url()); });
   await page.clock.setFixedTime(new Date("2026-08-16T16:00:00-04:00"));
   await setSingleLeague(page, "nfl");
   await page.route("**/football/nfl/scoreboard?**", route => route.fulfill({
@@ -219,9 +224,18 @@ test("an embed-blocked league goes straight to the YouTube card, no retry chain"
   await official.click();
   // The card, not a player. Anything else means the short-circuit stopped firing.
   await expect(page.getByRole("link", { name: /watch on youtube/i }).first()).toBeVisible();
-  await expect(page.locator("#yt-player")).toHaveCount(0);
+  // NOT `#yt-player` having count 0. That div is a mount POINT, rendered
+  // unconditionally whenever the modal is in YouTube mode (VideoModal's video
+  // region), so its presence never meant a player existed — asserting on it
+  // failed this test from the day it was written while the app was doing
+  // exactly the right thing. Measured on the same fixture 2026-09-04: the div
+  // is there and EMPTY — 0 children, 0 iframes on the page, 0 YT.Player
+  // constructions, 0 fetches of the IFrame API. So assert those instead.
+  await expect(page.locator("#yt-player > *")).toHaveCount(0);
+  await expect(page.locator("iframe")).toHaveCount(0);
   // And no id-burning retry behind it.
   await page.waitForTimeout(1500);
+  expect(playerApiLoads, "the IFrame API was fetched, so a player was being built").toEqual([]);
   expect(requests).toEqual([]);
 });
 

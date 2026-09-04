@@ -32,6 +32,17 @@ import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
 // than the MLB team names next to it is a bug this app has shipped before. The
 // cap is READ OFF THE DOM with the inline size cleared, so a board-layout CSS
 // rule that changes the class size moves the cap with it automatically.
+// The glyph names the sport for a screen reader ONLY on a tile that isn't
+// itself a button — a clickable tile carries an aria-label of its own, and a
+// second announcement of "Poker" ahead of it is noise. Hoisted out of the tile
+// because the glyph now renders in one of two places (see glyphInMeta) and both
+// must make the same call.
+function clickableGlyphA11y(clickable: boolean, glyphLabel: string) {
+  return clickable
+    ? ({ "aria-hidden": true } as const)
+    : ({ role: "img", "aria-label": glyphLabel } as const);
+}
+
 const FIT_FLOOR_TITLE = 11;
 const FIT_FLOOR_SUBTITLE = 9;
 
@@ -106,7 +117,22 @@ function FittedLine({
           }
         }
       }
-      probe.remove();
+      document.body.removeChild(probe);
+      // Put the chosen size back on the NODE before yielding, not just in state.
+      // `measure` clears node.style.fontSize to read the cap (see above), and
+      // React only rewrites that style when `fit` actually changes — so every
+      // re-measure that lands on the SAME answer bails out of setFit, renders
+      // nothing, and leaves the cleared inline size sitting in the DOM. The line
+      // then paints at its natural size and truncates: the exact outcome this
+      // component exists to prevent, and it is SELF-INFLICTED, because shrinking
+      // the font changes the span's height, which trips the ResizeObserver
+      // below, which re-measures and undoes the fit that had just worked.
+      // Steady state was "measured a clean 12px fit on every pass, rendered
+      // clipped at 14px" — "Triton Super High Roller · Jeju" (Jacob 9/4), and
+      // almost certainly the same tail on the Sinquefield Cup and WSOP reports
+      // this ladder was written for. Only lines that actually need a step were
+      // affected: a `size: null` answer re-clears to the same empty string.
+      node.style.fontSize = chosen.size == null ? "" : `${chosen.size}px`;
       setFit((prev) => (prev.text === chosen.text && prev.size === chosen.size ? prev : chosen));
     };
 
@@ -480,7 +506,7 @@ function FightCard({
   const status = isPost ? "Final" : isLive ? "" : whenLabel(fight.date, selectedDate) || fight.statusDetail;
   const clickable = !!onShowDetails;
   return (
-    <div className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    <div className={`ns-card-focus rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
       onClick={onShowDetails}
@@ -919,9 +945,14 @@ export default function EventCard({
   // (Every tile is clickable now that the detail sheet exists, so this is a
   // belt-and-braces path — it still fires if a caller omits onShowDetails.)
   const glyphLabel = event.kind === "boxing" ? "Boxing" : event.kind === "chess" ? "Chess" : event.kind === "poker" ? "Poker" : "Race";
+  const glyphA11y = clickableGlyphA11y(!!onShowDetails, glyphLabel);
   const isLive = event.state === "in";
   const isPost = event.state === "post";
   const hideHistoricalMeta = historicalPost(event.state, event.date);
+  // Where the sport glyph renders. Normally the meta row, which frees the 30px
+  // logo slot on both text rows below; a historical finished tile has no meta
+  // row at all, so it falls back to the title row it has always used.
+  const glyphInMeta = !hideHistoricalMeta;
   // Status text mirrors FightCard/the game cards exactly: "Final" / "Live" /
   // whenLabel ("Sat 9:00AM" for another day, bare "9:00AM" when the race is on
   // the viewed date — selectedDate — same rule as the game cards' time).
@@ -960,7 +991,7 @@ export default function EventCard({
   const showChessBtn = isPost && event.kind === "chess" && !!event.officialChannel && chessSource !== null;
 
   return (
-    <div ref={rootRef} className={`rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+    <div ref={rootRef} className={`ns-card-focus rounded-lg px-2 sm:px-4 py-2 sm:py-3 transition-colors relative${clickable ? " cursor-pointer" : ""}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
       onClick={clickable ? openDetails : undefined}
@@ -980,8 +1011,21 @@ export default function EventCard({
           upcoming time renders at text-[11px] muted — the exact classes
           GameCard's future-time span uses — while Final/Live keep the row's
           text-xs like GameCard's FINAL/clock. */}
-      {!hideHistoricalMeta && <div className="game-meta-row flex items-center gap-2 mb-1 sm:mb-2 min-h-[18px] text-xs">
-        <span className="shrink-0 whitespace-nowrap flex items-center gap-1" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
+      {!hideHistoricalMeta && <div className={`game-meta-row flex items-center gap-2 mb-1 sm:mb-2 ${compact ? "min-h-[14px]" : "min-h-[18px]"} text-xs`}>
+        <span className="shrink-0 whitespace-nowrap flex items-center gap-1.5" style={{ color: isLive ? "#16a34a" : "var(--text-muted)" }}>
+          {/* The sport glyph rides the meta row, which had a 6px live dot and
+              otherwise nothing on its left half, so the two text rows below
+              inherit the FULL card width instead of a 30px logo slot they only
+              use on one of them. That is 30px back on the exact line that kept
+              clipping: "Triton Super High Roller · Jeju" needs 189px and the
+              5-column board gave the title 173px, so it had to shrink to 12px
+              beside 14px MLB team names; with the slot gone it has 203px and
+              renders at full size (Jacob 9/4, "layout inside of it can be
+              optimized"). Card height is untouched — no row is added or
+              removed, so the tile still matches an MLB card at every
+              breakpoint, which is the constraint that rules out wrapping the
+              title onto a second line. */}
+          {glyphInMeta && <span {...glyphA11y} className="text-xs leading-none">{glyph}</span>}
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
           {isLive && <span className="sr-only">Live</span>}
           {isPost || isLive ? status : <span className="text-[11px] whitespace-nowrap">{status}</span>}
@@ -999,22 +1043,68 @@ export default function EventCard({
             EVERY width (its team-name-container is a full line box), while
             these rows' 16px mobile logo slot + leading-none text would collapse
             shorter, drifting the column heights apart as cards stack. */}
-        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6">
-          {/* Glyph keeps main's a11y treatment (it names the sport when the
-              tile isn't itself a button); the title keeps the fitted line. */}
-          <span {...(clickable ? { "aria-hidden": true } : { role: "img", "aria-label": glyphLabel })} className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>
+        <div className={`flex items-center gap-1 sm:gap-1.5 min-w-0 ${compact ? "min-h-[28px]" : "min-h-6"}`}>
+          {/* Fallback home for the glyph: a historical finished tile drops the
+              meta row entirely (hideHistoricalMeta, same rule the game cards
+              use), and the sport marker must not vanish with it. That branch
+              renders exactly the layout this tile always had. */}
+          {!glyphInMeta && <span {...glyphA11y} className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 flex items-center justify-center text-sm sm:text-base leading-none">{glyph}</span>}
           {/* flex-1: the span must OWN the leftover width even when its text is
               short, because FittedLine reads that width off clientWidth. A
               plain auto-basis flex item shrinks to its text and would report
               "no room" for a name that fits comfortably. */}
+          {compact ? (
+            // ── Two-line title, at the SAME card height ──────────────────────
+            //
+            // A 122px card (three columns on a 414px phone) cannot fit a real
+            // event name on one line at any size the ladder is allowed to use:
+            // "Triton Super High Roller · Jeju" still clipped sitting at the
+            // 11px floor. Wrapping is the only way to show the whole name, and
+            // Jacob's condition on it was that the card stay the same height as
+            // an MLB card beside it — "only if its same height of a card as 1
+            // mlb card" (9/4). So the second line is not ADDED to the tile, it
+            // is TRADED for: the meta row above gives up 4px (18 -> 14, which
+            // it has spare — at this width it holds a 10px glyph and a 6px live
+            // dot and nothing else), and this row takes exactly those 4px
+            // (24 -> 28). Two 14px line boxes fill it. Card total is unchanged
+            // at 90px, verified against the MLB card in card-height-parity.
+            //
+            // NOT FittedLine: that ladder measures with white-space:nowrap and
+            // exists to avoid a second line. Here the text keeps the class's own
+            // 12px — the same size the compact tile already used — and wraps
+            // instead of shrinking. lineHeight is pinned in px rather than left
+            // to leading-none so the two lines add up to the row exactly; a
+            // unitless value would drift with the font size.
+            //
+            // line-clamp-2 is the last resort a name too long even for two
+            // lines falls back to, the same role `truncate` plays on the wide
+            // tile. tests/visual/text-fit.spec.ts asserts vertical overflow, not
+            // just horizontal, so a clamp that actually bites still fails the
+            // guard rather than hiding behind a wrapped line's clean scrollWidth.
+            <span
+              data-fit-line="title"
+              title={event.title}
+              className="text-xs min-w-0 flex-1"
+              style={{
+                color: "var(--text)",
+                lineHeight: "14px",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {event.title}
+            </span>
+          ) : (
           <FittedLine
             variants={titleVariants}
             lineKind="title"
             fullText={event.title}
             floorPx={FIT_FLOOR_TITLE}
-            className={`${compact ? "text-xs sm:text-sm" : "text-sm team-name"} leading-none truncate min-w-0 flex-1`}
+            className="text-sm team-name leading-none truncate min-w-0 flex-1"
             style={{ color: "var(--text)" }}
-          />
+          />)}
         </div>
         {/* Second row ALWAYS renders, even with no subtitle. This is the tile's
             stand-in for a game card's second team row, so dropping it when the
@@ -1023,7 +1113,7 @@ export default function EventCard({
             short next to NASCAR and MLB (Jacob 8/9). Empty and aria-hidden when
             there's nothing to say, so screen readers hear a one-line tile. */}
         <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 min-h-6" aria-hidden={event.subtitle ? undefined : true}>
-          <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />
+          {!glyphInMeta && <span className="w-4 h-4 sm:w-6 sm:h-6 shrink-0" />}
           <FittedLine
             variants={subtitleVariants}
             lineKind="subtitle"
