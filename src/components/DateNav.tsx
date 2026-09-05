@@ -272,14 +272,20 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
   };
 
   return (
-    <div className="flex gap-0 sm:gap-0.5 items-center justify-center">
-      {/* Invisible leading spacer mirrors the trailing calendar icon's width so
-          the ‹ Yesterday/Today/Tomorrow › group stays centered (lines up with
-          the middle MLB column) instead of being shoved left by the icon.
-          Hidden on phones (Jacob 5/31) — the spacer was costing ~32px the
-          cramped mobile header couldn't spare, so the row reads cleaner
-          without it. Desktop keeps it for the MLB-column alignment. */}
-      {trailing && <span aria-hidden className="hidden sm:block sm:w-8 sm:h-8 sm:mr-1 shrink-0" />}
+    // sm+: a `1fr | auto | 1fr` grid. The ‹ Yesterday/Today/Tomorrow › group is
+    // the middle track, so it sits at the row's true centre — directly under
+    // the Ratings tab — no matter what `trailing` holds: the two 1fr tracks
+    // always split the leftover width equally. It replaces a fixed 32px leading
+    // spacer that mirrored the calendar icon alone; once the single-column
+    // toggle joined that icon (6/16) the trailing side was 70px and the whole
+    // group sat 17px left of centre (Jacob 9/4: "today should be directly
+    // under ratings"). Phones keep the plain flex row with no leading balance
+    // (Jacob 5/31 — the cramped mobile header couldn't spare the width), and
+    // their view tabs live in the bottom bar, so there is nothing above to
+    // line up with.
+    <div className="flex sm:grid sm:grid-cols-[1fr_auto_1fr] sm:w-full gap-0 sm:gap-0.5 items-center justify-center">
+      <span aria-hidden className="hidden sm:block" />
+      <div className="flex gap-0 sm:gap-0.5 items-center">
       <button
         type="button"
         onClick={goEarlier}
@@ -336,7 +342,8 @@ export default function DateNav({ selectedDate, onDateChange, trailing, initialO
       >
         ›
       </button>
-      {trailing}
+      </div>
+      {trailing && <div className="flex items-center sm:justify-self-start">{trailing}</div>}
     </div>
   );
 }
