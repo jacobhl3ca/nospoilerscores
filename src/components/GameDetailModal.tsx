@@ -23,11 +23,11 @@ function gameLengthHours(sport: string): number {
   return GAME_LENGTH_H[sport] ?? 3;
 }
 
-// Matchup row — logo + name + (opt-in) W-L record, no score/winner. Stateless
+// Matchup row — logo + name, no score/winner. Stateless
 // and dependent only on its props, so it lives at module scope rather than
 // inside the component body (declaring a component during render remounts it
 // every render and resets any state).
-function TeamRow({ team, showRecord }: { team: Game["homeTeam"]; showRecord: boolean }) {
+function TeamRow({ team }: { team: Game["homeTeam"] }) {
   return (
     <div className="flex items-center gap-3 min-w-0">
       {team.logo
@@ -37,14 +37,6 @@ function TeamRow({ team, showRecord }: { team: Game["homeTeam"]; showRecord: boo
       <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>
         {team.displayName || team.shortDisplayName || team.abbreviation}
       </span>
-      {/* A W-L record is a second-order spoiler — today's 63-49 encodes whether
-          the team won last night — so it is gated on the showTeamRecords opt-in
-          (default off) and, like the game card, shown only on a LIVE game. On a
-          FINISHED game the record can encode this game's own result, which is
-          exactly what this spoiler-safe modal must never leak. */}
-      {showRecord && team.record ? (
-        <span className="ml-auto text-xs tabular-nums shrink-0" style={{ color: "var(--text-muted)" }}>{team.record}</span>
-      ) : null}
     </div>
   );
 }
@@ -52,13 +44,11 @@ function TeamRow({ team, showRecord }: { team: Game["homeTeam"]; showRecord: boo
 // Lightweight, SPOILER-SAFE game details popup. Shown when a score/ratings card
 // is tapped. Never renders score, winner, or rating unless `showRatings` is on
 // (the user has already opted into spoilers) — and even then only the rating
-// badge, never the raw score line. W-L records (a second-order spoiler) are
-// likewise gated on `showTeamRecords` and shown only on live games, matching
-// the game card. Pre/live/final all use the same shell.
+// badge, never the raw score line. W-L records are not rendered at all — they
+// were removed 2026-09-05 (see preferences.ts). Pre/live/final use one shell.
 export default function GameDetailModal({
   game,
   showRatings,
-  showTeamRecords = false,
   onClose,
   leagueLabel,
   onPlayHighlight,
@@ -67,8 +57,6 @@ export default function GameDetailModal({
 }: {
   game: Game;
   showRatings: boolean;
-  // Opt-in (Settings), default off — see showTeamRecords in preferences.ts.
-  showTeamRecords?: boolean;
   onClose: () => void;
   leagueLabel?: string;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
@@ -320,19 +308,10 @@ export default function GameDetailModal({
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
 
-        {/* Matchup — names + logos, NO score/winner. Records only when the user
-            opted in, the game is live, AND it belongs to TODAY'S slate.
-            `isLive` alone was not enough (Jacob 8/11, MLB on Yesterday): a West
-            Coast game that starts at 10 PM ET is filed under that day's slate
-            and is still state="in" well after midnight, so opening it from the
-            Yesterday tab printed a live 63-49 — and yesterday's record is
-            precisely the second-order spoiler a delayed viewer is avoiding.
-            The score CARD already refuses on a past date (effectivePastDate in
-            GameCard); this is the modal catching up to it. isToday buckets by
-            the same 1 AM service-day rollover the card and date nav use. */}
+        {/* Matchup — names + logos, NO score/winner and no W-L record. */}
         <div className="flex flex-col gap-1 mb-4 pr-6">
-          <TeamRow team={game.awayTeam} showRecord={showTeamRecords && isLive && isToday} />
-          <TeamRow team={game.homeTeam} showRecord={showTeamRecords && isLive && isToday} />
+          <TeamRow team={game.awayTeam} />
+          <TeamRow team={game.homeTeam} />
         </div>
 
         {/* Status + time */}

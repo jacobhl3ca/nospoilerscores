@@ -219,11 +219,11 @@ export interface Preferences {
   // sticks — session counting has stopped by then. See STARS_AUTO_HIDE_SESSION
   // in lib/sessionVisits.ts.
   hideTeamStars?: boolean;
-  // Show W-L records on in-progress game cards. OPT-IN (default off): a record
-  // is a second-order spoiler — today's 63-49 encodes whether the team won last
-  // night, which is exactly what a delayed viewer is avoiding. Jacob flagged it
-  // across five screenshots before it was gated (8/4).
-  showTeamRecords?: boolean;
+  // `showTeamRecords` (W-L records on game cards) was REMOVED 2026-09-05. It was
+  // opt-in from 8/4 and not one of the 21 accounts ever turned it on, and the
+  // record is a second-order spoiler by nature — today's 63-49 encodes whether
+  // the team won last night. Old synced prefs may still carry the key; it is
+  // ignored, and it should not come back as a toggle.
   // "Add the World Cup column" banner dismissed (only shows during the
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
