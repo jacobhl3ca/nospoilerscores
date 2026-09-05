@@ -2305,7 +2305,19 @@ export default {
       "/prime-asins.json",
       "/big-inning-schedule.json",
     ]);
-    if (env.DATA && (url.pathname.startsWith("/news/") || url.pathname.startsWith("/alerts/") || R2_ROOT_PATHS.has(url.pathname))) {
+    // /alerts/_*.json is PERSONAL and must never be public: `_dashboard.json`
+    // carries the Priorities card (health, money, travel) and `_prefs.json` the
+    // synced card order. The dashboard reads those same-origin from
+    // alerts.hidescore.com, which is behind CF Access. Do not re-open them here.
+    // The remaining /alerts/*.json are non-personal deal listings scraped from
+    // public subreddits, and six local deal-notify crons curl them, so they stay
+    // public. Flat keys only — no nesting, no leading underscore.
+    const alertsKey = url.pathname.startsWith("/alerts/")
+      ? url.pathname.slice("/alerts/".length)
+      : null;
+    const isPublicAlerts =
+      !!alertsKey && !alertsKey.startsWith("_") && !alertsKey.includes("/");
+    if (env.DATA && (url.pathname.startsWith("/news/") || isPublicAlerts || R2_ROOT_PATHS.has(url.pathname))) {
       // CORS: Capacitor iOS WebView runs at `capacitor://localhost`, so fetches
       // to hidescore.com are cross-origin and blocked without ACAO. Same applies
       // to Android (`https://localhost`) and any future native shell.
