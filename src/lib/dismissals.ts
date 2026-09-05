@@ -27,18 +27,3 @@ export function mergeDismissedKeys(
   return merged.slice(-cap);
 }
 
-// A snooze is a date; whichever device snoozed for longer wins.
-export function mergeSnoozedUntil(local: string | undefined, remote: string | undefined): string | undefined {
-  if (!local) return remote;
-  if (!remote) return local;
-  return local > remote ? local : remote;
-}
-
-// YYYYMMDD arithmetic without a Date round-trip through local time.
-export function addDaysYmd(ymd: string, days: number): string {
-  const y = Number(ymd.slice(0, 4));
-  const m = Number(ymd.slice(4, 6));
-  const d = Number(ymd.slice(6, 8));
-  const t = new Date(Date.UTC(y, m - 1, d + days));
-  return `${t.getUTCFullYear()}${String(t.getUTCMonth() + 1).padStart(2, "0")}${String(t.getUTCDate()).padStart(2, "0")}`;
-}

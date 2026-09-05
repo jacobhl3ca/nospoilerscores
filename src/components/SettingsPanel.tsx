@@ -3,7 +3,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
-import { isTopEventsGameSport, TOP_EVENTS_DEFAULT_COUNT, type TopEventsMode, type TopEventsCount } from "@/lib/topEvents";
+import { isTopEventsGameSport, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type TopEventsMode, type TopEventsCount } from "@/lib/topEvents";
 import {
   Preferences,
   Theme,
@@ -692,7 +692,6 @@ export default function SettingsPanel({
       // season-kickoff banner too, so clear the per-kickoff dismissal list.
       // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
       kickoffBannersDismissed: undefined,
-      kickoffBannerSnoozedUntil: undefined,
       topEventsMode: undefined,
       topEventsLeagues: undefined,
       topEventsCount: undefined,
@@ -1150,7 +1149,10 @@ export default function SettingsPanel({
             </p>
             {[0, 1, 2, 3, 4].map((idx) => {
               const fallbackLabel = displayedLeagues[idx]?.label ?? "—";
-              const value = slotValues[idx];
+              const saved = slotValues[idx];
+              // A "top" pin from before the column was switched off reads as
+              // Auto here, which is what resolveSlot makes of it on the board.
+              const value = saved === "top" && !TOP_EVENTS_ENABLED ? undefined : saved;
               const selectedOption = value && value !== "empty"
                 ? leagueOptions.find((option) => option.sport === value)
                 : undefined;
@@ -1178,7 +1180,7 @@ export default function SettingsPanel({
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
                     <option value="">Auto</option>
-                    <option value="top">⭐ Top events</option>
+                    {TOP_EVENTS_ENABLED && <option value="top">⭐ Top events</option>}
                     {slotDropdownGroups(value).map((group) => (
                       <optgroup key={group.key} label={group.label}>
                         {group.options.map((option) => (
@@ -1248,7 +1250,9 @@ export default function SettingsPanel({
 
           {/* Top events (Jacob 9/4): the cross-league column's knobs. The pill
               itself lives in the column switcher, the slot dropdowns above and
-              the first-run picker; this is where "set it manually" happens. */}
+              the first-run picker; this is where "set it manually" happens.
+              Hidden while the column is off (TOP_EVENTS_ENABLED, 9/5). */}
+          {TOP_EVENTS_ENABLED && (
           <Section title="Top events column">
             <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
               Pick <em>⭐ Top events</em> for any column (tap a column header, or a slot above) to get the biggest games across every league in one column.
@@ -1301,6 +1305,7 @@ export default function SettingsPanel({
               />
             </Field>
           </Section>
+          )}
 
           {/* Board layout */}
           <Section title="Board layout">
