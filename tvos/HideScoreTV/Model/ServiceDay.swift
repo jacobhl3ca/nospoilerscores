@@ -22,6 +22,12 @@ enum ServiceDay {
         return String(format: "%04d%02d%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
+    /// The inverse of `ymd`, for the day a deep link names.
+    static func date(fromYMD ymd: String, calendar: Calendar = .current) -> Date? {
+        guard ymd.count == 8, let n = Int(ymd) else { return nil }
+        return calendar.date(from: DateComponents(year: n / 10000, month: (n / 100) % 100, day: n % 100))
+    }
+
     static func title(_ day: Date, relativeTo today: Date, calendar: Calendar = .current) -> String {
         let diff = calendar.dateComponents([.day], from: today, to: day).day ?? 0
         switch diff {

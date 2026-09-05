@@ -6,7 +6,8 @@ import Foundation
 /// line-for-line rather than "inspired by", because a TV that ranks last night's
 /// games differently from the phone is worse than no ranking at all. Every
 /// per-sport number it reads (multiplier, overtime bonus, scoring divisor,
-/// regulation periods, period length, soccer flag) comes from the catalog, so
+/// regulation periods, period length, soccer flag, closeness curve) comes from
+/// the catalog, so
 /// recalibrating a sport is a website push, not an app update. Only the shape of
 /// the algorithm lives here.
 ///
@@ -64,16 +65,16 @@ enum Rating {
         if input.state == "in" && progress < 0.12 { return nil }
 
         // Factor 1 — final margin closeness (45%)
-        let finalCloseness = max(0, 100 - diff * config.multiplier)
+        let finalCloseness = closeness(diff, config: config)
 
         // Factor 2 — average margin across periods (35%): rewards a game that
         // was tight throughout even when the final margin is not.
         let runningMargin = self.runningMargin(input.competitors)
-        let runningCloseness = runningMargin.map { max(0, 100 - $0 * config.multiplier) } ?? finalCloseness
+        let runningCloseness = runningMargin.map { closeness($0, config: config) } ?? finalCloseness
 
         // Factor 3 — margin entering the final period (20%)
         let fpMargin = self.finalPeriodMargin(input.competitors)
-        let finalPeriodCloseness = fpMargin.map { max(0, 100 - $0 * config.multiplier) } ?? finalCloseness
+        let finalPeriodCloseness = fpMargin.map { closeness($0, config: config) } ?? finalCloseness
 
         let baseScore = finalCloseness * 0.45 + runningCloseness * 0.35 + finalPeriodCloseness * 0.20
 
@@ -87,10 +88,11 @@ enum Rating {
         }
 
         // Soccer: a goalless draw is the dull case no matter how "close" it
-        // reads. 1-0 takes only -10 — at -25 it sank below two-goal wins, which
-        // inverted the ordering the whole board exists to get right.
+        // reads. 0 goals: -50, 1 goal: -25 — the website's numbers verbatim.
+        // (1.0 shipped -10 for a 1-0, so every 1-0 rated 15 higher on the TV
+        // than on the phone. The parity run is what caught it.)
         var lowScoringPenalty: Double = 0
-        if config.soccer && total < 2 { lowScoringPenalty = total == 0 ? 50 : 10 }
+        if config.soccer && total < 2 { lowScoringPenalty = (2 - total) * 25 }
 
         let lateDramaBonus = config.soccer ? soccerLateDrama(input.goals) : 0
 
@@ -127,6 +129,39 @@ enum Rating {
         }
         // Baseball and anything without a usable clock.
         return coarse
+    }
+
+    // MARK: Margin closeness
+
+    /// Score margin → 0-100 "how close is this game", the shared input to all
+    /// three closeness factors. A straight `multiplier` line for most sports.
+    /// A sport whose points arrive in chunks (football: 3, 6, 7, 8) carries a
+    /// piecewise-linear curve in the catalog keyed off how many SCORES the
+    /// margin is worth, so a 7-0 game reads as "one score", not "seven points".
+    /// Port of `marginCloseness` in src/lib/marginCloseness.ts.
+    static func closeness(_ margin: Double, config: Catalog.RatingConfig) -> Double {
+        let m = abs(margin)
+        let raw: Double
+        if let curve = config.closenessCurve, !curve.isEmpty {
+            raw = alongCurve(m, curve)
+        } else {
+            raw = 100 - m * config.multiplier
+        }
+        return max(0, min(100, raw))
+    }
+
+    /// Linear interpolation along `[margin, closeness]` knots; flat outside
+    /// either end.
+    private static func alongCurve(_ margin: Double, _ curve: [[Double]]) -> Double {
+        let knots = curve.filter { $0.count == 2 }
+        guard let first = knots.first else { return 0 }
+        if margin <= first[0] { return first[1] }
+        for i in 1..<knots.count {
+            let (x0, y0) = (knots[i - 1][0], knots[i - 1][1])
+            let (x1, y1) = (knots[i][0], knots[i][1])
+            if margin <= x1 { return y0 + ((margin - x0) / (x1 - x0)) * (y1 - y0) }
+        }
+        return knots[knots.count - 1][1]
     }
 
     // MARK: Margin helpers

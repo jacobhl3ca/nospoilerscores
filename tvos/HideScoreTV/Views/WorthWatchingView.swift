@@ -8,15 +8,15 @@ struct WorthWatchingView: View {
     @EnvironmentObject var preferences: Preferences
     @State private var selected: Game?
 
-    private let columns = [GridItem(.adaptive(minimum: 480, maximum: 520), spacing: 44)]
+    private let columns = [GridItem(.adaptive(minimum: GameCardView.size.width, maximum: GameCardView.size.width), spacing: 44)]
 
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 26) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Worth Watching").font(.system(size: 46, weight: .bold))
+                    Text("Worth Watching").font(.system(size: Type.title, weight: .bold))
                     Text("Finished games from the last two days, ranked by how close they were. No scores, no winners.")
-                        .font(.system(size: 24))
+                        .font(.system(size: Type.detail))
                         .foregroundStyle(Brand.secondary)
                 }
                 .padding(.top, 20)
@@ -43,7 +43,7 @@ struct WorthWatchingView: View {
         }
         .background(Brand.background.ignoresSafeArea())
         .fullScreenCover(item: $selected) { game in
-            GameDetailView(game: game, catalog: model.catalog)
+            GameDetailView(game: game).environmentObject(model)
         }
         .task {
             await model.load(day: model.today)

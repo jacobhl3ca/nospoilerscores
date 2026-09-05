@@ -8,19 +8,41 @@
 # uploads fine but cannot create the iOS/tvOS Distribution certificate, and the
 # failure lands on the EXPORT step, not the archive.
 #
-# Two things here look wrong and are not:
+# Three things here look wrong and are not:
 #
-#  1. The ARCHIVE is unsigned. Automatic signing provisions an archive for
+#  1. The ARCHIVE is built unsigned. Automatic signing provisions an archive for
 #     DEVELOPMENT, and a development profile cannot be issued to a team with no
 #     registered devices — which is us, since nothing here is ever side-loaded.
 #     Forcing CODE_SIGN_IDENTITY=Apple Distribution instead trips "conflicting
-#     provisioning settings". So the archive carries no signature and the export
-#     step applies the real App Store one, which is the only signature that ships.
+#     provisioning settings". The export step applies the real App Store
+#     signature, which is the only one that ships.
 #
-#  2. The EXPORT runs with a system-only PATH. exportArchive shells out to rsync,
+#  2. The archived bundles are then AD-HOC signed, by hand, with their
+#     entitlements files. The export re-signs with whatever entitlements it finds
+#     on the archived bundles — and an unsigned archive has none, so the App
+#     Groups entitlement the Top Shelf extension lives on was dropped SILENTLY
+#     (the export succeeds, the shelf can never read the shared container).
+#     An ad-hoc signature is enough to carry them: the export reads the
+#     entitlements off it, validates them against the store profile, and
+#     applies the real signature. Established 2026-09-05: the unsigned export
+#     read back (`codesign -d --entitlements`) with no app group in either
+#     bundle; the ad-hoc-signed one was validated against the profile — which
+#     is how the missing portal App Group surfaced. (Ad-hoc signing at ARCHIVE
+#     time is refused — "requires a provisioning profile" — even with
+#     AD_HOC_CODE_SIGNING_ALLOWED=YES.)
+#
+#  3. The EXPORT runs with a system-only PATH. exportArchive shells out to rsync,
 #     and Homebrew's rsync 3.4.x fails it with a bare "Copy failed" (the real
 #     error, "syntax or usage error (code 1)", is buried in the xcdistributionlogs
 #     bundle). Apple's /usr/bin/rsync is openrsync and works.
+#
+# One-time portal prerequisite (1.1+): the App Group `group.com.jacobhl.hidescore`
+# must exist and be enabled on BOTH App IDs (com.jacobhl.hidescore and
+# com.jacobhl.hidescore.topshelf) in developer.apple.com → Identifiers. The App
+# Store Connect API has no App Group resource, and xcodebuild's
+# -allowProvisioningUpdates cannot create one with an API key (it fails with
+# "Authentication failed", then "doesn't include the App Groups capability").
+# Until that is done the export below fails — loudly, which is the right way.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
@@ -51,6 +73,13 @@ xcodebuild archive \
   -derivedDataPath "$ROOT/build/dd" \
   DEVELOPMENT_TEAM=V45QZXMDAW \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+echo "→ ad-hoc signing the archived bundles so the export keeps their entitlements"
+APP="$ARCHIVE/Products/Applications/HideScoreTV.app"
+codesign -s - -f --entitlements "$ROOT/HideScoreTopShelf/HideScoreTopShelf.entitlements" "$APP/PlugIns/HideScoreTopShelf.appex"
+codesign -s - -f --entitlements "$ROOT/HideScoreTV/HideScoreTV.entitlements" "$APP"
+codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q application-groups \
+  || { echo "app-group entitlement missing from the archive — refusing to export"; exit 1; }
 
 echo "→ exporting + uploading"
 PATH=/usr/bin:/bin:/usr/sbin:/sbin xcodebuild -exportArchive \

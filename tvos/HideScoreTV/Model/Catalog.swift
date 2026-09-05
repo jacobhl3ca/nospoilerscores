@@ -32,6 +32,10 @@ struct Catalog: Codable {
         let regulationPeriods: Int
         let periodSeconds: Double?  // count-down sports only
         let soccer: Bool
+        /// `[margin, closeness]` knots for a sport whose points arrive in chunks
+        /// (football). Nil — and absent from a catalog written before it existed
+        /// — means the straight `multiplier` line. See Rating.closeness.
+        let closenessCurve: [[Double]]?
     }
 
     struct League: Codable, Identifiable, Hashable {
@@ -42,6 +46,10 @@ struct Catalog: Codable {
         let defaultOn: Bool
         let season: Season
         let rating: RatingConfig
+        /// ESPN season.type 1 is exhibition play and gets dropped — unless it is
+        /// the whole regular season for this league (rugby, the NFL preseason
+        /// window). Optional so a catalog written before the flag still decodes.
+        let preseasonIsRegular: Bool?
 
         var id: String { key }
         static func == (a: League, b: League) -> Bool { a.key == b.key }

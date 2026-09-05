@@ -10,19 +10,22 @@ struct GameCardView: View {
     let revealScores: Bool
     let onSelect: () -> Void
 
+    /// Three cards and a fourth peeking, on a 1920-wide board with 70pt margins.
+    static let size = CGSize(width: 520, height: 304)
+
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                Divider().overlay(Brand.hairline).padding(.vertical, 14)
+                Divider().overlay(Brand.hairline).padding(.vertical, 16)
                 teamRow(game.away)
                 Spacer(minLength: 10)
                 teamRow(game.home)
                 Spacer(minLength: 0)
                 footer
             }
-            .padding(22)
-            .frame(width: 480, height: 268, alignment: .topLeading)
+            .padding(24)
+            .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
         }
         .buttonStyle(.card)
         .accessibilityLabel(accessibilityText)
@@ -31,7 +34,7 @@ struct GameCardView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(game.leagueLabel.uppercased())
-                .font(.system(size: 19, weight: .heavy, design: .rounded))
+                .font(.system(size: Type.label, weight: .heavy, design: .rounded))
                 .tracking(1.1)
                 .foregroundStyle(Brand.secondary)
             Spacer()
@@ -44,14 +47,14 @@ struct GameCardView: View {
                     // there, which leaks that the game went long.
                     if !game.statusDetail.isEmpty {
                         Text(game.statusDetail)
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: Type.caption, weight: .medium))
                             .foregroundStyle(Brand.secondary)
                             .lineLimit(1)
                     }
                 }
             } else {
                 Text(headerRight)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: Type.caption, weight: .semibold))
                     .foregroundStyle(Brand.secondary)
             }
         }
@@ -67,15 +70,17 @@ struct GameCardView: View {
     }
 
     private func teamRow(_ team: GameTeam) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 16) {
             TeamMark(team: team)
             VStack(alignment: .leading, spacing: 2) {
                 Text(team.shortName)
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(size: Type.body, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                // A record is hidden once the game is over — it has already
+                // absorbed the result.
                 if let record = team.record, !record.isEmpty, !game.isFinal {
-                    Text(record).font(.system(size: 17)).foregroundStyle(Brand.secondary).lineLimit(1)
+                    Text(record).font(.system(size: Type.label)).foregroundStyle(Brand.secondary).lineLimit(1)
                 }
             }
             // Greedy frame rather than a Spacer, so both rows on a card are
@@ -95,17 +100,17 @@ struct GameCardView: View {
             if showRatings, game.isFinal || game.isLive, let rating = game.rating {
                 RatingBadge(rating: rating, catalog: catalog, compact: true)
             } else if game.isLive {
-                Text("Too early to rate").font(.system(size: 18)).foregroundStyle(Brand.secondary)
+                Text("Too early to rate").font(.system(size: Type.label)).foregroundStyle(Brand.secondary)
             }
             Spacer()
             if let broadcast = game.broadcasts.first {
                 Text(broadcast)
-                    .font(.system(size: 19, weight: .medium))
+                    .font(.system(size: Type.label, weight: .medium))
                     .foregroundStyle(Brand.secondary)
                     .lineLimit(1)
             }
         }
-        .frame(height: 40)
+        .frame(height: 44)
     }
 
     /// Siri and VoiceOver must not narrate the score either.

@@ -7,18 +7,18 @@ struct SettingsView: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 34) {
-                Text("Settings").font(.system(size: 46, weight: .bold)).padding(.top, 20)
+                Text("Settings").font(.system(size: Type.title, weight: .bold)).padding(.top, 20)
 
                 VStack(alignment: .leading, spacing: 22) {
                     Toggle("Show worth-watching ratings", isOn: $preferences.showRatings)
                     Text("A game's rating says how close it was. It never says who won or by how much.")
-                        .font(.system(size: 22)).foregroundStyle(Brand.secondary)
+                        .font(.system(size: Type.caption)).foregroundStyle(Brand.secondary)
 
                     Toggle("Always show scores", isOn: $preferences.revealScores)
-                    Text("Off by default. With this on, scores appear on every card without pressing Select.")
-                        .font(.system(size: 22)).foregroundStyle(Brand.secondary)
+                    Text("Off by default. With this on, scores appear on every card without pressing Select. The Home screen's Top Shelf never shows one either way.")
+                        .font(.system(size: Type.caption)).foregroundStyle(Brand.secondary)
                 }
-                .font(.system(size: 28))
+                .font(.system(size: Type.body))
                 .frame(maxWidth: 1000, alignment: .leading)
 
                 Divider().overlay(Brand.hairline).frame(maxWidth: 1000)
@@ -31,11 +31,11 @@ struct SettingsView: View {
                         aboutRow("Scores updated", updated.clockTime())
                     }
                     Text("Scores and schedules come from public scoreboard feeds. HideScore is not affiliated with, endorsed by, or sponsored by any league, team, or broadcaster.")
-                        .font(.system(size: 21))
+                        .font(.system(size: Type.caption))
                         .foregroundStyle(Brand.secondary)
                         .padding(.top, 12)
                     Text("hidescore.com/privacy")
-                        .font(.system(size: 21, weight: .medium))
+                        .font(.system(size: Type.caption, weight: .medium))
                         .foregroundStyle(Brand.secondary)
                 }
                 .frame(maxWidth: 1000, alignment: .leading)
@@ -56,7 +56,7 @@ struct SettingsView: View {
             Spacer()
             Text(value)
         }
-        .font(.system(size: 24))
+        .font(.system(size: Type.detail))
     }
 }
 

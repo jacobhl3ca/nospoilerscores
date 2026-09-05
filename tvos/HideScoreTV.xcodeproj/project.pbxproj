@@ -6,17 +6,67 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1A2B3C4D5E6F00000000001D /* HideScoreTopShelf.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F000000000011 /* HideScoreTopShelf.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1A2B3C4D5E6F00000000001E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1A2B3C4D5E6F000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A2B3C4D5E6F000000000012;
+			remoteInfo = HideScoreTopShelf;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1A2B3C4D5E6F00000000001C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1A2B3C4D5E6F00000000001D /* HideScoreTopShelf.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		1A2B3C4D5E6F000000000005 /* HideScoreTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HideScoreTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A2B3C4D5E6F000000000011 /* HideScoreTopShelf.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HideScoreTopShelf.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		1A2B3C4D5E6F000000000010 /* Exceptions for "HideScoreTV" folder in "HideScoreTV" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				HideScoreTV.entitlements,
 				Info.plist,
 			);
 			target = 1A2B3C4D5E6F000000000004 /* HideScoreTV */;
+		};
+		1A2B3C4D5E6F00000000001A /* Exceptions for "HideScoreTopShelf" folder in "HideScoreTopShelf" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				HideScoreTopShelf.entitlements,
+				Info.plist,
+			);
+			target = 1A2B3C4D5E6F000000000012 /* HideScoreTopShelf */;
+		};
+		1A2B3C4D5E6F00000000001B /* Exceptions for "HideScoreTV" folder in "HideScoreTopShelf" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Model/Catalog.swift,
+				Model/ESPN.swift,
+				Model/Game.swift,
+				Model/Rating.swift,
+				Model/ServiceDay.swift,
+				Model/SharedPreferences.swift,
+			);
+			target = 1A2B3C4D5E6F000000000012 /* HideScoreTopShelf */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -25,16 +75,34 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				1A2B3C4D5E6F000000000010 /* Exceptions for "HideScoreTV" folder in "HideScoreTV" target */,
+				1A2B3C4D5E6F00000000001B /* Exceptions for "HideScoreTV" folder in "HideScoreTopShelf" target */,
 			);
 			explicitFileTypes = {};
 			explicitFolders = ();
 			path = HideScoreTV;
 			sourceTree = "<group>";
 		};
+		1A2B3C4D5E6F000000000019 /* HideScoreTopShelf */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				1A2B3C4D5E6F00000000001A /* Exceptions for "HideScoreTopShelf" folder in "HideScoreTopShelf" target */,
+			);
+			explicitFileTypes = {};
+			explicitFolders = ();
+			path = HideScoreTopShelf;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		1A2B3C4D5E6F000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A2B3C4D5E6F000000000014 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -48,6 +116,7 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4D5E6F00000000000F /* HideScoreTV */,
+				1A2B3C4D5E6F000000000019 /* HideScoreTopShelf */,
 				1A2B3C4D5E6F000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +125,7 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4D5E6F000000000005 /* HideScoreTV.app */,
+				1A2B3C4D5E6F000000000011 /* HideScoreTopShelf.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,10 +140,12 @@
 				1A2B3C4D5E6F000000000006 /* Sources */,
 				1A2B3C4D5E6F000000000007 /* Frameworks */,
 				1A2B3C4D5E6F000000000008 /* Resources */,
+				1A2B3C4D5E6F00000000001C /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				1A2B3C4D5E6F00000000001F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				1A2B3C4D5E6F00000000000F /* HideScoreTV */,
@@ -82,6 +154,26 @@
 			productName = HideScoreTV;
 			productReference = 1A2B3C4D5E6F000000000005 /* HideScoreTV.app */;
 			productType = "com.apple.product-type.application";
+		};
+		1A2B3C4D5E6F000000000012 /* HideScoreTopShelf */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1A2B3C4D5E6F000000000016 /* Build configuration list for PBXNativeTarget "HideScoreTopShelf" */;
+			buildPhases = (
+				1A2B3C4D5E6F000000000013 /* Sources */,
+				1A2B3C4D5E6F000000000014 /* Frameworks */,
+				1A2B3C4D5E6F000000000015 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				1A2B3C4D5E6F000000000019 /* HideScoreTopShelf */,
+			);
+			name = HideScoreTopShelf;
+			productName = HideScoreTopShelf;
+			productReference = 1A2B3C4D5E6F000000000011 /* HideScoreTopShelf.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -94,6 +186,9 @@
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					1A2B3C4D5E6F000000000004 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					1A2B3C4D5E6F000000000012 = {
 						CreatedOnToolsVersion = 26.3;
 					};
 				};
@@ -113,12 +208,20 @@
 			projectRoot = "";
 			targets = (
 				1A2B3C4D5E6F000000000004 /* HideScoreTV */,
+				1A2B3C4D5E6F000000000012 /* HideScoreTopShelf */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		1A2B3C4D5E6F000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1A2B3C4D5E6F000000000015 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -135,7 +238,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		1A2B3C4D5E6F000000000013 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1A2B3C4D5E6F00000000001F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1A2B3C4D5E6F000000000012 /* HideScoreTopShelf */;
+			targetProxy = 1A2B3C4D5E6F00000000001E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1A2B3C4D5E6F00000000000A /* Debug */ = {
@@ -195,8 +313,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				CODE_SIGN_ENTITLEMENTS = HideScoreTV/HideScoreTV.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = V45QZXMDAW;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = HideScoreTV/Info.plist;
@@ -204,7 +323,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jacobhl.hidescore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -217,8 +336,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				CODE_SIGN_ENTITLEMENTS = HideScoreTV/HideScoreTV.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = V45QZXMDAW;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = HideScoreTV/Info.plist;
@@ -226,9 +346,55 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jacobhl.hidescore;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Release;
+		};
+		1A2B3C4D5E6F000000000017 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = HideScoreTopShelf/HideScoreTopShelf.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = V45QZXMDAW;
+				INFOPLIST_FILE = HideScoreTopShelf/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jacobhl.hidescore.topshelf;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Debug;
+		};
+		1A2B3C4D5E6F000000000018 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = HideScoreTopShelf/HideScoreTopShelf.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = V45QZXMDAW;
+				INFOPLIST_FILE = HideScoreTopShelf/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jacobhl.hidescore.topshelf;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
@@ -252,6 +418,15 @@
 			buildConfigurations = (
 				1A2B3C4D5E6F00000000000D /* Debug */,
 				1A2B3C4D5E6F00000000000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A2B3C4D5E6F000000000016 /* Build configuration list for PBXNativeTarget "HideScoreTopShelf" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4D5E6F000000000017 /* Debug */,
+				1A2B3C4D5E6F000000000018 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

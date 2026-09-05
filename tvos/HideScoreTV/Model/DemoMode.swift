@@ -48,10 +48,18 @@ enum DemoMode {
         let leagues = catalog.leagues.enumerated().map { index, league in
             Catalog.League(key: league.key, label: "Sports \(slot(index))", path: league.path,
                            logo: nil, defaultOn: league.defaultOn,
-                           season: league.season, rating: league.rating)
+                           season: league.season, rating: league.rating,
+                           preseasonIsRegular: league.preseasonIsRegular)
         }
         return Catalog(schema: catalog.schema, espnBase: catalog.espnBase,
                        ratingTiers: catalog.ratingTiers, leagues: leagues)
+    }
+
+    /// One game re-anonymized inside its slate, for a detail card that re-reads
+    /// the live copy of a game the demo board already renamed.
+    static func apply(_ game: Game, in slate: LeagueSlate) -> Game {
+        guard isActive else { return game }
+        return apply([slate]).first?.games.first { $0.id == game.id } ?? game
     }
 
     static func apply(_ slates: [LeagueSlate]) -> [LeagueSlate] {

@@ -8,20 +8,20 @@ struct LeaguesView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var preferences: Preferences
 
-    private let columns = [GridItem(.adaptive(minimum: 400, maximum: 460), spacing: 32)]
+    private let columns = [GridItem(.adaptive(minimum: 440, maximum: 560), spacing: 32)]
 
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 26) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Leagues").font(.system(size: 46, weight: .bold))
-                    Text("Pick what shows up on your board.")
-                        .font(.system(size: 24)).foregroundStyle(Brand.secondary)
+                    Text("Leagues").font(.system(size: Type.title, weight: .bold))
+                    Text("Pick what shows up on your board — and on the Home screen's Top Shelf.")
+                        .font(.system(size: Type.detail)).foregroundStyle(Brand.secondary)
                 }
                 .padding(.top, 20)
 
                 Toggle("Hide leagues that are out of season", isOn: $preferences.hideOffseason)
-                    .font(.system(size: 26))
+                    .font(.system(size: Type.detail))
                     .frame(maxWidth: 900)
 
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 32) {
@@ -67,14 +67,14 @@ struct LeaguesView: View {
                     Image(systemName: "sportscourt").frame(width: 44, height: 44)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(league.label).font(.system(size: 28, weight: .semibold)).lineLimit(1)
+                    Text(league.label).font(.system(size: Type.body, weight: .semibold)).lineLimit(1)
                     if !active {
-                        Text("Off-season").font(.system(size: 18)).foregroundStyle(Brand.secondary)
+                        Text("Off-season").font(.system(size: Type.label)).foregroundStyle(Brand.secondary)
                     }
                 }
                 Spacer()
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 30))
+                    .font(.system(size: 32))
                     .foregroundStyle(on ? Brand.accent : Brand.secondary)
             }
             .padding(.horizontal, 24)

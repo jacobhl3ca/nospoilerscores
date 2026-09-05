@@ -11,7 +11,7 @@
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 
 const WORK = "/tmp/hs-parity-ts";
 
@@ -36,6 +36,10 @@ function endOfBlock(src, from) {
 
 export function buildRatingModule(espnPath) {
   const src = readFileSync(espnPath, "utf8");
+  // The closeness curve is a leaf module of its own (so the website can unit-
+  // test it) and the rating block references it by name, so it rides along —
+  // verbatim, for the same no-copies reason as the block itself.
+  const margin = readFileSync(join(dirname(espnPath), "marginCloseness.ts"), "utf8");
   const start = src.indexOf("const SPORT_RATING_CONFIG");
   if (start < 0) throw new Error("extract-rating: SPORT_RATING_CONFIG not found in espn.ts");
   const fn = src.indexOf("function calculateRating(", start);
@@ -44,6 +48,7 @@ export function buildRatingModule(espnPath) {
 
   const body = [
     "type Sport = string;",
+    margin,
     src.slice(start, end),
     "export { calculateRating };",
   ].join("\n\n");

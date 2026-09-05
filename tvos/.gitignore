@@ -8,3 +8,4 @@ tools/parity/fixtures/
 tools/parity/ts-ratings.json
 tools/parity/swift-ratings.json
 .claude/
+tools/shelf/out/

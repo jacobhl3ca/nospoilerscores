@@ -6,20 +6,21 @@ import Combine
 /// On tvOS that is the right store rather than a compromise: the system backs it
 /// with iCloud automatically (1 MB cap), so a household with two Apple TVs gets
 /// the same leagues on both without the app asking for an iCloud entitlement or
-/// an account.
+/// an account. The parts the Top Shelf needs are mirrored into the app group on
+/// every change — see `SharedPreferences`.
 final class Preferences: ObservableObject {
     private let defaults = UserDefaults.standard
 
     /// League keys the viewer follows. Empty means "not chosen yet" — the app
     /// falls back to the catalog's defaults rather than showing nothing.
     @Published var followedLeagues: Set<String> {
-        didSet { defaults.set(Array(followedLeagues), forKey: Key.followed) }
+        didSet { defaults.set(Array(followedLeagues), forKey: Key.followed); mirror() }
     }
 
     /// Show the spoiler-safe worth-watching badge. On by default: it is the
     /// reason to open the app on a TV, and it reveals quality, never the score.
     @Published var showRatings: Bool {
-        didSet { defaults.set(showRatings, forKey: Key.ratings) }
+        didSet { defaults.set(showRatings, forKey: Key.ratings); mirror() }
     }
 
     /// Show scores everywhere without pressing Select. Off by default — the app
@@ -46,6 +47,12 @@ final class Preferences: ObservableObject {
         showRatings = defaults.bool(forKey: Key.ratings)
         revealScores = defaults.bool(forKey: Key.reveal)
         hideOffseason = defaults.bool(forKey: Key.hideOffseason)
+        // A viewer upgrading from 1.0 has picks the shelf has never seen.
+        mirror()
+    }
+
+    private func mirror() {
+        SharedPreferences.mirror(followed: followedLeagues, showRatings: showRatings)
     }
 
     func toggle(_ leagueKey: String, defaultsFrom catalog: Catalog) {
@@ -63,7 +70,6 @@ final class Preferences: ObservableObject {
     }
 
     func isFollowed(_ leagueKey: String, in catalog: Catalog) -> Bool {
-        followedLeagues.isEmpty ? (catalog.league(leagueKey)?.defaultOn ?? false)
-                                : followedLeagues.contains(leagueKey)
+        SharedPreferences.isFollowed(leagueKey, followed: followedLeagues, in: catalog)
     }
 }

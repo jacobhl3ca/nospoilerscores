@@ -8,6 +8,7 @@ name, price, categories and age rating.
 
   python3 submit.py status                 # what's live / in flight
   python3 submit.py metadata               # push the copy in APP_STORE_TVOS.md
+                                           # (incl. "What's new" from 1.1 on)
   python3 submit.py screenshots <dir>      # upload 1920x1080 or 3840x2160 PNGs
   python3 submit.py attach <buildNumber>   # wait for processing, attach the build
   python3 submit.py submit                 # send it to review
@@ -123,6 +124,11 @@ def cmd_metadata():
         "supportUrl": url,
         "marketingUrl": url,
     }}}
+    # Release notes. App Store Connect has no such field on a platform's FIRST
+    # version and rejects the attribute outright, so it only rides along once
+    # there is a shipped version to be "new" against.
+    if "what's new" in s and v["attributes"].get("versionString") != "1.0":
+        body["data"]["attributes"]["whatsNew"] = s["what's new"]
     if len(body["data"]["attributes"]["keywords"]) > 100:
         raise SystemExit(f"keywords are {len(body['data']['attributes']['keywords'])} chars — the limit is 100")
     call("PATCH", f"/appStoreVersionLocalizations/{loc['id']}", body)
@@ -227,16 +233,37 @@ def cmd_cancel():
     the one thing that frees it."""
     for s in call("GET", f"/apps/{APP}/reviewSubmissions?limit=20")["data"]:
         if s["attributes"]["platform"] == PLATFORM and s["attributes"]["state"] in ("UNRESOLVED_ISSUES", "READY_FOR_REVIEW", "WAITING_FOR_REVIEW"):
-            call("PATCH", f"/reviewSubmissions/{s['id']}",
-                 {"data": {"type": "reviewSubmissions", "id": s["id"], "attributes": {"canceled": True}}})
+            try:
+                call("PATCH", f"/reviewSubmissions/{s['id']}",
+                     {"data": {"type": "reviewSubmissions", "id": s["id"], "attributes": {"canceled": True}}})
+            except Exception as e:
+                # An empty READY_FOR_REVIEW draft is "not in cancellable state"
+                # (409) — harmless, cmd_submit reuses it. Anything else is real.
+                if "409" not in str(e):
+                    raise
+                print(f"not cancellable, skipping {s['id']} ({s['attributes']['state']})")
+                continue
             print(f"cancelled {s['id']} ({s['attributes']['state']})")
 
 
 def cmd_submit():
     v = tv_version()
-    sub = call("POST", "/reviewSubmissions", {"data": {
-        "type": "reviewSubmissions", "attributes": {"platform": PLATFORM},
-        "relationships": {"app": {"data": {"type": "apps", "id": APP}}}}})["data"]
+    # An empty, never-submitted draft (READY_FOR_REVIEW, 0 items) can sit on the
+    # app for good — one has sat beside 1.0's submission (bb390201…) — and Apple
+    # refuses to cancel it: PATCH {canceled:true} → 409 "not in cancellable
+    # state" (2026-09-06). Reuse it rather than race a second POST against it.
+    sub = None
+    for s in call("GET", f"/apps/{APP}/reviewSubmissions?limit=20")["data"]:
+        if s["attributes"]["platform"] != PLATFORM or s["attributes"]["state"] != "READY_FOR_REVIEW":
+            continue
+        if not call("GET", f"/reviewSubmissions/{s['id']}/items")["data"]:
+            sub = s
+            print(f"reusing the empty draft submission {s['id']}")
+            break
+    if sub is None:
+        sub = call("POST", "/reviewSubmissions", {"data": {
+            "type": "reviewSubmissions", "attributes": {"platform": PLATFORM},
+            "relationships": {"app": {"data": {"type": "apps", "id": APP}}}}})["data"]
     call("POST", "/reviewSubmissionItems", {"data": {
         "type": "reviewSubmissionItems",
         "relationships": {

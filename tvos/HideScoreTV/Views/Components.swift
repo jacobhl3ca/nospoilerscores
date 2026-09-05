@@ -21,12 +21,24 @@ enum Brand {
     }
 }
 
+/// The type scale, sized for a couch, not a lap. tvOS's own smallest text style
+/// (Caption 2) is 23pt; nothing here goes below it, because a 4K panel three
+/// metres away turns anything smaller into texture.
+enum Type {
+    static let title: CGFloat = 46        // screen titles
+    static let shelf: CGFloat = 34        // shelf headings
+    static let body: CGFloat = 30         // team names, list rows
+    static let detail: CGFloat = 27       // detail-card copy
+    static let caption: CGFloat = 24      // status, time, channel, counts
+    static let label: CGFloat = 23        // league tag, records, badges
+}
+
 /// Team mark. Falls back to the team's own colour and initials when there is no
 /// logo — which is also what App Store demo mode leans on, since it strips every
 /// logo URL rather than showing a trademark in a screenshot.
 struct TeamMark: View {
     let team: GameTeam
-    var size: CGFloat = 44
+    var size: CGFloat = 48
 
     var body: some View {
         ZStack {
@@ -64,11 +76,11 @@ struct RatingBadge: View {
     var body: some View {
         let tier = catalog.tier(for: rating)
         Text(tier?.label ?? "—")
-            .font(.system(size: compact ? 20 : 24, weight: .heavy, design: .rounded))
+            .font(.system(size: compact ? Type.label : Type.detail, weight: .heavy, design: .rounded))
             .tracking(0.5)
             .foregroundStyle(.white)
-            .padding(.horizontal, compact ? 12 : 16)
-            .padding(.vertical, compact ? 5 : 7)
+            .padding(.horizontal, compact ? 14 : 18)
+            .padding(.vertical, compact ? 6 : 8)
             .background(Brand.color(hex: tier?.color) ?? .gray, in: Capsule())
             .accessibilityLabel("Worth watching: \(tier?.label.capitalized ?? "unrated")")
     }
@@ -81,13 +93,13 @@ struct HiddenScore: View {
     var body: some View {
         Group {
             if let revealed {
-                Text(revealed).font(.system(size: 26, weight: .bold, design: .rounded))
+                Text(revealed).font(.system(size: Type.body, weight: .bold, design: .rounded))
             } else {
-                Image(systemName: "eye.slash.fill").font(.system(size: 20, weight: .semibold))
+                Image(systemName: "eye.slash.fill").font(.system(size: Type.label, weight: .semibold))
             }
         }
         .foregroundStyle(revealed == nil ? Brand.secondary : .white)
-        .frame(minWidth: 54)
+        .frame(minWidth: 60)
         .accessibilityLabel(revealed ?? "Score hidden")
     }
 }
@@ -96,7 +108,7 @@ struct LivePip: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(Brand.live).frame(width: 12, height: 12)
-            Text("LIVE").font(.system(size: 20, weight: .heavy, design: .rounded)).foregroundStyle(Brand.live)
+            Text("LIVE").font(.system(size: Type.label, weight: .heavy, design: .rounded)).foregroundStyle(Brand.live)
         }
     }
 }
@@ -112,9 +124,9 @@ struct StatusNote: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: symbol).font(.system(size: 44)).foregroundStyle(Brand.secondary)
-            Text(title).font(.system(size: 30, weight: .semibold))
+            Text(title).font(.system(size: 32, weight: .semibold))
             if let detail {
-                Text(detail).font(.system(size: 24)).foregroundStyle(Brand.secondary).multilineTextAlignment(.center)
+                Text(detail).font(.system(size: Type.detail)).foregroundStyle(Brand.secondary).multilineTextAlignment(.center)
             }
             if let action {
                 Button(actionTitle, action: action).padding(.top, 8)

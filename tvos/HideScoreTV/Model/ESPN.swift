@@ -30,7 +30,14 @@ enum ESPN {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw FetchError.notJSON }
 
         let events = root["events"] as? [[String: Any]] ?? []
+        // The same two drops as eventsToGames on the website: a postponed,
+        // canceled or suspended game is not a game, and exhibition play is not
+        // the season — except where the catalog says it is (every rugby
+        // fixture, the NFL preseason window). `parse` itself keeps every
+        // two-competitor event, which is what the parity harness compares.
         return events.compactMap { parse($0, league: league) }
+            .filter { !$0.isVoided }
+            .filter { !$0.isPreseason || (league.preseasonIsRegular ?? false) }
     }
 
     // MARK: - Parsing
@@ -50,7 +57,9 @@ enum ESPN {
         let status = (competition["status"] as? [String: Any]) ?? (event["status"] as? [String: Any]) ?? [:]
         let type = status["type"] as? [String: Any] ?? [:]
         let state = string(type["state"]) ?? ""
+        let statusName = string(type["name"]) ?? ""
         let completed = (type["completed"] as? Bool) ?? false
+        let seasonType = int((event["season"] as? [String: Any])?["type"])
         let detail = string(type["shortDetail"]) ?? string(type["detail"]) ?? ""
         let period = int(status["period"]) ?? 0
         let clock = double(status["clock"])
@@ -79,8 +88,11 @@ enum ESPN {
             leagueLabel: league.label,
             start: date(string(event["date"]) ?? string(competition["date"])),
             state: state,
+            statusName: statusName,
             statusDetail: detail,
             completed: completed,
+            seasonType: seasonType,
+            soccer: league.rating.soccer,
             home: home,
             away: away,
             broadcasts: broadcasts,
@@ -169,9 +181,19 @@ enum ESPN {
         return f
     }()
     private static let iso = ISO8601DateFormatter()
+    /// ESPN's actual shape — "2026-09-05T23:30Z", no seconds — which
+    /// `ISO8601DateFormatter` refuses. Without this every start time was nil:
+    /// cards said "Scheduled" instead of "7:10 PM" and shelves lost their order.
+    private static let isoNoSeconds: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm'Z'"
+        return f
+    }()
 
     static func date(_ value: String?) -> Date? {
         guard let value else { return nil }
-        return iso.date(from: value) ?? isoWithFraction.date(from: value)
+        return isoNoSeconds.date(from: value) ?? iso.date(from: value) ?? isoWithFraction.date(from: value)
     }
 }

@@ -18,8 +18,11 @@ struct Game: Identifiable, Hashable {
     var leagueLabel: String
     var start: Date?
     var state: String            // "pre" | "in" | "post"
+    var statusName: String       // ESPN's status.type.name — "STATUS_FINAL", "STATUS_POSTPONED"…
     var statusDetail: String     // "Final", "Top 5th", "7:10 PM"
     var completed: Bool
+    var seasonType: Int?         // ESPN's season.type — 1 = preseason, 2 = regular, 3 = post
+    var soccer: Bool             // decides "Away at Home" vs "Home vs Away"
     var home: GameTeam
     var away: GameTeam
     var broadcasts: [String]
@@ -31,7 +34,25 @@ struct Game: Identifiable, Hashable {
     func hash(into h: inout Hasher) { h.combine(id); h.combine(leagueKey) }
 
     var isLive: Bool { state == "in" }
-    var isFinal: Bool { state == "post" || completed }
+
+    /// Postponed, canceled and suspended games sit on ESPN's board with
+    /// state "post" and nothing played. They must never read as "Final" — the
+    /// website drops them outright (eventsToGames) and so does `ESPN.slate`.
+    var isVoided: Bool {
+        statusName.contains("POSTPONED") || statusName.contains("CANCELED") || statusName.contains("SUSPENDED")
+    }
+
+    var isFinal: Bool { (state == "post" || completed) && !isVoided }
+
+    /// Exhibition play. Dropped unless the catalog says type 1 IS the season for
+    /// this league (every rugby fixture, the NFL preseason window).
+    var isPreseason: Bool { seasonType == 1 }
+
+    /// "Away at Home" for North American sports, "Home vs Away" for soccer —
+    /// the convention each sport's fans actually use.
+    var matchup: String {
+        soccer ? "\(home.shortName) vs \(away.shortName)" : "\(away.shortName) at \(home.shortName)"
+    }
 
     /// Everything the score reveal is hiding, as one line.
     var revealedScore: String {

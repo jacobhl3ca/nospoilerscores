@@ -44,6 +44,11 @@ No account. No sign-in. No tracking. Nothing collected.
 —
 HideScore is an independent app and is not affiliated with, endorsed by, or sponsored by any team, league, broadcaster, or sports organization. All scores and schedules are sourced from publicly available sports websites.
 
+## What's new
+The Home screen's Top Shelf now shows last night's closest games and tonight's slate — with every score still hidden. Highlight HideScore in your top row and pick a game to open it straight from the Home screen.
+
+Also in this version: a live game's card keeps itself up to date, finished games no longer show season records, the type reads larger from across the room, and postponed or exhibition games stay off the board.
+
 ## Support / marketing URL
 https://hidescore.com
 

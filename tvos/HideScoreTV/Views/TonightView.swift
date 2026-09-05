@@ -11,12 +11,20 @@ struct TonightView: View {
             LazyVStack(alignment: .leading, spacing: 44) {
                 dateBar
                 let slates = model.slates(for: model.day)
+                let failed = slates.filter(\.failed)
                 if model.isLoading(model.day) && slates.isEmpty {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 120)
                 } else if model.activeLeagues(on: model.day).isEmpty {
                     StatusNote(symbol: "list.bullet",
                                title: "No leagues followed",
                                detail: "Pick the sports you care about in the Leagues tab.")
+                } else if !failed.isEmpty && failed.count == slates.count {
+                    // Every league failed at once: that is the Apple TV's
+                    // connection, not five separate outages, so say it once.
+                    StatusNote(symbol: "wifi.exclamationmark",
+                               title: "Couldn't reach the scoreboard",
+                               detail: "None of your leagues answered. Check the Apple TV's connection, then try again.",
+                               action: { Task { await model.load(day: model.day, force: true) } })
                 } else if slates.allSatisfy({ $0.games.isEmpty && !$0.failed }) {
                     StatusNote(symbol: "moon.zzz",
                                title: "Nothing on \(ServiceDay.title(model.day, relativeTo: model.today).lowercased())",
@@ -40,7 +48,7 @@ struct TonightView: View {
         }
         .background(Brand.background.ignoresSafeArea())
         .fullScreenCover(item: $selected) { game in
-            GameDetailView(game: game, catalog: model.catalog)
+            GameDetailView(game: game).environmentObject(model)
         }
         .task { await model.load(day: model.day) }
         .onChange(of: model.day) { _, _ in Task { await model.load(day: model.day) } }
@@ -49,7 +57,7 @@ struct TonightView: View {
     private var dateBar: some View {
         HStack(spacing: 22) {
             Text(ServiceDay.title(model.day, relativeTo: model.today))
-                .font(.system(size: 46, weight: .bold))
+                .font(.system(size: Type.title, weight: .bold))
             Spacer()
             Button {
                 model.day = ServiceDay.offset(-1, from: model.day)
@@ -71,11 +79,11 @@ struct TonightView: View {
         HStack(spacing: 14) {
             if let logo = slate.league.logo, let url = URL(string: logo) {
                 AsyncImage(url: url) { $0.resizable().scaledToFit() } placeholder: { Color.clear }
-                    .frame(width: 36, height: 36)
+                    .frame(width: 38, height: 38)
             }
-            Text(slate.league.label).font(.system(size: 32, weight: .bold))
+            Text(slate.league.label).font(.system(size: Type.shelf, weight: .bold))
             Text("\(slate.games.count)")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: Type.caption, weight: .semibold))
                 .foregroundStyle(Brand.secondary)
             Spacer()
         }
