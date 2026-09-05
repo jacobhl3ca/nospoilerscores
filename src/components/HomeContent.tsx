@@ -3440,7 +3440,6 @@ export default function HomeContent({
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
-              showTeamRecords: !!prefs.showTeamRecords,
               onAbbrevReport,
               namesCompact,
             };
@@ -4275,7 +4274,6 @@ export default function HomeContent({
         <GameDetailModal
           game={detailGame}
           showRatings={prefs.showRatings}
-          showTeamRecords={!!prefs.showTeamRecords}
           onClose={() => setDetailGame(null)}
           leagueLabel={thirdLeagueOptions.find((o) => o.sport === detailGame.sport)?.label ?? detailGame.sport.toUpperCase()}
           onPlayHighlight={openVideoModal}

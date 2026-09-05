@@ -52,8 +52,6 @@ interface GameCardProps {
   // column suppresses it for single-matchup Finals views where the favorite
   // sort can't reorder anything.
   showStars?: boolean;
-  // Opt-in (Settings). Off by default — see showTeamRecords in preferences.ts.
-  showRecords?: boolean;
 }
 
 function RatingBadge({ rating }: { rating: number }) {
@@ -370,7 +368,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, showRecords }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
@@ -1122,23 +1120,28 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 team-schedule view + the Settings team picker. */}
             {showStars ? star(team.id, team.displayName, favoriteTeams.includes(team.id), isTBD) : null}
             <span className="flex-1 min-w-0" />
-            {showRecords && !isTBD && team.record && !effectivePastDate && !isFinished && !isFuture ? (
-              <span className="text-[10px] sm:text-xs tabular-nums text-right whitespace-nowrap shrink-0 leading-none flex items-center" style={{ color: "var(--text-muted)" }}>{team.record}</span>
-            ) : null}
           </div>
         ))}
       </div>
 
       {/* Highlight buttons (official + top-search YouTube, plus NHL.com recap)
           live in the shared GameHighlights component so the score card and the
-          details popup render identical buttons playing identical videos. */}
-      <GameHighlights
-        game={game}
-        leagueLabel={leagueLabel}
-        isToday={isToday}
-        onPlayHighlight={onPlayHighlight}
-        onPlayEmbed={onPlayEmbed}
-      />
+          details popup render identical buttons playing identical videos.
+          .hl-slot (finished cards only) is the board-wide height floor — see
+          globals.css. Once any card on the board has earned a button row, every
+          finished card reserves one, so a card whose clip never comes (a BTN or
+          ESPN+ college game the ESPN channel skips) sits level with the MLB card
+          beside it instead of one row shorter (Jacob 9/5). Until something
+          resolves, the slot is empty and costs nothing — the 8/10 rule. */}
+      <div className={isFinished ? "hl-slot" : undefined}>
+        <GameHighlights
+          game={game}
+          leagueLabel={leagueLabel}
+          isToday={isToday}
+          onPlayHighlight={onPlayHighlight}
+          onPlayEmbed={onPlayEmbed}
+        />
+      </div>
     </div>
   );
 }

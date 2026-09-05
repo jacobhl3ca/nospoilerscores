@@ -332,6 +332,35 @@ body {
   outline-offset: 2px;
 }
 
+/* ── Card height floor: the MLB card is the height every card should be ─────
+   A finished card's action row is one 27px button (py-1.5 + the 10px label)
+   under a 4px (sm: 8px) margin, and it is the whole difference between a card
+   with a clip and one without. Two earlier rules fought over it: f2deaf2d
+   reserved the row on every finished card, and f8522ad5 took it back because a
+   slate where NOTHING resolves — a whole MLB column before the recaps land —
+   wore a blank band under every card ("bigger box not until it has actual
+   highlight", Jacob 8/10). Then 9/5: "the MLB cards height [is] the height
+   each card should be … I still see other leagues cards being smaller" — the
+   yesterday board, MLB's 3m/10m beside college games whose clip never comes.
+
+   This keeps both. The row is reserved on every finished card the moment ANY
+   card on the board has earned one (`main:has(...)`), and on none of them until
+   then. Parity comes from the slate, not from a phantom row.
+
+   .hl-slot wraps the action row on finished GameCards, event tiles and UFC
+   bouts only; the details popup's copy of GameHighlights is not inside one, so
+   an open popup can never trip the floor. flow-root keeps the row's own margin
+   INSIDE the slot — otherwise it collapses out through the wrapper and a card
+   with a button would measure one margin taller than the reserve. Keep the
+   numbers in step with the button and its row margin (mt-1 sm:mt-2);
+   tests/visual/card-height-parity.spec.ts measures a real button row against
+   the reserve. */
+.hl-slot { display: flow-root; }
+main:has(.hl-slot .highlight-btn) .hl-slot { min-height: calc(27px + 0.25rem); }
+@media (min-width: 640px) {
+  main:has(.hl-slot .highlight-btn) .hl-slot { min-height: calc(27px + 0.5rem); }
+}
+
 /* Score/event CARD roots. These are divs with role="button" + tabIndex=0, and a
    div with a tabindex takes focus on MOUSEDOWN — so every ordinary tap left a
    light-blue ring painted around the card, still there once the details sheet
