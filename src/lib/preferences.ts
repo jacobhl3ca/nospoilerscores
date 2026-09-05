@@ -1,4 +1,5 @@
 import { Sport } from "./types";
+import type { TopEventsMode, TopEventsCount } from "./topEvents";
 import { setServiceTimeZone } from "./etDay";
 
 const STORAGE_KEY = "nss-preferences";
@@ -22,7 +23,7 @@ const STORAGE_KEY = "nss-preferences";
 // Added 2026-08-11: llws→lw, and the five rugby competitions sn/rw/rc/sr/rt.
 // Same two rules again — letters only, and checked collision-free against
 // every code already in this map before being added.
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", llws: "lw", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", cricket: "ck", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es" };
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", nfl: "f", llws: "lw", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", cricket: "ck", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;
@@ -231,6 +232,17 @@ export interface Preferences {
   // August's Premier League banner doesn't silence next August's, and capped to
   // the last dozen keys so this can't grow without bound in a synced prefs blob.
   kickoffBannersDismissed?: string[];
+  // Set on every kickoff-banner ✕ to today + 7 days (YYYYMMDD). While today is
+  // earlier, NO season-kickoff banner shows, whichever league is next: six
+  // openers fall between Aug 29 and Oct 20, and 4 of the 68 sessions that
+  // dismissed one in the last 40 days had to dismiss two or more (Jacob 9/4).
+  // Merged as the later date across devices — see lib/dismissals.ts.
+  kickoffBannerSnoozedUntil?: string;
+  // Top events column (lib/topEvents.ts). All three undefined = Auto (ESPN's
+  // homepage strip + your starred teams), 8 games.
+  topEventsMode?: TopEventsMode;
+  topEventsLeagues?: Sport[];
+  topEventsCount?: TopEventsCount;
   // The footer's Google Play badge, hidden by its own dismiss control. Only
   // signed-in users are given that control, because the dismissal rides this
   // prefs blob and only a signed-in account pushes the blob to the server — a

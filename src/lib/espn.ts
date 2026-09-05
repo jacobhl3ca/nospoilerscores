@@ -1,5 +1,6 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout } from "./types";
 import { collegeFootballPollRank } from "./pollRank";
+import { parseEspnHeader, rankTopEvents, topEventsSourceSports, TOP_EVENTS_DEFAULT_COUNT, type EspnHeaderFeature, type TopEventsMode, type TopEventsCount } from "./topEvents";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
@@ -45,6 +46,9 @@ const SPORT_PATHS: Record<Sport, string> = {
   boxing: "",
   poker: "",
   esports: "",
+  // Top events has no scoreboard of its own — fetchTopEvents pulls the real
+  // leagues' boards. Present only so the Record stays total.
+  top: "",
   mlb: "/baseball/mlb/scoreboard",
   // Little League World Series (added 2026-08-11). ESPN files it under
   // baseball/llb and it returns the STANDARD scoreboard shape, so parseGame
@@ -426,7 +430,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // ("Rugby World Cup"), and a 20-character name would push the ‹ › arrows out
   // from under the pointer. "Rugby Nations" also reads unambiguously next to
   // "Six Nations" in the switcher, which "Nations Champ" does not.
-  { sport: "nationschamp", label: "Rugby Nations", startDate: "07-04", endDate: "11-29", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
+  // Two windows, not one: the Nations Championship plays a July round and
+  // then nothing until the November finals (ESPN calendar checked 9/4/2026:
+  // last July match 7/18, next 11/06). A single Jul→Nov window called it
+  // in-season for 3.5 empty months. Same sport, so the catalog dedupes them.
+  { sport: "nationschamp", label: "Rugby Nations", startDate: "07-04", endDate: "07-19", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
+  { sport: "nationschamp", label: "Rugby Nations", startDate: "11-06", endDate: "11-29", championshipDate: "11-29", verifiedFor: 2026, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2026 } },
   // ── F1 + UFC (single-event tiles) ──
   // UFC re-enabled 2026-07-17: its bout cards now match the game cards' look
   // (fighter names use the standard text-sm .team-name treatment + shared
@@ -664,7 +673,7 @@ const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
   cricket: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
-  ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮",
+  ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮", top: "⭐",
 };
 
 export function sportGlyph(sport: Sport): string {
@@ -875,9 +884,13 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
 
 // The single most imminent league worth announcing for viewDate, or null.
 // One banner at a time by design — two stacked announcements is an ad unit.
-export function getLeagueKickoff(viewDate: Date): LeagueKickoff | null {
+// `exclude` = leagues the user unticked in Settings: a hidden league never
+// takes the banner, and the NEXT opener takes it instead of a blank week —
+// with UCL hidden on Sep 4 that is the NFL (9/9), not silence (Jacob 9/4).
+export function getLeagueKickoff(viewDate: Date, exclude: readonly Sport[] = []): LeagueKickoff | null {
   const candidates: LeagueKickoff[] = [];
   for (const league of ALL_LEAGUES) {
+    if (exclude.includes(league.sport)) continue;
     // Opt-in leagues never take the banner. Mid-August alone opens La Liga,
     // Serie A, Ligue 1 and the Saudi Pro League within nine days of each other,
     // and announcing a league the user hasn't asked for — in the one slot above
@@ -1077,6 +1090,18 @@ export function pickAndAssignLeagues(viewDate: Date, count: number = MAX_LEAGUES
 
 // Resolves the display label for a league at a given date — NCAAM swaps to
 // "March Madness" during the tournament window; everything else passes through.
+// The label a card should carry for a game of `sport` on viewDate: the active
+// config's label when one is in season ("US Open" during the Slam, "March
+// Madness" in the tourney), else the sport's first catalog entry. The Top
+// events column mixes leagues, and its highlight channels + share cards are
+// keyed by this label, so each card names its own league.
+export function sportDisplayLabel(sport: Sport, viewDate: Date): string {
+  if (sport === "top") return TOP_EVENTS_CONFIG.label;
+  const configs = ALL_LEAGUES.filter((l) => l.sport === sport);
+  const config = configs.find((l) => isLeagueActive(l, viewDate)) ?? configs[0];
+  return config ? effectiveLeagueLabel(config, viewDate) : sport.toUpperCase();
+}
+
 export function effectiveLeagueLabel(league: LeagueConfig, viewDate: Date): string {
   if (league.sport === "ncaam" && league.marchMadnessLabel && isMarchMadness(viewDate)) {
     return "March Madness";
@@ -1165,6 +1190,9 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   scoringDivisor: number;   // normalizes scoring bonus per sport
   regulationPeriods: number; // normal period count (innings for MLB)
 }> = {
+  // Never consulted: a Top events game keeps its real sport, so the rating
+  // engine rates it as that league. Present only so the Record stays total.
+  top:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 30,  regulationPeriods: 4 },
   mlb:    { multiplier: 14,  overtimeBonus: 15, scoringDivisor: 3,   regulationPeriods: 9 },
   // Little League regulation is SIX innings, not nine — getting this wrong
   // would make `periods > regulationPeriods` false for a real extra-innings
@@ -2426,6 +2454,8 @@ export function espnGameUrl(game: Game): string {
     // PandaScore supplies no public per-match page, so there is no gamecast
     // to link to; this only satisfies the exhaustive switch.
     case "esports": return `https://www.pandascore.co/`;
+    // A Top events card keeps its REAL sport, so this never runs either.
+    case "top": return `https://www.espn.com/`;
   }
 }
 
@@ -2513,6 +2543,7 @@ export function sportStreamFallback(sport: Sport): string {
     // Every tier-s/a match streams free on Twitch; the channel varies per
     // league, so the directory is the only destination right for all of them.
     case "esports": return "https://www.twitch.tv/directory/category/league-of-legends";
+    case "top": return "https://www.espn.com/watch";
   }
 }
 
@@ -4754,6 +4785,84 @@ export async function resolveMlbGameVideos(game: Game): Promise<MlbGameVideos | 
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// TOP EVENTS — the cross-league column (Jacob 9/4)
+// ═══════════════════════════════════════════════════════════════
+// Not in ALL_LEAGUES on purpose: it has no season, no news feed and no
+// scoreboard, and every loop over the catalog would otherwise have to special-
+// case it. resolveSlot hands this config back for a "top" slot pref, and
+// fetchAllLeagues fills it AFTER the real columns so their games are reused
+// instead of fetched twice.
+export const TOP_EVENTS_CONFIG: LeagueConfig = { sport: "top", label: "Top events", excludeFromAuto: true };
+
+export interface TopEventsOptions {
+  favoriteTeams?: string[];
+  mode?: TopEventsMode;
+  leagues?: Sport[];
+  count?: TopEventsCount;
+}
+
+// ESPN's homepage "Top Events" strip. Same CDN family as the scoreboards,
+// CORS-open, 10 s edge cache. Editorial rather than exhaustive: on a Friday
+// in September it carries ~5 sports and 1-16 events each — exactly the
+// "what is espn.com leading with" signal the ranking anchors on.
+const ESPN_HEADER_URL = "https://site.web.api.espn.com/apis/v2/scoreboard/header?region=us&lang=en&contentorigin=espn&tz=America%2FNew_York";
+
+async function fetchEspnHeader(): Promise<EspnHeaderFeature[]> {
+  try {
+    const res = await fetchWithRetry(ESPN_HEADER_URL, 1, 6000);
+    if (!res.ok) return [];
+    return parseEspnHeader(await res.json());
+  } catch {
+    return [];
+  }
+}
+
+// Sports the auto pool falls back to when ESPN's strip is empty (fetch failed,
+// or a quiet morning) and the user has no starred teams: the board's own
+// in-season ranking, trimmed to game-card sports.
+function fallbackTopSports(viewDate: Date): Sport[] {
+  const { firstPref, rest } = getActiveLeagueCandidates(viewDate);
+  const out: Sport[] = [];
+  for (const cfg of [...firstPref, ...rest]) {
+    if (!out.includes(cfg.sport)) out.push(cfg.sport);
+  }
+  return out;
+}
+
+export async function fetchTopEvents(
+  date: string | undefined,
+  viewDate: Date,
+  opts: TopEventsOptions | undefined,
+  // Games the board already fetched for this date, by sport — a league that is
+  // also a column costs nothing extra.
+  prefetched: Map<Sport, Game[]>,
+): Promise<LeagueData> {
+  const mode: TopEventsMode = opts?.mode ?? "auto";
+  const favoriteTeams = opts?.favoriteTeams ?? [];
+  const features = await fetchEspnHeader();
+  let sports = topEventsSourceSports(mode, opts?.leagues, features, favoriteTeams);
+  if (mode === "auto" && sports.length < 3) {
+    sports = topEventsSourceSports("manual", [...sports, ...fallbackTopSports(viewDate)], features, favoriteTeams);
+  }
+  const pools = await Promise.all(sports.map(async (sport) => {
+    const pre = prefetched.get(sport);
+    if (pre) return pre;
+    try {
+      return (await fetchGames(sport, date)).games;
+    } catch {
+      return [] as Game[];
+    }
+  }));
+  const games = rankTopEvents(pools.flat(), {
+    favoriteTeams,
+    features,
+    nowMs: Date.now(),
+    count: opts?.count ?? TOP_EVENTS_DEFAULT_COUNT,
+  });
+  return { sport: "top", label: TOP_EVENTS_CONFIG.label, games, fetchFailed: false };
+}
+
 export async function fetchAllLeagues(
   date?: string,
   thirdLeagueSport?: Sport | "empty",
@@ -4761,6 +4870,8 @@ export async function fetchAllLeagues(
   // 3 on phones/laptops, 5 on wide viewports (the caller measures). Slots 4-5
   // exist only in the 5-column board; their prefs are ignored at count 3.
   slotCount: number = MAX_LEAGUES,
+  // Only read when a slot is "top" — see fetchTopEvents.
+  topOpts?: TopEventsOptions,
 ): Promise<LeagueData[]> {
   // Parse viewed date so league visibility matches the day being viewed, not today
   const viewDate = date
@@ -4788,6 +4899,7 @@ export async function fetchAllLeagues(
   const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
+    if (sport === "top") return TOP_EVENTS_CONFIG;
     const configs = ALL_LEAGUES.filter((l) => l.sport === sport);
     if (!configs.length) return null;
     // Several sports have more than one seasonal config (NFL regular season +
@@ -5024,10 +5136,20 @@ export async function fetchAllLeagues(
   // returns [] on any error), so this is defense-in-depth against a future
   // enrichment step reintroducing a throw — one bad column drops out, the
   // rest still render.
-  const settled = await Promise.allSettled(final.map(fetchLeague));
-  return settled
-    .map((r) => (r.status === "fulfilled" ? r.value : null))
-    .filter((r): r is LeagueData => r !== null);
+  // Top events runs AFTER the real columns so it can reuse their games —
+  // then slots back into its own position(s), duplicates included.
+  const regular = final.filter((cfg) => cfg.sport !== "top");
+  const settled = await Promise.allSettled(regular.map(fetchLeague));
+  const results: (LeagueData | null)[] = settled.map((r) => (r.status === "fulfilled" ? r.value : null));
+  if (final.some((cfg) => cfg.sport === "top")) {
+    const prefetched = new Map<Sport, Game[]>();
+    for (const r of results) if (r && r.games.length) prefetched.set(r.sport, r.games);
+    const top = await fetchTopEvents(date, viewDate, topOpts, prefetched).catch(
+      (): LeagueData => ({ sport: "top", label: TOP_EVENTS_CONFIG.label, games: [], fetchFailed: true }),
+    );
+    final.forEach((cfg, idx) => { if (cfg.sport === "top") results.splice(idx, 0, top); });
+  }
+  return results.filter((r): r is LeagueData => r !== null);
 }
 
 // ESPN standings: { teamId -> "W-L" }. Cached per-sport so one team-view

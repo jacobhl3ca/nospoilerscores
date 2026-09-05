@@ -3,6 +3,7 @@
 import { cloneElement, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeagueData, Sport } from "@/lib/types";
 import { fetchSportTeams, SportTeam, SPORT_GROUP_ORDER, sportGroup, catalogSortRank } from "@/lib/espn";
+import { isTopEventsGameSport, TOP_EVENTS_DEFAULT_COUNT, type TopEventsMode, type TopEventsCount } from "@/lib/topEvents";
 import {
   Preferences,
   Theme,
@@ -116,6 +117,16 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "dark", label: "Dark" },
 ];
 
+const TOP_MODE_OPTIONS: { value: TopEventsMode; label: string; hint: string }[] = [
+  { value: "auto", label: "Auto", hint: "What espn.com is featuring right now, plus your starred teams" },
+  { value: "manual", label: "Manual", hint: "Only the leagues you tick below" },
+];
+const TOP_COUNT_OPTIONS: { value: "5" | "8" | "12"; label: string; hint: string }[] = [
+  { value: "5", label: "5", hint: "Just the headliners" },
+  { value: "8", label: "8", hint: "Default" },
+  { value: "12", label: "12", hint: "A full column" },
+];
+
 const SWITCHER_MODE_OPTIONS: { value: "dropdown" | "arrows" | "both" | "off"; label: string; hint: string }[] = [
   { value: "dropdown", label: "Dropdown", hint: "Tap a header to pick from a list" },
   { value: "arrows", label: "Arrows", hint: "‹ › cycle the unused leagues, most relevant first" },
@@ -183,6 +194,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   chess: "Chess",
   poker: "Poker",
   esports: "Esports",
+  top: "Top events",
 };
 
 function teamSportFromId(id: string): Sport | null {
@@ -499,25 +511,43 @@ export default function SettingsPanel({
   // "Hide offseason" — a Settings-ONLY view filter over the catalog above
   // (Jacob 8/22). Twenty-odd rows reading "· offseason" in August is most of
   // what makes this list long, and none of them are what he came here to
-  // change. Two rules keep it honest: a row the user has CHECKED always stays
-  // listed (hiding a ticked league would leave no way to untick it, and an
-  // in-switcher league is never noise), and the control states how many rows
-  // it is holding back, so the shortened list can't read as the whole catalog.
-  // Groups emptied by the filter drop out with their heading.
+  // change. Only a slot-PINNED offseason league stays listed (it is "saved
+  // for its return" and needs its row to be un-pinned), and the control
+  // states how many rows it is holding back so the shortened list can't read
+  // as the whole catalog. Groups emptied by the filter drop out with their
+  // heading.
+  //
+  // Until 9/4 every CHECKED row stayed too — and the core leagues start
+  // checked, so NBA, NHL, NCAAM, FIFA, UCL, UEL and Golf all survived the
+  // filter, which hid 10 obscure rows out of 43 and read as broken (Jacob:
+  // "hide offseason doesn't seem to work"). A checkbox on an offseason league
+  // changes nothing until the league returns, so hiding the row costs
+  // nothing; untick "Hide offseason" to reach it. The five slot dropdowns
+  // follow the same filter (they had kept all 17 "· offseason" entries).
   const hideOffseason = !!prefs.hideOffseasonInCatalog;
   const offseasonRowCount = leagueOptions.filter((option) => option.offseason).length;
+  const keepOffseasonRow = (option: LeagueOption) => slotValues.includes(option.sport);
   const hiddenOffseasonCount = leagueOptions.filter(
-    (option) => option.offseason && !isSwitcherChecked(option),
+    (option) => option.offseason && !keepOffseasonRow(option),
   ).length;
   const visibleLeagueGroups = hideOffseason
     ? groupedLeagueOptions.flatMap((group) => {
-        const options = group.options.filter((option) => !option.offseason || isSwitcherChecked(option));
+        const options = group.options.filter((option) => !option.offseason || keepOffseasonRow(option));
         return options.length ? [{ ...group, options }] : [];
       })
     : groupedLeagueOptions;
+  const slotDropdownGroups = (current: Sport | "empty" | undefined) => hideOffseason
+    ? groupedLeagueOptions.flatMap((group) => {
+        const options = group.options.filter((option) => !option.offseason || option.sport === current || keepOffseasonRow(option));
+        return options.length ? [{ ...group, options }] : [];
+      })
+    : groupedLeagueOptions;
+  // Manual pool for the Top events column: every game-card league, catalog
+  // order, offseason ones marked (they contribute nothing until they return).
+  const topEventsLeagueRows = groupedLeagueOptions.flatMap((group) => group.options.filter((option) => isTopEventsGameSport(option.sport)));
 
   const optionText = (option: LeagueOption) =>
-    `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : ""}`;
+    `${SPORT_LABEL[option.sport] ?? option.label}${option.offseason ? " · offseason" : option.upcomingLabel ? ` · starts ${option.upcomingLabel}` : ""}`;
 
   const renderSwitcherToggle = (option: LeagueOption) => {
     const pinned = slotValues.includes(option.sport);
@@ -548,6 +578,7 @@ export default function SettingsPanel({
         <span>
           {SPORT_LABEL[option.sport] ?? option.label}
           {option.offseason && <em style={{ color: "var(--text-muted)" }}> · offseason</em>}
+          {!option.offseason && option.upcomingLabel && <em style={{ color: "var(--text-muted)" }}> · starts {option.upcomingLabel}</em>}
         </span>
       </label>
     );
@@ -661,11 +692,10 @@ export default function SettingsPanel({
       // season-kickoff banner too, so clear the per-kickoff dismissal list.
       // Read as `?? []`, so undefined restores the fresh-install "none dismissed".
       kickoffBannersDismissed: undefined,
-      // Sibling of the two dismissal flags above: the footer's Google Play badge
-      // hides once the user dismisses it (read as `!prefs.playBadgeDismissed`), so
-      // a full reset — which restores every other dismissed banner/badge — left it
-      // hidden. Clearing to undefined restores the fresh-install "badge shown".
-      playBadgeDismissed: undefined,
+      kickoffBannerSnoozedUntil: undefined,
+      topEventsMode: undefined,
+      topEventsLeagues: undefined,
+      topEventsCount: undefined,
       leagueSwitcherMode: undefined,
       hiddenLeagues: undefined,
       shownLeagues: undefined,
@@ -1148,7 +1178,8 @@ export default function SettingsPanel({
                     style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
                   >
                     <option value="">Auto</option>
-                    {groupedLeagueOptions.map((group) => (
+                    <option value="top">⭐ Top events</option>
+                    {slotDropdownGroups(value).map((group) => (
                       <optgroup key={group.key} label={group.label}>
                         {group.options.map((option) => (
                           <option key={option.sport} value={option.sport}>{optionText(option)}</option>
@@ -1212,6 +1243,62 @@ export default function SettingsPanel({
                   </button>
                 )}
               </div>
+            </Field>
+          </Section>
+
+          {/* Top events (Jacob 9/4): the cross-league column's knobs. The pill
+              itself lives in the column switcher, the slot dropdowns above and
+              the first-run picker; this is where "set it manually" happens. */}
+          <Section title="Top events column">
+            <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+              Pick <em>⭐ Top events</em> for any column (tap a column header, or a slot above) to get the biggest games across every league in one column.
+              Auto ranks your starred teams first, then what espn.com is featuring on its homepage right now, live games, playoffs, ranked matchups and national TV.
+              Scores stay hidden, same as everywhere else.
+            </p>
+            <Field label="Which leagues" hint="Auto follows ESPN's homepage plus your teams; Manual uses only the leagues you tick">
+              <RadioGroup
+                label="Which leagues"
+                value={prefs.topEventsMode ?? "auto"}
+                options={TOP_MODE_OPTIONS}
+                onChange={(v) => updatePrefs({ topEventsMode: v === "auto" ? undefined : v })}
+              />
+            </Field>
+            {(prefs.topEventsMode ?? "auto") === "manual" && (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mb-3">
+                {topEventsLeagueRows.map((option) => {
+                  const checked = (prefs.topEventsLeagues ?? []).includes(option.sport);
+                  return (
+                    <label key={option.sport} className="flex items-center gap-2 text-sm cursor-pointer select-none" style={{ color: "var(--text)" }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          const next = new Set(prefs.topEventsLeagues ?? []);
+                          if (event.target.checked) next.add(option.sport);
+                          else next.delete(option.sport);
+                          updatePrefs({ topEventsLeagues: next.size ? [...next] : undefined });
+                        }}
+                        className="cursor-pointer accent-[var(--accent)]"
+                      />
+                      <span>
+                        {SPORT_LABEL[option.sport] ?? option.label}
+                        {option.offseason && <em style={{ color: "var(--text-muted)" }}> · offseason</em>}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            <Field label="How many games" hint="Across all leagues, at most three per league unless one of your teams is playing">
+              <RadioGroup
+                label="How many games"
+                value={String(prefs.topEventsCount ?? TOP_EVENTS_DEFAULT_COUNT) as "5" | "8" | "12"}
+                options={TOP_COUNT_OPTIONS}
+                onChange={(v) => {
+                  const n = Number(v) as TopEventsCount;
+                  updatePrefs({ topEventsCount: n === TOP_EVENTS_DEFAULT_COUNT ? undefined : n });
+                }}
+              />
             </Field>
           </Section>
 

@@ -6,6 +6,8 @@ import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
+import { mergeDismissedKeys, mergeSnoozedUntil, addDaysYmd } from "@/lib/dismissals";
+import type { TopEventsOptions } from "@/lib/espn";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
@@ -61,12 +63,31 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
     hiddenLeagues: remote.hiddenLeagues,
     shownLeagues: remote.shownLeagues,
     switcherDefaultsVersion: remote.switcherDefaultsVersion,
+    // Dismissals only ever accumulate, so they merge as a UNION — never a
+    // pick. The reconcile lands 1-3 s after first paint; a banner dismissed
+    // inside that window was pushed, then overwritten by the in-flight pull
+    // of the server's older list, and came straight back (Jacob 9/4).
+    // See lib/dismissals.ts.
+    kickoffBannersDismissed: mergeDismissedKeys(local.kickoffBannersDismissed, remote.kickoffBannersDismissed),
+    wcBannerDismissed: local.wcBannerDismissed || remote.wcBannerDismissed || undefined,
+    kickoffBannerSnoozedUntil: mergeSnoozedUntil(local.kickoffBannerSnoozedUntil, remote.kickoffBannerSnoozedUntil),
   };
   // The remote copy is canonical for a signed-in account. Its missing marker,
   // not the new device's local marker, decides whether the account is legacy.
   return remote.switcherDefaultsVersion === 2
     ? merged
     : migrateLegacySwitcherPreferences({ ...merged, switcherDefaultsVersion: undefined });
+}
+
+// What the Top events column reads from prefs. A pure projection so fetchData
+// (a stable useCallback) can take it off a ref instead of closing over prefs.
+function topEventsOptions(p: Preferences): TopEventsOptions {
+  return {
+    favoriteTeams: p.favoriteTeams,
+    mode: p.topEventsMode,
+    leagues: p.topEventsLeagues,
+    count: p.topEventsCount,
+  };
 }
 
 function getSmartDefaultOffset(cutoffHour = 13): number {
@@ -599,6 +620,9 @@ export default function HomeContent({
   // kickoff banner did after being dismissed, or after the league was added
   // (Jacob 8/9). This flips true once the stored blob is in state.
   const [prefsHydrated, setPrefsHydrated] = useState(false);
+  // Latest prefs for the stable fetchData callback (its deps are []).
+  const prefsRef = useRef(prefs);
+  useEffect(() => { prefsRef.current = prefs; }, [prefs]);
   // Whether the sign-in reconcile has had its say about this device's prefs.
   // Only the first-run league picker waits on it — see the mount effect.
   const [authSettled, setAuthSettled] = useState(false);
@@ -1157,7 +1181,7 @@ export default function HomeContent({
       // Slot count reads the live viewport so the initial desktop load fetches
       // all 5 leagues in one pass (isWide state hasn't flipped yet on mount).
       let [data] = await Promise.all([
-        fetchAllLeagues(date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3),
+        fetchAllLeagues(date, thirdLeague, slotOverrides, isWideViewport() ? 5 : 3, topEventsOptions(prefsRef.current)),
         loadBakedHighlights(),
       ]);
       // A newer fetch started while we awaited — discard this now-stale result
@@ -1216,6 +1240,24 @@ export default function HomeContent({
     }, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague, isWide]);
+
+  // The Top events column is the one column whose CONTENTS depend on prefs
+  // other than its slot — the ranking pool (auto/manual), the count and the
+  // starred teams. Re-pull silently when any of those change while a Top
+  // events column is on the board; every other column is unaffected.
+  useEffect(() => {
+    if (!mountedRef.current || !selectedDate) return;
+    const slots = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
+    if (!slots.includes("top")) return;
+    fetchData(selectedDate, prefs.thirdLeague, {
+      first: prefs.firstLeague,
+      second: prefs.secondLeague,
+      third: prefs.thirdLeague,
+      fourth: prefs.fourthLeague,
+      fifth: prefs.fifthLeague,
+    }, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefs.topEventsMode, prefs.topEventsLeagues, prefs.topEventsCount, prefs.favoriteTeams]);
 
   // Live-clock polling: while any game on the board is in-progress, silently
   // refetch every 10s so the Q4/period and clock keep advancing (matches
@@ -1450,11 +1492,22 @@ export default function HomeContent({
 
   // The one league whose season is about to start (or just did) on the viewed
   // date, if any — drives the kickoff banner below the date nav.
-  const kickoff = useMemo(() => {
-    if (!selectedDate) return null;
-    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    return getLeagueKickoff(viewDate);
-  }, [selectedDate]);
+  // Computed from TODAY, not the viewed date (Jacob 9/4). The banner says when
+  // a season starts relative to now; driven off the date nav it announced a
+  // "kicks off Wednesday, Aug 21" on a 2024 page — one account's dismissal
+  // list carries an `epl-2024-08-21` key from exactly that. selectedDate stays
+  // the dependency only so it re-evaluates whenever the user moves around.
+  const kickoffInfo = useMemo(() => {
+    if (!selectedDate) return { kickoff: null, todayYmd: "" };
+    const todayYmd = getDateString(0);
+    const today = new Date(`${todayYmd.slice(0, 4)}-${todayYmd.slice(4, 6)}-${todayYmd.slice(6, 8)}T12:00:00`);
+    // A league unticked in Settings never takes the banner (two of the four
+    // accounts that dismissed the UCL banner had hidden UCL first); the next
+    // opener does.
+    return { kickoff: getLeagueKickoff(today, prefs.hiddenLeagues ?? []), todayYmd };
+  }, [selectedDate, prefs.hiddenLeagues]);
+  const kickoff = kickoffInfo.kickoff;
+  const kickoffTodayYmd = kickoffInfo.todayYmd;
 
   // Compute which leagues are available for manual selection. Most seasonal
   // leagues disappear outside their season; NBA deliberately remains as a
@@ -1489,6 +1542,9 @@ export default function HomeContent({
     // switcher out from under someone mid-scroll.
     const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string; defaultInSwitcher: boolean }>();
     const satisfiedByActive = new Set<Sport>();
+    // The cross-league pill leads every switcher: never offseason, never
+    // auto-picked, always addable (Jacob 9/4: "top events special pill").
+    options.set("top", { sport: "top", label: "Top events", defaultInSwitcher: true });
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       const active = isLeagueActive(league, viewDate);
@@ -1521,6 +1577,8 @@ export default function HomeContent({
   // Soccer is grouped as one block at the very bottom rather than interleaved,
   // so the domestic leagues read as a set you scroll past or into.
   const PICKER_RANK: Sport[] = [
+    // The cross-league pill first: the one option that is never offseason.
+    "top",
     // MLB leads: it is the league actually playing games today, and a picker
     // whose first pill is an offseason/preseason league reads as stale (Jacob
     // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
@@ -1548,27 +1606,41 @@ export default function HomeContent({
   // merely because that league is between seasons. A sport can have several
   // seasonal configs (golf majors, tennis Slams); mark it in-season when ANY
   // config for that sport is active on the viewed date.
+  //
+  // Judged against TODAY, not the viewed date (Jacob 9/4, "let's be precise"):
+  // the catalog is a durable "what is on right now", and with the default
+  // landing date of yesterday it told a Sep 4 visitor the NFL was in season
+  // (the preseason config was active on the 3rd) and would have told a Sep 5
+  // visitor it was offseason, four days before kickoff. A league inside its
+  // pre-season window is "starts 9/8", not "offseason" — same as the switcher.
   const settingsLeagueOptions = useMemo(() => {
     if (!selectedDate) return [];
-    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
-    const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean; defaultInSwitcher: boolean }>();
+    const todayYmd = getDateString(0);
+    const today = new Date(`${todayYmd.slice(0, 4)}-${todayYmd.slice(4, 6)}-${todayYmd.slice(6, 8)}T12:00:00`);
+    const options = new Map<Sport, { sport: Sport; label: string; offseason?: boolean; upcomingLabel?: string; defaultInSwitcher: boolean }>();
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue;
-      const active = isLeagueActive(league, viewDate);
+      const active = isLeagueActive(league, today);
+      const upcoming = !active && isLeagueUpcoming(league, today);
+      const upcomingLabel = upcoming ? formatKickoffShort(league.kickoffDate ?? league.startDate, today) : undefined;
       const existing = options.get(league.sport);
       if (!existing) {
         options.set(league.sport, {
           sport: league.sport,
           label: league.label,
-          offseason: !active,
+          offseason: !active && !upcoming,
+          upcomingLabel,
           defaultInSwitcher: !league.excludeFromAuto,
         });
-      } else if (active && existing.offseason) {
+      } else if (active && (existing.offseason || existing.upcomingLabel)) {
         options.set(league.sport, {
           sport: league.sport,
           label: league.label,
           defaultInSwitcher: !league.excludeFromAuto,
         });
+      } else if (upcoming && existing.offseason) {
+        existing.offseason = false;
+        existing.upcomingLabel = upcomingLabel;
       } else if (!active && existing.offseason && !league.excludeFromAuto) {
         existing.defaultInSwitcher = true;
       }
@@ -1728,6 +1800,8 @@ export default function HomeContent({
     }),
     [thirdLeagueOptions, prefs],
   );
+  // The news board has no cross-league feed, so its switchers skip the pill.
+  const newsSwitcherOptions = useMemo(() => switcherOptions.filter((o) => o.sport !== "top"), [switcherOptions]);
 
   // Switcher sports in RELEVANCE order — the auto-picker's own ranking
   // (firstPref pins like the World Cup first, then LEAGUE_PRIORITY). Drives
@@ -2915,6 +2989,10 @@ export default function HomeContent({
             const queued = newsLeagueQueue.shift();
             const sport: Sport | undefined = queued?.sport;
             if (!sport) return null;
+            // A Top events score column has no news feed of its own (it is a
+            // cross-league pick, not a league). The board keeps its other
+            // mirror plus the News column rather than an empty "Top events".
+            if (sport === "top") return null;
             const label = thirdLeagueOptions.find((o) => o.sport === sport)?.label ?? sport.toUpperCase();
             const orderedCascade = leagueSourceCascade(sport);
             return { slotIdx, sport, id: sport as string, label, orderedCascade };
@@ -3182,7 +3260,7 @@ export default function HomeContent({
                         <div key={`title-${entry.id}-${entry.slotIdx}`} className="flex-1 min-w-0 max-w-[225px] xl:max-w-[280px]">
                           <NewsColumnTitle
                             title={entry.label}
-                            swappableOptions={switcherOptions}
+                            swappableOptions={newsSwitcherOptions}
                             shownElsewhere={otherSports}
                             selectedSport={entry.sport}
                             onSwapLeague={newsSwapFor(entry.slotIdx)}
@@ -3244,7 +3322,7 @@ export default function HomeContent({
                       key={`nc-${entry.id}-${entry.slotIdx}-${newsRefreshKey}`}
                       title={entry.label}
                       sources={sourcesForEntry(entry, idx)}
-                      swappableOptions={switcherOptions}
+                      swappableOptions={newsSwitcherOptions}
                       shownElsewhere={otherSports}
                       selectedSport={entry.sport}
                       onSwapLeague={newsSwapFor(entry.slotIdx)}
@@ -3446,6 +3524,7 @@ export default function HomeContent({
             // (Jacob 6/11 #2). Dismiss persists.
             const wcActive = thirdLeagueOptions.some((o) => o.sport === "fifa");
             const showWcBanner = prefsHydrated
+              && authSettled
               && wcActive
               && !displayedSports.includes("fifa")
               && !prefs.wcBannerDismissed;
@@ -3553,7 +3632,14 @@ export default function HomeContent({
               // are synchronous, so check those too and the flash has no window
               // to happen in.
               && !selectedSlotLeagues.includes(kickoff.config.sport)
-              && !(prefs.kickoffBannersDismissed ?? []).includes(kickoff.seasonKey);
+              && !(prefs.kickoffBannersDismissed ?? []).includes(kickoff.seasonKey)
+              // One ✕ quiets the whole family for a week (see the pref).
+              && !(prefs.kickoffBannerSnoozedUntil && prefs.kickoffBannerSnoozedUntil > kickoffTodayYmd)
+              // Wait for the account reconcile: on a second device the local
+              // blob paints first and the server copy — which holds the
+              // dismissal — lands 1-3 s later, so a banner dismissed elsewhere
+              // flashed here. authSettled is capped by PICKER_AUTH_GRACE_MS.
+              && authSettled;
             const kickoffAddLabel = kickoff ? `Add the ${kickoff.config.label} column` : "";
             const kickoffBanner = showKickoffBanner && kickoff ? (
               <div
@@ -3623,6 +3709,7 @@ export default function HomeContent({
                   type="button"
                   onClick={() => updatePrefs({
                     kickoffBannersDismissed: [...(prefs.kickoffBannersDismissed ?? []), kickoff.seasonKey].slice(-12),
+                    kickoffBannerSnoozedUntil: addDaysYmd(kickoffTodayYmd, 7),
                   })}
                   data-umami-event={`kickoff-banner-dismiss-${kickoff.config.sport}`}
                   aria-label={`Dismiss ${kickoff.config.label} banner`}
