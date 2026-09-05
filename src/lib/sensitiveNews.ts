@@ -31,8 +31,11 @@ export type SensitiveCategory = "death" | "violence" | "injury" | "medical" | "a
 // What the main "Hide upsetting news" toggle covers. `crash` is deliberately
 // absent: a racing wreck is the sport, so it gets its own opt-in toggle
 // (Jacob 8/21 — "fights fine if nothing terrible, crashes can have option to
-// hide"). A crash that killed or hospitalized someone still matches `death` /
-// `injury`, so it is caught by the main toggle regardless.
+// hide"). A crash that killed, hurt or hospitalized someone still matches
+// `death` / `injury`, so it is caught by the main toggle regardless. That last
+// part used to say "killed or hospitalized" and it was the gap: "injured in a
+// crash" named no mechanism the injury list knew, so it fell through to
+// `crash`-only. See the two wreck patterns in `injury`.
 export const BASE_CATEGORIES: SensitiveCategory[] = ["death", "violence", "injury", "medical", "animal", "selfharm"];
 
 // Sports idiom that reads as violence but isn't. Removed from the text before
@@ -935,6 +938,15 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     // visible. `.?` spans the "life changing" / "life-changing" spellings.
     /\blife.?changing injur(y|ies)\b/i,
     /\bcollision\b|\bcollided\b|\bviolent(ly)? (fall|crash|hit|tackle)\b/i,
+    // Someone HURT in a wreck. `crash` is opt-in, so before this a rider
+    // "injured in a crash" tripped neither toggle's default and sat in the feed
+    // (Jacob 8/31 — Pogacar abandoning the Vuelta, on r/sports). Both Settings
+    // hints promise the main toggle covers a crash that hurt someone; these two
+    // patterns are what make that true. Deliberately requires BOTH a
+    // getting-hurt word and a wreck word, so roster injury news ("on the
+    // injured list", "out 4-6 weeks") still reads.
+    /\b(injur(ed|y|ies)|hurt|banged up|broke|broken|fractured?|dislocated?)\b[^.]{0,60}\b(crash|wreck|collision|pile.?up|high.?side|spill|shunt)\b/i,
+    /\b(crash|wreck|collision|pile.?up|shunt)\b[^.]{0,60}\b(injur(ed|y|ies)|hurt|taken to hospital)\b/i,
     /\b(gruesome|horrific|grisly|scary|sickening|ugly) (injury|scene|moment|fall|crash|collision|hit|landing)\b/i,
     // A player leaving the game HURT. The lookahead requires a genuine injury
     // cue somewhere after the departure — "hurt", "in pain", blood, a knock, a
@@ -956,66 +968,12 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\bblows? to the (back of the )?head\b|\bshots? to the back of the head\b/i,
   ],
   medical: [
-    // `ill(ness)?` so the noun form "terminal illness" is caught alongside the
-    // adjective "terminally ill" / "terminal ill". `\bterminal(ly)? ill\b` alone
-    // stopped at the word boundary after "ill", so "diagnosed with a terminal
-    // illness" (the more common phrasing in an obituary-adjacent story) slipped
-    // straight past "Hide upsetting news". "terminal illness"/"terminally ill"
-    // carry no sports idiom — a "terminal" on its own (velocity, bus/airport
-    // terminal) never takes this object — so the noun form is safe to add.
-    // `leuka?emia` spans the British "leukaemia" and American "leukemia"
-    // spellings, the same both-spellings widening `tumou?r` and `neurone?`
-    // already carry. The app's soccer/rugby/cricket feeds use the British
-    // form, and — exactly like the MND case below — a tribute, fundraiser or
-    // "battle" feature carries no "diagnosed with" cue, so "continues his brave
-    // leukaemia battle" / "raising millions for leukaemia research" slipped
-    // straight past "Hide upsetting news" while the American spelling matched.
-    // "leukaemia" is only ever the disease, so it adds no false-positive risk.
-    /\bcancer\b|\btumou?r\b|\bleuka?emia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill(ness)?\b/i,
-    // `motor neurone disease` / `MND` is ALS by its British name — the form the
-    // app's soccer, rugby and cricket feeds actually use (Rob Burrow, Doddie
-    // Weir, Stephen Darby). ALS is listed as a named disease precisely so the
-    // non-"diagnosed with" phrasings match too — a fundraiser, a tribute, a
-    // "living with"/"battle" feature — yet its far more common British name was
-    // absent, so those exact stories ("continues his brave MND battle", "raising
-    // millions for motor neurone disease research", "honoured as an MND
-    // campaigner") slipped straight past "Hide upsetting news". `neurone?` spans
-    // the British "neurone" and American "neuron" spellings. `MND` is a bare
-    // acronym like its list-mates ALS/CTE: it carries no sports sense a word-
-    // bounded, all-caps token would hit, so it is safe without a carve-out.
-    // `multiple sclerosis` joins the same named-disease list for the same
-    // reason ALS/MND are on it: a chronic degenerative illness that reaches the
-    // feed through "living with"/fundraiser/tribute features carrying no
-    // "diagnosed with"/hospital/critical cue ("continues to live with multiple
-    // sclerosis", "charity ride raises millions for multiple sclerosis
-    // research"), so those stories slipped straight past "Hide upsetting news".
-    // Only the FULL phrase is added, never the acronym "MS": unlike the
-    // all-caps MND, a bare "MS" collides with the US state abbreviation
-    // (Mississippi), "manuscript" and the "Ms." honorific, so it needs no
-    // carve-out precisely because the unambiguous full name is the only token.
-    /\bALS\b|\bmotor neurone? disease\b|\bMND\b|\bmultiple sclerosis\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
-    // `s?` so the plural "cardiac arrests/events/episodes" is caught too: the
-    // violence list's `(?<!cardiac )` carve-out excludes those from crime, so the
-    // medical rule must recover the plural or a plural cardiac headline would leak.
-    /\bcardiac (arrest|event|episode)s?\b|\bheart attack\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
-    // A cerebrovascular stroke. The old `suffered a stroke` had two faults. It
-    // over-hid: "suffered a stroke of luck / of genius / of misfortune" — the
-    // staple sports idiom for a fortunate or brilliant turn — tripped it and
-    // pulled ordinary recaps under "serious illness" for anyone with the main
-    // filter on. And it under-hid: only the exact past tense matched, so a real
-    // "suffers a stroke", "suffering a stroke" or "suffered a minor/massive
-    // stroke" (an adjective between "a" and "stroke") slipped straight past
-    // "Hide upsetting news". This covers the verb tenses and a closed list of
-    // severity adjectives, and the `(?! of)` lookahead drops the "stroke of
-    // <luck/genius/…>" idiom — a phrasing a real cerebrovascular stroke never
-    // takes. "suspected"/"possible" join the list because a stroke is most often
-    // first reported unconfirmed ("understood to have suffered a suspected
-    // stroke", "rushed to hospital with a possible stroke") — the exact breaking-
-    // news phrasing that otherwise slipped straight past the filter — and the
-    // `(?! of)` guard still drops "a possible stroke of genius". Golf/swimming
-    // "stroke" carries none of the `suffer(s|ed|ing) a … stroke` frame ("two-
-    // stroke penalty", "smooth stroke", "backstroke"), so it stays visible.
-    /\bstroke suffered\b|\bsuffer(s|ed|ing)? a (minor |mild |major |massive |severe |serious |second |fatal |near.?fatal |life.?threatening |suspected |possible )?stroke\b(?! of\b)/i,
+    /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill\b/i,
+    // MND is what the UK/AU press calls ALS, and it is how rugby/cricket
+    // stories are always headlined — "MND-diagnosed" also misses the
+    // "diagnosed with" pattern below, so the bare acronym has to be here.
+    /\bALS\b|\bMND\b|\bmotor neuron[e]? disease\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
+    /\bcardiac (arrest|event|episode)\b|\bheart attack\b|\bstroke suffered\b|\bsuffered a stroke\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
     /\bcollapsed? (on|during|at|mid)/i,
     // `ventilator` joins the emergency-state cues alongside `life support` and
     // `intensive care`: someone on a ventilator is in the same critical ICU

@@ -1051,6 +1051,42 @@ test("a fatal crash is hidden by the main toggle alone", () => {
   assert.equal(sensitiveCategoryOf("Driver killed in a crash during practice"), "death");
 });
 
+// The comment above this block claimed "a crash that hurt someone is caught
+// either way" and nothing tested it — it was false. A rider injured but alive
+// matched only `crash`, which is the opt-in toggle, so the main toggle showed
+// it (Jacob 8/31, the real r/sports headline is the first case here).
+const HURT_IN_A_WRECK = [
+  "Race leader Tadej Pogacar has abandoned the Vuelta a Espana after being injured in a crash during stage eight",
+  "Two riders hurt in a pile-up on the run-in",
+  "Driver injured after a heavy shunt at turn one",
+  "Massive crash leaves three riders injured",
+  "Rider broke his collarbone in a crash on the descent",
+];
+
+for (const h of HURT_IN_A_WRECK) {
+  test(`a crash that hurt someone is hidden by the main toggle alone: ${h}`, () => {
+    assert.equal(sensitiveCategoryOf(h), "injury");
+  });
+}
+
+test("a walk-away wreck is still crash-only, not injury", () => {
+  for (const h of WRECKS) assert.equal(sensitiveCategoryOf(h), null, h);
+});
+
+test("roster injury news survives the wreck patterns", () => {
+  for (const h of [
+    "Dodgers place struggling closer on the injured list",
+    "Casper Ruud withdraws from US Open with back injury",
+    "Star winger out 4-6 weeks with a hamstring strain",
+    "Two teams on a collision course for the division title",
+  ]) assert.equal(sensitiveCategoryOf(h), null, h);
+});
+
+test("MND is ALS by its British name", () => {
+  assert.equal(sensitiveCategoryOf("Recently MND-diagnosed Rugby League player walks out for his penultimate game"), "medical");
+  assert.equal(sensitiveCategoryOf("Former prop diagnosed with motor neurone disease"), "medical");
+});
+
 test("crash-only leaves ordinary upsetting news alone", () => {
   assert.equal(sensitiveCategoryOf("Former NBA star dies at 58", CRASH_ONLY), null);
 });

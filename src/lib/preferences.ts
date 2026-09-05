@@ -209,6 +209,14 @@ export interface Preferences {
   switcherDefaultsVersion?: 2;
   // Hide the favorite-star next to team names on game cards (favoriting stays
   // available via the team-schedule view + settings picker).
+  //
+  // Undefined means the user has never touched the toggle, and that is load-
+  // bearing: on their THIRD session the app sets this to true by itself (Jacob
+  // 8/31). The star's job is to teach a new user which cards are theirs; by the
+  // third visit they know, and it is just noise. Anyone who has already set the
+  // toggle either way is left alone, and turning stars back on afterwards
+  // sticks — session counting has stopped by then. See STARS_AUTO_HIDE_SESSION
+  // in lib/sessionVisits.ts.
   hideTeamStars?: boolean;
   // Show W-L records on in-progress game cards. OPT-IN (default off): a record
   // is a second-order spoiler — today's 63-49 encodes whether the team won last
@@ -249,6 +257,16 @@ export interface Preferences {
   // landing view drop a remembered News view to Scores across a day boundary,
   // so the user never lands on yesterday's news (= spoilers). Jacob 6/19.
   lastOpenDay?: string;
+  // Visit counter behind the stars auto-hide above. A "session" is an app open
+  // more than 30 minutes after the last one, so a reload or a tab revisit does
+  // not inflate it. Counting STOPS once it reaches STARS_AUTO_HIDE_SESSION —
+  // otherwise this pair would change on every single visit and turn a
+  // once-a-day prefs sync into a once-a-visit one, forever, for a number
+  // nothing reads any more. Logic + tests: lib/sessionVisits.ts.
+  sessionCount?: number;
+  // Epoch ms of the last app open. Only maintained while sessionCount is still
+  // counting; see above.
+  lastSessionAt?: number;
   // Ratings on launch: auto (smart morning reset), always off, always on.
   defaultRatings?: DefaultRatings;
   // News-view column count (1, 2, or 3). Default 3 (see `defaults` below).

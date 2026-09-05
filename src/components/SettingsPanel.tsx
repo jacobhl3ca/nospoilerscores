@@ -269,17 +269,38 @@ export default function SettingsPanel({
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailStatus, setEmailStatus] = useState("");
   const [emailError, setEmailError] = useState(false);
+  // Linking a SECOND sign-in is a once-ever chore, but its buttons and the whole
+  // email form sat open under every signed-in account and pushed the real
+  // settings a screen down (Jacob 8/31: "it takes up too much space"). Collapsed
+  // behind a grey link under Sign out; re-collapses each time the panel opens.
+  const [showLinkMore, setShowLinkMore] = useState(false);
   // Android shell only — see the Rate link in the legal row below.
   const [isAndroidApp, setIsAndroidApp] = useState(false);
   useEffect(() => {
     if (!open) return;
     const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
     setCanUseGoogle(!cap?.isNativePlatform?.() || hasNativeGoogleBridge());
+    setShowLinkMore(false);
     setIsAndroidApp(!!cap?.isNativePlatform?.() && cap?.getPlatform?.() === "android");
     let alive = true;
     getAuthState().then((a) => { if (alive) setAuthState(a); });
     return () => { alive = false; };
   }, [open]);
+
+  // Everything this account could still link. A provider already linked simply
+  // isn't here, so an account with nothing left to link shows no disclosure at
+  // all. flex-wrap keeps the row honest if a third provider is ever added.
+  const linkableProviders = useMemo(() => {
+    const out: { key: string; label: string; onClick: () => void }[] = [];
+    if (auth.providers?.google && canUseGoogle && !auth.linkedProviders?.includes("google")) {
+      out.push({ key: "google", label: "Google", onClick: () => signInWithGoogle(undefined, true) });
+    }
+    if (auth.providers?.apple && !auth.linkedProviders?.includes("apple")) {
+      out.push({ key: "apple", label: "Apple", onClick: () => signInWithApple(undefined, true) });
+    }
+    return out;
+  }, [auth.providers, auth.linkedProviders, canUseGoogle]);
+  const canLinkEmail = !!auth.providers?.email && !auth.linkedProviders?.includes("email");
 
   // Esc to close
   useEffect(() => {
@@ -629,14 +650,12 @@ export default function SettingsPanel({
       defaultRatings: "auto",
       hideLeagueChevrons: undefined,
       hideTeamStars: undefined,
-      // Sibling of hideTeamStars (rendered directly beneath it in the panel) and
-      // a documented second-order spoiler (see showTeamRecords in preferences.ts:
-      // today's W-L record encodes whether the team won last night). It ships
-      // default-off and reads everywhere as `!!prefs.showTeamRecords`, but was
-      // omitted here — so a user who turned records ON kept them revealed through
-      // "Reset all settings to defaults," which is meant to restore the no-spoiler
-      // defaults. Clearing to undefined restores the fresh-install off state.
-      showTeamRecords: undefined,
+      // Reset means "act like a fresh install", and on a fresh install the
+      // stars are on for two visits before the app hides them itself. Leaving
+      // the counter at 3 would re-hide them on the very next open, which reads
+      // as the reset not having worked. See lib/sessionVisits.ts.
+      sessionCount: undefined,
+      lastSessionAt: undefined,
       wcBannerDismissed: undefined,
       // Sibling of wcBannerDismissed: a full reset should bring back every
       // season-kickoff banner too, so clear the per-kickoff dismissal list.
@@ -790,36 +809,6 @@ export default function SettingsPanel({
                 <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
                   Your teams, layout, and settings sync automatically across all your browsers and devices.
                 </p>
-                {/* Everything still linkable, on ONE row (Jacob 8/11: "for
-                    link google/email/etc just have it in 1 row with all things
-                    that can be linked"). Each was a full-width stacked button,
-                    so an account with two providers left to link pushed Sign
-                    out and everything below it a screen further down. A
-                    provider already linked simply isn't in the row. flex-wrap
-                    keeps it honest if a third provider is ever added. */}
-                {(() => {
-                  const linkable: { key: string; label: string; onClick: () => void }[] = [];
-                  if (auth.providers?.google && canUseGoogle && !auth.linkedProviders?.includes("google")) {
-                    linkable.push({ key: "google", label: "Google", onClick: () => signInWithGoogle(undefined, true) });
-                  }
-                  if (auth.providers?.apple && !auth.linkedProviders?.includes("apple")) {
-                    linkable.push({ key: "apple", label: "Apple", onClick: () => signInWithApple(undefined, true) });
-                  }
-                  if (!linkable.length) return null;
-                  return (
-                    <div className="flex flex-wrap gap-2">
-                      {linkable.map((l) => (
-                        <button key={l.key} type="button"
-                          onClick={l.onClick}
-                          className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
-                          style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
-                        >
-                          Link {l.label}
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })()}
                 <button type="button"
                   onClick={() => signOut()}
                   className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
@@ -827,6 +816,34 @@ export default function SettingsPanel({
                 >
                   Sign out
                 </button>
+                {/* Adding a second way into the same account is a once-ever
+                    chore, so it is a grey link under Sign out rather than a
+                    stack of buttons and an email form held permanently open
+                    (Jacob 8/31). Nothing left to link = no link at all. */}
+                {(linkableProviders.length > 0 || canLinkEmail) && !showLinkMore && (
+                  <button type="button"
+                    onClick={() => setShowLinkMore(true)}
+                    aria-expanded={false}
+                    aria-controls={canLinkEmail ? "hs-link-more" : undefined}
+                    className="w-full text-[11px] underline cursor-pointer"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Link another way to sign in
+                  </button>
+                )}
+                {showLinkMore && linkableProviders.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {linkableProviders.map((l) => (
+                      <button key={l.key} type="button"
+                        onClick={l.onClick}
+                        className="flex-1 min-w-[120px] py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors"
+                        style={{ background: "transparent", color: "var(--text)", border: "1px solid var(--border)" }}
+                      >
+                        Link {l.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -865,8 +882,9 @@ export default function SettingsPanel({
                 </p>
               </div>
             )}
-            {auth.providers?.email && !auth.linkedProviders?.includes("email") && (
+            {canLinkEmail && (!auth.signedIn || showLinkMore) && (
               <form
+                id="hs-link-more"
                 className="mt-3 space-y-2"
                 onSubmit={async (event) => {
                   event.preventDefault();
@@ -1199,9 +1217,12 @@ export default function SettingsPanel({
 
           {/* Board layout */}
           <Section title="Board layout">
+            {/* Was also called just "Single column", same as the News one two
+                sections down — identical labels, different jobs, and flipping
+                the wrong one looked like a bug (Jacob 8/31). */}
             <ToggleRow
-              label="Single column"
-              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns"
+              label="One wide column — scores"
+              hint="Stack your leagues in one wide column with bigger cards, instead of side-by-side columns. (The matching setting for news is under News.)"
               checked={prefs.singleColumn ?? false}
               onChange={(v) => updatePrefs({ singleColumn: v })}
             />
@@ -1300,23 +1321,38 @@ export default function SettingsPanel({
           {/* News */}
           <Section title="News">
             <ToggleRow
-              label="Single column"
-              hint="Stack all news columns into one wide column instead of side-by-side."
+              label="One wide column — news"
+              hint="Stack all news columns into one wide column instead of side-by-side. (The matching setting for scores is under Board layout.)"
               checked={prefs.newsSingleColumn ?? false}
               onChange={(v) => updatePrefs({ newsSingleColumn: v })}
             />
+            {/* One setting, with the racing carve-out nested under it. These
+                were two peer toggles whose hints each had to explain the other,
+                and that seam is where "injured in a crash" fell through — it
+                read as a crash story, so only the second toggle saw it, and the
+                second toggle is the one nobody turns on (Jacob 8/31). */}
             <ToggleRow
               label="Hide upsetting news"
-              hint="Filters out deaths, crashes, assault and abuse cases, getting hurt on the field (a batter hit in the head, a collision, carted off), serious illness, harm to animals and self-harm. Anything hidden is counted at the bottom of the feed, so you can still show it in one tap. Roster injury news — IL moves, return timelines — still shows."
+              hint="Filters out deaths, assault and abuse cases, getting hurt (a batter hit in the head, a collision, someone injured in a crash, carted off), serious illness, harm to animals and self-harm. Anything hidden is counted at the bottom of the feed, so you can still show it in one tap. Roster injury news — IL moves, return timelines — still shows."
               checked={prefs.hideSensitiveNews ?? false}
-              onChange={(v) => updatePrefs({ hideSensitiveNews: v })}
+              // Turning the parent off also clears the child: the crash filter
+              // has no control of its own any more, so leaving it armed would
+              // keep hiding posts with nothing on screen to explain why.
+              onChange={(v) => updatePrefs(v ? { hideSensitiveNews: true } : { hideSensitiveNews: false, hideCrashNews: false })}
             />
-            <ToggleRow
-              label="Hide crashes and wrecks"
-              hint="Separate from the setting above, because a crash everyone walks away from is part of racing. On: racing wrecks, pile-ups, hard falls and bike spills are filtered out too. A crash that hurt or killed someone is already covered by the setting above."
-              checked={prefs.hideCrashNews ?? false}
-              onChange={(v) => updatePrefs({ hideCrashNews: v })}
-            />
+            {/* Shown when the parent is on — or when the crash filter is already
+                armed, so an account that set it under the old two-toggle UI can
+                always still see and reach it. */}
+            {(prefs.hideSensitiveNews || prefs.hideCrashNews) && (
+              <div className="pl-3.5 ml-1" style={{ borderLeft: "2px solid var(--border)" }}>
+                <ToggleRow
+                  label="Also hide wrecks nobody got hurt in"
+                  hint="Racing crashes, pile-ups, hard falls and bike spills where everyone walked away — those are the sport, so they stay visible unless you ask. A crash that hurt or killed someone is already hidden by the setting above."
+                  checked={prefs.hideCrashNews ?? false}
+                  onChange={(v) => updatePrefs({ hideCrashNews: v })}
+                />
+              </div>
+            )}
             <Field label="3rd news column" hint="Default league for the third news column">
               <select
                 value={prefs.newsThirdLeague ?? ""}
@@ -1350,7 +1386,14 @@ export default function SettingsPanel({
               checked={prefs.maskVideoTitle ?? true}
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
-            <fieldset disabled={prefs.youtubeNativeControls ?? true} className={(prefs.youtubeNativeControls ?? true) ? "space-y-3 opacity-40" : "space-y-3"}>
+            {/* These four only ever apply to the spoiler-safe player, so they
+                render only when it is chosen. They used to render disabled +
+                opacity-40 for everyone: four dead rows that 18 of 21 synced
+                accounts could see but never touch, and that nobody had ever
+                changed (Jacob 8/31). Hidden, not greyed — a control you are not
+                allowed to use is not a control. */}
+            {!(prefs.youtubeNativeControls ?? true) && (
+            <fieldset className="space-y-3">
               <legend className="sr-only">Spoiler-safe player controls</legend>
               <Field label="Skip controls" hint="Jump around a clip — drag is capped at 90% so the ending stays hidden">
                 <RadioGroup
@@ -1381,22 +1424,7 @@ export default function SettingsPanel({
                 onChange={(v) => updatePrefs({ videoWarnHalfway: v })}
               />
             </fieldset>
-          </Section>
-
-          {/* Onboarding hints */}
-          <Section title="Spoiler explainers">
-            <ToggleRow
-              label="Show ratings explainer"
-              hint="Off after first 'Don't show again' confirm"
-              checked={!prefs.skipExplainer}
-              onChange={(v) => updatePrefs({ skipExplainer: !v })}
-            />
-            <ToggleRow
-              label="Show news warning"
-              hint="The 'FULL OF SPOILERS' confirm before opening news"
-              checked={!prefs.skipNewsExplainer}
-              onChange={(v) => updatePrefs({ skipNewsExplainer: !v })}
-            />
+            )}
           </Section>
 
           {/* Share & Reset */}
@@ -1474,6 +1502,27 @@ export default function SettingsPanel({
               >
                 Reset to defaults
               </button>
+            </div>
+            {/* Bring back a one-time explainer you dismissed. These had their own
+                "Spoiler explainers" section, which read like two settings to tune
+                — they are an undo, so they live with the other undos now
+                (Jacob 8/31). */}
+            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+              <p className="text-[11px] mb-2" style={{ color: "var(--text-muted)" }}>
+                Bring back a warning you dismissed
+              </p>
+              <ToggleRow
+                label="Show ratings explainer"
+                hint="Off after first 'Don't show again' confirm"
+                checked={!prefs.skipExplainer}
+                onChange={(v) => updatePrefs({ skipExplainer: !v })}
+              />
+              <ToggleRow
+                label="Show news warning"
+                hint="The 'FULL OF SPOILERS' confirm before opening news"
+                checked={!prefs.skipNewsExplainer}
+                onChange={(v) => updatePrefs({ skipNewsExplainer: !v })}
+              />
             </div>
           </Section>
 
