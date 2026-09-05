@@ -7,7 +7,7 @@ const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : use
 import { Game, LeagueData, LeagueEventCard, FightBout, Sport, Team } from "@/lib/types";
 import { SHORT_LEAGUE_LABELS, HEADER_SHORT_LABEL_MAX_PX } from "@/lib/leagueLabels";
 import type { ShareCardMeta } from "@/lib/shareCard";
-import { displayShortName, loadBigInningSchedule, getSeasonOpener, BigInningSchedule } from "@/lib/espn";
+import { displayShortName, loadBigInningSchedule, getSeasonOpener, sportDisplayLabel, BigInningSchedule } from "@/lib/espn";
 import { handleExternalClick } from "@/lib/openExternal";
 import { prefetchGameWeather } from "@/lib/weather";
 import { getGolfSubtitle } from "@/lib/golf";
@@ -822,6 +822,21 @@ export default function LeagueColumn({
   // only ever grows — the same no-flash direction the old flag had.
   const [narrowColumn, setNarrowColumn] = useState(true);
   const headerLabel = (narrowColumn && SHORT_LEAGUE_LABELS[league.label]) || league.label;
+  // The Top events column mixes leagues, so each card names ITS league — the
+  // highlight channel and the share card are keyed by that label, and a
+  // "Top events" channel does not exist. Every other column is one league.
+  const cardLeagueLabel = (game: Game): string => {
+    if (league.sport !== "top") return league.label;
+    const viewDate = new Date(`${selectedDate.slice(0, 4)}-${selectedDate.slice(4, 6)}-${selectedDate.slice(6, 8)}T12:00:00`);
+    return sportDisplayLabel(game.sport, viewDate);
+  };
+  // The chip on each Top events card ("MLB", "UCL", "Prem"): the short form of
+  // the label above. Undefined everywhere else — see GameCard.leagueTag.
+  const cardLeagueTag = (game: Game): string | undefined => {
+    if (league.sport !== "top") return undefined;
+    const label = cardLeagueLabel(game);
+    return SHORT_LEAGUE_LABELS[label] || label;
+  };
   const [swapOpen, setSwapOpen] = useState(false);
   // Panel + measured height cap for the switcher — see the effect below.
   const swapPanelRef = useRef<HTMLDivElement>(null);
@@ -1246,6 +1261,10 @@ export default function LeagueColumn({
   };
 
   const sorted = [...league.games].sort((a, b) => {
+    // Top events arrives already ranked (your teams, then what espn.com is
+    // featuring, live, playoffs…) — that order IS the column, in both modes.
+    // Array.prototype.sort is stable, so 0 keeps it. See lib/topEvents.ts.
+    if (league.sport === "top") return 0;
     const aPri = getFavPriority(a);
     const bPri = getFavPriority(b);
     const aHasFav = aPri !== Infinity;
@@ -1362,7 +1381,8 @@ export default function LeagueColumn({
         favoriteTeams={favoriteTeams}
         onToggleFavoriteTeam={onToggleFavoriteTeam}
         showRatings={showRatings}
-        leagueLabel={league.label}
+        leagueLabel={cardLeagueLabel(game)}
+        leagueTag={cardLeagueTag(game)}
         onPlayHighlight={onPlayHighlight}
         onPlayEmbed={onPlayEmbed}
         isPastDate={pastDate}
@@ -1435,7 +1455,8 @@ export default function LeagueColumn({
           favoriteTeams={favoriteTeams}
           onToggleFavoriteTeam={onToggleFavoriteTeam}
           showRatings={showRatings}
-          leagueLabel={league.label}
+          leagueLabel={cardLeagueLabel(game)}
+          leagueTag={cardLeagueTag(game)}
           onPlayHighlight={onPlayHighlight}
           onPlayEmbed={onPlayEmbed}
           nextGameDate={nextGameDate}
@@ -1478,7 +1499,8 @@ export default function LeagueColumn({
             favoriteTeams={favoriteTeams}
             onToggleFavoriteTeam={onToggleFavoriteTeam}
             showRatings={showRatings}
-            leagueLabel={league.label}
+            leagueLabel={cardLeagueLabel(game)}
+            leagueTag={cardLeagueTag(game)}
             onPlayHighlight={onPlayHighlight}
             onPlayEmbed={onPlayEmbed}
             isPastDate
@@ -1730,6 +1752,8 @@ export default function LeagueColumn({
                         the bottom, just above Empty — they're the least useful to
                         pick again (Jacob 6/9). Stable sort keeps the rest in order. */}
                     {[...swappableOptions!].sort((a, b) => {
+                      // The cross-league pill leads the list wherever it appears.
+                      if ((a.sport === "top") !== (b.sport === "top")) return a.sport === "top" ? -1 : 1;
                       const ae = a.sport !== league.sport && !!shownElsewhere?.includes(a.sport);
                       const be = b.sport !== league.sport && !!shownElsewhere?.includes(b.sport);
                       return (ae ? 1 : 0) - (be ? 1 : 0);
@@ -1755,7 +1779,7 @@ export default function LeagueColumn({
                           onMouseEnter={(e) => { e.currentTarget.style.background = "var(--menu-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          {opt.label}
+                          {opt.sport === "top" ? "⭐ " : ""}{opt.label}
                           {opt.offseason && <em className="font-normal"> · offseason</em>}
                           {opt.upcomingLabel && <em className="font-normal"> · {opt.upcomingLabel}</em>}
                           {isAutoDefault && !isCurrent && <em className="font-normal" style={{ color: "var(--text-muted)" }}> · default</em>}
@@ -1904,7 +1928,8 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
-              leagueLabel={league.label}
+              leagueLabel={cardLeagueLabel(game)}
+              leagueTag={cardLeagueTag(game)}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={isPastDate}
@@ -1926,7 +1951,8 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
-              leagueLabel={league.label}
+              leagueLabel={cardLeagueLabel(game)}
+              leagueTag={cardLeagueTag(game)}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
@@ -1944,7 +1970,8 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
-              leagueLabel={league.label}
+              leagueLabel={cardLeagueLabel(game)}
+              leagueTag={cardLeagueTag(game)}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isToday={isToday}
@@ -1976,7 +2003,8 @@ export default function LeagueColumn({
               favoriteTeams={favoriteTeams}
               onToggleFavoriteTeam={onToggleFavoriteTeam}
               showRatings={showRatings}
-              leagueLabel={league.label}
+              leagueLabel={cardLeagueLabel(game)}
+              leagueTag={cardLeagueTag(game)}
               onPlayHighlight={onPlayHighlight}
               onPlayEmbed={onPlayEmbed}
               isPastDate={false}
