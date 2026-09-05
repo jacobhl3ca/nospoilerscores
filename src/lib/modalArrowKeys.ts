@@ -80,7 +80,10 @@ export type ModalKeyAction =
   | "page-prev"
   | "page-next"
   | "toggle-play"
-  | "peek-headline";
+  | "peek-headline"
+  | "mute"
+  | "seek-10"
+  | "jump-pct";
 
 /** null = leave the key alone (no preventDefault). */
 export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
@@ -144,6 +147,23 @@ export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
   if (key === "h" || key === "H") {
     if (ctx.repeat) return null;
     return ctx.hasHeadline ? "peek-headline" : null;
+  }
+
+  // The YouTube keys we take back. With focus pulled out of the iframe (so ↓/↑,
+  // Esc and f reach us at all — see the focus-recovery effect in VideoModal),
+  // YouTube's own shortcuts stop working in native-controls mode, so the ones
+  // worth having are re-served through the player API the modal already drives.
+  if (key === "m" || key === "M") {
+    if (ctx.repeat) return null;
+    return ctx.canSeek ? "mute" : null;
+  }
+  if (key === "j" || key === "J" || key === "l" || key === "L") {
+    // ∓10s, YouTube's own step. Repeat allowed, like ←/→: holding it scrubs.
+    return ctx.canSeek ? "seek-10" : null;
+  }
+  if (key.length === 1 && key >= "0" && key <= "9") {
+    if (ctx.repeat) return null;
+    return ctx.canSeek ? "jump-pct" : null;
   }
 
   return null;

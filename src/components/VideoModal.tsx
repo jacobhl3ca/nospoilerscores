@@ -816,19 +816,39 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // instead. (Only gates a deliberate forward jump from the first half — it
   // won't nag once you're already past the midpoint.)
   const guardSeek = useCallback((targetFrac: number, run: () => void) => {
+    // Read the position off whichever player is up: a direct stream (MLB
+    // .m3u8, v.redd.it) has no playerRef at all, and reading 0 there would nag
+    // on a jump the viewer is already past (Jacob 9/5, same YouTube-only
+    // oversight seekBy carried until 8/9).
+    const v = videoRef.current;
     const p = playerRef.current;
-    const d = p?.getDuration?.() ?? 0;
-    const cur = d > 0 ? (p?.getCurrentTime?.() ?? 0) / d : 0;
+    const d = v && hlsMode ? (isFinite(v.duration) ? v.duration : 0) : (p?.getDuration?.() ?? 0);
+    const cur = d > 0 ? ((v && hlsMode ? v.currentTime : p?.getCurrentTime?.() ?? 0) / d) : 0;
     if (warnHalfway && targetFrac > 0.5 && cur <= 0.5) {
       setPendingSeek({ run, pct: Math.round(targetFrac * 100) });
       return;
     }
     run();
-  }, [warnHalfway]);
+  }, [warnHalfway, hlsMode]);
 
   // Jump to a fraction of the clip. Works off the YouTube player's reported
   // duration so no timeline is ever revealed.
   const seekToPct = useCallback((pct: number) => {
+    // Direct streams play through an in-document <video>, not the YT player —
+    // same clamp, same halfway guard, just the other element (Jacob 9/5, so the
+    // 0-9 keys land on an MLB clip and not only on a YouTube one).
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      const dv = v.duration;
+      if (!dv || !isFinite(dv) || dv <= 0) return;
+      const targetV = Math.min(pct / 100, seekCap);
+      guardSeek(targetV, () => {
+        v.currentTime = dv * targetV;
+        void v.play().catch(() => { /* autoplay prompt already covers this */ });
+        setProgress(targetV);
+      });
+      return;
+    }
     const p = playerRef.current;
     if (!p?.getDuration || !p?.seekTo) return;
     const d = p.getDuration();
@@ -839,7 +859,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       p.playVideo?.();
       setProgress(target);
     });
-  }, [seekCap, guardSeek]);
+  }, [seekCap, guardSeek, hlsMode]);
 
   // Fraction (capped) for a given pointer x on the bar — shared by the seek and
   // the warn-guard so they agree on the target.
@@ -957,6 +977,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Toggle mute on the YouTube player. Un-muting restores the slider's level
   // (or 100 if it was dragged to 0).
   const toggleMute = useCallback(() => {
+    // Direct streams again: no playerRef, so drive the <video>'s own muted flag
+    // (its native control strip picks the change up). Keeps the m key honest on
+    // an MLB clip instead of silently doing nothing (Jacob 9/5).
+    const v = videoRef.current;
+    if (v && hlsMode) { v.muted = !v.muted; setMuted(v.muted); return; }
     const p = playerRef.current;
     if (!p) return;
     if (muted) {
@@ -965,7 +990,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     } else {
       p.mute?.(); setMuted(true);
     }
-  }, [muted, volume]);
+  }, [muted, volume, hlsMode]);
 
   // Apply a volume level (0–100) from any source — shared by the pointer
   // handler and the keyboard handler below. Sets the YT player volume and
@@ -1213,11 +1238,17 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         case "page-next": goNext(); break;
         case "toggle-play": togglePlay(); break;
         case "peek-headline": toggleHeadlinePeek(); break;
+        case "mute": toggleMute(); break;
+        // j back, l forward — YouTube's own ∓10s, twice the arrows' step.
+        case "seek-10": seekBy((e.key === "j" || e.key === "J" ? -1 : 1) * 10); break;
+        // 1-9 jump to that tenth; 0 restarts. seekToPct already honours the 90%
+        // spoiler cap and the warn-past-halfway prompt, so the keys inherit both.
+        case "jump-pct": seekToPct(Number(e.key) * 10); break;
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, togglePlay, toggleHeadlinePeek, headline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen]);
+  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, headline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
