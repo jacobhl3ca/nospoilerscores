@@ -6,8 +6,9 @@ import { buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { enabledCategories } from "@/lib/sensitiveNews";
 import { Preferences, Theme, loadPreferences, savePreferences, setRemoteSync, encodeFavorites, decodeFavorites } from "@/lib/preferences";
 import { sessionLaunchPatch } from "@/lib/sessionVisits";
-import { mergeDismissedKeys, mergeSnoozedUntil, addDaysYmd } from "@/lib/dismissals";
+import { mergeDismissedKeys } from "@/lib/dismissals";
 import type { TopEventsOptions } from "@/lib/espn";
+import { TOP_EVENTS_ENABLED } from "@/lib/topEvents";
 import { getAuthState, fetchRemotePrefs, pushRemotePrefs } from "@/lib/prefsSync";
 import { fetchAllLeagues, ALL_LEAGUES, isLeagueActive, isLeagueUpcoming, getActiveLeagueCandidates, pickAndAssignLeagues, getLeagueKickoff, formatKickoffShort, formatKickoffLong, sportGlyph, type LeagueKickoff } from "@/lib/espn";
 import { isDemoModeActive, applyDemoMode, isNoHitAlertDemoActive, applyNoHitAlertDemo } from "@/lib/demoMode";
@@ -70,7 +71,6 @@ function mergeRemotePreferences(local: Preferences, remote: Partial<Preferences>
     // See lib/dismissals.ts.
     kickoffBannersDismissed: mergeDismissedKeys(local.kickoffBannersDismissed, remote.kickoffBannersDismissed),
     wcBannerDismissed: local.wcBannerDismissed || remote.wcBannerDismissed || undefined,
-    kickoffBannerSnoozedUntil: mergeSnoozedUntil(local.kickoffBannerSnoozedUntil, remote.kickoffBannerSnoozedUntil),
   };
   // The remote copy is canonical for a signed-in account. Its missing marker,
   // not the new device's local marker, decides whether the account is legacy.
@@ -1243,7 +1243,7 @@ export default function HomeContent({
   useEffect(() => {
     if (!mountedRef.current || !selectedDate) return;
     const slots = [prefs.firstLeague, prefs.secondLeague, prefs.thirdLeague, prefs.fourthLeague, prefs.fifthLeague];
-    if (!slots.includes("top")) return;
+    if (!TOP_EVENTS_ENABLED || !slots.includes("top")) return;
     fetchData(selectedDate, prefs.thirdLeague, {
       first: prefs.firstLeague,
       second: prefs.secondLeague,
@@ -1537,7 +1537,8 @@ export default function HomeContent({
     const satisfiedByActive = new Set<Sport>();
     // The cross-league pill leads every switcher: never offseason, never
     // auto-picked, always addable (Jacob 9/4: "top events special pill").
-    options.set("top", { sport: "top", label: "Top events", defaultInSwitcher: true });
+    // Switched off 9/5 — see TOP_EVENTS_ENABLED.
+    if (TOP_EVENTS_ENABLED) options.set("top", { sport: "top", label: "Top events", defaultInSwitcher: true });
     for (const league of ALL_LEAGUES) {
       if (league.hidden) continue; // none currently hidden (UFC back 7/17, F1 back 7/18)
       const active = isLeagueActive(league, viewDate);
@@ -3612,8 +3613,9 @@ export default function HomeContent({
             // the World Cup banner, but driven by league config instead of a
             // hard-coded sport, so every future season opener gets it for free.
             // Shows in the days before a league starts, on the day itself, and
-            // for a few days after (weekend-only users). Dismissal is keyed to
-            // the exact kickoff, so next season's banner still appears.
+            // for a few days after (weekend-only users). It shows ONCE: a ✕
+            // retires the banner for good, whichever league is next (Jacob 9/5:
+            // "banner should only popup once total. not a second reminder").
             // Never renders alongside the World Cup banner — one announcement.
             const showKickoffBanner = prefsHydrated
               && !showWcBanner
@@ -3625,9 +3627,10 @@ export default function HomeContent({
               // are synchronous, so check those too and the flash has no window
               // to happen in.
               && !selectedSlotLeagues.includes(kickoff.config.sport)
-              && !(prefs.kickoffBannersDismissed ?? []).includes(kickoff.seasonKey)
-              // One ✕ quiets the whole family for a week (see the pref).
-              && !(prefs.kickoffBannerSnoozedUntil && prefs.kickoffBannerSnoozedUntil > kickoffTodayYmd)
+              // Any dismissal on record retires the whole family — this is a
+              // one-time heads-up, not a reminder that returns with the next
+              // opener. Replaced the 7-day snooze on 9/5.
+              && !(prefs.kickoffBannersDismissed ?? []).length
               // Wait for the account reconcile: on a second device the local
               // blob paints first and the server copy — which holds the
               // dismissal — lands 1-3 s later, so a banner dismissed elsewhere
@@ -3702,7 +3705,6 @@ export default function HomeContent({
                   type="button"
                   onClick={() => updatePrefs({
                     kickoffBannersDismissed: [...(prefs.kickoffBannersDismissed ?? []), kickoff.seasonKey].slice(-12),
-                    kickoffBannerSnoozedUntil: addDaysYmd(kickoffTodayYmd, 7),
                   })}
                   data-umami-event={`kickoff-banner-dismiss-${kickoff.config.sport}`}
                   aria-label={`Dismiss ${kickoff.config.label} banner`}

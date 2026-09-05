@@ -1,7 +1,7 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout } from "./types";
 import { collegeFootballPollRank } from "./pollRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
-import { parseEspnHeader, rankTopEvents, topEventsSourceSports, TOP_EVENTS_DEFAULT_COUNT, type EspnHeaderFeature, type TopEventsMode, type TopEventsCount } from "./topEvents";
+import { parseEspnHeader, rankTopEvents, topEventsSourceSports, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type EspnHeaderFeature, type TopEventsMode, type TopEventsCount } from "./topEvents";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
 import { raceDetailsUrl } from "./raceDetails";
@@ -4870,7 +4870,8 @@ export async function fetchAllLeagues(
   const resolveSlot = (sport: Sport | "empty" | undefined): LeagueConfig | "empty" | null => {
     if (sport === "empty") return "empty";
     if (!sport) return null;
-    if (sport === "top") return TOP_EVENTS_CONFIG;
+    // A "top" pin saved while the column was on reads as Auto while it is off.
+    if (sport === "top") return TOP_EVENTS_ENABLED ? TOP_EVENTS_CONFIG : null;
     const configs = ALL_LEAGUES.filter((l) => l.sport === sport);
     if (!configs.length) return null;
     // Several sports have more than one seasonal config (NFL regular season +

@@ -228,16 +228,14 @@ export interface Preferences {
   // tournament when no visible column is the World Cup).
   wcBannerDismissed?: boolean;
   // Season-kickoff banners the user dismissed, keyed by sport + kickoff day
-  // ("epl-2026-08-21"). Per-season rather than a boolean so dismissing this
-  // August's Premier League banner doesn't silence next August's, and capped to
-  // the last dozen keys so this can't grow without bound in a synced prefs blob.
+  // ("epl-2026-08-21"), capped to the last dozen keys so this can't grow
+  // without bound in a synced prefs blob. Since 9/5 ANY entry retires the
+  // banner for good — it is a one-time heads-up, not a reminder that returns
+  // with the next opener (Jacob: "only popup once total"). The keys still
+  // record which opener the user saw. Merged as a union across devices — see
+  // lib/dismissals.ts. (A `kickoffBannerSnoozedUntil` date lived here 9/4-9/5;
+  // old blobs may still carry it, nothing reads it.)
   kickoffBannersDismissed?: string[];
-  // Set on every kickoff-banner ✕ to today + 7 days (YYYYMMDD). While today is
-  // earlier, NO season-kickoff banner shows, whichever league is next: six
-  // openers fall between Aug 29 and Oct 20, and 4 of the 68 sessions that
-  // dismissed one in the last 40 days had to dismiss two or more (Jacob 9/4).
-  // Merged as the later date across devices — see lib/dismissals.ts.
-  kickoffBannerSnoozedUntil?: string;
   // Top events column (lib/topEvents.ts). All three undefined = Auto (ESPN's
   // homepage strip + your starred teams), 8 games.
   topEventsMode?: TopEventsMode;
