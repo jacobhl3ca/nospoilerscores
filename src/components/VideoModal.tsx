@@ -869,6 +869,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (!p?.getDuration || !p?.seekTo) return;
     const d = p.getDuration();
     if (!d || d <= 0) return;
+    const target = Math.min(pct / 100, seekCap);
     guardSeek(target, () => {
       p.seekTo(d * target, true);
       p.playVideo?.();
