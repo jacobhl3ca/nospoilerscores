@@ -109,8 +109,18 @@ for (const l of ALL_LEAGUES) {
   if (!SUPPORTED.has(l.sport) || l.hidden || l.backfillOnly) continue;
   // ALL_LEAGUES carries one row per *window* (golf majors, NFL Preseason), so a
   // sport can appear twice. The TV app is one row per sport — keep the first,
-  // which is the primary window in every supported case.
-  if (seen.has(l.sport)) continue;
+  // which is the primary window in every supported case. One exception: a
+  // league split into two windows under the SAME label (Rugby Nations plays a
+  // July round, then the November finals) spans both on TV, which has no
+  // mid-season-gap concept — so the row's end date stretches to the later
+  // window's end instead of stopping at the first.
+  if (seen.has(l.sport)) {
+    const row = leagues.find((r) => r.key === l.sport);
+    const laterSameLeague = row && row.label === l.label && row.season.start && row.season.end && l.startDate && l.endDate
+      && row.season.start <= row.season.end && l.startDate <= l.endDate && l.startDate > row.season.end;
+    if (laterSameLeague) row.season.end = l.endDate;
+    continue;
+  }
   seen.add(l.sport);
   const r = RATING[l.sport];
   leagues.push({
