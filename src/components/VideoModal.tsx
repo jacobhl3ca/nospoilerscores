@@ -7,7 +7,7 @@ import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
-import { routeArrowKey } from "@/lib/modalArrowKeys";
+import { routeModalKey } from "@/lib/modalArrowKeys";
 
 interface VideoModalProps {
   videoId: string;
@@ -96,6 +96,10 @@ interface YTPlayer {
   mute: () => void;
   unMute: () => void;
   destroy: () => void;
+  // The <iframe> the player lives in. Only read to answer one question — is
+  // document.activeElement this frame, i.e. did the user's click just move
+  // focus INTO YouTube (see the focus-recovery effect below, Jacob 9/5).
+  getIframe: () => HTMLIFrameElement;
   // Undocumented but reliable helpers used by the quality/title-spoiler logic.
   // Optional because they aren't guaranteed present on every API revision.
   getAvailableQualityLevels?: () => string[];
@@ -329,20 +333,31 @@ const SEEK_STEP = 5;
 // independent of the global Headlines toggle — for the modal's spoiler-bearing
 // headline and the Reddit selftext body. stopPropagation so a peek tap doesn't
 // also dismiss the modal (the dark backdrop is what closes it).
-function PeekBlur({ tag = "div", className, style, children }: {
+function PeekBlur({ tag = "div", className, style, children, peek: peekProp, onToggle, keyShortcut }: {
   tag?: "div" | "h2" | "p";
   className?: string;
   style?: React.CSSProperties;
   children: React.ReactNode;
+  /** Controlled mode: the owner holds the peek state (the headline, driven by
+   *  the H key). Omit both props and the block keeps its own state (the Reddit
+   *  body, which is tap-only). */
+  peek?: boolean;
+  onToggle?: () => void;
+  /** Advertised to assistive tech as this block's shortcut, when it has one. */
+  keyShortcut?: string;
 }) {
-  const [peek, setPeek] = useState(false);
+  const [peekState, setPeek] = useState(false);
+  const controlled = peekProp !== undefined;
+  const peek = controlled ? peekProp : peekState;
   const Tag = tag as React.ElementType;
   const cls = `news-title${peek ? " peek" : ""}${className ? ` ${className}` : ""}`;
-  const toggle = () => setPeek((p) => !p);
+  const toggle = () => { if (controlled) onToggle?.(); else setPeek((p) => !p); };
+  const hint = keyShortcut ? ` (${keyShortcut.toUpperCase()})` : "";
   return (
     <Tag
       className={cls}
       style={style}
+      aria-keyshortcuts={keyShortcut}
       // Operable by pointer AND keyboard — without role/tabIndex/onKeyDown this
       // clickable element would be invisible to keyboard and screen-reader users
       // (WCAG 2.1.1). aria-pressed mirrors the blur state for assistive tech.
@@ -353,7 +368,7 @@ function PeekBlur({ tag = "div", className, style, children }: {
       onKeyDown={(e: React.KeyboardEvent) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); toggle(); }
       }}
-      title={peek ? "Tap to blur" : "Tap to reveal"}
+      title={(peek ? "Tap to blur" : "Tap to reveal") + hint}
       aria-label={peek ? "Hide spoiler text" : "Reveal spoiler text"}
     >
       {children}
@@ -663,6 +678,27 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Same reuse trap as PeekBlur: page to another post and the gallery cursor
   // must go back to picture 1 (post B would otherwise open on post A's 4th).
   useEffect(() => { setGalIdx(0); }, [postKey]);
+  // Which post's headline is peeked — NOT a boolean (Jacob 9/5). H has to drive
+  // the reveal from up here, but the same modal is reused across posts, so the
+  // reset has to be free. Storing the POST and comparing derives the answer
+  // during render: post B is blurred on its very first frame, and ↑ back to A
+  // finds A blurred again because nothing was ever remembered. The obvious
+  // alternative — useState(false) plus useEffect(() => setPeek(false),
+  // [postKey]) — runs AFTER paint, so post B's headline would render un-blurred
+  // for one frame, and in this app a one-frame headline IS the spoiler (the
+  // same reason layout.tsx blurs news media in a pre-paint script). Never
+  // written to prefs: a peek is a glance, not a setting.
+  const [peekedKey, setPeekedKey] = useState<string | null>(null);
+  const headlinePeek = peekedKey === postKey;
+  const toggleHeadlinePeek = useCallback(
+    () => setPeekedKey((k) => (k === postKey ? null : postKey)),
+    [postKey]
+  );
+  // The dialog root's data-player-state, so a click-through test (and anything
+  // else outside the cross-origin iframe) can read play/pause without asking
+  // YouTube. Reveals nothing — not the position, not the duration.
+  const [playerState, setPlayerState] = useState<"playing" | "paused" | "none">("none");
+  useEffect(() => { setPlayerState("none"); }, [postKey]);
 
   const clearAutoplayBlocked = useCallback(() => {
     autoplayBlockedRef.current = false;
@@ -796,33 +832,36 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // instead. (Only gates a deliberate forward jump from the first half — it
   // won't nag once you're already past the midpoint.)
   const guardSeek = useCallback((targetFrac: number, run: () => void) => {
+    // Read the position off whichever player is up: a direct stream (MLB
+    // .m3u8, v.redd.it) has no playerRef at all, and reading 0 there would nag
+    // on a jump the viewer is already past (Jacob 9/5, same YouTube-only
+    // oversight seekBy carried until 8/9).
+    const v = videoRef.current;
     const p = playerRef.current;
-    const d = p?.getDuration?.() ?? 0;
-    const cur = d > 0 ? (p?.getCurrentTime?.() ?? 0) / d : 0;
+    const d = v && hlsMode ? (isFinite(v.duration) ? v.duration : 0) : (p?.getDuration?.() ?? 0);
+    const cur = d > 0 ? ((v && hlsMode ? v.currentTime : p?.getCurrentTime?.() ?? 0) / d) : 0;
     if (warnHalfway && targetFrac > 0.5 && cur <= 0.5) {
       setPendingSeek({ run, pct: Math.round(targetFrac * 100) });
       return;
     }
     run();
-  }, [warnHalfway]);
+  }, [warnHalfway, hlsMode]);
 
   // Jump to a fraction of the clip. Works off the YouTube player's reported
   // duration so no timeline is ever revealed.
   const seekToPct = useCallback((pct: number) => {
-    const target = Math.min(pct / 100, seekCap);
-    // Direct-stream clips (MLB .m3u8, v.redd.it, streamff) have no YouTube
-    // player — playerRef is null, so this jump silently did nothing on them
-    // while the ±5s buttons beside it worked (seekBy already branches on
-    // hlsMode). Seek the in-document <video> instead; same seekCap and
-    // warn-halfway guard.
+    // Direct streams play through an in-document <video>, not the YT player —
+    // same clamp, same halfway guard, just the other element (Jacob 9/5, so the
+    // 0-9 keys land on an MLB clip and not only on a YouTube one).
     const v = videoRef.current;
     if (v && hlsMode) {
-      const d = v.duration;
-      if (!d || !isFinite(d) || d <= 0) return;
-      guardSeek(target, () => {
-        v.currentTime = d * target;
+      const dv = v.duration;
+      if (!dv || !isFinite(dv) || dv <= 0) return;
+      const targetV = Math.min(pct / 100, seekCap);
+      guardSeek(targetV, () => {
+        v.currentTime = dv * targetV;
         void v.play().catch(() => { /* autoplay prompt already covers this */ });
-        setProgress(target);
+        setProgress(targetV);
       });
       return;
     }
@@ -913,12 +952,22 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // enters the cross-origin frame; if it did, every later keystroke (Esc, f, the
   // arrows, Space) would be swallowed by YouTube instead of reaching this modal.
   const togglePlay = useCallback(() => {
+    // Direct streams (MLB .m3u8, v.redd.it, streamff) are an in-document
+    // <video> with no playerRef, so Space and click-to-pause did nothing on an
+    // MLB clip — the same YouTube-only shape seekBy was fixed out of on 8/9
+    // (Jacob 9/5).
+    const v = videoRef.current;
+    if (v && hlsMode) {
+      if (v.paused) void v.play().catch(handleNativePlayError);
+      else v.pause();
+      return;
+    }
     const p = playerRef.current;
     if (!p?.getPlayerState) return;
     const PLAYING = (window as unknown as { YT?: { PlayerState?: { PLAYING?: number } } }).YT?.PlayerState?.PLAYING ?? 1;
     if (p.getPlayerState() === PLAYING) p.pauseVideo?.();
     else p.playVideo?.();
-  }, []);
+  }, [hlsMode, handleNativePlayError]);
 
   // Poll the YT player's position to drive the progress-bar fill while the
   // clip plays. Cheap (every 350ms) and only while this is a YouTube clip.
@@ -955,6 +1004,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Toggle mute on the YouTube player. Un-muting restores the slider's level
   // (or 100 if it was dragged to 0).
   const toggleMute = useCallback(() => {
+    // Direct streams again: no playerRef, so drive the <video>'s own muted flag
+    // (its native control strip picks the change up). Keeps the m key honest on
+    // an MLB clip instead of silently doing nothing (Jacob 9/5).
+    const v = videoRef.current;
+    if (v && hlsMode) { v.muted = !v.muted; setMuted(v.muted); return; }
     const p = playerRef.current;
     if (!p) return;
     if (muted) {
@@ -963,7 +1017,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     } else {
       p.mute?.(); setMuted(true);
     }
-  }, [muted, volume]);
+  }, [muted, volume, hlsMode]);
 
   // Apply a volume level (0–100) from any source — shared by the pointer
   // handler and the keyboard handler below. Sets the YT player volume and
@@ -1068,6 +1122,55 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     if (seekFlashTimerRef.current) window.clearTimeout(seekFlashTimerRef.current);
   }, []);
 
+  // Take focus back off YouTube after a click inside the iframe (Jacob 9/5).
+  //
+  // With YouTube's native controls on — the default since 8/9 — the click-catcher
+  // deliberately isn't mounted, because YT's own play button, scrubber and
+  // fullscreen live inside the frame and clicks have to reach them. Focus goes
+  // with those clicks, and from that moment every keystroke belongs to YouTube's
+  // document, not ours: ↑/↓ become volume, Esc and f and h never arrive. The
+  // modal looked like it had simply lost its keyboard.
+  //
+  // A cross-origin frame tells us nothing directly, but it does make the TOP
+  // window blur, and after that blur document.activeElement is the iframe
+  // element itself — which is the whole signal. YouTube has already handled the
+  // click by then, so pulling focus back costs the user nothing.
+  //
+  // Deferred ~250ms on purpose: a scrubber DRAG inside the frame is mousedown,
+  // a stream of moves, then mouseup, and yanking focus on the mousedown would
+  // cut it (the parent never sees pointer events from inside the frame, which
+  // is why the blur is the only handle we have).
+  useEffect(() => {
+    if (!ytMode || !youtubeNativeControls) return;
+    let timer: number | null = null;
+    const ytFrame = (): HTMLIFrameElement | null => {
+      try {
+        const f = playerRef.current?.getIframe?.();
+        if (f) return f;
+      } catch { /* player destroyed mid-teardown */ }
+      // The YT API replaces our #yt-player div with the iframe, keeping the id.
+      const host = document.getElementById("yt-player");
+      if (host instanceof HTMLIFrameElement) return host;
+      return host?.querySelector("iframe") ?? null;
+    };
+    const onBlur = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const frame = ytFrame();
+        // Only when focus really went INTO the player. A plain Cmd-Tab away
+        // leaves activeElement wherever it was, so this stays a no-op.
+        if (!frame || document.activeElement !== frame) return;
+        frame.blur();
+        dialogRef.current?.focus({ preventScroll: true });
+      }, 250);
+    };
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [ytMode, youtubeNativeControls]);
+
   // Keep nativeFs in sync with the browser, and remember when we left so a
   // co-delivered Escape doesn't also close the modal.
   useEffect(() => {
@@ -1085,14 +1188,35 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
   }, []);
 
-  // Keyboard: Esc backs out of fullscreen first, then closes; "f" fullscreens.
+  // The modal's keyboard. Esc backs out of fullscreen first, then closes; "f"
+  // fullscreens; everything else is routed by routeModalKey (the leaf module,
+  // where the rules are unit-tested — VideoModal itself can't load under `node
+  // --test`). Esc and f stay here rather than going through the module: they
+  // carry fullscreen timing state (fsExitAtRef, the co-delivered Escape) the
+  // module has no business knowing.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // The warn-past-halfway prompt is modal in its own right: Esc cancels
+        // THE PROMPT, and leaves the post open. Before this it closed the whole
+        // modal out from under the question it had just asked (Jacob 9/5).
+        if (pendingSeek) { setPendingSeek(null); return; }
         if (fakeFs) { setFakeFs(false); return; }
         if (nativeFs) return;                                  // browser exits FS itself
         if (Date.now() - fsExitAtRef.current < 350) return;    // just left FS — swallow
         onClose();
+        return;
+      }
+      // Enter confirms that same prompt — the keyboard twin of "Skip anyway".
+      // Skipped when a button or link has focus, which owns Enter itself (Tab
+      // to Cancel and press Enter and you get Cancel, not the skip).
+      if (e.key === "Enter" && pendingSeek && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "BUTTON" || t.tagName === "A" || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        e.preventDefault();
+        const run = pendingSeek.run;
+        setPendingSeek(null);
+        run();
         return;
       }
       // "f" toggles fullscreen — but don't steal it from text entry or from
@@ -1103,46 +1227,55 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         e.preventDefault();
         toggleFullscreen();
       }
-      // ←/→ — routed by routeArrowKey. Plain arrows act on the content when it
-      // can take them (a gallery walks its pictures, then runs off the end onto
-      // the neighbouring post like swipe does; a video scrubs ±5s like YouTube's
-      // own keys) and page otherwise, so image and text posts still page on
-      // plain arrows. Shift+←/→ always pages: the keyboard twin of the side
-      // chevrons, and the only keyboard way off a video now that plain arrows
-      // seek on it (Jacob 9/4). Cmd/Ctrl/Alt chords and text entry are left
-      // alone.
-      if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const t = e.target as HTMLElement | null;
-        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-        const dir = e.key === "ArrowLeft" ? -1 : 1;
-        const action = routeArrowKey({
-          shift: e.shiftKey,
-          // hlsMode included: MLB/Reddit direct streams seek through the <video>
-          // element (see seekBy), so ← → skip on them like they do on YouTube.
-          canSeek: ytMode || hlsMode,
-          galleryCanStep: isGallery && galAt + dir >= 0 && galAt + dir < galLen,
-          hasNeighbour: dir < 0 ? !!onPrev : !!onNext,
-        });
-        if (!action) return;
-        e.preventDefault();
-        if (action === "gallery") stepGallery(dir);
-        else if (action === "seek") seekBy(dir * SEEK_STEP);
-        else if (dir < 0) goPrev();
-        else goNext();
-      }
-      // Space (or "k", YouTube's own key) toggles play/pause on the YT clip.
-      // preventDefault stops Space from scrolling the page. Skip text entry and
-      // any focused button/link so Space still activates them normally.
-      if ((e.key === " " || e.code === "Space" || e.key === "k" || e.key === "K") && ytMode && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const t = e.target as HTMLElement | null;
-        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "BUTTON" || t.tagName === "A" || t.isContentEditable)) return;
-        e.preventDefault();
-        togglePlay();
+      // Everything else: build the context, ask routeModalKey, act. ↓/↑ page the
+      // post list, ←/→ keep the 9/4 routing (content first, Shift always pages),
+      // Space/k play-pause, H peeks this post's headline, and m / j / l / 0-9
+      // are the YouTube keys we take back by keeping focus out of the iframe.
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      const dir = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+      const action = routeModalKey({
+        // e.key is " " for the space bar everywhere modern, but e.code is the
+        // reliable one when a layout remaps it.
+        key: e.code === "Space" ? " " : e.key,
+        shift: e.shiftKey,
+        chord: e.metaKey || e.ctrlKey || e.altKey,
+        repeat: e.repeat,
+        // VIDEO is in this list on purpose: a focused native <video controls>
+        // (the HLS path) already toggles itself on Space and seeks itself on
+        // the arrows, so routing the same press would double-act.
+        inTextEntry: !!t && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "VIDEO" || t.isContentEditable),
+        onControl: !!t && (tag === "BUTTON" || tag === "A"),
+        // hlsMode included: MLB/Reddit direct streams seek through the <video>
+        // element (see seekBy), so ← → skip on them like they do on YouTube.
+        canSeek: ytMode || hlsMode,
+        galleryCanStep: isGallery && dir !== 0 && galAt + dir >= 0 && galAt + dir < galLen,
+        hasPrev: !!onPrev,
+        hasNext: !!onNext,
+        hasHeadline: !!headline,
+      });
+      if (!action) return;
+      // preventDefault ONLY once we've decided to act — an unhandled ↓ has to
+      // stay the browser's (scroll), and Space has to stay the page's.
+      e.preventDefault();
+      switch (action) {
+        case "gallery": stepGallery(dir); break;
+        case "seek": seekBy(dir * SEEK_STEP); break;
+        case "page-prev": goPrev(); break;
+        case "page-next": goNext(); break;
+        case "toggle-play": togglePlay(); break;
+        case "peek-headline": toggleHeadlinePeek(); break;
+        case "mute": toggleMute(); break;
+        // j back, l forward — YouTube's own ∓10s, twice the arrows' step.
+        case "seek-10": seekBy((e.key === "j" || e.key === "J" ? -1 : 1) * 10); break;
+        // 1-9 jump to that tenth; 0 restarts. seekToPct already honours the 90%
+        // spoiler cap and the warn-past-halfway prompt, so the keys inherit both.
+        case "jump-pct": seekToPct(Number(e.key) * 10); break;
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, hlsMode, seekBy, togglePlay, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen]);
+  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, headline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -1628,6 +1761,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // states where YouTube paints its related-video overlays.
             if (event.data === 2 || event.data === 0) setYtPaused(true);
             else if (event.data === 1 || event.data === 3) setYtPaused(false);
+            // Same two states, published on the dialog root (see
+            // data-player-state) so play/pause is observable from outside the
+            // cross-origin frame.
+            if (event.data === 2 || event.data === 0) setPlayerState("paused");
+            else if (event.data === 1 || event.data === 3) setPlayerState("playing");
             // Playback actually started — kill the watchdog.
             if (event.data === 1 || event.data === 3) {
               clearAutoplayBlocked();
@@ -1810,7 +1948,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         onClick={(e) => { e.stopPropagation(); goPrev(); }}
         disabled={!onPrev}
         aria-label="Previous post"
-        title="Previous post (Shift+←)"
+        title="Previous post (↑)"
+        aria-keyshortcuts="ArrowUp"
         className="hidden sm:flex fixed left-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
       >
@@ -1820,7 +1959,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         onClick={(e) => { e.stopPropagation(); goNext(); }}
         disabled={!onNext}
         aria-label="Next post"
-        title="Next post (Shift+→)"
+        title="Next post (↓)"
+        aria-keyshortcuts="ArrowDown"
         className="hidden sm:flex fixed right-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
       >
@@ -1874,6 +2014,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         style={{ zIndex: 1 }}
         role="dialog"
         aria-modal="true"
+        // "playing" | "paused" | "none". Nothing about the clip leaks through
+        // it — not the position, not the duration — and it is the only way to
+        // read play state from outside a cross-origin YouTube iframe, which is
+        // what makes the keyboard's Space testable (Jacob 9/5).
+        data-player-state={ytMode || hlsMode ? playerState : "none"}
         // Keep the dialog's accessible name in sync with what it's actually
         // showing — this same modal also serves an image lightbox (imageMode)
         // and a Reddit text-post preview (textMode), so a static "Video player"
@@ -2087,7 +2232,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 />
               )}
               {headline && (
-                <PeekBlur key={`h-${postKey}`} tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
+                <PeekBlur key={`h-${postKey}`} peek={headlinePeek} onToggle={toggleHeadlinePeek} keyShortcut="h" tag="h2" className="text-lg sm:text-2xl font-semibold leading-snug mb-3" style={{ color: "var(--text)" }}>{headline}</PeekBlur>
               )}
               <ArticleMeta byline={byline} published={published} className="text-xs sm:text-sm" style={{ color: "var(--text-muted)" }} />
               {body && (
@@ -2635,6 +2780,8 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 muted
                 playsInline
                 onPlaying={trackVideoPlay}
+                onPlay={() => setPlayerState("playing")}
+                onPause={() => setPlayerState("paused")}
                 // Spoiler-safe accessible name — matching the sibling <iframe>'s
                 // title and the dialog's aria-label: the PeekBlur'd headline can
                 // carry a score, so setting it as this focusable player's
@@ -2708,7 +2855,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           <div className="mt-3 text-center px-2">
             {/* Only the text itself swallows the click (so selecting the headline
                 doesn't close); the surrounding strip stays a dismiss target. */}
-            <PeekBlur key={`f-${postKey}`} tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
+            <PeekBlur key={`f-${postKey}`} peek={headlinePeek} onToggle={toggleHeadlinePeek} keyShortcut="h" tag="p" className="text-sm sm:text-base text-white/90 leading-snug">{headline}</PeekBlur>
             {byline && (
               <ArticleMeta byline={byline} published={null} className="text-xs text-white/40 mt-1" />
             )}
