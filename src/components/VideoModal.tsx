@@ -7,6 +7,7 @@ import { formatPublished, proxyImage } from "@/lib/news";
 import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
+import { routeArrowKey } from "@/lib/modalArrowKeys";
 
 interface VideoModalProps {
   videoId: string;
@@ -426,7 +427,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     return true;
   }, [isGallery, galAt, galLen]);
   // Horizontal swipe on the image lightbox → prev/next post (mobile parity with
-  // the bottom Prev/Next buttons and the desktop ← → keys). Inside a gallery it
+  // the bottom Prev/Next buttons and the desktop Shift+← → keys). Inside a gallery it
   // walks the pictures first and only leaves the post at either end, so a swipe
   // never skips over photos the user hasn't seen.
   // The modal ROOT — see the fullscreen block further down. Declared up here
@@ -1102,21 +1103,32 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         e.preventDefault();
         toggleFullscreen();
       }
-      // ←/→: step to the previous/next video when sibling navigation is
-      // available (news lists pass onPrev/onNext — same as the on-screen
-      // side arrows). Otherwise they skip ±5s on the YouTube player. Don't steal
-      // arrows from text entry or modified chords.
+      // ←/→ — routed by routeArrowKey. Plain arrows act on the content when it
+      // can take them (a gallery walks its pictures, then runs off the end onto
+      // the neighbouring post like swipe does; a video scrubs ±5s like YouTube's
+      // own keys) and page otherwise, so image and text posts still page on
+      // plain arrows. Shift+←/→ always pages: the keyboard twin of the side
+      // chevrons, and the only keyboard way off a video now that plain arrows
+      // seek on it (Jacob 9/4). Cmd/Ctrl/Alt chords and text entry are left
+      // alone.
       if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-        // Inside a gallery the arrows walk its pictures first (same rule as
-        // swipe), then continue on to the neighbouring post at either end.
-        if (stepGallery(e.key === "ArrowLeft" ? -1 : 1)) { e.preventDefault(); return; }
-        if (e.key === "ArrowLeft" && onPrev) { e.preventDefault(); goPrev(); }
-        else if (e.key === "ArrowRight" && onNext) { e.preventDefault(); goNext(); }
-        // hlsMode included: MLB/Reddit direct streams seek through the <video>
-        // element now (see seekBy), so ← → skip on them like they do on YouTube.
-        else if (ytMode || hlsMode) { e.preventDefault(); seekBy(e.key === "ArrowLeft" ? -SEEK_STEP : SEEK_STEP); }
+        const dir = e.key === "ArrowLeft" ? -1 : 1;
+        const action = routeArrowKey({
+          shift: e.shiftKey,
+          // hlsMode included: MLB/Reddit direct streams seek through the <video>
+          // element (see seekBy), so ← → skip on them like they do on YouTube.
+          canSeek: ytMode || hlsMode,
+          galleryCanStep: isGallery && galAt + dir >= 0 && galAt + dir < galLen,
+          hasNeighbour: dir < 0 ? !!onPrev : !!onNext,
+        });
+        if (!action) return;
+        e.preventDefault();
+        if (action === "gallery") stepGallery(dir);
+        else if (action === "seek") seekBy(dir * SEEK_STEP);
+        else if (dir < 0) goPrev();
+        else goNext();
       }
       // Space (or "k", YouTube's own key) toggles play/pause on the YT clip.
       // preventDefault stops Space from scrolling the page. Skip text entry and
@@ -1130,7 +1142,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, hlsMode, seekBy, togglePlay, onPrev, onNext, goPrev, goNext, stepGallery]);
+  }, [onClose, fakeFs, nativeFs, toggleFullscreen, ytMode, hlsMode, seekBy, togglePlay, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -1798,7 +1810,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         onClick={(e) => { e.stopPropagation(); goPrev(); }}
         disabled={!onPrev}
         aria-label="Previous post"
-        title="Previous post"
+        title="Previous post (Shift+←)"
         className="hidden sm:flex fixed left-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
       >
@@ -1808,7 +1820,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         onClick={(e) => { e.stopPropagation(); goNext(); }}
         disabled={!onNext}
         aria-label="Next post"
-        title="Next post"
+        title="Next post (Shift+→)"
         className="hidden sm:flex fixed right-4 top-1/2 -translate-y-1/2 z-[60] w-11 h-11 items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-default cursor-pointer transition-colors"
         style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.16)" }}
       >

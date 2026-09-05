@@ -29,6 +29,10 @@ interface GameCardProps {
   // Plays a non-YouTube embed (NHL recaps via Brightcove) in the same modal.
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   leagueLabel?: string;
+  // Small chip naming the game's league, for a column that MIXES leagues
+  // (Top events). Every single-league column leaves it unset — its header
+  // already says it, and a chip on all sixteen NFL cards would be noise.
+  leagueTag?: string;
   useAbbreviations?: boolean;
   // When true, render the game's own date on the top-left regardless of state,
   // and treat finished games like past-date cards (hide records, show highlights).
@@ -366,7 +370,7 @@ export function CompactUpcomingCard({
   );
 }
 
-export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, showRecords }: GameCardProps) {
+export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, showRatings, nextGameDate, isPastDate, isToday, onPlayHighlight, onPlayEmbed, leagueLabel, leagueTag, useAbbreviations, teamView, isDoubleheader, onSelectTeam, onShowDetails, showStars, showRecords }: GameCardProps) {
   const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   // Any click outside the expanded-networks overlay collapses it (Jacob 6/11) —
   // before this, overlays only closed via the tiny ✕ and piled up across cards.
@@ -686,7 +690,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
         const showFinal = isFinished && !isPastDate && !teamView;
         // Series state now renders as a top banner above the card (see above),
         // not in the status bar's middle cell, so it's gone from showBar here.
-        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView;
+        // A Top events card carries its league chip in this row, so the row
+        // renders for the chip alone (a finished game on a past date has no
+        // status, rating or network text to show otherwise).
+        const showBar = hasStatusText || hasRating || hasBroadcast || showFinal || teamView || !!leagueTag;
         if (!showBar) return null;
         // Small ESPN link wrapper for upcoming-time / date labels. In demo mode
         // the link would leak the real matchup (see demoActive above), so render
@@ -726,6 +733,16 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                 exhibition sitting under a header reading plain "NFL").
                 Rides inside the existing flex-wrap meta row rather than taking a
                 banner row of its own, so it costs no card height. */}
+            {leagueTag && (
+              <span
+                className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-muted)" }}
+                data-league-tag={leagueTag}
+                title={leagueLabel && leagueLabel !== leagueTag ? leagueLabel : undefined}
+              >
+                {leagueTag}
+              </span>
+            )}
             {game.isPreseason && !/preseason/i.test(leagueLabel ?? "") && (
               <span
                 className="shrink-0 text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-px leading-none"
