@@ -968,12 +968,29 @@ const PATTERNS: Record<SensitiveCategory, RegExp[]> = {
     /\bblows? to the (back of the )?head\b|\bshots? to the back of the head\b/i,
   ],
   medical: [
-    /\bcancer\b|\btumou?r\b|\bleukemia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill\b/i,
+    // `leuka?emia` spans the British "leukaemia" and American "leukemia"
+    // spellings, the parity the `tumou?r` alternation already carries. The
+    // soccer/rugby/cricket feeds use the British `ae` form ("continues his
+    // brave leukaemia battle", "leukaemia research"), so those exact stories
+    // slipped past "Hide upsetting news" while only the American spelling matched.
+    /\bcancer\b|\btumou?r\b|\bleuka?emia\b|\blymphoma\b|\bchemotherapy\b|\bterminal(ly)? ill\b/i,
     // MND is what the UK/AU press calls ALS, and it is how rugby/cricket
     // stories are always headlined — "MND-diagnosed" also misses the
     // "diagnosed with" pattern below, so the bare acronym has to be here.
-    /\bALS\b|\bMND\b|\bmotor neuron[e]? disease\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
-    /\bcardiac (arrest|event|episode)\b|\bheart attack\b|\bstroke suffered\b|\bsuffered a stroke\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
+    // `multiple sclerosis` joins the named chronic-disease list alongside
+    // ALS/MND: it reaches the feed through "living with"/fundraiser features
+    // ("continues to live with multiple sclerosis", "multiple sclerosis
+    // research") that carry no "diagnosed with"/hospital cue, so it must match
+    // on the full disease name alone. Only the two-word phrase fires — a bare
+    // "sclerosis" carries no sports sense but is not distinctive enough to need.
+    /\bALS\b|\bMND\b|\bmotor neuron[e]? disease\b|\bmultiple sclerosis\b|\bParkinson'?s\b|\bAlzheimer'?s\b|\bdementia\b|\bCTE\b/i,
+    // `(arrest|event|episode)s?` covers the plural "cardiac arrests" ("two
+    // players suffered cardiac arrests this season"); the singular's `(?<!cardiac )`
+    // violence carve-out already spares the plural "arrests" too, so without the
+    // `s?` here the plural fell through to no flag at all. The stroke qualifier
+    // group catches "suffered a possible/suspected/minor stroke" — real cardiac
+    // wording — while "stroke of genius" stays clear (no "suffered a" precedes it).
+    /\bcardiac (arrest|event|episode)s?\b|\bheart attack\b|\bstroke suffered\b|\bsuffered a (possible |suspected |minor |major |mild )?stroke\b|\baneurysm\b|\bblood clots?\b|\bpulmonary embolism\b/i,
     /\bcollapsed? (on|during|at|mid)/i,
     // `ventilator` joins the emergency-state cues alongside `life support` and
     // `intensive care`: someone on a ventilator is in the same critical ICU
