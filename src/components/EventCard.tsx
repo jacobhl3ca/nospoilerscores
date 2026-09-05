@@ -566,6 +566,10 @@ function FightCard({
           keeps the answer where the question was asked, and costs no height
           that the button was not already occupying.
           undefined → not attempted yet, so the button shows. */}
+      {/* .hl-slot: the board-wide height floor shared with GameCard (see
+          globals.css). A bout already keeps its row once played, so this mostly
+          lets a resolved bout COUNT as a card with a button for the floor. */}
+      <div className={isPost ? "hl-slot" : undefined}>
       {isPost && source === null && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           <p role="status" className="flex-1 text-center text-[10px] py-1.5" style={{ color: "var(--text-muted)" }}>
@@ -587,6 +591,7 @@ function FightCard({
           <PlayBtn label={source?.label ?? defaultPlayLabel} loading={loadingId === fight.id} onClick={() => onPlay(fight.id, boutHighlightQuery(fight), "UFC")} />
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -1133,7 +1138,12 @@ export default function EventCard({
           have no shared uploader; chess through an organizer mapping, and what
           it plays is the round broadcast rather than a highlight reel, because
           the sport publishes none. See NO_HIGHLIGHT_FALLBACK in lib/youtube.ts
-          for the case where the answer is no button at all (cricket). */}
+          for the case where the answer is no button at all (cricket).
+          .hl-slot wraps all four so a finished tile with no clip reserves the
+          row whenever another card on the board has one — the same floor as
+          GameCard (globals.css), so a race or poker tile never sits one row
+          shorter than the MLB card beside it once the board has clips. */}
+      <div className={isPost ? "hl-slot" : undefined}>
       {showRaceBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
@@ -1192,6 +1202,7 @@ export default function EventCard({
           />
         </div>
       )}
+      </div>
     </div>
   );
 }
