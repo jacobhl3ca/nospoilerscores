@@ -20,6 +20,13 @@
 // erased and fine.
 import type { Game, Sport } from "./types";
 
+// Master switch for the whole column. OFF since 2026-09-05 (Jacob: "top events
+// take down for now") — the pill leaves every switcher, the slot dropdowns and
+// Settings, a saved "top" slot resolves to Auto, and nothing fetches ESPN's
+// strip. The ranking below and its tests stay so flipping this back on is a
+// one-line change.
+export const TOP_EVENTS_ENABLED = false;
+
 export type TopEventsMode = "auto" | "manual";
 export type TopEventsCount = 5 | 8 | 12;
 export const TOP_EVENTS_DEFAULT_COUNT: TopEventsCount = 8;
