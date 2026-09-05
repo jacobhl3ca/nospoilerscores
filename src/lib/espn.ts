@@ -1,5 +1,6 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout } from "./types";
 import { collegeFootballPollRank } from "./pollRank";
+import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
 import { parseEspnHeader, rankTopEvents, topEventsSourceSports, TOP_EVENTS_DEFAULT_COUNT, type EspnHeaderFeature, type TopEventsMode, type TopEventsCount } from "./topEvents";
 import { getApiBase } from "./youtube";
 import { getEtServiceDate, toYmd, fromYmd, getTimeZone, etSlateYmd, nextYmd } from "./etDay";
@@ -1189,6 +1190,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   overtimeBonus: number;    // extra points for OT/extras
   scoringDivisor: number;   // normalizes scoring bonus per sport
   regulationPeriods: number; // normal period count (innings for MLB)
+  // Sports whose points arrive in CHUNKS replace the straight multiplier line
+  // with a curve keyed off how many scores the margin is worth — see
+  // marginCloseness. `multiplier` still drives the comeback bonus for them.
+  closenessCurve?: ClosenessCurve;
 }> = {
   // Never consulted: a Top events game keeps its real sport, so the rating
   // engine rates it as that league. Present only so the Record stays total.
@@ -1212,9 +1217,9 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // handed out the +15 OT bonus (a full tier) to non-OT games.
   ncaaw:  { multiplier: 5.5, overtimeBonus: 15, scoringDivisor: 25,  regulationPeriods: 4 },
   // NCAAF: scoring similar to NFL, mirrors its calibration.
-  ncaaf:  { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
+  ncaaf:  { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
-  nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4 },
+  nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   fifa:   { multiplier: 22,  overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   mls:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
@@ -1597,7 +1602,10 @@ function calculateRating(game: RatingGame): number | null {
   if (state === "in" && progress < 0.12) return null;
 
   // --- Factor 1: Final margin closeness (45%) ---
-  const finalCloseness = Math.max(0, 100 - diff * config.multiplier);
+  // Straight multiplier line for most sports; football reads the margin as how
+  // many scores it takes to tie instead (see marginCloseness).
+  const closeness = (margin: number) => marginCloseness(margin, config.multiplier, config.closenessCurve);
+  const finalCloseness = closeness(diff);
 
   // --- Factor 2: Running margin throughout game (35%) ---
   // Average margin across all periods — rewards games that were close throughout
@@ -1605,8 +1613,8 @@ function calculateRating(game: RatingGame): number | null {
   const runningMargin = calcRunningMargin(competitors);
   let runningCloseness: number;
   if (runningMargin !== null) {
-    // Use same multiplier — a running average margin of 5 in NBA means it was tight
-    runningCloseness = Math.max(0, 100 - runningMargin * config.multiplier);
+    // Same scale as the final margin — a running average margin of 5 in NBA means it was tight
+    runningCloseness = closeness(runningMargin);
   } else {
     // No linescore data (live game early on) — fall back to final margin
     runningCloseness = finalCloseness;
@@ -1617,7 +1625,7 @@ function calculateRating(game: RatingGame): number | null {
   const fpMargin = calcFinalPeriodMargin(competitors);
   let finalPeriodCloseness: number;
   if (fpMargin !== null) {
-    finalPeriodCloseness = Math.max(0, 100 - fpMargin * config.multiplier);
+    finalPeriodCloseness = closeness(fpMargin);
   } else {
     finalPeriodCloseness = finalCloseness;
   }
