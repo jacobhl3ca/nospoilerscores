@@ -1,5 +1,37 @@
 # HideScore — Master Backlog
 
+## 2026-09-05 — Card height floor: the MLB card is the height every finished card should be; why Friday's college cards had no clip
+
+✅ **Jacob 9/5 ("set a strict rule that the size of the MLB cards height are the height each card
+should be … I still see other leagues cards being smaller"), screenshots of the yesterday board:
+MLB with its 3m/10m beside NCAAF cards one row shorter.** The row is the whole difference — a
+finished card with a clip is 109px on desktop, one without was 74px. This is the third pass over
+that row: `f2deaf2d` (8/9) reserved it on every finished card, `f8522ad5` (8/11) took it back
+because a slate where NOTHING resolves wore a blank band under every card ("bigger box not until
+it has actual highlight", Jacob 8/10). The new rule keeps both: **a finished card reserves the
+button row the moment ANY card on the board has earned one, and not before.** One CSS rule
+(`main:has(.hl-slot .highlight-btn) .hl-slot { min-height }` in `globals.css`); the `.hl-slot`
+wrapper goes on finished GameCards, event tiles and UFC bouts only, so the details popup's copy
+of GameHighlights can never trip it. `display: flow-root` on the slot keeps the row's margin
+inside it — without that the margin collapses out and a card with a button measures one margin
+taller than the reserve. Measured on the mixed slate (border-box): card 111/111 desktop, 107/107 phone single-column;
+slot = button row = 35 (sm) / 31, button 27. `card-height-parity.spec.ts` now asserts all three shapes — mixed
+slate lines up, nothing-resolves stays collapsed, and the floor crosses columns (the screenshot).
+⚠️ Not covered on purpose: an UPCOMING card (meta row, no clip yet) is still one row shorter than
+a finished card with a clip on today's board — same as before; say so if that should join the floor.
+
+🔎 **Why three of Friday's NCAAF cards had no highlight (not timing — by 9:46am the ESPN channel
+had already posted OU–UTEP, Miami–Stanford and Kansas–LIU from the same night).** Both NCAAF
+buttons are strict-gated to the `ESPN College Football` channel, and ESPN posts a cut only for
+games on its own networks. The blanks were **BTN** (Indiana St–Purdue) and **ESPN+** (SJSU–E
+Michigan, NC A&T–Georgia St); the FOX/FS1 games (Fresno St–USC, Toledo–Michigan St) are dark the
+same way. Verified live against the worker with `strict=1`: `Big Ten Network` has a clean
+per-game cut for ALL THREE Big Ten games (`Indiana State vs. Purdue | Highlights | Big Ten
+Football | 09/04/26`, plus USC and Michigan St), `SEC` has one for OU–UTEP; FOX's own channels
+have nothing, and the two ESPN+ games have nothing on YouTube at all. The fix is a
+conference-network secondary for NCAAF (BTN + SEC verified today; ACC/Big 12 to verify), wired
+through the prebake so it isn't a live scrape per card. Open call, not built.
+
 ## 2026-09-04 — Grand Slam cards were dark for four tournaments; rugby joins the bake; three open calls on uploader gaps
 
 ✅ **The bug Jacob reported ("us open highlights for yesterday not showing up properly …

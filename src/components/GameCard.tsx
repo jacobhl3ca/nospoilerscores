@@ -1120,14 +1120,22 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
 
       {/* Highlight buttons (official + top-search YouTube, plus NHL.com recap)
           live in the shared GameHighlights component so the score card and the
-          details popup render identical buttons playing identical videos. */}
-      <GameHighlights
-        game={game}
-        leagueLabel={leagueLabel}
-        isToday={isToday}
-        onPlayHighlight={onPlayHighlight}
-        onPlayEmbed={onPlayEmbed}
-      />
+          details popup render identical buttons playing identical videos.
+          .hl-slot (finished cards only) is the board-wide height floor — see
+          globals.css. Once any card on the board has earned a button row, every
+          finished card reserves one, so a card whose clip never comes (a BTN or
+          ESPN+ college game the ESPN channel skips) sits level with the MLB card
+          beside it instead of one row shorter (Jacob 9/5). Until something
+          resolves, the slot is empty and costs nothing — the 8/10 rule. */}
+      <div className={isFinished ? "hl-slot" : undefined}>
+        <GameHighlights
+          game={game}
+          leagueLabel={leagueLabel}
+          isToday={isToday}
+          onPlayHighlight={onPlayHighlight}
+          onPlayEmbed={onPlayEmbed}
+        />
+      </div>
     </div>
   );
 }
