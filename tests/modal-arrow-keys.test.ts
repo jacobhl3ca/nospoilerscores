@@ -129,6 +129,20 @@ test("H peeks the headline, and only when there is one", () => {
   assert.equal(routeModalKey(mctx({ key: "h", repeat: true })), null);
 });
 
+test("the YouTube keys we take back: m, j/l, 0-9 — video only", () => {
+  assert.equal(routeModalKey(mctx({ key: "m", canSeek: true })), "mute");
+  assert.equal(routeModalKey(mctx({ key: "j", canSeek: true })), "seek-10");
+  assert.equal(routeModalKey(mctx({ key: "l", canSeek: true })), "seek-10");
+  assert.equal(routeModalKey(mctx({ key: "L", canSeek: true, repeat: true })), "seek-10");
+  assert.equal(routeModalKey(mctx({ key: "0", canSeek: true })), "jump-pct");
+  assert.equal(routeModalKey(mctx({ key: "9", canSeek: true })), "jump-pct");
+  for (const key of ["m", "j", "l", "0", "5", "9"]) {
+    assert.equal(routeModalKey(mctx({ key })), null, `${key} on a text post`);
+  }
+  assert.equal(routeModalKey(mctx({ key: "m", canSeek: true, repeat: true })), null);
+  assert.equal(routeModalKey(mctx({ key: "5", canSeek: true, repeat: true })), null);
+});
+
 test("a Cmd/Ctrl/Alt chord is never ours — not one key", () => {
   for (const key of ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", " ", "k", "h", "m", "j", "l", "5", "N", "P"]) {
     assert.equal(routeModalKey(mctx({ key, chord: true, shift: true, canSeek: true })), null, key);
