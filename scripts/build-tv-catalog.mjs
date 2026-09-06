@@ -29,7 +29,7 @@ const OUT = join(ROOT, "public", "tv", "catalog.json");
  * every one of these literals is dense with `//` prose that contains braces,
  * parens and apostrophes, so a naive regex or a brace count would stop early.
  */
-function literal(src, name) {
+function literal(src, name, scope = {}) {
   const decl = new RegExp(`\\bconst\\s+${name}\\b`).exec(src);
   if (!decl) throw new Error(`build-tv-catalog: ${name} not found — did it get renamed?`);
   let i = src.indexOf("=", decl.index);
@@ -55,17 +55,30 @@ function literal(src, name) {
     if (c === open) depth++;
     else if (c === close) { depth--; if (depth === 0) { j++; break; } }
   }
-  return new Function(`"use strict"; return (${src.slice(i, j)});`)();
+  // `scope` supplies the few names a literal is allowed to reference — a
+  // constant imported from a sibling leaf module. Anything else is still a
+  // ReferenceError, which is the right failure: it means the source grew a
+  // dependency this generator does not know how to carry to the TV.
+  return new Function(...Object.keys(scope), `"use strict"; return (${src.slice(i, j)});`)(...Object.values(scope));
 }
 
 const espn = readFileSync(join(ROOT, "src/lib/espn.ts"), "utf8");
 const news = readFileSync(join(ROOT, "src/lib/news.ts"), "utf8");
+const margin = readFileSync(join(ROOT, "src/lib/marginCloseness.ts"), "utf8");
 
 const ALL_LEAGUES = literal(espn, "ALL_LEAGUES");
 const SPORT_PATHS = literal(espn, "SPORT_PATHS");
-const RATING = literal(espn, "SPORT_RATING_CONFIG");
+// Football's closeness curve is a leaf module of its own (so the website can
+// unit-test it) and the rating table references it by name.
+const FOOTBALL_CLOSENESS = literal(margin, "FOOTBALL_CLOSENESS");
+const RATING = literal(espn, "SPORT_RATING_CONFIG", { FOOTBALL_CLOSENESS });
 const PERIOD_SECONDS = literal(espn, "PERIOD_SECONDS");
 const SOCCER = new Set(literal(espn, "SOCCER_SPORTS"));
+// ESPN tags exhibition play season.type 1 and the website drops it — EXCEPT for
+// the sports in this set, where type 1 is the whole regular season (every rugby
+// fixture, the NFL preseason column). The TV app applies the same rule, so it
+// needs the same set.
+const PRESEASON_IS_REGULAR = new Set(literal(espn, "SEASON_TYPE_1_IS_REGULAR"));
 const LOGOS = literal(news, "LEAGUE_LOGO");
 const BASE = /const BASE_URL = "([^"]+)"/.exec(espn)?.[1];
 if (!BASE) throw new Error("build-tv-catalog: BASE_URL not found");
@@ -129,6 +142,7 @@ for (const l of ALL_LEAGUES) {
     path: SPORT_PATHS[l.sport],
     logo: tvLogo(LOGOS[l.sport]),
     defaultOn: DEFAULT_ON.has(l.sport),
+    preseasonIsRegular: PRESEASON_IS_REGULAR.has(l.sport),
     season: { start: l.startDate ?? null, end: l.endDate ?? null,
               cycleMod: l.yearCycle?.mod ?? null, cycleAnchor: l.yearCycle?.anchor ?? null },
     rating: {
@@ -139,6 +153,9 @@ for (const l of ALL_LEAGUES) {
       regulationPeriods: r.regulationPeriods,
       periodSeconds: PERIOD_SECONDS[l.sport] ?? null,
       soccer: SOCCER.has(l.sport),
+      // [margin, closeness] knots for a sport that scores in chunks (football);
+      // null means the straight `multiplier` line. See src/lib/marginCloseness.ts.
+      closenessCurve: r.closenessCurve ?? null,
     },
   });
 }
