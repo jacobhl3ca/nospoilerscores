@@ -31,10 +31,20 @@ per event (`HL_NFL_PRESEASON_TOKENS`, `preseason` on the item). One league typo 
 fetch): **32/32** of Preseason Weeks 1 + 3 resolve to the NFL's own preseason cut, 0 wrong; the
 Hall of Fame Game resolves (its title does say Highlights); the Commanders@Giants Week 15 2025
 control is unchanged; the preseason query without the token stays dark. `scripts/check-nfl-weeks.mjs`
-gained the plumbing checks (24/24) and a `--live` preseason leg on the 8/29 slate — run it after
-the deploy; `npm run highlights:check`, `test:unit` (213), tsc and eslint all green. ⚠️ The 8/29
-cards resolve LIVE (one scrape per card) — the bake only looks at today/yesterday, so those two
-games were never baked and won't be. The regular season starts Thu 9/10 and needs none of this.
+gained the plumbing checks (24/24) and a `--live` preseason leg on the 8/29 slate; `npm run
+highlights:check`, `test:unit` (213), tsc and eslint all green. ⚠️ The 8/29 cards resolve LIVE
+(one scrape per card) — the bake only looks at today/yesterday, so those two games were never
+baked and won't be. The regular season opens Wed 9/9 and needs none of this.
+
+✅ **SHIPPED `bd2ede2d` 9/6** (rebased over the two card-height commits, CI deploy green).
+Live-verified three ways: the deployed worker answers the exact card requests with
+`zPOLpNquCCU` / `tqqbRB2uu2g` and stays dark without the token; `check-nfl-weeks.mjs --live`
+= 14/14 Week 15 2025 controls unchanged + 2/2 preseason; headless Chromium on hidescore.com,
+NFL column, date arrow back to Sat 8/29 → both cards render the `NFL` button at 112px
+(`~/hidescore-nfl-preseason-live-2026-09-06.png`). ⚠️ On the 9/6 board the NFL column now
+shows the Wed 9/9 opener (lookahead), so the 8/29 cards are reached with the ‹ date arrow, not
+the lookback header in the screenshot. ⚠️ `/_next/static` chunks are cached 4h (`max-age=14400`,
+names aren't content-hashed) — a Safari tab open before the deploy may need Cmd+Option+R.
 
 ## 2026-09-05 — Card height floor: the MLB card is the height every finished card should be; why Friday's college cards had no clip
 
