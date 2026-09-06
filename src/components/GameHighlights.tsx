@@ -421,6 +421,10 @@ export default function GameHighlights({
         if (!cancelled) setSearchStatus(secondId ? "found" : "missing");
       })();
     }
+    // Actually arm the guard the comment above promises: without this cleanup
+    // `cancelled` stayed false forever, so the post-await setState writes fired
+    // even after the card unmounted mid-scrape. Mirrors the MLB effect below.
+    return () => { cancelled = true; };
   }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, weekNumber, compTokens]);
 
   // See resolvedMlb above. Fires only when the board enrich did NOT already
