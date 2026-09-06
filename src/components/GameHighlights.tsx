@@ -286,12 +286,23 @@ export default function GameHighlights({
   // different meeting of the same two teams. See Game.weekNumber.
   const weekNumber = game.weekNumber ?? null;
   const weekGateParam = weekNumber ? `&nss_week=${weekNumber}` : "";
+  // Competition title gate — a hard filter on the winning title for the leagues
+  // whose official channel uploads more than one competition between the same
+  // teams (rugby's Nations Championship vs the U20s; an NFL preseason card vs
+  // the same pair's regular-season meeting). Empty — and so completely inert —
+  // for every other card. Carried on the modal's fallback URL as `nss_comp`
+  // for the same reason as the week. See getCompetitionTitleTokens.
+  const compTokens = useMemo(
+    () => getCompetitionTitleTokens(game.sport, { preseason: game.isPreseason }),
+    [game.sport, game.isPreseason],
+  );
+  const compGateParam = compTokens.length ? `&nss_comp=${encodeURIComponent(compTokens.join("|"))}` : "";
   const modalFallbackUrl = (channels: (string | null | undefined)[]) => {
     if (!highlightUrl) return null;
-    if (noSearchFallback) return `${highlightUrl}&nss_no_fallback=1${weekGateParam}`;
+    if (noSearchFallback) return `${highlightUrl}&nss_no_fallback=1${weekGateParam}${compGateParam}`;
     const allowed = [...new Set(channels.filter((channel): channel is string => !!channel))];
-    if (!allowed.length) return `${highlightUrl}${weekGateParam}`;
-    return `${highlightUrl}&nss_strict=1&nss_channels=${encodeURIComponent(allowed.join("|"))}${weekGateParam}`;
+    if (!allowed.length) return `${highlightUrl}${weekGateParam}${compGateParam}`;
+    return `${highlightUrl}&nss_strict=1&nss_channels=${encodeURIComponent(allowed.join("|"))}${weekGateParam}${compGateParam}`;
   };
   const officialModalFallbackUrl = modalFallbackUrl([primaryChannel]);
   const secondaryModalFallbackUrl = modalFallbackUrl([secondaryChannel]);
@@ -328,11 +339,9 @@ export default function GameHighlights({
         // reads "normal + extended". Hidden if no extended exists. (fifa-only;
         // competition is null for every other league.)
         const preferExtended = !!competition;
-        // Hard title filter for leagues whose official channel uploads more
-        // than one competition between the same teams (rugby's Nations
-        // Championship vs the U20 Junior World Championships). Empty — and so
-        // completely inert — for every other sport. See COMPETITION_TITLE_TOKENS.
-        const compTokens = getCompetitionTitleTokens(game.sport);
+        // compTokens (the competition title gate) is the component-level one
+        // above, so the prefetch, the click paths and the modal's retry all
+        // send the same filter.
         const baked = await getBakedHighlight(game.sport, game.id);
         const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel, away, home);
         const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
@@ -412,8 +421,7 @@ export default function GameHighlights({
         if (!cancelled) setSearchStatus(secondId ? "found" : "missing");
       })();
     }
-    return () => { cancelled = true; };
-  }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, weekNumber]);
+  }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, weekNumber, compTokens]);
 
   // See resolvedMlb above. Fires only when the board enrich did NOT already
   // attach a recap (game.mlbRecapPlaybackUrl absent) and the highlight window
@@ -470,7 +478,19 @@ export default function GameHighlights({
   // 27px band and just reads as fat — "bigger box not until it has actual
   // highlight" (Jacob 8/10). Ragged heights only appear on the mixed slate,
   // and there the taller card is the one that earned it.
-  if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
+  if (!showYouTube && !showTelemundo && !showNhl && !showMlb) {
+    // Nothing to draw — but WHY matters to the card's height. A finished game
+    // still inside its highlight buffer (highlightBufferHours: 4h from first
+    // serve for tennis, 5h from first pitch for MLB) has a clip COMING, so the
+    // .hl-slot floor must stand down and let the card sit at its plain height;
+    // reserving now parks an empty band on it for hours (Jacob 9/6, the US Open
+    // finals on the today board). A finished game PAST its buffer with nothing
+    // found is the case the floor exists for — a college game on a channel ESPN
+    // skips — and gets no marker, so it reserves and lines up with the MLB card
+    // beside it (Jacob 9/5). The 60s tick above re-renders this component the
+    // moment the buffer opens, which drops the marker without a reload.
+    return isFinished && !highlightsReady ? <span data-hl-pending hidden /> : null;
+  }
 
   // The OTHER resolved highlight versions of this game, minus the one being
   // played — passed to the modal so its embed-blocked overlay can offer a
@@ -510,7 +530,7 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, getCompetitionTitleTokens(game.sport));
+                const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, compTokens);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedOfficialId.current = id;
@@ -561,7 +581,7 @@ export default function GameHighlights({
                 setFetchingOnClick("search");
                 // Dedup against primary so the two buttons never play the same video.
                 // World Cup prefers the extended cut (see prefetch note above).
-                const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition, weekNumber, getCompetitionTitleTokens(game.sport));
+                const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, secondaryChannel, [prefetchedOfficialId.current], competition, !!competition, weekNumber, compTokens);
                 setFetchingOnClick(null);
                 if (id) {
                   prefetchedVideoId.current = id;

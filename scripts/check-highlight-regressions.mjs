@@ -59,6 +59,22 @@ check(
   youtube.getOfficialChannelName("nfl") === "NFL",
 );
 check(
+  "an NFL preseason card requires a preseason (or Hall of Fame) title",
+  JSON.stringify(youtube.getCompetitionTitleTokens("nfl", { preseason: true })) ===
+    JSON.stringify(["preseason", "hall of fame"]),
+);
+check(
+  "a regular-season NFL card sends no competition gate (its gate is the week)",
+  youtube.getCompetitionTitleTokens("nfl").length === 0 &&
+    youtube.getCompetitionTitleTokens("nfl", { preseason: false }).length === 0,
+);
+check(
+  "the preseason flag changes nothing outside the NFL",
+  youtube.getCompetitionTitleTokens("ncaaf", { preseason: true }).length === 0 &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("nationschamp", { preseason: true })) ===
+      JSON.stringify(["nations championship"]),
+);
+check(
   "La Liga and Ligue 1 fail closed without approved uploaders",
   youtube.hasNoTrustedHighlightSource("laliga") && youtube.hasNoTrustedHighlightSource("ligue1"),
 );
