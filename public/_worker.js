@@ -759,13 +759,36 @@ export default {
             isFromChannel &&
             CHESS_BROADCAST_CHANNELS.has(preferChannelLower) &&
             /\b(?:round|day|game|playoff|tiebreaks?)\s*\d/.test(titleLower);
+          // The NFL channel titles its PRESEASON cuts without the word at all:
+          // every 2026 exhibition is "Detroit Lions vs Indianapolis Colts |
+          // 2026 Preseason Week 3" (measured 2026-09-06: 32 of 32 across Weeks
+          // 1–3; only the Hall of Fame Game says "Highlights"). New in 2026 —
+          // the 2025 cuts were "… Game Highlights | 2025 Preseason Week 2" —
+          // and the regular season keeps "… Game Highlights | NFL 2025 Season
+          // Week 15", so every preseason card went dark while the correct clip
+          // sat at rank 1 of the very page this loop was reading. Same shape
+          // as the WNBA bare-recap carve-out, one gate tighter: the caller has
+          // to have ASKED for the preseason (`comp=preseason`, which
+          // GameHighlights sends only for a Game.isPreseason card), so a
+          // regular-season lookup can never widen to an exhibition, and the
+          // comp gate below still has to agree. No trailing \b on purpose: the
+          // league's own "Houston Texans vs. Carolina Panthers | 2026
+          // PreseasonWeek 3" would otherwise be the one dark card of the slate.
+          const isStrictBareNflPreseason =
+            strictChannelParam &&
+            isFromChannel &&
+            preferChannelLower === "nfl" &&
+            queryHasSpecificTeams &&
+            compTokens.includes("preseason") &&
+            /\bpreseason/.test(titleLower);
           const isHighlight =
             titleLower.includes("highlight") ||
             titleLower.includes("recap") ||
             (isWorldCupQuery && titleLower.includes("resumen")) ||
             roundOnlyTitleOk ||
             isStrictBareWnbaRecap ||
-            isChessRoundBroadcast;
+            isChessRoundBroadcast ||
+            isStrictBareNflPreseason;
           if (!isHighlight) continue;
 
           // Racing race gate (see the `race` param above). The official channel

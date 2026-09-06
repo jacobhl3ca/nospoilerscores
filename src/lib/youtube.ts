@@ -453,7 +453,22 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   nationschamp: ["nations championship"],
 };
 
-export function getCompetitionTitleTokens(sport: string): string[] {
+// NFL preseason — the same failure one season-phase over. The NFL channel
+// carries the whole year, and a pair that meets in August can meet again in
+// the regular season under the same two names and the same year; the week gate
+// can't separate them because Game.weekNumber is deliberately null for the
+// exhibitions (their Week 1–3 numbering collides with the regular season's).
+// So a preseason card requires the title to say so. The tokens double as the
+// worker's permission to accept the NFL's bare preseason title, which carries
+// no "highlights" at all ("Detroit Lions vs Indianapolis Colts | 2026
+// Preseason Week 3" — see isStrictBareNflPreseason in public/_worker.js). The
+// Hall of Fame Game is titled "… | 2026 Hall of Fame Game Highlights", hence
+// the second token. Mirrored by HL_NFL_PRESEASON_TOKENS in
+// scripts/prebake-news.mjs — keep the two in sync.
+const NFL_PRESEASON_TITLE_TOKENS = ["preseason", "hall of fame"];
+
+export function getCompetitionTitleTokens(sport: string, opts?: { preseason?: boolean }): string[] {
+  if (sport === "nfl" && opts?.preseason) return NFL_PRESEASON_TITLE_TOKENS;
   return COMPETITION_TITLE_TOKENS[sport] ?? [];
 }
 

@@ -2457,6 +2457,14 @@ const HL_LEAGUES = [
 const HL_COMPETITION_TOKENS = {
   nationschamp: ["nations championship"],
 };
+// NFL preseason — mirrors NFL_PRESEASON_TITLE_TOKENS in src/lib/youtube.ts.
+// Sent per EVENT, not per league: an exhibition (season.type 1) must resolve to
+// a title that says "preseason" (or "hall of fame"), both because the NFL's
+// bare preseason titles carry no "highlights" and the worker only accepts them
+// under this token, and because the same two clubs can meet again in the
+// regular season under the same names and year with no week to tell them
+// apart (Game.weekNumber is null for the exhibitions).
+const HL_NFL_PRESEASON_TOKENS = ["preseason", "hall of fame"];
 // Competition token required in the title (mirrors COMPETITION_NAMES) — fifa only.
 const HL_COMPETITION = { fifa: "World Cup" };
 
@@ -2855,11 +2863,14 @@ async function bakeGameHighlights() {
             const week = (lg.sport === "nfl" || lg.sport === "ncaaf") && event.season?.type === 2
               ? event.week?.number
               : undefined;
-            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week }];
+            // NFL exhibitions (see HL_NFL_PRESEASON_TOKENS). Only the NFL keeps
+            // its type-1 slate on the board, so this is false everywhere else.
+            const preseason = lg.sport === "nfl" && event.season?.type === 1;
+            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
-        const { away, home, series, week } = item;
+        const { away, home, series, week, preseason } = item;
         const isFifa = lg.sport === "fifa";
         const matchup = hlMatchupFingerprint(away, home);
         const rawPrev = games[key] ?? {};
@@ -2874,7 +2885,7 @@ async function bakeGameHighlights() {
         }
         const dateStr = hlDateStr(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
-        const compTokens = HL_COMPETITION_TOKENS[lg.sport] ?? null;
+        const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (HL_COMPETITION_TOKENS[lg.sport] ?? null);
         const preferExtended = !!competition;
         const primaryChannel = item.channel;
         const secondaryChannel = isFifa ? "FOX Sports" : (lg.secondaryChannel ?? primaryChannel);

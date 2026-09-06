@@ -1,5 +1,41 @@
 # HideScore — Master Backlog
 
+## 2026-09-06 — NFL preseason cards were dark: the league dropped "Highlights" from its 2026 exhibition titles
+
+✅ **Jacob 9/6 ("nfl at least highlights link or something? whats optimal, isnt there highlights
+existing but this is blank?"), screenshot of the NFL column on the Last played · Sat 8/29 board:
+Lions–Colts and Bears–Titans with no button.** The clips exist — `Detroit Lions vs Indianapolis
+Colts | 2026 Preseason Week 3` and `Chicago Bears vs Tennessee Titans | 2026 Preseason Week 3`,
+both on the NFL channel, both at **rank 1** of the exact results page the worker scrapes for the
+card's own query. What changed is the title: through 2025 the exhibitions were "… Game Highlights
+| 2025 Preseason Week 2"; every 2026 cut (32 of 32 across Weeks 1–3) is the bare "Away vs. Home |
+2026 Preseason Week N", and the worker's highlight-keyword filter (`highlight`/`recap`) dropped
+each one. Not recall, not timing, and not the embed block. On "what's optimal": the NFL is in
+`EMBED_BLOCKED_CHANNELS`, so the button is the hand-off-to-YouTube card either way — that IS the
+ceiling; the 32 club channels block game footage the same way (`nflTeamChannels.ts`) and ESPN
+ships no NFL highlights at all.
+
+**Fix (branch `fix/nfl-preseason-highlights`, worktree `~/hs-nfl-pre`):** a preseason card
+(`Game.isPreseason`) now sends `comp=preseason|hall of fame`, and the worker accepts the bare NFL
+preseason title as a highlight only under that token and only from the strict NFL channel
+(`isStrictBareNflPreseason`, the WNBA bare-recap shape). The token is also the safety: no week is
+sent for an exhibition (its Week 1–3 numbering collides with the regular season's), so the title
+having to say "preseason" is what keeps the same pair's regular-season recap off an August card —
+and a regular-season lookup is byte-identical to before (without the token the bare titles stay
+rejected; replayed). `nss_comp` now rides the modal fallback URL and `VideoModal`'s retry
+re-applies it, which closes the same gap for rugby's Nations Championship. The prebake mirrors it
+per event (`HL_NFL_PRESEASON_TOKENS`, `preseason` on the item). One league typo tolerated:
+`Houston Texans vs. Carolina Panthers | 2026 PreseasonWeek 3` (no trailing word boundary).
+
+**Proof:** the real card requests replayed through the patched worker in Node (curl-backed
+fetch): **32/32** of Preseason Weeks 1 + 3 resolve to the NFL's own preseason cut, 0 wrong; the
+Hall of Fame Game resolves (its title does say Highlights); the Commanders@Giants Week 15 2025
+control is unchanged; the preseason query without the token stays dark. `scripts/check-nfl-weeks.mjs`
+gained the plumbing checks (24/24) and a `--live` preseason leg on the 8/29 slate — run it after
+the deploy; `npm run highlights:check`, `test:unit` (213), tsc and eslint all green. ⚠️ The 8/29
+cards resolve LIVE (one scrape per card) — the bake only looks at today/yesterday, so those two
+games were never baked and won't be. The regular season starts Thu 9/10 and needs none of this.
+
 ## 2026-09-05 — Card height floor: the MLB card is the height every finished card should be; why Friday's college cards had no clip
 
 ✅ **Jacob 9/5 ("set a strict rule that the size of the MLB cards height are the height each card

@@ -953,7 +953,17 @@ export default function EventCard({
   const glyphA11y = clickableGlyphA11y(!!onShowDetails, glyphLabel);
   const isLive = event.state === "in";
   const isPost = event.state === "post";
-  const hideHistoricalMeta = historicalPost(event.state, event.date);
+  // A PAST board is a settled board: every game card on it is finished, has
+  // already dropped its status row (GameCard's showBar) and has already taken
+  // the .hl-slot reserve. An event tile there has to do BOTH or it cannot line
+  // up — a multi-day major still LIVE (Triton Jeju, Sep 4-17) kept its 26px
+  // meta row AND skipped the 36px reserve, which is exactly the 10px the poker
+  // tile came up short beside the MLB cards on /yesterday (measured on prod
+  // 9/6: poker 102.67, MLB/EPL/US Open 112.67). Doing only one of the two
+  // overshoots by 26px the other way. Cost, accepted by Jacob: a live event
+  // tile shows no green dot on a PAST board — the same trade the game cards
+  // made when they stopped printing FINAL there. Today/future is untouched.
+  const hideHistoricalMeta = isPastDate || historicalPost(event.state, event.date);
   // Where the sport glyph renders. Normally the meta row, which frees the 30px
   // logo slot on both text rows below; a historical finished tile has no meta
   // row at all, so it falls back to the title row it has always used.
@@ -1124,7 +1134,7 @@ export default function EventCard({
             lineKind="subtitle"
             fullText={event.subtitle || undefined}
             floorPx={FIT_FLOOR_SUBTITLE}
-            className="text-[10px] sm:text-xs leading-none truncate min-w-0 flex-1"
+            className="ns-ink-safe text-[10px] sm:text-xs leading-none truncate min-w-0 flex-1"
             style={{ color: "var(--text-muted)" }}
           />
         </div>
@@ -1142,8 +1152,9 @@ export default function EventCard({
           .hl-slot wraps all four so a finished tile with no clip reserves the
           row whenever another card on the board has one — the same floor as
           GameCard (globals.css), so a race or poker tile never sits one row
-          shorter than the MLB card beside it once the board has clips. */}
-      <div className={isPost ? "hl-slot" : undefined}>
+          shorter than the MLB card beside it once the board has clips.
+          `|| isPastDate` for the live-major case — see hideHistoricalMeta. */}
+      <div className={isPost || isPastDate ? "hl-slot" : undefined}>
       {showRaceBtn && (
         <div className="mt-1 sm:mt-2 flex gap-1">
           {/* Label follows the series, not the tile: this same race layout also
