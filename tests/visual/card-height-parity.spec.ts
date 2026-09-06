@@ -52,14 +52,14 @@ async function setLeagues(page: Page, leagues: string[]) {
 
 // Two finished games on one slate, named so a highlight mock can resolve one
 // and not the other — the exact mixed column that used to go ragged.
-function twoFinishedGames(names: [string, string, string, string], idBase = 900001) {
+function twoFinishedGames(names: [string, string, string, string], idBase = 900001, startIso = "2026-08-06T02:00:00Z") {
   const team = (id: string, name: string, abbr: string, score: string) => ({
     id, displayName: name, shortDisplayName: name, abbreviation: abbr, score,
     logo: "", color: "666666",
   });
   const event = (id: string, away: ReturnType<typeof team>, home: ReturnType<typeof team>) => ({
     id,
-    date: "2026-08-06T02:00:00Z",
+    date: startIso,
     name: `${away.displayName} at ${home.displayName}`,
     shortName: `${away.abbreviation} @ ${home.abbreviation}`,
     season: { type: 2 },
@@ -176,6 +176,86 @@ test("a slate where nothing resolves reserves no row anywhere — the 8/10 rule"
     expect(card.slot).toBe(0);
     expect(card.hasBtn).toBe(false);
   }
+});
+
+// ── …and the row is NOT reserved while the clip is merely not due yet ────────
+//
+// The reserve answers "this card will never get a button". It must not answer
+// "not yet": a highlight is gated for hours after the start (highlightBufferHours
+// — 3.5 for the WNBA, 4 for tennis), so a match that just went final on TODAY's
+// board would otherwise wear an empty band all afternoon while its clip is still
+// being cut. Jacob 9/6, the US Open finals: "reserved row i dont think needed?
+// maybe normal mlb height until highlights are ready". GameHighlights marks that
+// window with [data-hl-pending] and globals.css exempts it.
+test("a clip that is not due yet reserves nothing, even beside a card that has one", async ({ page }) => {
+  // 4:00 PM ET. The WNBA games tipped at 2:00 PM ET → 3.5h buffer closes at
+  // 5:30 PM, so their clips are PENDING. MLS kicked off at 8:00 AM → long open.
+  await page.clock.setFixedTime(new Date("2026-08-06T16:00:00-04:00"));
+  await setLeagues(page, ["wnba", "mls"]);
+  await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Aces", "Lynx", "Fever", "Sky"], 900001, "2026-08-06T18:00:00Z"),
+  }));
+  await page.route("**/soccer/usa.1/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Galaxy", "Sounders", "Union", "Crew"], 910001, "2026-08-06T12:00:00Z"),
+  }));
+  await resolveOnly(page, "Galaxy");
+
+  await page.goto("/today");
+  // 15s, not the 5s default: the today board mounts more than /yesterday and a
+  // cold dev server can take its time on the first paint (flaked at 5s).
+  await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible({ timeout: 15_000 });
+  // Wait on the CARD, not a button label — the MLS button is named for the
+  // league's full name ("Major League Soccer highlights") on this board.
+  await expect.poll(async () => {
+    const cards = await measuredCards(page);
+    return cards.find((c) => c.name.includes("Galaxy"))?.hasBtn ?? null;
+  }, { timeout: 15_000 }).toBe(true);
+  // Let every resolver settle so a late arrival can't fake the collapse.
+  await page.waitForTimeout(1500);
+
+  const cards = await measuredCards(page);
+  const galaxy = cards.find((c) => c.name.includes("Galaxy"))!;
+  const pending = cards.filter((c) => c.name.includes("Aces") || c.name.includes("Fever"));
+  expect(pending).toHaveLength(2);
+  // The board HAS a button, so the floor is armed — and still stands down on
+  // the two cards whose clip is only pending.
+  expect(galaxy.hasBtn).toBe(true);
+  expect(galaxy.slot).toBeGreaterThan(20);
+  for (const card of pending) {
+    expect(card.hasBtn).toBe(false);
+    expect(card.slot).toBe(0);
+  }
+});
+
+// The other side of the same line: once the buffer HAS opened and nothing was
+// found, the card is not pending, it is empty-handed — and it takes the row so
+// it lines up with the card that has one (the 9/5 rule).
+test("once the buffer opens, a card with no clip reserves the row again", async ({ page }) => {
+  // 8:00 PM ET — past the WNBA games' 5:30 PM buffer.
+  await page.clock.setFixedTime(new Date("2026-08-06T20:00:00-04:00"));
+  await setLeagues(page, ["wnba"]);
+  await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Aces", "Lynx", "Fever", "Sky"], 900001, "2026-08-06T18:00:00Z"),
+  }));
+  await resolveOnly(page, "Aces");
+
+  await page.goto("/today");
+  // 15s, not the 5s default: the today board mounts more than /yesterday and a
+  // cold dev server can take its time on the first paint (flaked at 5s).
+  await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "WNBA highlights" })).toHaveCount(1);
+
+  await expect.poll(async () => {
+    const [withVideo, without] = await measuredCards(page);
+    return withVideo && without ? withVideo.height === without.height : null;
+  }, { timeout: 15_000 }).toBe(true);
+
+  const [withVideo, without] = await measuredCards(page);
+  expect(without.hasBtn).toBe(false);
+  expect(without.slot).toBe(withVideo.btnRow);
 });
 
 test("the floor crosses columns: one clip in one league lifts the finished cards in another", async ({ page }) => {

@@ -1126,7 +1126,11 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
           finished card reserves one, so a card whose clip never comes (a BTN or
           ESPN+ college game the ESPN channel skips) sits level with the MLB card
           beside it instead of one row shorter (Jacob 9/5). Until something
-          resolves, the slot is empty and costs nothing — the 8/10 rule. */}
+          resolves, the slot is empty and costs nothing — the 8/10 rule.
+          One exemption, in CSS not here: a finished card still inside its
+          highlight buffer renders a [data-hl-pending] marker and the floor
+          stands down, so a clip that is merely NOT DUE YET never parks a blank
+          band on the card (Jacob 9/6). See GameHighlights' null-return. */}
       <div className={isFinished ? "hl-slot" : undefined}>
         <GameHighlights
           game={game}
