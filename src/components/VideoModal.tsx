@@ -209,6 +209,21 @@ function weekFallbackParam(fallbackUrl: string): string {
   }
 }
 
+// Competition title gate carried the same way (`nss_comp=` — see
+// GameHighlights). The week gate's blind spot: an NFL preseason card sends NO
+// week (its Week 1–3 numbering collides with the regular season's), so the
+// only thing keeping a retry off the same pair's regular-season recap is the
+// title having to say "preseason". Rugby's Nations Championship rides the same
+// param to keep its retry off the U20s.
+function compFallbackParam(fallbackUrl: string): string {
+  try {
+    const comp = new URL(fallbackUrl).searchParams.get("nss_comp");
+    return comp ? `&comp=${encodeURIComponent(comp)}` : "";
+  } catch {
+    return "";
+  }
+}
+
 // Minimal Reddit selftext renderer. Reddit selftext is markdown but we only
 // care about the structural bits that matter for readability — paragraphs,
 // line breaks, and autolinked URLs. Full markdown (headings, bold, code
@@ -1598,6 +1613,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       const strictChannels = strictFallbackChannels(fallbackUrl);
       const raceParam = raceFallbackParam(fallbackUrl);
       const weekParam = weekFallbackParam(fallbackUrl);
+      const compParam = compFallbackParam(fallbackUrl);
       // Fail closed if a highlight caller ever forgets to carry its channel
       // contract. The old unscoped branch was how NFL (and every other league)
       // could resolve correctly, hit an embed error, then silently swap to a
@@ -1615,7 +1631,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // EventCard's UFC chain is sequential).
         for (const channel of strictChannels) {
           const res = await fetch(
-            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}`
+            `${getApiBase()}/api/youtube?q=${encodeURIComponent(q)}&exclude=${excl}&channel=${encodeURIComponent(channel)}&strict=1${raceParam}${weekParam}${compParam}`
           );
           const data = res.ok ? await res.json() : null;
           if (data?.videoId && data.videoId !== currentId) { nextId = data.videoId; break; }
