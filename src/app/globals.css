@@ -354,12 +354,22 @@ body {
    and the reserve is derived from it rather than copied. 28px is the closest
    whole pixel to both engines' natural heights, so the MLB card itself barely
    moves (+1 Chromium, -1.33 Safari). */
+/* ⛔ A card whose clip is still PENDING is exempt (`[data-hl-pending]`). The
+   reserve answers "this card will never get a button" — a college game on a
+   channel ESPN skips. It must not answer "not yet": a tennis final is gated for
+   4 hours from first serve (highlightBufferHours), so reserving at FINAL parks
+   an empty band on the card for most of an afternoon — "reserved row i dont
+   think needed? maybe normal mlb height until highlights are ready" (Jacob
+   9/6). GameHighlights renders the marker while its buffer is closed and drops
+   it the minute the buffer opens (its own 60s tick re-renders it), so the card
+   sits at the plain height until the clip is actually due and takes the floor
+   from then on, clip or no clip. */
 :root { --hl-btn-h: 28px; }
 .hl-slot { display: flow-root; }
 .hl-slot .highlight-btn { height: var(--hl-btn-h); box-sizing: border-box; }
-main:has(.hl-slot .highlight-btn) .hl-slot { min-height: calc(var(--hl-btn-h) + 0.25rem); }
+main:has(.hl-slot .highlight-btn) .hl-slot:not(:has([data-hl-pending])) { min-height: calc(var(--hl-btn-h) + 0.25rem); }
 @media (min-width: 640px) {
-  main:has(.hl-slot .highlight-btn) .hl-slot { min-height: calc(var(--hl-btn-h) + 0.5rem); }
+  main:has(.hl-slot .highlight-btn) .hl-slot:not(:has([data-hl-pending])) { min-height: calc(var(--hl-btn-h) + 0.5rem); }
 }
 
 /* Score/event CARD roots. These are divs with role="button" + tabIndex=0, and a
@@ -611,3 +621,22 @@ iframe#yt-player {
   padding-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem);
 }
+
+/* ── Descenders are not clipping ──────────────────────────────────────────────
+   `leading-none` + `truncate` makes these spans flex items with overflow:hidden
+   and a line box exactly font-size tall, so the tail of a j/g/p is painted
+   OUTSIDE the box and cut — measured 1.27px at 14px on "Triton Super High
+   Roller · Jeju" (Jacob 9/6: "jeju name seems cut off on bottom like theres
+   something blocking over it"). It hits every descender on the board, poker
+   and "Angels"/"Blue Jays" alike; the poker tile just says it loudest.
+
+   Widen the clip box by 0.2em and pull the identical amount straight back with
+   a negative margin: the margin box, and therefore the row, the card and the
+   height floor, are byte-for-byte unchanged — only what the box is ALLOWED to
+   paint grows. In em so it tracks the font size FittedLine lands on.
+
+   ⛔ Deliberately NOT on the compact tile's two-line clamp (a `-webkit-box`
+   with line-clamp:2, no .team-name / .ns-ink-safe): there a taller clip box
+   would start showing the top of a third line. */
+.team-name,
+.ns-ink-safe { padding-bottom: 0.2em; margin-bottom: -0.2em; }

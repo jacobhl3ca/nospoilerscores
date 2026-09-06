@@ -438,7 +438,19 @@ export default function GameHighlights({
   // 27px band and just reads as fat — "bigger box not until it has actual
   // highlight" (Jacob 8/10). Ragged heights only appear on the mixed slate,
   // and there the taller card is the one that earned it.
-  if (!showYouTube && !showTelemundo && !showNhl && !showMlb) return null;
+  if (!showYouTube && !showTelemundo && !showNhl && !showMlb) {
+    // Nothing to draw — but WHY matters to the card's height. A finished game
+    // still inside its highlight buffer (highlightBufferHours: 4h from first
+    // serve for tennis, 5h from first pitch for MLB) has a clip COMING, so the
+    // .hl-slot floor must stand down and let the card sit at its plain height;
+    // reserving now parks an empty band on it for hours (Jacob 9/6, the US Open
+    // finals on the today board). A finished game PAST its buffer with nothing
+    // found is the case the floor exists for — a college game on a channel ESPN
+    // skips — and gets no marker, so it reserves and lines up with the MLB card
+    // beside it (Jacob 9/5). The 60s tick above re-renders this component the
+    // moment the buffer opens, which drops the marker without a reload.
+    return isFinished && !highlightsReady ? <span data-hl-pending hidden /> : null;
+  }
 
   // The OTHER resolved highlight versions of this game, minus the one being
   // played — passed to the modal so its embed-blocked overlay can offer a
