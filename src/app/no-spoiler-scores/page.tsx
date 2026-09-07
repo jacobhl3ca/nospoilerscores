@@ -14,8 +14,10 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // Same rank, six times the click-through, and the only material difference was
 // substance — so this is the page where depth was worth the most.
 const TITLE = "No Spoiler Scores - Sports Scores Without Spoilers | HideScore";
+// Kept under Google's ~155-char SERP limit: the old 170-char copy was cut after
+// "…until you tap," so the ratings value prop never rendered in the snippet.
 const DESC =
-  "Check NBA, NFL, NHL, MLB, soccer, and World Cup scores without spoilers. HideScore hides every result until you tap, and rates games so you know which are worth watching.";
+  "Check NBA, NFL, NHL, MLB, soccer, and World Cup scores without spoilers. HideScore hides every result until you tap and rates games worth watching.";
 const CANONICAL = "/no-spoiler-scores";
 
 const FAQ = [
