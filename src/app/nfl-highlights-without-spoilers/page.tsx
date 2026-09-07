@@ -3,7 +3,7 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 
 const TITLE = "NFL Highlights Without Spoilers | HideScore";
 const DESC =
-  "Watch NFL highlights and catch up on football games without seeing scores, winners, or spoiler headlines first. HideScore keeps results hidden until you tap.";
+  "Watch NFL highlights and catch up on football games without seeing scores, winners, or spoiler headlines. HideScore keeps results hidden until you tap.";
 const CANONICAL = "/nfl-highlights-without-spoilers";
 
 // Answer-engine questions. Depth here is deliberate: this page ranked at

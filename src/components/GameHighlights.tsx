@@ -30,13 +30,25 @@ const highlightBufferHours: Record<string, number> = {
   // surface the button while the second innings is still being bowled.
   cricket: 7,
   // Rugby union: 80 minutes of play in two halves, so the same 3-hour
-  // post-kickoff buffer every 90-minute soccer league uses. These five were
-  // absent until 2026-08-12 and silently took the 4h default, which both
-  // delayed the buttons by an hour AND disagreed with
-  // scripts/check-highlight-fallbacks.mjs, whose mirror has always said 3 —
-  // i.e. the audit could flag a "missing" button during the hour the app was
-  // still deliberately hiding it.
-  sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, nationschamp: 3,
+  // post-kickoff buffer every 90-minute soccer league uses. sixnations,
+  // superrugby, rugbywc and nationschamp were absent until 2026-08-12 and
+  // silently took the 4h default, which both delayed the buttons by an hour AND
+  // disagreed with scripts/check-highlight-fallbacks.mjs, whose mirror has
+  // always said 3 — i.e. the audit could flag a "missing" button during the
+  // hour the app was still deliberately hiding it. rugbychamp and rugbytest are
+  // in NO_HIGHLIGHT_FALLBACK (no button ever renders), so their values are inert
+  // today; both are listed anyway to keep this table complete alongside
+  // regulationPeriods and highlightBadgeLabel below — where both already appear —
+  // so neither silently takes the wrong 4h default if it is ever un-gated.
+  sixnations: 3, superrugby: 3, rugbywc: 3, rugbychamp: 3, rugbytest: 3, nationschamp: 3,
+  // llws (Little League World Series) is in NO_HIGHLIGHT_FALLBACK (youtube.ts) —
+  // ESPN holds the broadcast but posts no per-game cut, so no button ever
+  // renders and this value is inert today, exactly like the rugbychamp/rugbytest
+  // keys above. Listed anyway to keep this table complete: llws was the lone
+  // game-sport missing from it and regulationPeriods below, so it would silently
+  // take the wrong 4h default if it is ever un-gated. 5 mirrors mlb — its
+  // closest analog, LLWS being 6-inning baseball.
+  llws: 5,
 };
 // ncaaw is 4, not 2: women's college hoops plays four 10-min quarters (moved to
 // quarters in 2015-16), so a finished regulation game reports period 4. A value
@@ -47,7 +59,14 @@ const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, n
   // Two 40-minute halves. Without these the default of 4 made rawOt negative
   // for every finished rugby match — clamped to 0 by the Math.max, so the
   // buffer was right by accident; stating it keeps that an intent, not luck.
-  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2 };
+  sixnations: 2, superrugby: 2, rugbywc: 2, rugbychamp: 2, rugbytest: 2, nationschamp: 2,
+  // llws is 6-inning baseball — SPORT_RATING_CONFIG in espn.ts sets its
+  // regulationPeriods to 6. Without this row the default of 4 made a regulation
+  // final (period 6) read as rawOt = 6 - 4 = 2 phantom overtimes, padding the
+  // buffer ~1h. Inert today (llws is in NO_HIGHLIGHT_FALLBACK so no button
+  // renders), but mirrors the rating config so it can't misfire if un-gated —
+  // same "keep the table complete" intent as the rugby rows above.
+  llws: 6 };
 
 // The highlight-button badge uppercases the sport KEY (nba → "NBA"), which reads
 // right for the leagues whose key IS the abbreviation. A couple of later
@@ -142,7 +161,7 @@ export default function GameHighlights({
   const prefetchedTelemundoShortId = useRef<string | null>(initialTelemundoShortId);
   const prefetchedTelemundoLongId = useRef<string | null>(initialTelemundoLongId);
   const prefetchStarted = useRef(false);
-  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | "telemundoLong" | null>(null);
+  const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | null>(null);
   // "loading" while prefetch (or click-time chain) is running. "found" once
   // resolveHighlightVideo returns an id. "missing" once the full retry chain
   // strict channel lookup has been exhausted — the button is hidden so the user
@@ -199,7 +218,12 @@ export default function GameHighlights({
     // !isPlayoff). Every other sport and playoff NHL are byte-for-byte unchanged.
     const rawOt = Math.max(0, game.period - (regulationPeriods[game.sport] ?? 4));
     const otPeriods = game.sport === "nhl" && !game.isPlayoff ? Math.min(rawOt, 1) : rawOt;
-    const otExtra = otPeriods * (game.sport === "mlb" ? 0.25 : 0.5); // extra innings shorter, OT ~30min each
+    // Baseball extra innings are short (~15min) vs. a 30-min OT period, so both
+    // baseball sports take the 0.25 factor. llws is 6-inning baseball — inert
+    // today (NO_HIGHLIGHT_FALLBACK, no button renders) but grouped with mlb here
+    // for the same reason regulationPeriods/highlightBufferHours already list it:
+    // so it can't misfire with a phantom ~30min-per-inning pad if ever un-gated.
+    const otExtra = otPeriods * (game.sport === "mlb" || game.sport === "llws" ? 0.25 : 0.5);
     const bufferMs = ((highlightBufferHours[game.sport] ?? 4) + otExtra) * 60 * 60 * 1000;
     return nowMs > gameStart + bufferMs;
   })();
@@ -286,6 +310,12 @@ export default function GameHighlights({
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
+    // Guard the post-await status writes against a mid-flight unmount (modal
+    // close, board scroll/date-nav) — each resolve is a multi-second live
+    // YouTube scrape. Mirrors the `cancelled` flag on the MLB effect right
+    // below. prefetchStarted keeps this effect to one run, so there is no
+    // stale-vs-fresh race; this only drops the writes once the card is gone.
+    let cancelled = false;
     const away = hlAway;
     const home = hlHome;
     const series = game.seriesNote;
@@ -371,13 +401,14 @@ export default function GameHighlights({
             }
             prefetchedTelemundoShortId.current = telemundoShortId;
             prefetchedTelemundoLongId.current = telemundoLongId;
+            if (cancelled) return;
             setTelemundoShortStatus(telemundoShortId ? "found" : "missing");
             setTelemundoLongStatus(telemundoLongId ? "found" : "missing");
           })();
         }
         const officialId = await officialP;
         prefetchedOfficialId.current = officialId;
-        setOfficialStatus(officialId ? "found" : "missing");
+        if (!cancelled) setOfficialStatus(officialId ? "found" : "missing");
         let secondId = await secondP;
         if (!bakedSecondary && secondId && officialId && secondId === officialId) {
           // Collision — the parallel (unexcluded) 2nd landed the same clip as the
@@ -387,9 +418,13 @@ export default function GameHighlights({
           secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended, weekNumber, compTokens);
         }
         prefetchedVideoId.current = secondId;
-        setSearchStatus(secondId ? "found" : "missing");
+        if (!cancelled) setSearchStatus(secondId ? "found" : "missing");
       })();
     }
+    // Actually arm the guard the comment above promises: without this cleanup
+    // `cancelled` stayed false forever, so the post-await setState writes fired
+    // even after the card unmounted mid-scrape. Mirrors the MLB effect below.
+    return () => { cancelled = true; };
   }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, weekNumber, compTokens]);
 
   // See resolvedMlb above. Fires only when the board enrich did NOT already
@@ -512,16 +547,23 @@ export default function GameHighlights({
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "official" ? 0.5 : undefined }}
-              aria-label={`${officialChannel} highlights`}
-              // aria-busy conveys the in-flight fetch that the visible "Loading..."
+              // Under ?demo=1 the visible badge is scrubbed to "Watch" (below) so
+              // the button doesn't reveal the sport/league of an anonymized
+              // column — but the accessible name and the hover tooltip still named
+              // the real rightsholder ("NBA highlights", "LCK highlights"), leaking
+              // via a VISIBLE tooltip and to screen readers the exact identity the
+              // demo scrub hides. Fall back to the same generic "Watch" wording so
+              // all three stay in lockstep. Production (demoActive false) unchanged.
+              aria-label={demoActive ? "Watch highlights" : `${officialChannel} highlights`}
+              // aria-busy conveys the in-flight fetch that the visible "Loading…"
               // swap shows sighted users; the aria-label above stays pinned to the
-              // button's purpose so the name never collapses to "Loading...".
+              // button's purpose so the name never collapses to "Loading…".
               // Matches the aria-busy pairing on EventCard's highlight buttons.
               aria-busy={fetchingOnClick === "official"}
-              title={`${officialChannel} highlights`}
+              title={demoActive ? "Watch highlights" : `${officialChannel} highlights`}
             >
               {fetchingOnClick === "official" ? (
-                <span className="text-[10px]">Loading...</span>
+                <span className="text-[10px]">Loading…</span>
               ) : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
@@ -557,14 +599,14 @@ export default function GameHighlights({
               className="highlight-btn flex items-center justify-center py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
               style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "search" ? 0.5 : undefined }}
               aria-label={isFifa ? "FOX full highlights" : "Official alternate highlights"}
-              // aria-busy conveys the in-flight fetch that the visible "Loading..."
+              // aria-busy conveys the in-flight fetch that the visible "Loading…"
               // swap shows sighted users; the aria-label above stays pinned so the
-              // name never collapses to "Loading...". Matches EventCard's buttons.
+              // name never collapses to "Loading…". Matches EventCard's buttons.
               aria-busy={fetchingOnClick === "search"}
               title={isFifa ? "FOX full highlights" : "Official alternate highlights"}
             >
               {fetchingOnClick === "search" ? (
-                <span className="text-[10px]">Loading...</span>
+                <span className="text-[10px]">Loading…</span>
               ) : (
                   <>
                     <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
@@ -621,17 +663,14 @@ export default function GameHighlights({
               // Telemundo buttons): this opens the pre-resolved date-exact clip
               // synchronously via onPlayEmbed with no click-time fetch, so
               // `fetchingOnClick` is never set on the MLB path (showYouTube needs
-              // !isMlb, showTelemundo needs FIFA). The old loading swap keyed off
-              // it was therefore dead code — the button never dimmed or showed
-              // "Loading...".
+              // !isMlb, showTelemundo needs FIFA). Render the icon + label
+              // directly — a `fetchingOnClick`-keyed loading swap here would be
+              // dead code (the button can never dim or show "Loading…"), and
+              // the sibling 3m recap button above already renders without one.
               title="MLB 10 minute condensed game"
             >
-              {fetchingOnClick === "official" ? <span className="text-[10px]">Loading...</span> : (
-                <>
-                  <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
-                </>
-              )}
+              <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium whitespace-nowrap">10m</span>
             </button>
           )}
         </div>
@@ -667,7 +706,7 @@ export default function GameHighlights({
               aria-busy={fetchingOnClick === "telemundoShort"}
               title="Telemundo highlights"
             >
-              {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading...</span> : (
+              {fetchingOnClick === "telemundoShort" ? <span className="text-[10px]">Loading…</span> : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
                   <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 10m</span>
@@ -693,17 +732,15 @@ export default function GameHighlights({
               }}
               disabled={fetchingOnClick !== null}
               className="highlight-btn flex min-w-0 items-center justify-center gap-0.5 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
-              style={{ background: "var(--bg-card-hover)", color: "var(--accent)", opacity: fetchingOnClick === "telemundoLong" ? 0.5 : undefined }}
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
               aria-label="Telemundo extended highlights"
-              aria-busy={fetchingOnClick === "telemundoLong"}
               title="Telemundo extended highlights"
             >
-              {fetchingOnClick === "telemundoLong" ? <span className="text-[10px]">Loading...</span> : (
-                <>
-                  <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
-                </>
-              )}
+              {/* No loading state: the extended cut plays directly from the
+                  prefetched ref (see the click handler above), so this button
+                  never enters a click-time fetch. */}
+              <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[9px] sm:text-[10px] font-medium whitespace-nowrap">TEL 30m</span>
             </button>
           )}
         </div>

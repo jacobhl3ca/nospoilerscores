@@ -23,10 +23,24 @@ for (const event of data.events) {
   }
 }
 
+// Mirror the production selection in fetchCuratedBoxingEvent (src/lib/boxing.ts)
+// EXACTLY so this guard actually validates the window it claims to. Production
+// filters on `startDate <= target` (the fight has begun) plus a 7-day-after-end
+// retention, and floats a still-open/future card (`endDate >= target`) above
+// finished ones in the sort. The old fixture filtered on `endDate <= target`
+// and omitted that ongoing-preference term — different logic that happened to
+// agree only because every shipped event is single-day; a multi-day card
+// ongoing on the target date would pass this guard while production picked a
+// different event.
 const target = "2026-08-05";
+const targetMs = new Date(`${target}T12:00:00Z`).getTime();
+const endMs = (event) => new Date(`${event.endDate}T12:00:00Z`).getTime();
 const aug5 = data.events
-  .filter((event) => event.endDate <= target && new Date(`${target}T12:00:00Z`) - new Date(`${event.endDate}T12:00:00Z`) <= 7 * 86400000)
-  .sort((a, b) => b.endDate.localeCompare(a.endDate) || b.priority - a.priority)[0];
+  .filter((event) => event.startDate <= target && targetMs - endMs(event) <= 7 * 86400000)
+  .sort((a, b) =>
+    Number(b.endDate >= target) - Number(a.endDate >= target) ||
+    b.endDate.localeCompare(a.endDate) || b.priority - a.priority
+  )[0];
 if (aug5?.id !== "roach-zepeda-2026-08-01") fail("acceptance fixture failed: Aug 5 must retain the Aug 1 major");
 
 if (process.argv.includes("--live")) {

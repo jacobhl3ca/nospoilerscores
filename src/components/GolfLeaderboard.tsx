@@ -278,7 +278,7 @@ export default function GolfLeaderboard({
       const sample = sortedPlayers.slice(0, 25);
       const fullMax = measureMax(sample.map((p) => p.name));
       const initialMax = measureMax(sample.map((p) => p.shortName));
-      document.body.removeChild(probe);
+      probe.remove();
 
       if (fullMax <= available) setNameTier("full");
       else if (initialMax <= available) setNameTier("initial");
@@ -440,6 +440,19 @@ export default function GolfLeaderboard({
         ];
         for (const q of backfillQueries) {
           for (const channel of channelsInOrder) {
+            // Slot 0 already owns the (highlightQuery, channelsInOrder[0])
+            // lookup via its dedicated resolver above, whose whole job is to
+            // land that clip in the channel-LABELED slot 0. Re-issuing the
+            // identical request here is a redundant fetch that RACES that
+            // resolver: fetchFirstVideoId makes a fresh network call each time
+            // (no in-flight dedup), so when this copy wins, tryFill drops the
+            // recap into a secondary slot (index > 0) and the slot-0 resolver
+            // then bails on its own prev.includes(id) guard — leaving slot 0
+            // empty, so the main "Golf Channel — Round N highlights" button is
+            // demoted to an unlabeled numbered "…more on YouTube (1)" button
+            // (its only accessible name). Skip that one combination so slot 0
+            // keeps its clip; every other q×channel pair still backfills 1–3.
+            if (q === highlightQuery && channel === channelsInOrder[0]) continue;
             fetchFirstVideoId(q, channel, undefined, undefined, true).then(tryFill);
           }
         }

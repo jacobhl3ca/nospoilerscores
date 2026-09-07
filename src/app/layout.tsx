@@ -380,8 +380,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         {/* iOS Safari Smart App Banner. The site already promotes the HideScore
             iOS app everywhere else — the footer "also on the App Store" link, the
-            MobileApplication JSON-LD node above, the manifest's sameAs — but this
-            was the one surface still missing Apple's own native banner, the
+            MobileApplication JSON-LD node above, the Organization JSON-LD's sameAs —
+            but this was the one surface still missing Apple's own native banner, the
             highest-intent install prompt (it deep-links to Open when the app is
             already installed, App Store otherwise). app-id is the same App Store
             ID (6766885311) used by those other references, so app promotion stays
@@ -505,10 +505,10 @@ export default function RootLayout({
         />
         {/* The Capacitor shells load this site remotely (server.url), so every app
             open lands in Umami as an ordinary web visit and there is no way to tell
-            them apart. That is not academic: the Play closed test (15 paid testers,
-            from Aug 5 2026) pushed tonightnyc.com's homepage 57 -> 211 views and the
-            weekly insights job scored it a #1 "breakout" worth chasing. Tag app
-            traffic so web numbers stay web numbers.
+            them apart. That is not academic: from Aug 5 2026 the Play closed test made
+            it material — app opens masked hidescore's real web visits falling from 735
+            to 545, so web-only numbers read lower than they were. Tag app traffic so
+            web numbers stay web numbers.
 
             This runs as a before-send hook rather than a load-time data-tag attribute
             on purpose: the tracker reads data-tag once when it loads, which races the

@@ -14,7 +14,7 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // TNT/truTV and ESPN/ESPN+/Hulu/Disney+.
 const TITLE = "NHL Scores Without Spoilers | HideScore";
 const DESC =
-  "Check NHL scores, standings, and playoff results without seeing who won. HideScore keeps every hockey result hidden until you tap, so you can pick a game worth watching first.";
+  "Check NHL scores, standings, and playoffs without seeing who won. HideScore hides every result until you tap, so you can pick a game worth watching first.";
 const CANONICAL = "/nhl-scores-without-spoilers";
 
 const FAQ = [

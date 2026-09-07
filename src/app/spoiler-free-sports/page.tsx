@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 const TITLE = "Spoiler-Free Sports Scores and Highlights | HideScore";
+// Kept under ~155 chars so Google doesn't truncate the tail of the description
+// (this DESC is reused verbatim for openGraph + twitter below). Dropped the
+// "results, headlines" restatement and "choose to" — "Scores and highlights
+// stay hidden until you reveal them" already carries the promise.
 const DESC =
-  "HideScore is a spoiler-free sports app for NBA, NFL, NHL, MLB, soccer, golf, and World Cup fans. Scores, results, headlines, and highlights stay hidden until you choose to reveal them.";
+  "HideScore is a spoiler-free sports app for NBA, NFL, NHL, MLB, soccer, golf, and World Cup fans. Scores and highlights stay hidden until you reveal them.";
 
 const FAQ: { q: string; a: string }[] = [
   {
@@ -45,7 +49,7 @@ export const metadata: Metadata = {
     // og:locale matches the site-level Open Graph block in layout.tsx and the
     // World Cup/date/SEO-landing routes. A page's openGraph replaces the parent's
     // wholesale (Next merges metadata per top-level field, not deep), so without
-    // this this page emitted no og:locale for social unfurlers (Facebook/
+    // this the page emitted no og:locale for social unfurlers (Facebook/
     // LinkedIn/Slack/iMessage). en_US is the OG-spec format (underscore, not "en").
     locale: "en_US",
     type: "website",

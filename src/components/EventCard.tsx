@@ -173,7 +173,13 @@ function FittedLine({
 // the exact UI/data drift etDay.ts's single-source-of-truth exists to prevent:
 // between midnight and 1 AM local, the board still shows yesterday's slate, so
 // "today" here must be that service day, not the new calendar day.
-function whenLabel(iso?: string, refYmd?: string): string {
+// `dateOnly` forces the date-only rendering (no clock) even for a non-midnight
+// value: boxing.ts anchors every card's `date` to a synthetic noon-UTC
+// placeholder (there's no published bout time), which reads as a real "8:00AM"
+// here and fabricated a wall-clock for what is a night fight. EventDetailModal
+// already special-cases boxing to a date-only "When"; this is the tile-side
+// half of that fix so the compact tile stops inventing a time too.
+function whenLabel(iso?: string, refYmd?: string, dateOnly?: boolean): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
@@ -190,6 +196,10 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // (same guard as weather.ts / etDay.ts / DateNav.ts).
   const hm = new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   const midnight = hm === "00:00" || hm === "24:00";
+  // A date-only event (boxing's noon-UTC placeholder) has no real clock, so it
+  // renders like the midnight TBD placeholder: bare weekday off-slate, nothing
+  // on-slate — never a fabricated time.
+  const noTime = midnight || dateOnly;
   // Bucket a REAL kickoff to its SLATE day (etSlateYmd's 1 AM rollover), not a
   // raw effective-tz calendar day, so the "is this on the viewed slate?" test
   // uses the SAME boundary the board, the soccer cards, and the data layer all
@@ -212,8 +222,8 @@ function whenLabel(iso?: string, refYmd?: string): string {
   // formatTime (GameCard's "1:10PM"), not "8:00 PM".
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).replace(/(\d)\s+([AP]M)\b/i, "$1$2");
   const wd = d.toLocaleDateString("en-US", { weekday: "short", timeZone: tz });
-  if (sameDay) return midnight ? "" : time;
-  return midnight ? wd : `${wd} ${time}`;
+  if (sameDay) return noTime ? "" : time;
+  return noTime ? wd : `${wd} ${time}`;
 }
 
 // Rights-holder channels that post per-BOUT UFC highlights, best coverage
@@ -831,7 +841,12 @@ export default function EventCard({
       // card that was really rendering 12px — and the row wrapped anyway.
       const metaEl = rootRef.current?.querySelector(".game-meta-row");
       const metaFs = metaEl ? parseFloat(getComputedStyle(metaEl).fontSize) || 12 : 12;
-      const statusMax = maxW(fights.map((f) => f.state === "post" ? "Final" : f.state === "in" ? "Live" : whenLabel(f.date, selectedDate) || f.statusDetail), metaFs);
+      // Measure the live state as "" to match what FightCard actually renders: a
+      // live bout shows only the green dot, not the word "Live" (see the `isLive
+      // ? ""` status above). Measuring it as "Live" over-reserved ~24px of the
+      // status slot for text that never paints, which could drop the Main/Co-Main
+      // pill or the broadcaster one column-width sooner than necessary.
+      const statusMax = maxW(fights.map((f) => f.state === "post" ? "Final" : f.state === "in" ? "" : whenLabel(f.date, selectedDate) || f.statusDetail), metaFs);
       probe.style.fontWeight = "600";
       probe.style.textTransform = "uppercase";
       probe.style.letterSpacing = "0.025em";
@@ -841,7 +856,15 @@ export default function EventCard({
       probe.style.letterSpacing = "";
       const pillW = pillText + (isMobile ? 12 : 16);
       const bcW = event.broadcasts.length ? maxW([event.broadcasts[0]], metaFs) : 0;
-      document.body.removeChild(probe);
+      // `probe.remove()`, not `document.body.removeChild(probe)`: this runs in a
+      // bare rAF (no try/catch), so an uncaught throw here reaches Sentry. If the
+      // DOM has been reparented out from under us — a page-translation extension
+      // is the common cause — removeChild throws "NotFoundError: The object can
+      // not be found here." because the probe is no longer a direct child of
+      // <body>; remove() detaches it from wherever it sits (or no-ops) and never
+      // throws. Matches the sibling probe above (widthAt) and the other
+      // measurement probes across the app.
+      probe.remove();
       const metaGaps = isMobile ? 4 : 6; // gap-x-1 / sm:gap-x-1.5
       const metaAvail = colWidth - cardPadding - 2;
       // Ladder — always ONE line, never a wrap (Jacob 7/19: a card that grew a
@@ -957,7 +980,7 @@ export default function EventCard({
       ? ""
       : event.kind === "poker" && event.scheduleLabel
         ? event.scheduleLabel
-        : whenLabel(event.date, selectedDate) || event.statusDetail;
+        : whenLabel(event.date, selectedDate, event.kind === "boxing") || event.statusDetail;
   const f1Query = event.highlightQuery ?? `${event.title} highlights`;
   // Clicking the tile body opens the detail SHEET, not ESPN. It used to open
   // ESPN's race page directly, which meant only a pre/live race with an
@@ -987,7 +1010,12 @@ export default function EventCard({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--border-hover)")}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
       onClick={clickable ? openDetails : undefined}
-      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(); } } : undefined}
+      // Guard on e.target === e.currentTarget, as the FightCard tile and GameCard
+      // do: without it, Space/Enter on a nested play button (race/poker/boxing/
+      // chess highlight) would ALSO pop the detail sheet on top of the video the
+      // user just started — and preventDefault here would block the button's own
+      // Space activation.
+      onKeyDown={clickable ? (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDetails(); } } : undefined}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `${event.title} — event details` : undefined}
@@ -1014,6 +1042,7 @@ export default function EventCard({
               title onto a second line. */}
           {glyphInMeta && <span {...glyphA11y} className="text-xs leading-none">{glyph}</span>}
           {isLive && <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "#16a34a" }} />}
+          {isLive && <span className="sr-only">Live</span>}
           {isPost || isLive ? status : <span className="text-[11px] whitespace-nowrap">{status}</span>}
         </span>
         {!metaCompact && event.broadcasts.length > 0 && (

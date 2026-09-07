@@ -168,7 +168,13 @@ const HIGHLIGHT_BUFFER_HOURS = {
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3,
-  nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
+  // tennis is 4 (not 3) to mirror SPORT_RATING_CONFIG in src/lib/espn.ts and the
+  // regulationPeriods table in GameHighlights.tsx, the two source-of-truth copies
+  // this audit's readiness heuristic must agree with. tennis/golf are reference
+  // rows only — neither is in ESPN_PATHS, so highlightsReady() never reads them
+  // today — but the lone 3 here disagreed with both copies, so if tennis were
+  // ever scanned the OT buffer would be off by 0.5h for a five-set match.
+  nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 4,
   seriea: 2, bundesliga: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,

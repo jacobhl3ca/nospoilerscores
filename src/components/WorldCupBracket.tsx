@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getTimeZone, getEtServiceDate, toYmd } from "@/lib/etDay";
+import { getTimeZone, getEtServiceDate, toYmd, etSlateYmd } from "@/lib/etDay";
 import {
   fetchBracket,
   type Bracket,
@@ -63,7 +63,7 @@ function MatchCard({ match, bracket }: { match: Bracket["rounds"][number]["match
   // doesn't throw, it returns the literal string "Invalid Date" — so a present-
   // but-unparseable match.date from ESPN would render "Invalid Date" in the card
   // corner. isNaN-check it (the same guard etSlateYmd/shareCard already apply to
-  // their date parses, and matching this file's own try/guarded ymd() helper) so
+  // their date parses, and matching this file's own guarded ymd() helper) so
   // a bad date simply drops the corner label instead. Valid dates are unchanged.
   const parsed = match.date ? new Date(match.date) : null;
   const dateLabel = parsed && !isNaN(parsed.getTime())
@@ -81,14 +81,19 @@ function MatchCard({ match, bracket }: { match: Bracket["rounds"][number]["match
   );
 }
 
+// The slate day a match belongs to — bucketed to the effective TZ WITH the same
+// 1 AM rollover getEtServiceDate (and therefore `target` below) use. This used
+// to bucket to the raw effective-TZ calendar day with no rollover, so it
+// DISAGREED with `target` for a match kicking off between midnight and 1 AM
+// local: `target` (the service day) places such a match on the PREVIOUS day,
+// while the raw bucket returned the calendar day — so `ymd(m.date) === target`
+// never matched and the bracket silently failed to auto-scroll to that round
+// (e.g. a 7 PM ET knockout tie is just-past-midnight for a UTC+1/+2 viewer).
+// etSlateYmd is the app's SSOT for exactly this rollover-aware bucketing
+// (TeamView and the espn.ts soccer path already route through it), and it
+// returns "" for an unparseable date, preserving this helper's old guard.
 function ymd(iso: string | null): string {
-  if (!iso) return "";
-  try {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: getTimeZone(), year: "numeric", month: "2-digit", day: "2-digit" })
-      .format(new Date(iso)).replace(/-/g, "");
-  } catch {
-    return "";
-  }
+  return iso ? etSlateYmd(iso) : "";
 }
 
 export default function WorldCupBracket({ selectedDate }: { selectedDate?: string }) {
@@ -127,7 +132,15 @@ export default function WorldCupBracket({ selectedDate }: { selectedDate?: strin
     if (!focusRoundKey || !scrollRef.current) return;
     const el = scrollRef.current.querySelector<HTMLElement>(`[data-round-key="${focusRoundKey}"]`);
     if (!el) return;
-    requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", inline: "center" }));
+    // Capture + cancel the frame in cleanup (matching the AbortController and
+    // FittedLine effects elsewhere in this tree). selectedDate can change while
+    // the overlay is open, so focusRoundKey re-runs this effect — without the
+    // cancel, a still-pending frame from the previous round would fire and
+    // scroll to the STALE round before the new one lands (and it would fire on a
+    // detached node after unmount). Cancelling keeps the scroll to the current
+    // focus round only.
+    const raf = requestAnimationFrame(() => el.scrollIntoView({ block: "nearest", inline: "center" }));
+    return () => cancelAnimationFrame(raf);
   }, [focusRoundKey]);
 
   if (failed) {
