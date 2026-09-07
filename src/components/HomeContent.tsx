@@ -1490,17 +1490,15 @@ export default function HomeContent({
   // "kicks off Wednesday, Aug 21" on a 2024 page — one account's dismissal
   // list carries an `epl-2024-08-21` key from exactly that. selectedDate stays
   // the dependency only so it re-evaluates whenever the user moves around.
-  const kickoffInfo = useMemo(() => {
-    if (!selectedDate) return { kickoff: null, todayYmd: "" };
+  const kickoff = useMemo(() => {
+    if (!selectedDate) return null;
     const todayYmd = getDateString(0);
     const today = new Date(`${todayYmd.slice(0, 4)}-${todayYmd.slice(4, 6)}-${todayYmd.slice(6, 8)}T12:00:00`);
     // A league unticked in Settings never takes the banner (two of the four
     // accounts that dismissed the UCL banner had hidden UCL first); the next
     // opener does.
-    return { kickoff: getLeagueKickoff(today, prefs.hiddenLeagues ?? []), todayYmd };
+    return getLeagueKickoff(today, prefs.hiddenLeagues ?? []);
   }, [selectedDate, prefs.hiddenLeagues]);
-  const kickoff = kickoffInfo.kickoff;
-  const kickoffTodayYmd = kickoffInfo.todayYmd;
 
   // Compute which leagues are available for manual selection. Most seasonal
   // leagues disappear outside their season; NBA deliberately remains as a
