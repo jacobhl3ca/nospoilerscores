@@ -22,9 +22,25 @@ test("a 'get the job done' win reveal never reads as a clean title", () => {
   }
 });
 
-// The pattern is gated on the fixed "the job done" tail, so the everyday senses of
+// The "get the" prefix is optional, so the bare declarative "Job done" — the
+// title-style sibling recap channels lead with — is a spoiler in its own right.
+// It read as a clean title before, because the pattern required the verb prefix.
+test("a bare 'Job done' declaration never reads as a clean title", () => {
+  for (const title of [
+    "Arsenal: Job done",
+    "Job done for the Gunners | Match Highlights",
+    "JOB DONE ✅ | Premier League",
+    "Job done and dusted at Anfield",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The pattern is gated on the fixed "job done" tail, so the everyday senses of
 // "get"/"got"/"job" — which appear constantly in ordinary titles — must still pass
-// through untouched.
+// through untouched. The bare form still needs the two words "job done" adjacent:
+// "a job well done" has "well" between them, and "Jobe … done deal" is the name
+// "Jobe", not the word "job", so neither trips the mask.
 test("ordinary uses of 'get'/'job' are not over-hidden", () => {
   for (const title of [
     "How to get better at free kicks",
@@ -32,6 +48,8 @@ test("ordinary uses of 'get'/'job' are not over-hidden", () => {
     "Get to know the new signing | Player interview",
     "Match preview: can Arsenal find a way through?",
     "Top 10 goals of the season compilation",
+    "A job well done? Season in review",
+    "Jobe Bellingham done deal | Transfer news",
   ]) {
     assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
   }
