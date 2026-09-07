@@ -499,6 +499,11 @@ const TEAM_NAME_ALIASES: Record<string, string> = {
   // clubs. The strict resolver requires both teams, so query the title form.
   "Tempo": "Toronto Tempo",
   "Valkyries": "Golden State Valkyries",
+  // ESPN's shortDisplayName is "Boro"; EFL titles the club in full
+  // ("Burnley v Middlesbrough Highlights"). Querying "Boro" returns nothing
+  // from the EFL channel, so every Middlesbrough match stayed dark despite a
+  // baked clip existing. The strict both-teams gate still applies.
+  "Boro": "Middlesbrough",
 };
 
 function aliasTeam(name: string): string {
@@ -645,6 +650,14 @@ const TELEMUNDO_WORLD_CUP_TEAM_ALIASES: Record<string, string> = {
   // currently-resolving lookup regresses.
   "DR Congo": "RD Congo", // vs. "Congo DR"
   "Cote d'Ivoire": "Costa de Marfil", // vs. "Ivory Coast" (FIFA's official French name)
+  // Same fix fifaRankings.ts carries for Türkiye (see its "turkey" alias): the
+  // "Turkiye" primary key above matches FIFA's official-name form, but ESPN's
+  // scoreboard shortDisplayName can still send the pre-2022-rebrand English
+  // "Turkey", which normalizes to "turkey", misses the "turkiye" key, and falls
+  // through to the English name on the Spanish-language Telemundo channel — the
+  // exact under-match this map exists to prevent. Alias to the same Spanish name;
+  // "turkiye" stays put and the two distinct keys can't collide, so nothing regresses.
+  Turkey: "Turquía", // vs. "Turkiye" (FIFA's official name)
 };
 
 // Fold diacritics + typographic apostrophes and lowercase for lookup — the SAME

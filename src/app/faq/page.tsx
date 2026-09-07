@@ -56,7 +56,7 @@ const FAQ: { q: string; a: string; link?: { href: string; text: string } }[] = [
   },
   {
     q: "Why don't I see a league on the main screen?",
-    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round in the In season and Offseason groups, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
+    a: "The main screen shows a few leagues at a time. Open Settings to choose your columns or use a column heading to switch leagues. Settings lists every supported league year-round, grouped by sport with an offseason marker on the leagues that are between seasons, and saved offseason picks return automatically when play resumes. The main switcher generally stays seasonal; NBA remains selectable during its offseason for news and trades. You can choose favorite teams from supported leagues year-round.",
   },
   {
     q: "How do the separate soccer leagues work?",
@@ -93,8 +93,16 @@ export default function FaqPage() {
                   {" "}
                   {/* rel="me" — both sites are the same author, so this is the
                       identity link Google/IndieWeb consumers read to tie the
-                      HideScore author to the jacobhl.com Person entity. */}
-                  <a href={item.link.href} rel="me" className="underline underline-offset-2">
+                      HideScore author to the jacobhl.com Person entity.
+                      target="_blank" + rel="noopener noreferrer" brings this in
+                      line with every other external link in the app (e.g. the
+                      /privacy Twemoji credit): opening jacobhl.com in a new tab
+                      keeps the FAQ — and, in the Capacitor app, HideScore itself —
+                      in place instead of navigating the reader away, and noopener
+                      closes the reverse-tabnabbing hole a bare _blank leaves open.
+                      The rel-me identity signal is untouched: consumers read it
+                      from the rel token list, not the HTTP referrer. */}
+                  <a href={item.link.href} target="_blank" rel="me noopener noreferrer" className="underline underline-offset-2">
                     {item.link.text}
                   </a>
                   .
