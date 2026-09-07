@@ -3,7 +3,7 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 
 const TITLE = "NBA Scores Without Spoilers | HideScore";
 const DESC =
-  "Check NBA scores, standings, and highlights without seeing who won. HideScore keeps every basketball result hidden until you tap, so you can pick a game worth watching first.";
+  "Check NBA scores, standings, and highlights without seeing who won. HideScore hides results until you tap, so you can pick a game worth watching first.";
 const CANONICAL = "/nba-scores-without-spoilers";
 
 // Rebuilt 2026-09-03. This page was the worst performer on the site with real
