@@ -144,19 +144,22 @@ test("the YouTube keys we take back: m, j/l, 0-9 — video only", () => {
 });
 
 test("a Cmd/Ctrl/Alt chord is never ours — not one key", () => {
-  for (const key of ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", " ", "k", "h", "m", "j", "l", "5", "N", "P"]) {
+  for (const key of ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", " ", "k", "h", "m", "j", "l", "5", "N", "P", "?"]) {
     assert.equal(routeModalKey(mctx({ key, chord: true, shift: true, canSeek: true })), null, key);
   }
 });
 
 test("typing is sacred — a focused input, or a native <video>, takes every key", () => {
-  for (const key of ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", " ", "k", "h", "m", "j", "l", "5", "N", "P"]) {
+  for (const key of ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", " ", "k", "h", "m", "j", "l", "5", "N", "P", "?"]) {
     assert.equal(routeModalKey(mctx({ key, inTextEntry: true, shift: true, canSeek: true, galleryCanStep: true })), null, key);
   }
 });
 
 test("keys we deliberately do not handle stay the browser's", () => {
-  for (const key of ["Enter", "Tab", "PageDown", "PageUp", "Home", "End", "a", "z", "?", "Shift", "f", "Escape"]) {
+  // "?" left this list on 9/8 — it now shows/hides the key legend in the
+  // modal's corner (see modal-key-legend.test.ts). "/" takes its place here:
+  // "?" is Shift+/ on a US layout, and the unshifted key stays the browser's.
+  for (const key of ["Enter", "Tab", "PageDown", "PageUp", "Home", "End", "a", "z", "/", "Shift", "f", "Escape"]) {
     assert.equal(routeModalKey(mctx({ key, canSeek: true })), null, key);
   }
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiBase, leadChannelBlocksEmbeds, channelAlwaysMasksTitle } from "@/lib/youtube";
 import { openExternal, handleExternalClick } from "@/lib/openExternal";
 import { formatPublished, proxyImage } from "@/lib/news";
@@ -8,6 +8,8 @@ import { isScoreSpoiler } from "@/lib/spoilers";
 import { shareCardUrl, buildHighlightShareUrl, type ShareCardMeta } from "@/lib/shareCard";
 import { getTimeZone } from "@/lib/etDay";
 import { routeModalKey } from "@/lib/modalArrowKeys";
+import { buildKeyLegend } from "@/lib/modalKeyLegend";
+import ModalKeyHints, { initialKeyHintsState, persistKeyHintsOff, type KeyHintsState } from "@/components/ModalKeyHints";
 
 interface VideoModalProps {
   videoId: string;
@@ -656,6 +658,26 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // doesn't exist.
   const [nativeFs, setNativeFs] = useState(false);
   const [fakeFs, setFakeFs] = useState(false);
+
+  // The bottom-right key legend (ModalKeyHints). "gone" straight away for a
+  // browser that already dismissed it once — the ✕ is a permanent answer, not a
+  // per-clip one.
+  const [keyHints, setKeyHints] = useState<KeyHintsState>(initialKeyHintsState);
+  // ✕ — hand the corner to the Undo, and write the dismissal NOW rather than
+  // when the Undo expires: closing the modal mid-window has to count as "yes,
+  // gone", or the ✕ silently un-does itself.
+  const dismissKeyHints = useCallback(() => { setKeyHints("undo"); persistKeyHintsOff(true); }, []);
+  const restoreKeyHints = useCallback(() => { setKeyHints("open"); persistKeyHintsOff(false); }, []);
+  const expireKeyHints = useCallback(() => setKeyHints("gone"), []);
+  // "?" is a plain toggle over the same switch, from either of the two hidden
+  // states — so it's also how you get the panel back weeks after dismissing it.
+  const toggleKeyHints = useCallback(() => {
+    setKeyHints((s) => {
+      const next: KeyHintsState = s === "open" ? "gone" : "open";
+      persistKeyHintsOff(next === "gone");
+      return next;
+    });
+  }, []);
   const fsActive = nativeFs || fakeFs;
   // Timestamp of the last native-fullscreen exit — some browsers deliver the
   // Escape keydown alongside the exit, and that Escape must not also close the
@@ -1299,11 +1321,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         // 1-9 jump to that tenth; 0 restarts. seekToPct already honours the 90%
         // spoiler cap and the warn-past-halfway prompt, so the keys inherit both.
         case "jump-pct": seekToPct(Number(e.key) * 10); break;
+        case "toggle-keys": toggleKeyHints(); break;
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, headline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen]);
+  }, [onClose, fakeFs, nativeFs, pendingSeek, toggleFullscreen, ytMode, hlsMode, seekBy, seekToPct, togglePlay, toggleMute, toggleHeadlinePeek, headline, onPrev, onNext, goPrev, goNext, stepGallery, isGallery, galAt, galLen, toggleKeyHints]);
 
   // Focus management (WCAG 2.4.3), matching GameDetailModal / SettingsPanel /
   // WorldCupGroupsModal and the HomeContent dialogs — the treatment this modal,
@@ -1922,6 +1945,32 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const btnBase = "flex items-center justify-center rounded-md text-white/55 hover:text-white transition-colors cursor-pointer";
 
   const hasPager = !!(onPrev || onNext);
+
+  // The legend's rows come out of the same context flags routeModalKey decides
+  // on, so a row can't outlive the key it names (buildKeyLegend, and the test
+  // that feeds every printed chip back through the router).
+  const keyLegendRows = useMemo(
+    () => buildKeyLegend({
+      canSeek: ytMode || hlsMode,
+      galleryCanStep: isGallery,
+      hasPrev: !!onPrev,
+      hasNext: !!onNext,
+      hasHeadline: !!headline,
+    }),
+    [ytMode, hlsMode, isGallery, onPrev, onNext, headline]
+  );
+  // Not in fullscreen, either kind. The fake one paints over this z-index
+  // anyway, and in the native one the corner belongs to YouTube's own
+  // fullscreen / settings buttons — the panel would land on top of them.
+  const keyHintsPanel = !fakeFs && !nativeFs ? (
+    <ModalKeyHints
+      state={keyHints}
+      rows={keyLegendRows}
+      onDismiss={dismissKeyHints}
+      onRestore={restoreKeyHints}
+      onUndoExpire={expireKeyHints}
+    />
+  ) : null;
   // Cap the media (image / HLS / YouTube alike) so the media + the headline /
   // byline / Open-on / Copy-link row + the pinned Prev/Next pager ALL fit the
   // viewport with no page scroll and nothing overlapping the pager (Jacob 7/7).
@@ -3018,6 +3067,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             dead end. Swipe still works; the buttons just make it visible. */}
         {controlCluster}
         {desktopPager}
+        {keyHintsPanel}
       </div>
       </div>
     </div>

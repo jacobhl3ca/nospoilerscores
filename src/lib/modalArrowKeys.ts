@@ -83,7 +83,8 @@ export type ModalKeyAction =
   | "peek-headline"
   | "mute"
   | "seek-10"
-  | "jump-pct";
+  | "jump-pct"
+  | "toggle-keys";
 
 /** null = leave the key alone (no preventDefault). */
 export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
@@ -97,6 +98,19 @@ export function routeModalKey(ctx: ModalKeyContext): ModalKeyAction | null {
   if (ctx.inTextEntry) return null;
 
   const { key } = ctx;
+
+  // "?" shows or hides the key legend in the modal's bottom-right corner
+  // (ModalKeyHints). Deliberately not gated on ctx.shift: "?" is Shift+/ on a
+  // US layout but Shift+ß on a German one and its own key elsewhere, and every
+  // layout reports e.key === "?" regardless — so the glyph is the test, not the
+  // chord that produced it. Not gated on onControl either: unlike Space, "?"
+  // does nothing to a focused button, so it stays available while Tabbing.
+  // This is the one key that works when nothing else on the list does, which is
+  // why it's checked before the content keys rather than after them.
+  if (key === "?") {
+    if (ctx.repeat) return null; // holding it must not strobe the panel
+    return "toggle-keys";
+  }
 
   if (key === "ArrowLeft" || key === "ArrowRight") {
     // Unchanged from 9/4, repeat included: holding ← to scrub a clip is the
