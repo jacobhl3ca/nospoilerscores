@@ -2548,7 +2548,20 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   NO BOTTOM BAR: controls:0 already strips YouTube's ENTIRE bottom
                   bar (no timeline/seek line exists), so nothing there needs
                   covering during playback. */}
-              {maskVideoTitle && !titleSafe && (
+              {/* titleAlwaysMasked OVERRIDES the setting (Jacob 9/8). "Cover
+                  video title" went default-OFF the same day, and for most clips
+                  that is fine — an MLB or NBA upload titles itself by matchup.
+                  But the channels in TITLE_ALWAYS_MASKED_CHANNELS title
+                  themselves by RESULT ("X knocks out Y in round 2"), which is
+                  the whole fight given away in the one line the mask covers.
+                  Leaving those to the default would have quietly reopened the
+                  8/11 hole ("titles have spoilers") for every user who never
+                  touched the toggle. So the pref governs ordinary clips and this
+                  short list stays covered either way — the app's promise beats a
+                  display preference. titleSafe is already forced false for these
+                  channels (see the onReady/PLAYING handlers), so the second
+                  condition is belt-and-braces, not the thing doing the work. */}
+              {(maskVideoTitle || titleAlwaysMasked) && !titleSafe && (
                 <div
                   aria-hidden
                   className="absolute top-0 inset-x-0 z-10 pointer-events-none"

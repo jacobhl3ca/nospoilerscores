@@ -24,6 +24,7 @@
     "ratingorder:audit": "node scripts/audit-rating-order.mjs",
     "tv:catalog": "node scripts/build-tv-catalog.mjs",
     "tv:catalog:check": "node scripts/build-tv-catalog.mjs --check",
+    "qa:titlemask": "node scripts/qa-title-mask.mjs",
     "tv:parity": "tvos/tools/parity/parity.sh"
   },
   "dependencies": {
