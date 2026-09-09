@@ -5,9 +5,10 @@
 // covered content is hidden from assistive tech, that tapping reveals it — are
 // all runtime DOM state that a bundle grep cannot prove.
 //
-//   npm run build && node scripts/qa-bracket-picture.mjs
+//   npm run build && node scripts/qa-bracket-picture.mjs      # the local build
+//   node scripts/qa-bracket-picture.mjs --url https://hidescore.com
 //
-// Serves ./out itself and exits non-zero on the first failed check.
+// With no --url it serves ./out itself. Exits non-zero on any failed check.
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
@@ -16,19 +17,27 @@ import { fileURLToPath } from "node:url";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 8137;
+const argv = process.argv.slice(2);
+// Pointing this at production is how a deploy gets proven: a 200 from the CDN
+// is not evidence the new code is on the page, but these checks are.
+const liveUrl = argv.includes("--url") ? argv[argv.indexOf("--url") + 1] : null;
 const checks = [];
 const ok = (name, pass, detail = "") => {
   checks.push({ name, pass, detail });
   console.log(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
-const server = spawn("python3", ["-m", "http.server", String(PORT), "--bind", "127.0.0.1"], {
-  cwd: path.join(repo, "out"),
-  stdio: "ignore",
-});
-const stop = () => { try { server.kill(); } catch {} };
+const server = liveUrl
+  ? null
+  : spawn("python3", ["-m", "http.server", String(PORT), "--bind", "127.0.0.1"], {
+      cwd: path.join(repo, "out"),
+      stdio: "ignore",
+    });
+const stop = () => { try { server?.kill(); } catch {} };
 process.on("exit", stop);
 
+const baseUrl = liveUrl ?? `http://127.0.0.1:${PORT}/`;
+console.log(`target: ${baseUrl}`);
 await new Promise((r) => setTimeout(r, 1200));
 
 const browser = await chromium.launch();
@@ -56,7 +65,7 @@ async function clearOverlays() {
 }
 
 try {
-  await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded" });
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(6000); // let the ESPN fetches land
   await clearOverlays();
 
