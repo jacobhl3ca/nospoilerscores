@@ -1453,7 +1453,7 @@ export default function SettingsPanel({
             </Field>
             <ToggleRow
               label="Cover video title"
-              hint="Black bar over YouTube's title so the headline can't spoil"
+              hint="Black bar over YouTube's title so the headline can't spoil. UFC, MMA and boxing clips stay covered either way — those channels put the result in the title."
               checked={prefs.maskVideoTitle ?? false}
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
