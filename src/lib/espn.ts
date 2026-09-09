@@ -863,9 +863,17 @@ export function getSeasonOpener(sport: Sport, label: string, viewDate: Date): Se
     date: kickoff,
     daysUntil,
     // A confirmed opening-day date only stays confirmed for the season someone
-    // actually checked — past that, kickoffDate is last year's date recurring,
-    // so the copy goes back to hedging. See LeagueConfig.verifiedFor.
-    approximate: !config.kickoffDate || (config.verifiedFor ?? 0) < kickoff.getFullYear(),
+    // actually checked — either side of that, kickoffDate is a different year's
+    // date recurring, so the copy goes back to hedging. See
+    // LeagueConfig.verifiedFor.
+    //
+    // `!==`, not `<`: verifiedFor names the ONE year that was checked, not a
+    // floor. Under `<`, every year BEFORE the checked one also counted as
+    // confirmed — so a window verified for 2027 stated 2026's opener as fact.
+    // The tennis US Open ran "kicks off Saturday, Aug 29" through August 2026
+    // with no "~" while ESPN had Day 1 on Sunday Aug 30; 08-29 is right for
+    // 2027, which is exactly what verifiedFor: 2027 claims and all it claims.
+    approximate: !config.kickoffDate || (config.verifiedFor ?? 0) !== kickoff.getFullYear(),
     scheduleOut,
     kind: EVENT_SPORTS[sport] ? "event" : "season",
     // Past a year out the day-of-month is noise (and unknowable) — month + year
