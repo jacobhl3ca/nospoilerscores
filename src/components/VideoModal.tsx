@@ -682,7 +682,25 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // the post a headline the user revealed on post A stays revealed on post B
   // (Jacob 7/19). Keying each PeekBlur by postKey remounts it fresh per post,
   // resetting the reveal, while leaving the video player + modal chrome mounted.
-  const postKey = String(currentId ?? playbackUrl ?? embedUrl ?? imageUrl ?? fallbackUrl ?? headline ?? "");
+  // Join EVERY identity field rather than taking the first non-null one, and
+  // read the videoId PROP rather than currentId. The old
+  // `String(currentId ?? playbackUrl ?? … ?? "")` had two holes:
+  //   • The opener normalises a missing video id to "" (optsToModal in
+  //     HomeContent: `videoId: opts.videoId || ""`), and ?? does NOT skip an
+  //     empty string — so for EVERY text / article / image post this collapsed
+  //     to the constant "". Every such post shared one identity, so peeking
+  //     post A's headline left post B (and A again, on the way back) revealed,
+  //     the gallery cursor never reset, and trackVideoPlay's `!postKey` guard
+  //     dropped every native-player play event (Jacob 9/8). It only ever worked
+  //     on YouTube clips, which are the one kind that carries a real id.
+  //   • currentId is STATE synced by an effect, so on the first render after a
+  //     step it still held the OUTGOING post's id — one painted frame of the
+  //     incoming headline in the clear, which is exactly what deriving
+  //     headlinePeek below is meant to prevent. The prop updates in the same
+  //     render as the swap, so nothing lags.
+  const postKey = [videoId, playbackUrl, embedUrl, imageUrl, fallbackUrl, headline]
+    .map((v) => v || "")
+    .join("\u0000");
   const trackedPlayRef = useRef<string | null>(null);
   const trackVideoPlay = useCallback(() => {
     if (!postKey || trackedPlayRef.current === postKey) return;
@@ -695,22 +713,29 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // Same reuse trap as PeekBlur: page to another post and the gallery cursor
   // must go back to picture 1 (post B would otherwise open on post A's 4th).
   useEffect(() => { setGalIdx(0); }, [postKey]);
-  // Which post's headline is peeked — NOT a boolean (Jacob 9/5). H has to drive
-  // the reveal from up here, but the same modal is reused across posts, so the
-  // reset has to be free. Storing the POST and comparing derives the answer
-  // during render: post B is blurred on its very first frame, and ↑ back to A
-  // finds A blurred again because nothing was ever remembered. The obvious
-  // alternative — useState(false) plus useEffect(() => setPeek(false),
-  // [postKey]) — runs AFTER paint, so post B's headline would render un-blurred
-  // for one frame, and in this app a one-frame headline IS the spoiler (the
-  // same reason layout.tsx blurs news media in a pre-paint script). Never
-  // written to prefs: a peek is a glance, not a setting.
-  const [peekedKey, setPeekedKey] = useState<string | null>(null);
-  const headlinePeek = peekedKey === postKey;
-  const toggleHeadlinePeek = useCallback(
-    () => setPeekedKey((k) => (k === postKey ? null : postKey)),
-    [postKey]
-  );
+  // A peek is a glance, not a setting: leaving a post ALWAYS re-blurs it, and
+  // coming back to a post you peeked earlier finds it blurred again (Jacob 9/8
+  // — "when i switch to next or previous news item all should be hidden, even
+  // when i go back to the previous one"). Comparing a remembered peekedKey
+  // against postKey got the step forward right but not the step back: the key
+  // was still remembered, so ← back to A re-revealed it.
+  //
+  // The reset runs DURING render rather than in an effect. useState(false) plus
+  // useEffect(() => setPeek(false), [postKey]) runs AFTER paint, so post B's
+  // headline would show un-blurred for one frame, and in this app a one-frame
+  // headline IS the spoiler (the same reason layout.tsx blurs news media in a
+  // pre-paint script). Adjusting state while rendering is React's supported
+  // escape hatch for exactly this; it re-renders before the browser sees the
+  // first pass. headlinePeek also gates on peekedFor, so even that discarded
+  // first pass computes `false` for the incoming post. Never written to prefs.
+  const [peeked, setPeeked] = useState(false);
+  const [peekedFor, setPeekedFor] = useState(postKey);
+  if (peekedFor !== postKey) {
+    setPeekedFor(postKey);
+    if (peeked) setPeeked(false);
+  }
+  const headlinePeek = peeked && peekedFor === postKey;
+  const toggleHeadlinePeek = useCallback(() => setPeeked((p) => !p), []);
   // The dialog root's data-player-state, so a click-through test (and anything
   // else outside the cross-origin iframe) can read play/pause without asking
   // YouTube. Reveals nothing — not the position, not the duration.
