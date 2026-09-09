@@ -309,9 +309,22 @@ export interface Preferences {
   // Source labels the user has hidden via the per-source visibility checkbox.
   // Applied alongside the type pill (independent filters).
   newsHiddenSources?: string[];
+  // The bottom-right keyboard-shortcuts hint (ControlsHint). Default ON
+  // (undefined ⇒ shown) — the modal keyboard is invisible otherwise, which is
+  // how Shift+←/→ went unnoticed until it broke. `true` here means HIDDEN, so
+  // the ✕ only ever has to write one value and a fresh install shows the hint.
+  hideControlsHint?: boolean;
   // Spoiler mask on the highlight-video player: maskVideoTitle covers
-  // YouTube's title strip (top). Defaults ON (undefined ⇒ true ⇒ covered) so
-  // the player stays spoiler-safe out of the box; the user opts out in Settings.
+  // YouTube's title strip (top).
+  // Default OFF as of 2026-09-08 (undefined ⇒ false ⇒ not covered), flipped from
+  // ON at Jacob's request: "everyone who hasnt manually turned on the cover title
+  // in hidescore please turn that off for them". undefined is exactly the set of
+  // people who never touched the toggle, so reading it as false turns it off for
+  // them and leaves an explicit `true` alone — nobody who chose the mask loses it.
+  // What it was protecting has narrowed anyway: the mask only ever mattered while
+  // YouTube's own title bar was on screen (a pause, or a desktop mouse-move), the
+  // post's real headline sits under the player already with the app's own blur on
+  // it, and covering the top ~50px of every clip costs real footage on a phone.
   maskVideoTitle?: boolean;
   // Default ON (undefined ⇒ true, matching the `?? true` at every read site —
   // HomeContent, SettingsPanel — and the `youtubeNativeControls: true` default
