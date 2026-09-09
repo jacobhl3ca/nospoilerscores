@@ -711,6 +711,7 @@ export default function SettingsPanel({
       // each to its documented default value instead — otherwise a user's chosen
       // news source-type filter (e.g. "ESPN only") survived "Reset to defaults".
       maskVideoTitle: undefined,
+      hideControlsHint: undefined,
       youtubeNativeControls: undefined,
       videoSeekControl: undefined,
       videoSeekFill: undefined,
@@ -1294,6 +1295,14 @@ export default function SettingsPanel({
               checked={prefs.singleColumn ?? false}
               onChange={(v) => updatePrefs({ singleColumn: v })}
             />
+            {/* Stored inverted (hideControlsHint) so a fresh install shows it —
+                see the pref's note. The row reads the way you'd expect. */}
+            <ToggleRow
+              label="Keyboard shortcuts hint"
+              hint="A small “Keys” tag in the bottom-right corner listing what ↓/↑, ←/→ and Space do. Desktop only."
+              checked={!prefs.hideControlsHint}
+              onChange={(v) => updatePrefs({ hideControlsHint: !v })}
+            />
           </Section>
 
           {/* Favorite teams — picker first so adding a team doesn't push the
@@ -1445,7 +1454,7 @@ export default function SettingsPanel({
             <ToggleRow
               label="Cover video title"
               hint="Black bar over YouTube's title so the headline can't spoil"
-              checked={prefs.maskVideoTitle ?? true}
+              checked={prefs.maskVideoTitle ?? false}
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
             {/* These four only ever apply to the spoiler-safe player, so they

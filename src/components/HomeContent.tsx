@@ -18,6 +18,7 @@ import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
 import FeedbackBox from "@/components/FeedbackBox";
+import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
@@ -4241,7 +4242,7 @@ export default function HomeContent({
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
-          maskVideoTitle={prefs.maskVideoTitle ?? true}
+          maskVideoTitle={prefs.maskVideoTitle ?? false}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
@@ -4284,6 +4285,14 @@ export default function HomeContent({
           onClose={() => { setGroupsOpen(false); setGroupsHighlight(null); }}
         />
       )}
+
+      {/* Bottom-right keyboard guide. Sits outside every modal so it can say
+          what the post-modal keys are WHILE that modal is open (Jacob 9/8). */}
+      <ControlsHint
+        enabled={!prefs.hideControlsHint}
+        onDismiss={() => updatePrefs({ hideControlsHint: true })}
+        modalOpen={!!videoModal}
+      />
 
       <SettingsPanel
         open={settingsOpen}

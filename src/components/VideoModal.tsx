@@ -124,7 +124,9 @@ interface YTPlayerEvent {
 // from https://www.youtube.com/iframe_api, so it isn't in any @types package.
 interface YTNamespace {
   Player: new (
-    elementId: string,
+    // An element, not just an id: we hand YT a node we created ourselves so it
+    // has something of its own to replace. See ytHostRef.
+    elementId: string | HTMLElement,
     config: {
       width?: string | number;
       height?: string | number;
@@ -421,8 +423,12 @@ function ArticleMeta({ byline, published, className, style }: {
   );
 }
 
-export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = true, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
+export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl, poster, imageUrl, images, embedUrl, sourceLabel, headline, byline, published, body, shareCard, maskVideoTitle = false, maskVideoBottom = true, youtubeNativeControls = false, seekControl = "both", seekFill = "off", allowEnd = false, warnHalfway = false, onPrev, onNext, alternates }: VideoModalProps) {
   const playerRef = useRef<YTPlayer | null>(null);
+  // The React-owned box the YouTube player lives INSIDE. React renders this and
+  // nothing else touches it; the #yt-player node YT destroys is a plain DOM
+  // child we append below. See initPlayer for why that separation matters.
+  const ytHostRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // The dialog root (role="dialog") — used by the focus-management effect below
   // to seat focus inside the modal on open, trap Tab within it, and restore it
@@ -597,6 +603,11 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   const [ytPaused, setYtPaused] = useState(false);
   // Latch so the near-end auto-pause (see the progress poll) runs once per clip.
   const endLatchRef = useRef(false);
+  // TRUE only for the pause the progress poll fires a second before the clip
+  // runs out, and for a real ENDED. That is the pause worth blacking the whole
+  // player out for — see the cover's own note. An ordinary mid-clip pause sets
+  // ytPaused WITHOUT this.
+  const [ytAtEnd, setYtAtEnd] = useState(false);
   // controls:0 hides YouTube's native mute button, and clips autoplay muted
   // (browsers block unmuted autoplay) — so we render a custom mute toggle + a
   // volume slider. `volume` is 0–100 (the YT player's scale); it's the level we
@@ -976,6 +987,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // would be re-paused 350ms later, trapping the viewer on the last frame.
       if (d > 2 && t > 0 && d - t <= 1 && !endLatchRef.current) {
         endLatchRef.current = true;
+        setYtAtEnd(true);
         p?.pauseVideo?.();
       }
     }, 350);
@@ -1363,6 +1375,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   useEffect(() => {
     setTitleSafe(false);
     setYtPaused(false);
+    setYtAtEnd(false);
     endLatchRef.current = false;
   }, [currentId]);
 
@@ -1566,6 +1579,10 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
   // YouTube IFrame Player API. Recreates on currentId change (fallback retry swaps it).
   useEffect(() => {
     if (hlsMode || embedMode || imageMode || textMode) return; // HLS / iframe / image / text branches handle rendering instead
+    // Captured for the cleanup, which runs after React has already detached the
+    // ref on a real unmount. Clearing the host only actually matters on a
+    // post-to-post step, where this is the same live node either way.
+    const hostAtMount = ytHostRef.current;
     // Channels that refuse embeds on every upload (F1) can only end at the
     // "Watch on YouTube" card, so go there on the first frame instead of
     // mounting a player that will black-screen, error 150, and then walk a
@@ -1665,10 +1682,32 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       if (!YT) return;
       // The iframe_api script can finish downloading AFTER the modal has closed
       // (fast Esc on a cold load). By then this effect's cleanup has run and the
-      // #yt-player mount is gone, so `new YT.Player("yt-player", …)` would build
-      // against a missing element and throw. Bail if the mount is no longer there.
-      if (!document.getElementById("yt-player")) return;
-      playerRef.current = new YT.Player("yt-player", {
+      // host is gone, so building a player would throw. Bail if it went away.
+      // Read the ref live rather than the captured node: this can fire long
+      // after the effect that scheduled it, and isConnected is the direct
+      // question the old `document.getElementById` guard was really asking —
+      // is there still a mount point in the document to build into.
+      const host = ytHostRef.current;
+      if (!host || !host.isConnected) return;
+      // ⛔ Never hand YT a node React rendered. The IFrame API REPLACES the
+      // element it is given with its <iframe> (globals.css says so too, for the
+      // styling half of the same fact) — but React's fiber goes on holding the
+      // ORIGINAL div, which is now detached. Unmounting that subtree then calls
+      // removeChild on a node that is no longer its parent's child:
+      // `NotFoundError: The object can not be found here.`, DOMException code 8
+      // — Sentry JAVASCRIPT-NEXTJS-NY-G (8/18) and NY-J (8/24), both iPhone,
+      // both one tap on the pager while a ?v= YouTube post was open, stepping
+      // to a post of another type so this whole branch unmounts. Paging YouTube
+      // to YouTube never unmounts it, which is why it only showed twice.
+      //
+      // So: React owns `host` and never learns about the child. YT is free to
+      // replace, and React only ever removes a node it really does own. The id
+      // rides on the child because the CSS pins the iframe by it.
+      host.textContent = "";
+      const mount = document.createElement("div");
+      mount.id = "yt-player";
+      host.appendChild(mount);
+      playerRef.current = new YT.Player(mount, {
         width: "100%",
         height: "100%",
         videoId: currentId,
@@ -1749,7 +1788,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // Drive the spoiler cover: PAUSED (2) and ENDED (0) are exactly the
             // states where YouTube paints its related-video overlays.
             if (event.data === 2 || event.data === 0) setYtPaused(true);
-            else if (event.data === 1 || event.data === 3) setYtPaused(false);
+            else if (event.data === 1 || event.data === 3) { setYtPaused(false); setYtAtEnd(false); }
+            // A real ENDED (0) is the other end-of-clip pause. The progress poll
+            // normally gets there first and parks a second early, so this is the
+            // belt-and-braces case: a clip short enough that the poll's d > 2
+            // guard skipped it, or one that raced past the last sample.
+            if (event.data === 0) setYtAtEnd(true);
             // Same two states, published on the dialog root (see
             // data-player-state) so play/pause is observable from outside the
             // cross-origin frame.
@@ -1825,6 +1869,12 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // (which re-subscribes on ytMode, not currentId) can't call methods on it
       // during a fallback swap before the replacement player is built.
       playerRef.current = null;
+      // Whatever YT left in the host — its iframe, or our mount if it never got
+      // that far — is ours to clear, and clearing it is safe precisely because
+      // React is not tracking any of it. This also gives the next post a clean
+      // host: the old code re-looked-up `#yt-player` after destroy() had already
+      // removed it, found nothing, and silently built no player at all.
+      hostAtMount?.replaceChildren();
     };
     // titleAlwaysMasked is derived from fallbackUrl (already a dep), so it can
     // never change on its own — listed to keep exhaustive-deps quiet.
@@ -2290,7 +2340,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 ? { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: 0 }
                 : { width: ytFrameWidth, aspectRatio: "16 / 9", borderRadius: "0.5rem" }}
             >
-              <div id="yt-player" className="absolute inset-0 w-full h-full" />
+              <div ref={ytHostRef} className="absolute inset-0 w-full h-full" />
               {/* Embed-blocked / unplayable fallback — covers YouTube's own
                   "Video unavailable" screen with a clean prompt + a Watch-on-
                   YouTube button (opens the YT app on native via openExternal). */}
@@ -2337,10 +2387,30 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                   "POST-FIGHT INTERVIEW" text readable, which is the whole leak.
                   pointer-events-none so the tap still falls through to the
                   click-catcher below (z-10) and resumes playback as before.
-                  With YouTube's native controls on, stop short of the bottom so
-                  its control bar stays visible and usable — the related-video
-                  grid is centred, so it's still fully covered. */}
-              {ytPaused && !ytFailed && !autoplayBlocked && (
+
+                  TWO different pauses, two different covers (Jacob 9/8, on a
+                  Jomboy clip: "black screen"). Blacking the WHOLE player out for
+                  an ordinary mid-clip pause is what reads as a broken player —
+                  and it protects nothing, because the frame it hides is the one
+                  that was on screen a moment earlier while the clip played. What
+                  YouTube actually ADDS on a mid-clip pause, measured against the
+                  live embed at 1280x720 and 398x224 with our own covers stripped
+                  (9/8): its title bar at the top, and a "More videos" suggestion
+                  card in the bottom strip. The suggestion card is the leak.
+                    • mid-clip pause → cover the bottom strip only; the frozen
+                      frame stays visible and the player still looks like a
+                      player. In native-controls mode the strip stops above
+                      YouTube's own bar (bottom-12) so its controls stay usable.
+                    • end of clip → the full opaque cover, unchanged. Here the
+                      last frame IS a spoiler (a highlight ends on the final
+                      scoreboard) and the endscreen is a full grid, so nothing
+                      short of the whole player will do. ytAtEnd marks it: the
+                      progress poll parks the clip a second early precisely so
+                      ENDED never fires and this cover, not YouTube's grid, is
+                      what you see.
+                  The title bar the mid-clip pause exposes is the "Cover video
+                  title" mask's job, not this one's. */}
+              {ytPaused && ytAtEnd && !ytFailed && !autoplayBlocked && (
                 <div
                   aria-hidden
                   className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center ${youtubeNativeControls ? "bottom-12" : "bottom-0"}`}
@@ -2348,6 +2418,37 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 >
                   <svg width="46" height="46" viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)"><polygon points="6,4 20,12 6,20" /></svg>
                 </div>
+              )}
+              {ytPaused && !ytAtEnd && !ytFailed && !autoplayBlocked && (
+                <>
+                  {/* The suggestion strip, flush to the BOTTOM edge — not
+                      bottom-12 like the end-of-clip cover. That offset exists so
+                      YouTube's control bar stays usable underneath a full
+                      blackout, but the "More videos" card sits in exactly the
+                      48px it spares, so an offset strip floats above the very
+                      thing it is there to hide (measured 9/8: card at 620-670px
+                      in a 679px-tall player, strip ending at 620). Bottom-anchored
+                      it also takes YouTube's control bar with it while paused —
+                      acceptable, because the strip is pointer-events-none and a
+                      click anywhere on the player resumes, which brings the bar
+                      straight back.
+                      clamp, because the card does NOT scale with the player: it
+                      sits ~65px off the bottom of a 720px-tall frame and ~70px off
+                      a 224px one, so the min does the work on a phone and the max
+                      stops it eating a third of a desktop frame. */}
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 bottom-0 z-20"
+                    style={{ height: "clamp(96px, 34%, 210px)", background: "#000" }}
+                  />
+                  {/* Paused badge — the frame is visible now, so the play glyph
+                      needs its own scrim to stay legible over footage. */}
+                  <div aria-hidden className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                    <span className="flex items-center justify-center w-16 h-16 rounded-full" style={{ background: "rgba(0,0,0,0.55)" }}>
+                      <svg width="34" height="34" viewBox="0 0 24 24" fill="rgba(255,255,255,0.85)"><polygon points="6,4 20,12 6,20" /></svg>
+                    </span>
+                  </div>
+                </>
               )}
               {/* Click-catcher over the whole player. A click anywhere on the
                   video toggles play/pause through the YT API instead of falling
