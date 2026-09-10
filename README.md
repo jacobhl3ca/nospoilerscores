@@ -11,8 +11,9 @@ tonight, or skip a dull game, without learning the result.
 
 ## What it covers
 
-12 leagues across football, basketball, baseball, hockey, soccer, tennis, golf and poker,
-with per-league settings, spoiler-safe highlight links, and a sensitive-news filter.
+40+ leagues and competitions — football, basketball, baseball, hockey, soccer, tennis,
+golf, rugby, cricket, motorsport, fighting, chess and poker — with per-league settings,
+spoiler-safe highlight links, and a sensitive-news filter.
 
 ## How it works
 
