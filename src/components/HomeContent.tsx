@@ -396,6 +396,12 @@ function AddColumnButton({ onClick }: { onClick: () => void }) {
 // than a countdown ("in 13 days" makes a reader do arithmetic). The 2026-27
 // Premier League is the case that prompted this — a World Cup summer pushed
 // kickoff a week later than usual, so even regular viewers have the wrong date.
+// Paused (Jacob 9/10): the season-kickoff banner — the one-line "<League> kicks
+// off Friday / Add the <League> column" strip above the board — is off. Every
+// piece of it below is intact; flip this to true to bring it back, and the
+// per-season dismissal keys pick up where they left off.
+const KICKOFF_BANNER_ENABLED = false;
+
 function kickoffMessage(k: LeagueKickoff): string {
   const name = k.config.label === "Premier League" ? "The Premier League" : k.config.label;
   if (k.phase === "underway") return `${name} is underway — every match, spoiler-free.`;
@@ -3626,7 +3632,8 @@ export default function HomeContent({
             // retires the banner for good, whichever league is next (Jacob 9/5:
             // "banner should only popup once total. not a second reminder").
             // Never renders alongside the World Cup banner — one announcement.
-            const showKickoffBanner = prefsHydrated
+            const showKickoffBanner = KICKOFF_BANNER_ENABLED
+              && prefsHydrated
               && !showWcBanner
               && kickoff !== null
               && !displayedSports.includes(kickoff.config.sport)
