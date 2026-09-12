@@ -522,7 +522,7 @@ export default {
           "aston villa": ["aston villa", "villa"],
           // MLS — abbreviations ↔ full names
           "nycfc": ["nycfc", "new york city fc", "new york city"],
-          "red bull ny": ["red bull ny", "new york red bulls", "red bulls"],
+          "red bull ny": ["red bull ny", "new york red bulls", "red bulls", "red bull new york"],
           "la galaxy": ["la galaxy", "los angeles galaxy", "galaxy"],
           "lafc": ["lafc", "los angeles fc", "los angeles football club"],
           "d.c. united": ["d.c. united", "dc united"],
