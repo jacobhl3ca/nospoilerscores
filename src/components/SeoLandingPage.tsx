@@ -84,13 +84,13 @@ export default function SeoLandingPage({
           {ctaLabel}
         </Link>
         {links.length > 0 && (
-          <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          <nav aria-label="Related spoiler-free pages" className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
             {links.map((link) => (
               <Link key={link.href} href={link.href} className="underline underline-offset-2">
                 {link.label}
               </Link>
             ))}
-          </div>
+          </nav>
         )}
       </div>
 
@@ -104,7 +104,7 @@ export default function SeoLandingPage({
         ))}
       </section>
 
-      <div className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
+      <nav aria-label="More from HideScore" className="mt-10 flex flex-wrap gap-x-4 gap-y-2">
         <Link href="/" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           Back to HideScore
         </Link>
@@ -114,7 +114,7 @@ export default function SeoLandingPage({
         <Link href="/faq" className="underline underline-offset-2" style={{ color: "var(--text-muted)" }}>
           FAQ
         </Link>
-      </div>
+      </nav>
 
       <script
         type="application/ld+json"
