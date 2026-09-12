@@ -522,7 +522,7 @@ export default {
           "aston villa": ["aston villa", "villa"],
           // MLS — abbreviations ↔ full names
           "nycfc": ["nycfc", "new york city fc", "new york city"],
-          "red bull ny": ["red bull ny", "new york red bulls", "red bulls"],
+          "red bull ny": ["red bull ny", "new york red bulls", "red bulls", "red bull new york"],
           "la galaxy": ["la galaxy", "los angeles galaxy", "galaxy"],
           "lafc": ["lafc", "los angeles fc", "los angeles football club"],
           "d.c. united": ["d.c. united", "dc united"],
@@ -638,11 +638,33 @@ export default {
           // boundary check stops "Lions"→"lion" from matching "Lionel". In
           // practice the variant that fires here is the full "New York Giants",
           // which is unambiguous.
-          return variants.some((v) => {
+          if (variants.some((v) => {
             const n = normalizeTeamMatch(v);
             if (!n.endsWith("s") || n.length < 5) return false;
             const singular = n.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             return new RegExp(`(^|[^a-z0-9])${singular}([^a-z0-9]|$)`).test(normalizedTitle);
+          })) return true;
+          // Name-order tolerance for people, not clubs. ESPN's tennis feed
+          // names Chinese players family-name-first ("Zheng Qinwen", "Wu
+          // Yibing") while the US Open channel titles them given-name-first
+          // ("Qinwen Zheng vs. Elena Rybakina Highlights | 2026 US Open
+          // Quarterfinal", verified 2026-09-11). The substring test above can
+          // never match the swapped order, so every card for such a player
+          // strict-resolved to "No results" — four US Open R3+ cards wore an
+          // empty highlight band. The channel is not consistent either (its
+          // Round 1 cut is "Wu Yibing vs. Adam Walton"), so swapping is not
+          // enough: accept a TWO-word name whose words both appear as whole
+          // words anywhere in the title. Two words only — club names carry
+          // the city/nickname shape ("New York Giants") that an any-order
+          // match could pin on the wrong club, and no Eastern-order player
+          // name ESPN emits has more than two words.
+          return variants.some((v) => {
+            const words = normalizeTeamMatch(v).split(/[^a-z0-9]+/).filter(Boolean);
+            if (words.length !== 2 || words.some((w) => w.length < 2)) return false;
+            return words.every((w) => {
+              const esc = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(normalizedTitle);
+            });
           });
         }
 

@@ -211,6 +211,14 @@ function formatSeriesStatus(s: string): string {
 const NETWORK_SHORT: Record<string, string> = {
   "ESPN Unlmtd": "ESPN",
   "ESPN Unlimited": "ESPN",
+  // Identity, not a shortening — an EXEMPTION from the trailing-"+" strip
+  // below, which exists for "Apple TV+" → "Apple TV" and was silently
+  // collapsing "ESPN+" to "ESPN" too. Those are different products: ESPN is on
+  // the TV, ESPN+ is a separate subscription in another app, and the chip is
+  // the only place most people read it. ESPN's feed still returns it — every
+  // one of the 240 US Open qualifying matches on 2026-08-24..28 came through
+  // as "ESPN+" (the main draw is ESPN / ESPN2 / ABC / ESPN Unlmtd, no plus).
+  "ESPN+": "ESPN+",
   "Marquee Sports Net": "Marquee",
   "Space City Home Network": "Space City",
 };

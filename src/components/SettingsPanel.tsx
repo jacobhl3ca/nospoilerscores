@@ -720,6 +720,7 @@ export default function SettingsPanel({
       // undefined read back as `!!undefined` === false, hiding the text posts a
       // fresh install shows on by default.
       maskVideoTitle: undefined,
+      hideControlsHint: undefined,
       youtubeNativeControls: undefined,
       videoSeekControl: undefined,
       videoSeekFill: undefined,
@@ -1318,6 +1319,14 @@ export default function SettingsPanel({
               checked={prefs.singleColumn ?? false}
               onChange={(v) => updatePrefs({ singleColumn: v })}
             />
+            {/* Stored inverted (hideControlsHint) so a fresh install shows it —
+                see the pref's note. The row reads the way you'd expect. */}
+            <ToggleRow
+              label="Keyboard shortcuts hint"
+              hint="A small “Keys” tag in the bottom-right corner listing what ↓/↑, ←/→ and Space do. Desktop only."
+              checked={!prefs.hideControlsHint}
+              onChange={(v) => updatePrefs({ hideControlsHint: !v })}
+            />
           </Section>
 
           {/* Favorite teams — picker first so adding a team doesn't push the
@@ -1468,8 +1477,8 @@ export default function SettingsPanel({
             </Field>
             <ToggleRow
               label="Cover video title"
-              hint="Black bar over YouTube's title so the headline can't spoil"
-              checked={prefs.maskVideoTitle ?? true}
+              hint="Black bar over YouTube's title so the headline can't spoil. UFC, MMA and boxing clips stay covered either way — those channels put the result in the title."
+              checked={prefs.maskVideoTitle ?? false}
               onChange={(v) => updatePrefs({ maskVideoTitle: v })}
             />
             {/* These four only ever apply to the spoiler-safe player, so they

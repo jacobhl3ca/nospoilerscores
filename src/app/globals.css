@@ -653,3 +653,14 @@ iframe#yt-player {
    would start showing the top of a third line. */
 .team-name,
 .ns-ink-safe { padding-bottom: 0.2em; margin-bottom: -0.2em; }
+
+/* Keyboard-shortcuts hint (ControlsHint) — only where there are keys to press.
+   A touch device gets no benefit from a list of keyboard shortcuts and would
+   just lose a corner of the screen to it, so gate on a fine pointer with real
+   hover, the same test the app's hover-only affordances use. CSS rather than a
+   JS media query: no hydration mismatch, and it follows a window resize or a
+   trackpad being plugged in. */
+.hs-controls-hint { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .hs-controls-hint { display: flex; }
+}

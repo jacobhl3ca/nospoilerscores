@@ -2604,6 +2604,32 @@ const HL_TITLE_TEAM_ALIASES = {
   netherlands: ["netherlands", "holland", "paises bajos"],
 };
 
+// The worker's club alias table (ESPN compact name ↔ every title form the
+// official channels use: "red bull ny" ↔ "New York Red Bulls", "inter milan" ↔
+// "Inter", "wolves" ↔ "Wolverhampton"). Read from public/_worker.js at bake
+// time, the same way HL_LLWS_REGION_NAMES reads the client's JSON, so the two
+// matchers can never disagree: the 2026-09-12 nine-day re-bake showed the
+// worker resolving six MLS/UCL/Serie A/EFL clips that this file's country-only
+// table then rejected as HIGHLIGHT-MATCHUP-REJECT. Same reverse index as the
+// worker (any variant → the full list). Empty when the block cannot be found,
+// which degrades to the previous behaviour instead of failing the bake.
+const HL_WORKER_TEAM_VARIANTS = (() => {
+  try {
+    const src = readFileSync(new URL("../public/_worker.js", import.meta.url), "utf8");
+    const start = src.indexOf("const TEAM_ALIASES = {");
+    const end = src.indexOf("\n        };", start);
+    if (start < 0 || end < 0) return {};
+    const table = new Function(`return {${src.slice(start + "const TEAM_ALIASES = {".length, end)}};`)();
+    const index = {};
+    for (const variants of Object.values(table)) {
+      for (const v of variants) index[hlNormalizeTeam(v)] = variants.map(hlNormalizeTeam);
+    }
+    return index;
+  } catch {
+    return {};
+  }
+})();
+
 function hlTitleHasTeam(title, team) {
   const normalizedTitle = hlNormalizeTeam(title);
   const normalizedTeam = hlNormalizeTeam(team);
@@ -2612,8 +2638,21 @@ function hlTitleHasTeam(title, team) {
     hlNormalizeTeam(hlAlias(team)),
     hlNormalizeTeam(hlTelemundoTeam(team)),
     ...(HL_TITLE_TEAM_ALIASES[normalizedTeam] ?? []),
+    ...(HL_WORKER_TEAM_VARIANTS[normalizedTeam] ?? []),
   ]);
-  return [...variants].some((variant) => variant && normalizedTitle.includes(variant));
+  if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
+  // Name-order tolerance, mirroring titleHasTeam in public/_worker.js: ESPN
+  // names Chinese tennis players family-name-first ("Zheng Qinwen") and the US
+  // Open channel titles them given-name-first ("Qinwen Zheng vs. Elena
+  // Rybakina Highlights | …"). A two-word name matches when both words appear
+  // as whole words anywhere in the title. This check also revalidates CARRIED
+  // entries every run, so without it the worker could bake such a match and
+  // the next bake would reject it as HIGHLIGHT-MATCHUP-REJECT.
+  return [...variants].some((variant) => {
+    const words = String(variant ?? "").split(" ").filter(Boolean);
+    if (words.length !== 2 || words.some((w) => w.length < 2)) return false;
+    return words.every((w) => new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(normalizedTitle));
+  });
 }
 
 const HL_OEMBED_META_CACHE = new Map();
@@ -2820,7 +2859,13 @@ async function bakeGameHighlights() {
     else delete games[k];
   }
 
-  const dates = [hlEtYmd(0), hlEtYmd(-1)];
+  // --hl-days=N widens the window for a one-off re-bake after a matcher fix
+  // (2026-09-12: four US Open cards from Sep 4–9 missed on name order).
+  // Already-baked games short-circuit, so a wide window only re-scrapes the
+  // still-missing ones. Default stays the 2-day daily window.
+  const hlDaysArg = parseInt(process.argv.find((a) => a.startsWith("--hl-days="))?.slice("--hl-days=".length) ?? "", 10);
+  const hlDays = Number.isFinite(hlDaysArg) && hlDaysArg > 0 ? Math.min(hlDaysArg, 30) : 2;
+  const dates = Array.from({ length: hlDays }, (_, i) => hlEtYmd(-i));
   // World Cup gets a much wider window than the daily leagues. WC has only a
   // handful of games/day but a recap can post late (or a bake can fail while the
   // recap wasn't up yet), and outside the 2-day window that game NEVER gets

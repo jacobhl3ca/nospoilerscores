@@ -17,7 +17,10 @@ import LeagueColumn from "@/components/LeagueColumn";
 import GameDetailModal from "@/components/GameDetailModal";
 import EventDetailModal from "@/components/EventDetailModal";
 import WorldCupGroupsModal from "@/components/WorldCupGroupsModal";
+import SlamBracketModal from "@/components/SlamBracketModal";
+import PlayoffPictureModal from "@/components/PlayoffPictureModal";
 import FeedbackBox from "@/components/FeedbackBox";
+import ControlsHint from "@/components/ControlsHint";
 import NewsColumn, { NewsColumnTitle, NewsSource, PlayHandler, PlayOpts } from "@/components/NewsColumn";
 import SettingsPanel from "@/components/SettingsPanel";
 import { fetchLeagueNews, fetchPrebaked, leagueSourceCascade, GENERIC_CASCADE, MOBILE_NEWS_LEAGUE_ORDER, ColumnSource, classifySource, LEAGUE_LOGO } from "@/lib/news";
@@ -393,6 +396,12 @@ function AddColumnButton({ onClick, label = "Add a league column" }: { onClick: 
 // than a countdown ("in 13 days" makes a reader do arithmetic). The 2026-27
 // Premier League is the case that prompted this — a World Cup summer pushed
 // kickoff a week later than usual, so even regular viewers have the wrong date.
+// Paused (Jacob 9/10): the season-kickoff banner — the one-line "<League> kicks
+// off Friday / Add the <League> column" strip above the board — is off. Every
+// piece of it below is intact; flip this to true to bring it back, and the
+// per-season dismissal keys pick up where they left off.
+const KICKOFF_BANNER_ENABLED = false;
+
 function kickoffMessage(k: LeagueKickoff): string {
   const name = k.config.label === "Premier League" ? "The Premier League" : k.config.label;
   if (k.phase === "underway") return `${name} is underway — every match, spoiler-free.`;
@@ -564,6 +573,11 @@ export default function HomeContent({
   // when one bout of a UFC card was tapped rather than the card as a whole.
   const [detailEvent, setDetailEvent] = useState<{ event: LeagueEventCard; fight?: FightBout; leagueLabel?: string } | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
+  // The tennis draw and the MLB playoff picture. Both open from the league
+  // column's subtitle line and both gate their own contents behind a reveal —
+  // see SlamBracketModal / PlayoffPictureModal.
+  const [slamBracketOpen, setSlamBracketOpen] = useState(false);
+  const [playoffPictureOpen, setPlayoffPictureOpen] = useState(false);
   // A WC group to spotlight in the groups overlay (tapped from a game card).
   const [groupsHighlight, setGroupsHighlight] = useState<string | null>(null);
   const [showNews, setShowNews] = useState(false);
@@ -3437,6 +3451,8 @@ export default function HomeContent({
               onShowDetails: (g: Game) => setDetailGame(g),
               onShowEventDetails: (event: LeagueEventCard, fight: FightBout | undefined, leagueLabel: string) => setDetailEvent({ event, fight, leagueLabel }),
               onShowGroups: () => { setGroupsHighlight(null); setGroupsOpen(true); },
+              onShowSlamBracket: () => setSlamBracketOpen(true),
+              onShowPlayoffPicture: () => setPlayoffPictureOpen(true),
               selectedDate,
               onRetry: () => doRefreshRef.current(),
               showTeamStars: !prefs.hideTeamStars,
@@ -3621,7 +3637,8 @@ export default function HomeContent({
             // retires the banner for good, whichever league is next (Jacob 9/5:
             // "banner should only popup once total. not a second reminder").
             // Never renders alongside the World Cup banner — one announcement.
-            const showKickoffBanner = prefsHydrated
+            const showKickoffBanner = KICKOFF_BANNER_ENABLED
+              && prefsHydrated
               && !showWcBanner
               && kickoff !== null
               && !displayedSports.includes(kickoff.config.sport)
@@ -4257,7 +4274,7 @@ export default function HomeContent({
           published={videoModal.published}
           body={videoModal.body}
           shareCard={videoModal.shareCard}
-          maskVideoTitle={prefs.maskVideoTitle ?? true}
+          maskVideoTitle={prefs.maskVideoTitle ?? false}
           youtubeNativeControls={prefs.youtubeNativeControls ?? true}
           seekControl={prefs.videoSeekControl ?? "both"}
           seekFill={prefs.videoSeekFill ?? "off"}
@@ -4300,6 +4317,18 @@ export default function HomeContent({
           onClose={() => { setGroupsOpen(false); setGroupsHighlight(null); }}
         />
       )}
+
+      {slamBracketOpen && <SlamBracketModal onClose={() => setSlamBracketOpen(false)} />}
+
+      {playoffPictureOpen && <PlayoffPictureModal onClose={() => setPlayoffPictureOpen(false)} />}
+
+      {/* Bottom-right keyboard guide. Sits outside every modal so it can say
+          what the post-modal keys are WHILE that modal is open (Jacob 9/8). */}
+      <ControlsHint
+        enabled={!prefs.hideControlsHint}
+        onDismiss={() => updatePrefs({ hideControlsHint: true })}
+        modalOpen={!!videoModal}
+      />
 
       <SettingsPanel
         open={settingsOpen}
