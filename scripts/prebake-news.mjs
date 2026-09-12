@@ -2858,9 +2858,18 @@ async function bakeGameHighlights() {
   // --hl-days=N widens the window for a one-off re-bake after a matcher fix
   // (2026-09-12: four US Open cards from Sep 4–9 missed on name order).
   // Already-baked games short-circuit, so a wide window only re-scrapes the
-  // still-missing ones. Default stays the 2-day daily window.
+  // still-missing ones.
+  //
+  // Default widened 2 → 7 days (2026-09-12). With 2 days a recap that posts
+  // late was never retried, so the card stayed buttonless forever — a 9-day
+  // one-off resolved four EPL cards, and a 7-day timing run on the mini found
+  // three more (UCL, Liga MX, NWSL). Measured cost on the mini, highlights
+  // step only: 30 s → 104 s per run (the full run is ~23 min), +110 ESPN
+  // scoreboard fetches, and ~2 YouTube searches per still-missing game in the
+  // window (24 such games on 2026-09-12) until its clip appears or it ages out.
+  const HL_DEFAULT_DAYS = 7;
   const hlDaysArg = parseInt(process.argv.find((a) => a.startsWith("--hl-days="))?.slice("--hl-days=".length) ?? "", 10);
-  const hlDays = Number.isFinite(hlDaysArg) && hlDaysArg > 0 ? Math.min(hlDaysArg, 30) : 2;
+  const hlDays = Number.isFinite(hlDaysArg) && hlDaysArg > 0 ? Math.min(hlDaysArg, 30) : HL_DEFAULT_DAYS;
   const dates = Array.from({ length: hlDays }, (_, i) => hlEtYmd(-i));
   // World Cup gets a much wider window than the daily leagues. WC has only a
   // handful of games/day but a recap can post late (or a bake can fail while the
