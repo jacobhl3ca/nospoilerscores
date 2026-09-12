@@ -2609,7 +2609,19 @@ function hlTitleHasTeam(title, team) {
     hlNormalizeTeam(hlTelemundoTeam(team)),
     ...(HL_TITLE_TEAM_ALIASES[normalizedTeam] ?? []),
   ]);
-  return [...variants].some((variant) => variant && normalizedTitle.includes(variant));
+  if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
+  // Name-order tolerance, mirroring titleHasTeam in public/_worker.js: ESPN
+  // names Chinese tennis players family-name-first ("Zheng Qinwen") and the US
+  // Open channel titles them given-name-first ("Qinwen Zheng vs. Elena
+  // Rybakina Highlights | …"). A two-word name matches when both words appear
+  // as whole words anywhere in the title. This check also revalidates CARRIED
+  // entries every run, so without it the worker could bake such a match and
+  // the next bake would reject it as HIGHLIGHT-MATCHUP-REJECT.
+  return [...variants].some((variant) => {
+    const words = String(variant ?? "").split(" ").filter(Boolean);
+    if (words.length !== 2 || words.some((w) => w.length < 2)) return false;
+    return words.every((w) => new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(normalizedTitle));
+  });
 }
 
 const HL_OEMBED_META_CACHE = new Map();
@@ -2816,7 +2828,13 @@ async function bakeGameHighlights() {
     else delete games[k];
   }
 
-  const dates = [hlEtYmd(0), hlEtYmd(-1)];
+  // --hl-days=N widens the window for a one-off re-bake after a matcher fix
+  // (2026-09-12: four US Open cards from Sep 4–9 missed on name order).
+  // Already-baked games short-circuit, so a wide window only re-scrapes the
+  // still-missing ones. Default stays the 2-day daily window.
+  const hlDaysArg = parseInt(process.argv.find((a) => a.startsWith("--hl-days="))?.slice("--hl-days=".length) ?? "", 10);
+  const hlDays = Number.isFinite(hlDaysArg) && hlDaysArg > 0 ? Math.min(hlDaysArg, 30) : 2;
+  const dates = Array.from({ length: hlDays }, (_, i) => hlEtYmd(-i));
   // World Cup gets a much wider window than the daily leagues. WC has only a
   // handful of games/day but a recap can post late (or a bake can fail while the
   // recap wasn't up yet), and outside the 2-day window that game NEVER gets
