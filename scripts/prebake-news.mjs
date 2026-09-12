@@ -2600,6 +2600,32 @@ const HL_TITLE_TEAM_ALIASES = {
   netherlands: ["netherlands", "holland", "paises bajos"],
 };
 
+// The worker's club alias table (ESPN compact name ↔ every title form the
+// official channels use: "red bull ny" ↔ "New York Red Bulls", "inter milan" ↔
+// "Inter", "wolves" ↔ "Wolverhampton"). Read from public/_worker.js at bake
+// time, the same way HL_LLWS_REGION_NAMES reads the client's JSON, so the two
+// matchers can never disagree: the 2026-09-12 nine-day re-bake showed the
+// worker resolving six MLS/UCL/Serie A/EFL clips that this file's country-only
+// table then rejected as HIGHLIGHT-MATCHUP-REJECT. Same reverse index as the
+// worker (any variant → the full list). Empty when the block cannot be found,
+// which degrades to the previous behaviour instead of failing the bake.
+const HL_WORKER_TEAM_VARIANTS = (() => {
+  try {
+    const src = readFileSync(new URL("../public/_worker.js", import.meta.url), "utf8");
+    const start = src.indexOf("const TEAM_ALIASES = {");
+    const end = src.indexOf("\n        };", start);
+    if (start < 0 || end < 0) return {};
+    const table = new Function(`return {${src.slice(start + "const TEAM_ALIASES = {".length, end)}};`)();
+    const index = {};
+    for (const variants of Object.values(table)) {
+      for (const v of variants) index[hlNormalizeTeam(v)] = variants.map(hlNormalizeTeam);
+    }
+    return index;
+  } catch {
+    return {};
+  }
+})();
+
 function hlTitleHasTeam(title, team) {
   const normalizedTitle = hlNormalizeTeam(title);
   const normalizedTeam = hlNormalizeTeam(team);
@@ -2608,6 +2634,7 @@ function hlTitleHasTeam(title, team) {
     hlNormalizeTeam(hlAlias(team)),
     hlNormalizeTeam(hlTelemundoTeam(team)),
     ...(HL_TITLE_TEAM_ALIASES[normalizedTeam] ?? []),
+    ...(HL_WORKER_TEAM_VARIANTS[normalizedTeam] ?? []),
   ]);
   if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
   // Name-order tolerance, mirroring titleHasTeam in public/_worker.js: ESPN
