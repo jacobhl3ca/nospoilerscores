@@ -17,8 +17,14 @@ const geistSans = Geist({
 // window instead of leaving them past the truncation point. NFL comes out of the list
 // on purpose: its highlights are embed-blocked league-wide, and it keeps its own page.
 const SITE_TITLE = "HideScore: Spoiler-Free NHL, NBA & MLB Highlights and Scores";
+// Kept under Google's ~155-char SERP limit so the whole line shows instead of
+// being cut mid-sentence (the previous 209-char version truncated after "…until
+// you choose to reveal it"). Same trim already applied to the per-league pages.
+// Both product hooks survive the cut: scores/winners stay hidden, and games are
+// rated so you know what's worth watching. SITE_DESC feeds the meta description,
+// OG/Twitter cards, and the JSON-LD nodes, so one edit keeps them all in sync.
 const SITE_DESC =
-  "Watch NHL, NBA, MLB, NFL and soccer highlights without spoilers. HideScore hides every score and winner until you choose to reveal it, and game ratings tell you if a game is worth watching before you hit play.";
+  "Watch NHL, NBA, MLB, NFL and soccer highlights without spoilers. HideScore hides every score and winner, and rates which games are worth watching.";
 
 export const metadata: Metadata = {
   title: SITE_TITLE,
