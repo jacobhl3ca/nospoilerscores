@@ -1848,10 +1848,15 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
   };
 }
 
-function buildTennisGames(events: TennisScoreboardEvent[], date?: string): Game[] {
+// `when` is either ONE ET day (YYYYMMDD — the board's single-day slate) or an
+// inclusive {from, to} range of ET days. The range form feeds the endgame
+// lookahead: ESPN's tennis scoreboard ignores `?dates=A-B` and always returns
+// the whole tournament, so the window has to be applied here, per match.
+export function buildTennisGames(events: TennisScoreboardEvent[], when?: string | { from: string; to: string }): Game[] {
+  const range = typeof when === "object" ? when : null;
   // No-date fallback uses the shared service day so tennis matches the rest of
-  // the app's notion of "today" (normally `date` is always passed).
-  const target = date ?? toYmd(getEtServiceDate());
+  // the app's notion of "today" (normally `when` is always passed).
+  const target = range ? null : (when ?? toYmd(getEtServiceDate()));
   const games: Game[] = [];
   for (const event of events) {
     // Grand Slam only. The ATP scoreboard also returns the week's tune-up
@@ -1866,7 +1871,8 @@ function buildTennisGames(events: TennisScoreboardEvent[], date?: string): Game[
       if (!slug.includes("singles") || slug.includes("doubles")) continue;
       for (const match of grouping.competitions ?? []) {
         if ((match.competitors?.length ?? 0) < 2) continue;
-        if (tennisEtYmd(match.date ?? "") !== target) continue;
+        const day = tennisEtYmd(match.date ?? "");
+        if (range ? (day < range.from || day > range.to) : day !== target) continue;
         const sn = match.status?.type?.name ?? "";
         if (sn.includes("POSTPONED") || sn.includes("CANCELED") || sn.includes("SUSPENDED")) continue;
         try {
@@ -4040,13 +4046,20 @@ function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
 // league whose opener sits outside the span the fetch would actually cover.
 const RANGE_LOOKAHEAD_DAYS = 80;
 
+// Endgame slate: a league with at most this many scheduled games in the next
+// ENDGAME_WINDOW_DAYS shows all of them under today's cards (see fetchLeague).
+export const ENDGAME_MAX = 5;
+export const ENDGAME_WINDOW_DAYS = 7;
+
 async function fetchNextGameDayRange(
   sport: Sport,
   fromDate?: string,
   windowDays = RANGE_LOOKAHEAD_DAYS,
-  // allDays: every upcoming fixture in the window. maxDays: every fixture from
-  // the first N distinct ET match-days. Default (neither): the earliest day only.
-  opts?: { allDays?: boolean; maxDays?: number },
+  // allDays: every upcoming fixture in the window, reduced to ONE NBA/NHL
+  // series. allGames: every upcoming fixture in the window, chronological, no
+  // series grouping (the endgame slate). maxDays: every fixture from the first
+  // N distinct ET match-days. Default (none): the earliest day only.
+  opts?: { allDays?: boolean; allGames?: boolean; maxDays?: number },
 ): Promise<{ date: string; games: Game[] } | null> {
   const base = fromDate
     ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
@@ -4067,7 +4080,13 @@ async function fetchNextGameDayRange(
   } catch {
     return null;
   }
-  const games = eventsToGames(events, sport).filter((g) => g.state === "pre" || g.state === "in");
+  // Tennis nests its matches inside a 0-competitor tournament wrapper that
+  // eventsToGames drops, so it goes through its own parser with the window
+  // applied per match (ESPN returns the whole Slam regardless of `dates`).
+  const parsed = sport === "tennis"
+    ? buildTennisGames(events as unknown as TennisScoreboardEvent[], { from: ymd(start), to: ymd(end) })
+    : eventsToGames(events, sport);
+  const games = parsed.filter((g) => g.state === "pre" || g.state === "in");
   if (!games.length) return null;
   // Group by the fixture's ET calendar day, return the earliest day's slate.
   const dayOf = (iso: string) => {
@@ -4079,6 +4098,15 @@ async function fetchNextGameDayRange(
   };
   const chrono = (gs: Game[]) => [...gs].sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
+  // allGames: the whole window, chronological, each game on its own day. The
+  // endgame slate (fetchLeague) reads this to count what is left in a league
+  // and, when it is a handful, show all of it.
+  if (opts?.allGames) {
+    const sorted = chrono(games);
+    const first = leadDay(sorted);
+    if (!first) return null;
+    return { date: first, games: sorted };
+  }
   // allDays: every upcoming fixture in the window, chronological. Used for
   // NBA/NHL in the playoffs. We want exactly ONE series — the most imminent —
   // so a column never interleaves two simultaneous series (both conference
@@ -5023,7 +5051,24 @@ export async function fetchAllLeagues(
     const isPlayoffMonth = viewDate.getMonth() === 4 /* May */ || viewDate.getMonth() === 5 /* Jun */;
     const nbaNhlPlayoff = (cfg.sport === "nba" || cfg.sport === "nhl") && isPlayoffMonth;
     const alwaysShowUpcoming = nbaNhlPlayoff;
-    if (!failed && !isPastView && (games.length === 0 || alwaysShowUpcoming)) {
+    // Endgame slate (Jacob 9/11–9/12): once a league has ≤ ENDGAME_MAX games
+    // left in the next ENDGAME_WINDOW_DAYS, show every one of them with its
+    // day/time — a Slam from the semis, the NFL from the divisional round, the
+    // World Series, a UCL final. Above that count the column keeps its normal
+    // today-only slate so regular weeks never stack (the 6/19 World Cup call):
+    // the domestic soccer leagues run 9–10 fixtures a week, so ≤5 fires only
+    // at the very end of a bracket. NBA/NHL keep their own series rule below
+    // (it already shows the whole remaining series). Event-tile and non-ESPN
+    // sports returned before this point. ONE ranged request per column.
+    let endgame = false;
+    if (!failed && !isPastView && !nbaNhlPlayoff) {
+      const ahead = await fetchNextGameDayRange(cfg.sport, date, ENDGAME_WINDOW_DAYS, { allGames: true });
+      if (ahead && ahead.games.length <= ENDGAME_MAX) {
+        nextGameDay = ahead;
+        endgame = true;
+      }
+    }
+    if (!endgame && !failed && !isPastView && (games.length === 0 || alwaysShowUpcoming)) {
       if (cfg.sport === "fifa") {
         // World Cup, empty slate only: surface just the NEXT match day so a
         // rest day (or the pre-tournament gap) shows the upcoming real day
