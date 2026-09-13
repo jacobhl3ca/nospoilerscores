@@ -2045,7 +2045,7 @@ function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null
   return typeof week === "number" && week >= 1 && week <= 25 ? week : null;
 }
 
-function parseGame(event: ScoreboardEvent, sport: Sport): Game {
+export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors ?? [];
 
@@ -2096,7 +2096,13 @@ function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     // playoff, and `round` hit "ground"/"around". playoffLabel is user-visible
     // (game-detail modal + league header), so a false match shows wrong text.
     if (/playoff|postseason|wild.?card|divisional|conference|championship|\bfinals?\b|\brounds?\b|semi.?finals?|quarter.?finals?|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
-      isPlayoff = true;
+      // College hockey's in-season tournaments ("Ice Breaker Tournament",
+      // "Governor's Cup") are regular-season games that keep the 5-min OT +
+      // shootout format, so only a ROUND word flags them as playoff — otherwise
+      // a shootout renders "2OT" instead of "SO". The label still shows.
+      if (sport !== "ncaah" || /quarter.?finals?|semi.?finals?|\bfinals?\b|\brounds?\b|championship|regional|frozen four/i.test(headlineLower)) {
+        isPlayoff = true;
+      }
       if (!playoffLabel) playoffLabel = headline;
     }
   }
