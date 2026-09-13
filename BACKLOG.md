@@ -2,7 +2,12 @@
 
 ## 2026-09-12 — NCAA men's hockey (`ncaah`) gets a column of its own
 
-**Built (branch `feat/ncaa-hockey`, worktree `~/hs-ncaah`), not shipped.** Config, not code, same as
+**✅ Shipped 2026-09-12** — `67aa805e` (league add), `6edcced5` (in-season tournaments like Ice Breaker /
+Governor's Cup no longer set `isPlayoff`, so a shootout reads SO), `33794261` (the highlight monitor reads the
+worker's club alias table). Deploy run 34732388520 green; `hidescore.com/tv/catalog.json` lists `ncaah`.
+Production read-back on the mini: fresh profile = no NCAA Hockey column, Settings row OFF, tick + pick adds it;
+10/3 column = 15 cards, 30 logos, 0 broken, 0 rank chips, 0 highlight buttons; mocked live = `P2 - 8:32` /
+`OT - 2:10` / `SO`; RIT team page loads its schedule. Config, not code, same as
 Little League: ESPN serves `/hockey/mens-college-hockey` in the standard scoreboard shape. Window is
 ESPN's calendar, 2026-10-02 → 2027-04-10 (`verifiedFor: 2026`). Opt-in (`excludeFromAuto`), listed in
 Settings → US leagues, share code `hc`, TV catalog `SUPPORTED` (not `DEFAULT_ON`), r/collegehockey
