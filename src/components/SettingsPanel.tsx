@@ -738,6 +738,7 @@ export default function SettingsPanel({
       hideSensitiveNews: undefined,
       hideCrashNews: undefined,
       timezone: undefined,
+      reminderLinkTemplate: undefined,
       smartCutoffHour: 13,
       newsColCount: 3,
       newsTypeFilter: "reddit",
@@ -1595,6 +1596,36 @@ export default function SettingsPanel({
                 checked={!prefs.skipNewsExplainer}
                 onChange={(v) => updatePrefs({ skipNewsExplainer: !v })}
               />
+            </div>
+            {/* "Remind me" link template — personal, off by default. A URL with
+                placeholders that an upcoming game's detail sheet opens on tap
+                (lib/reminderLink.ts). Raycast, Shortcuts, Alfred, Things, … —
+                whatever has a URL scheme on THIS device. Blank = no button. */}
+            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+              <Field
+                label="Reminder link"
+                hint="Opens this URL from an upcoming game's details. Placeholders: {minutes} {title} {iso} {time} {date}. Leave blank to hide the button."
+              >
+                <input
+                  type="url"
+                  inputMode="url"
+                  value={prefs.reminderLinkTemplate ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    updatePrefs({ reminderLinkTemplate: v.trim() ? v : undefined });
+                  }}
+                  placeholder="raycast://… or shortcuts://…"
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
+                  className="w-full min-h-11 rounded-lg px-3 text-sm"
+                  style={{ background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)" }}
+                />
+              </Field>
+              <p className="text-[11px] mt-1 break-all" style={{ color: "var(--text-muted)" }}>
+                Example: raycast://script-commands/timer?arguments={"{minutes}"}m%20{"{title}"}
+              </p>
             </div>
           </Section>
 
