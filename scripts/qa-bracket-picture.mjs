@@ -191,7 +191,24 @@ try {
 
     const clinchedRows = await dialog.locator(".grid .flex.items-center", { hasText: "Clinched" }).allInnerTexts();
     ok("clinched rows carry no percentage", clinchedRows.every((r) => !/%/.test(r)), `${clinchedRows.length} clinched`);
-    ok("games back is hidden by default", !/\b(back|up)\b|In the mix/.test(gridText));
+    ok("games back is hidden by default", !/\b(back|up)\b|Last spot/.test(gridText));
+    // The chase (rows with no seed) reads most-likely-in first, within each league.
+    const huntOrders = await dialog.locator(".grid > div").evaluateAll((panels) =>
+      panels.map((panel) => {
+        const out = [];
+        for (const r of panel.querySelectorAll(".flex.items-center")) {
+          const cells = r.innerText.split("\n").map((s) => s.trim()).filter(Boolean);
+          if (cells[0] !== "—") continue;
+          const m = (cells.find((c) => /%$/.test(c)) ?? "").match(/\d+/);
+          out.push(m ? +m[0] : -1);
+        }
+        return out;
+      }),
+    );
+    const sorted = (a) => a.every((v, i) => i === 0 || v <= a[i - 1]);
+    ok("the chase is sorted by odds, high to low", huntOrders.some((a) => a.length) && huntOrders.every(sorted), huntOrders.map((a) => a.join(" ≥ ")).join(" | "));
+    ok("footer keeps one short seeding line", !/FanGraphs|spoiler/i.test(await dialog.locator("p").first().innerText()));
+    ok("updated stamp is italic", (await dialog.locator("p", { hasText: /^Updated / }).evaluate((el) => getComputedStyle(el).fontStyle)) === "italic");
     const gbToggle = dialog.getByLabel("Show games back");
     ok("games-back toggle present and off", (await gbToggle.count()) === 1 && !(await gbToggle.isChecked()));
     await gbToggle.check();

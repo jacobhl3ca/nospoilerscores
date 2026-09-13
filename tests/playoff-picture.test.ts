@@ -110,7 +110,7 @@ test("no records yields empty leagues rather than throwing", () => {
 
 // ── Playoff odds (ESPN's FanGraphs column) ───────────────────────────────────
 
-import { formatOdds, oddsFromEspn } from "../src/lib/playoffPicture.ts";
+import { formatOdds, oddsFromEspn, sortHuntByOdds, type PlayoffOdds } from "../src/lib/playoffPicture.ts";
 
 test("odds labels are whole numbers that never claim 100% or 0% short of the fact", () => {
   assert.equal(formatOdds(85.2, "85.2%"), "85%");
@@ -135,5 +135,22 @@ test("odds are walked out of ESPN's nested standings and keyed by MLB's abbrevia
       { standings: { entries: [entry("NYY", 100, ">99.9%"), { team: { abbreviation: "SEA" }, stats: [{ name: "gamesBehind" }] }] } },
     ],
   });
-  assert.deepEqual(odds, { AZ: "39%", CWS: "85%", NYY: ">99%" }); // SEA has no odds stat → absent, never "0%"
+  assert.deepEqual(odds, {
+    AZ: { pct: 38.5, label: "39%" },
+    CWS: { pct: 85.2, label: "85%" },
+    NYY: { pct: 100, label: ">99%" },
+  }); // SEA has no odds stat → absent, never "0%"
+});
+
+test("the chase sorts by odds, keeps standings order on ties, and is untouched without odds", () => {
+  const hunt = nl().hunt; // standings order: Oscar (71-73), Romeo (66-78)
+  assert.deepEqual(hunt.map((t) => t.name), ["Oscar", "Romeo"]);
+  const odds: PlayoffOdds = { OSC: { pct: 2, label: "2%" }, ROM: { pct: 7, label: "7%" } };
+  assert.deepEqual(sortHuntByOdds(hunt, odds).map((t) => t.name), ["Romeo", "Oscar"]);
+  assert.deepEqual(sortHuntByOdds(hunt, { OSC: { pct: 7, label: "7%" }, ROM: { pct: 7, label: "7%" } }).map((t) => t.name), ["Oscar", "Romeo"]);
+  assert.deepEqual(sortHuntByOdds(hunt, null).map((t) => t.name), ["Oscar", "Romeo"]);
+  // A club with no published number sinks below every club that has one.
+  assert.deepEqual(sortHuntByOdds(hunt, { ROM: { pct: 1, label: "1%" } }).map((t) => t.name), ["Romeo", "Oscar"]);
+  // The seeds are never re-sorted: that order IS the seeding.
+  assert.deepEqual(nl().seeded.map((t) => t.seed), [1, 2, 3, 4, 5, 6]);
 });
