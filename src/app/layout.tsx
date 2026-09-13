@@ -180,6 +180,17 @@ const JSON_LD = {
     },
     {
       "@type": "MobileApplication",
+      // Stable @id so this iOS product node is a referenceable entity like its
+      // siblings — the WebApplication (#webapp), WebSite (#website), and
+      // Organization (#organization) all carry one; the two MobileApplication
+      // nodes were the last product outliers still identified only by their
+      // (store) `url`. The same dedup reasoning the WebApplication @id documents
+      // applies here: every node in this @graph re-renders on every route via the
+      // shared layout, so without a stable @id Google can read each page's copy
+      // as a separate MobileApplication for the same app instead of merging them
+      // into one entity across pages and crawls. Purely additive JSON-LD — no
+      // visual change, and nothing references it, so no behavior depends on it.
+      "@id": "https://hidescore.com/#ios-app",
       name: "HideScore",
       operatingSystem: "iOS",
       applicationCategory: "SportsApplication",
@@ -214,6 +225,10 @@ const JSON_LD = {
       // 2026-08-23 and now serves a real store page, so the node is restored and
       // the @graph describes both native products instead of only the iOS one.
       "@type": "MobileApplication",
+      // Stable @id, same dedup rationale as the iOS node's #ios-app above — the
+      // Android product node re-renders on every route too, so a stable id keeps
+      // Google merging it to one entity across pages instead of one per page.
+      "@id": "https://hidescore.com/#android-app",
       name: "HideScore",
       operatingSystem: "Android",
       applicationCategory: "SportsApplication",
