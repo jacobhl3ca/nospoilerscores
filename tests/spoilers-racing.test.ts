@@ -4,16 +4,21 @@ import test from "node:test";
 import { isScoreSpoiler } from "../src/lib/spoilers.ts";
 
 // Motorsport and other racing sit almost entirely outside the rest of SPOILER_RX,
-// which is built around team-sport result verbs. "takes the chequered flag" and
-// "crosses the line first" are the canonical winner reveals for a timed race
+// which is built around team-sport result verbs. "takes/claims the chequered flag"
+// and "crosses the line first" are the canonical winner reveals for a timed race
 // (F1/IndyCar/NASCAR/MotoGP, plus athletics/cycling/swimming) — each named the
-// winner outright yet read as a clean title before these were added.
+// winner outright yet read as a clean title before these were added. "claims" is a
+// winner-only verb too (a backmarker never "claims" the flag), so it joins take/took.
 test("a race-winner reveal never reads as a clean title", () => {
   for (const title of [
     "Verstappen takes the chequered flag at Monaco",
     "Hamilton took the checkered flag",
     "Norris taking the chequered flag | Race Highlights",
     "Verstappen takes chequered flag",
+    "Leclerc claims the chequered flag at Monza",
+    "Norris claimed the checkered flag",
+    "Verstappen claiming the chequered flag | Race Highlights",
+    "Piastri claims chequered flag",
     "Hamilton crosses the line first",
     "Bolt crosses the finish line first",
     "Piastri crossed the line first",
