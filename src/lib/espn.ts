@@ -1,5 +1,6 @@
 import { Game, Sport, LeagueData, Team, GolfTournament, GolfPlayer, LeagueEventCard, EventFetchResult, FightBout } from "./types";
 import { collegeFootballPollRank } from "./pollRank";
+import { rankFromStandings, type StandingsPayload } from "./standingsRank";
 import { marginCloseness, FOOTBALL_CLOSENESS, type ClosenessCurve } from "./marginCloseness";
 import { parseEspnHeader, rankTopEvents, topEventsSourceSports, TOP_EVENTS_DEFAULT_COUNT, TOP_EVENTS_ENABLED, type EspnHeaderFeature, type TopEventsMode, type TopEventsCount } from "./topEvents";
 import { getApiBase } from "./youtube";
@@ -5295,28 +5296,10 @@ const RANK_LEAGUES = new Set<Sport>([
   // exclusion above — a live group position is itself a spoiler.
 ]);
 
-// When ESPN groups standings by conference/division (no single league-wide
-// rank), we compute an overall rank by sorting every team on the sport's
-// primary standings metric, higher = better. Point-table sports use points;
-// the rest use win%. Single-table soccer leagues skip this — their own `rank`
-// stat is the real position.
-const RANK_METRIC: Partial<Record<Sport, "points" | "winPercent">> = {
-  nhl: "points", mls: "points",
-  nba: "winPercent", wnba: "winPercent", mlb: "winPercent", nfl: "winPercent",
-  // ncaaf omitted with intent — see RANK_LEAGUES above. Men's and women's
-  // college basketball DO expose winPercent, so those two stay.
-  ncaam: "winPercent", ncaaw: "winPercent",
-};
-
-type StandingEntry = {
-  team?: { id?: string };
-  stats?: Array<{ name?: string; value?: number; displayValue?: string }>;
-};
-
 // ESPN standings → { teamId -> overall league rank (1 = best) }. Cached per
-// sport. Mirrors fetchStandingsRecords' grouping handling, but resolves a
-// single league-wide position: trusts ESPN's `rank` for a single combined
-// table, otherwise sorts the whole league on its primary metric.
+// sport. The ranking rule itself (single-table `rank` vs metric sort, the
+// early-season gate, tiebreaks) lives in lib/standingsRank.ts so it is
+// unit-testable; this is only the fetch + cache.
 const standingsRankCache = new Map<Sport, Promise<Map<string, number>>>();
 export function fetchStandingsRanks(sport: Sport): Promise<Map<string, number>> {
   const cached = standingsRankCache.get(sport);
@@ -5324,48 +5307,12 @@ export function fetchStandingsRanks(sport: Sport): Promise<Map<string, number>> 
   const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
   const url = `https://site.web.api.espn.com/apis/v2/sports${sportPath}/standings`;
   const p = (async () => {
-    const map = new Map<string, number>();
     try {
       const res = await fetchWithRetry(url, 1, 6000);
-      if (!res.ok) return map;
-      const data = await res.json();
-      const groups = (data.children ?? []) as Array<{ standings?: { entries?: StandingEntry[] } }>;
-      const groupLists = groups
-        .map((g) => g.standings?.entries ?? [])
-        .filter((e) => e.length);
-      const flat = (data.standings?.entries ?? []) as StandingEntry[];
-      const all = groupLists.length ? groupLists.flat() : flat;
-      if (!all.length) return map;
-
-      const statVal = (e: StandingEntry, name: string): number | null => {
-        const s = e.stats?.find((x) => x.name === name);
-        if (!s) return null;
-        const v = s.value ?? (s.displayValue != null ? parseFloat(s.displayValue) : NaN);
-        return Number.isFinite(v) ? (v as number) : null;
-      };
-
-      // One combined table (most soccer leagues, UCL/UEL league phase): ESPN's
-      // `rank` is the real position (with goal-difference tiebreakers baked in).
-      const oneTable = groupLists.length <= 1;
-      if (oneTable && all.every((e) => statVal(e, "rank") != null)) {
-        for (const e of all) {
-          const id = e.team?.id;
-          const r = statVal(e, "rank");
-          if (id && r != null) map.set(id, Math.round(r));
-        }
-        return map;
-      }
-
-      // Conference/division split (or no per-row rank): rank the whole league
-      // on its primary metric so "#N" means total-league position, not seed.
-      const metric = RANK_METRIC[sport] ?? "winPercent";
-      all
-        .map((e) => ({ id: e.team?.id, v: statVal(e, metric) }))
-        .filter((x): x is { id: string; v: number } => !!x.id && x.v != null)
-        .sort((a, b) => b.v - a.v)
-        .forEach((x, i) => map.set(x.id, i + 1));
+      if (!res.ok) return new Map<string, number>();
+      return rankFromStandings(sport, (await res.json()) as StandingsPayload);
     } catch { /* swallow — ranks just won't show */ }
-    return map;
+    return new Map<string, number>();
   })();
   standingsRankCache.set(sport, p);
   return p;
