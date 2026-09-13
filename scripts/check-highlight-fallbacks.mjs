@@ -90,8 +90,9 @@ const ESPN_PATHS = {
   superrugby:   "/rugby/242041/scoreboard",
   rugbywc:      "/rugby/164205/scoreboard",
   nationschamp: "/rugby/17567/scoreboard",
-  // Deliberately absent: MLB (MLB.com-native); La Liga, Ligue 1, EURO, and
-  // cricket (no approved per-match uploader, so no YouTube button).
+  // Deliberately absent: MLB (MLB.com-native); La Liga, Ligue 1, EURO, NCAA
+  // men's hockey, and cricket (no approved per-match uploader, so no YouTube
+  // button). ncaah is in NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts.
 };
 
 // Matches OFFICIAL_CHANNELS in src/lib/youtube.ts. Keep in sync.
@@ -159,7 +160,7 @@ const TENNIS_CHANNELS = new Set([
 // Mirrors GameHighlights.tsx. A same-day final does not promise highlight
 // buttons until this post-start window has opened.
 const HIGHLIGHT_BUFFER_HOURS = {
-  nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5,
+  nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5,
   nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
   seriea: 3, bundesliga: 3,
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3,
@@ -167,14 +168,8 @@ const HIGHLIGHT_BUFFER_HOURS = {
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
 };
 const REGULATION_PERIODS = {
-  nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3,
-  // tennis is 4 (not 3) to mirror SPORT_RATING_CONFIG in src/lib/espn.ts and the
-  // regulationPeriods table in GameHighlights.tsx, the two source-of-truth copies
-  // this audit's readiness heuristic must agree with. tennis/golf are reference
-  // rows only — neither is in ESPN_PATHS, so highlightsReady() never reads them
-  // today — but the lone 3 here disagreed with both copies, so if tennis were
-  // ever scanned the OT buffer would be off by 0.5h for a five-set match.
-  nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 4,
+  nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3,
+  nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
   seriea: 2, bundesliga: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
@@ -422,11 +417,48 @@ const TITLE_TEAM_ALIASES = {
   spain: ["spain", "espana"],
 };
 
+// The worker's club alias table, read straight out of public/_worker.js — the
+// same reader as HL_WORKER_TEAM_VARIANTS in scripts/prebake-news.mjs, so the
+// monitor, the worker and the prebake cannot disagree. Before this the monitor
+// kept only the country table above and flagged nine served clips as
+// bake-invalid on 2026-09-12 ("Red Bull New York", "Inter", "Wolverhampton").
+// Empty when the block cannot be found, which degrades to the country table.
+const WORKER_TEAM_VARIANTS = (() => {
+  try {
+    const src = fs.readFileSync(new URL("../public/_worker.js", import.meta.url), "utf8");
+    const start = src.indexOf("const TEAM_ALIASES = {");
+    const end = src.indexOf("\n        };", start);
+    if (start < 0 || end < 0) return {};
+    const table = new Function(`return {${src.slice(start + "const TEAM_ALIASES = {".length, end)}};`)();
+    const index = {};
+    for (const variants of Object.values(table)) {
+      for (const v of variants) index[normalizeMatchText(v)] = variants.map(normalizeMatchText);
+    }
+    return index;
+  } catch {
+    return {};
+  }
+})();
+
 function titleHasTeam(title, team) {
   const normalizedTitle = normalizeMatchText(title);
   const normalizedTeam = normalizeMatchText(team);
-  const variants = TITLE_TEAM_ALIASES[normalizedTeam] ?? [normalizedTeam, normalizeMatchText(aliasTeam(team))];
-  return variants.some((variant) => normalizedTitle.includes(normalizeMatchText(variant)));
+  const variants = new Set([
+    normalizedTeam,
+    normalizeMatchText(aliasTeam(team)),
+    ...(TITLE_TEAM_ALIASES[normalizedTeam] ?? []).map(normalizeMatchText),
+    ...(WORKER_TEAM_VARIANTS[normalizedTeam] ?? []),
+  ]);
+  if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
+  // Name-order tolerance, same rule as hlTitleHasTeam in the prebake: ESPN
+  // names Chinese tennis players family-name-first ("Zheng Qinwen") and the
+  // channel titles them given-name-first. A two-word name matches when both
+  // words appear as whole words anywhere in the title.
+  return [...variants].some((variant) => {
+    const words = String(variant ?? "").split(" ").filter(Boolean);
+    if (words.length !== 2 || words.some((w) => w.length < 2)) return false;
+    return words.every((w) => new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(normalizedTitle));
+  });
 }
 
 function matchupFingerprint(away, home) {

@@ -3211,6 +3211,8 @@ const jobs = [
   // wire. Adds one 45s gate slot to the bake (see REDDIT_BATCH_COOLDOWN_MS).
   ["reddit-cricket", () => fetchReddit("Cricket", "r/Cricket")],
   ["reddit-ncaaw", () => fetchReddit("ncaaw", "r/ncaaw")],
+  // 2026-09-12: NCAA men's hockey. One more 45s gate slot in the reddit bake.
+  ["reddit-ncaah", () => fetchReddit("collegehockey", "r/collegehockey")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],

@@ -188,6 +188,17 @@ check(
 const monitor = readFileSync("scripts/check-highlight-fallbacks.mjs", "utf8");
 check("monitor covers NCAAF", monitor.includes('ncaaf: "/football/college-football/scoreboard"'));
 check("monitor covers NCAAW", monitor.includes('ncaaw: "/basketball/womens-college-basketball/scoreboard"'));
+// The monitor, the worker and the prebake share one title matcher table: the
+// monitor reads the worker's TEAM_ALIASES block, so a club alias added there
+// can't leave the monitor flagging a served clip as bake-invalid.
+check("monitor reads the worker's club alias table", monitor.includes("const TEAM_ALIASES = {") && monitor.includes("WORKER_TEAM_VARIANTS[normalizedTeam]"));
+// NCAA men's hockey is dark (no approved uploader, 2026-09-12). The monitor must
+// not scan it: a league with no button would read as a permanent gap.
+check(
+  "NCAAH stays dark and unmonitored",
+  youtube.hasNoTrustedHighlightSource("ncaah") === true &&
+    !monitor.includes('ncaah: "/hockey/mens-college-hockey/scoreboard"'),
+);
 check("monitor rejects incomplete ESPN audits", monitor.includes("Source failures are not zero-game slates"));
 check("rejected custom ESPN User-Agent is gone", !monitor.includes("nospoilerscores-staleness-check/1.0"));
 check(

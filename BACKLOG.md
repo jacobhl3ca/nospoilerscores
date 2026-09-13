@@ -1,5 +1,39 @@
 # HideScore — Master Backlog
 
+## 2026-09-12 — NCAA men's hockey (`ncaah`) gets a column of its own
+
+**Built (branch `feat/ncaa-hockey`, worktree `~/hs-ncaah`), not shipped.** Config, not code, same as
+Little League: ESPN serves `/hockey/mens-college-hockey` in the standard scoreboard shape. Window is
+ESPN's calendar, 2026-10-02 → 2027-04-10 (`verifiedFor: 2026`). Opt-in (`excludeFromAuto`), listed in
+Settings → US leagues, share code `hc`, TV catalog `SUPPORTED` (not `DEFAULT_ON`), r/collegehockey
+reddit card + bake + staleness monitor. Rating config and period labels mirror the NHL (P1–P3 / OT /
+SO, tournament multi-OT via `isPlayoff`).
+
+Two changes from the plan, both on evidence:
+- **Rank = the USCHO poll on the event, not standings.** The standings feed held ONE entry across its
+  10 conference groups on 2026-09-12 (Ohio State, "24-0-0" with 26 GP), so a win% sort would crown a
+  bogus #1. `ncaah` rides the NCAAF poll path (`pollRank.ts`); it stays out of `RANK_LEAGUES`.
+- **Highlights are dark** (`NO_HIGHLIGHT_FALLBACK`). Strict probe on 7 completed 2026 fixtures: "ESPN"
+  0/7. "NCAA Championships" posts per-game cuts for the TOURNAMENT (4/5 postseason hits) but returned
+  the WRONG game for a regular-season query (Michigan–Minnesota 1/17 → Michigan–Minnesota Duluth
+  regional final). The monitor does not scan `ncaah`; a regression check keeps it dark and unmonitored.
+
+**Proof:** tsc, eslint (0 errors), test:unit, highlights:check, news:check, poker:check,
+tv:catalog:check, `next build` all green; `check-season-windows --all` shows NCAA Hockey ✓ (its only ✗
+is WNBA, same on main). Hidden-Chromium read-back on the mini against the local build, clock fixed:
+10/3 Today = 15 cards, 30 logos, 0 broken, 0 rank chips, 0 highlight buttons; mocked live scores read
+`P2 - 8:32` / `OT - 2:10` / `SO`; 1/17 Yesterday = 26 cards, 16 poll chips, 0 highlight buttons;
+fresh profile = column absent, Settings row OFF, ticking it adds it to the switcher and picking it
+adds the column.
+
+**Open:**
+- [ ] Postseason-only channel gate so the NCAA tournament (late March → Frozen Four 4/8–4/10) gets
+      "NCAA Championships" highlights without the regular-season wrong-match risk.
+- [ ] NCAA women's hockey (`ncaawh`): ESPN 200, 2026-09-18 → 2027-03-23, ~19 games a Saturday, no
+      standings. ~30 min on the same pattern. Jacob decides.
+- [ ] Re-check the standings feed mid-season; if it fills in, W-L records have a source (the PTS tail
+      is already stripped).
+
 ## 2026-09-06 — NFL preseason cards were dark: the league dropped "Highlights" from its 2026 exhibition titles
 
 ✅ **Jacob 9/6 ("nfl at least highlights link or something? whats optimal, isnt there highlights

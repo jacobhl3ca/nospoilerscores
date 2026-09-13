@@ -26,7 +26,7 @@ const NEWS_HOURLY = [
   // (ucl/uel/fifa/soccer/ncaaf/ncaaw) was previously unmonitored, which is
   // exactly the family the hourly bake rate-limits first (see the batching fix).
   "reddit-boxing", "reddit-cricket", "reddit-epl", "reddit-fifa", "reddit-general", "reddit-golf", "reddit-mlb",
-  "reddit-mls", "reddit-nba", "reddit-ncaaf", "reddit-ncaam", "reddit-ncaaw",
+  "reddit-mls", "reddit-nba", "reddit-ncaaf", "reddit-ncaah", "reddit-ncaam", "reddit-ncaaw",
   "reddit-f1", "reddit-indycar", "reddit-nascar", "reddit-nfl", "reddit-nhl", "reddit-nwsl", "reddit-soccer", "reddit-tennis",
   "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-wnba",
   "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
@@ -55,6 +55,8 @@ const NEWS_HOURLY = [
 // bake rewrites fetchedAt every run, so 24h only fires on a genuinely stuck feed.
 const RATE_LIMIT_PRONE_REDDIT = new Set([
   "reddit-fifa", "reddit-ucl", "reddit-uel", "reddit-ncaaf", "reddit-ncaaw",
+  // r/collegehockey (added 2026-09-12) is a low-volume college sub like r/ncaaw.
+  "reddit-ncaah",
   // reddit-wnba is a lower-volume sub whose prebake occasionally slips a couple
   // of hourly runs on a Reddit 429/403 blip and self-heals; a 12h crit paged on
   // a 13.4h transient (issue #18, 2026-07-06). Treat like the other flaky subs.
@@ -75,6 +77,7 @@ const RATE_LIMIT_PRONE_REDDIT = new Set([
 // serving stale snapshots hits those first, not the off-season tail.
 const SEASONAL_REDDIT = new Set([
   "reddit-uel", "reddit-ucl", "reddit-ncaaw", "reddit-ncaaf", "reddit-fifa",
+  "reddit-ncaah",
 ]);
 
 const FEEDS = [
