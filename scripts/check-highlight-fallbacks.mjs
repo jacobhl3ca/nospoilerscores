@@ -417,11 +417,48 @@ const TITLE_TEAM_ALIASES = {
   spain: ["spain", "espana"],
 };
 
+// The worker's club alias table, read straight out of public/_worker.js — the
+// same reader as HL_WORKER_TEAM_VARIANTS in scripts/prebake-news.mjs, so the
+// monitor, the worker and the prebake cannot disagree. Before this the monitor
+// kept only the country table above and flagged nine served clips as
+// bake-invalid on 2026-09-12 ("Red Bull New York", "Inter", "Wolverhampton").
+// Empty when the block cannot be found, which degrades to the country table.
+const WORKER_TEAM_VARIANTS = (() => {
+  try {
+    const src = fs.readFileSync(new URL("../public/_worker.js", import.meta.url), "utf8");
+    const start = src.indexOf("const TEAM_ALIASES = {");
+    const end = src.indexOf("\n        };", start);
+    if (start < 0 || end < 0) return {};
+    const table = new Function(`return {${src.slice(start + "const TEAM_ALIASES = {".length, end)}};`)();
+    const index = {};
+    for (const variants of Object.values(table)) {
+      for (const v of variants) index[normalizeMatchText(v)] = variants.map(normalizeMatchText);
+    }
+    return index;
+  } catch {
+    return {};
+  }
+})();
+
 function titleHasTeam(title, team) {
   const normalizedTitle = normalizeMatchText(title);
   const normalizedTeam = normalizeMatchText(team);
-  const variants = TITLE_TEAM_ALIASES[normalizedTeam] ?? [normalizedTeam, normalizeMatchText(aliasTeam(team))];
-  return variants.some((variant) => normalizedTitle.includes(normalizeMatchText(variant)));
+  const variants = new Set([
+    normalizedTeam,
+    normalizeMatchText(aliasTeam(team)),
+    ...(TITLE_TEAM_ALIASES[normalizedTeam] ?? []).map(normalizeMatchText),
+    ...(WORKER_TEAM_VARIANTS[normalizedTeam] ?? []),
+  ]);
+  if ([...variants].some((variant) => variant && normalizedTitle.includes(variant))) return true;
+  // Name-order tolerance, same rule as hlTitleHasTeam in the prebake: ESPN
+  // names Chinese tennis players family-name-first ("Zheng Qinwen") and the
+  // channel titles them given-name-first. A two-word name matches when both
+  // words appear as whole words anywhere in the title.
+  return [...variants].some((variant) => {
+    const words = String(variant ?? "").split(" ").filter(Boolean);
+    if (words.length !== 2 || words.some((w) => w.length < 2)) return false;
+    return words.every((w) => new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(normalizedTitle));
+  });
 }
 
 function matchupFingerprint(away, home) {
