@@ -2074,7 +2074,33 @@ function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null
   return typeof week === "number" && week >= 1 && week <= 25 ? week : null;
 }
 
+// Regulation length for the timed sports ESPN reports as "End of 4th" etc.
+const END_OF_PLAY_REGULATION: Partial<Record<Sport, number>> = {
+  nfl: 4, ncaaf: 4, nba: 4, wnba: 4, ncaaw: 4, ncaam: 2, nhl: 3, ncaah: 3,
+};
+
+// "End of 4th" with the score not level IS the final (Jacob 9/12): no more
+// play can happen, but ESPN keeps the game `in` for a few minutes until it
+// posts "Final", so the card sat in the live group reading "End of Q4". Settle
+// it here, before anything reads the status, so the card, its rating and the
+// Final grouping all agree. A level score stays live — overtime is next.
+// Only ESPN's own "End of" detail counts, never a 0:00 clock: a football play
+// can run (and a PAT follow) at 0:00, and basketball free throws after the
+// buzzer shoot with 0.0 on the clock.
+export function settleEndOfRegulation(event: ScoreboardEvent, sport: Sport): void {
+  const regulation = END_OF_PLAY_REGULATION[sport];
+  const status = event.status;
+  const type = status?.type;
+  if (!regulation || !status || !type || type.state !== "in") return;
+  if ((status.period ?? 0) < regulation || !/^end of\b/i.test(type.shortDetail ?? "")) return;
+  const scores = (event.competitions?.[0]?.competitors ?? []).map((c) => Number.parseInt(c.score ?? "", 10));
+  if (scores.length !== 2 || scores.some((n) => !Number.isFinite(n)) || scores[0] === scores[1]) return;
+  const detail = (status.period ?? 0) > regulation ? "Final/OT" : "Final";
+  status.type = { ...type, state: "post", completed: true, name: "STATUS_FINAL", shortDetail: detail, detail };
+}
+
 export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
+  settleEndOfRegulation(event, sport);
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors ?? [];
 
