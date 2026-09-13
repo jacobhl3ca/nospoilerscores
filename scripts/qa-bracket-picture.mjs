@@ -181,6 +181,32 @@ try {
     ok("tapping reveals the playoff picture", revealed?.blur === "none" && revealed?.hidden === null, JSON.stringify(revealed));
     ok("both leagues render their six seeds", (revealed?.rows ?? 0) >= 12, `${revealed?.rows} lines`);
     void body;
+
+    // The number on a row is the chance of making the playoffs, never the W-L
+    // record; games back is opt-in behind its own toggle, off by default.
+    const gridText = await dialog.locator(".grid").innerText();
+    ok("no W-L record on any row", !/\b\d{2,3}-\d{2,3}\b/.test(gridText));
+    const oddsCount = (gridText.match(/(?:>|<)?\d{1,3}%/g) ?? []).length;
+    ok("rows carry a playoff-odds percentage", oddsCount >= 8, `${oddsCount} percentages`);
+
+    const clinchedRows = await dialog.locator(".grid .flex.items-center", { hasText: "Clinched" }).allInnerTexts();
+    ok("clinched rows carry no percentage", clinchedRows.every((r) => !/%/.test(r)), `${clinchedRows.length} clinched`);
+    ok("games back is hidden by default", !/\b(back|up)\b|In the mix/.test(gridText));
+    const gbToggle = dialog.getByLabel("Show games back");
+    ok("games-back toggle present and off", (await gbToggle.count()) === 1 && !(await gbToggle.isChecked()));
+    await gbToggle.check();
+    await page.waitForTimeout(300);
+    const withGb = await dialog.locator(".grid").innerText();
+    ok("games-back toggle shows the chase", /\d+\.\d (back|up)/.test(withGb));
+    await gbToggle.uncheck();
+    ok("magic-number key sits in the dialog header", (await dialog.locator("text=/Magic N/").count()) === 1);
+    const updated = dialog.locator("p", { hasText: /^Updated / });
+    const placed = await updated.evaluate((el) => {
+      const dlg = el.closest('[role="dialog"]');
+      const a = el.getBoundingClientRect(), b = dlg.getBoundingClientRect();
+      return { fromRight: Math.round(b.right - a.right), fromBottom: Math.round(b.bottom - a.bottom) };
+    }).catch(() => null);
+    ok("updated-at sits bottom right", !!placed && placed.fromRight < 40 && placed.fromBottom < 40, JSON.stringify(placed));
   }
 } catch (e) {
   ok("run completed without throwing", false, e.message);
