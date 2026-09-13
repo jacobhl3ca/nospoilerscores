@@ -45,10 +45,11 @@ export interface PlayoffTeam {
 }
 
 /**
- * Chance of reaching the postseason, keyed by MLB abbreviation, as a short
- * label ready to render ("85%", ">99%", "<1%"). Missing = no number published.
+ * Chance of reaching the postseason, keyed by MLB abbreviation: `pct` is the
+ * raw number (for sorting), `label` a short string ready to render ("85%",
+ * ">99%", "<1%"). A missing key = no number published for that club.
  */
-export type PlayoffOdds = Record<string, string>;
+export type PlayoffOdds = Record<string, { pct: number; label: string }>;
 
 export interface PlayoffLeague {
   key: LeagueKey;
@@ -223,11 +224,26 @@ export function oddsFromEspn(root: EspnStandingsNode): PlayoffOdds {
       const stat = (e.stats ?? []).find((st) => st.name === "playoffPercent");
       if (!stat) continue;
       const label = formatOdds(stat.value, stat.displayValue);
-      if (label) out[ESPN_TO_MLB[ab] ?? ab] = label;
+      if (!label) continue;
+      const raw = typeof stat.value === "number" && Number.isFinite(stat.value) ? stat.value : parseFloat(stat.displayValue ?? "");
+      out[ESPN_TO_MLB[ab] ?? ab] = { pct: Number.isFinite(raw) ? raw : 0, label };
     }
   };
   walk(root);
   return out;
+}
+
+// The six seeds are ordered by MLB's format — a division winner is always
+// seeded above every wild card, whatever its odds — so that order is left
+// alone. The chase below has no such rule: the club most likely to get in is
+// the one worth reading first, so it sorts by odds, and falls back to the
+// standings order (games back) when two clubs tie or a number is missing.
+export function sortHuntByOdds(hunt: PlayoffTeam[], odds: PlayoffOdds | null): PlayoffTeam[] {
+  if (!odds) return hunt;
+  return hunt
+    .map((t, i) => ({ t, i, pct: odds[t.abbrev]?.pct ?? -1 }))
+    .sort((a, b) => (b.pct !== a.pct ? b.pct - a.pct : a.i - b.i))
+    .map((x) => x.t);
 }
 
 const ESPN_STANDINGS = "https://site.web.api.espn.com/apis/v2/sports/baseball/mlb/standings?level=3";

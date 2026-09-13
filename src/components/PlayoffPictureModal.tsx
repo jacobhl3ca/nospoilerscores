@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchPlayoffOdds,
   fetchPlayoffPicture,
+  sortHuntByOdds,
   teamLogo,
   type PlayoffLeague,
   type PlayoffOdds,
@@ -47,7 +48,9 @@ function statusFor(t: PlayoffTeam, showGamesBack: boolean): { text: string; tone
   if (!showGamesBack) return null;
   const gb = t.wildCardGamesBack;
   if (gb && gb !== "-") return { text: gb.startsWith("+") ? `${gb.slice(1)} up` : `${gb} back`, tone: "plain" };
-  return { text: "In the mix", tone: "plain" };
+  // MLB writes "-" for the club that IS the cut line — the last wild card,
+  // zero games up on itself.
+  return { text: "Last spot", tone: "plain" };
 }
 
 function Row({ team, seed, odds, showGamesBack }: { team: PlayoffTeam; seed: number | null; odds: string | null; showGamesBack: boolean }) {
@@ -90,7 +93,8 @@ function Row({ team, seed, odds, showGamesBack }: { team: PlayoffTeam; seed: num
 }
 
 function LeaguePanel({ league, odds, showGamesBack }: { league: PlayoffLeague; odds: PlayoffOdds | null; showGamesBack: boolean }) {
-  const oddsFor = (t: PlayoffTeam) => odds?.[t.abbrev] ?? null;
+  const oddsFor = (t: PlayoffTeam) => odds?.[t.abbrev]?.label ?? null;
+  const hunt = sortHuntByOdds(league.hunt, odds);
   return (
     <div className="min-w-0">
       <div className="text-[10px] font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>
@@ -120,7 +124,7 @@ function LeaguePanel({ league, odds, showGamesBack }: { league: PlayoffLeague; o
             <div className="h-px flex-1" style={{ background: "var(--border)" }} />
           </div>
           <div className="space-y-1">
-            {league.hunt.map((t) => <Row key={t.id} team={t} seed={null} odds={oddsFor(t)} showGamesBack={showGamesBack} />)}
+            {hunt.map((t) => <Row key={t.id} team={t} seed={null} odds={oddsFor(t)} showGamesBack={showGamesBack} />)}
           </div>
         </>
       ) : null}
@@ -219,10 +223,16 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
     }
   };
 
+  // Time alone when the stamp is from today; the date only earns its place
+  // once it differs from the reader's.
   const updatedLabel = picture?.updated
     ? (() => {
         const d = new Date(picture.updated);
-        return isNaN(d.getTime()) ? null : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+        if (isNaN(d.getTime())) return null;
+        const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        return d.toDateString() === new Date().toDateString()
+          ? time
+          : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`;
       })()
     : null;
 
@@ -306,11 +316,11 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
                 </button>
               ) : null}
             </div>
-            <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
               <p className="m-0">
-                Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards. The number is each club&rsquo;s chance of making the playoffs (FanGraphs, via ESPN). Standings are a spoiler, so this stays covered until you ask for it.
+                Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards. The chase below sorts by odds.
               </p>
-              {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums">Updated {updatedLabel}</p> : null}
+              {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums italic" style={{ opacity: 0.75 }}>Updated {updatedLabel}</p> : null}
             </div>
           </>
         )}
