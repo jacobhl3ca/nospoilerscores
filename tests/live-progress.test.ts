@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createJiti } from "jiti";
 import { formatGameProgress } from "../src/lib/liveProgress.ts";
 
 // Live-card status between periods (Jacob 9/12): ESPN leaves displayClock at
@@ -16,8 +17,10 @@ test("football halftime reads Halftime, not Q2 - 0:00", () => {
   assert.equal(full(g("ncaaf", 2, "0:00", "Halftime")), "Halftime");
   assert.equal(short(g("ncaaf", 2, "0:00", "Halftime")), "HT");
   assert.equal(full(g("nfl", 2, "0:00", "Halftime")), "Halftime");
-  // Zero clock before ESPN flips the detail still reads as the break.
-  assert.equal(full(g("ncaaf", 2, "0:00", "0:00 - 2nd")), "Halftime");
+  // A stopped clock alone is not a break (a play or PAT can still run at
+  // 0:00) — it just drops the "- 0:00" tail.
+  assert.equal(full(g("ncaaf", 2, "0:00", "0:00 - 2nd")), "Q2");
+  assert.equal(full(g("nba", 4, "0.0", "0.0 - 4th")), "Q4");
 });
 
 test("live ESPN shapes captured 2026-09-12 10:40pm ET", () => {
@@ -54,4 +57,40 @@ test("halves and hockey intermissions", () => {
   assert.equal(full(g("nhl", 1, "0:00", "End of 1st")), "End of P1");
   assert.equal(full(g("nhl", 2, "0:00", "End of 2nd")), "End of P2");
   assert.equal(full(g("nhl", 5, "0:00", "Shootout")), "SO");
+});
+
+// "End of 4th" with a winner is the final (Jacob 9/12): settle it in espn.ts so
+// the card leaves the live group instead of reading "End of Q4" for minutes.
+const jiti = createJiti(import.meta.url);
+const { settleEndOfRegulation } = (await jiti.import("../src/lib/espn.ts")) as {
+  settleEndOfRegulation: (event: unknown, sport: string) => void;
+};
+const ev = (period: number, shortDetail: string, scores: [string, string]) => ({
+  id: "1",
+  date: "2026-09-13T00:00Z",
+  status: { displayClock: "0:00", period, type: { name: "STATUS_IN_PROGRESS", state: "in", shortDetail, detail: shortDetail, completed: false } },
+  competitions: [{ competitors: [{ homeAway: "home", score: scores[0] }, { homeAway: "away", score: scores[1] }] }],
+});
+type Ev = ReturnType<typeof ev>;
+const settled = (sport: string, e: Ev) => { settleEndOfRegulation(e, sport); return e.status.type; };
+
+test("End of 4th with a winner settles as Final", () => {
+  const t = settled("ncaaf", ev(4, "End of 4th", ["31", "24"]));
+  assert.equal(t.state, "post");
+  assert.equal(t.completed, true);
+  assert.equal(t.shortDetail, "Final");
+  assert.equal(settled("nba", ev(4, "End of 4th", ["101", "99"])).state, "post");
+  assert.equal(settled("nhl", ev(3, "End of 3rd", ["3", "2"])).state, "post");
+  assert.equal(settled("ncaam", ev(2, "End of 2nd Half", ["70", "68"])).state, "post");
+  assert.equal(settled("nba", ev(5, "End of OT", ["110", "108"])).shortDetail, "Final/OT");
+});
+
+test("level score, earlier breaks and a bare 0:00 stay live", () => {
+  assert.equal(settled("ncaaf", ev(4, "End of 4th", ["24", "24"])).state, "in");
+  assert.equal(settled("ncaaf", ev(3, "End of 3rd", ["31", "24"])).state, "in");
+  assert.equal(settled("ncaaf", ev(2, "Halftime", ["31", "24"])).state, "in");
+  assert.equal(settled("ncaaf", ev(4, "0:00 - 4th", ["30", "24"])).state, "in");
+  assert.equal(settled("nhl", ev(4, "End of OT", ["2", "2"])).state, "in");
+  assert.equal(settled("mlb", ev(9, "End of 9th", ["5", "4"])).state, "in");
+  assert.equal(settled("epl", ev(2, "End of 2nd Half", ["1", "0"])).state, "in");
 });
