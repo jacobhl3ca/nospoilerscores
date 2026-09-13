@@ -40,12 +40,13 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
   }
   // Timed sports between periods (Jacob 9/12): ESPN leaves displayClock at
   // "0:00" through the break, so a live card read "Q2 - 0:00" all halftime.
-  // A zero clock or ESPN's own "Halftime" / "End of 1st" shortDetail now
-  // renders the break by name, the way ESPN's gamecast does.
+  // ESPN's own "Halftime" / "End of 1st" shortDetail now renders the break by
+  // name; a stopped clock without it drops the "- 0:00" tail. "End of 4th"
+  // with a winner never reaches here — espn.ts settles it as Final.
   if (sport === "ncaam") {
     // NCAAM uses halves, not quarters
     const h = period <= 2 ? `H${period}` : period === 3 ? "OT" : `${period - 2}OT`;
-    const brk = periodBreak(statusDetail, clock, period, 2, 1, h);
+    const brk = periodBreak(statusDetail, period, 1, h);
     if (brk) return brk;
     if (hasRunningClock(clock)) return { full: `${h} - ${clock}`, short: h };
     return { full: h, short: h };
@@ -57,7 +58,7 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     // NCAAW card fell through to the generic status, so ESPN's "8:32 - 2nd"
     // rendered raw on desktop and truncated to "8:3" on mobile instead of "Q2".
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
-    const brk = periodBreak(statusDetail, clock, period, 4, 2, q);
+    const brk = periodBreak(statusDetail, period, 2, q);
     if (brk) return brk;
     if (hasRunningClock(clock)) return { full: `${q} - ${clock}`, short: q };
     return { full: q, short: q };
@@ -77,7 +78,7 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     // A shootout has no running clock, so skip the "- 0:00" tail and just show "SO".
     if (shootout) return { full: p, short: p };
     // Hockey has no halftime — every break is an intermission ("End of P1").
-    const brk = periodBreak(statusDetail, clock, period, 3, 0, p);
+    const brk = periodBreak(statusDetail, period, 0, p);
     if (brk) return brk;
     if (hasRunningClock(clock)) return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
@@ -91,7 +92,7 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     // College-football OT is untimed (no game clock), so the clock guard below
     // falls through to the bare "OT"/"2OT" label there, same as the NFL path.
     const q = period <= 4 ? `Q${period}` : period === 5 ? "OT" : `${period - 4}OT`;
-    const brk = periodBreak(statusDetail, clock, period, 4, 2, q);
+    const brk = periodBreak(statusDetail, period, 2, q);
     if (brk) return brk;
     if (hasRunningClock(clock)) return { full: `${q} - ${clock}`, short: q };
     return { full: q, short: q };
@@ -105,22 +106,20 @@ function hasRunningClock(clock: string): boolean {
   return !!clock && !/^[0:.]+$/.test(clock);
 }
 
-// The between-periods label, or null while play is on. `regulation` is the
-// normal period count and `halftimeAfter` the period that ends in halftime
-// (0 = no halftime, hockey). A zero clock only counts inside regulation:
-// college-football OT has no game clock at all, so its "0:00" is live play.
+// The between-periods label, or null while play is on. `halftimeAfter` is the
+// period that ends in halftime (0 = no halftime, hockey). Only ESPN's own
+// "Halftime" / "End of …" detail counts, never a stopped clock: a football play
+// (and the PAT after it) runs at 0:00, basketball free throws after the buzzer
+// shoot at 0.0, and college-football OT has no clock at all.
 function periodBreak(
   statusDetail: string,
-  clock: string,
   period: number,
-  regulation: number,
   halftimeAfter: number,
   label: string,
 ): { full: string; short: string } | null {
   const detail = statusDetail.toLowerCase();
   if (halftimeAfter && /\bhalftime\b/.test(detail)) return { full: "Halftime", short: "HT" };
-  const ended = /^end\b/.test(detail) || (period >= 1 && period <= regulation && !!clock && !hasRunningClock(clock));
-  if (!ended) return null;
+  if (!/^end\b/.test(detail)) return null;
   if (period === halftimeAfter) return { full: "Halftime", short: "HT" };
   return { full: `End of ${label}`, short: `End ${label}` };
 }
