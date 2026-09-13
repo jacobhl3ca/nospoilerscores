@@ -44,6 +44,12 @@ export interface PlayoffTeam {
   eliminated: boolean;
 }
 
+/**
+ * Chance of reaching the postseason, keyed by MLB abbreviation, as a short
+ * label ready to render ("85%", ">99%", "<1%"). Missing = no number published.
+ */
+export type PlayoffOdds = Record<string, string>;
+
 export interface PlayoffLeague {
   key: LeagueKey;
   name: string;
@@ -172,6 +178,64 @@ export async function fetchPlayoffPicture(signal?: AbortSignal, now: Date = new 
   // than render six empty rows.
   if (picture.leagues.every((l) => !l.seeded.length)) return null;
   return picture;
+}
+
+// ── Playoff odds ─────────────────────────────────────────────────────────────
+//
+// MLB's StatsAPI publishes no probability. ESPN's standings feed carries
+// FanGraphs' "make the playoffs" number as `playoffPercent`, is CORS-open, and
+// is already on this app's preconnect list — so the odds ride alongside the
+// StatsAPI picture rather than replacing it. The two feeds spell exactly two
+// clubs differently; everything else keys straight across.
+const ESPN_TO_MLB: Record<string, string> = { ARI: "AZ", CHW: "CWS" };
+
+export interface EspnStandingsNode {
+  children?: EspnStandingsNode[];
+  standings?: { entries?: EspnStandingsEntry[] };
+}
+export interface EspnStandingsEntry {
+  team?: { abbreviation?: string };
+  stats?: { name?: string; value?: number; displayValue?: string }[];
+}
+
+// A whole-number label: "85%". ESPN's own ">99.9%" / "<0.1%" edges are kept as
+// ">99%" / "<1%" so a team that has NOT clinched never reads as 100% and a team
+// that is not yet out never reads as 0%.
+export function formatOdds(value: number | undefined, display: string | undefined): string | null {
+  const d = (display ?? "").trim();
+  if (d.startsWith(">")) return ">99%";
+  if (d.startsWith("<")) return "<1%";
+  const v = typeof value === "number" && Number.isFinite(value) ? value : parseFloat(d);
+  if (!Number.isFinite(v)) return null;
+  if (v >= 100) return "100%";
+  if (v >= 99.5) return ">99%";
+  if (v > 0 && v < 0.5) return "<1%";
+  return `${Math.round(v)}%`;
+}
+
+export function oddsFromEspn(root: EspnStandingsNode): PlayoffOdds {
+  const out: PlayoffOdds = {};
+  const walk = (n: EspnStandingsNode) => {
+    for (const c of n.children ?? []) walk(c);
+    for (const e of n.standings?.entries ?? []) {
+      const ab = e.team?.abbreviation;
+      if (!ab) continue;
+      const stat = (e.stats ?? []).find((st) => st.name === "playoffPercent");
+      if (!stat) continue;
+      const label = formatOdds(stat.value, stat.displayValue);
+      if (label) out[ESPN_TO_MLB[ab] ?? ab] = label;
+    }
+  };
+  walk(root);
+  return out;
+}
+
+const ESPN_STANDINGS = "https://site.web.api.espn.com/apis/v2/sports/baseball/mlb/standings?level=3";
+
+export async function fetchPlayoffOdds(signal?: AbortSignal): Promise<PlayoffOdds> {
+  const r = await fetch(ESPN_STANDINGS, { signal });
+  if (!r.ok) throw new Error(`espn standings → ${r.status}`);
+  return oddsFromEspn((await r.json()) as EspnStandingsNode);
 }
 
 export function teamLogo(id: number): string {
