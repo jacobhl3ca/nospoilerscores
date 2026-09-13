@@ -381,6 +381,13 @@ export interface Preferences {
   // device's own zone, so the default behavior is unchanged. Applied globally
   // via setServiceTimeZone() in loadPreferences()/savePreferences().
   timezone?: string;
+  // "Remind me" link template (Settings → Reminder link). A URL with
+  // placeholders — {minutes} {title} {iso} {time} {date} — that an upcoming
+  // game's detail sheet opens on tap (see lib/reminderLink.ts). Undefined/blank
+  // = no button anywhere. Personal by design: it only does something on a
+  // device with the target app (Raycast, Shortcuts, …). Syncs with the rest of
+  // the blob.
+  reminderLinkTemplate?: string;
   // News headlines are spoilers (a highlight's title gives away the result), so
   // every headline in the news view + modal is blurred by default. The "Titles"
   // eye toggle in the news header flips this on to reveal them all at once.

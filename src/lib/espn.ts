@@ -1833,6 +1833,7 @@ function parseTennisMatch(match: TennisMatch, event: TennisEvent, slug: string):
     id: match.id ?? `${event.id}-${awayTeam.abbreviation}-${homeTeam.abbreviation}`,
     sport: "tennis",
     date: match.date ?? event.date,
+    dateIsEstimate: !match.date,
     name,
     shortName: name,
     state,
