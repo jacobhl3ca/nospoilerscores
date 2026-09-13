@@ -107,3 +107,33 @@ test("no records yields empty leagues rather than throwing", () => {
   assert.deepEqual(empty.leagues.map((l) => l.seeded.length), [0, 0]);
   assert.equal(empty.updated, null);
 });
+
+// ── Playoff odds (ESPN's FanGraphs column) ───────────────────────────────────
+
+import { formatOdds, oddsFromEspn } from "../src/lib/playoffPicture.ts";
+
+test("odds labels are whole numbers that never claim 100% or 0% short of the fact", () => {
+  assert.equal(formatOdds(85.2, "85.2%"), "85%");
+  assert.equal(formatOdds(100, ">99.9%"), ">99%");   // ESPN rounds the value up but not the label
+  assert.equal(formatOdds(99.9, "99.9%"), ">99%");
+  assert.equal(formatOdds(100, "100.0%"), "100%");
+  assert.equal(formatOdds(0, "<0.1%"), "<1%");
+  assert.equal(formatOdds(0.4, "0.4%"), "<1%");
+  assert.equal(formatOdds(0, "0.0%"), "0%");
+  assert.equal(formatOdds(undefined, "7.0%"), "7%");
+  assert.equal(formatOdds(undefined, ""), null);
+});
+
+test("odds are walked out of ESPN's nested standings and keyed by MLB's abbreviations", () => {
+  const entry = (abbreviation: string, value: number, displayValue: string) => ({
+    team: { abbreviation },
+    stats: [{ name: "gamesBehind", displayValue: "-" }, { name: "playoffPercent", value, displayValue }],
+  });
+  const odds = oddsFromEspn({
+    children: [
+      { children: [{ standings: { entries: [entry("ARI", 38.5, "38.5%"), entry("CHW", 85.2, "85.2%")] } }] },
+      { standings: { entries: [entry("NYY", 100, ">99.9%"), { team: { abbreviation: "SEA" }, stats: [{ name: "gamesBehind" }] }] } },
+    ],
+  });
+  assert.deepEqual(odds, { AZ: "39%", CWS: "85%", NYY: ">99%" }); // SEA has no odds stat → absent, never "0%"
+});
