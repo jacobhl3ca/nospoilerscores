@@ -125,6 +125,17 @@ const JSON_LD = {
   "@graph": [
     {
       "@type": "WebApplication",
+      // Stable @id so this primary product node is a first-class, referenceable
+      // entity like its siblings — the WebSite (#website) and Organization
+      // (#organization) both carry one, and this WebApplication was the lone
+      // node in the @graph still identified only by its (page-shared) `url`.
+      // An @id lets Google merge it to the same entity across pages and crawls
+      // (the whole app is embedded on every route via the shared layout, so this
+      // node re-renders everywhere) instead of treating each page's copy as a
+      // separate WebApplication for the same URL — the same entity-dedup reason
+      // the WebSite/Organization ids exist. Purely additive JSON-LD; no visual
+      // change and nothing else references it, so no behavior depends on it.
+      "@id": "https://hidescore.com/#webapp",
       name: "HideScore",
       alternateName: ["No Spoiler Scores", "Spoiler Free Sports"],
       url: "https://hidescore.com",
