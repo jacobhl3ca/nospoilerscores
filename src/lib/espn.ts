@@ -65,6 +65,12 @@ const SPORT_PATHS: Record<Sport, string> = {
   ncaaf: "/football/college-football/scoreboard",
   nfl: "/football/nfl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
+  // NCAA men's ice hockey (added 2026-09-12). Standard scoreboard shape, so
+  // parseGame reads it as is. Probed live 2026-09-12: 200, league abbr NCAAH,
+  // calendar 2026-10-02 → 2027-04-10 (88 game days), ~18-26 games a Saturday,
+  // three regulation periods, poll rank on curatedRank. Do NOT add groups=50:
+  // it returns 0 events for this sport.
+  ncaah: "/hockey/mens-college-hockey/scoreboard",
   golf: "/golf/pga/scoreboard",
   tennis: "/tennis/atp/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",
@@ -360,6 +366,11 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Swap-only (excludeFromAuto) so it never disturbs the NBA/MLB/NHL/NFL slot
   // rotation — selectable from the slot-3 dropdown when in season.
   { sport: "ncaaw", label: "NCAAW", startDate: "11-01", endDate: "04-06", championshipDate: "04-06", excludeFromAuto: true },
+  // ── NCAA men's hockey (Oct–Apr) ──
+  // Window is ESPN's own calendar, read live 2026-09-12: 2026-10-02 → 2027-04-10,
+  // Frozen Four 04-08, national championship 04-10. Opt-in (excludeFromAuto),
+  // like NCAAW, so it never takes a column from the NHL or NCAAF.
+  { sport: "ncaah", label: "NCAA Hockey", startDate: "10-02", endDate: "04-10", championshipDate: "04-10", verifiedFor: 2026, excludeFromAuto: true },
   // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
   // in season, but low priority so it only fills open summer/fall slots after
   // the core leagues and major tournament windows.
@@ -668,7 +679,7 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
-  nfl: "🏈", ncaaf: "🏈", nhl: "🏒", golf: "⛳", tennis: "🎾",
+  nfl: "🏈", ncaaf: "🏈", nhl: "🏒", ncaah: "🏒", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
@@ -717,7 +728,7 @@ export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
 // disappearing from Settings. Adding a sport to `Sport` without touching this
 // map degrades to a slightly-wrong section, never to an unpickable league.
 const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
-  nfl: "us", nba: "us", mlb: "us", nhl: "us", wnba: "us",
+  nfl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", wnba: "us",
   ncaaf: "us", ncaam: "us", ncaaw: "us", llws: "us",
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
@@ -1171,7 +1182,7 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
   let record = competitor.records?.[0]?.summary ?? "";
   // MLB spring training and NHL records include a 3rd segment (ties / OTL) — strip to W-L
-  if ((sport === "mlb" || sport === "nhl") && record.split("-").length === 3) {
+  if ((sport === "mlb" || sport === "nhl" || sport === "ncaah") && record.split("-").length === 3) {
     const parts = record.split("-");
     record = `${parts[0]}-${parts[1]}`;
   }
@@ -1227,6 +1238,8 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // NCAAF: scoring similar to NFL, mirrors its calibration.
   ncaaf:  { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
+  // NCAA men's hockey: three 20-min periods and NHL-like scoring, so it mirrors NHL.
+  ncaah:  { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   fifa:   { multiplier: 22,  overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
@@ -1296,6 +1309,7 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
   ncaaw: 600,                 // 10-min quarters (four of them, like WNBA)
   nfl: 900, ncaaf: 900,       // 15-min quarters
   nhl: 1200,                  // 20-min periods
+  ncaah: 1200,                // 20-min periods, same as NHL
   ncaam: 1200,                // 20-min halves
 };
 // Soccer is different: status.clock counts UP and equals total elapsed match
@@ -2393,6 +2407,8 @@ export function espnGameUrl(game: Game): string {
     case "ncaaf": return `https://www.espn.com/college-football/game/_/gameId/${game.id}`;
     case "nfl": return `https://www.espn.com/nfl/game/_/gameId/${game.id}`;
     case "nhl": return `https://www.espn.com/nhl/game/_/gameId/${game.id}`;
+    // College hockey's per-game page is the boxscore (verified 2026-09-12).
+    case "ncaah": return `https://www.espn.com/mens-college-hockey/boxscore?gameId=${game.id}`;
     // ⚠️ The Little League World Series has NO per-game page on espn.com.
     // Checked every plausible pattern on 2026-08-11 with a browser UA and a
     // real event id (401889776): /llws/, /llb/, /baseball/llb/,
@@ -2463,6 +2479,8 @@ export function sportStreamFallback(sport: Sport): string {
     case "ncaaf": return "https://www.espn.com/watch/";
     case "nfl": return "https://www.nfl.com/plus/";
     case "nhl": return "https://www.espn.com/watch/";
+    // ESPN+ carries most college hockey; the tournament finals air on ESPN.
+    case "ncaah": return "https://www.espn.com/watch/";
     case "mlb": return "https://www.mlb.com/tv";
     // The LLWS is an ESPN-network property end to end (ESPN / ESPN2 / ABC),
     // so ESPN's own watch hub is the correct and only landing.
@@ -4523,6 +4541,7 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
     case "nfl":
       return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
     case "ncaam":
+    case "ncaah":
       return `https://a.espncdn.com/i/teamlogos/ncaa/500/${rawId}.png`;
     // Cricket follows the soccer convention (team id under its own sport path).
     case "cricket":
@@ -5204,7 +5223,11 @@ export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>
         if (!id) continue;
         const overall = entry.stats?.find((s) => s.name === "overall") ?? entry.stats?.find((s) => s.name === "record");
         let rec = overall?.summary ?? overall?.displayValue ?? "";
-        if ((sport === "mlb" || sport === "nhl") && rec.split("-").length === 3) {
+        // College hockey's overall displayValue carries a points tail ("24-0-0, 0 PTS",
+        // read 2026-09-12; summary is the bare "24-0-0"). Drop it before the W-L
+        // trim in case summary is ever absent and the fallback is used.
+        if (sport === "ncaah") rec = rec.split(",")[0].trim();
+        if ((sport === "mlb" || sport === "nhl" || sport === "ncaah") && rec.split("-").length === 3) {
           const [w, l] = rec.split("-");
           rec = `${w}-${l}`;
         }
@@ -5225,6 +5248,8 @@ export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>
 // on the event (parseTeam), not from standings — the standings feed has no
 // `winPercent` stat, so this path returned an empty map for it. Listing it
 // would also re-open the door to applyTeamRanks clobbering the poll rank.
+// ⛔ NCAAH is NOT here either, for the same reason: its rank is the USCHO poll
+// on the event, and its standings feed held one junk entry on 2026-09-12.
 const RANK_LEAGUES = new Set<Sport>([
   "mlb", "nba", "wnba", "ncaam", "ncaaw", "nfl", "nhl", "epl", "mls", "ucl", "uel",
   // Single-table domestic leagues — ESPN's standings carry a real league-wide
