@@ -22,6 +22,7 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   ncaaf: "/football/college-football",
   nfl: "/football/nfl",
   nhl: "/hockey/nhl",
+  ncaah: "/hockey/mens-college-hockey",
   golf: "/golf/pga",
   // ESPN has no bare /tennis/news feed (404) — the ATP league feed carries the
   // marquee tennis news (Slams, both tours' headlines), so route tennis there.
@@ -297,6 +298,7 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   // logo on ESPN's CDN. Distinction is in the column header label + game data.
   ncaaw: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
   ncaaf: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
+  ncaah: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
   golf: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
   tennis: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/International_Tennis_Federation_Logo.svg/250px-International_Tennis_Federation_Logo.svg.png",
   epl: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
@@ -413,6 +415,7 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // slot in the reddit bake; see the batch/cooldown notes in prebake-news.mjs.
   cricket: { key: "reddit-cricket", label: "r/Cricket" },
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
+  ncaah: { key: "reddit-ncaah", label: "r/collegehockey" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
   boxing: { key: "reddit-boxing", label: "r/Boxing" },
   f1: { key: "reddit-f1", label: "r/formula1" },
@@ -511,7 +514,7 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf",
   "fifa", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
-  "mls", "golf", "tennis", "wnba", "ncaaw",
+  "mls", "golf", "tennis", "wnba", "ncaaw", "ncaah",
   // Second-wave soccer sorts below the established leagues in the merged mobile
   // feed, Liga MX first (largest US audience of the group). The two
   // yearCycle-gated national-team tournaments sit just above it, since in a year

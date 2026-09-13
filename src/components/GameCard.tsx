@@ -158,7 +158,10 @@ function formatGameProgress(game: Game): { full: string; short: string; delayed?
     if (statusDetail.toLowerCase().includes("half")) return { full: "Half", short: "HT" };
     return { full: q, short: q };
   }
-  if (sport === "nhl") {
+  if (sport === "nhl" || sport === "ncaah") {
+    // College hockey shares this shape: P1–P3, then a 5-min OT (period 4) and a
+    // shootout in most conferences during the regular season, while the NCAA
+    // tournament plays 20-min sudden-death OTs (isPlayoff → "2OT").
     // Regulation is P1–P3, then a single overtime (period 4). In the REGULAR
     // season a still-tied game goes to a SHOOTOUT (period 5) — not a 2nd OT.
     // Multiple overtimes only exist in the playoffs (periods 5, 6, … = 2OT,
@@ -1098,7 +1101,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // would bake a literal "#null" into it if that guard ever
                   // moved. Set it only when we actually have a rank.
                   if (rank != null) title = `FIFA world ranking: #${rank}`;
-                } else if (game.sport === "ncaaf") {
+                } else if (game.sport === "ncaaf" || game.sport === "ncaah") {
                   // No date/finished gate — see the NCAAF bullet above. The
                   // tooltip stays poll-neutral because ESPN's curated rank is
                   // the AP Top 25 until December and the CFP committee's
@@ -1106,7 +1109,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // ?? null because Team.rank is optional — the other branch
                   // narrows it with its own `!= null` guard, this one doesn't.
                   rank = team.rank ?? null;
-                  if (rank != null) title = `Top 25 ranking: #${rank}`;
+                  // College hockey's curated rank is the USCHO Top 20.
+                  if (rank != null) title = `${game.sport === "ncaah" ? "Top 20" : "Top 25"} ranking: #${rank}`;
                 } else if (team.rank != null && !effectivePastDate && !isFinished) {
                   rank = team.rank;
                   title = `${leagueLabel || "League"} standing: #${rank}`;
