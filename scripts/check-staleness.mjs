@@ -26,10 +26,10 @@ const NEWS_HOURLY = [
   // (ucl/uel/fifa/soccer/ncaaf/ncaaw) was previously unmonitored, which is
   // exactly the family the hourly bake rate-limits first (see the batching fix).
   "reddit-boxing", "reddit-cricket", "reddit-epl", "reddit-fifa", "reddit-general", "reddit-golf", "reddit-mlb",
-  "reddit-mls", "reddit-nba", "reddit-ncaaf", "reddit-ncaah", "reddit-ncaam", "reddit-ncaaw",
+  "reddit-cfl", "reddit-mls", "reddit-nba", "reddit-ncaaf", "reddit-ncaah", "reddit-ncaam", "reddit-ncaaw",
   "reddit-f1", "reddit-indycar", "reddit-nascar", "reddit-nfl", "reddit-nhl", "reddit-nwsl", "reddit-soccer", "reddit-tennis",
   "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-wnba",
-  "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
+  "thescore-cfl", "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",
   // Editorial substitute feeds + the two league video feeds that shipped after
   // this list was last swept and were never added — they baked unwatched for
@@ -78,6 +78,8 @@ const RATE_LIMIT_PRONE_REDDIT = new Set([
 const SEASONAL_REDDIT = new Set([
   "reddit-uel", "reddit-ucl", "reddit-ncaaw", "reddit-ncaaf", "reddit-fifa",
   "reddit-ncaah",
+  // r/CFL goes quiet from the Grey Cup (mid-Nov) to the May preseason.
+  "reddit-cfl",
 ]);
 
 const FEEDS = [

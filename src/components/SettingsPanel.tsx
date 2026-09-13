@@ -161,6 +161,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   nfl: "NFL",
   nhl: "NHL",
   ncaah: "NCAA Hockey",
+  cfl: "CFL",
   llws: "Little League",
   golf: "Golf",
   tennis: "Tennis",
