@@ -83,7 +83,9 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (hasRunningClock(clock)) return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
-  if (sport === "nfl" || sport === "ncaaf") {
+  if (sport === "nfl" || sport === "ncaaf" || sport === "cfl") {
+    // The CFL is the same four 15-min quarters + OT; the worker already maps
+    // theScore's live strings onto these ESPN shapes (public/_worker.js).
     // NCAAF plays four 15-min quarters (then OT), the same period structure as
     // the NFL — the rest of the app already classifies it that way (espn.ts:
     // regulationPeriods 4, PERIOD_SECONDS 900). Without this branch a live NCAAF
