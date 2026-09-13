@@ -9,6 +9,8 @@ import { type ShareCardMeta } from "@/lib/shareCard";
 import { getDateString } from "@/components/DateNav";
 import { fetchGameWeather, type GameWeather } from "@/lib/weather";
 import GameHighlights from "@/components/GameHighlights";
+import CalendarButtons from "@/components/CalendarButtons";
+import { buildCalendarEvent } from "@/lib/calendarLink";
 
 // Typical game length (hours) per sport, used to bound the rain window. Soccer
 // ~2.5h, ball sports ~3.5h; default 3h. The rain-chance block only surfaces
@@ -54,11 +56,14 @@ export default function GameDetailModal({
   onPlayHighlight,
   onPlayEmbed,
   onShowGroup,
+  reminderLinkTemplate,
 }: {
   game: Game;
   showRatings: boolean;
   onClose: () => void;
   leagueLabel?: string;
+  // Settings → Reminder link. Blank = no "Remind me" button (CalendarButtons).
+  reminderLinkTemplate?: string;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
   // World Cup group games: open the all-groups overlay with this group spotlit.
@@ -232,6 +237,10 @@ export default function GameDetailModal({
   })();
 
   const statusLabel = isFinal ? "Final" : isLive ? "In progress" : "Upcoming";
+
+  // "Add to calendar" / "Remind me" — pre-game only, and null when there is no
+  // honest event to make (TBD team, bad date, tennis day-only fallback).
+  const calendarEvent = buildCalendarEvent(game, leagueLabel);
 
   // Name the dialog after the matchup so screen readers announce which game's
   // details opened (e.g. "Yankees at Red Sox — game details") instead of a
@@ -452,6 +461,12 @@ export default function GameDetailModal({
             <span className="uppercase tracking-wide">Watch: </span>
             {game.broadcasts.flatMap((b, i) => (i === 0 ? [networkLink(b, i)] : [" · ", networkLink(b, i)]))}
           </div>
+        ) : null}
+
+        {/* Add to calendar / Remind me — upcoming games only. Sits where
+            "Watch live" sits for a live game; the two never show together. */}
+        {!isFinal && !isLive ? (
+          <CalendarButtons event={calendarEvent} reminderTemplate={reminderLinkTemplate} onClose={onClose} />
         ) : null}
 
         {/* Competitiveness rating — ONLY when the user already revealed ratings. */}

@@ -128,6 +128,10 @@ export interface Game {
   // "Z. Wheeler (5-1, 2.22)" (name + ESPN's record string). Null for non-MLB.
   homeProbable?: string | null;
   awayProbable?: string | null;
+  // Tennis only: true when ESPN gave the match no start of its own and the
+  // parser fell back to the tournament day (`match.date ?? event.date`). The
+  // card still shows the day; "Add to calendar" declines to invent a clock.
+  dateIsEstimate?: boolean;
   // Cup-competition stage/round, spoiler-free: "Group H", "Round of 16",
   // "Final". Derived from competition.altGameNote + event.season.slug — NEVER
   // the notes array, which leaks results ("PSG win 4-3 on penalties"). Null for
