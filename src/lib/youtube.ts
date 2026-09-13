@@ -248,12 +248,23 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // the first probe was a WRONG match — a 2025 Women's Rugby World Cup game
 // served for a men's autumn test. The unscoped winners were "Rugby Mzansi" and
 // "Match Videos", both fan channels. Dark until one uploader owns the window.
+//
+// ncaah (NCAA men's hockey, added 2026-09-12): probed against the LIVE worker
+// with strict=1 on 7 completed 2026 fixtures, bare query shape. "ESPN" was 0/7.
+// "NCAA Championships" posts a clean per-game cut for the NCAA TOURNAMENT only
+// (Frozen Four semis + final, one regional final: 4/5 postseason hits) — and
+// it served the WRONG game for the regular season: "Michigan vs Minnesota
+// highlights 1/17/2026" returned "Michigan vs. Minnesota Duluth - 2026 NCAA
+// hockey regional final highlights". A wrong match fails the gate outright, and
+// regular-season games stream on ESPN+ with no official upload. Dark. A
+// postseason-only channel gate is the way to light it for the March tournament.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "cricket",
   "euro",
   "esports",
   "laliga",
   "ligue1",
+  "ncaah",
   "rugbychamp",
   "rugbytest",
 ]);

@@ -38,6 +38,7 @@ const UA =
 const SPORT_PATHS = {
   nba: "/basketball/nba/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
+  ncaah: "/hockey/mens-college-hockey/scoreboard",
   mlb: "/baseball/mlb/scoreboard",
   nfl: "/football/nfl/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
