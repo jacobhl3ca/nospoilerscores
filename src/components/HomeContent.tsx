@@ -4296,6 +4296,7 @@ export default function HomeContent({
           onPlayHighlight={openVideoModal}
           onPlayEmbed={openEmbedModal}
           onShowGroup={(groupName) => { setGroupsHighlight(groupName); setDetailGame(null); setGroupsOpen(true); }}
+          reminderLinkTemplate={prefs.reminderLinkTemplate}
         />
       )}
 
@@ -4307,6 +4308,7 @@ export default function HomeContent({
           fight={detailEvent.fight}
           leagueLabel={detailEvent.leagueLabel}
           onClose={() => setDetailEvent(null)}
+          reminderLinkTemplate={prefs.reminderLinkTemplate}
         />
       )}
 

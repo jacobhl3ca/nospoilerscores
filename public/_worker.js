@@ -226,6 +226,30 @@ export default {
     }
     if (url.pathname === "/api/account" && request.method === "DELETE") return accountDelete(request, env);
 
+    // --- "Add to calendar" (.ics) for the native wrapper. The web builds a
+    // data:text/calendar download in the page (lib/calendarLink.ts), but
+    // SFSafariViewController takes only http(s); this echoes the SAME text
+    // back under text/calendar so iOS shows its Add-to-Calendar sheet. It is a
+    // reflection of the caller's own text, bounded and typed: must be one
+    // VCALENDAR, capped at 8 KB, served as an attachment with nosniff so no
+    // browser will ever render it as markup.
+    if (url.pathname === "/api/ics") {
+      const t = url.searchParams.get("t") || "";
+      if (t.length > 8192 || !/^BEGIN:VCALENDAR\r?\n/.test(t) || !/END:VCALENDAR\r?\n?$/.test(t) || /<|>/.test(t)) {
+        return new Response("Bad calendar text", { status: 400 });
+      }
+      const uid = (t.match(/^UID:([A-Za-z0-9@._-]+)/m) || [])[1] || "event";
+      const name = `hidescore-${uid.replace(/@.*$/, "")}.ics`;
+      return new Response(t, {
+        headers: {
+          "Content-Type": "text/calendar; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${name}"`,
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
+
     // --- Serve a stored share card (rendered server-side by the prebake cron).
     if (url.pathname.startsWith("/cards/") && url.pathname.endsWith(".png")) {
       if (env.DATA) {

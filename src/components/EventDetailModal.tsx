@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import { LeagueEventCard, FightBout } from "@/lib/types";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
+import CalendarButtons from "@/components/CalendarButtons";
+import { buildEventCalendarEvent } from "@/lib/calendarLink";
 
 // Spoiler-safe detail sheet for the EVENT tiles — races, UFC bouts, boxing,
 // chess and poker. The score cards have had GameDetailModal since day one; the
@@ -83,6 +85,7 @@ export default function EventDetailModal({
   fight,
   leagueLabel,
   onClose,
+  reminderLinkTemplate,
 }: {
   event: LeagueEventCard;
   // Set when a single UFC BOUT card was tapped rather than the event tile —
@@ -92,6 +95,8 @@ export default function EventDetailModal({
   fight?: FightBout;
   leagueLabel?: string;
   onClose: () => void;
+  // Settings → Reminder link. Blank = no "Remind me" button (CalendarButtons).
+  reminderLinkTemplate?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -204,6 +209,10 @@ export default function EventDetailModal({
 
   const dialogLabel = `${heading} — event details`;
 
+  // "Add to calendar" / "Remind me" — upcoming only, and null for a poker
+  // festival that carries a date window instead of a clock (scheduleLabel).
+  const calendarEvent = buildEventCalendarEvent(event, fight);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -301,6 +310,8 @@ export default function EventDetailModal({
             </div>
           </div>
         ) : null}
+
+        <CalendarButtons event={calendarEvent} reminderTemplate={reminderLinkTemplate} onClose={onClose} />
 
         {showExternal ? (
           <button

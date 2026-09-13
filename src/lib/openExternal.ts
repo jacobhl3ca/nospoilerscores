@@ -41,6 +41,11 @@
 // HideScore's own embedded player (VideoModal) — see fetchFirstVideoId in
 // lib/youtube.ts. openExternal only runs when no specific video resolves.
 
+// True inside the Capacitor iOS/Android wrapper. Exported for callers that
+// need to pick a native-safe link form (e.g. an https .ics instead of a data:
+// URL, which SFSafariViewController cannot open).
+export const isNativeApp = (): boolean => isCapacitorNative();
+
 const isCapacitorNative = (): boolean => {
   if (typeof window === "undefined") return false;
   type CapacitorGlobal = { Capacitor?: { isNativePlatform?: () => boolean } };
@@ -235,6 +240,26 @@ export function openExternal(url: string): void {
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+// Open a custom-scheme URL (raycast://, shortcuts://, things:///, …) — the
+// "Remind me" link. Not a web page, so it never goes through window.open (Safari
+// leaves an empty tab behind) or SFSafariViewController (http(s) only): the
+// browser path assigns location, which hands the scheme to the OS and leaves the
+// page in place; the wrapper path uses AppLauncher, which needs no
+// LSApplicationQueriesSchemes entry to OPEN a scheme. http(s) URLs fall through
+// to openExternal so a template that points at a web app still opens a tab.
+export function openAppScheme(url: string): void {
+  if (!url) return;
+  if (/^https?:\/\//i.test(url)) {
+    openExternal(url);
+    return;
+  }
+  if (isCapacitorNative()) {
+    tryOpenAppScheme(url);
+    return;
+  }
+  window.location.assign(url);
 }
 
 // Use as an `onClick` handler on `<a>` tags so the browser's default link
