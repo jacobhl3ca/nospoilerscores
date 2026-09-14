@@ -2356,6 +2356,262 @@ export default {
       }
     }
 
+    // ── CFL: theScore's app API, reshaped to the ESPN scoreboard ───────────
+    // ESPN stopped serving the CFL after 2023 (probed 2026-09-13: the calendar
+    // is frozen at 2023 and every date returns 0 events), so the config-only
+    // league recipe does not apply. theScore's undocumented app API
+    // (api.thescore.com/cfl/…, CORS *, s-maxage=10 at Cloudflare) is the only
+    // live free JSON source, and prebake-news already depends on this host for
+    // the thescore-* feeds. The client keeps calling fetchGames → parseGame:
+    // this route converts each theScore event into the ESPN scoreboard shape,
+    // so every football behaviour (FOOTBALL_CLOSENESS rating, Q1–Q4/OT labels,
+    // "End of 4th" settle, playoff flag, lookahead/lookback, the localStorage
+    // cache, the standings chip) comes for free. Three routes:
+    //   GET /api/cfl?dates=YYYYMMDD[-YYYYMMDD]  → { events: ScoreboardEvent[] }
+    //   GET /api/cfl/standings                  → ESPN standings (one table + rank)
+    //   GET /api/cfl/teams                      → ESPN core-API teams { items }
+    // Always HTTP 200; `{ events: [] }` on any upstream failure like every
+    // other JSON route here — fetchGames only distinguishes failure by res.ok,
+    // so a worker 5xx would bypass the client's cache fallback.
+    //
+    // ⚠️ `rpp`: omit it or send rpp=200. The default returns everything in the
+    // window (a whole season is ~90 events); rpp=50 truncates silently.
+    if (url.pathname === "/api/cfl" || url.pathname === "/api/cfl/standings" || url.pathname === "/api/cfl/teams") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+      const corsJson = (body, status = 200, maxAge = 300) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${maxAge}`,
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      const SCORE = "https://api.thescore.com/cfl";
+      const scoreFetch = (path) =>
+        fetch(`${SCORE}${path}`, {
+          headers: { "User-Agent": "HideScore/1.0 (+https://hidescore.com)", Accept: "application/json" },
+        });
+      // theScore team → ESPN competitor.team. shortDisplayName carries the FULL
+      // name on purpose: TSN titles its recaps "CFL WEEK 15: Ottawa Redblacks
+      // vs. Toronto Argonauts | Full Highlights", and GameHighlights + the
+      // prebake build the YouTube query from shortDisplayName (16/16 clean on
+      // Weeks 12–15 with full names, 2026-09-13).
+      const toEspnTeam = (t) => ({
+        id: String(t?.id ?? ""),
+        abbreviation: String(t?.abbreviation || t?.short_name || ""),
+        displayName: String(t?.full_name || t?.name || ""),
+        shortDisplayName: String(t?.full_name || t?.name || ""),
+        name: String(t?.name || ""),
+        location: String(t?.location || ""),
+        logo: t?.logos?.large || t?.logos?.w72xh72 || "",
+        color: String(t?.colour_1 || "666666").replace(/^#/, ""),
+      });
+      const ordinal = (n) => `${n}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"}`;
+      const toEspnEvent = (ev) => {
+        const home = ev?.home_team || {};
+        const away = ev?.away_team || {};
+        const box = ev?.box_score || null;
+        const progress = box?.progress || {};
+        const rawStatus = String(ev?.event_status || ev?.status || progress.status || "pre_game").toLowerCase();
+        const segment = Number.isFinite(Number(progress.segment)) ? Number(progress.segment) : 0;
+        const overtime = progress.overtime === true || segment > 4;
+        const clock = String(progress.clock || "");
+        const clockLabel = String(progress.clock_label || progress.string || "");
+        // Season type follows ESPN's numbering (1 pre, 2 regular, 3 post) so
+        // eventsToGames' preseason filter and parseGame's playoff flag apply.
+        const gameType = String(ev?.game_type || "");
+        const seasonType = /exhibition|pre/i.test(gameType) ? 1 : /playoff|post/i.test(gameType) ? 3 : 2;
+        // Regular-season week only — the postseason reuses the numbering, and
+        // TSN titles those by round, never by week (see gridironWeekNumber).
+        const weekMatch = String(ev?.season_week || "").match(/-(\d{1,2})$/);
+        const week = seasonType === 2 && weekMatch ? Number(weekMatch[1]) : (seasonType === 2 && Number.isFinite(Number(ev?.week)) ? Number(ev.week) : null);
+        let state = "pre", name = "STATUS_SCHEDULED", completed = false, detail = "";
+        if (rawStatus === "final") {
+          state = "post"; name = "STATUS_FINAL"; completed = true;
+          detail = overtime ? "Final/OT" : "Final";
+        } else if (rawStatus === "in_progress") {
+          state = "in"; name = "STATUS_IN_PROGRESS";
+          // Live strings are unverified until the first live window (Fri
+          // 2026-09-18 23:30Z MTL@HAM). Map defensively onto ESPN's shapes:
+          // "Halftime" / "End of 2nd" / "8:32 - 2nd", which liveProgress reads.
+          const nth = segment <= 4 ? ordinal(segment) : segment === 5 ? "OT" : `${segment - 4}OT`;
+          if (/half/i.test(clockLabel)) { name = "STATUS_HALFTIME"; detail = "Halftime"; }
+          else if (/^end/i.test(clockLabel)) detail = `End of ${nth}`;
+          else if (/delay/i.test(clockLabel)) { name = "STATUS_DELAYED"; detail = clockLabel; }
+          else detail = clock && segment ? `${clock} - ${nth}` : (clockLabel || "In Progress");
+        } else if (rawStatus === "postponed") {
+          name = "STATUS_POSTPONED"; detail = "Postponed";
+        } else if (rawStatus === "cancelled" || rawStatus === "canceled") {
+          state = "post"; name = "STATUS_CANCELED"; detail = "Canceled";
+        } else if (rawStatus === "delayed") {
+          name = "STATUS_DELAYED"; detail = "Delayed";
+        }
+        const score = box?.score || null;
+        const winnerId = String(score?.winning_team || "").split("/").pop();
+        const competitor = (team, homeAway, s, standing) => {
+          const t = toEspnTeam(team);
+          // 2025 events carry "10-8-0" (ties segment always present); 2026
+          // ones carry "10-3". Drop a zero ties tail so both read W-L, and
+          // keep a real tie ("6-6-1") — CFL ties are real.
+          const rec = String(standing?.short_record || "").replace(/^(\d+)-(\d+)-0$/, "$1-$2");
+          return {
+            homeAway,
+            id: t.id,
+            team: t,
+            score: s != null && s !== "" ? String(s) : "0",
+            winner: !!winnerId && t.id === winnerId && state === "post",
+            // theScore stamps each side's current record on the event; the
+            // standings route fills anything this leaves blank (future games).
+            records: rec ? [{ summary: String(rec) }] : [],
+          };
+        };
+        const us = ev?.tv_listings_by_country_code?.us;
+        // US audience: a game with no US listing streams free on CFL+.
+        const network = Array.isArray(us) && us[0]?.short_name ? String(us[0].short_name) : "CFL+";
+        // game_description is either a title ("Banjo Bowl", "Eastern Semi-Final",
+        // "112th Grey Cup") or, on some finished games, a full sentence about
+        // a record set in the game — which names the winner. Only the short
+        // titles pass through as a note; the sentences never leave the worker.
+        const desc = String(ev?.game_description || "").trim();
+        const notes = desc && desc.length <= 40 && !/[.!]$/.test(desc) ? [{ headline: desc }] : [];
+        const isGreyCup = /grey cup/i.test(desc);
+        const location = String(ev?.location || "");
+        const [city, province] = location.split(",").map((s) => s.trim());
+        const id = String(ev?.id ?? "");
+        const date = (() => { const d = new Date(ev?.game_date); return Number.isNaN(d.getTime()) ? null : d.toISOString(); })();
+        return {
+          id,
+          date,
+          name: `${away.full_name || away.name || ""} at ${home.full_name || home.name || ""}`,
+          shortName: `${away.abbreviation || ""} @ ${home.abbreviation || ""}`,
+          season: { type: seasonType, year: date ? Number(date.slice(0, 4)) : undefined },
+          ...(week ? { week: { number: week } } : {}),
+          status: {
+            displayClock: state === "in" ? clock : "0:00",
+            period: segment,
+            type: { name, state, completed, detail, shortDetail: detail },
+          },
+          links: [{ rel: ["summary"], href: `https://www.thescore.com/cfl/event/${id}` }],
+          competitions: [{
+            id,
+            date,
+            neutralSite: isGreyCup,
+            competitors: [
+              competitor(home, "home", score?.home?.score, ev?.standings?.home),
+              competitor(away, "away", score?.away?.score, ev?.standings?.away),
+            ],
+            broadcasts: [{ names: [network] }],
+            notes,
+            venue: {
+              fullName: String(ev?.stadium || ""),
+              address: { city: city || "", state: province || "", country: "Canada" },
+            },
+          }],
+        };
+      };
+
+      if (url.pathname === "/api/cfl/teams") {
+        try {
+          const res = await scoreFetch("/teams");
+          if (!res.ok) return corsJson({ items: [] }, 200, 60);
+          const data = await res.json();
+          const items = (Array.isArray(data) ? data : []).map((t) => {
+            const e = toEspnTeam(t);
+            return { id: e.id, displayName: e.displayName, shortDisplayName: e.shortDisplayName, abbreviation: e.abbreviation, active: true, logos: e.logo ? [{ href: e.logo }] : [] };
+          });
+          return corsJson({ items }, 200, 86400);
+        } catch {
+          return corsJson({ items: [] }, 200, 60);
+        }
+      }
+
+      if (url.pathname === "/api/cfl/standings") {
+        // One combined table with a `rank` stat: fetchStandingsRanks' oneTable
+        // branch reads it directly. rank = theScore's playoff_seed, which is
+        // league-wide (1–9) with the crossover rule already applied. Ties are
+        // real in the CFL, so the record keeps its third segment when ties > 0.
+        try {
+          const res = await scoreFetch("/standings");
+          if (!res.ok) return corsJson({ children: [] }, 200, 60);
+          const data = await res.json();
+          const rows = Array.isArray(data) ? data : [];
+          const entries = rows.map((s) => {
+            const t = toEspnTeam(s?.team || {});
+            const w = Number(s?.wins ?? 0), l = Number(s?.losses ?? 0), ties = Number(s?.ties ?? 0);
+            const summary = ties > 0 ? `${w}-${l}-${ties}` : `${w}-${l}`;
+            const seed = Number(s?.playoff_seed);
+            const pct = Number.parseFloat(String(s?.winning_percentage ?? ""));
+            return {
+              team: { id: t.id, abbreviation: t.abbreviation, displayName: t.displayName },
+              stats: [
+                { name: "overall", summary, displayValue: summary },
+                ...(Number.isFinite(seed) && seed > 0 ? [{ name: "rank", value: seed, displayValue: String(seed) }] : []),
+                ...(Number.isFinite(pct) ? [{ name: "winPercent", value: pct, displayValue: String(pct) }] : []),
+                { name: "points", value: Number(s?.points ?? 0), displayValue: String(s?.points ?? 0) },
+                // wins/losses/ties feed the client's early-season rank gate
+                // (lib/standingsRank.ts gamesPlayed) — no "#N" at 0-0.
+                { name: "wins", value: w, displayValue: String(w) },
+                { name: "losses", value: l, displayValue: String(l) },
+                { name: "ties", value: ties, displayValue: String(ties) },
+              ],
+            };
+          }).filter((e) => e.team.id);
+          return corsJson({ children: [{ name: "CFL", standings: { entries } }] }, 200, 600);
+        } catch {
+          return corsJson({ children: [] }, 200, 60);
+        }
+      }
+
+      // Scoreboard. `dates` is ESPN's YYYYMMDD or YYYYMMDD-YYYYMMDD, read as
+      // ET calendar days (ESPN buckets by ET, and so does the client's date
+      // nav). theScore is queried in UTC with a day of slack either side, then
+      // every event is re-bucketed onto its ET day so a 02:14Z Sunday kickoff
+      // (10:14pm ET Saturday) lands on the Saturday it belongs to. Intl does
+      // the DST math — the Nov 1 fall-back sits inside the playoff window.
+      const etDay = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+      const etYmd = (d) => etDay.format(d).replace(/-/g, "");
+      const datesParam = url.searchParams.get("dates") || "";
+      const m = datesParam.match(/^(\d{8})(?:-(\d{8}))?$/);
+      let from, to;
+      if (m) { from = m[1]; to = m[2] || m[1]; }
+      else { const today = etYmd(new Date()); from = today; to = today; }
+      if (to < from) [from, to] = [to, from];
+      const utcAt = (ymd, dayShift, hour) =>
+        new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8) + dayShift, hour)).toISOString();
+      const windowStart = utcAt(from, 0, 0);   // ET midnight is 04:00Z/05:00Z — 00:00Z is already 4h+ early
+      const windowEnd = utcAt(to, 1, 12);      // and noon Z the next day is 7h+ past ET midnight
+      try {
+        const res = await scoreFetch(`/events?game_date.in=${encodeURIComponent(`${windowStart},${windowEnd}`)}&rpp=200`);
+        if (!res.ok) return corsJson({ events: [] }, 200, 60);
+        const data = await res.json();
+        const events = [];
+        let live = false;
+        for (const ev of Array.isArray(data) ? data : []) {
+          const d = new Date(ev?.game_date);
+          if (Number.isNaN(d.getTime())) continue;
+          const day = etYmd(d);
+          if (day < from || day > to) continue;
+          const e = toEspnEvent(ev);
+          if (!e.id || !e.date) continue;
+          if (e.status.type.state === "in") live = true;
+          events.push(e);
+        }
+        events.sort((a, b) => a.date.localeCompare(b.date));
+        return corsJson({ events }, 200, live ? 20 : 300);
+      } catch {
+        return corsJson({ events: [] }, 200, 60);
+      }
+    }
+
     // ── Boxing: fight-card schedule (boxing-data.com via RapidAPI) ──────────
     // ESPN has NO boxing endpoint — its core API rejects the sport outright
     // ("Invalid sport (boxing)"), so this is the only structured source.

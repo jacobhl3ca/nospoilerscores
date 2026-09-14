@@ -250,6 +250,17 @@ check(
     /facup: \["fa cup"\]/.test(monitor) &&
     /facup: \["fa cup"\]/.test(readFileSync("scripts/prebake-news.mjs", "utf8")),
 );
+// CFL (2026-09-13): TSN is the uploader, served through the worker route.
+check("monitor covers CFL", monitor.includes('cfl:          "/api/cfl"') && monitor.includes('cfl: "TSN"'));
+check("CFL highlights resolve against TSN", youtube.getOfficialChannelName("cfl") === "TSN");
+// TSN titles the CFL postseason by round with no year; without the round gate
+// the 2025 semi-finals resolved to a regular-season meeting (2026-09-13).
+check(
+  "CFL playoff round gate is mirrored by the prebaker and the monitor",
+  youtube.getCompetitionTitleTokens("cfl", { playoff: true, playoffLabel: "Eastern Semi-Final" })[0] === "semi final" &&
+    readFileSync("scripts/prebake-news.mjs", "utf8").includes("function hlCflPlayoffTokens") &&
+    monitor.includes("function cflPlayoffTokens"),
+);
 check("monitor rejects incomplete ESPN audits", monitor.includes("Source failures are not zero-game slates"));
 check("rejected custom ESPN User-Agent is gone", !monitor.includes("nospoilerscores-staleness-check/1.0"));
 check(

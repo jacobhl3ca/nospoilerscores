@@ -18,21 +18,9 @@ name: Sticky header guard
 # Deliberately NOT part of deploy.yml: a regression here is cosmetic, so this
 # must never be able to block a deploy. It runs alongside and alerts.
 
+# 2026-09-14: dropped the push trigger to cut Actions minutes (free quota ran
+# out). Runs once per PR update instead of again on every push to main.
 on:
-  push:
-    branches: [main]
-    # Only the files that can break the invariant. Everything the spec touches:
-    # the header + spacer (HomeContent), every .league-sticky-top owner, the CSS
-    # that defines the pin offsets and the spacer height, and the spec itself.
-    paths:
-      - 'src/components/HomeContent.tsx'
-      - 'src/components/LeagueColumn.tsx'
-      - 'src/components/NewsColumn.tsx'
-      - 'src/components/TeamView.tsx'
-      - 'src/app/globals.css'
-      - 'tests/visual/sticky-seam.spec.ts'
-      - 'playwright.config.ts'
-      - '.github/workflows/sticky-guard.yml'
   pull_request:
     paths:
       - 'src/components/HomeContent.tsx'

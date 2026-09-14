@@ -327,6 +327,10 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   ncaawh: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/250px-NCAA_logo.svg.png",
   // ESPN's own league mark for women's college volleyball (leagues[0].logos, 2026-09-14).
   ncaavb: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/sports-volleyball-solid.png",
+  // The current CFL shield (2016 mark) on en.wikipedia — the Commons
+  // CFL_logo.svg is the old 250×41 wordmark, unreadable at 40px. Verified 200
+  // image/png, 250×229, 2026-09-13.
+  cfl: "https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/CFL_2016_logo.svg/250px-CFL_2016_logo.svg.png",
   golf: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pgatour.png&w=40&h=40&transparent=true",
   tennis: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/International_Tennis_Federation_Logo.svg/250px-International_Tennis_Federation_Logo.svg.png",
   epl: "https://a.espncdn.com/i/leaguelogos/soccer/500/23.png",
@@ -462,6 +466,7 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // r/collegehockey covers both tours, so the women's column reads the SAME
   // baked snapshot — no second bake job, no second staleness entry.
   ncaawh: { key: "reddit-ncaah", label: "r/collegehockey" },
+  cfl: { key: "reddit-cfl", label: "r/CFL" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
   boxing: { key: "reddit-boxing", label: "r/Boxing" },
   f1: { key: "reddit-f1", label: "r/formula1" },
@@ -541,6 +546,16 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
     sport === "nationschamp"
   ) return [];
   const logoUrl = LEAGUE_LOGO[sport];
+  // ESPN has no CFL feed any more (its CFL endpoints froze in 2023), so an
+  // "ESPN CFL" card could only ever be empty. r/CFL leads and theScore's CFL
+  // wire — the same api.thescore.com family the thescore-* bakes already use —
+  // is the headline catch-all instead.
+  if (sport === "cfl") {
+    return [
+      { label: "r/CFL", key: "reddit-cfl", kind: "prebaked", logoUrl },
+      { label: "theScore CFL", key: "thescore-cfl", kind: "prebaked", logoUrl },
+    ];
+  }
   const out: ColumnSource[] = [];
   // Reddit FIRST (Jacob 7/16): the freshest community discussion leads every
   // column, above the official highlight video and the ESPN catch-all.
@@ -580,7 +595,7 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf", "ufl",
   "fifa", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
-  "mls", "golf", "tennis", "wnba", "ncaaw", "ncaavb", "ncaah", "ncaawh", "ncaabase", "ncaasoft",
+  "mls", "golf", "tennis", "wnba", "ncaaw", "ncaavb", "ncaah", "cfl", "ncaawh", "ncaabase", "ncaasoft",
   // Second-wave soccer sorts below the established leagues in the merged mobile
   // feed, Liga MX first (largest US audience of the group). The two
   // yearCycle-gated national-team tournaments sit just above it, since in a year

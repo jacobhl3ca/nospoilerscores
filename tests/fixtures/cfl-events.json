@@ -1,0 +1,1464 @@
+{
+ "final": {
+  "id": 138558,
+  "game_date": "Sat, 12 Sep 2026 17:00:00 -0000",
+  "event_status": "final",
+  "status": "final",
+  "game_type": "Regular Season",
+  "game_description": null,
+  "season_week": "2026-15",
+  "week": 15,
+  "tba": false,
+  "stadium": "BMO Field",
+  "location": "Toronto, ON",
+  "tv_listings_by_country_code": {
+   "ca": [
+    {
+     "short_name": "TSN1",
+     "long_name": "TSN1"
+    }
+   ]
+  },
+  "home_team": {
+   "id": 316,
+   "abbreviation": "TOR",
+   "short_name": "TOR",
+   "full_name": "Toronto Argonauts",
+   "name": "Argonauts",
+   "location": "Toronto",
+   "division": "East",
+   "colour_1": "5f90b2",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/316/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/316/w72xh72_logo.png"
+   }
+  },
+  "away_team": {
+   "id": 800,
+   "abbreviation": "OTT",
+   "short_name": "OTT",
+   "full_name": "Ottawa REDBLACKS",
+   "name": "REDBLACKS",
+   "location": "Ottawa",
+   "division": "East",
+   "colour_1": "AD172B",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/800/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/800/w72xh72_logo.png"
+   }
+  },
+  "standings": {
+   "home": {
+    "short_record": "7-6"
+   },
+   "away": {
+    "short_record": "0-12"
+   }
+  },
+  "box_score": {
+   "progress": {
+    "clock_label": "Final",
+    "string": "Final",
+    "status": "final",
+    "event_status": "final",
+    "segment": 4,
+    "segment_string": "4th",
+    "segment_description": "4th Quarter",
+    "clock": "0:00",
+    "overtime": false
+   },
+   "score": {
+    "home": {
+     "score": 26
+    },
+    "away": {
+     "score": 23
+    },
+    "winning_team": "/cfl/teams/316",
+    "losing_team": "/cfl/teams/800",
+    "tie_game": false
+   },
+   "segment_number": 4,
+   "minutes": 0
+  }
+ },
+ "pregame": {
+  "id": 138563,
+  "game_date": "Fri, 18 Sep 2026 23:30:00 -0000",
+  "event_status": "pre_game",
+  "status": "pre_game",
+  "game_type": "Regular Season",
+  "game_description": null,
+  "season_week": "2026-16",
+  "week": 16,
+  "tba": false,
+  "stadium": "Hamilton Stadium",
+  "location": "Hamilton, ON",
+  "tv_listings_by_country_code": {
+   "us": [
+    {
+     "short_name": "CBS Sports Network",
+     "long_name": "CBS Sports Network"
+    }
+   ],
+   "ca": [
+    {
+     "short_name": "TSN1",
+     "long_name": "TSN1"
+    },
+    {
+     "short_name": "TSN3",
+     "long_name": "TSN3"
+    }
+   ]
+  },
+  "home_team": {
+   "id": 312,
+   "abbreviation": "HAM",
+   "short_name": "HAM",
+   "full_name": "Hamilton Tiger-Cats",
+   "name": "Tiger-Cats",
+   "location": "Hamilton",
+   "division": "East",
+   "colour_1": "EEAB16",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/312/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/312/w72xh72_logo.png"
+   }
+  },
+  "away_team": {
+   "id": 314,
+   "abbreviation": "MTL",
+   "short_name": "MTL",
+   "full_name": "Montreal Alouettes",
+   "name": "Alouettes",
+   "location": "Montreal",
+   "division": "East",
+   "colour_1": "081E48",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/314/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/314/w72xh72_logo.png"
+   }
+  },
+  "standings": {
+   "home": {
+    "short_record": "4-9"
+   },
+   "away": {
+    "short_record": "10-2"
+   }
+  },
+  "box_score": null
+ },
+ "greycup": {
+  "id": 137884,
+  "game_date": "Sun, 16 Nov 2025 23:00:00 -0000",
+  "event_status": "final",
+  "status": "final",
+  "game_type": "Playoff Game",
+  "game_description": "112th Grey Cup",
+  "season_week": "2025-24",
+  "week": 24,
+  "tba": false,
+  "stadium": "Princess Auto Stadium",
+  "location": "Winnipeg, MB",
+  "tv_listings_by_country_code": {
+   "ca": [
+    {
+     "short_name": "CTV",
+     "long_name": "CTV"
+    },
+    {
+     "short_name": "TSN",
+     "long_name": "TSN"
+    }
+   ],
+   "us": [
+    {
+     "short_name": "CBS",
+     "long_name": "CBS"
+    }
+   ]
+  },
+  "home_team": {
+   "id": 314,
+   "abbreviation": "MTL",
+   "short_name": "MTL",
+   "full_name": "Montreal Alouettes",
+   "name": "Alouettes",
+   "location": "Montreal",
+   "division": "East",
+   "colour_1": "081E48",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/314/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/314/w72xh72_logo.png"
+   }
+  },
+  "away_team": {
+   "id": 326,
+   "abbreviation": "SSK",
+   "short_name": "SSK",
+   "full_name": "Saskatchewan Roughriders",
+   "name": "Roughriders",
+   "location": "Saskatchewan",
+   "division": "West",
+   "colour_1": "046240",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/326/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/326/w72xh72_logo.png"
+   }
+  },
+  "standings": {
+   "home": {
+    "short_record": "10-8-0"
+   },
+   "away": {
+    "short_record": "12-6-0"
+   }
+  },
+  "box_score": {
+   "progress": {
+    "clock_label": "Final",
+    "string": "Final",
+    "status": "final",
+    "event_status": "final",
+    "segment": 4,
+    "segment_string": "4th",
+    "segment_description": "4th Quarter",
+    "clock": "0:00",
+    "overtime": false
+   },
+   "score": {
+    "home": {
+     "score": 17
+    },
+    "away": {
+     "score": 25
+    },
+    "winning_team": "/cfl/teams/326",
+    "losing_team": "/cfl/teams/314",
+    "tie_game": false
+   },
+   "segment_number": 4,
+   "minutes": 0
+  }
+ },
+ "overtime": {
+  "id": 135214,
+  "game_date": "Thu, 07 Aug 2025 23:30:00 -0000",
+  "event_status": "final",
+  "status": "final",
+  "game_type": "Regular Season",
+  "game_description": null,
+  "season_week": "2025-10",
+  "week": 10,
+  "tba": false,
+  "stadium": "Hamilton Field",
+  "location": "Hamilton, ON",
+  "tv_listings_by_country_code": {
+   "us": [
+    {
+     "short_name": "CBS Sports Network",
+     "long_name": "CBS Sports Network"
+    }
+   ],
+   "ca": [
+    {
+     "short_name": "TSN1",
+     "long_name": "TSN1"
+    },
+    {
+     "short_name": "TSN4",
+     "long_name": "TSN4"
+    }
+   ]
+  },
+  "home_team": {
+   "id": 312,
+   "abbreviation": "HAM",
+   "short_name": "HAM",
+   "full_name": "Hamilton Tiger-Cats",
+   "name": "Tiger-Cats",
+   "location": "Hamilton",
+   "division": "East",
+   "colour_1": "EEAB16",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/312/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/312/w72xh72_logo.png"
+   }
+  },
+  "away_team": {
+   "id": 320,
+   "abbreviation": "BC",
+   "short_name": "BC",
+   "full_name": "BC Lions",
+   "name": "Lions",
+   "location": "BC",
+   "division": "West",
+   "colour_1": "FF521C",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/320/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/320/w72xh72_logo.png"
+   }
+  },
+  "standings": {
+   "home": {
+    "short_record": "11-7-0"
+   },
+   "away": {
+    "short_record": "11-7-0"
+   }
+  },
+  "box_score": {
+   "progress": {
+    "clock_label": "Final (OT)",
+    "string": "Final (OT)",
+    "status": "final",
+    "event_status": "final",
+    "segment": 5,
+    "segment_string": "OT",
+    "segment_description": "Overtime",
+    "clock": "0:00",
+    "overtime": true
+   },
+   "score": {
+    "home": {
+     "score": 38
+    },
+    "away": {
+     "score": 41
+    },
+    "winning_team": "/cfl/teams/320",
+    "losing_team": "/cfl/teams/312",
+    "tie_game": false
+   },
+   "segment_number": 5,
+   "minutes": 0
+  }
+ },
+ "recordSentence": {
+  "id": 135189,
+  "game_date": "Fri, 27 Jun 2025 23:30:00 -0000",
+  "event_status": "final",
+  "status": "final",
+  "game_type": "Regular Season",
+  "game_description": "Bo Levi Mitchell becomes the 10th QB in CFL history to reach 100 career wins, and the fastest to accomplish the feat (143 games).",
+  "season_week": "2025-4",
+  "week": 4,
+  "tba": false,
+  "stadium": "Hamilton Field",
+  "location": "Hamilton, ON",
+  "tv_listings_by_country_code": {
+   "ca": [
+    {
+     "short_name": "TSN1",
+     "long_name": "TSN1"
+    },
+    {
+     "short_name": "TSN4",
+     "long_name": "TSN4"
+    }
+   ]
+  },
+  "home_team": {
+   "id": 312,
+   "abbreviation": "HAM",
+   "short_name": "HAM",
+   "full_name": "Hamilton Tiger-Cats",
+   "name": "Tiger-Cats",
+   "location": "Hamilton",
+   "division": "East",
+   "colour_1": "EEAB16",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/312/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/312/w72xh72_logo.png"
+   }
+  },
+  "away_team": {
+   "id": 314,
+   "abbreviation": "MTL",
+   "short_name": "MTL",
+   "full_name": "Montreal Alouettes",
+   "name": "Alouettes",
+   "location": "Montreal",
+   "division": "East",
+   "colour_1": "081E48",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/314/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/314/w72xh72_logo.png"
+   }
+  },
+  "standings": {
+   "home": {
+    "short_record": "11-7-0"
+   },
+   "away": {
+    "short_record": "10-8-0"
+   }
+  },
+  "box_score": {
+   "progress": {
+    "clock_label": "Final",
+    "string": "Final",
+    "status": "final",
+    "event_status": "final",
+    "segment": 4,
+    "segment_string": "4th",
+    "segment_description": "4th Quarter",
+    "clock": "0:00",
+    "overtime": false
+   },
+   "score": {
+    "home": {
+     "score": 35
+    },
+    "away": {
+     "score": 17
+    },
+    "winning_team": "/cfl/teams/312",
+    "losing_team": "/cfl/teams/314",
+    "tie_game": false
+   },
+   "segment_number": 4,
+   "minutes": 0
+  }
+ },
+ "sep12": [
+  {
+   "id": 138558,
+   "game_date": "Sat, 12 Sep 2026 17:00:00 -0000",
+   "event_status": "final",
+   "status": "final",
+   "game_type": "Regular Season",
+   "game_description": null,
+   "season_week": "2026-15",
+   "week": 15,
+   "tba": false,
+   "stadium": "BMO Field",
+   "location": "Toronto, ON",
+   "tv_listings_by_country_code": {
+    "ca": [
+     {
+      "short_name": "TSN1",
+      "long_name": "TSN1"
+     }
+    ]
+   },
+   "home_team": {
+    "id": 316,
+    "abbreviation": "TOR",
+    "short_name": "TOR",
+    "full_name": "Toronto Argonauts",
+    "name": "Argonauts",
+    "location": "Toronto",
+    "division": "East",
+    "colour_1": "5f90b2",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/316/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/316/w72xh72_logo.png"
+    }
+   },
+   "away_team": {
+    "id": 800,
+    "abbreviation": "OTT",
+    "short_name": "OTT",
+    "full_name": "Ottawa REDBLACKS",
+    "name": "REDBLACKS",
+    "location": "Ottawa",
+    "division": "East",
+    "colour_1": "AD172B",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/800/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/800/w72xh72_logo.png"
+    }
+   },
+   "standings": {
+    "home": {
+     "short_record": "7-6"
+    },
+    "away": {
+     "short_record": "0-12"
+    }
+   },
+   "box_score": {
+    "progress": {
+     "clock_label": "Final",
+     "string": "Final",
+     "status": "final",
+     "event_status": "final",
+     "segment": 4,
+     "segment_string": "4th",
+     "segment_description": "4th Quarter",
+     "clock": "0:00",
+     "overtime": false
+    },
+    "score": {
+     "home": {
+      "score": 26
+     },
+     "away": {
+      "score": 23
+     },
+     "winning_team": "/cfl/teams/316",
+     "losing_team": "/cfl/teams/800",
+     "tie_game": false
+    },
+    "segment_number": 4,
+    "minutes": 0
+   }
+  },
+  {
+   "id": 138561,
+   "game_date": "Sat, 12 Sep 2026 20:00:00 -0000",
+   "event_status": "final",
+   "status": "final",
+   "game_type": "Regular Season",
+   "game_description": "Banjo Bowl",
+   "season_week": "2026-15",
+   "week": 15,
+   "tba": false,
+   "stadium": "Princess Auto Stadium",
+   "location": "Winnipeg, MB",
+   "tv_listings_by_country_code": {
+    "ca": [
+     {
+      "short_name": "TSN1",
+      "long_name": "TSN1"
+     },
+     {
+      "short_name": "TSN3",
+      "long_name": "TSN3"
+     },
+     {
+      "short_name": "CTV",
+      "long_name": "CTV"
+     },
+     {
+      "short_name": "Crave",
+      "long_name": "Crave"
+     }
+    ]
+   },
+   "home_team": {
+    "id": 318,
+    "abbreviation": "WPG",
+    "short_name": "WPG",
+    "full_name": "Winnipeg Blue Bombers",
+    "name": "Blue Bombers",
+    "location": "Winnipeg",
+    "division": "West",
+    "colour_1": "002F87",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/318/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/318/w72xh72_logo.png"
+    }
+   },
+   "away_team": {
+    "id": 326,
+    "abbreviation": "SSK",
+    "short_name": "SSK",
+    "full_name": "Saskatchewan Roughriders",
+    "name": "Roughriders",
+    "location": "Saskatchewan",
+    "division": "West",
+    "colour_1": "046240",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/326/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/326/w72xh72_logo.png"
+    }
+   },
+   "standings": {
+    "home": {
+     "short_record": "7-6"
+    },
+    "away": {
+     "short_record": "8-5"
+    }
+   },
+   "box_score": {
+    "progress": {
+     "clock_label": "Final",
+     "string": "Final",
+     "status": "final",
+     "event_status": "final",
+     "segment": 4,
+     "segment_string": "4th",
+     "segment_description": "4th Quarter",
+     "clock": "0:00",
+     "overtime": false
+    },
+    "score": {
+     "home": {
+      "score": 19
+     },
+     "away": {
+      "score": 6
+     },
+     "winning_team": "/cfl/teams/318",
+     "losing_team": "/cfl/teams/326",
+     "tie_game": false
+    },
+    "segment_number": 4,
+    "minutes": 0
+   }
+  },
+  {
+   "id": 138559,
+   "game_date": "Sat, 12 Sep 2026 23:00:00 -0000",
+   "event_status": "final",
+   "status": "final",
+   "game_type": "Regular Season",
+   "game_description": null,
+   "season_week": "2026-15",
+   "week": 15,
+   "tba": false,
+   "stadium": "Commonwealth Stadium",
+   "location": "Edmonton, AB",
+   "tv_listings_by_country_code": {
+    "ca": [
+     {
+      "short_name": "TSN",
+      "long_name": "TSN"
+     }
+    ]
+   },
+   "home_team": {
+    "id": 324,
+    "abbreviation": "EDM",
+    "short_name": "EDM",
+    "full_name": "Edmonton Elks",
+    "name": "Elks",
+    "location": "Edmonton",
+    "division": "West",
+    "colour_1": "254A2E",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/324/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/324/w72xh72_logo.png"
+    }
+   },
+   "away_team": {
+    "id": 322,
+    "abbreviation": "CGY",
+    "short_name": "CGY",
+    "full_name": "Calgary Stampeders",
+    "name": "Stampeders",
+    "location": "Calgary",
+    "division": "West",
+    "colour_1": "C30F28",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/322/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/322/w72xh72_logo.png"
+    }
+   },
+   "standings": {
+    "home": {
+     "short_record": "10-3"
+    },
+    "away": {
+     "short_record": "5-8"
+    }
+   },
+   "box_score": {
+    "progress": {
+     "clock_label": "Final",
+     "string": "Final",
+     "status": "final",
+     "event_status": "final",
+     "segment": 4,
+     "segment_string": "4th",
+     "segment_description": "4th Quarter",
+     "clock": "0:00",
+     "overtime": false
+    },
+    "score": {
+     "home": {
+      "score": 53
+     },
+     "away": {
+      "score": 16
+     },
+     "winning_team": "/cfl/teams/324",
+     "losing_team": "/cfl/teams/322",
+     "tie_game": false
+    },
+    "segment_number": 4,
+    "minutes": 0
+   }
+  },
+  {
+   "id": 138560,
+   "game_date": "Sun, 13 Sep 2026 02:14:00 -0000",
+   "event_status": "final",
+   "status": "final",
+   "game_type": "Regular Season",
+   "game_description": null,
+   "season_week": "2026-15",
+   "week": 15,
+   "tba": false,
+   "stadium": "BC Place",
+   "location": "Vancouver, BC",
+   "tv_listings_by_country_code": {
+    "ca": [
+     {
+      "short_name": "TSN",
+      "long_name": "TSN"
+     }
+    ]
+   },
+   "home_team": {
+    "id": 320,
+    "abbreviation": "BC",
+    "short_name": "BC",
+    "full_name": "BC Lions",
+    "name": "Lions",
+    "location": "BC",
+    "division": "West",
+    "colour_1": "FF521C",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/320/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/320/w72xh72_logo.png"
+    }
+   },
+   "away_team": {
+    "id": 314,
+    "abbreviation": "MTL",
+    "short_name": "MTL",
+    "full_name": "Montreal Alouettes",
+    "name": "Alouettes",
+    "location": "Montreal",
+    "division": "East",
+    "colour_1": "081E48",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/314/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/314/w72xh72_logo.png"
+    }
+   },
+   "standings": {
+    "home": {
+     "short_record": "7-6"
+    },
+    "away": {
+     "short_record": "10-3"
+    }
+   },
+   "box_score": {
+    "progress": {
+     "clock_label": "Final",
+     "string": "Final",
+     "status": "final",
+     "event_status": "final",
+     "segment": 4,
+     "segment_string": "4th",
+     "segment_description": "4th Quarter",
+     "clock": "0:00",
+     "overtime": false
+    },
+    "score": {
+     "home": {
+      "score": 48
+     },
+     "away": {
+      "score": 29
+     },
+     "winning_team": "/cfl/teams/320",
+     "losing_team": "/cfl/teams/314",
+     "tie_game": false
+    },
+    "segment_number": 4,
+    "minutes": 0
+   }
+  }
+ ],
+ "standings": [
+  {
+   "team": {
+    "id": 314,
+    "abbreviation": "MTL",
+    "short_name": "MTL",
+    "full_name": "Montreal Alouettes",
+    "name": "Alouettes",
+    "location": "Montreal",
+    "division": "East",
+    "colour_1": "081E48",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/314/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/314/w72xh72_logo.png"
+    }
+   },
+   "division": "East",
+   "division_rank": 1,
+   "playoff_seed": 1,
+   "points": 20,
+   "wins": 10,
+   "losses": 3,
+   "ties": 0,
+   "short_record": "10-3",
+   "winning_percentage": ".769",
+   "clinched_playoffs": true,
+   "eliminated_from_playoffs": false
+  },
+  {
+   "team": {
+    "id": 324,
+    "abbreviation": "EDM",
+    "short_name": "EDM",
+    "full_name": "Edmonton Elks",
+    "name": "Elks",
+    "location": "Edmonton",
+    "division": "West",
+    "colour_1": "254A2E",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/324/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/324/w72xh72_logo.png"
+    }
+   },
+   "division": "West",
+   "division_rank": 1,
+   "playoff_seed": 2,
+   "points": 20,
+   "wins": 10,
+   "losses": 3,
+   "ties": 0,
+   "short_record": "10-3",
+   "winning_percentage": ".769",
+   "clinched_playoffs": true,
+   "eliminated_from_playoffs": false
+  },
+  {
+   "team": {
+    "id": 326,
+    "abbreviation": "SSK",
+    "short_name": "SSK",
+    "full_name": "Saskatchewan Roughriders",
+    "name": "Roughriders",
+    "location": "Saskatchewan",
+    "division": "West",
+    "colour_1": "046240",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/326/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/326/w72xh72_logo.png"
+    }
+   },
+   "division": "West",
+   "division_rank": 2,
+   "playoff_seed": 3,
+   "points": 16,
+   "wins": 8,
+   "losses": 5,
+   "ties": 0,
+   "short_record": "8-5",
+   "winning_percentage": ".615",
+   "clinched_playoffs": false,
+   "eliminated_from_playoffs": false
+  },
+  {
+   "team": {
+    "id": 318,
+    "abbreviation": "WPG",
+    "short_name": "WPG",
+    "full_name": "Winnipeg Blue Bombers",
+    "name": "Blue Bombers",
+    "location": "Winnipeg",
+    "division": "West",
+    "colour_1": "002F87",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/318/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/318/w72xh72_logo.png"
+    }
+   },
+   "division": "West",
+   "division_rank": 3,
+   "playoff_seed": 4,
+   "points": 14,
+   "wins": 7,
+   "losses": 6,
+   "ties": 0,
+   "short_record": "7-6",
+   "winning_percentage": ".538",
+   "clinched_playoffs": false,
+   "eliminated_from_playoffs": false
+  },
+  {
+   "team": {
+    "id": 322,
+    "abbreviation": "CGY",
+    "short_name": "CGY",
+    "full_name": "Calgary Stampeders",
+    "name": "Stampeders",
+    "location": "Calgary",
+    "division": "West",
+    "colour_1": "C30F28",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/322/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/322/w72xh72_logo.png"
+    }
+   },
+   "division": "West",
+   "division_rank": 4,
+   "playoff_seed": 5,
+   "points": 10,
+   "wins": 5,
+   "losses": 8,
+   "ties": 0,
+   "short_record": "5-8",
+   "winning_percentage": ".385",
+   "clinched_playoffs": false,
+   "eliminated_from_playoffs": false
+  },
+  {
+   "team": {
+    "id": 316,
+    "abbreviation": "TOR",
+    "short_name": "TOR",
+    "full_name": "Toronto Argonauts",
+    "name": "Argonauts",
+    "location": "Toronto",
+    "division": "East",
+    "colour_1": "5f90b2",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/316/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/316/w72xh72_logo.png"
+    }
+   },
+   "division": "East",
+   "division_rank": 2,
+   "playoff_seed": 6,
+   "points": 14,
+   "wins": 7,
+   "losses": 6,
+   "ties": 0,
+   "short_record": "7-6",
+   "winning_percentage": ".538",
+   "clinched_playoffs": false,
+   "eliminated_from_playoffs": false
+  },
+  {
+   "team": {
+    "id": 312,
+    "abbreviation": "HAM",
+    "short_name": "HAM",
+    "full_name": "Hamilton Tiger-Cats",
+    "name": "Tiger-Cats",
+    "location": "Hamilton",
+    "division": "East",
+    "colour_1": "EEAB16",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/312/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/312/w72xh72_logo.png"
+    }
+   },
+   "division": "East",
+   "division_rank": 3,
+   "playoff_seed": 7,
+   "points": 8,
+   "wins": 4,
+   "losses": 9,
+   "ties": 0,
+   "short_record": "4-9",
+   "winning_percentage": ".308",
+   "clinched_playoffs": false,
+   "eliminated_from_playoffs": false
+  },
+  {
+   "team": {
+    "id": 320,
+    "abbreviation": "BC",
+    "short_name": "BC",
+    "full_name": "BC Lions",
+    "name": "Lions",
+    "location": "BC",
+    "division": "West",
+    "colour_1": "FF521C",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/320/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/320/w72xh72_logo.png"
+    }
+   },
+   "division": "West",
+   "division_rank": 3,
+   "playoff_seed": 8,
+   "points": 14,
+   "wins": 7,
+   "losses": 6,
+   "ties": 0,
+   "short_record": "7-6",
+   "winning_percentage": ".538",
+   "clinched_playoffs": false,
+   "eliminated_from_playoffs": false
+  },
+  {
+   "team": {
+    "id": 800,
+    "abbreviation": "OTT",
+    "short_name": "OTT",
+    "full_name": "Ottawa REDBLACKS",
+    "name": "REDBLACKS",
+    "location": "Ottawa",
+    "division": "East",
+    "colour_1": "AD172B",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/800/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/800/w72xh72_logo.png"
+    }
+   },
+   "division": "East",
+   "division_rank": 4,
+   "playoff_seed": 9,
+   "points": 0,
+   "wins": 0,
+   "losses": 12,
+   "ties": 0,
+   "short_record": "0-12",
+   "winning_percentage": ".000",
+   "clinched_playoffs": false,
+   "eliminated_from_playoffs": false
+  }
+ ],
+ "teams": [
+  {
+   "id": 312,
+   "abbreviation": "HAM",
+   "short_name": "HAM",
+   "full_name": "Hamilton Tiger-Cats",
+   "name": "Tiger-Cats",
+   "location": "Hamilton",
+   "division": "East",
+   "colour_1": "EEAB16",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/312/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/312/w72xh72_logo.png"
+   }
+  },
+  {
+   "id": 314,
+   "abbreviation": "MTL",
+   "short_name": "MTL",
+   "full_name": "Montreal Alouettes",
+   "name": "Alouettes",
+   "location": "Montreal",
+   "division": "East",
+   "colour_1": "081E48",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/314/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/314/w72xh72_logo.png"
+   }
+  },
+  {
+   "id": 316,
+   "abbreviation": "TOR",
+   "short_name": "TOR",
+   "full_name": "Toronto Argonauts",
+   "name": "Argonauts",
+   "location": "Toronto",
+   "division": "East",
+   "colour_1": "5f90b2",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/316/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/316/w72xh72_logo.png"
+   }
+  },
+  {
+   "id": 318,
+   "abbreviation": "WPG",
+   "short_name": "WPG",
+   "full_name": "Winnipeg Blue Bombers",
+   "name": "Blue Bombers",
+   "location": "Winnipeg",
+   "division": "West",
+   "colour_1": "002F87",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/318/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/318/w72xh72_logo.png"
+   }
+  },
+  {
+   "id": 320,
+   "abbreviation": "BC",
+   "short_name": "BC",
+   "full_name": "BC Lions",
+   "name": "Lions",
+   "location": "BC",
+   "division": "West",
+   "colour_1": "FF521C",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/320/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/320/w72xh72_logo.png"
+   }
+  },
+  {
+   "id": 322,
+   "abbreviation": "CGY",
+   "short_name": "CGY",
+   "full_name": "Calgary Stampeders",
+   "name": "Stampeders",
+   "location": "Calgary",
+   "division": "West",
+   "colour_1": "C30F28",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/322/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/322/w72xh72_logo.png"
+   }
+  },
+  {
+   "id": 324,
+   "abbreviation": "EDM",
+   "short_name": "EDM",
+   "full_name": "Edmonton Elks",
+   "name": "Elks",
+   "location": "Edmonton",
+   "division": "West",
+   "colour_1": "254A2E",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/324/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/324/w72xh72_logo.png"
+   }
+  },
+  {
+   "id": 326,
+   "abbreviation": "SSK",
+   "short_name": "SSK",
+   "full_name": "Saskatchewan Roughriders",
+   "name": "Roughriders",
+   "location": "Saskatchewan",
+   "division": "West",
+   "colour_1": "046240",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/326/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/326/w72xh72_logo.png"
+   }
+  },
+  {
+   "id": 800,
+   "abbreviation": "OTT",
+   "short_name": "OTT",
+   "full_name": "Ottawa REDBLACKS",
+   "name": "REDBLACKS",
+   "location": "Ottawa",
+   "division": "East",
+   "colour_1": "AD172B",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/800/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/800/w72xh72_logo.png"
+   }
+  }
+ ],
+ "tie": {
+  "id": 900001,
+  "game_date": "Sat, 12 Sep 2026 17:00:00 -0000",
+  "event_status": "final",
+  "status": "final",
+  "game_type": "Regular Season",
+  "game_description": null,
+  "season_week": "2026-15",
+  "week": 15,
+  "tba": false,
+  "stadium": "BMO Field",
+  "location": "Toronto, ON",
+  "tv_listings_by_country_code": {
+   "ca": [
+    {
+     "short_name": "TSN1",
+     "long_name": "TSN1"
+    }
+   ]
+  },
+  "home_team": {
+   "id": 316,
+   "abbreviation": "TOR",
+   "short_name": "TOR",
+   "full_name": "Toronto Argonauts",
+   "name": "Argonauts",
+   "location": "Toronto",
+   "division": "East",
+   "colour_1": "5f90b2",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/316/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/316/w72xh72_logo.png"
+   }
+  },
+  "away_team": {
+   "id": 800,
+   "abbreviation": "OTT",
+   "short_name": "OTT",
+   "full_name": "Ottawa REDBLACKS",
+   "name": "REDBLACKS",
+   "location": "Ottawa",
+   "division": "East",
+   "colour_1": "AD172B",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/800/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/800/w72xh72_logo.png"
+   }
+  },
+  "standings": {
+   "home": {
+    "short_record": "7-6"
+   },
+   "away": {
+    "short_record": "0-12"
+   }
+  },
+  "box_score": {
+   "progress": {
+    "clock_label": "Final",
+    "string": "Final",
+    "status": "final",
+    "event_status": "final",
+    "segment": 4,
+    "segment_string": "4th",
+    "segment_description": "4th Quarter",
+    "clock": "0:00",
+    "overtime": false
+   },
+   "score": {
+    "home": {
+     "score": 24
+    },
+    "away": {
+     "score": 24
+    },
+    "winning_team": null,
+    "losing_team": null,
+    "tie_game": true
+   },
+   "segment_number": 4,
+   "minutes": 0
+  }
+ },
+ "postponed": {
+  "id": 900002,
+  "game_date": "Fri, 18 Sep 2026 23:30:00 -0000",
+  "event_status": "postponed",
+  "status": "postponed",
+  "game_type": "Regular Season",
+  "game_description": null,
+  "season_week": "2026-16",
+  "week": 16,
+  "tba": false,
+  "stadium": "Hamilton Stadium",
+  "location": "Hamilton, ON",
+  "tv_listings_by_country_code": {
+   "us": [
+    {
+     "short_name": "CBS Sports Network",
+     "long_name": "CBS Sports Network"
+    }
+   ],
+   "ca": [
+    {
+     "short_name": "TSN1",
+     "long_name": "TSN1"
+    },
+    {
+     "short_name": "TSN3",
+     "long_name": "TSN3"
+    }
+   ]
+  },
+  "home_team": {
+   "id": 312,
+   "abbreviation": "HAM",
+   "short_name": "HAM",
+   "full_name": "Hamilton Tiger-Cats",
+   "name": "Tiger-Cats",
+   "location": "Hamilton",
+   "division": "East",
+   "colour_1": "EEAB16",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/312/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/312/w72xh72_logo.png"
+   }
+  },
+  "away_team": {
+   "id": 314,
+   "abbreviation": "MTL",
+   "short_name": "MTL",
+   "full_name": "Montreal Alouettes",
+   "name": "Alouettes",
+   "location": "Montreal",
+   "division": "East",
+   "colour_1": "081E48",
+   "logos": {
+    "large": "https://assets-sports-gcp.thescore.com/football/team/314/logo.png",
+    "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/314/w72xh72_logo.png"
+   }
+  },
+  "standings": {
+   "home": {
+    "short_record": "4-9"
+   },
+   "away": {
+    "short_record": "10-2"
+   }
+  },
+  "box_score": null
+ },
+ "dstEdge": [
+  {
+   "id": 900003,
+   "game_date": "Sun, 01 Nov 2026 03:30:00 -0000",
+   "event_status": "final",
+   "status": "final",
+   "game_type": "Playoff Game",
+   "game_description": "Eastern Semi-Final",
+   "season_week": "2026-22",
+   "week": 22,
+   "tba": false,
+   "stadium": "BMO Field",
+   "location": "Toronto, ON",
+   "tv_listings_by_country_code": {
+    "ca": [
+     {
+      "short_name": "TSN1",
+      "long_name": "TSN1"
+     }
+    ]
+   },
+   "home_team": {
+    "id": 316,
+    "abbreviation": "TOR",
+    "short_name": "TOR",
+    "full_name": "Toronto Argonauts",
+    "name": "Argonauts",
+    "location": "Toronto",
+    "division": "East",
+    "colour_1": "5f90b2",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/316/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/316/w72xh72_logo.png"
+    }
+   },
+   "away_team": {
+    "id": 800,
+    "abbreviation": "OTT",
+    "short_name": "OTT",
+    "full_name": "Ottawa REDBLACKS",
+    "name": "REDBLACKS",
+    "location": "Ottawa",
+    "division": "East",
+    "colour_1": "AD172B",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/800/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/800/w72xh72_logo.png"
+    }
+   },
+   "standings": {
+    "home": {
+     "short_record": "7-6"
+    },
+    "away": {
+     "short_record": "0-12"
+    }
+   },
+   "box_score": {
+    "progress": {
+     "clock_label": "Final",
+     "string": "Final",
+     "status": "final",
+     "event_status": "final",
+     "segment": 4,
+     "segment_string": "4th",
+     "segment_description": "4th Quarter",
+     "clock": "0:00",
+     "overtime": false
+    },
+    "score": {
+     "home": {
+      "score": 26
+     },
+     "away": {
+      "score": 23
+     },
+     "winning_team": "/cfl/teams/316",
+     "losing_team": "/cfl/teams/800",
+     "tie_game": false
+    },
+    "segment_number": 4,
+    "minutes": 0
+   }
+  },
+  {
+   "id": 900004,
+   "game_date": "Sun, 01 Nov 2026 23:00:00 -0000",
+   "event_status": "final",
+   "status": "final",
+   "game_type": "Playoff Game",
+   "game_description": "Western Semi-Final",
+   "season_week": "2026-22",
+   "week": 22,
+   "tba": false,
+   "stadium": "BMO Field",
+   "location": "Toronto, ON",
+   "tv_listings_by_country_code": {
+    "ca": [
+     {
+      "short_name": "TSN1",
+      "long_name": "TSN1"
+     }
+    ]
+   },
+   "home_team": {
+    "id": 316,
+    "abbreviation": "TOR",
+    "short_name": "TOR",
+    "full_name": "Toronto Argonauts",
+    "name": "Argonauts",
+    "location": "Toronto",
+    "division": "East",
+    "colour_1": "5f90b2",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/316/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/316/w72xh72_logo.png"
+    }
+   },
+   "away_team": {
+    "id": 800,
+    "abbreviation": "OTT",
+    "short_name": "OTT",
+    "full_name": "Ottawa REDBLACKS",
+    "name": "REDBLACKS",
+    "location": "Ottawa",
+    "division": "East",
+    "colour_1": "AD172B",
+    "logos": {
+     "large": "https://assets-sports-gcp.thescore.com/football/team/800/logo.png",
+     "w72xh72": "https://assets-sports-gcp.thescore.com/football/team/800/w72xh72_logo.png"
+    }
+   },
+   "standings": {
+    "home": {
+     "short_record": "7-6"
+    },
+    "away": {
+     "short_record": "0-12"
+    }
+   },
+   "box_score": {
+    "progress": {
+     "clock_label": "Final",
+     "string": "Final",
+     "status": "final",
+     "event_status": "final",
+     "segment": 4,
+     "segment_string": "4th",
+     "segment_description": "4th Quarter",
+     "clock": "0:00",
+     "overtime": false
+    },
+    "score": {
+     "home": {
+      "score": 26
+     },
+     "away": {
+      "score": 23
+     },
+     "winning_team": "/cfl/teams/316",
+     "losing_team": "/cfl/teams/800",
+     "tie_game": false
+    },
+    "segment_number": 4,
+    "minutes": 0
+   }
+  }
+ ]
+}

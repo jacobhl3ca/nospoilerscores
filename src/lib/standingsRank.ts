@@ -41,6 +41,7 @@ export const RANK_METRIC: Partial<Record<Sport, "points" | "winPercent">> = {
 export const MIN_RANK_GAMES: Partial<Record<Sport, number>> = {
   nfl: 4, ncaaf: 4, ligamx: 4,          // 17-game seasons
   ufl: 2,                               // 10-game spring season
+  cfl: 4,                               // 18 (the worker's playoff_seed still reads as listing order at 0-0)
   nba: 15, nhl: 15,                     // 82
   wnba: 8,                              // 44
   mlb: 30,                              // 162

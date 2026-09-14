@@ -26,7 +26,7 @@ export interface CalendarEvent {
 // erring long keeps the slot free through a late finish.
 const DURATION_MIN: Record<string, number> = {
   mlb: 180, ncaabase: 180, ncaasoft: 150,
-  nfl: 195, ncaaf: 195,
+  nfl: 195, ncaaf: 195, cfl: 195,
   nba: 150, wnba: 150, ncaam: 150, ncaaw: 150,
   nhl: 165, ncaah: 165, ncaawh: 165,
   ncaavb: 150,

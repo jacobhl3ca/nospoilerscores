@@ -17,24 +17,9 @@ name: Unit tests
 # tile-text-guard.yml: it runs alongside a deploy and alerts, it never blocks
 # one. Node's own runner, no browser — the whole suite is ~1s.
 
+# 2026-09-14: dropped the push trigger to cut Actions minutes (free quota ran
+# out). Runs once per PR update instead of again on every push to main.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/lib/**'
-      - 'public/_worker.js'
-      # tests/label-keyed-channels.test.ts reads these two components as text --
-      # it is the guard on LeagueColumn handing every GameCard its league label,
-      # which is what tennis and golf highlight buttons hang off. Without these
-      # two lines the one file the guard watches is the one file that can't
-      # trigger it. The deploy gate in deploy.yml runs the suite on every push
-      # regardless; these paths are what give a PR the same answer.
-      - 'src/components/LeagueColumn.tsx'
-      - 'src/components/GameHighlights.tsx'
-      - 'tests/*.test.ts'
-      - 'tests/*.test.mjs'
-      - 'package.json'
-      - '.github/workflows/unit-tests.yml'
   pull_request:
     paths:
       - 'src/lib/**'

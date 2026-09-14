@@ -19,6 +19,18 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // NCAAF: ESPN College Football posts per-game recaps with title format
   // "Team A vs. Team B | Full Game Highlights | ESPN College Football".
   ncaaf: "ESPN College Football",
+  // CFL (added 2026-09-13): TSN (channelId UC--i2rV5NCxiEIPefr3l-zQ), not
+  // the league. Probed against the LIVE worker with strict=1 + week= on all
+  // 16 completed games of Weeks 12–15: 16/16 hits, 0 wrong, every title
+  // "CFL WEEK N: Away vs. Home | Full Highlights" (one Banjo Bowl variant "…
+  // | CFL HIGHLIGHTS", still right). The CFL's own channel scored 2/8 and
+  // served the WRONG game once without week= — it titles by city only ("CFL
+  // 2026 Recap: Ottawa @ Toronto - Week 15") and never carries team names.
+  // The week gate is load-bearing: TSN has 2024/2025 "CFL Week 10: …" uploads
+  // with no year in the title. Playoffs carry no week and TSN titles them by
+  // round ("EAST SEMI-FINAL: … FULL HIGHLIGHTS"); the worker's date tiers
+  // pick the year there.
+  cfl: "TSN",
   // World Cup: FOX is the US English-language rightsholder and "FOX Sports"
   // posts a clean per-match "TeamA vs TeamB Highlights | 2026 FIFA World Cup™"
   // for every game. FIFA's own channel only posts alt-cast / limited clips, so
@@ -553,8 +565,33 @@ const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
 // scripts/prebake-news.mjs — keep the two in sync.
 const NFL_PRESEASON_TITLE_TOKENS = ["preseason", "hall of fame"];
 
-export function getCompetitionTitleTokens(sport: string, opts?: { preseason?: boolean }): string[] {
+// CFL playoffs — the week gate's blind spot. TSN titles the regular season by
+// week ("CFL WEEK 13: …") and the postseason by ROUND with no year ("CFL
+// EASTERN SEMI-FINAL: …", "CFL EAST FINAL: …", "GREY CUP: … | FULL
+// HIGHLIGHTS"). Playoff cards carry no week (gridironWeekNumber), so with only
+// the date gate both 2025 semi-finals resolved to a REGULAR-season meeting of
+// the same two teams ("CFL WEEK 13: Montreal Alouettes vs. Winnipeg Blue
+// Bombers" — probed 2026-09-13, 2/2 wrong). With the round from the card's
+// playoffLabel as a title gate the same five 2025 playoff games read 5/5
+// right. Mirrored by hlCflPlayoffTokens in scripts/prebake-news.mjs and
+// cflPlayoffTokens in scripts/check-highlight-fallbacks.mjs — keep in sync.
+export function cflPlayoffTitleTokens(playoffLabel?: string | null): string[] {
+  const l = (playoffLabel ?? "").toLowerCase();
+  if (/grey.?cup/.test(l)) return ["grey cup"];
+  if (/semi/.test(l)) return ["semi final"];
+  if (/east/.test(l)) return ["east final", "eastern final"];
+  if (/west/.test(l)) return ["west final", "western final"];
+  // A playoff game with no round in its label: any postseason title, never a
+  // "WEEK N" one.
+  return ["grey cup", "semi final", "east final", "eastern final", "west final", "western final", "playoff"];
+}
+
+export function getCompetitionTitleTokens(
+  sport: string,
+  opts?: { preseason?: boolean; playoff?: boolean; playoffLabel?: string | null },
+): string[] {
   if (sport === "nfl" && opts?.preseason) return NFL_PRESEASON_TITLE_TOKENS;
+  if (sport === "cfl" && opts?.playoff) return cflPlayoffTitleTokens(opts.playoffLabel);
   return COMPETITION_TITLE_TOKENS[sport] ?? [];
 }
 

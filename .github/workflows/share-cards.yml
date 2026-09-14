@@ -1,11 +1,11 @@
 name: Prebake highlight share cards
 
+# moved to the mini 2026-09-14 (launchd com.hidescore.share-cards, hourly,
+# ~/bin/hidescore-share-cards-cron.sh); manual fallback only.
+# Hourly cadence kept there: finished games get a matchup preview card within
+# an hour, well before a highlight is even shareable (per-league buffer is
+# 3–5h after start). Covers yesterday + today (ET) each run.
 on:
-  schedule:
-    # Hourly — finished games get a matchup preview card within an hour, well
-    # before a highlight is even shareable (per-league buffer is 3–5h after
-    # start). Covers yesterday + today (ET) each run.
-    - cron: "0 * * * *"
   workflow_dispatch:
 
 # A new run supersedes an in-flight one; we only care about the latest cards.

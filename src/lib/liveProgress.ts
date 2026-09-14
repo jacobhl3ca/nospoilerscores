@@ -96,10 +96,11 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (/^end\b|between/i.test(statusDetail)) return { full: `End of Set ${n}`, short: `End S${n}` };
     return { full: `Set ${n}`, short: `S${n}` };
   }
-  if (sport === "nfl" || sport === "ncaaf" || sport === "ufl") {
+  if (sport === "nfl" || sport === "ncaaf" || sport === "ufl" || sport === "cfl") {
     // UFL shares the shape: four 15-min quarters, then OT. Its OT is an
     // alternating series of 2-point tries, but ESPN still reports it as
-    // period 5, so "OT" is the right label.
+    // period 5, so "OT" is the right label. The CFL is the same shape; the
+    // worker maps theScore's live strings onto these ESPN shapes (public/_worker.js).
     // NCAAF plays four 15-min quarters (then OT), the same period structure as
     // the NFL — the rest of the app already classifies it that way (espn.ts:
     // regulationPeriods 4, PERIOD_SECONDS 900). Without this branch a live NCAAF
