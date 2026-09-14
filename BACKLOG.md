@@ -1,8 +1,156 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — UEFA Conference League + FA Cup, Copa del Rey, DFB-Pokal (`uecl` / `facup` / `copadelrey` / `dfbpokal`)
+
+**✅ Shipped 2026-09-14** — `1da799d1` (rebased over the same-day UFL, baseball/softball, women's hockey and
+volleyball adds; both sides kept, catalog regenerated). Deploy run 34872768498 green; `hidescore.com/tv/catalog.json`
+lists all four. Production read-back (headless Chromium, fresh v2 profile, real clock): no cup column, Settings
+DFB-Pokal row OFF, tick + pick puts DFB-Pokal in the column; 23 × ‹ to Sat Aug 22 = 11 cards, 17 logos + 5 muted
+placeholders, 0 broken, 0 highlight buttons, 0 scorelines, modal "First Round". Four opt-in soccer competitions (Jacob chose 4 of the 7 probed; Carabao Cup, Coppa
+Italia and Coupe de France are out). Config, not code: ESPN serves all four in the standard soccer
+scoreboard shape (`site.web.api`, 200 each, probed 2026-09-14), so the soccer parsers do the work. All
+four: `SOCCER_SPORTS` (up-counting clock, closeness model, `reconcileSoccerDay`), `overtimeBonus: 25`
+(knockout extra time), Settings → Soccer group (16 → 20 rows, all OFF on a v2 profile), `excludeFromAuto`,
+share codes `cl fa cr dp`, TV catalog `SUPPORTED` (rows say `soccer: true`), news feeds (each `/news`
+200 / 6 articles) on the shared r/soccer firehose, `HEADER_SLUG_TO_SPORT` + Top-events pool. Short header
+labels "UECL" and "Copa Rey"; "FA Cup" / "DFB-Pokal" fit as-is. No standings table → not in
+`RANK_LEAGUES`, 0 rank chips. `deriveStage` learned the cup rounds (altGameNote "English FA Cup, Third
+Round" / "German Cup, First Round" / "UEFA Conference League, League Phase", plus the season.slugs
+`qualifying-round` … `fifth-round`, `league-phase`, `knockout-round-playoffs` — ESPN spells it without
+the hyphen), so the detail modal shows "First Round" / "League Phase" / "Final".
+
+**Windows (2026-27, HAND-SET — ESPN's calendar for each is one year-wide "list" entry).** Read from
+fixture range probes on 2026-09-14 and the competitions' published finals; `verifiedFor: 2026`:
+- `uecl` Conference League 10-13 → 06-03 (kickoff 10-15, final 06-02). MD1 2026-10-15 = 18 fixtures, all
+  Paramount+, league phase through 12-17. Final: Istanbul 2027-06-02 per UEFA (plan said 05-27).
+- `facup` FA Cup 01-07 → 05-23 (kickoff 01-09, final 05-22). Third round proper 2027-01-09, final
+  2027-05-22 per the FA (plan said 05-29). Checked against 2025-26 (01-09 → 05-16) — ✓ in the checker.
+- `copadelrey` Copa del Rey 10-27 → 04-25 (kickoff 10-28, final 04-24). First round proper 2026-10-28,
+  final La Cartuja 2027-04-24 per the RFEF (plan said 04-30). Qualifying (09-26 / 10-03, 20 clubs, no
+  logos) is outside the window on purpose.
+- `dfbpokal` DFB-Pokal 08-21 → 05-30 (kickoff 08-21, final 05-29). Round one 2026-08-21 → 08-24 (+ two
+  leftovers 09-01/02), round two 10-27/28; final Berlin 2027-05-29 per the DFB (plan said 08-14 / 05-22).
+
+Three changes from the plan, all on evidence:
+- **Only the FA Cup is lit; the other three are dark** (`NO_HIGHLIGHT_FALLBACK`, regression check keeps
+  them dark and unmonitored). Live worker, strict=1, 5 completed 2025-26 fixtures per probe, bare query:
+  - facup: "Emirates FA Cup" 0/5. **"ESPN FC" 7/10, 0 wrong** (5/5 from the fourth round; the three
+    misses were all-EFL third-round ties ESPN FC never cut — hidden button, not a wrong video). Ships
+    with a REQUIRED `"fa cup"` title token (`COMPETITION_TITLE_TOKENS`, mirrored in prebake-news and
+    the monitor) because the same channel cuts the PL meetings of the same clubs — see Copa del Rey.
+    Local read-back of the 5/16 final resolved "FA CUP FINAL 🏆 Chelsea vs. Manchester City | FA Cup
+    Highlights | ESPN FC". Badge reads "FA CUP".
+  - uecl: "CBS Sports Golazo" 0/5 — the uploader is a separate **"CBS Sports Golazo - Europe"**
+    channel: 2/5, and one hit was the WRONG LEG (R16 Leg 1 served for the Leg 2 fixture a week
+    later). A title token cannot separate two legs of one tie. Dark.
+  - copadelrey: "ESPN FC" 3/5 with TWO wrong matches (LaLiga Elche–Betis and Betis–Atlético served
+    for the cup ties); with a "copa del rey" token 2/5, 0 wrong — under the gate. Dark.
+  - dfbpokal: "DFB" 0/5, "ESPN FC" 0/5; unscoped winners were Bundesliga league games of the same
+    clubs (Dortmund–Leverkusen MD16 for the R16 tie). Dark.
+- **Windows moved off the plan's guesses** (see above) — the DFB-Pokal opener is 08-21 not 08-14, and
+  three finals are later than the plan had them.
+- **Empty-logo cards.** Amateur hosts in the DFB-Pokal first round (5 of 11 cards on 8/22) and the Copa
+  del Rey first two rounds have no ESPN logo at all, and an `<img src="">` never fires `onError`, so the
+  card drew an empty bordered box. GameCard now renders a same-size muted tile when `team.logo` is empty
+  (the compact row and the modal already guarded it).
+
+**Proof:** tsc, eslint (0 errors), test:unit (294, incl. new `tests/cup-stage-labels.test.ts`),
+highlights:check, news:check, poker:check, tv:catalog + tv:catalog:check (37 leagues), `next build` all
+green; `check-season-windows --only=uecl,facup,copadelrey,dfbpokal`: FA Cup ✓, the other three
+"unverified" (no far-edge fixtures yet), 0 flagged. Headless-Chromium read-back against the local
+export (`serve out`), clock fixed, screenshots in `~/hs-cups/qa/`: 8/22 DFB-Pokal = 11 cards, 17 logos +
+5 muted placeholders, 0 broken, 0 rank chips, 0 highlight buttons, modal stage "First Round", no
+scoreline; 10/15 Conference League = 18 cards, 36 logos, 0 broken, "League Phase", WATCH: Paramount+;
+5/16 FA Cup final = 1 card, 2 logos, stage "Final", 1 "ESPN FC highlights" button (worker proxied to
+production). Settings on a v2 profile: 20 Soccer rows, all four OFF, DFB-Pokal without "· offseason",
+the other three with it; ticking DFB-Pokal adds it to the header switcher (an offseason tick stays
+saved for its return, as designed).
+
+**Open:**
+- [ ] Far edges ESPN could not verify yet: Conference League final 06-02, Copa del Rey opener 10-28 and
+      final 04-24, DFB-Pokal final 05-29 — the checker reports them "unverified"; re-run `--only=` once
+      the draws land (Copa del Rey first round is drawn in October; UEFA knockouts in February).
+- [ ] January re-probe of the three dark cups once the 2026-27 knockouts exist. Candidates: "CBS Sports
+      Golazo - Europe" for uecl (needs a leg gate, not a title gate), "ESPN FC" + token for Copa del
+      Rey and the DFB-Pokal. ≥4/5 and 0 wrong to light.
+- [ ] Cup upsets ("Eintracht Frankfurt at SC St. Tönis", 11-0) rate on the league closeness model;
+      nothing marks a lower-division host. Fine for now — the card is spoiler-safe either way.
+
+## 2026-09-14 — NCAA women's volleyball (`ncaavb`) gets a column of its own
+
+**✅ Shipped 2026-09-14** — `f7dea68d` (rebased over the same-day UFL, baseball/softball, women's hockey and
+next-16.3.3 commits; 24 conflicted files, both sides kept, full check suite re-run green on 16.3.3). Deploy
+run 34871018619 green; `hidescore.com/tv/catalog.json` lists `ncaavb`. Production read-back
+(`qa/readback-prod.mjs`, headless Playwright, clock fixed to Sat 9/12 23:30 ET): 159 cards, 317 logos all
+loaded after scroll, 0 broken, 15 rank chips, 0 highlight buttons, 159 rating badges, top card Notre
+Dame–Duquesne; fresh profile = column absent, Settings row OFF, tick → switcher → column.
+Built on `feat/ncaa-volleyball` (worktree `~/hs-ncaavb`). Follows the `67aa805e` ncaah template plus two volleyball-only branches, because ESPN's `score` for
+this sport is SETS won (0-3) and `linescores[].value` is the points per set. Path
+`/volleyball/womens-college-volleyball`, label "NCAA Volleyball" (header short form "NCAA VB"), opt-in
+(`excludeFromAuto`), Settings → US leagues, share code `vb`, TV catalog `SUPPORTED` (rating kind
+`"volleyball"`, which the tvOS scorer leaves unrated until `volleyballRating` is ported). Window
+08-21 → 12-21: ESPN's calendar stops at the regular season (2026-08-21 → 2026-11-29); the December edge is
+the 2025 tournament read from `?dates=20251201-20251231` (first round 12-04, regionals 12-11 → 12-15,
+semifinals 12-18, final 12-21). Rank chip = AVCA Top 25 via `POLL_RANK_SPORTS` (15 chips on the 9/12 slate);
+not in `RANK_LEAGUES`. No reddit feed (r/volleyball is beach/pro/indoor mixed). No per-game page on
+espn.com (all three URL forms 404 in a real browser, events carry `links: []`), so `espnGameUrl` lands on the
+scoreboard like the LLWS. Highlights dark: strict probe on the 2025 tournament, "NCAA Championships" 1/5
+(only the Wisconsin–Kentucky semifinal), "ESPN" 0/3, two Sep 2026 regular-season queries 0/2.
+
+**Rating (`volleyballRating`, espn.ts)** — 0.45 × sets closeness (finished 3-2 → 85, 3-1 → 65, 3-0 → 30;
+live level-in-the-fifth 100, level earlier 85, one set apart 70, 2-0/1-0 45) + 0.35 × point closeness (mean
+set margin over completed sets, ≤2 → 100 linear to 0 at ≥12) + 0.20 × the same curve on the LAST completed
+set; then +15 for a fifth set, +4 per deuce set (≥26, or ≥16 in the fifth) capped at 12, +20 when the
+winner lost the first two sets / +10 when it lost the first (finished only); clamp 0-100. Live before the
+second set → null. A set only counts once it is over (to 25 / 15, won by two), so an in-progress set never
+skews the averages. Missing linescores → the sets-only score (30 / 65 / 100), never NaN.
+Sep 12 spot-check (159 finals): five-setters 77-100 (mean 97), four-setters 41-97 (mean 69), sweeps 17-74
+(mean 47); top card = Notre Dame–Duquesne 25-19 / 18-25 / 24-26 / 26-24 / 16-14; no sweep outrates any
+five-setter (max sweep 74 < min five 77). `ratingorder:audit` reports 4% "inversions" for ncaavb — by design
+(a deuce-heavy 3-0 outranks a 3-1 with three blowout sets), and biggest tie 18 at 100.
+
+**Live label (`liveProgress.ts`)** — "Set N" / "SN"; an "End of …" / "between" detail → "End of Set N" /
+"End SN"; the clock is ignored (volleyball has none). ⚠️ Built from the plan's shape, not a captured sample —
+no match was live on Monday. See Open.
+
+**Playoff flag** — same gate as hockey: for ncaavb only a round word (`quarte?r?final | semifinal | final |
+round | championship | regional`) sets `isPlayoff`; ~150 in-season invitationals ("Paradise Invitational",
+"SFA Tournament", "Ocean State Cup") stay regular season. ESPN tags the whole season `type 2`, tournament
+included, so the type-3 check never helps here. The CAA's "Quartefinal" typo is absorbed.
+
+**Two changes from the plan, both on evidence:**
+- **3-2 finished = 85, not 100.** At 100 every one of the 23 five-setters on 9/12 landed on 99-100 with the
+  +15 fifth-set bonus stacked on top; at 85 the set margins order them (77 → 100).
+- **No detail-modal set line.** `GameDetailModal` never renders a score, revealed or not ("even then only the
+  rating badge, never the raw score line"), so there is no revealed-score section to hang "25-10 · 25-14"
+  under. `setScores` was not added to `Game`.
+
+**Proof:** tsc, eslint (0 errors), test:unit (301, incl. new `volleyball-rating`, `ncaavb-playoff-flag`,
+live-progress volleyball cases), highlights:check, news:check, poker:check, tv:catalog + check,
+`check-season-windows --only=ncaavb` ✓, `next build` all green. Read-back on the mini (hidden Chromium via
+`bg_chromium` + headless for screenshots, reverse tunnel to the local static export), clock pinned to
+2026-09-12 23:30 ET: column = 159 cards, all shown (no collapse in multi-column mode), data on screen 0.7 s
+after load, evaluate round-trip 0.06 s after data; 318 team logos, 317 loaded, 1 blank = Tampa Spartans
+(D-II, ESPN ships no logo and the CDN 404s on id 2626); 15 rank chips; 0 highlight buttons; 159 rating
+badges, top card the five-setter above. Mocked live: `Set 5` + GREAT on a 2-2, `Set 2` + MEH on 1-0,
+`End of Set 1` with no badge. v2 profile: column absent, Settings row OFF, tick → `shownLeagues:["ncaavb"]`
+→ "NCAA Volleyball" in the switcher → picking it adds the column. Screenshots in `~/hs-ncaavb/qa/`.
+
+**Open:**
+- [ ] Capture a live sample Tue 9/15 evening (`status.type.detail` / `shortDetail` / `period` for a match
+      in progress AND one between sets) and confirm the `Set N` / `End of Set N` branch against it.
+- [ ] December tournament edge: re-read ESPN's calendar once it publishes the 2026 bracket (~Nov 30) and
+      adjust 12-21 if the final moves.
+- [ ] Port `volleyballRating` to tvOS `Rating.swift` (catalog kind `"volleyball"` currently = unrated on TV).
+- [ ] Highlights stay dark; the NCAA channel covers the tournament only (1/5 even there).
+
 ## 2026-09-14 — NCAA women's hockey (`ncaawh`) column, on the men's pattern
 
-**Built 2026-09-14** on branch `feat/ncaa-womens-hockey` (worktree `~/hs-ncaawh`), a line-for-line mirror of
+**✅ Shipped 2026-09-14** — `3a816465` (rebased over the same-day UFL and baseball/softball adds, both sides
+kept in 17 files). Deploy run 34859165620 green; `hidescore.com/tv/catalog.json` lists `ncaawh`. Production
+read-back (`qa/readback-prod.mjs`, clock fixed to Sat 9/26): 14 cards, 28 logos, 0 broken, 0 rank chips,
+0 highlight buttons; fresh profile = column absent, Settings row OFF, tick → switcher → column (15 cards).
+Built on branch `feat/ncaa-womens-hockey` (worktree `~/hs-ncaawh`), a line-for-line mirror of
 `67aa805e` + `6edcced5` (men's hockey). Config, not code: ESPN serves `/hockey/womens-college-hockey` in
 the standard two-competitor scoreboard shape (league abbr `CWHOC`). Window is ESPN's calendar read live
 2026-09-14: 2026-09-18 → 2027-03-23, Frozen Four semis 03-21, national championship 03-23 (range probe
@@ -30,9 +178,7 @@ poker:check, tv:catalog + tv:catalog:check (web + tvOS copies regenerated togeth
 (`npx serve out`), clock fixed to Sat 2026-09-26: 14 cards, 28 logos loaded, 0 broken, 0 rank chips (all
 99), 0 highlight buttons; fresh profile = column absent, Settings row OFF, ticking it adds "NCAAW Hockey"
 to the switcher and picking it adds the column (15 cards, Today+Tomo). 390px phone: "W. Hockey" on one
-line beside NFL / MLB. Screenshots in `~/hs-ncaawh/qa/`. Not deployed — awaiting Jacob's merge call;
-production read-back (`curl -s https://hidescore.com/tv/catalog.json | grep '"ncaawh"'` + a Sep 26 page)
-is owed after merge.
+line beside NFL / MLB. Screenshots were in `~/hs-ncaawh/qa/` (worktree removed after the deploy).
 
 **Open:**
 - [ ] The men's "postseason-only channel gate" open item (2026-09-12) would light BOTH tournaments —
@@ -669,15 +815,15 @@ _src: 2026-08-03 session_
   > - **NASCAR / IndyCar** — `racing/nascar-cup`, `racing/irl`. Niche overlap with F1; skip unless interested.
   > - **Cricket (IPL, T20 World Cup)** — `cricket/<league>`. Global big, small US daily audience.
   > - **Rugby (Six Nations, RWC)** — `rugby/<league>`. Niche in the US.
-  > - **UEFA Conference League** — `soccer/uefa.europa.conf`. Pairs with UCL + UEL.
+  > - ~~**UEFA Conference League** — `soccer/uefa.europa.conf`. Pairs with UCL + UEL.~~ ✅ shipped 2026-09-14 (see the top of this file), with the FA Cup, Copa del Rey and DFB-Pokal.
   > _src: session 2026-05-27 sports-audit_
   >
   > **Update 2026-08-03 — most of this list SHIPPED.** Added and verified live against
   > ESPN: Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, Euro
   > (yearCycle-gated to 2028), AFCON (gated to 2027), Cricket/IPL, NASCAR, IndyCar.
   > NCAAM/NCAAW were already in. Still open from the list above: Olympics, Ryder Cup,
-  > Rugby (ESPN's `rugby/*` scoreboard 400s — no working path found), UEFA Conference
-  > League.
+  > Rugby (ESPN's `rugby/*` scoreboard 400s — no working path found). UEFA Conference
+  > League shipped 2026-09-14.
 
 - [ ] **Esports column (LoL) — new data provider, not ESPN.** Biggest remaining audience gap. Worlds peaks ~6M+ concurrent excluding China and is watched almost entirely on VOD in the West because it's played in Asian timezones, which makes it the purest spoiler use-case after cricket.
   > **Source found and de-risked (2026-08-03):** `https://esports-api.lolesports.com/persisted/gw/getSchedule?hl=en-US`

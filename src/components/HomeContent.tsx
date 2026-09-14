@@ -1595,12 +1595,13 @@ export default function HomeContent({
     // MLB leads: it is the league actually playing games today, and a picker
     // whose first pill is an offseason/preseason league reads as stale (Jacob
     // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
-    "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "ncaawh", "ufl", "ncaabase", "ncaasoft",
+    "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "ncaawh", "ncaavb", "ufl", "ncaabase", "ncaasoft",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
     "chess", "poker", "esports",
     // ── soccer block, bottom ──
-    "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
+    "epl", "ucl", "uel", "uecl", "laliga", "seriea", "bundesliga", "ligue1",
     "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",
+    "facup", "copadelrey", "dfbpokal",
     "fifa", "euro", "afcon",
   ];
   const pickerOptions = useMemo(() => {

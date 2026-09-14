@@ -25,7 +25,7 @@ struct Catalog: Codable {
     }
 
     struct RatingConfig: Codable {
-        let kind: String            // "generic" | "cricket"
+        let kind: String            // "generic" | "cricket" | "volleyball"
         let multiplier: Double
         let overtimeBonus: Double
         let scoringDivisor: Double

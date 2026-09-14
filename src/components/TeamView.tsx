@@ -53,6 +53,8 @@ const TWO_CALENDAR_YEAR_SPORTS = new Set<Sport>([
   // half lives in the following calendar year. NWSL, Libertadores, Euro and
   // AFCON are all single-calendar-year and correctly fall through to [y, y-1].
   "ligamx", "efl", "saudi",
+  // Conference League and the three domestic cups all run autumn → late spring.
+  "uecl", "facup", "copadelrey", "dfbpokal",
 ]);
 
 // Fallback multi-year window so a season that spans (or hasn't filled) the
