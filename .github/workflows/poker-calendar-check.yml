@@ -26,12 +26,8 @@ on:
   schedule:
     - cron: "20 14 * * 1"   # Mondays, 10:20am ET (14:20 UTC)
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "public/poker-events.json"
-      - "scripts/check-poker-events.mjs"
-      - ".github/workflows/poker-calendar-check.yml"
+  # 2026-09-14: push trigger dropped to cut Actions minutes; the Monday schedule
+  # still catches a bad edit within a week.
 
 jobs:
   runway:
