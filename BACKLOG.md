@@ -773,8 +773,7 @@ _src: 2026-08-03 session_
 - [ ] **MLB player option 1.** Force hls.js on Safari and drop subtitles for clean, Reddit-style controls.
   > Touch `VideoModal.tsx:133` (skip the native HLS branch), remove the CC button at `:332-342`. _src: project_hidescore_mlb_player_consistency.md_
 
-- [ ] **FastCast pin.** Pin Real Fast + FastCast to the first two slots of the MLB videos strip.
-  > New `fetchMLBPinnedRoundups()` in `scripts/prebake-news.mjs`, prepend before the `items.length >= 10` cap. _src: project_hidescore_mlb_fastcast_pin.md_
+- [x] **FastCast pin.** ~~Pin Real Fast + FastCast to the first two slots of the MLB videos strip.~~ Superseded 2026-09-14 by the league-wide recap card: `bakeLeagueRecaps()` in `scripts/prebake-news.mjs` bakes FastCast + Real Fast (and NFL / NBA / EPL / MLS cuts) to `/news/recaps.json`, and `LeagueRecapCard` shows them on top of the league column on past-date boards. _src: project_hidescore_mlb_fastcast_pin.md_
 
 - [ ] **Post-R2 #1: NBC.com scraper.** Deep-link NBC broadcast chips to `nbc.com/watch/...` URLs.
   > New `scripts/scrape-nbc-sports.mjs` mirroring the prime-asins pattern. Edit `espn.ts:671`. _src: project_hidescore_post_r2_followups.md_

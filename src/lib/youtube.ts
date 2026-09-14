@@ -1,4 +1,5 @@
 import llwsRegions from "./llwsRegions.json";
+import { isNflTeamChannel } from "./nflTeamChannels";
 
 // The JSON import types as a literal object, which cannot be indexed by an
 // arbitrary string; the codes come from ESPN at runtime, so widen it once here.
@@ -428,8 +429,14 @@ const EMBED_BLOCKED_CHANNELS = new Set(["FORMULA 1", "NFL"]);
 // True when the FIRST channel a highlight is gated to refuses embeds. The lead
 // channel is the only one guaranteed to hold the clip (the rest of the chain is
 // opportunistic), so a blocked lead means the attempt is already lost.
+//
+// The 32 NFL club channels block game footage exactly like the league does
+// (error 150 on every club highlight package, measured 2026-08-10 — see
+// nflTeamChannels.ts), so the club short-cut button (GameHighlights, NFL
+// "Lions 10m") goes straight to the hand-off card too. Without this the modal
+// would mount the player, hit 150, and only then show it.
 export function leadChannelBlocksEmbeds(channels: string[]): boolean {
-  return channels.length > 0 && EMBED_BLOCKED_CHANNELS.has(channels[0]);
+  return channels.length > 0 && (EMBED_BLOCKED_CHANNELS.has(channels[0]) || isNflTeamChannel(channels[0]));
 }
 
 // Channels whose clip title bar must stay masked no matter what the spoiler
