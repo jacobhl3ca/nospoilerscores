@@ -25,7 +25,12 @@ const STORAGE_KEY = "nss-preferences";
 // every code already in this map before being added.
 // Added 2026-09-12: ncaah→hc (men's college hockey). "ch" is chess and c/cw/cf
 // are the other college keys, so hockey leads with its own letter.
-const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", nfl: "f", llws: "lw", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", cricket: "ck", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp" };
+// Added 2026-09-14: ufl→uf (UFL spring football). "u" is ufc and "ue" is uel,
+// so the league takes its second letter.
+// Added 2026-09-14: ncaabase→cb, ncaasoft→cs (college baseball / softball);
+// both checked free against every code in the map.
+// Added 2026-09-14: ncaawh→hw (women's college hockey), collision-free.
+const SPORT_TO_SHORT: Record<Sport, string> = { mlb: "m", nba: "n", wnba: "wn", ncaam: "c", ncaaw: "cw", ncaaf: "cf", nhl: "h", ncaah: "hc", ncaawh: "hw", nfl: "f", ufl: "uf", llws: "lw", ncaabase: "cb", ncaasoft: "cs", golf: "g", tennis: "t", fifa: "w", epl: "e", mls: "s", ucl: "uc", uel: "ue", laliga: "ll", seriea: "sa", bundesliga: "bl", ligue1: "lg", ligamx: "mx", nwsl: "nw", efl: "ec", libertadores: "lb", euro: "eu", afcon: "af", saudi: "sp", cricket: "ck", sixnations: "sn", rugbywc: "rw", rugbychamp: "rc", superrugby: "sr", rugbytest: "rt", nationschamp: "nc", f1: "fo", nascar: "ns", indycar: "ic", ufc: "u", boxing: "bx", chess: "ch", poker: "pk", esports: "es", top: "tp" };
 const SHORT_TO_SPORT: Record<string, Sport> = Object.fromEntries(
   Object.entries(SPORT_TO_SHORT).map(([k, v]) => [v, k as Sport])
 ) as Record<string, Sport>;

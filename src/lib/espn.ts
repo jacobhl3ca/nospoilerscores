@@ -59,12 +59,27 @@ const SPORT_PATHS: Record<Sport, string> = {
   // the most spoiler-sensitive slates of the summer — games run all day on
   // ESPN networks and get replayed in prime time.
   llws: "/baseball/llb/scoreboard",
+  // NCAA baseball + softball (added 2026-09-14). Standard two-competitor
+  // scoreboard shape, so parseGame reads both as is. Probed live 2026-09-14
+  // via site.web.api: 200, abbr CBASE / CSOFT, 2026 calendars 02-13 → 06-22
+  // (117 days) and 02-05 → 06-04 (108 days), 81 / 57 games on a mid-April
+  // Saturday, curatedRank (Top 25 poll) on the event, team logos under
+  // a.espncdn.com/guid/<guid>/ — NOT the ncaa/500/<id> school path (their
+  // team ids are sport-specific). Softball plays SEVEN innings.
+  ncaabase: "/baseball/college-baseball/scoreboard",
+  ncaasoft: "/baseball/college-softball/scoreboard",
   nba: "/basketball/nba/scoreboard",
   wnba: "/basketball/wnba/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
   ncaaw: "/basketball/womens-college-basketball/scoreboard",
   ncaaf: "/football/college-football/scoreboard",
   nfl: "/football/nfl/scoreboard",
+  // UFL spring football (added 2026-09-14). Standard two-competitor shape, so
+  // parseGame reads it as is. Probed live 2026-09-14: 200, league abbr UFL,
+  // calendar is a list (Regular Season 2026-03-14 → 06-03, Postseason → 06-17);
+  // actual fixtures 2026-03-27 → 06-13 (43 games, 8 teams), four quarters,
+  // records "6-4", curatedRank 99 placeholders (no poll).
+  ufl: "/football/ufl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
   // NCAA men's ice hockey (added 2026-09-12). Standard scoreboard shape, so
   // parseGame reads it as is. Probed live 2026-09-12: 200, league abbr NCAAH,
@@ -72,6 +87,12 @@ const SPORT_PATHS: Record<Sport, string> = {
   // three regulation periods, poll rank on curatedRank. Do NOT add groups=50:
   // it returns 0 events for this sport.
   ncaah: "/hockey/mens-college-hockey/scoreboard",
+  // NCAA women's ice hockey (added 2026-09-14). Same two-competitor scoreboard
+  // shape as the men's feed. Probed live 2026-09-14: 200, league abbr CWHOC,
+  // calendar 2026-09-18 → 2027-03-23 (81 game days), 13-15 games a Saturday,
+  // three regulation periods, USCHO poll rank on curatedRank (99 = unranked).
+  // No groups= param, same as ncaah.
+  ncaawh: "/hockey/womens-college-hockey/scoreboard",
   golf: "/golf/pga/scoreboard",
   tennis: "/tennis/atp/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",
@@ -255,6 +276,13 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Window ends Sep 3 (regular NFL takes over Sep 8) — but EPL kickoff Aug 16 already fills
   // the third slot, so backfillOnly ensures preseason only shows when slot 3 would be empty.
   { sport: "nfl",   label: "NFL Preseason", startDate: "07-21", endDate: "09-03", backfillOnly: true, displaySlot: "center", slotPrecedence: 7 },
+  // ── UFL spring football (late Mar – mid Jun) ──
+  // Window is ESPN's own fixture list, read live 2026-09-14: first kickoff Fri
+  // 2026-03-27 (8pm ET), United Bowl Sat 2026-06-13 on ABC. Opens two days
+  // early for the fixture lookahead, like EPL. Opt-in (excludeFromAuto): spring
+  // already has the NBA/NHL playoffs + MLB in the auto rotation. 2027 dates are
+  // unpublished; the season-window checker reports it unverified until then.
+  { sport: "ufl",   label: "UFL", startDate: "03-25", endDate: "06-14", kickoffDate: "03-27", championshipDate: "06-13", verifiedFor: 2026, excludeFromAuto: true },
   // ── Golf majors ──
   // Masters takes the right slot when active (Jacob's pref) — bumps NHL during Apr 9-13.
   { sport: "golf",  label: "Masters",  startDate: "04-06", endDate: "04-13", kickoffDate: "04-08", championshipDate: "04-11", verifiedFor: 2027, firstPref: true, displaySlot: "right",  slotPrecedence: 1 },
@@ -372,6 +400,12 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Frozen Four 04-08, national championship 04-10. Opt-in (excludeFromAuto),
   // like NCAAW, so it never takes a column from the NHL or NCAAF.
   { sport: "ncaah", label: "NCAA Hockey", startDate: "10-02", endDate: "04-10", championshipDate: "04-10", verifiedFor: 2026, excludeFromAuto: true },
+  // ── NCAA women's hockey (Sep–Mar) ──
+  // Window is ESPN's own calendar, read live 2026-09-14: 2026-09-18 → 2027-03-23,
+  // Frozen Four semis 03-21, national championship 03-23 (range probe
+  // ?dates=20270301-20270331, season type 3). Opt-in (excludeFromAuto), like
+  // the men's column. Header label is shortened by SHORT_LEAGUE_LABELS.
+  { sport: "ncaawh", label: "NCAAW Hockey", startDate: "09-18", endDate: "03-23", championshipDate: "03-23", verifiedFor: 2026, excludeFromAuto: true },
   // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
   // in season, but low priority so it only fills open summer/fall slots after
   // the core leagues and major tournament windows.
@@ -384,6 +418,19 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // league someone chose. It sits in the "US leagues" section of Settings,
   // next to MLB, because that is where a baseball fan looks for it.
   { sport: "llws", label: "Little League", startDate: "08-10", endDate: "08-30", championshipDate: "08-30", verifiedFor: 2026, excludeFromAuto: true },
+  // ── NCAA baseball + softball (Feb–Jun, added 2026-09-14) ──
+  // Windows are ESPN's own 2026 calendar edges, read live 2026-09-14:
+  // baseball 02-13 → 06-22 (CWS championship final G3 on 06-22), softball
+  // 02-05 → 06-04 (WCWS finals G2 on 06-04, 8 PM ET). endDate is padded one
+  // day past the final like the NBA/NHL/NFL rows: the WCWS final is 00:00Z
+  // on 06-05, and the season-windows check reads UTC dates, so a 06-04 close
+  // reported "closes 1d before the last game". ESPN has not published 2027
+  // dates yet (it does so ~December); the season-windows check (`--all`,
+  // twice a month) reports them unverified until then and flags any drift.
+  // Both opt-in (excludeFromAuto): they overlap MLB's spring and the NBA/NHL
+  // playoffs and must never take a column from those.
+  { sport: "ncaabase", label: "NCAA Baseball", startDate: "02-13", endDate: "06-23", championshipDate: "06-22", verifiedFor: 2026, excludeFromAuto: true },
+  { sport: "ncaasoft", label: "NCAA Softball", startDate: "02-05", endDate: "06-05", championshipDate: "06-04", verifiedFor: 2026, excludeFromAuto: true },
   // ── Rugby union (five competitions, added 2026-08-11) ──
   // Every window below is ESPN's own published calendar for that league id,
   // read live on 2026-08-11 (see SPORT_PATHS for the ids). All five are
@@ -679,8 +726,8 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // One glyph per sport for the kickoff banner. Partial by design — anything not
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
-  mlb: "⚾", llws: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
-  nfl: "🏈", ncaaf: "🏈", nhl: "🏒", ncaah: "🏒", golf: "⛳", tennis: "🎾",
+  mlb: "⚾", llws: "⚾", ncaabase: "⚾", ncaasoft: "🥎", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
+  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
@@ -729,8 +776,8 @@ export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
 // disappearing from Settings. Adding a sport to `Sport` without touching this
 // map degrades to a slightly-wrong section, never to an unpickable league.
 const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
-  nfl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", wnba: "us",
-  ncaaf: "us", ncaam: "us", ncaaw: "us", llws: "us",
+  nfl: "us", ufl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", ncaawh: "us", wnba: "us",
+  ncaaf: "us", ncaam: "us", ncaaw: "us", llws: "us", ncaabase: "us", ncaasoft: "us",
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
   ligamx: "soccer", nwsl: "soccer", efl: "soccer", libertadores: "soccer",
@@ -1179,11 +1226,16 @@ function formatScore(raw: string, sport: Sport): string {
   return head || raw;
 }
 
+// Sports whose W-L record can carry a third segment (ties / OTL) that the
+// card strips to plain W-L. Shared by parseTeam and fetchStandingsRecords.
+const THREE_SEGMENT_RECORD_SPORTS = new Set<Sport>(["mlb", "nhl", "ncaah", "ncaawh", "ncaabase", "ncaasoft"]);
+
 function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
   const rawId = competitor.team?.id ?? "";
   let record = competitor.records?.[0]?.summary ?? "";
-  // MLB spring training and NHL records include a 3rd segment (ties / OTL) — strip to W-L
-  if ((sport === "mlb" || sport === "nhl" || sport === "ncaah") && record.split("-").length === 3) {
+  // MLB spring training and NHL records include a 3rd segment (ties / OTL) — strip to W-L.
+  // Both college hockey feeds report "W-L-T"; college baseball/softball carry ties the same way ("54-13-1", read 2026-09-14).
+  if (THREE_SEGMENT_RECORD_SPORTS.has(sport) && record.split("-").length === 3) {
     const parts = record.split("-");
     record = `${parts[0]}-${parts[1]}`;
   }
@@ -1225,6 +1277,13 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // runs much higher than MLB (mercy rule at 10 after 4), so the differential
   // multiplier is softened and the scoring divisor raised.
   llws:   { multiplier: 9,   overtimeBonus: 15, scoringDivisor: 5,   regulationPeriods: 6 },
+  // NCAA baseball: nine innings and MLB-like scoring, so it mirrors MLB.
+  ncaabase: { multiplier: 14, overtimeBonus: 15, scoringDivisor: 3,   regulationPeriods: 9 },
+  // NCAA softball: SEVEN innings (status.period reads 7 at a full-length
+  // final, read 2026-06-04). Run-rule finals end at period 5 or 6 and rate
+  // like a rain-shortened MLB game: progress is 1 once state is post, and
+  // `periods > regulationPeriods` is simply false. Scoring tracks MLB.
+  ncaasoft: { multiplier: 14, overtimeBonus: 15, scoringDivisor: 3,   regulationPeriods: 7 },
   nba:    { multiplier: 4.5, overtimeBonus: 15, scoringDivisor: 40,  regulationPeriods: 4 },
   // WNBA: same quarter structure as NBA but lower totals (~80 vs ~115); divisor
   // scaled down so scoring bonus normalizes the same way.
@@ -1241,7 +1300,11 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   nhl:    { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
   // NCAA men's hockey: three 20-min periods and NHL-like scoring, so it mirrors NHL.
   ncaah:  { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
+  // NCAA women's hockey: same three 20-min periods and scoring shape as the men's.
+  ncaawh: { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
+  // UFL: four 15-min quarters and NFL-like scoring, so it mirrors NFL.
+  ufl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   fifa:   { multiplier: 22,  overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   mls:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
@@ -1308,9 +1371,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
 const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
   nba: 720, wnba: 600,        // 12-min / 10-min quarters
   ncaaw: 600,                 // 10-min quarters (four of them, like WNBA)
-  nfl: 900, ncaaf: 900,       // 15-min quarters
+  nfl: 900, ncaaf: 900, ufl: 900, // 15-min quarters
   nhl: 1200,                  // 20-min periods
   ncaah: 1200,                // 20-min periods, same as NHL
+  ncaawh: 1200,               // 20-min periods, same as NHL
   ncaam: 1200,                // 20-min halves
 };
 // Soccer is different: status.clock counts UP and equals total elapsed match
@@ -2076,9 +2140,17 @@ function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null
   return typeof week === "number" && week >= 1 && week <= 25 ? week : null;
 }
 
+// NCAA baseball + softball: the two leagues whose postseason ESPN files as
+// season type 6 and whose notes name regionals (see parseGame).
+const COLLEGE_DIAMOND_SPORTS = new Set<Sport>(["ncaabase", "ncaasoft"]);
+
+// The two college hockey feeds: a tournament note needs a round word before
+// it sets isPlayoff (see parseGame).
+const COLLEGE_HOCKEY_ROUND_WORD_SPORTS = new Set<Sport>(["ncaah", "ncaawh"]);
+
 // Regulation length for the timed sports ESPN reports as "End of 4th" etc.
 const END_OF_PLAY_REGULATION: Partial<Record<Sport, number>> = {
-  nfl: 4, ncaaf: 4, nba: 4, wnba: 4, ncaaw: 4, ncaam: 2, nhl: 3, ncaah: 3,
+  nfl: 4, ncaaf: 4, ufl: 4, nba: 4, wnba: 4, ncaaw: 4, ncaam: 2, nhl: 3, ncaah: 3, ncaawh: 3,
 };
 
 // "End of 4th" with the score not level IS the final (Jacob 9/12): no more
@@ -2156,10 +2228,21 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
       // College hockey's in-season tournaments ("Ice Breaker Tournament",
       // "Governor's Cup") are regular-season games that keep the 5-min OT +
       // shootout format, so only a ROUND word flags them as playoff — otherwise
-      // a shootout renders "2OT" instead of "SO". The label still shows.
-      if (sport !== "ncaah" || /quarter.?finals?|semi.?finals?|\bfinals?\b|\brounds?\b|championship|regional|frozen four/i.test(headlineLower)) {
+      // a shootout renders "2OT" instead of "SO". The label still shows. Both
+      // the men's and the women's feeds share the format.
+      if (!COLLEGE_HOCKEY_ROUND_WORD_SPORTS.has(sport) || /quarter.?finals?|semi.?finals?|\bfinals?\b|\brounds?\b|championship|regional|frozen four/i.test(headlineLower)) {
         isPlayoff = true;
       }
+      if (!playoffLabel) playoffLabel = headline;
+    }
+    // College baseball/softball postseason notes read "… Regional", "… Super
+    // Regional" and "Men's/Women's College World Series … - Game N"; only the
+    // last of those hits the generic list ("world series"), so the regionals
+    // get their own gate. Scoped to the two diamond sports: "regional" is a
+    // regular-season word elsewhere (a Regional Final in ncaah already has its
+    // own rule above).
+    if (COLLEGE_DIAMOND_SPORTS.has(sport) && /\bregional\b|super regional|world series|championship/i.test(headlineLower)) {
+      isPlayoff = true;
       if (!playoffLabel) playoffLabel = headline;
     }
   }
@@ -2172,6 +2255,13 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
   // suppressed the shootout "SO" label on any such game that reached a 5th period.
   // playoffLabel is unaffected — it's driven only by the notes match above.
   if (event.season?.type === 3) {
+    isPlayoff = true;
+  }
+  // College baseball/softball file the whole NCAA tournament as type 6
+  // ("championship-series", read 2026-09-14 on the CWS final 2026-06-21 and the
+  // WCWS final 2026-06-04; a March fixture reads 2 / "regular-season"). Scoped
+  // to the two diamond sports so no other league's type 6 is reinterpreted.
+  if (COLLEGE_DIAMOND_SPORTS.has(sport) && event.season?.type === 6) {
     isPlayoff = true;
   }
   // Type 1 is the exhibition slate. Only NFL games ever carry it this far (the
@@ -2469,9 +2559,18 @@ export function espnGameUrl(game: Game): string {
     case "ncaaw": return `https://www.espn.com/womens-college-basketball/game/_/gameId/${game.id}`;
     case "ncaaf": return `https://www.espn.com/college-football/game/_/gameId/${game.id}`;
     case "nfl": return `https://www.espn.com/nfl/game/_/gameId/${game.id}`;
+    // UFL has no /game/ page on espn.com (404 for the 2026 United Bowl id,
+    // checked 2026-09-14); /recap/ is the per-game page that answers 200.
+    case "ufl": return `https://www.espn.com/ufl/recap/_/gameId/${game.id}`;
     case "nhl": return `https://www.espn.com/nhl/game/_/gameId/${game.id}`;
     // College hockey's per-game page is the boxscore (verified 2026-09-12).
     case "ncaah": return `https://www.espn.com/mens-college-hockey/boxscore?gameId=${game.id}`;
+    // Same boxscore form for the women's feed (verified 2026-09-14, event 401903932).
+    case "ncaawh": return `https://www.espn.com/womens-college-hockey/boxscore?gameId=${game.id}`;
+    // Both college diamond sports have the plain game page (verified 2026-09-14
+    // with 2026 ids 401851045 / 401846824: 200, no redirect).
+    case "ncaabase": return `https://www.espn.com/college-baseball/game/_/gameId/${game.id}`;
+    case "ncaasoft": return `https://www.espn.com/college-softball/game/_/gameId/${game.id}`;
     // ⚠️ The Little League World Series has NO per-game page on espn.com.
     // Checked every plausible pattern on 2026-08-11 with a browser UA and a
     // real event id (401889776): /llws/, /llb/, /baseball/llb/,
@@ -2541,9 +2640,17 @@ export function sportStreamFallback(sport: Sport): string {
     case "ncaaw": return "https://www.espn.com/watch/";
     case "ncaaf": return "https://www.espn.com/watch/";
     case "nfl": return "https://www.nfl.com/plus/";
+    // UFL splits between FOX/FS1 and ESPN/ABC/ESPN2 (2026: 13 of the 22 May–June
+    // fixtures on FOX/FS1, the United Bowl on ABC). FOX games stream on the
+    // FOX Sports app, so its live hub is the better landing.
+    case "ufl": return "https://www.foxsports.com/live";
     case "nhl": return "https://www.espn.com/watch/";
     // ESPN+ carries most college hockey; the tournament finals air on ESPN.
     case "ncaah": return "https://www.espn.com/watch/";
+    case "ncaawh": return "https://www.espn.com/watch/";
+    // ESPN / ESPN+ / SEC Network carry nearly all college baseball and softball.
+    case "ncaabase": return "https://www.espn.com/watch/";
+    case "ncaasoft": return "https://www.espn.com/watch/";
     case "mlb": return "https://www.mlb.com/tv";
     // The LLWS is an ESPN-network property end to end (ESPN / ESPN2 / ABC),
     // so ESPN's own watch hub is the correct and only landing.
@@ -4581,7 +4688,8 @@ export async function fetchScheduleRatings(
 // CORS — undocumented per-endpoint policy). We use `sports.core.api.espn.com`
 // which is fully CORS-open. Its response shape is flat (`items[]`) instead of
 // the nested `sports[0].leagues[0].teams[]` of the site host, and items lack
-// the `logos` array — we synthesize logo URLs from ESPN's CDN conventions.
+// the `logos` array — we synthesize logo URLs from ESPN's CDN conventions
+// (or from the item's `guid`, for the college diamond sports).
 export interface SportTeam {
   id: string;           // "${sport}-${rawId}" — same shape as Team.id elsewhere
   rawId: string;        // ESPN's numeric id, useful for schedule fetches
@@ -4591,7 +4699,7 @@ export interface SportTeam {
   logo?: string;
 }
 
-function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string | undefined {
+function logoForTeam(sport: Sport, rawId: string, abbreviation: string, guid?: string): string | undefined {
   const abbr = abbreviation.toLowerCase();
   // ESPN CDN team-logo path conventions, verified empirically. The major US
   // leagues use abbreviation; NCAAM uses team id; soccer uses team id under
@@ -4602,6 +4710,9 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
     case "wnba":
     case "nhl":
     case "nfl":
+    // UFL follows the abbreviation convention (lou.png / bham.png answer 200,
+    // checked 2026-09-14).
+    case "ufl":
       return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
     // NCAAM / NCAAW / NCAAF share ESPN's single college institution namespace:
     // one `/i/teamlogos/ncaa/500/{id}.png` directory keyed by the school's id,
@@ -4611,7 +4722,18 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
     // rendered every school logo-less while the sibling NCAAM tab showed them.
     case "ncaam":
     case "ncaah":
+    case "ncaawh":
       return `https://a.espncdn.com/i/teamlogos/ncaa/500/${rawId}.png`;
+    // College baseball/softball team ids are sport-specific (softball OU is 524,
+    // baseball UCLA is 66), NOT the ncaa/500 school ids — that path 404s for
+    // most of them (checked 2026-09-14: 5 of 6 softball ids, 2 of 8 baseball).
+    // The scoreboard event and the core teams payload both carry a `guid`, and
+    // a.espncdn.com/guid/<guid>/logos/default.png is the logo ESPN itself uses
+    // on the event (342 of 400 baseball teams have one). No guid → no logo,
+    // never a broken image.
+    case "ncaabase":
+    case "ncaasoft":
+      return guid ? `https://a.espncdn.com/guid/${guid}/logos/default.png` : undefined;
     // Cricket follows the soccer convention (team id under its own sport path).
     case "cricket":
       return `https://a.espncdn.com/i/teamlogos/cricket/500/${rawId}.png`;
@@ -4642,7 +4764,9 @@ export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
   const cached = sportTeamsCache.get(sport);
   if (cached) return cached;
   const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
-  const url = `https://sports.core.api.espn.com/v3/sports${sportPath}/teams?limit=400`;
+  // 500, not 400: college baseball lists 437 teams and softball 446 (read
+  // 2026-09-14), so the old cap silently dropped the tail of the alphabet.
+  const url = `https://sports.core.api.espn.com/v3/sports${sportPath}/teams?limit=500`;
   const p = (async (): Promise<SportTeam[]> => {
     try {
       const res = await fetchWithRetry(url, 1, 8000);
@@ -4661,7 +4785,7 @@ export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
           displayName: t.displayName,
           shortDisplayName: t.shortDisplayName || t.displayName,
           abbreviation,
-          logo: logoForTeam(sport, rawId, abbreviation),
+          logo: logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined),
         });
       }
       out.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -5295,8 +5419,8 @@ export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>
         // College hockey's overall displayValue carries a points tail ("24-0-0, 0 PTS",
         // read 2026-09-12; summary is the bare "24-0-0"). Drop it before the W-L
         // trim in case summary is ever absent and the fallback is used.
-        if (sport === "ncaah") rec = rec.split(",")[0].trim();
-        if ((sport === "mlb" || sport === "nhl" || sport === "ncaah") && rec.split("-").length === 3) {
+        if (sport === "ncaah" || sport === "ncaawh") rec = rec.split(",")[0].trim();
+        if (THREE_SEGMENT_RECORD_SPORTS.has(sport) && rec.split("-").length === 3) {
           const [w, l] = rec.split("-");
           rec = `${w}-${l}`;
         }
@@ -5319,8 +5443,12 @@ export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>
 // would also re-open the door to applyTeamRanks clobbering the poll rank.
 // ⛔ NCAAH is NOT here either, for the same reason: its rank is the USCHO poll
 // on the event, and its standings feed held one junk entry on 2026-09-12.
+// ⛔ NCAAWH likewise (no standings feed; USCHO Top 15 rides the event).
 const RANK_LEAGUES = new Set<Sport>([
   "mlb", "nba", "wnba", "ncaam", "ncaaw", "nfl", "nhl", "epl", "mls", "ucl", "uel",
+  // UFL: one flat 8-team table with a real `winPercent` stat and no per-row
+  // `rank` (read 2026-09-14), so the win% sort gives a league-wide position.
+  "ufl",
   // Single-table domestic leagues — ESPN's standings carry a real league-wide
   // `rank`, so they need no RANK_METRIC entry (same as EPL).
   "laliga", "seriea", "bundesliga", "ligue1",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type AnimationEvent, type ReactNode } from "react";
-import { Game, Team } from "@/lib/types";
+import { Game, Sport, Team } from "@/lib/types";
 import { type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { networkStreamUrl, sportStreamFallback, espnGameUrl, displayShortName } from "@/lib/espn";
@@ -54,6 +54,10 @@ interface GameCardProps {
   // sort can't reorder anything.
   showStars?: boolean;
 }
+
+// Poll name for the rank-chip tooltip, keyed on sport. Anything absent reads
+// "Top 25" (AP / CFP for college football).
+const POLL_RANK_TITLE: Partial<Record<Sport, string>> = { ncaah: "Top 20", ncaawh: "Top 15" };
 
 function RatingBadge({ rating }: { rating: number }) {
   // The badge only renders for a real numeric rating (see showRating gate below),
@@ -1038,7 +1042,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // would bake a literal "#null" into it if that guard ever
                   // moved. Set it only when we actually have a rank.
                   if (rank != null) title = `FIFA world ranking: #${rank}`;
-                } else if (game.sport === "ncaaf" || game.sport === "ncaah") {
+                } else if (game.sport === "ncaaf" || game.sport === "ncaah" || game.sport === "ncaawh" || game.sport === "ncaabase" || game.sport === "ncaasoft") {
                   // No date/finished gate — see the NCAAF bullet above. The
                   // tooltip stays poll-neutral because ESPN's curated rank is
                   // the AP Top 25 until December and the CFP committee's
@@ -1046,8 +1050,10 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // ?? null because Team.rank is optional — the other branch
                   // narrows it with its own `!= null` guard, this one doesn't.
                   rank = team.rank ?? null;
-                  // College hockey's curated rank is the USCHO Top 20.
-                  if (rank != null) title = `${game.sport === "ncaah" ? "Top 20" : "Top 25"} ranking: #${rank}`;
+                  // College hockey's curated rank is the USCHO poll: Top 20
+                  // for the men, Top 15 for the women. Baseball and softball
+                  // carry a Top 25 poll like football.
+                  if (rank != null) title = `${POLL_RANK_TITLE[game.sport] ?? "Top 25"} ranking: #${rank}`;
                 } else if (team.rank != null && !effectivePastDate && !isFinished) {
                   rank = team.rank;
                   title = `${leagueLabel || "League"} standing: #${rank}`;
