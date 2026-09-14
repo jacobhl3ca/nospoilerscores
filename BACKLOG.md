@@ -21,6 +21,11 @@ mini's R2 uploads (news, espn-airings, reddit alerts) kept running.
   `poker-calendar-check.yml` is schedule + dispatch only. `staleness-check.yml` untouched: it is the watchdog
   for the mini jobs (1 min/run). Expected burn: ~700–900 min/month, under the 2,000 private cap.
 
+- [ ] **`sticky-guard.yml` times out on `networkidle`** whenever the MLB board (`?l=m`) is polling live games:
+  `page.goto` hits the 60 s test timeout, a different test each run, 5 of 7 pass. Red on every branch from
+  18:30 UTC 2026-09-14 (auto/staging, news-toolbar, feat/league-recaps twice) while the same spec passed at
+  18:04. Not a code failure. Fix: `waitUntil: "domcontentloaded"` + the existing `.league-sticky-top` wait,
+  or route the scoreboard fetch to a fixture in the spec.
 - [ ] **Move `prime-asins.yml` and `big-inning.yml` to the mini** on the share-cards pattern (this week).
   Both are cheap; do it when there is a spare hour, then flip them to `workflow_dispatch` only.
 - [ ] **NFL "Top 15 / Every Touchdown / Top Plays" recap videos** (league recaps, PR #71): Week 1 uploads
