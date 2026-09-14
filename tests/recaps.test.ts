@@ -307,6 +307,15 @@ test("selectRecaps keeps uploader-verified records that cover the day, shortest 
   assert.deepEqual(selectRecaps(all, "mlb", "20260913").map((r) => r.key), ["realfast", "fastcast"]);
   assert.deepEqual(selectRecaps(all, "mlb", "20260912").map((r) => r.key), ["realfast"]);
   assert.deepEqual(selectRecaps(all, "nba", "20260913"), []);
+  // Overlapping weekly windows from two uploaders: only the latest week shows.
+  const epl = {
+    epl: [
+      base({ sport: "epl", key: "everygoal", heading: "Every goal, Matchweek 4", coversWeek: 4, windowStart: "20260907", windowEnd: "20260913", channel: "Premier League", durationSec: 201 }),
+      base({ sport: "epl", key: "everygoalnbc", heading: "Every goal, Matchweek 3", coversWeek: 3, windowStart: "20260901", windowEnd: "20260907", channel: "NBC Sports", durationSec: 723 }),
+    ],
+  };
+  assert.deepEqual(selectRecaps(epl, "epl", "20260907").map((r) => r.key), ["everygoal"]);
+  assert.deepEqual(selectRecaps(epl, "epl", "20260905").map((r) => r.key), ["everygoalnbc"]);
   assert.deepEqual(selectRecaps(null, "nfl", "20260913"), []);
   assert.equal(recapCoversDay(base({}), "2026-09-13"), false);
 });
