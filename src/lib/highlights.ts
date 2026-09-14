@@ -23,6 +23,13 @@ export type BakedHighlight = {
   telemundoChannel?: string;
   telemundoExtended?: string;
   telemundoExtendedChannel?: string;
+  // NFL regular season only: the shorter CLUB-channel package (see
+  // nflTeamChannels.ts) beside the league's cut, plus both durations so the
+  // buttons can read "NFL 16m" / "Lions 10m". Bake-only; never live-resolved.
+  club?: string;
+  clubChannel?: string;
+  clubDurationSec?: number;
+  officialDurationSec?: number;
   mlbOrder?: "official-first";
   sourcePolicy?: "official-channel";
 };
@@ -34,6 +41,7 @@ const BAKED_CHANNEL_KEY = {
   extended: "extendedChannel",
   telemundo: "telemundoChannel",
   telemundoExtended: "telemundoExtendedChannel",
+  club: "clubChannel",
 } as const;
 
 // A policy label alone is not proof: older manifests carried stale or unscoped

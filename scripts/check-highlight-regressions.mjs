@@ -30,16 +30,29 @@ writeFileSync(tempRegions, readFileSync("src/lib/llwsRegions.json", "utf8"));
 // …and Node then demands an import attribute on a JSON specifier in ESM
 // (ERR_IMPORT_ATTRIBUTE_MISSING) — SWC's transform doesn't add one, so stamp it
 // onto the emitted specifier. Both halves are needed; either alone still throws.
+// youtube.ts also imports ./nflTeamChannels (the club embed-block, 2026-09-14).
+// Same treatment: transpile it beside the temp module and point the relative
+// specifier at the emitted file.
+const clubSource = readFileSync("src/lib/nflTeamChannels.ts", "utf8");
+const clubTransformed = await transform(clubSource, {
+  jsc: { parser: { syntax: "typescript" }, target: "es2022" },
+  module: { type: "es6" },
+});
+const tempClubs = join(tmpdir(), `hidescore-nflTeamChannels-${process.pid}.mjs`);
+writeFileSync(tempClubs, clubTransformed.code);
 writeFileSync(
   tempModule,
-  transformed.code.replace(
-    /(from\s*")(\.[^"]*\.json)(")/g,
-    '$1$2$3 with { type: "json" }',
-  ),
+  transformed.code
+    .replace(
+      /(from\s*")(\.[^"]*\.json)(")/g,
+      '$1$2$3 with { type: "json" }',
+    )
+    .replace(/(from\s*")\.\/nflTeamChannels(")/g, `$1./${tempClubs.split("/").pop()}$2`),
 );
 const youtube = await import(pathToFileURL(tempModule).href);
 unlinkSync(tempModule);
 unlinkSync(tempRegions);
+unlinkSync(tempClubs);
 
 check(
   "WNBA expansion names use official title forms",
@@ -57,6 +70,16 @@ check(
 check(
   "NFL resolves only against the NFL uploader",
   youtube.getOfficialChannelName("nfl") === "NFL",
+);
+// The club short-cut button (GameHighlights "Lions 10m") is embed-blocked
+// exactly like the league's cut, so the modal must open on the hand-off card
+// at once instead of mounting a player that fires error 150 first.
+check(
+  "NFL club channels are embed-blocked like the league channel",
+  youtube.leadChannelBlocksEmbeds(["Detroit Lions"]) === true
+    && youtube.leadChannelBlocksEmbeds(["Raiders"]) === true
+    && youtube.leadChannelBlocksEmbeds(["NFL"]) === true
+    && youtube.leadChannelBlocksEmbeds(["NBA"]) === false,
 );
 check(
   "an NFL preseason card requires a preseason (or Hall of Fame) title",

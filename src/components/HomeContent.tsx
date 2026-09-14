@@ -29,6 +29,7 @@ import DateNav, { getDateString, CalendarDropdown, getETHour } from "@/component
 import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
+import LeagueRecapCard from "@/components/LeagueRecapCard";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -3461,6 +3462,20 @@ export default function HomeContent({
             // shownElsewhere) but stay selectable — picking one gives you a
             // second column of that league.
             const displayedSports = sortedLeagues.map((l) => l.sport);
+            // League-wide recap pill on top of each column, past dates only
+            // (the ask). Follows the "Last played" slate when the column is
+            // showing one, so the NFL Week-1 card tracks Sun 9/13 on Tue/Wed.
+            const recapTopCard = (league: LeagueData) => isPast
+              ? (
+                <LeagueRecapCard
+                  sport={league.sport}
+                  date={selectedDate}
+                  lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
+                  onPlayHighlight={openVideoModal}
+                  onPlayEmbed={openEmbedModal}
+                />
+              )
+              : undefined;
             const swapPropsForSlot = (idx: number) => ({
               swappableOptions: switcherOptions,
               shownElsewhere: displayedSports.filter((_, i) => i !== idx),
@@ -3804,6 +3819,7 @@ export default function HomeContent({
                       widthClassName={colWidthClass}
                       condense={singleColumn}
                       footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
+                      topCard={recapTopCard(entry.league)}
                     />
                   ))}
                   {addButton}
@@ -3832,6 +3848,7 @@ export default function HomeContent({
                     widthClassName={colWidthClass}
                     condense={singleColumn}
                     footer={entry.league.sport === "fifa" && worldCupActive ? <WorldCupMattersCard date={selectedDate} /> : undefined}
+                    topCard={recapTopCard(entry.league)}
                   />
                 ))}
                 {addButton}
