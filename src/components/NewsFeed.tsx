@@ -11,7 +11,8 @@ import {
   PlayHandler,
   PlayOpts,
   newsItemToPlayOpts,
-  itemIsTextPost,
+  itemIsVideo,
+  passesNewsFilters,
 } from "@/components/NewsColumn";
 
 // Vertical "Feed" view for the news section — a single Reddit-style scroll of
@@ -39,11 +40,6 @@ interface NewsFeedProps {
   // Categories switched on by the two Settings toggles; empty = filter off.
   hiddenCategories?: SensitiveCategory[];
   onShowSensitive?: () => void;
-}
-
-// A post counts as a video when it carries any playable clip.
-function hasVideo(item: NewsItem): boolean {
-  return !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
 }
 
 // Merge every source's items into one de-duped, time-sorted list. Dedupe by the
@@ -109,20 +105,15 @@ function useAggregatedFeed(sources: NewsSource[]) {
 export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, oldestFirst, hiddenCategories, onShowSensitive }: NewsFeedProps) {
   const items = useAggregatedFeed(sources);
 
-  // Visible posts: in Videos mode keep only posts with a clip; otherwise hide
-  // headline-only text posts unless explicitly opted in (matches the
-  // .news-textpost / .show-text-posts rule the Cards view uses).
+  // Visible posts: the same passesNewsFilters rule the Cards view applies —
+  // Videos only keeps only clip-bearing posts (and overrides Text posts, Jacob
+  // 9/14); otherwise headline-only text posts hide unless Text posts is on.
   // How many posts the sensitive filter removed, so the feed can say so rather
   // than silently shrinking. Counted over the SAME post set the other filters
   // leave behind, so the number matches what would appear if it were off.
   const [visible, sensitiveHidden] = useMemo<[NewsItem[], number]>(
     () => {
-      const preFilter = (items ?? []).filter((it) =>
-        // Videos + Text posts are independent toggles: Videos keeps clip-bearing
-        // posts, and Text posts ALSO on adds the headline-only ones (which carry
-        // no clip, so videosOnly alone hid them — Jacob 7/16).
-        videosOnly ? (hasVideo(it) || (showTextPosts && itemIsTextPost(it))) : (!itemIsTextPost(it) || showTextPosts)
-      );
+      const preFilter = (items ?? []).filter((it) => passesNewsFilters(it, videosOnly, showTextPosts));
       const kept = hiddenCategories?.length ? preFilter.filter((it) => !isSensitiveNews(it, hiddenCategories)) : preFilter;
       // ⇅ Oldest first: the Feed is already time-sorted newest-first, so a plain
       // reverse IS chronological order here. Reverse a copy — `items` is shared.
@@ -154,7 +145,15 @@ export default function NewsFeed({ sources, onPlay, showTextPosts, videosOnly, o
   if (visible.length === 0) {
     return (
       <div role="status" aria-live="polite" className="max-w-2xl mx-auto px-4 py-16 text-center" style={{ color: "var(--text-muted)" }}>
-        No posts to show.
+        {/* Same copy as the Cards column's all-filtered state (NewsColumn), so
+            an empty Videos-only feed says WHY it's empty and how to fix it
+            instead of a bare "No posts to show." */}
+        {videosOnly ? "No videos here right now." : "No posts to show."}
+        {videosOnly && (
+          <span className="block mt-1" style={{ opacity: 0.8 }}>
+            Turn off Videos only, or widen Source in the filter menu.
+          </span>
+        )}
         {sensitiveHidden > 0 && (
           <span className="block mt-2">
             <SensitiveHiddenNote count={sensitiveHidden} onShow={onShowSensitive} />
@@ -198,7 +197,7 @@ function FeedPost({ item, onOpen }: { item: NewsItem; onOpen: () => void }) {
   const gallery = item.images ?? [];
   const img = gallery[0] || item.imageFullUrl || (item.thumbOnly ? null : item.imageUrl);
   const tile = !img && item.imageUrl ? item.imageUrl : null;
-  const isVideo = !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
+  const isVideo = itemIsVideo(item);
   const hasMedia = !!img || !!tile || isVideo;
   const comments = item.comments ?? [];
 

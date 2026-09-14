@@ -738,8 +738,11 @@ export default function SettingsPanel({
       // UI to clear it — a reset is the only way out. All four have no non-
       // undefined default, so clearing to undefined restores the fresh-install
       // default (Cards view, no video filter, default order, nothing hidden).
+      // newsOldestFirst (the ⇅ control) was the last toolbar pref still
+      // surviving a reset; it has no non-undefined default either.
       newsFeedView: undefined,
       newsVideosOnly: undefined,
+      newsOldestFirst: undefined,
       newsTypeFilterOrder: undefined,
       newsHiddenSources: undefined,
       singleColumn: undefined,

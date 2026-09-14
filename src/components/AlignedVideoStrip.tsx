@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NewsItem, proxyImage } from "@/lib/news";
 import { isSensitiveNews, SensitiveCategory } from "@/lib/sensitiveNews";
 import { handleExternalClick } from "@/lib/openExternal";
-import { NewsSource, PlayHandler, PlayOpts, itemIsTextPost, newsItemToPlayOpts } from "./NewsColumn";
+import { NewsSource, PlayHandler, PlayOpts, newsItemToPlayOpts, passesNewsFilters } from "./NewsColumn";
 
 interface Props {
   sources: NewsSource[];
@@ -18,12 +18,16 @@ interface Props {
   tailFetch?: () => Promise<NewsItem[]>;
   tailColIdx?: number;
   showTextPosts?: boolean;
+  // 🎥 Videos only. Only the text tail needs it — the video cells are videos by
+  // construction — but without it the ESPN headline tail ignored the chip.
+  videosOnly?: boolean;
   // Settings → "Hide upsetting news" (lib/sensitiveNews). Filters both the video
   // cells and the ESPN text tail. No "N hidden" line here: the strip sits above
   // the news columns, which print that count for the same filter — two notes for
   // one filter reads like two different things were hidden.
   hiddenCategories?: SensitiveCategory[];
-  // Reverse the tail list (oldest first) — the ⇅ news-header control.
+  // Reverse every column's cells AND the tail list (oldest first) — the ⇅
+  // news-header control, applied here so the strip flips with the columns.
   oldestFirst?: boolean;
 }
 
@@ -32,7 +36,7 @@ interface Props {
 // gridTemplateRows: subgrid. Per-row height = tallest headline at that row,
 // shorter cells anchor align-self: start so blank space sits at the bottom.
 // Headlines stay un-clamped so long titles wrap fully (Jacob 2026-05-02).
-export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, hiddenCategories, oldestFirst }: Props) {
+export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColIdx, showTextPosts, videosOnly, hiddenCategories, oldestFirst }: Props) {
   const [colItems, setColItems] = useState<(NewsItem[] | null)[]>(() => sources.map(() => null));
   const [tailItems, setTailItems] = useState<NewsItem[] | null>(null);
 
@@ -100,11 +104,18 @@ export default function AlignedVideoStrip({ sources, onPlay, tailFetch, tailColI
   // Apply the sensitive filter at RENDER, not in the fetch effect: the effect
   // only re-runs on a source-set change, so filtering there would leave the
   // already-fetched strip untouched when the Settings toggle flips mid-session.
+  // Oldest first reverses each column AFTER the filter (copy — colItems is
+  // state). The per-column `items` below, and so the modal's prev/next list,
+  // read this reversed array, so paging stays in the on-screen order.
   const shownColItems = useMemo(
-    () => (hiddenCategories?.length ? colItems.map((c) => (c ? c.filter((i) => !isSensitiveNews(i, hiddenCategories)) : c)) : colItems),
-    [colItems, hiddenCategories],
+    () => colItems.map((c) => {
+      if (!c) return c;
+      const kept = hiddenCategories?.length ? c.filter((i) => !isSensitiveNews(i, hiddenCategories)) : c;
+      return oldestFirst ? [...kept].reverse() : kept;
+    }),
+    [colItems, hiddenCategories, oldestFirst],
   );
-  const keptTailItems = (tailItems ?? []).filter((item) => (showTextPosts || !itemIsTextPost(item)) && !(hiddenCategories?.length && isSensitiveNews(item, hiddenCategories)));
+  const keptTailItems = (tailItems ?? []).filter((item) => passesNewsFilters(item, !!videosOnly, !!showTextPosts) && !(hiddenCategories?.length && isSensitiveNews(item, hiddenCategories)));
   const visibleTailItems = oldestFirst ? [...keptTailItems].reverse() : keptTailItems;
   const tailHasItems = tailColIdx !== undefined && visibleTailItems.length > 0;
   // Reserve 2 pad rows in the tail col so the ESPN-top tail always has somewhere

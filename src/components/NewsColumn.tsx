@@ -64,6 +64,21 @@ export function itemIsVideo(item: NewsItem): boolean {
   return !!(item.youtubeVideoId || item.playbackUrl || item.videoUrl || item.embedUrl);
 }
 
+// The ONE item-level rule behind the toolbar's Videos only + Text posts chips,
+// shared by every news surface (Cards, Feed, the aligned strip's ESPN tail) so
+// a pref can't be honored on one surface and ignored on another.
+//   - Videos only ON  → only clip-bearing items, full stop. It OVERRIDES Text
+//     posts (Jacob 9/14): Text posts has defaulted ON since 8/9 and the funnel
+//     defaults to Reddit-only, so the old "text posts still show if Text posts
+//     is on" rule (7/16) made Videos only a no-op for every default user — the
+//     chip lit up and the board didn't change.
+//   - Videos only OFF → everything, minus headline-only text posts unless Text
+//     posts is on.
+export function passesNewsFilters(item: NewsItem, videosOnly: boolean, showTextPosts: boolean): boolean {
+  if (videosOnly) return itemIsVideo(item);
+  return showTextPosts || !itemIsTextPost(item);
+}
+
 export function newsItemToPlayOpts(item: NewsItem): PlayOpts {
   const isReddit = !!item.section?.startsWith("r/");
   const hasPlayableMedia = !!(item.playbackUrl || item.videoUrl || item.youtubeVideoId || item.embedUrl);
@@ -950,12 +965,11 @@ function SourceSection({ source, onPlayVideo, onItemsLoaded, onRenderState, sibl
   // per source so the column can total it up in one footer line instead of
   // repeating a note on every card.
   const [shown, sensitiveHidden] = useMemo<[NewsItem[], number]>(
-    // Videos and Text posts are independent toggles: with Videos on you get the
-    // clip-bearing posts, and with Text posts ALSO on you additionally get the
-    // headline-only text posts (they carry no clip, so plain videosOnly hid them
-    // and the Text posts toggle was a no-op — Jacob 7/16).
+    // Videos only wins over Text posts (Jacob 9/14) — see passesNewsFilters.
+    // (The 7/16 rule let Text posts re-admit headline-only rows under Videos
+    // only; once Text posts defaulted ON on 8/9 that made Videos only a no-op.)
     () => {
-      const preFilter = items.filter((item) => videosOnly ? (itemIsVideo(item) || (showTextPosts && itemIsTextPost(item))) : (showTextPosts || !itemIsTextPost(item)));
+      const preFilter = items.filter((item) => passesNewsFilters(item, !!videosOnly, !!showTextPosts));
       const kept = hiddenCategories?.length ? preFilter.filter((item) => !isSensitiveNews(item, hiddenCategories)) : preFilter;
       // Bottom-to-top reading order (the ⇅ control next to the funnel). Reverse
       // AFTER filtering so the flip is over what's actually on screen, and copy
@@ -1109,7 +1123,7 @@ export default function NewsColumn({
             {videosOnly ? "No videos here right now." : "Nothing to show with these filters."}
             <span className="block mt-1" style={{ opacity: 0.8 }}>
               {videosOnly
-                ? "Turn off Videos, or widen Source in the filter menu."
+                ? "Turn off Videos only, or widen Source in the filter menu."
                 : "Try widening Source in the filter menu."}
             </span>
           </div>
