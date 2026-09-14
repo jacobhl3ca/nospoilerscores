@@ -55,7 +55,7 @@ test("ncaaf is not also on the standings-rank path", () => {
 // lost to #1 Ohio State. Guard the branch so nobody re-adds a date gate.
 test("the college chip is not hidden on finished cards", () => {
   const card = fs.readFileSync(new URL("../src/components/GameCard.tsx", import.meta.url), "utf8");
-  const branch = card.slice(card.indexOf('} else if (game.sport === "ncaaf" || game.sport === "ncaah" || game.sport === "ncaabase" || game.sport === "ncaasoft") {'), card.indexOf("} else if (team.rank != null"));
+  const branch = card.slice(card.indexOf('} else if (game.sport === "ncaaf" || game.sport === "ncaah" || game.sport === "ncaawh" || game.sport === "ncaabase" || game.sport === "ncaasoft") {'), card.indexOf("} else if (team.rank != null"));
   assert.ok(branch.length > 0, "the ncaaf rank branch is gone");
   assert.ok(!/effectivePastDate|isFinished/.test(branch), "the ncaaf rank branch must not re-gate on date/finished");
 });

@@ -162,6 +162,7 @@ const SPORT_LABEL: Record<Sport, string> = {
   ufl: "UFL",
   nhl: "NHL",
   ncaah: "NCAA Hockey",
+  ncaawh: "NCAA Women's Hockey",
   llws: "Little League",
   ncaabase: "NCAA Baseball",
   ncaasoft: "NCAA Softball",

@@ -724,6 +724,30 @@
       }
     },
     {
+      "key": "ncaawh",
+      "label": "NCAAW Hockey",
+      "path": "/hockey/womens-college-hockey/scoreboard",
+      "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/NCAA_logo.svg/500px-NCAA_logo.svg.png",
+      "defaultOn": false,
+      "preseasonIsRegular": false,
+      "season": {
+        "start": "09-18",
+        "end": "03-23",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 18,
+        "overtimeBonus": 20,
+        "scoringDivisor": 1.5,
+        "regulationPeriods": 3,
+        "periodSeconds": 1200,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
       "key": "wnba",
       "label": "WNBA",
       "path": "/basketball/wnba/scoreboard",

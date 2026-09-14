@@ -59,6 +59,14 @@ test("halves and hockey intermissions", () => {
   assert.equal(full(g("nhl", 5, "0:00", "Shootout")), "SO");
 });
 
+// Women's college hockey rides the NHL branch: regular-season period 5 is a
+// shootout, period 4 is the single OT with its running clock.
+test("ncaawh overtime and shootout", () => {
+  assert.equal(full(g("ncaawh", 5, "0:00", "Shootout")), "SO");
+  assert.equal(full(g("ncaawh", 4, "2:10", "2:10 - OT")), "OT - 2:10");
+  assert.equal(full(g("ncaawh", 5, "12:00", "12:00 - 2OT", true)), "2OT - 12:00");
+});
+
 // "End of 4th" with a winner is the final (Jacob 9/12): settle it in espn.ts so
 // the card leaves the live group instead of reading "End of Q4" for minutes.
 const jiti = createJiti(import.meta.url);
