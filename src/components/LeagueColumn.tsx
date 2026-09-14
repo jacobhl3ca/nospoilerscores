@@ -89,6 +89,9 @@ interface LeagueColumnProps {
   // Optional content rendered at the very bottom of the column, under the
   // games (e.g. the World Cup "What matters today" stakes pill).
   footer?: ReactNode;
+  // Optional content rendered between the column header and the games (the
+  // league-wide recap pill on past-date boards — see LeagueRecapCard).
+  topCard?: ReactNode;
   // Reports this column's live useAbbreviations state up to HomeContent (null =
   // this column has no team names to measure). HomeContent folds the reports
   // into `namesCompact`, which comes back down so event columns (UFC) can size
@@ -842,6 +845,7 @@ export default function LeagueColumn({
   widthClassName = "flex-1 min-w-0 max-w-[225px] xl:max-w-[280px] min-h-[60vh]",
   condense,
   footer,
+  topCard,
   onAbbrevReport,
   namesCompact,
 }: LeagueColumnProps) {
@@ -1863,6 +1867,7 @@ export default function LeagueColumn({
           )}
         </div>
       )}
+      {topCard}
       {teamViewTeam && !league.golfTournament ? (
         section === "finished" ? null : (
           <TeamView

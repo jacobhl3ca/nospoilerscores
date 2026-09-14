@@ -113,6 +113,11 @@ const FEEDS = [
       : null;
     return { path: `/news/${slug}.json`, warnH: reddit ? 4 : 6, critH, contentWarnH, contentCritH };
   }),
+  // League-wide recap lookout (prebake bakeLeagueRecaps, mini every 30 min).
+  // A slow feed by nature: records carry forward and most series post once a
+  // day or once a week, so only fetchedAt is watched, loosely. Not in
+  // NEWS_HOURLY because it is not an `items` feed (no content-age check).
+  { path: "/news/recaps.json", warnH: 24, critH: 72 },
   { path: "/espn-airings.json", warnH: 6, critH: 24 },           // GHA every 2h
   // prime-asins is a best-effort nicety: it deep-links Prime broadcasts to the
   // exact game page, and scrape-prime-asins.mjs is explicitly non-fatal — if
