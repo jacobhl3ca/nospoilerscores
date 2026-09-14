@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Game } from "@/lib/types";
 import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
@@ -8,6 +8,9 @@ import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
 import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, hasNoTrustedHighlightSource, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
+import { clubNickname, formatRecapDuration } from "@/lib/recaps";
+import { nflTeamChannelChain } from "@/lib/nflTeamChannels";
+import type { BakedHighlight } from "@/lib/highlights";
 import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 
 // Per-league buffer (hrs from game start) before showing the highlight button,
@@ -167,6 +170,25 @@ export default function GameHighlights({
   const initialTelemundoLongId = fifaTelemundoEnabled && isFifa
     ? getChannelVerifiedBakedId(initialBaked, "telemundoExtended", "Telemundo Deportes", hlAway, hlHome)
     : null;
+  // NFL club short cut (bake-only, see BakedHighlight.club). Trusted only when
+  // the baked record names one of THIS game's two clubs and passes the same
+  // uploader + matchup check as every other slot. Never live-resolved: the
+  // 8/10 per-card club scrape was reverted for cost, and the clip is
+  // embed-blocked either way, so this is a second hand-off button.
+  const isNfl = game.sport === "nfl";
+  const awayAbbr = game.awayTeam.abbreviation;
+  const homeAbbr = game.homeTeam.abbreviation;
+  const verifiedClub = useCallback((baked: BakedHighlight | null): { id: string; channel: string; durationSec: number | null } | null => {
+    if (!isNfl || !baked?.clubChannel) return null;
+    const allowed = nflTeamChannelChain(awayAbbr, homeAbbr);
+    if (!allowed.includes(baked.clubChannel)) return null;
+    const id = getChannelVerifiedBakedId(baked, "club", baked.clubChannel, hlAway, hlHome);
+    return id ? { id, channel: baked.clubChannel, durationSec: Number.isFinite(baked.clubDurationSec) ? (baked.clubDurationSec as number) : null } : null;
+  }, [isNfl, awayAbbr, homeAbbr, hlAway, hlHome]);
+  const [club, setClub] = useState(() => verifiedClub(initialBaked));
+  const [officialDurationSec, setOfficialDurationSec] = useState<number | null>(
+    isNfl && initialOfficialId && Number.isFinite(initialBaked?.officialDurationSec) ? (initialBaked!.officialDurationSec as number) : null,
+  );
   const prefetchedVideoId = useRef<string | null>(initialSecondaryId ?? null);
   const prefetchedOfficialId = useRef<string | null>(initialOfficialId ?? null);
   const prefetchedTelemundoShortId = useRef<string | null>(initialTelemundoShortId);
@@ -313,6 +335,10 @@ export default function GameHighlights({
   };
   const officialModalFallbackUrl = modalFallbackUrl([primaryChannel]);
   const secondaryModalFallbackUrl = modalFallbackUrl([secondaryChannel]);
+  // The club channel rides the strict gate too: leadChannelBlocksEmbeds knows
+  // every club name, so VideoModal opens on the hand-off card at once.
+  const clubModalFallbackUrl = club ? modalFallbackUrl([club.channel]) : null;
+  const officialMins = isNfl ? formatRecapDuration(officialDurationSec) : "";
   const telemundoModalFallbackUrl = isFifa && highlightUrl ? `${highlightUrl}&nss_no_fallback=1` : highlightUrl;
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
@@ -351,6 +377,10 @@ export default function GameHighlights({
         // send the same filter.
         const baked = await getBakedHighlight(game.sport, game.id);
         const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel, away, home);
+        if (isNfl) {
+          setClub(verifiedClub(baked));
+          setOfficialDurationSec(bakedOfficial && Number.isFinite(baked?.officialDurationSec) ? (baked!.officialDurationSec as number) : null);
+        }
         const bakedSecondary = getChannelVerifiedBakedId(baked, "extended", secondaryChannel, away, home);
         // MLB's official slot is never rendered (showYouTube requires !isMlb —
         // its visible row is MLB.com-native, per the initialOfficialId guard
@@ -428,11 +458,7 @@ export default function GameHighlights({
         if (!cancelled) setSearchStatus(secondId ? "found" : "missing");
       })();
     }
-    // Actually arm the guard the comment above promises: without this cleanup
-    // `cancelled` stayed false forever, so the post-await setState writes fired
-    // even after the card unmounted mid-scrape. Mirrors the MLB effect below.
-    return () => { cancelled = true; };
-  }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, fifaTelemundoEnabled, weekNumber, compTokens]);
+  }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, isNfl, verifiedClub, fifaTelemundoEnabled, weekNumber, compTokens]);
 
   // See resolvedMlb above. Fires only when the board enrich did NOT already
   // attach a recap (game.mlbRecapPlaybackUrl absent) and the highlight window
@@ -469,7 +495,7 @@ export default function GameHighlights({
   // held back by the slower (often live-scraped) 2nd slot — that wait was what
   // made the whole highlight row "pop in later than MLB" on refresh and on past
   // days (Jacob 7/11). A distinct 2nd clip, when found, simply joins the row.
-  const showYouTube = !!(!isMlb && isFinished && highlightUrl && (effectiveOfficialStatus === "found" || searchStatus === "found"));
+  const showYouTube = !!(!isMlb && isFinished && highlightUrl && (effectiveOfficialStatus === "found" || searchStatus === "found" || (isNfl && !!club)));
   const showTelemundo = !!(fifaTelemundoEnabled && isFinished && highlightUrl && isFifa && (telemundoShortStatus === "found" || telemundoLongStatus === "found"));
   const showNhl = !!(isFinished && game.sport === "nhl" && (game.nhlRecapEmbed || game.nhlCondensedEmbed));
   // MLB row: short MLB.com recap (3m) first, then the condensed game (10m).
@@ -574,9 +600,28 @@ export default function GameHighlights({
               ) : (
                 <>
                   <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-                  <span className="text-[10px] font-medium">{demoActive ? "Watch" : isFifa ? "2m" : (highlightBadgeLabel[game.sport] ?? game.sport.toUpperCase())}</span>
+                  <span className="text-[10px] font-medium whitespace-nowrap">{demoActive ? "Watch" : isFifa ? "2m" : `${highlightBadgeLabel[game.sport] ?? game.sport.toUpperCase()}${officialMins ? ` ${officialMins}` : ""}`}</span>
                 </>
               )}
+            </button>
+          )}
+          {isNfl && club && clubModalFallbackUrl && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!onPlayHighlight) return;
+                // Bake-only: no click-time resolve (see verifiedClub).
+                playHl(club.id, clubModalFallbackUrl, shareCard);
+              }}
+              disabled={fetchingOnClick !== null}
+              className="highlight-btn flex min-w-0 items-center justify-center gap-1 py-1.5 rounded-md flex-1 transition-opacity hover:opacity-80 cursor-pointer"
+              style={{ background: "var(--bg-card-hover)", color: "var(--accent)" }}
+              aria-label={`${club.channel} highlights`}
+              title={`${club.channel} highlights`}
+            >
+              <svg aria-hidden="true" className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              <span className="text-[10px] font-medium whitespace-nowrap">{clubNickname(club.channel)}{formatRecapDuration(club.durationSec) ? ` ${formatRecapDuration(club.durationSec)}` : ""}</span>
             </button>
           )}
           {searchStatus === "found" && (
