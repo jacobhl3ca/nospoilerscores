@@ -19,6 +19,7 @@ import {
   stripRecapRecord,
   fillHeading,
   pickShorterClub,
+  eplSeasonYear,
 } from "../scripts/lib/recaps.mjs";
 import { createJiti } from "jiti";
 import type { RecapRecord } from "../src/lib/recaps.ts";
@@ -109,11 +110,17 @@ test("NBA Top 10 carries the games' date from the title", () => {
 
 test("EPL and MLS every-goal series parse the matchweek / matchday", () => {
   assert.equal(matchSeriesTitle(series("epl", "everygoal"), cand("EVERY Weekend Goal | Matchweek 4", "Premier League"))?.week, 4);
-  assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 4 | Premier League | NBC Sports", "NBC Sports"))?.week, 4);
+  // NBC: the season stamp is required and must be the running season.
+  assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 4 (2026-27) | Premier League | NBC Sports", "NBC Sports"), { seasonYear: 2026 })?.week, 4);
+  assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 38 (2025-26) | Premier League | NBC Sports", "NBC Sports"), { seasonYear: 2026 }), null);
+  assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 7 | NBC Sports", "NBC Sports"), { seasonYear: 2026 }), null);
+  assert.equal(eplSeasonYear(new Date("2026-09-14T16:00:00Z")), 2026);
+  assert.equal(eplSeasonYear(new Date("2027-02-14T16:00:00Z")), 2026);
+  assert.equal(eplSeasonYear(new Date("2027-08-14T16:00:00Z")), 2027);
   assert.equal(matchSeriesTitle(series("mls", "everygoal"), cand("Every Goal From Matchday 25", "Major League Soccer"))?.week, 25);
   assert.equal(matchSeriesTitle(series("mls", "everygoal"), cand("Watch Every Goal from Matchday 25!", "Major League Soccer"))?.week, 25);
   assert.equal(matchSeriesTitle(series("mls", "everygoal"), cand("Every Goal From Matchday 24! Luis Suárez, Cavan Sullivan, and more!", "Major League Soccer"))?.week, 24);
-  assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 3 (2026-27) | Premier League | NBC Sports", "NBC Sports"))?.week, 3);
+  assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 3 (2026-27) | Premier League | NBC Sports", "NBC Sports"), { seasonYear: 2026 })?.week, 3);
   assert.equal(matchSeriesTitle(series("mls", "everygoal"), cand("Inter Miami vs LAFC | Highlights", "Major League Soccer")), null);
   assert.equal(matchSeriesTitle(series("epl", "everygoal"), cand("Bedard's BEAUTY of a goal | NHL Week 21", "Premier League")), null);
 });
@@ -244,8 +251,10 @@ test("pickNewest ranks by publish day, then week, then title date — never page
     { videoId: "md24", week: 24, publishedMs: 463 * D },
   ]);
   assert.equal(crossSeason?.videoId, "md25");
-  // Unknown publish time on one side falls back to the week.
+  // An unknown publish time never outranks a known one, whatever the week says.
   assert.equal(pickNewest([{ videoId: "x", week: 3, publishedMs: null }, { videoId: "y", week: 4, publishedMs: 5 * D }])?.videoId, "y");
+  assert.equal(pickNewest([{ videoId: "mw38", week: 38, publishedMs: null }, { videoId: "mw3", week: 3, publishedMs: 7 * D }])?.videoId, "mw3");
+  assert.equal(pickNewest([{ videoId: "a", week: 3, publishedMs: null }, { videoId: "b", week: 4, publishedMs: null }])?.videoId, "b");
   const byDate = pickNewest([
     { videoId: "a", week: null, titleDate: "20261022", publishedMs: 9 },
     { videoId: "b", week: null, titleDate: "20261023", publishedMs: 1 },

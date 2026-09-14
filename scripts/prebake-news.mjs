@@ -10,7 +10,7 @@ import {
   RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds,
   parseRelativeTime, isoDurationToSec, etYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, matchSeriesTitle, pickNewest, stripRecapRecord,
-  fillHeading, pickShorterClub,
+  fillHeading, pickShorterClub, eplSeasonYear,
 } from "./lib/recaps.mjs";
 
 const OUT_DIR = "public/news";
@@ -3357,7 +3357,7 @@ async function bakeLeagueRecaps() {
             };
           }
         } else {
-          const seasonYear = sport === "nfl" ? nflSeasonYear : null;
+          const seasonYear = sport === "nfl" ? nflSeasonYear : sport === "epl" ? eplSeasonYear() : null;
           const hit = await resolveYtRecapSeries(series, seasonYear);
           if (hit) {
             rec = {
