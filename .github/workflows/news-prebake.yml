@@ -1,14 +1,11 @@
 name: Prebake news feeds
 
+# moved to the mini 2026-09-14 (launchd com.hidescore.reddit-prebake, every 30 min,
+# runs the FULL prebake-news.mjs + R2 upload); manual fallback only.
+# History: 2026-07-07 this dropped to a once-a-day safety net; 2026-09-14 the
+# free Actions quota ran out, so the schedule went too. Run it by hand from the
+# Actions tab when the mini is down.
 on:
-  schedule:
-    # Daily backup only. 2026-07-07: the residential-IP Mac mini cron
-    # (com.hidescore.reddit-prebake, every 30 min) was switched from a scoped
-    # reddit+espn run to a FULL prebake, so it now bakes these league/CBS/
-    # theScore feeds too — every 30 min instead of the 2h this workflow used to
-    # provide. This run is kept only as a safety net for when the mini is down,
-    # and dropped to once a day to free Actions minutes (was 12 runs/day).
-    - cron: "0 12 * * *"
   workflow_dispatch:
 
 jobs:

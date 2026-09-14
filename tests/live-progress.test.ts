@@ -45,6 +45,20 @@ test("running clocks are unchanged", () => {
   assert.equal(full(g("ncaam", 2, "10:00", "10:00 - 2nd Half")), "H2 - 10:00");
 });
 
+// CFL (added 2026-09-13) shares the gridiron branch. The worker maps
+// theScore's live strings onto these ESPN shapes; the real live strings are
+// unverified until the first live window (Fri 2026-09-18, MTL@HAM) — replace
+// the assumed inputs below with the captured payload then.
+test("cfl reads like the NFL: quarters, halftime, end of quarter, OT", () => {
+  assert.equal(full(g("cfl", 2, "8:32", "8:32 - 2nd")), "Q2 - 8:32");
+  assert.equal(short(g("cfl", 2, "8:32", "8:32 - 2nd")), "Q2");
+  assert.equal(full(g("cfl", 2, "0:00", "Halftime")), "Halftime");
+  assert.equal(full(g("cfl", 1, "0:00", "End of 1st")), "End of Q1");
+  assert.equal(full(g("cfl", 3, "0:00", "End of 3rd")), "End of Q3");
+  assert.equal(full(g("cfl", 5, "", "OT")), "OT");
+  assert.equal(full(g("cfl", 6, "", "2OT")), "2OT");
+});
+
 test("college-football OT has no clock, so its 0:00 is live play", () => {
   assert.equal(full(g("ncaaf", 5, "0:00", "OT")), "OT");
   assert.equal(full(g("ncaaf", 6, "0:00", "2OT")), "2OT");
@@ -81,6 +95,14 @@ const ev = (period: number, shortDetail: string, scores: [string, string]) => ({
 });
 type Ev = ReturnType<typeof ev>;
 const settled = (sport: string, e: Ev) => { settleEndOfRegulation(e, sport); return e.status.type; };
+
+test("cfl End of 4th with a winner settles as Final too", () => {
+  const t = settled("cfl", ev(4, "End of 4th", ["26", "23"]));
+  assert.equal(t.state, "post");
+  assert.equal(t.shortDetail, "Final");
+  const tied = settled("cfl", ev(4, "End of 4th", ["24", "24"]));
+  assert.equal(tied.state, "in");
+});
 
 test("End of 4th with a winner settles as Final", () => {
   const t = settled("ncaaf", ev(4, "End of 4th", ["31", "24"]));

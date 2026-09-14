@@ -157,6 +157,9 @@ const NETWORK_SHORT: Record<string, string> = {
   // one of the 240 US Open qualifying matches on 2026-08-24..28 came through
   // as "ESPN+" (the main draw is ESPN / ESPN2 / ABC / ESPN Unlmtd, no plus).
   "ESPN+": "ESPN+",
+  // Same exemption: the CFL's free stream. Stripped, the chip read "CFL" —
+  // the league's own name, sitting next to the league label.
+  "CFL+": "CFL+",
   "Marquee Sports Net": "Marquee",
   "Space City Home Network": "Space City",
 };

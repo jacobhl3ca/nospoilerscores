@@ -129,8 +129,13 @@ def cmd_metadata():
     print("metadata pushed")
 
     # Review notes live on the version's review detail, which may not exist yet.
+    # The reviewer's phone number is personal data; the repo is public, so it
+    # comes from the environment (set ASC_CONTACT_PHONE in the shell that ships).
+    phone = os.environ.get("ASC_CONTACT_PHONE")
+    if not phone:
+        raise SystemExit("ASC_CONTACT_PHONE is not set (the App Review contact phone, digits only)")
     detail = {"contactFirstName": "Jacob", "contactLastName": "Heifetz-Licht",
-              "contactPhone": "REDACTED_PHONE", "contactEmail": "hi@jacobhl.com",
+              "contactPhone": phone, "contactEmail": "hi@jacobhl.com",
               "demoAccountRequired": False, "notes": s["review notes"]}
     try:
         existing = call("GET", f"/appStoreVersions/{v['id']}/appStoreReviewDetail")["data"]

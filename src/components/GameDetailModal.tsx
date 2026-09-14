@@ -17,7 +17,7 @@ import { buildCalendarEvent } from "@/lib/calendarLink";
 // rain forecast to fall within [start − 1h, start + length + 1h] — an hour
 // before through about an hour after the game is slotted to play.
 const GAME_LENGTH_H: Record<string, number> = {
-  mlb: 3.5, nfl: 3.5, ncaaf: 3.5,
+  mlb: 3.5, nfl: 3.5, ncaaf: 3.5, cfl: 3.5,
   fifa: 2.5, mls: 2.5,
   tennis: 3, f1: 2.5,
 };
