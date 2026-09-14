@@ -28,7 +28,7 @@ const NEWS_HOURLY = [
   "reddit-boxing", "reddit-cricket", "reddit-epl", "reddit-fifa", "reddit-general", "reddit-golf", "reddit-mlb",
   "reddit-mls", "reddit-nba", "reddit-ncaaf", "reddit-ncaah", "reddit-ncaam", "reddit-ncaaw",
   "reddit-f1", "reddit-indycar", "reddit-nascar", "reddit-nfl", "reddit-nhl", "reddit-nwsl", "reddit-soccer", "reddit-tennis",
-  "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-wnba",
+  "reddit-ucl", "reddit-uel", "reddit-ufc", "reddit-ufl", "reddit-wnba",
   "thescore-epl", "thescore-general", "thescore-mlb", "thescore-mls",
   "thescore-nba", "thescore-ncaam", "thescore-nfl", "thescore-nhl",
   // Editorial substitute feeds + the two league video feeds that shipped after
@@ -57,6 +57,8 @@ const RATE_LIMIT_PRONE_REDDIT = new Set([
   "reddit-fifa", "reddit-ucl", "reddit-uel", "reddit-ncaaf", "reddit-ncaaw",
   // r/collegehockey (added 2026-09-12) is a low-volume college sub like r/ncaaw.
   "reddit-ncaah",
+  // r/UnitedFootballLeague (added 2026-09-14) is a low-volume spring-league sub.
+  "reddit-ufl",
   // reddit-wnba is a lower-volume sub whose prebake occasionally slips a couple
   // of hourly runs on a Reddit 429/403 blip and self-heals; a 12h crit paged on
   // a 13.4h transient (issue #18, 2026-07-06). Treat like the other flaky subs.
@@ -78,6 +80,8 @@ const RATE_LIMIT_PRONE_REDDIT = new Set([
 const SEASONAL_REDDIT = new Set([
   "reddit-uel", "reddit-ucl", "reddit-ncaaw", "reddit-ncaaf", "reddit-fifa",
   "reddit-ncaah",
+  // UFL plays late Mar – mid Jun; the sub is quiet Jul – Feb.
+  "reddit-ufl",
 ]);
 
 const FEEDS = [

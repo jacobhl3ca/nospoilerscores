@@ -1,5 +1,51 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — UFL spring football (`ufl`) gets a column of its own
+
+**🧪 Built on `feat/ufl`, not yet merged.** Config, not code, same as NCAA hockey: ESPN serves
+`/football/ufl/scoreboard` in the standard two-competitor shape (probed 2026-09-14: abbr UFL, four
+quarters, records "6-4", `curatedRank` 99 placeholders — no poll, so NOT in `POLL_RANK_SPORTS`; the
+United Bowl carries `season.type` 3, so `isPlayoff` needs nothing new). Window is ESPN's own fixture
+list: first kickoff Fri 2026-03-27, United Bowl Sat 2026-06-13 on ABC, 43 games (`verifiedFor: 2026`;
+`check-season-windows --only=ufl` ✓). Opt-in (`excludeFromAuto`), listed in Settings → US leagues,
+picker after NCAA Hockey, share code `uf`, glyph 🏈, TV catalog `SUPPORTED`, r/UnitedFootballLeague
+reddit card + bake + staleness monitor (SEASONAL: quiet Jul–Feb). Rating config, `PERIOD_SECONDS`
+900, live labels (Q1–Q4 / OT / Halftime / End of Q3) and `END_OF_PLAY_REGULATION` 4 mirror the NFL.
+Game page = `espn.com/ufl/recap/_/gameId/<id>` (`/game/` 404s); stream fallback = FOX Sports live
+(13 of the 22 May–June fixtures were FOX/FS1). 2027 dates are unpublished.
+
+Four changes from the plan, all on evidence:
+- **Window is 03-25 → 06-14, kickoff 03-27** (plan said 03-12 / 03-14 off the calendar's "Regular
+  Season" start). The calendar opens two weeks before any fixture; the first game was Mar 27.
+- **`RANK_LEAGUES` includes `ufl`.** The standings feed is one flat 8-team table with a real
+  `winPercent` and no per-row `rank`, so the win% sort gives a league-wide "#N" on upcoming cards.
+  `MIN_RANK_GAMES` 2 (10-game season). No `overall` record stat — W-L comes from the event.
+- **The reddit sub is r/UnitedFootballLeague, not r/UFL.** r/UFL is the University of Florida
+  (its hot feed is dorm and course posts); r/UFL_Football stopped in Feb 2025; r/xfl is frozen at 2024.
+- **Highlights are dark** (`NO_HIGHLIGHT_FALLBACK`). Strict probe against the live worker on 5
+  completed 2026 fixtures (Stallions–Storm 5/3, Defenders–Kings 5/16, Renegades–Battlehawks 5/29,
+  Defenders–Storm semi 6/7, Defenders–Kings United Bowl 6/13): "UFL" 0/5, "FOX Sports" 0/1, "ESPN"
+  0/1. Unscoped winners were fan channels ("Cincinnati Bengals / Oklahoma Sooners fan", "Mr. Mane").
+  `gridironWeekNumber` leaves `ufl` out. The monitor does not scan it; a regression check keeps it
+  dark and unmonitored.
+
+**Proof:** tsc, eslint (0 errors), test:unit (292, incl. a new `ufl` live-progress case), highlights:check,
+news:check, poker:check, tv:catalog + tv:catalog:check (34 leagues, `ufl` in both catalog.json copies),
+`next build` all green. Headless-Chromium read-back against the static build, clock pinned
+(`qa/readback.mjs`): 6/13 United Bowl = 1 card, 2 logos, 0 broken, 0 rank chips, 0 highlight buttons;
+Sat 4/18 = 2 cards, 4 logos, 0 broken; ESPN payload rewritten to pre-game = "3:00PM · ABC" chip and
+#4 / #3 standings chips; rewritten to live = `Q2 - 8:32`; fresh profile on 9/14 = column absent,
+Settings row "UFL · offseason" OFF, tick works; on 4/18 the switcher lists UFL and picking it adds the
+column (the switcher omits every opt-in offseason league, so on 9/14 it is absent there by design).
+The plan expected 4 cards on a Saturday — the 2026 UFL spread games Tue–Sun, so a day peaks at 2.
+
+**Open:**
+- [ ] 2027 window re-read when the UFL publishes its schedule (usually January): kickoff, United
+      Bowl, and whether the Tue/Thu games stay.
+- [ ] Highlight re-probe once the 2027 season starts: if the "UFL" channel starts posting per-game
+      cuts, light it (`OFFICIAL_CHANNELS` + `HL_LEAGUES` + the three fallback-monitor maps).
+- [ ] Mid-season 2027: confirm the standings win% chip reads right after week 2 (`MIN_RANK_GAMES`).
+
 ## 2026-09-12 — NCAA men's hockey (`ncaah`) gets a column of its own
 
 **✅ Shipped 2026-09-12** — `67aa805e` (league add), `6edcced5` (in-season tournaments like Ice Breaker /

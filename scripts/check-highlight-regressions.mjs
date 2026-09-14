@@ -199,6 +199,12 @@ check(
   youtube.hasNoTrustedHighlightSource("ncaah") === true &&
     !monitor.includes('ncaah: "/hockey/mens-college-hockey/scoreboard"'),
 );
+// UFL is dark too (0/5 strict on "UFL", 2026-09-14). Same rule: unmonitored.
+check(
+  "UFL stays dark and unmonitored",
+  youtube.hasNoTrustedHighlightSource("ufl") === true &&
+    !monitor.includes('ufl: "/football/ufl/scoreboard"'),
+);
 check("monitor rejects incomplete ESPN audits", monitor.includes("Source failures are not zero-game slates"));
 check("rejected custom ESPN User-Agent is gone", !monitor.includes("nospoilerscores-staleness-check/1.0"));
 check(

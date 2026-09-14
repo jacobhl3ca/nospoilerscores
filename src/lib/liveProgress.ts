@@ -83,7 +83,10 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (hasRunningClock(clock)) return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
-  if (sport === "nfl" || sport === "ncaaf") {
+  if (sport === "nfl" || sport === "ncaaf" || sport === "ufl") {
+    // UFL shares the shape: four 15-min quarters, then OT. Its OT is an
+    // alternating series of 2-point tries, but ESPN still reports it as
+    // period 5, so "OT" is the right label.
     // NCAAF plays four 15-min quarters (then OT), the same period structure as
     // the NFL — the rest of the app already classifies it that way (espn.ts:
     // regulationPeriods 4, PERIOD_SECONDS 900). Without this branch a live NCAAF

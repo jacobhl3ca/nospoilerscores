@@ -3209,6 +3209,9 @@ const jobs = [
   ["reddit-ncaaw", () => fetchReddit("ncaaw", "r/ncaaw")],
   // 2026-09-12: NCAA men's hockey. One more 45s gate slot in the reddit bake.
   ["reddit-ncaah", () => fetchReddit("collegehockey", "r/collegehockey")],
+  // 2026-09-14: UFL spring football. r/UFL is the University of Florida; the
+  // league lives at r/UnitedFootballLeague. One more 45s gate slot.
+  ["reddit-ufl", () => fetchReddit("UnitedFootballLeague", "r/UnitedFootballLeague")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],

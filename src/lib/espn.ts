@@ -65,6 +65,12 @@ const SPORT_PATHS: Record<Sport, string> = {
   ncaaw: "/basketball/womens-college-basketball/scoreboard",
   ncaaf: "/football/college-football/scoreboard",
   nfl: "/football/nfl/scoreboard",
+  // UFL spring football (added 2026-09-14). Standard two-competitor shape, so
+  // parseGame reads it as is. Probed live 2026-09-14: 200, league abbr UFL,
+  // calendar is a list (Regular Season 2026-03-14 → 06-03, Postseason → 06-17);
+  // actual fixtures 2026-03-27 → 06-13 (43 games, 8 teams), four quarters,
+  // records "6-4", curatedRank 99 placeholders (no poll).
+  ufl: "/football/ufl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
   // NCAA men's ice hockey (added 2026-09-12). Standard scoreboard shape, so
   // parseGame reads it as is. Probed live 2026-09-12: 200, league abbr NCAAH,
@@ -255,6 +261,13 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // Window ends Sep 3 (regular NFL takes over Sep 8) — but EPL kickoff Aug 16 already fills
   // the third slot, so backfillOnly ensures preseason only shows when slot 3 would be empty.
   { sport: "nfl",   label: "NFL Preseason", startDate: "07-21", endDate: "09-03", backfillOnly: true, displaySlot: "center", slotPrecedence: 7 },
+  // ── UFL spring football (late Mar – mid Jun) ──
+  // Window is ESPN's own fixture list, read live 2026-09-14: first kickoff Fri
+  // 2026-03-27 (8pm ET), United Bowl Sat 2026-06-13 on ABC. Opens two days
+  // early for the fixture lookahead, like EPL. Opt-in (excludeFromAuto): spring
+  // already has the NBA/NHL playoffs + MLB in the auto rotation. 2027 dates are
+  // unpublished; the season-window checker reports it unverified until then.
+  { sport: "ufl",   label: "UFL", startDate: "03-25", endDate: "06-14", kickoffDate: "03-27", championshipDate: "06-13", verifiedFor: 2026, excludeFromAuto: true },
   // ── Golf majors ──
   // Masters takes the right slot when active (Jacob's pref) — bumps NHL during Apr 9-13.
   { sport: "golf",  label: "Masters",  startDate: "04-06", endDate: "04-13", kickoffDate: "04-08", championshipDate: "04-11", verifiedFor: 2027, firstPref: true, displaySlot: "right",  slotPrecedence: 1 },
@@ -680,7 +693,7 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
-  nfl: "🏈", ncaaf: "🏈", nhl: "🏒", ncaah: "🏒", golf: "⛳", tennis: "🎾",
+  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", nhl: "🏒", ncaah: "🏒", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
@@ -729,7 +742,7 @@ export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
 // disappearing from Settings. Adding a sport to `Sport` without touching this
 // map degrades to a slightly-wrong section, never to an unpickable league.
 const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
-  nfl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", wnba: "us",
+  nfl: "us", ufl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", wnba: "us",
   ncaaf: "us", ncaam: "us", ncaaw: "us", llws: "us",
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
@@ -1242,6 +1255,8 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   // NCAA men's hockey: three 20-min periods and NHL-like scoring, so it mirrors NHL.
   ncaah:  { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
+  // UFL: four 15-min quarters and NFL-like scoring, so it mirrors NFL.
+  ufl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   fifa:   { multiplier: 22,  overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   mls:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
@@ -1308,7 +1323,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
 const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
   nba: 720, wnba: 600,        // 12-min / 10-min quarters
   ncaaw: 600,                 // 10-min quarters (four of them, like WNBA)
-  nfl: 900, ncaaf: 900,       // 15-min quarters
+  nfl: 900, ncaaf: 900, ufl: 900, // 15-min quarters
   nhl: 1200,                  // 20-min periods
   ncaah: 1200,                // 20-min periods, same as NHL
   ncaam: 1200,                // 20-min halves
@@ -2049,7 +2064,7 @@ function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null
 
 // Regulation length for the timed sports ESPN reports as "End of 4th" etc.
 const END_OF_PLAY_REGULATION: Partial<Record<Sport, number>> = {
-  nfl: 4, ncaaf: 4, nba: 4, wnba: 4, ncaaw: 4, ncaam: 2, nhl: 3, ncaah: 3,
+  nfl: 4, ncaaf: 4, ufl: 4, nba: 4, wnba: 4, ncaaw: 4, ncaam: 2, nhl: 3, ncaah: 3,
 };
 
 // "End of 4th" with the score not level IS the final (Jacob 9/12): no more
@@ -2440,6 +2455,9 @@ export function espnGameUrl(game: Game): string {
     case "ncaaw": return `https://www.espn.com/womens-college-basketball/game/_/gameId/${game.id}`;
     case "ncaaf": return `https://www.espn.com/college-football/game/_/gameId/${game.id}`;
     case "nfl": return `https://www.espn.com/nfl/game/_/gameId/${game.id}`;
+    // UFL has no /game/ page on espn.com (404 for the 2026 United Bowl id,
+    // checked 2026-09-14); /recap/ is the per-game page that answers 200.
+    case "ufl": return `https://www.espn.com/ufl/recap/_/gameId/${game.id}`;
     case "nhl": return `https://www.espn.com/nhl/game/_/gameId/${game.id}`;
     // College hockey's per-game page is the boxscore (verified 2026-09-12).
     case "ncaah": return `https://www.espn.com/mens-college-hockey/boxscore?gameId=${game.id}`;
@@ -2512,6 +2530,10 @@ export function sportStreamFallback(sport: Sport): string {
     case "ncaaw": return "https://www.espn.com/watch/";
     case "ncaaf": return "https://www.espn.com/watch/";
     case "nfl": return "https://www.nfl.com/plus/";
+    // UFL splits between FOX/FS1 and ESPN/ABC/ESPN2 (2026: 13 of the 22 May–June
+    // fixtures on FOX/FS1, the United Bowl on ABC). FOX games stream on the
+    // FOX Sports app, so its live hub is the better landing.
+    case "ufl": return "https://www.foxsports.com/live";
     case "nhl": return "https://www.espn.com/watch/";
     // ESPN+ carries most college hockey; the tournament finals air on ESPN.
     case "ncaah": return "https://www.espn.com/watch/";
@@ -4573,6 +4595,9 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string): string 
     case "wnba":
     case "nhl":
     case "nfl":
+    // UFL follows the abbreviation convention (lou.png / bham.png answer 200,
+    // checked 2026-09-14).
+    case "ufl":
       return abbr ? `https://a.espncdn.com/i/teamlogos/${sport}/500/${abbr}.png` : undefined;
     case "ncaam":
     case "ncaah":
@@ -5286,6 +5311,9 @@ export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>
 // on the event, and its standings feed held one junk entry on 2026-09-12.
 const RANK_LEAGUES = new Set<Sport>([
   "mlb", "nba", "wnba", "ncaam", "ncaaw", "nfl", "nhl", "epl", "mls", "ucl", "uel",
+  // UFL: one flat 8-team table with a real `winPercent` stat and no per-row
+  // `rank` (read 2026-09-14), so the win% sort gives a league-wide position.
+  "ufl",
   // Single-table domestic leagues — ESPN's standings carry a real league-wide
   // `rank`, so they need no RANK_METRIC entry (same as EPL).
   "laliga", "seriea", "bundesliga", "ligue1",

@@ -21,6 +21,7 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   ncaaw: "/basketball/womens-college-basketball",
   ncaaf: "/football/college-football",
   nfl: "/football/nfl",
+  ufl: "/football/ufl",
   nhl: "/hockey/nhl",
   ncaah: "/hockey/mens-college-hockey",
   golf: "/golf/pga",
@@ -285,6 +286,7 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   wnba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
   nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
   nfl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nfl.png&w=40&h=40&transparent=true",
+  ufl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/ufl.png&w=40&h=40&transparent=true",
   mls: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/mls.png&w=40&h=40&transparent=true",
   fifa: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/fifa.png&w=40&h=40&transparent=true",
   // ESPN's CDN doesn't host real league logos for NCAAM or tennis — even
@@ -416,6 +418,9 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   cricket: { key: "reddit-cricket", label: "r/Cricket" },
   ncaaw: { key: "reddit-ncaaw", label: "r/ncaaw" },
   ncaah: { key: "reddit-ncaah", label: "r/collegehockey" },
+  // r/UFL is the University of Florida (checked 2026-09-14); the league's live
+  // sub is r/UnitedFootballLeague (r/UFL_Football stopped in Feb 2025).
+  ufl: { key: "reddit-ufl", label: "r/UnitedFootballLeague" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
   boxing: { key: "reddit-boxing", label: "r/Boxing" },
   f1: { key: "reddit-f1", label: "r/formula1" },
@@ -512,7 +517,7 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 // the filter button — backlogged) to re-rank. Leagues not listed fall to the
 // tail in their column order.
 export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
-  "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf",
+  "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf", "ufl",
   "fifa", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
   "mls", "golf", "tennis", "wnba", "ncaaw", "ncaah",
   // Second-wave soccer sorts below the established leagues in the merged mobile
