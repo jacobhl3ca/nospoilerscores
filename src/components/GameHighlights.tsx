@@ -194,6 +194,11 @@ export default function GameHighlights({
   const prefetchedTelemundoShortId = useRef<string | null>(initialTelemundoShortId);
   const prefetchedTelemundoLongId = useRef<string | null>(initialTelemundoLongId);
   const prefetchStarted = useRef(false);
+  // Flipped true only when the card actually unmounts. A mount-scoped ref, not
+  // an effect cleanup, because the prefetch effect below re-runs on live prop
+  // refreshes (game/date deps) while still mounted — an effect-scoped flag
+  // would cancel a healthy in-flight scrape and leave the buttons stuck.
+  const prefetchUnmounted = useRef(false);
   const [fetchingOnClick, setFetchingOnClick] = useState<"official" | "search" | "telemundoShort" | null>(null);
   // "loading" while prefetch (or click-time chain) is running. "found" once
   // resolveHighlightVideo returns an id. "missing" once the full retry chain
@@ -340,15 +345,15 @@ export default function GameHighlights({
   const clubModalFallbackUrl = club ? modalFallbackUrl([club.channel]) : null;
   const officialMins = isNfl ? formatRecapDuration(officialDurationSec) : "";
   const telemundoModalFallbackUrl = isFifa && highlightUrl ? `${highlightUrl}&nss_no_fallback=1` : highlightUrl;
+  useEffect(() => () => { prefetchUnmounted.current = true; }, []);
   useEffect(() => {
     if (!highlightUrl || prefetchStarted.current) return;
     prefetchStarted.current = true;
     // Guard the post-await status writes against a mid-flight unmount (modal
     // close, board scroll/date-nav) — each resolve is a multi-second live
-    // YouTube scrape. Mirrors the `cancelled` flag on the MLB effect right
-    // below. prefetchStarted keeps this effect to one run, so there is no
-    // stale-vs-fresh race; this only drops the writes once the card is gone.
-    let cancelled = false;
+    // YouTube scrape. prefetchStarted keeps this effect to one run, so there is
+    // no stale-vs-fresh race; the prefetchUnmounted ref only drops the writes
+    // once the card is gone.
     const away = hlAway;
     const home = hlHome;
     const series = game.seriesNote;
@@ -438,14 +443,14 @@ export default function GameHighlights({
             }
             prefetchedTelemundoShortId.current = telemundoShortId;
             prefetchedTelemundoLongId.current = telemundoLongId;
-            if (cancelled) return;
+            if (prefetchUnmounted.current) return;
             setTelemundoShortStatus(telemundoShortId ? "found" : "missing");
             setTelemundoLongStatus(telemundoLongId ? "found" : "missing");
           })();
         }
         const officialId = await officialP;
         prefetchedOfficialId.current = officialId;
-        if (!cancelled) setOfficialStatus(officialId ? "found" : "missing");
+        if (!prefetchUnmounted.current) setOfficialStatus(officialId ? "found" : "missing");
         let secondId = await secondP;
         if (!bakedSecondary && secondId && officialId && secondId === officialId) {
           // Collision — the parallel (unexcluded) 2nd landed the same clip as the
@@ -455,7 +460,7 @@ export default function GameHighlights({
           secondId = await resolveHighlightVideo(away, home, dateStr, series, secondaryChannel, [officialId], competition, preferExtended, weekNumber, compTokens);
         }
         prefetchedVideoId.current = secondId;
-        if (!cancelled) setSearchStatus(secondId ? "found" : "missing");
+        if (!prefetchUnmounted.current) setSearchStatus(secondId ? "found" : "missing");
       })();
     }
   }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, isNfl, verifiedClub, fifaTelemundoEnabled, weekNumber, compTokens]);
