@@ -455,14 +455,19 @@ function SingleColToggle({ active, onClick }: { active: boolean; onClick: () => 
 // A labeled on/off chip for the news toolbar (Headlines / Videos / Text posts).
 // Filled accent = ON, outline = OFF — one consistent shape so the row is easy to
 // read and toggle (Jacob 7/14).
-function NewsToggleChip({ active, onClick, title, ariaLabel, children }: {
-  active: boolean; onClick: () => void; title: string; ariaLabel: string; children: ReactNode;
+// `disabled` = the chip's pref is currently OVERRIDDEN by another chip (Text
+// posts while Videos only is on). It renders dimmed + aria-disabled but still
+// toggles, so the pref can be pre-set for when the override lifts — a real
+// disabled button would trap the user in the override.
+function NewsToggleChip({ active, onClick, title, ariaLabel, disabled, children }: {
+  active: boolean; onClick: () => void; title: string; ariaLabel: string; disabled?: boolean; children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
+      aria-disabled={disabled || undefined}
       // The visible text label is display:none below 640px (`hidden sm:inline`)
       // and the icon is aria-hidden, so on phones the only name source left is
       // `title` — which iOS VoiceOver doesn't reliably announce for buttons,
@@ -476,6 +481,7 @@ function NewsToggleChip({ active, onClick, title, ariaLabel, children }: {
         background: active ? "var(--accent)" : "var(--bg-card)",
         border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
         color: active ? "white" : "var(--text-muted)",
+        opacity: disabled ? 0.45 : undefined,
       }}
     >
       {children}
@@ -2788,11 +2794,15 @@ export default function HomeContent({
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m23 7-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
               <span>Videos only</span>
             </NewsToggleChip>
+            {/* Videos only overrides Text posts (Jacob 9/14): a text post has no
+                clip, so it can never pass the Videos filter. Dim this chip while
+                that's the case so its state doesn't read as a lie. */}
             <NewsToggleChip
               active={!!prefs.showTextPosts}
               onClick={() => updatePrefs({ showTextPosts: !prefs.showTextPosts })}
-              title="Show or hide headline-only text posts"
+              title={prefs.newsVideosOnly ? "Off while Videos only is on" : "Show or hide headline-only text posts"}
               ariaLabel="Toggle text posts"
+              disabled={!!prefs.newsVideosOnly}
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="14" y2="12" /><line x1="4" y1="18" x2="18" y2="18" /></svg>
               <span>Text posts</span>
@@ -3138,7 +3148,13 @@ export default function HomeContent({
           // they don't push that column's reddit section below the others. Its
           // index is dynamic (col 2 in a 3-col board, col 1 in a 2-col one).
           const espnColIdx = renderedEntries.findIndex((e) => e.id === "espn");
-          const useEspnTopTail = stripActive && espnColIdx >= 0 && !prefs.newsThirdLeague;
+          // The tail fetches espn-top DIRECTLY (fetchPrebaked), bypassing the
+          // orderedColumnSourcesFor funnel every column goes through — so gate it
+          // on the same two things the funnel checks: the "espn" source type is
+          // selected and the ESPN label isn't hidden. Otherwise a Reddit-only
+          // funnel still showed ESPN headlines in col 3's tail.
+          const useEspnTopTail = stripActive && espnColIdx >= 0 && !prefs.newsThirdLeague
+            && newsTypeFilters.includes("espn") && !newsHiddenSources.includes("ESPN");
           // Sources stripped of the video lead when the strip is active.
           const sourcesForEntry = (entry: typeof renderedEntries[number], idx: number) => {
             const all = renderSourcesFor(entry);
@@ -3293,6 +3309,7 @@ export default function HomeContent({
                     tailFetch={useEspnTopTail ? () => fetchPrebaked("espn-top") : undefined}
                     tailColIdx={useEspnTopTail ? espnColIdx : undefined}
                     showTextPosts={!!prefs.showTextPosts}
+                    videosOnly={!!prefs.newsVideosOnly}
                     hiddenCategories={hiddenNewsCategories}
                     oldestFirst={!!prefs.newsOldestFirst}
                   />
