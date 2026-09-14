@@ -92,6 +92,10 @@ const ESPN_PATHS = {
   superrugby:   "/rugby/242041/scoreboard",
   rugbywc:      "/rugby/164205/scoreboard",
   nationschamp: "/rugby/17567/scoreboard",
+  // CFL (added 2026-09-13): NOT an ESPN path. ESPN stopped serving the CFL
+  // after 2023, so fetchScoreboard reads this one from our own worker route
+  // (theScore reshaped to the ESPN scoreboard — public/_worker.js).
+  cfl:          "/api/cfl",
   // Deliberately absent: MLB (MLB.com-native); La Liga, Ligue 1, EURO, NCAA
   // men's and women's hockey, women's volleyball, UFL, NCAA baseball, NCAA
   // softball, the Conference League, Copa del Rey, DFB-Pokal, and cricket (no
@@ -104,6 +108,8 @@ const ESPN_PATHS = {
 const OFFICIAL_CHANNELS = {
   nba: "NBA", wnba: "WNBA", nhl: "NHL", nfl: "NFL", ncaam: "March Madness",
   ncaaw: "March Madness", ncaaf: "ESPN College Football",
+  // TSN, not the CFL's own channel — see the cfl note in src/lib/youtube.ts.
+  cfl: "TSN",
   // ⚠️ Two entries below had DRIFTED from src/lib/youtube.ts (found 2026-08-12).
   // `mlb: "MLB"` was missing outright, and fifa read "FIFA" while the app has
   // used "FOX Sports" since the World Cup work — FIFA's own channel posts only
@@ -147,6 +153,17 @@ const COMPETITION_TITLE_TOKENS = {
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
 };
+// CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts (per
+// event: the round from the card's playoff note). Keep in sync.
+function cflPlayoffTokens(ev) {
+  if (ev?.season?.type !== 3) return null;
+  const l = String(ev?.competitions?.[0]?.notes?.[0]?.headline || "").toLowerCase();
+  if (/grey.?cup/.test(l)) return ["grey cup"];
+  if (/semi/.test(l)) return ["semi final"];
+  if (/east/.test(l)) return ["east final", "eastern final"];
+  if (/west/.test(l)) return ["west final", "western final"];
+  return ["grey cup", "semi final", "east final", "eastern final", "west final", "western final", "playoff"];
+}
 
 // Matches SECONDARY_CHANNELS in src/lib/youtube.ts for team-game leagues.
 // Every entry remains strict to that exact uploader.
@@ -168,7 +185,7 @@ const TENNIS_CHANNELS = new Set([
 // buttons until this post-start window has opened.
 const HIGHLIGHT_BUFFER_HOURS = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5, ncaavb: 3,
-  nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
+  nfl: 5, cfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
   seriea: 3, bundesliga: 3,
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3, facup: 3,
   // Rugby union: 80 minutes plus stoppages, so the same 3h window soccer uses.
@@ -176,7 +193,7 @@ const HIGHLIGHT_BUFFER_HOURS = {
 };
 const REGULATION_PERIODS = {
   nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5,
-  nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
+  nfl: 4, cfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
   seriea: 2, bundesliga: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2, facup: 2,
   sixnations: 2, superrugby: 2, rugbywc: 2, nationschamp: 2,
@@ -223,7 +240,10 @@ let scoreboardSuccesses = 0;
 const scoreboardFailures = [];
 
 async function fetchScoreboard(sport, date) {
-  const url = `${ESPN_BASE}${ESPN_PATHS[sport]}?dates=${fmtESPN(date)}`;
+  // Worker-served leagues (cfl) live on BASE, not ESPN.
+  const url = ESPN_PATHS[sport].startsWith("/api/")
+    ? `${BASE}${ESPN_PATHS[sport]}?dates=${fmtESPN(date)}`
+    : `${ESPN_BASE}${ESPN_PATHS[sport]}?dates=${fmtESPN(date)}`;
   scoreboardRequests++;
   let lastFailure = "unknown failure";
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -545,12 +565,12 @@ async function validateBakedHighlight(sport, bakedHighlight) {
 
 // Mirrors resolveHighlightVideo() in src/lib/youtube.ts: exactly one channel,
 // strict, with no unscoped tier.
-async function resolve(away, home, dateStr, channel, sport) {
+async function resolve(away, home, dateStr, channel, sport, compOverride = null) {
   const a = aliasTeam(away);
   const h = aliasTeam(home);
   const dated = `${a} vs ${h} highlights ${dateStr}`;
   if (!channel) return { videoId: null, via: "no-approved-channel" };
-  const compTokens = COMPETITION_TITLE_TOKENS[sport] ?? [];
+  const compTokens = compOverride ?? COMPETITION_TITLE_TOKENS[sport] ?? [];
   const hit = await youtubeLookup(dated, channel, true, { compTokens });
   return hit
     ? { videoId: hit, via: "strict-channel+date" }
@@ -969,8 +989,9 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
       const secondaryChannel = sport === "fifa"
           ? "FOX Sports"
           : (SECONDARY_CHANNELS[sport] ?? channel);
+      const compOverride = sport === "cfl" ? cflPlayoffTokens(ev) : null;
       const official = primaryChannel
-        ? await resolve(teams.away, teams.home, dateStr, primaryChannel, sport)
+        ? await resolve(teams.away, teams.home, dateStr, primaryChannel, sport, compOverride)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(FIRST_PASS_GAP_MS);
       const search = await resolve(
@@ -979,6 +1000,7 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
         dateStr,
         secondaryChannel,
         sport,
+        compOverride,
       );
       await sleep(FIRST_PASS_GAP_MS);
 
@@ -1002,6 +1024,7 @@ for (const sport of SPECIAL_ONLY ? [] : Object.keys(ESPN_PATHS)) {
         primaryChannel,
         secondaryChannel,
         eventId: String(ev.id),
+        compOverride,
       };
       const anyVisibleButton = (primaryChannel ? !!official.videoId : false) || !!search.videoId;
       if (!anyVisibleButton) {
@@ -1055,7 +1078,7 @@ if (exhausted.length) {
     for (let attempt = 0; attempt < CONFIRM_ATTEMPTS; attempt++) {
       if (attempt > 0) await sleep(CONFIRM_RETRY_BACKOFF_MS); // let a lingering block lift
       official = row.primaryChannel
-        ? await resolve(row.away, row.home, row.dateStr, row.primaryChannel, row.sportKey)
+        ? await resolve(row.away, row.home, row.dateStr, row.primaryChannel, row.sportKey, row.compOverride ?? null)
         : { videoId: "n/a", via: "no-official-channel" };
       await sleep(CONFIRM_GAP_MS);
       search = await resolve(
@@ -1064,6 +1087,7 @@ if (exhausted.length) {
         row.dateStr,
         row.secondaryChannel,
         row.sportKey,
+        row.compOverride ?? null,
       );
       const anyVisibleButton = (row.primaryChannel ? !!official.videoId : false) || !!search.videoId;
       if (anyVisibleButton) break; // recovered — stop retrying this game

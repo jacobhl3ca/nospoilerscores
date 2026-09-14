@@ -33,6 +33,29 @@ import {
 // the console — the scripts will not tell you.
 const BASE_URL = "https://site.web.api.espn.com/apis/site/v2/sports";
 
+// Origin for the worker-served leagues (today: cfl). getApiBase() is "" on the
+// web build, so `new URL("" + "/api/cfl")` would throw — fall through to the
+// page origin there, and to production for SSR/tests. Capacitor already maps
+// to https://hidescore.com inside getApiBase.
+function workerOrigin(): string {
+  const base = getApiBase();
+  if (base) return base;
+  if (typeof window !== "undefined" && /^https?:$/.test(window.location.protocol)) return window.location.origin;
+  return "https://hidescore.com";
+}
+// Sports whose scoreboard is a worker route rather than an ESPN path.
+const WORKER_SCOREBOARD_SPORTS = new Set<Sport>(["cfl"]);
+function scoreboardUrl(sport: Sport): URL {
+  return new URL(WORKER_SCOREBOARD_SPORTS.has(sport) ? workerOrigin() + SPORT_PATHS[sport] : BASE_URL + SPORT_PATHS[sport]);
+}
+// The ESPN standings/teams hosts are keyed off the scoreboard path; the
+// worker leagues serve their own equivalents next to the scoreboard route.
+function standingsUrl(sport: Sport): string {
+  if (WORKER_SCOREBOARD_SPORTS.has(sport)) return `${workerOrigin()}${SPORT_PATHS[sport]}/standings`;
+  const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
+  return `https://site.web.api.espn.com/apis/v2/sports${sportPath}/standings`;
+}
+
 // See EventFetchResult — a feed that broke is not a day with nothing on it.
 const EVENT_FETCH_EMPTY: EventFetchResult = { card: null, failed: false };
 const EVENT_FETCH_FAILED: EventFetchResult = { card: null, failed: true };
@@ -100,6 +123,13 @@ const SPORT_PATHS: Record<Sport, string> = {
   // 2026-09-14: 200, calendar 2026-08-21 → 2026-11-29 (regular season only),
   // 159 games on a Saturday, curatedRank = AVCA Top 25, records[0] = overall.
   ncaavb: "/volleyball/womens-college-volleyball/scoreboard",
+  // CFL (added 2026-09-13). ESPN stopped serving the CFL after 2023 (its
+  // calendar is frozen there and every date returns 0 events), so this is NOT
+  // an ESPN path: it is our own worker route (public/_worker.js), which
+  // converts theScore's app API into the ESPN scoreboard shape. scoreboardUrl()
+  // routes it to the site origin; the missing "/scoreboard" suffix is what
+  // keeps check-season-windows and the tvOS catalog from treating it as ESPN.
+  cfl: "/api/cfl",
   golf: "/golf/pga/scoreboard",
   tennis: "/tennis/atp/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",
@@ -453,6 +483,15 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // semifinals 12-18, national final 12-21. Opt-in (excludeFromAuto), like
   // NCAAW and NCAA Hockey, so it never takes a column from NCAAF or the NFL.
   { sport: "ncaavb", label: "NCAA Volleyball", startDate: "08-21", endDate: "12-21", championshipDate: "12-21", verifiedFor: 2026, excludeFromAuto: true },
+  // ── CFL (Jun–Nov) ──
+  // 2026: regular season Thu Jun 4 → Sat Oct 24 (21 weeks), division
+  // semi-finals Oct 31, division finals Nov 7, 113th Grey Cup Sun Nov 15 in
+  // Calgary (cfl.ca + theScore's schedule, read 2026-09-13). Opt-in like NCAA
+  // Hockey. check-season-windows skips it (non-ESPN path) — re-verify the
+  // window by hand when the 2027 schedule drops (~Dec 2026).
+  // endDate runs a week past the Grey Cup so the final's own day (and the
+  // 2025-style Sunday Nov 16 slot) still resolves the column on a past tab.
+  { sport: "cfl", label: "CFL", startDate: "06-04", endDate: "11-22", championshipDate: "11-15", verifiedFor: 2026, excludeFromAuto: true },
   // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
   // in season, but low priority so it only fills open summer/fall slots after
   // the core leagues and major tournament windows.
@@ -774,7 +813,7 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", ncaabase: "⚾", ncaasoft: "🥎", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
-  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", golf: "⛳", tennis: "🎾",
+  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", cfl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
@@ -824,7 +863,7 @@ export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
 // disappearing from Settings. Adding a sport to `Sport` without touching this
 // map degrades to a slightly-wrong section, never to an unpickable league.
 const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
-  nfl: "us", ufl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", ncaawh: "us", wnba: "us",
+  nfl: "us", ufl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", cfl: "us", ncaawh: "us", wnba: "us",
   ncaaf: "us", ncaam: "us", ncaaw: "us", ncaavb: "us", llws: "us", ncaabase: "us", ncaasoft: "us",
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
@@ -1105,6 +1144,7 @@ const LEAGUE_PRIORITY: Record<string, number> = {
   chess: 33,
   poker: 34,
   esports: 35,
+  cfl: 36,
 };
 
 function isMarchMadness(viewDate: Date): boolean {
@@ -1358,6 +1398,9 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   // UFL: four 15-min quarters and NFL-like scoring, so it mirrors NFL.
   ufl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
+  // CFL: four quarters, NFL-like scoring (rouges add the odd single point, and
+  // a 1-point margin already reads as a one-score game on the curve).
+  cfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   fifa:   { multiplier: 22,  overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   epl:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   mls:    { multiplier: 22,  overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
@@ -1430,7 +1473,7 @@ const SPORT_RATING_CONFIG: Record<Sport, {
 const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
   nba: 720, wnba: 600,        // 12-min / 10-min quarters
   ncaaw: 600,                 // 10-min quarters (four of them, like WNBA)
-  nfl: 900, ncaaf: 900, ufl: 900, // 15-min quarters
+  nfl: 900, ncaaf: 900, ufl: 900, cfl: 900, // 15-min quarters
   nhl: 1200,                  // 20-min periods
   ncaah: 1200,                // 20-min periods, same as NHL
   ncaawh: 1200,               // 20-min periods, same as NHL
@@ -2280,7 +2323,7 @@ type ScoreboardEvent = {
 //     Preseason (type 1) is excluded for the same reason: its own Week 1–3
 //     numbering collides head-on with the regular season's.
 function gridironWeekNumber(sport: Sport, event: ScoreboardEvent): number | null {
-  if (sport !== "nfl" && sport !== "ncaaf") return null;
+  if (sport !== "nfl" && sport !== "ncaaf" && sport !== "cfl") return null;
   if (event.season?.type !== 2) return null;
   const week = event.week?.number;
   return typeof week === "number" && week >= 1 && week <= 25 ? week : null;
@@ -2296,7 +2339,7 @@ const COLLEGE_HOCKEY_ROUND_WORD_SPORTS = new Set<Sport>(["ncaah", "ncaawh"]);
 
 // Regulation length for the timed sports ESPN reports as "End of 4th" etc.
 const END_OF_PLAY_REGULATION: Partial<Record<Sport, number>> = {
-  nfl: 4, ncaaf: 4, ufl: 4, nba: 4, wnba: 4, ncaaw: 4, ncaam: 2, nhl: 3, ncaah: 3, ncaawh: 3,
+  nfl: 4, ncaaf: 4, ufl: 4, cfl: 4, nba: 4, wnba: 4, ncaaw: 4, ncaam: 2, nhl: 3, ncaah: 3, ncaawh: 3,
 };
 
 // "End of 4th" with the score not level IS the final (Jacob 9/12): no more
@@ -2370,7 +2413,7 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
     // "Season Finale" (a regular-season note) and mislabeled the game as a
     // playoff, and `round` hit "ground"/"around". playoffLabel is user-visible
     // (game-detail modal + league header), so a false match shows wrong text.
-    if (/playoff|postseason|wild.?card|divisional|conference|championship|\bfinals?\b|\brounds?\b|semi.?finals?|quarter.?finals?|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
+    if (/playoff|postseason|wild.?card|divisional|conference|championship|\bfinals?\b|\brounds?\b|semi.?finals?|quarter.?finals?|elimination|play-in|tournament|march madness|ncaa|sweet.?16|elite.?8|final.?four|stanley.?cup|world.?series|super.?bowl|grey.?cup|nlds|nlcs|alds|alcs|alwc|nlwc/i.test(headlineLower)) {
       // College hockey's in-season tournaments ("Ice Breaker Tournament",
       // "Governor's Cup") are regular-season games that keep the 5-min OT +
       // shootout format, so only a ROUND word flags them as playoff — otherwise
@@ -2734,6 +2777,8 @@ export function espnGameUrl(game: Game): string {
     // an empty `links` array (no recapUrl). The scoreboard is the only page
     // that exists — the same section-landing compromise as the LLWS.
     case "ncaavb": return `https://www.espn.com/womens-college-volleyball/scoreboard`;
+    // ESPN has no CFL pages any more; the worker also sets recapUrl to this.
+    case "cfl": return `https://www.thescore.com/cfl/event/${game.id}`;
     // ⚠️ The Little League World Series has NO per-game page on espn.com.
     // Checked every plausible pattern on 2026-08-11 with a browser UA and a
     // real event id (401889776): /llws/, /llb/, /baseball/llb/,
@@ -2821,6 +2866,12 @@ export function sportStreamFallback(sport: Sport): string {
     // ESPN+ / ESPN2 / ESPNU and the conference networks (B1G+, ACCNX, SECN)
     // carry college volleyball; the tournament airs on the ESPN networks.
     case "ncaavb": return "https://www.espn.com/watch/";
+    // CBS Sports Network carries 34 regular-season games in 2026 (the last
+    // year of that deal); everything else, playoffs included, streams free on
+    // CFL+. There is no stable CFL+ landing (cfl.ca/cflplus, /watch/ and
+    // /where-to-watch/ all 404), so this year-specific page is the one that
+    // resolves. Re-check with the 2027 schedule.
+    case "cfl": return "https://cfl.ca/where-to-watch-2026-broadcast-information/";
     case "mlb": return "https://www.mlb.com/tv";
     // The LLWS is an ESPN-network property end to end (ESPN / ESPN2 / ABC),
     // so ESPN's own watch hub is the correct and only landing.
@@ -4376,7 +4427,7 @@ const SEASON_TYPE_1_IS_REGULAR = new Set<Sport>([
 // Map raw ESPN scoreboard events into Game[] (team-based sports). Shared by
 // the single-day fetch and the soccer range-lookahead so both apply the same
 // postponed/preseason/0-competitor filtering + per-event failure isolation.
-function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
+export function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
   return events
     .filter((e) => {
       // Filter out postponed/canceled/suspended games
@@ -4435,7 +4486,7 @@ async function fetchNextGameDayRange(
   const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   const start = new Date(base); start.setDate(start.getDate() + 1);
   const end = new Date(base); end.setDate(end.getDate() + windowDays);
-  const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+  const url = scoreboardUrl(sport);
   url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
   let events: ScoreboardEvent[];
   try {
@@ -4537,7 +4588,7 @@ async function fetchPreviousGameDayRange(
   const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   const end = new Date(base); end.setDate(end.getDate() - 1);            // the day BEFORE the viewed date
   const start = new Date(base); start.setDate(start.getDate() - windowDays);
-  const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+  const url = scoreboardUrl(sport);
   url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
   let events: ScoreboardEvent[];
   try {
@@ -4573,7 +4624,7 @@ export async function fetchGames(
   sport: Sport,
   date?: string
 ): Promise<{ games: Game[]; failed: boolean }> {
-  const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+  const url = scoreboardUrl(sport);
   // Soccer fixtures can kick off in the local midnight hour (a western-US World
   // Cup night game is 12 AM ET). ESPN buckets those under their raw calendar
   // day, but etSlateYmd counts them as the PREVIOUS day's slate so they line up
@@ -4824,7 +4875,7 @@ export async function fetchScheduleRatings(
       const byId = new Map(cached.map((g) => [g.id, g] as const));
       if (wantIds.every((id) => byId.get(id)?.state === "post")) return cached;
     }
-    const url = new URL(BASE_URL + SPORT_PATHS[sport]);
+    const url = scoreboardUrl(sport);
     url.searchParams.set("dates", day);
     try {
       const res = await fetchWithRetry(url.toString());
@@ -4942,10 +4993,11 @@ const sportTeamsCache = new Map<Sport, Promise<SportTeam[]>>();
 export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
   const cached = sportTeamsCache.get(sport);
   if (cached) return cached;
-  const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
-  // 500, not 400: college baseball lists 437 teams and softball 446 (read
-  // 2026-09-14), so the old cap silently dropped the tail of the alphabet.
-  const url = `https://sports.core.api.espn.com/v3/sports${sportPath}/teams?limit=500`;
+  const url = WORKER_SCOREBOARD_SPORTS.has(sport)
+    ? `${workerOrigin()}${SPORT_PATHS[sport]}/teams`
+    // 500, not 400: college baseball lists 437 teams and softball 446 (read
+    // 2026-09-14), so the old cap silently dropped the tail of the alphabet.
+    : `https://sports.core.api.espn.com/v3/sports${SPORT_PATHS[sport].replace(/\/scoreboard$/, "")}/teams?limit=500`;
   const p = (async (): Promise<SportTeam[]> => {
     try {
       const res = await fetchWithRetry(url, 1, 8000);
@@ -4964,7 +5016,9 @@ export function fetchSportTeams(sport: Sport): Promise<SportTeam[]> {
           displayName: t.displayName,
           shortDisplayName: t.shortDisplayName || t.displayName,
           abbreviation,
-          logo: logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined),
+          // The worker leagues ship the logo on the item (theScore's CDN);
+          // ESPN's core items don't, hence the CDN-convention synthesis.
+          logo: t.logos?.[0]?.href || logoForTeam(sport, rawId, abbreviation, typeof t.guid === "string" ? t.guid : undefined),
         });
       }
       out.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -5575,8 +5629,7 @@ const standingsCache = new Map<Sport, Promise<Map<string, string>>>();
 export function fetchStandingsRecords(sport: Sport): Promise<Map<string, string>> {
   const cached = standingsCache.get(sport);
   if (cached) return cached;
-  const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
-  const url = `https://site.web.api.espn.com/apis/v2/sports${sportPath}/standings`;
+  const url = standingsUrl(sport);
   const p = (async () => {
     const map = new Map<string, string>();
     try {
@@ -5634,6 +5687,9 @@ const RANK_LEAGUES = new Set<Sport>([
   // Second-wave single-table leagues. Liga MX qualifies because each tournament
   // (Apertura / Clausura) is its own single table.
   "ligamx", "nwsl", "efl", "saudi",
+  // CFL: the worker's standings route is one table with `rank` = theScore's
+  // league-wide playoff_seed (crossover rule applied), so no RANK_METRIC.
+  "cfl",
   // Deliberately NOT here: libertadores, euro, afcon. All three are group-stage
   // tournaments with no league-wide rank, and — exactly like the World Cup
   // exclusion above — a live group position is itself a spoiler.
@@ -5647,8 +5703,7 @@ const standingsRankCache = new Map<Sport, Promise<Map<string, number>>>();
 export function fetchStandingsRanks(sport: Sport): Promise<Map<string, number>> {
   const cached = standingsRankCache.get(sport);
   if (cached) return cached;
-  const sportPath = SPORT_PATHS[sport].replace(/\/scoreboard$/, "");
-  const url = `https://site.web.api.espn.com/apis/v2/sports${sportPath}/standings`;
+  const url = standingsUrl(sport);
   const p = (async () => {
     try {
       const res = await fetchWithRetry(url, 1, 6000);
@@ -5688,6 +5743,7 @@ export async function fetchTeamSchedule(
   seasons?: number[]
 ): Promise<Game[]> {
   const years = seasons && seasons.length > 0 ? seasons : [new Date().getFullYear()];
+  if (WORKER_SCOREBOARD_SPORTS.has(sport)) return fetchWorkerTeamSchedule(sport, espnTeamId, years);
   const asinMap = await loadPrimeAsins();
   const standingsPromise = fetchStandingsRecords(sport);
   const all: Game[] = [];
@@ -5808,6 +5864,50 @@ export async function fetchTeamSchedule(
     for (const g of all) { fill(g.homeTeam); fill(g.awayTeam); }
   }
   // Standings rank (#N) — same data the dated board hydrates onto each team.
+  if (RANK_LEAGUES.has(sport)) {
+    applyTeamRanks(sport, await fetchStandingsRanks(sport), [all]);
+  }
+  return all;
+}
+
+// Team schedule for the worker-served leagues: there is no per-team endpoint,
+// so pull the season's slate through the scoreboard route in one ranged call
+// and keep the games this team is in. CFL seasons are single calendar year
+// (May preseason → mid-November Grey Cup), so one window per year covers it.
+async function fetchWorkerTeamSchedule(sport: Sport, rawTeamId: string, years: number[]): Promise<Game[]> {
+  const teamId = `${sport}-${rawTeamId}`;
+  const standingsPromise = fetchStandingsRecords(sport);
+  const seen = new Set<string>();
+  const all: Game[] = [];
+  await Promise.all(years.map(async (year) => {
+    const url = scoreboardUrl(sport);
+    url.searchParams.set("dates", `${year}0501-${year}1201`);
+    try {
+      const res = await fetchWithRetry(url.toString());
+      if (!res.ok) return;
+      const data: { events?: unknown[] } | null = await res.json();
+      for (const g of eventsToGames((data?.events ?? []) as ScoreboardEvent[], sport)) {
+        if (g.homeTeam.id !== teamId && g.awayTeam.id !== teamId) continue;
+        if (seen.has(g.id)) continue;
+        seen.add(g.id);
+        g.streamUrl = buildStreamUrl(g);
+        all.push(g);
+      }
+    } catch {
+      // One year failing must not lose the others.
+    }
+  }));
+  all.sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
+  const standings = await standingsPromise;
+  if (standings.size > 0) {
+    const fill = (t: Team) => {
+      if (t.record || !t.id) return;
+      const rawId = t.id.startsWith(`${sport}-`) ? t.id.slice(sport.length + 1) : t.id;
+      const rec = standings.get(rawId);
+      if (rec) t.record = rec;
+    };
+    for (const g of all) { fill(g.homeTeam); fill(g.awayTeam); }
+  }
   if (RANK_LEAGUES.has(sport)) {
     applyTeamRanks(sport, await fetchStandingsRanks(sport), [all]);
   }
