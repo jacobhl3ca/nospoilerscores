@@ -2,8 +2,13 @@
 
 ## 2026-09-14 — NCAA women's volleyball (`ncaavb`) gets a column of its own
 
-**✅ Built 2026-09-14 on `feat/ncaa-volleyball`** (worktree `~/hs-ncaavb`), not yet merged — Jacob authorizes the
-deploy. Follows the `67aa805e` ncaah template plus two volleyball-only branches, because ESPN's `score` for
+**✅ Shipped 2026-09-14** — `f7dea68d` (rebased over the same-day UFL, baseball/softball, women's hockey and
+next-16.3.3 commits; 24 conflicted files, both sides kept, full check suite re-run green on 16.3.3). Deploy
+run 34871018619 green; `hidescore.com/tv/catalog.json` lists `ncaavb`. Production read-back
+(`qa/readback-prod.mjs`, headless Playwright, clock fixed to Sat 9/12 23:30 ET): 159 cards, 317 logos all
+loaded after scroll, 0 broken, 15 rank chips, 0 highlight buttons, 159 rating badges, top card Notre
+Dame–Duquesne; fresh profile = column absent, Settings row OFF, tick → switcher → column.
+Built on `feat/ncaa-volleyball` (worktree `~/hs-ncaavb`). Follows the `67aa805e` ncaah template plus two volleyball-only branches, because ESPN's `score` for
 this sport is SETS won (0-3) and `linescores[].value` is the points per set. Path
 `/volleyball/womens-college-volleyball`, label "NCAA Volleyball" (header short form "NCAA VB"), opt-in
 (`excludeFromAuto`), Settings → US leagues, share code `vb`, TV catalog `SUPPORTED` (rating kind
