@@ -24,6 +24,9 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   ufl: "/football/ufl",
   nhl: "/hockey/nhl",
   ncaah: "/hockey/mens-college-hockey",
+  // Both /news feeds answered 200 on 2026-09-14.
+  ncaabase: "/baseball/college-baseball",
+  ncaasoft: "/baseball/college-softball",
   golf: "/golf/pga",
   // ESPN has no bare /tennis/news feed (404) — the ATP league feed carries the
   // marquee tennis news (Slams, both tours' headlines), so route tennis there.
@@ -282,6 +285,10 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   // baseball sport-icon as its league logo, so use exactly that — same family
   // NASCAR and boxing already fall back to. Verified 200 image/png.
   llws: "https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-baseball.png",
+  // College baseball's own scoreboard serves the same baseball sport-icon;
+  // college softball has a real league mark (both read 2026-09-14).
+  ncaabase: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-baseball.png",
+  ncaasoft: "https://a.espncdn.com/i/espn/misc_logos/500/ncaa_womens_softball.png",
   nba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nba.png&w=40&h=40&transparent=true",
   wnba: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/wnba.png&w=40&h=40&transparent=true",
   nhl: "https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/nhl.png&w=40&h=40&transparent=true",
@@ -421,6 +428,9 @@ const REDDIT_SUB: Partial<Record<Sport, { key: string; label: string }>> = {
   // r/UFL is the University of Florida (checked 2026-09-14); the league's live
   // sub is r/UnitedFootballLeague (r/UFL_Football stopped in Feb 2025).
   ufl: { key: "reddit-ufl", label: "r/UnitedFootballLeague" },
+  // 2026-09-14: college baseball gets r/collegebaseball. Softball has NO card
+  // on purpose — no sub with volume (r/collegesoftball is near-empty).
+  ncaabase: { key: "reddit-ncaabase", label: "r/collegebaseball" },
   ufc: { key: "reddit-ufc", label: "r/ufc" },
   boxing: { key: "reddit-boxing", label: "r/Boxing" },
   f1: { key: "reddit-f1", label: "r/formula1" },
@@ -519,7 +529,7 @@ export function leagueSourceCascade(sport: Sport): ColumnSource[] {
 export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   "mlb", "nba", "nhl", "nfl", "ncaam", "ncaaf", "ufl",
   "fifa", "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
-  "mls", "golf", "tennis", "wnba", "ncaaw", "ncaah",
+  "mls", "golf", "tennis", "wnba", "ncaaw", "ncaah", "ncaabase", "ncaasoft",
   // Second-wave soccer sorts below the established leagues in the merged mobile
   // feed, Liga MX first (largest US audience of the group). The two
   // yearCycle-gated national-team tournaments sit just above it, since in a year

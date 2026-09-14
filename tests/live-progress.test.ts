@@ -103,3 +103,20 @@ test("ufl takes the football branch", () => {
   assert.equal(full(g("ufl", 4, "6:22", "6:22 - 4th")), "Q4 - 6:22");
   assert.equal(full(g("ufl", 5, "0:00", "OT")), "OT");
 });
+
+// College baseball and softball (added 2026-09-14) share MLB's "Top 5th" /
+// "Bot 7th" status shape, so they take the ▲/▼ inning branch, not the raw
+// statusDetail fallthrough (which truncated to "Top" on mobile).
+test("college baseball and softball read innings like MLB", () => {
+  const cb = formatGameProgress(g("ncaabase", 5, "", "Top 5th"));
+  assert.equal(cb.full, "▲5");
+  assert.equal(cb.short, "▲5");
+  assert.equal(cb.label, "Top of the 5th inning");
+  const cs = formatGameProgress(g("ncaasoft", 7, "", "Bot 7th"));
+  assert.equal(cs.full, "▼7");
+  assert.equal(cs.label, "Bottom of the 7th inning");
+  const delay = formatGameProgress(g("ncaabase", 1, "", "Rain Delay, Top 1st"));
+  assert.equal(delay.full, "▲1 Rain");
+  assert.equal(delay.delayed, true);
+  assert.equal(delay.label, "Top of the 1st inning, Rain");
+});

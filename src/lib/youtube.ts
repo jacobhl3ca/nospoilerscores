@@ -265,6 +265,18 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // and "ESPN" 0/1 each on the United Bowl. The unscoped winners were fan
 // channels ("Cincinnati Bengals / Oklahoma Sooners fan", "Mr. Mane"). Dark
 // until an official uploader owns the per-game cut.
+//
+// ncaabase / ncaasoft (NCAA baseball + softball, added 2026-09-14): dark.
+// Probed the LIVE worker with strict=1 and "NCAA Championships" on 8
+// completed 2026 fixtures (bare query, no seriesNote). Postseason: 4/6 correct
+// (CWS finals G1, a CWS double-elimination game, WCWS finals G1, a WCWS
+// double-elimination game), and the two finals GAME 2 probes both served the
+// Game 1 cut. Regular season: baseball "No results"; softball "Michigan vs
+// Wisconsin 4/18/2026" served "Wisconsin vs. Michigan State - 2026 NCAA
+// HOCKEY regional final" — a wrong match, the ncaah failure shape exactly.
+// The regular season streams on ESPN+ / SEC Network+ with no per-game
+// uploader. The same postseason-only channel gate ncaah needs would light
+// the CWS / WCWS.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "cricket",
   "euro",
@@ -272,6 +284,8 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "laliga",
   "ligue1",
   "ncaah",
+  "ncaabase",
+  "ncaasoft",
   "rugbychamp",
   "rugbytest",
   "ufl",

@@ -772,6 +772,54 @@
       }
     },
     {
+      "key": "ncaabase",
+      "label": "NCAA Baseball",
+      "path": "/baseball/college-baseball/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-baseball.png",
+      "defaultOn": false,
+      "preseasonIsRegular": false,
+      "season": {
+        "start": "02-13",
+        "end": "06-23",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 14,
+        "overtimeBonus": 15,
+        "scoringDivisor": 3,
+        "regulationPeriods": 9,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
+      "key": "ncaasoft",
+      "label": "NCAA Softball",
+      "path": "/baseball/college-softball/scoreboard",
+      "logo": "https://a.espncdn.com/i/espn/misc_logos/500/ncaa_womens_softball.png",
+      "defaultOn": false,
+      "preseasonIsRegular": false,
+      "season": {
+        "start": "02-05",
+        "end": "06-05",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "generic",
+        "multiplier": 14,
+        "overtimeBonus": 15,
+        "scoringDivisor": 3,
+        "regulationPeriods": 7,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
       "key": "sixnations",
       "label": "Six Nations",
       "path": "/rugby/180659/scoreboard",

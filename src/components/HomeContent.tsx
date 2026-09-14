@@ -1590,7 +1590,7 @@ export default function HomeContent({
     // MLB leads: it is the league actually playing games today, and a picker
     // whose first pill is an offseason/preseason league reads as stale (Jacob
     // 8/9). NBA stays ahead of WNBA — his call, even in the NBA offseason.
-    "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "ufl",
+    "mlb", "nfl", "nba", "wnba", "nhl", "ncaaf", "ncaam", "ncaaw", "ncaah", "ufl", "ncaabase", "ncaasoft",
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
     "chess", "poker", "esports",
     // ── soccer block, bottom ──
