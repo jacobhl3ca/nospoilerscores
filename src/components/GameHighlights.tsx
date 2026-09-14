@@ -24,6 +24,8 @@ const BASEBALL_SPORTS = new Set<string>(["mlb", "ncaabase", "ncaasoft"]);
 
 const highlightBufferHours: Record<string, number> = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5, ncaavb: 3, mlb: 5, ufl: 4,
+  // CFL: TSN posts the full-highlights cut on the same timeline as NFL recaps.
+  cfl: 5,
   // College baseball runs MLB-long; softball's seven innings finish an hour sooner.
   ncaabase: 5, ncaasoft: 4,
   nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
@@ -53,7 +55,7 @@ const highlightBufferHours: Record<string, number> = {
 // of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
 // 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5, mlb: 9, ncaabase: 9, ncaasoft: 7, nfl: 4, ufl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, uecl: 2, facup: 2, copadelrey: 2, dfbpokal: 2, cricket: 2, golf: 4, tennis: 4,
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, cfl: 4, ncaawh: 3, ncaavb: 5, mlb: 9, ncaabase: 9, ncaasoft: 7, nfl: 4, ufl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, uecl: 2, facup: 2, copadelrey: 2, dfbpokal: 2, cricket: 2, golf: 4, tennis: 4,
   // Two 40-minute halves. Without these the default of 4 made rawOt negative
   // for every finished rugby match — clamped to 0 by the Math.max, so the
   // buffer was right by accident; stating it keeps that an intent, not luck.
@@ -299,9 +301,10 @@ export default function GameHighlights({
   // the same pair's regular-season meeting). Empty — and so completely inert —
   // for every other card. Carried on the modal's fallback URL as `nss_comp`
   // for the same reason as the week. See getCompetitionTitleTokens.
+  // CFL playoff cards add the round from playoffLabel (see cflPlayoffTitleTokens).
   const compTokens = useMemo(
-    () => getCompetitionTitleTokens(game.sport, { preseason: game.isPreseason }),
-    [game.sport, game.isPreseason],
+    () => getCompetitionTitleTokens(game.sport, { preseason: game.isPreseason, playoff: game.isPlayoff, playoffLabel: game.playoffLabel }),
+    [game.sport, game.isPreseason, game.isPlayoff, game.playoffLabel],
   );
   const compGateParam = compTokens.length ? `&nss_comp=${encodeURIComponent(compTokens.join("|"))}` : "";
   const modalFallbackUrl = (channels: (string | null | undefined)[]) => {
