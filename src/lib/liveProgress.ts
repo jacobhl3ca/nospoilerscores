@@ -67,8 +67,8 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (hasRunningClock(clock)) return { full: `${q} - ${clock}`, short: q };
     return { full: q, short: q };
   }
-  if (sport === "nhl" || sport === "ncaah") {
-    // College hockey shares this shape: P1–P3, then a 5-min OT (period 4) and a
+  if (sport === "nhl" || sport === "ncaah" || sport === "ncaawh") {
+    // College hockey (men's and women's) shares this shape: P1–P3, then a 5-min OT (period 4) and a
     // shootout in most conferences during the regular season, while the NCAA
     // tournament plays 20-min sudden-death OTs (isPlayoff → "2OT").
     // Regulation is P1–P3, then a single overtime (period 4). In the REGULAR

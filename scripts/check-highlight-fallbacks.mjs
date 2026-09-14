@@ -91,9 +91,9 @@ const ESPN_PATHS = {
   rugbywc:      "/rugby/164205/scoreboard",
   nationschamp: "/rugby/17567/scoreboard",
   // Deliberately absent: MLB (MLB.com-native); La Liga, Ligue 1, EURO, NCAA
-  // men's hockey, UFL, NCAA baseball, NCAA softball, and cricket (no approved
-  // per-match uploader, so no YouTube button). ncaah / ufl / ncaabase /
-  // ncaasoft are in NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts.
+  // men's and women's hockey, UFL, NCAA baseball, NCAA softball, and cricket
+  // (no approved per-match uploader, so no YouTube button). ncaah / ncaawh /
+  // ufl / ncaabase / ncaasoft are in NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts.
 };
 
 // Matches OFFICIAL_CHANNELS in src/lib/youtube.ts. Keep in sync.
@@ -161,7 +161,7 @@ const TENNIS_CHANNELS = new Set([
 // Mirrors GameHighlights.tsx. A same-day final does not promise highlight
 // buttons until this post-start window has opened.
 const HIGHLIGHT_BUFFER_HOURS = {
-  nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5,
+  nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5,
   nfl: 5, fifa: 3, epl: 3, mls: 3, ucl: 3, uel: 3, golf: 6, tennis: 4,
   seriea: 3, bundesliga: 3,
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, saudi: 3, afcon: 3,
@@ -169,7 +169,7 @@ const HIGHLIGHT_BUFFER_HOURS = {
   sixnations: 3, superrugby: 3, rugbywc: 3, nationschamp: 3,
 };
 const REGULATION_PERIODS = {
-  nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3,
+  nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3,
   nfl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, golf: 4, tennis: 3,
   seriea: 2, bundesliga: 2,
   ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, saudi: 2, afcon: 2,

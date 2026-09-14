@@ -90,7 +90,7 @@ if (!BASE) throw new Error("build-tv-catalog: BASE_URL not found");
 // groupings), f1 / nascar / indycar / ufc / boxing / chess / poker (single-event
 // tiles, not games), esports (PandaScore via a worker route).
 const SUPPORTED = new Set([
-  "mlb", "llws", "nba", "wnba", "ncaam", "ncaaw", "ncaaf", "nfl", "ufl", "nhl", "ncaah", "ncaabase", "ncaasoft", "cricket",
+  "mlb", "llws", "nba", "wnba", "ncaam", "ncaaw", "ncaaf", "nfl", "ufl", "nhl", "ncaah", "ncaawh", "ncaabase", "ncaasoft", "cricket",
   "epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1",
   "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",

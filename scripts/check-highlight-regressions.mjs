@@ -213,6 +213,12 @@ check(
     !monitor.includes('ncaabase: "/baseball/college-baseball/scoreboard"') &&
     !monitor.includes('ncaasoft: "/baseball/college-softball/scoreboard"'),
 );
+// NCAA women's hockey (2026-09-14) is dark for the same reason.
+check(
+  "NCAAWH stays dark and unmonitored",
+  youtube.hasNoTrustedHighlightSource("ncaawh") === true &&
+    !monitor.includes('ncaawh: "/hockey/womens-college-hockey/scoreboard"'),
+);
 check("monitor rejects incomplete ESPN audits", monitor.includes("Source failures are not zero-game slates"));
 check("rejected custom ESPN User-Agent is gone", !monitor.includes("nospoilerscores-staleness-check/1.0"));
 check(

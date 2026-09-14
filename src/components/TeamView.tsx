@@ -45,7 +45,7 @@ function rawEspnTeamId(teamId: string, sport: Sport): string {
 // convention — a not-yet-scheduled or out-of-range season year just returns no
 // events (fetchTeamSchedule dedups + sorts, and no-ops on an empty/failed year).
 const TWO_CALENDAR_YEAR_SPORTS = new Set<Sport>([
-  "epl", "mls", "fifa", "ucl", "uel", "nba", "nhl", "ncaam", "ncaaw", "ncaah",
+  "epl", "mls", "fifa", "ucl", "uel", "nba", "nhl", "ncaam", "ncaaw", "ncaah", "ncaawh",
   "laliga", "seriea", "bundesliga", "ligue1",
   // Second-wave leagues whose season spans two calendar years. EFL Championship
   // and the Saudi Pro League run Aug–May like the big five. Liga MX belongs here

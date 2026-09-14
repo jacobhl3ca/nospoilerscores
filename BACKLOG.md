@@ -1,5 +1,44 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — NCAA women's hockey (`ncaawh`) column, on the men's pattern
+
+**Built 2026-09-14** on branch `feat/ncaa-womens-hockey` (worktree `~/hs-ncaawh`), a line-for-line mirror of
+`67aa805e` + `6edcced5` (men's hockey). Config, not code: ESPN serves `/hockey/womens-college-hockey` in
+the standard two-competitor scoreboard shape (league abbr `CWHOC`). Window is ESPN's calendar read live
+2026-09-14: 2026-09-18 → 2027-03-23, Frozen Four semis 03-21, national championship 03-23 (range probe
+`?dates=20270301-20270331`, season type 3), `verifiedFor: 2026`. Opt-in (`excludeFromAuto`), Settings →
+US leagues as "NCAA Women's Hockey", header "NCAAW Hockey" with short form "W. Hockey" (99px at 390px —
+exactly the budget, one line), share code `hw`, TV catalog `SUPPORTED` (not `DEFAULT_ON`). Rating
+config, period labels (P1–P3 / OT / SO, tournament multi-OT via `isPlayoff`), the round-word playoff
+gate, the W-L-T record trim and the calendar duration all mirror `ncaah`. Rank = the USCHO women's Top 15
+on the event (`POLL_RANK_SPORTS`; the 1..25 guard accepts it; tooltip "Top 15 ranking"), not standings —
+there is no standings feed. ESPN news feed 200 (6 articles) → `SPORT_NEWS_PATHS`. Reddit card reuses the
+`reddit-ncaah` snapshot (r/collegehockey covers both tours): no new bake job, no staleness change;
+`news:check` accepts the shared key. Highlights **dark** (`NO_HIGHLIGHT_FALLBACK` + "stays dark and
+unmonitored" regression check) on the men's evidence — no per-game uploader, ESPN+ streams. Team-picker
+logos: `sports.core.api …/womens-college-hockey/teams?limit=400` returns 47 items.
+
+Two changes from the plan, both on evidence:
+- **`championshipDate` is 03-23, not 03-21.** The range probe shows the two Frozen Four semis on 03-21
+  and the title game on 03-23 — the calendar's last day IS the final.
+- **Read-back date is 09-26, not 09-18/19.** ESPN lists only 2 games on 09-18 (LIU @ Princeton, RPI @
+  Mercyhurst) and the same 2 for 09-19; the first full weekend is 09-25 (15) / 09-26 (14).
+
+**Proof (local, 2026-09-14):** tsc, eslint (0 errors), test:unit 294/294, highlights:check, news:check,
+poker:check, tv:catalog + tv:catalog:check (web + tvOS copies regenerated together), `check-season-windows
+--only=ncaawh` ✓, `next build` green. Headless-Chromium read-back against the static export
+(`npx serve out`), clock fixed to Sat 2026-09-26: 14 cards, 28 logos loaded, 0 broken, 0 rank chips (all
+99), 0 highlight buttons; fresh profile = column absent, Settings row OFF, ticking it adds "NCAAW Hockey"
+to the switcher and picking it adds the column (15 cards, Today+Tomo). 390px phone: "W. Hockey" on one
+line beside NFL / MLB. Screenshots in `~/hs-ncaawh/qa/`. Not deployed — awaiting Jacob's merge call;
+production read-back (`curl -s https://hidescore.com/tv/catalog.json | grep '"ncaawh"'` + a Sep 26 page)
+is owed after merge.
+
+**Open:**
+- [ ] The men's "postseason-only channel gate" open item (2026-09-12) would light BOTH tournaments —
+      "NCAA Championships" posts the women's Frozen Four too. Not probed here (kept cheap).
+- [ ] If the women's standings feed ever fills in, W-L records get a source (PTS tail already stripped).
+
 ## 2026-09-14 — NCAA baseball (`ncaabase`) + NCAA softball (`ncaasoft`) columns
 
 **✅ Shipped 2026-09-14** — `ea7356c5` (one commit, both leagues, same shape as `ncaah` `67aa805e`; rebased over
@@ -134,8 +173,7 @@ adds the column.
 **Open:**
 - [ ] Postseason-only channel gate so the NCAA tournament (late March → Frozen Four 4/8–4/10) gets
       "NCAA Championships" highlights without the regular-season wrong-match risk.
-- [ ] NCAA women's hockey (`ncaawh`): ESPN 200, 2026-09-18 → 2027-03-23, ~19 games a Saturday, no
-      standings. ~30 min on the same pattern. Jacob decides.
+- [x] NCAA women's hockey (`ncaawh`) — shipped, see the 2026-09-14 section above.
 - [ ] Re-check the standings feed mid-season; if it fills in, W-L records have a source (the PTS tail
       is already stripped).
 

@@ -40,6 +40,17 @@ test("ncaah conference and NCAA tournament rounds are playoff games", () => {
   assert.equal(parseGame(event("NCAA Men's Hockey Championship - Worcester Regional Final"), "ncaah").isPlayoff, true);
 });
 
-test("the round-word rule is scoped to ncaah", () => {
+// The women's feed shares the format, so the same rule applies.
+test("ncaawh in-season tournaments are not playoff games", () => {
+  assert.equal(parseGame(event("Ice Breaker Tournament"), "ncaawh").isPlayoff, false);
+  assert.equal(parseGame(event("Smashville Showcase"), "ncaawh").isPlayoff, false);
+});
+
+test("ncaawh conference and NCAA tournament rounds are playoff games", () => {
+  assert.equal(parseGame(event("WCHA - Semifinal"), "ncaawh").isPlayoff, true);
+  assert.equal(parseGame(event("NCAA Women's Ice Hockey Championship - Frozen Four"), "ncaawh").isPlayoff, true);
+});
+
+test("the round-word rule is scoped to college hockey", () => {
   assert.equal(parseGame(event("Ice Breaker Tournament"), "nhl").isPlayoff, true);
 });

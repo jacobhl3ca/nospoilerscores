@@ -259,6 +259,10 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // regular-season games stream on ESPN+ with no official upload. Dark. A
 // postseason-only channel gate is the way to light it for the March tournament.
 //
+// ncaawh (NCAA women's hockey, added 2026-09-14): same evidence as the men's —
+// regular-season games stream on ESPN+ with no per-game uploader. Dark; the
+// same postseason-only gate would light both tournaments together.
+//
 // ufl (UFL spring football, added 2026-09-14): probed against the LIVE worker
 // with strict=1 on 5 completed 2026 fixtures (May 3, May 16, May 29, Jun 7
 // semifinal, Jun 13 United Bowl), bare query shape. "UFL" was 0/5; "FOX Sports"
@@ -284,6 +288,7 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "laliga",
   "ligue1",
   "ncaah",
+  "ncaawh",
   "ncaabase",
   "ncaasoft",
   "rugbychamp",

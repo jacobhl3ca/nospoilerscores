@@ -28,7 +28,7 @@ const DURATION_MIN: Record<string, number> = {
   mlb: 180, ncaabase: 180, ncaasoft: 150,
   nfl: 195, ncaaf: 195,
   nba: 150, wnba: 150, ncaam: 150, ncaaw: 150,
-  nhl: 165, ncaah: 165,
+  nhl: 165, ncaah: 165, ncaawh: 165,
   tennis: 180,
   golf: 180, f1: 180, nascar: 180, indycar: 180,
   ufc: 240, boxing: 240,
