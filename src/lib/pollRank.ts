@@ -34,7 +34,11 @@ export type PollRankCompetitor = { curatedRank?: { current?: number } };
 // would crown a bogus #1. curatedRank there is the USCHO Top 20, frozen onto the
 // event the same way (13 of 26 games on 2026-01-17 carried a ranked team, and
 // every October 2026 fixture reads 99).
-const POLL_RANK_SPORTS = new Set<Sport>(["ncaaf", "ncaah"]);
+//
+// NCAA BASEBALL and SOFTBALL (added 2026-09-14) carry a Top 25 poll on
+// curatedRank the same way (UNC 5 / OU null on the 2026 CWS final; Texas Tech
+// 11 / Texas 2 on the WCWS final). The 1..25 guard fits both.
+const POLL_RANK_SPORTS = new Set<Sport>(["ncaaf", "ncaah", "ncaabase", "ncaasoft"]);
 
 // Returns null for every sport but NCAAF and NCAAH, and for the two shapes ESPN uses to
 // mean "not ranked": the sentinel 99, and an absent curatedRank.

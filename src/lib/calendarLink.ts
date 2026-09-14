@@ -25,7 +25,7 @@ export interface CalendarEvent {
 // Typical length per sport, in minutes. A calendar block, not a forecast —
 // erring long keeps the slot free through a late finish.
 const DURATION_MIN: Record<string, number> = {
-  mlb: 180,
+  mlb: 180, ncaabase: 180, ncaasoft: 150,
   nfl: 195, ncaaf: 195,
   nba: 150, wnba: 150, ncaam: 150, ncaaw: 150,
   nhl: 165, ncaah: 165,
