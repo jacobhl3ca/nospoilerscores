@@ -2,7 +2,11 @@
 
 ## 2026-09-14 — NCAA women's hockey (`ncaawh`) column, on the men's pattern
 
-**Built 2026-09-14** on branch `feat/ncaa-womens-hockey` (worktree `~/hs-ncaawh`), a line-for-line mirror of
+**✅ Shipped 2026-09-14** — `3a816465` (rebased over the same-day UFL and baseball/softball adds, both sides
+kept in 17 files). Deploy run 34859165620 green; `hidescore.com/tv/catalog.json` lists `ncaawh`. Production
+read-back (`qa/readback-prod.mjs`, clock fixed to Sat 9/26): 14 cards, 28 logos, 0 broken, 0 rank chips,
+0 highlight buttons; fresh profile = column absent, Settings row OFF, tick → switcher → column (15 cards).
+Built on branch `feat/ncaa-womens-hockey` (worktree `~/hs-ncaawh`), a line-for-line mirror of
 `67aa805e` + `6edcced5` (men's hockey). Config, not code: ESPN serves `/hockey/womens-college-hockey` in
 the standard two-competitor scoreboard shape (league abbr `CWHOC`). Window is ESPN's calendar read live
 2026-09-14: 2026-09-18 → 2027-03-23, Frozen Four semis 03-21, national championship 03-23 (range probe
@@ -30,9 +34,7 @@ poker:check, tv:catalog + tv:catalog:check (web + tvOS copies regenerated togeth
 (`npx serve out`), clock fixed to Sat 2026-09-26: 14 cards, 28 logos loaded, 0 broken, 0 rank chips (all
 99), 0 highlight buttons; fresh profile = column absent, Settings row OFF, ticking it adds "NCAAW Hockey"
 to the switcher and picking it adds the column (15 cards, Today+Tomo). 390px phone: "W. Hockey" on one
-line beside NFL / MLB. Screenshots in `~/hs-ncaawh/qa/`. Not deployed — awaiting Jacob's merge call;
-production read-back (`curl -s https://hidescore.com/tv/catalog.json | grep '"ncaawh"'` + a Sep 26 page)
-is owed after merge.
+line beside NFL / MLB. Screenshots were in `~/hs-ncaawh/qa/` (worktree removed after the deploy).
 
 **Open:**
 - [ ] The men's "postseason-only channel gate" open item (2026-09-12) would light BOTH tournaments —
