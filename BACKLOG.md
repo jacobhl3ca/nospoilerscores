@@ -1,5 +1,52 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — NCAA baseball (`ncaabase`) + NCAA softball (`ncaasoft`) columns
+
+**Built 2026-09-14 on `feat/ncaa-baseball-softball`, not yet merged** — one commit, both leagues, same shape
+as `ncaah` (`67aa805e`). Both are offseason until February, so nothing shows on the board until then; the tables,
+the TV catalog and the window checker are in place before the openers. Config, not code: ESPN serves
+`/baseball/college-baseball` and `/baseball/college-softball` in the standard scoreboard shape. Windows are ESPN's
+2026 calendar (baseball 02-13 → 06-22 CWS final G3; softball 02-05 → 06-04 WCWS finals G2), `verifiedFor: 2026`,
+endDate padded one day past the final like NBA/NHL/NFL. Opt-in (`excludeFromAuto`), Settings → US leagues,
+share codes `cb` / `cs`, TV catalog `SUPPORTED`, headers "NCAA BSB" / "Softball" on a phone. Softball is SEVEN
+innings (`regulationPeriods: 7`); run-rule finals (`Final/5`) still rate. Live cards read `▲5` / `▼7` / `▲1 Rain`
+like MLB. `isPlayoff` = season type 6 (ESPN files the whole NCAA tournament as `championship-series`) or a
+regional / super regional / world series / championship note, scoped to the two sports. Poll rank on
+`curatedRank` (Top 25), same path as NCAAF / NCAAH. r/collegebaseball card + bake + staleness monitor; softball
+has NO reddit card (no sub with volume).
+
+Three changes from the plan, all on evidence:
+- **Team-picker logos ride the team `guid`, not `ncaa/500/<id>`.** These sports' team ids are their own
+  (softball OU = 524, baseball UCLA = 66); the school-id path 404s for 5 of 6 softball ids and 2 of 8 baseball.
+  The core teams payload carries `guid` for 344 / 342 of 400 teams, and `a.espncdn.com/guid/<guid>/logos/default.png`
+  is the logo ESPN itself puts on the event (5/5 sampled per sport = 200). No guid → no logo, never a broken image.
+- **Picker limit 400 → 500.** College baseball lists 437 teams, softball 446; the old cap dropped the tail.
+- **endDate 06-23 / 06-05, not 06-22 / 06-04.** The WCWS final is 8 PM ET = 00:00Z on 06-05 and the window checker
+  reads UTC dates, so a 06-04 close reported "closes 1d before the last game". `championshipDate` stays on the real day.
+
+**Highlights are dark** (`NO_HIGHLIGHT_FALLBACK`). Strict probe on the live worker, "NCAA Championships", 8
+completed 2026 fixtures: postseason 4/6 correct (CWS finals G1, a CWS double-elimination game, WCWS finals G1, a
+WCWS double-elimination game) and BOTH finals Game 2 probes served the Game 1 cut; regular season baseball "No
+results", softball Michigan–Wisconsin 4/18 served "Wisconsin vs. Michigan State – 2026 NCAA HOCKEY regional
+final". Same shape as ncaah; the monitor does not scan either, a regression check keeps them dark and unmonitored.
+
+**Proof:** tsc, eslint (0 errors), test:unit (297, incl. new `college-baseball-playoff-flag` + live-progress cases),
+highlights:check, news:check, poker:check, tv:catalog:check, `check-season-windows --only=ncaabase,ncaasoft` ✓✓,
+`next build` all green. Headless-Chromium read-back against the local static build, clock fixed: 4/18 Today =
+138 cards (81 baseball + 57 softball, no cap, every game on the column), 276 logos, 0 broken, 52 poll chips
+("Top 25 ranking: #N"), 0 highlight buttons, Settings opens in <100 ms; 6/21 = the CWS final (UNC #5 vs OU), 6/4
+= the WCWS final (Texas #2 vs Texas Tech #11), 2 logos each, 0 broken; phone 390px = "NCAA BSB" / "Softball"
+headers, 0 overflow; fresh profile 9/14 = column absent, both Settings rows OFF with "· offseason", ticking adds
+both to the switcher and the slot dropdown; fresh profile 4/18 = tick + pick in slot 2 adds the column. (An
+offseason league picked into a slot in September renders no column — same as `ncaah` today, not this change.)
+
+**Open:**
+- [ ] 2027 windows: ESPN publishes ~December. Re-read in January; the twice-monthly checker reports them
+      unverified until then.
+- [ ] Softball reddit card — no sub with volume found (r/collegesoftball near-empty; reddit 429'd the probe
+      from this IP on 9/14, re-check).
+- [ ] Postseason-only highlight channel gate (shared with hockey) would light the CWS / WCWS. Note the Game 2 →
+      Game 1 collision even inside the postseason; the real query carries the `Game N` seriesNote, re-probe with it.
 ## 2026-09-14 — UFL spring football (`ufl`) gets a column of its own
 
 **✅ Shipped 2026-09-14** — `5ac45ddb`. Deploy run 34856081688 green; `hidescore.com/tv/catalog.json` lists

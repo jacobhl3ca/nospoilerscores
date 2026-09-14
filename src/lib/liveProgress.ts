@@ -9,12 +9,16 @@ function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
+// Sports that read "Top 5th" / "Bot 7th" and render the ▲/▼ inning glyph.
+// College baseball and softball (added 2026-09-14) share MLB's status shape.
+const BASEBALL_SPORTS = new Set<Game["sport"]>(["mlb", "ncaabase", "ncaasoft"]);
+
 // `label`, when present, is a spoken form for screen readers (applied as an
-// aria-label on the live-status element). Only MLB sets it: the ▲/▼ inning
-// glyphs read as a meaningless "up-pointing triangle 5" otherwise.
+// aria-label on the live-status element). Only the baseball sports set it: the
+// ▲/▼ inning glyphs read as a meaningless "up-pointing triangle 5" otherwise.
 export function formatGameProgress(game: Game): { full: string; short: string; delayed?: boolean; label?: string } {
   const { sport, statusDetail, clock, period } = game;
-  if (sport === "mlb") {
+  if (BASEBALL_SPORTS.has(sport)) {
     // Delayed games arrive as "Rain Delay, Top 1st" / "Heat Delay, ..." —
     // render the inning the same compact way as live cards and append the
     // reason word (Rain/Heat/...) in proper case; the renderer recolors yellow.

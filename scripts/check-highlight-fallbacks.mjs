@@ -91,9 +91,9 @@ const ESPN_PATHS = {
   rugbywc:      "/rugby/164205/scoreboard",
   nationschamp: "/rugby/17567/scoreboard",
   // Deliberately absent: MLB (MLB.com-native); La Liga, Ligue 1, EURO, NCAA
-  // men's hockey, UFL, and cricket (no approved per-match uploader, so no
-  // YouTube button). ncaah and ufl are in NO_HIGHLIGHT_FALLBACK — see
-  // src/lib/youtube.ts.
+  // men's hockey, UFL, NCAA baseball, NCAA softball, and cricket (no approved
+  // per-match uploader, so no YouTube button). ncaah / ufl / ncaabase /
+  // ncaasoft are in NO_HIGHLIGHT_FALLBACK — see src/lib/youtube.ts.
 };
 
 // Matches OFFICIAL_CHANNELS in src/lib/youtube.ts. Keep in sync.
