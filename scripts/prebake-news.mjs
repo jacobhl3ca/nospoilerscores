@@ -2548,6 +2548,10 @@ const HL_TEAM_ALIASES = {
   "Red Bull NY": "New York Red Bulls",
   Tempo: "Toronto Tempo",
   Valkyries: "Golden State Valkyries",
+  // ESPN "Boro" -> EFL's full "Middlesbrough" title form; keeps the bake's
+  // query in sync with the client so Middlesbrough matches bake instead of
+  // falling through to a live per-card lookup.
+  Boro: "Middlesbrough",
 };
 const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 // The LLWS code->state/country table is the SAME FILE src/lib/youtube.ts reads,

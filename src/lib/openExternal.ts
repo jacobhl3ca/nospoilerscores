@@ -56,8 +56,9 @@ const isCapacitorNative = (): boolean => {
 // Map a youtube.com / youtu.be web URL to its `youtube://` app-scheme
 // equivalent so @capacitor/app-launcher can hand off to the native app.
 // Covers video links (youtube.com/watch?v=ID, youtu.be/ID, /shorts/ID,
-// /live/ID, m.youtube.com/*) and search-results pages (youtube.com/results?
-// search_query=Q). Returns null for any non-YouTube or unrecognized URL.
+// /live/ID, /embed/ID, m.youtube.com/*) and search-results pages
+// (youtube.com/results?search_query=Q). Returns null for any non-YouTube or
+// unrecognized URL.
 function youTubeAppUrl(url: string): string | null {
   try {
     const u = new URL(url);
@@ -79,6 +80,15 @@ function youTubeAppUrl(url: string): string | null {
     // landed in the in-app browser. Mirrors the /shorts/ case above.
     const liveMatch = u.pathname.match(/^\/live\/([a-zA-Z0-9_-]{11})/);
     if (liveMatch) return `youtube://watch?v=${liveMatch[1]}`;
+    // /embed/ID is YouTube's iframe-player URL; the ID is a regular video id the
+    // app opens via its watch endpoint. An external item (Reddit/ESPN) linking to
+    // a bare youtube.com/embed/ID page otherwise missed the app handoff every
+    // other YouTube URL form above gets and landed in the in-app browser. Mirrors
+    // the /shorts/ and /live/ cases above. (The app's own in-modal embeds are
+    // iframes, never routed through openExternal, so this only affects real
+    // external embed links.)
+    const embedMatch = u.pathname.match(/^\/embed\/([a-zA-Z0-9_-]{11})/);
+    if (embedMatch) return `youtube://watch?v=${embedMatch[1]}`;
     if (u.pathname === "/results") {
       const q = u.searchParams.get("search_query") || "";
       return q ? `youtube://results?search_query=${encodeURIComponent(q)}` : null;
@@ -261,8 +271,12 @@ export function handleExternalClick(
   return (e) => {
     e.stopPropagation();
     if (!url) return;
-    // Let modifier-clicks (cmd/ctrl/middle) follow the default new-tab behavior.
-    if (e.metaKey || e.ctrlKey || e.shiftKey || (e as React.MouseEvent).button === 1) return;
+    // Let modifier-clicks fall through to the browser's own open behavior instead
+    // of intercepting: cmd/ctrl open a new tab, shift a new window, and the middle
+    // button (button 1) a background tab. shiftKey was already in the guard but the
+    // comment omitted it. `e` is typed React.MouseEvent, so `.button` reads directly
+    // — the prior `(e as React.MouseEvent)` assertion was a redundant no-op.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
     e.preventDefault();
     openExternal(url);
   };

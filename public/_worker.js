@@ -1036,7 +1036,7 @@ export default {
           //     closing \b lands between the "r" and "b" of "Canterbury" and the
           //     place name can't match. Byte-identical to spoilers.ts. The "[verb][- ]?past"
           //     clause — (?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|
-          //     coast(?:s|ed)?|stroll(?:s|ed)?|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past — adds the
+          //     coast(?:s|ed)?|stroll(?:s|ed)?|glid(?:e|es|ed)|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past — adds the
           //     SAME comfortable-win framing in cruise's other everyday verbs, the
           //     "X past Y" idiom recap titles lean on ("Spain ease past Georgia",
           //     "City power past United", "Madrid breeze past Getafe", "Real Madrid
@@ -1049,6 +1049,22 @@ export default {
           //     "on a roll", "roll call" and "years past" never fire. Its one benign
           //     collision — "ease past the keeper" (a dribble) — reveals a goal not a
           //     result and errs over-hide-safe. Byte-identical to spoilers.ts.
+          //     "blow(?:s|n)?|blew" joins that group as its going-away/blowout-tempo
+          //     member — "blow past" is the American-sports idiom for running clean
+          //     away ("Mavericks blow past the Suns", "Cowboys blew past the Eagles",
+          //     "the Bills were blown past"), and like "roll past" every form slipped
+          //     the ease/power/breeze/coast/stroll/waltz/roll set and carries no digits.
+          //     Same trailing "past" anchor keeps the common bare "blow" safe ("blow the
+          //     lead", "blow a save", "blow-by-blow", "don't blow it" never fire, and
+          //     "blow[- ]?outs?" still owns "blowout"); covers blow/blows/blown/blew, the
+          //     -ing form left alone like roll's. Byte-identical to spoilers.ts.
+          //     "glid(?:e|es|ed)" is the smooth-motion member of that group — the
+          //     breeze/coast/waltz cousin tennis, motorsport and NBA recap titles use
+          //     ("Alcaraz glides past Sinner", "Verstappen glided past Hamilton",
+          //     "Celtics glide past the Nets") — a beaten side named with no digits.
+          //     Same trailing "past" anchor keeps bare "glide" safe ("glide path",
+          //     "hang gliding" never fire); covers glide/glides/glided, the -ing form
+          //     left alone like breeze's. Byte-identical to spoilers.ts.
           //     "(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past"
           //     is the NARROW-win twin of that group — same "verb + past" idiom for a
           //     side that only just got through ("Real Madrid sneak past Getafe",
@@ -1164,6 +1180,10 @@ export default {
           //     out (sink/sinks/sank, not "sink\w*") so it can't swallow the baseball pitch "sinker" or
           //     "sinking feeling"; whole-word forms are boundary-safe, no in-scope club/nation is named
           //     "Sink", and the "kitchen sink" idiom is rare in match titles and errs over-hide-safe.
+          //     "sunk" is the past participle the sink/sinks/sank set misses — the passive defeat reveal
+          //     ("Arsenal sunk by a late Rodri goal", "Liverpool sunk at the death") that never reads the
+          //     active "sank". Whole-word (\bsunk\b, so not "sunken"); "sunk cost"/"the ship sunk" never
+          //     appear in per-match highlight titles and err over-hide-safe.
           //     Byte-identical to spoilers.ts.
           //     "send(?:s|ing)?[- ]?off"/"sent[- ]?off" catch the red-card reveal in its far more common
           //     verb form — the noun "red card" is already blocked, but titles almost always phrase a
@@ -1242,6 +1262,15 @@ export default {
           //     required trailing "out" keeps bare "dump" (the empty-a-container sense, absent from
           //     match highlight titles) from firing. No in-scope club/nation is named "Dump", so any
           //     benign collision errs to the over-hide-is-safe side. Byte-identical to spoilers.ts.
+          //     "bundl(?:e|es|ed|ing)?[- ]?out" joins that same knockout-elimination family (bow…out/
+          //     crash…out/dump…out/knock…out): "bundled out" is another stock British WC/cup phrasing for
+          //     a side going out ("Germany bundled out of the World Cup", "holders bundled out on
+          //     penalties"), carrying no digits for SCORE_RX and slipping past every sibling. Structured
+          //     exactly like them — the inflection sits on the verb, so "(?:e|es|ed|ing)?" covers
+          //     bundle/bundles/bundled/bundling while the required trailing "out" keeps the goal-mouth
+          //     scramble senses "bundled home"/"bundled in" (no "out") from firing. No in-scope
+          //     club/nation is named "Bundle", so any benign collision errs to the over-hide-is-safe
+          //     side. Byte-identical to spoilers.ts.
           //     "hat[- ]?tricks?" widens the earlier "hat[- ]trick" (mandatory separator, singular
           //     only) to also catch the closed spelling "hattrick" and the plural — both common in
           //     soccer/WC highlight titles ("Mbappé hattrick", "two hat tricks") that leaked past the
@@ -1280,20 +1309,24 @@ export default {
           // skipped false-positive just falls back to the next source (the
           // over-hide-safe side the filter already embraces). Byte-identical to
           // spoilers.ts.
-          const SCORE_RX = /(?<![-\/])\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-\/])/;
-          //     "book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)" is the canonical
+          const SCORE_RX = /(?<![-/])\b\d{1,3}\s*[-–—:]\s*\d{1,3}\b(?![-/])/;
+          //     "book(?:s|ed)? (?:their|its|a|his|her) (?:place|spot|berth|ticket|passage)" is the canonical
           //     knockout qualification idiom WC / cup-tie coverage reaches for the instant a side goes
           //     through ("England book their place in the final", "Brazil booked their passage") — a pure
           //     advancement reveal carrying no digits (SCORE_RX misses it) that headlines phrase this way
           //     far more than they say "advance". The trailing place/spot/berth/ticket/passage requirement
-          //     keeps the football sense of a bare "booked" (a yellow card) out. Byte-identical to
-          //     spoilers.ts.
-          //     "punch(?:es|ed)? (?:their|its|a) ticket" is the American sibling of the "book their ticket"
-          //     idiom above — the phrase US playoff/tournament coverage reaches for the instant a side
-          //     clinches ("Chiefs punch their ticket to the Super Bowl", "Duke punched its ticket to the
-          //     Final Four") — a pure advancement reveal carrying no digits (SCORE_RX misses it). The
-          //     required "(their|its|a) ticket" object keeps a bare boxing/UFC "punch" out. Byte-identical
+          //     keeps the football sense of a bare "booked" (a yellow card) out. The "his|her" in the
+          //     determiner set covers the individual-athlete framing the team-only (their|its) set missed —
+          //     tennis/boxing/athletics/golf/swimming recaps phrase advancement about a person ("Djokovic
+          //     books his place in the final", "Gauff books her spot in the semis") — and stays as safe:
+          //     "took his place on the bench" has no "book", "book your tickets" uses "your". Byte-identical
           //     to spoilers.ts.
+          //     "punch(?:es|ed)? (?:their|its|a|his|her) ticket" is the American sibling of the "book their
+          //     ticket" idiom above — the phrase US playoff/tournament coverage reaches for the instant a
+          //     side clinches ("Chiefs punch their ticket to the Super Bowl", "Duke punched its ticket to
+          //     the Final Four", "Fury punches his ticket to a title shot") — a pure advancement reveal
+          //     carrying no digits (SCORE_RX misses it). The required "(their|its|a|his|her) ticket" object
+          //     keeps a bare boxing/UFC "punch" out. Byte-identical to spoilers.ts.
           //     "reach(?:es|ed|ing)? (?:the )?(?:finals?|semi…|quarter…|last 16/8/4)" is the OTHER canonical
           //     knockout-advancement idiom, right beside "book their place" / "advanc\w*" ("Spain reach the
           //     final", "Brazil reached the semis", "France reach the quarters", "Croatia reach the last 8")
@@ -1380,6 +1413,11 @@ export default {
           //     only ever completes this dominate-the-game idiom in a sports title (the crowd-trouble "fans run
           //     riot" is a news headline, and this filter runs only on highlight/recap titles), and no in-scope
           //     club/nation is named "Riot", so any residual over-hide errs to the over-hide-is-safe side.
+          //     "rampant" rides the same anchor, so the object is now "(?:riot|rampant)": "(?:runs?|running|ran)
+          //     rampant" is the sibling blowout idiom the "run riot" entry missed ("Liverpool run rampant",
+          //     "City ran rampant in a 5-0 win", "Mbappé runs rampant") — the same one-sided-win reveal, and
+          //     "rampant" only ever completes this dominate-the-game phrase in a highlight title, with no
+          //     in-scope club/nation named "Rampant", so it inherits the same near-zero false-positive risk.
           //     Byte-identical to spoilers.ts.
           //     "sees?[- ]?red"/"saw[- ]?red" catch the red-card reveal in its other stock verb phrasing,
           //     beside the "red card" noun and the "send(?:s|ing)?[- ]?off"/"sent[- ]?off" form: "see red"/
@@ -1409,6 +1447,11 @@ export default {
           //     honours", "the sides shared the honours"). Distinct from "honou?rs even" already in the set
           //     (that needs the trailing "even"), anchored to "the honou?rs" so a lone share/honours never
           //     fires, and "honou?r" covers honours/honors. No digits for SCORE_RX. Byte-identical to spoilers.ts.
+          //     "(?:claim|take|took) the honou?rs" is the WINNING-side counterpart: taking/claiming the honours
+          //     means a side WON (sibling of "(?:claim|take|took) the spoils"), as derby/motorsport recaps say
+          //     ("Rangers take the honours in the derby", "Hamilton takes the honours at Silverstone"). Pinned
+          //     to the claim/take/took verb before "the honou?rs", so "do the honours"/"guard of honour"/"New
+          //     Year honours" never fire; carries no digits for SCORE_RX. Byte-identical to spoilers.ts.
           //     "fight(?:s|ing)?[- ]?back"/"fought[- ]?back" complete the comeback-reveal family beside
           //     "comeback"/"come[- ]from[- ]behind"/"(?:storm|roar|claw)…back"/"battl…back" — "fight back"
           //     is the commonest way a recap title frames a rally, yet was the one member still missing
@@ -1419,6 +1462,17 @@ export default {
           //     mandatory trailing "back" pins it to the comeback sense (bare "title fight"/"fight for the
           //     ball" never fires) and the leading \b keeps "infighting"/"firefight" out; "[- ]?" covers
           //     "fight back"/"fight-back"/"fightback". The one benign idiom "fight back tears" errs
+          //     over-hide-safe. Byte-identical to spoilers.ts.
+          //     "peg(?:s|ged|ging)?[- ]?back" and "(?:pulls?|pulled|pulling|grabs?|grabbed|grabbing) (?:one|a
+          //     goal|another) back" are the OTHER half of the comeback reveal — the trailing side scoring to
+          //     cut the deficit, the mirror of the already-covered "claw…back". Staple soccer/cricket framing
+          //     ("Real Madrid pegged back by Barca", "United pull one back", "Chelsea grabbed another back",
+          //     "England pegged back to 2-2"): a lead was cut, the game is closer than the neutral title lets
+          //     on, yet none carries "comeback"/"claw" or digits for SCORE_RX. "peg…back" is pinned to the
+          //     comeback sense by the trailing "back" (finance's "pegged at" and "peg leg" have no "back").
+          //     The pull/grab branch REQUIRES the object "one"/"a goal"/"another" before "back" so the bare
+          //     cutback-cross idiom ("great pull-back from Messi", "pulls it back across goal") — an assist
+          //     that reveals no result — stays untouched, catching only the comeback-goal form. Errs
           //     over-hide-safe. Byte-identical to spoilers.ts.
           //     "salvag\w*" catches the rescue-a-result reveal soccer/hockey recaps lean on constantly
           //     ("Spurs salvage a late point", "United salvage a draw", "Barca salvage pride with a
@@ -1507,10 +1561,15 @@ export default {
           //     misses them) and matching none of the beat/defeat/lose set. In a per-match highlight or
           //     news title "relegated"/"relegation" essentially always means the drop; the only benign
           //     sense ("relegated to the bench") is itself result-adjacent and rare, so the trailing \w*
-          //     covers relegate/relegated/relegating/relegation at negligible false-positive risk. The
-          //     mirror term "promot\w*" is deliberately NOT added — "promotional video"/"promoted
-          //     content"/"coach promoted" are common benign titles that would over-hide. Byte-identical
-          //     to spoilers.ts.
+          //     covers relegate/relegated/relegating/relegation at negligible false-positive risk.
+          //     Promotion mirrors that season-outcome reveal, but a bare "promot\w*" over-hides
+          //     ("promotional video"/"coach promoted to a role"), so it is caught in two anchored forms
+          //     only: a result verb bound to the noun ("secure/earn/gain/confirm/achieve/complete/
+          //     celebrate/seal/clinch/win promotion" — secure/earn/gain/… are not standalone win-verbs,
+          //     so "Leeds secure promotion" had leaked), and "promoted/promotion to <division>" gated on
+          //     a league/tier word (league/division/flight/tier/premier/championship/Serie A/Bundesliga/
+          //     La Liga/Eredivisie), so "promoted to captain" and a boxing org's "promotion" stay
+          //     visible. Byte-identical to spoilers.ts.
           //     "(?:unanimous|split|majority)[- ]?decision" completes the combat-sports method-of-victory
           //     family alongside "TKO"/"submission\w*"/"submit"/"tap…out": when a UFC/boxing bout goes the
           //     distance the result is a scorecard decision, and the winner is named right beside it
@@ -1523,6 +1582,28 @@ export default {
           //     through untouched — those three adjectives only ever precede "decision" as a judges' verdict
           //     in the per-match highlight titles this filter sees. The "[- ]?" covers "unanimous decision"/
           //     "unanimous-decision". Byte-identical to spoilers.ts.
+          //     "(?:goes|going|went|gone)[- ]the[- ]distance" is the OUTCOME sibling of the scorecard-
+          //     decision entry above: a boxing/MMA bout that "goes the distance" reached the final bell
+          //     with no stoppage, so a title saying so reveals the fight was NOT finished early — the same
+          //     method-of-result leak the KO/TKO/submission/decision terms mask, told from the went-the-
+          //     full-length angle ("Canelo goes the distance against Charlo", "Fury vs Usyk went the
+          //     distance", "gone the distance for the first time"). Carries no digits for SCORE_RX and
+          //     matched no existing token. Scoped to the four completed-result forms goes/going/went/gone
+          //     on purpose so the bare-infinitive PREVIEW form never fires — "Can Fury go the distance?"/
+          //     "Will he go the distance tonight?" ask an open question and must pass through, the same
+          //     tight scoping the "qualify" note keeps. "the distance" must follow immediately, so "goes
+          //     the extra distance"/"long-distance"/"the full distance" never match. Byte-identical to
+          //     spoilers.ts.
+          //     "(?:puts?|putting)[- ]...[- ]to[- ]sleep" is the combat-slang KO reveal that sits beside the
+          //     stoppage/decision cluster above: a fighter "put to sleep" was knocked cold or choked
+          //     unconscious, the most literal finish there is, yet the phrasing carries no digits for
+          //     SCORE_RX and no existing token ("Khabib puts McGregor to sleep", "Ngannou put Gane to
+          //     sleep", "Poirier put to sleep"). The one benign homograph is the boredom idiom "put the
+          //     fans/crowd to sleep", so the {0,3}-word object slot is fenced with a negative lookahead that
+          //     refuses the audience nouns/pronouns that idiom always takes (fans/crowd/viewers/spectators/
+          //     everyone/us/me/you/em/them) — a KO names the opponent (a proper name or him/her), never the
+          //     audience — while "to sleep" must follow the object immediately, so "sleeps 8"/"the city that
+          //     never sleeps"/"sleepwalk" never match. Byte-identical to spoilers.ts.
           //     "whitewash\w*" catches the clean-sweep / comprehensive-defeat framing tennis, cricket and
           //     aggregate-tie recaps lean on ("Argentina whitewash Brazil", "India whitewashed 3-0",
           //     "a series whitewash") — a result that names the side that lost every game/set, yet its
@@ -1532,6 +1613,17 @@ export default {
           //     appears in a highlight or headline feed, and no in-scope team is named anything beginning
           //     with it), so the trailing \w* covers whitewash/whitewashes/whitewashed/whitewashing at the
           //     same negligible false-positive risk as the sweep/rout family. Byte-identical to spoilers.ts.
+          //     "clos(?:e|es|ed|ing)[- ]?out(?: the| a| their| its)? series" catches the playoff series-clinch
+          //     framing NBA/NHL/MLB recaps lead with ("Celtics close out the series in Game 5", "Panthers closing
+          //     out the series", "Dodgers closed out series") — to close out a series is to WIN it and eliminate the
+          //     other side, a decisive reveal that carries no digits for SCORE_RX and slipped past the sibling
+          //     "sweep\w*|whitewash\w*" entries beside it (a series win need not be a sweep). Deliberately anchored to
+          //     the object "series" — the one sense in which "close out" can only mean winning — so the everyday
+          //     senses that DO appear on a sports channel are all left untouched: the defensive "close out on a
+          //     shooter" drill, a "season close out" roundup and a "close out the year" retrospective have no
+          //     "series" after "out" and never match. The (?: the| a| their| its)? covers the article/possessive
+          //     forms and the bare "close out series"; the leading clos(?:e|es|ed|ing) covers close/closes/closed/
+          //     closing. Byte-identical to spoilers.ts.
           //     ── Cricket (added 2026-08-03 with the IPL column) ──
           //     Cricket states its results in vocabulary no other sport uses, so ten of the commonest IPL
           //     result headlines walked straight through the filter above. Measured before this block:
@@ -1555,7 +1647,123 @@ export default {
           //     Verified against a 24-case battery (10 cricket results blocked, 14 non-spoiler headlines
           //     still passing, including the Super Bowl and date-format traps). Byte-identical to the
           //     worker's copy.
-          const SPOILER_RX = /\b(walk[- ]?off|buzzer[- ]?beaters?|comeback|come[- ]from[- ]behind|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|fight(?:s|ing)?[- ]?back|fought[- ]?back|rall(?:y|ies|ied|ying) (?:past|back|from)|extra[- ]?innings?|overtime|extra[- ]?time|sudden[- ]?death|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|overwhelm\w*|outgun\w*|outduel\w*|outscor\w*|prevail\w*|surviv\w*|relegat\w*|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|sinks?|sank|holds?[- ]?off|held[- ]?off|hold(?:s|ing)?[- ]?on|held[- ]?on|hang(?:s|ing)?[- ]?on|hung[- ]?on|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|top(?:s|ped)|toppl\w*|trounc\w*|demolish\w*|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|choke\w*|collaps\w*|obliterat\w*|annihilat\w*|decimat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|brush(?:es|ed|ing)?[- ]?aside|(?:runs?|running|ran) riot|to the sword|hammer(?:ed|ing)|batter(?:ed|ing)|cruise(?:s|d)?|canter(?:s|ed|ing)?|(?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|coast(?:s|ed)?|stroll(?:s|ed)?|waltz(?:es|ed)?|roll(?:s|ed)?)[- ]?past|(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past|triumph\w*|romp\w*|conquer\w*|dethron\w*|upset\w*|clinch\w*|seals?|sealed|snatch\w*|sweep\w*|swept|whitewash\w*|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|knock(?:s|ed|ing)[- ]?out|knock out|knock(?:s|ed|ing)? off|sent[- ]?packing|qualif(?:y|ies|ied)|advanc\w*|book(?:s|ed)? (?:their|its|a) (?:place|spot|berth|ticket|passage)|punch(?:es|ed)? (?:their|its|a) ticket|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:16|8|4))(?!\s+third)|crowned (?:world )?champions?|world[- ]?(?:cup[- ]?)?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:world[- ]?cup|trophy)|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|(?:comes?|came)[- ]?out on top|losing|lose|loses|lost|loss|hat[- ]?tricks?|braces?|no[- ]?hitter|empty[- ]?net(?:s|ter|ters)?|shut[- ]?outs?|blow[- ]?outs?|shoot[- ]?outs?|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|salvag\w*|rescu\w*|consolat\w*|share(?:s|d)? the spoils|share(?:s|d)? the points|share(?:s|d)? the honou?rs|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|all[- ]?square|equali[sz]\w*|level(?:l)?ers?|go[- ]?ahead (?:goal|run|homer|home[- ]?run|score|basket|bucket|touchdown|header|strike)s?|own[- ]?goals?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|all three points|bowl(?:s|ed|ing)[- ]?out|all[- ]?out for|chas(?:e|es|ed|ing)[- ]?down|chas(?:e|es|ed) \d{2,3}\b|super[- ]?over|defend(?:s|ed|ing)? \d{2,3}\b|\d{2,3}\/(?:10|\d)\b|\d{2,3} for \d\b|five[- ]?for\b|fifer|wicket haul|skittl\w*|TKO|KOs?|KO'd|stops|stopped|def(?=\.)|retain(?:s|ed)|finish(?:es|ed)|starch\w*|submission\w*|submit(?:s|ted|ting)|tap(?:s|ped|ping)?[- ]?out|(?:unanimous|split|majority)[- ]?decision)\b/i;
+          //     "golden[- ]?goals?" sits beside "sudden[- ]?death": a golden goal IS the sudden-death goal
+          //     that ends the match, so the phrase reveals the game went the distance AND is over with a
+          //     winner ("golden goal sends France through"). The mandatory trailing "goal" keeps it clear
+          //     of the in-scope "Golden State" (Warriors/Valkyries) and "golden boot" — none is followed
+          //     by "goal" — so it fires only on the actual term, at near-zero false-positive risk.
+          //     "(?:take|took|claim) the chequered flag" and "cross(?:es|ed|ing) the (finish) line first" cover
+          //     motorsport and other racing (F1/IndyCar/NASCAR/MotoGP, athletics/cycling/swimming) — a
+          //     category the team-sport result verbs barely touch. Only the winner "takes"/"claims" the flag, and
+          //     the trailing "first" is what turns the everyday "cross the line" metaphor into a race
+          //     result, so both are tightly anchored at negligible false-positive risk. "che(?:ck|qu)ered"
+          //     covers the British and American spelling. Byte-identical to spoilers.ts.
+          //     "(?:triple|double)[- ]?doubles?" catches the NBA stat-line reveal that recap and highlight
+          //     titles lead with ("Jokic records a triple-double", "Giannis with a double-double") — the same
+          //     notable individual-feat leak the sibling feat nouns ("hat[- ]?tricks?", "braces?", "no[- ]?hitter",
+          //     "perfect[- ]?games?") already mask for other sports: it reveals a star had a dominant
+          //     statistical game, yet on its own carries no digit for SCORE_RX and matched no existing keyword,
+          //     so a bare "… triple-double" recap leaked. It is pinned to the "triple"/"double" + "double"
+          //     adjacency, so a bare tennis "doubles" ("men's doubles final", "mixed doubles semifinal") passes
+          //     through untouched — only the joined stat term fires. Byte-identical to spoilers.ts.
+          //     "(?:makes?|making|made) it <count> (?:in a row|straight|on the trot/bounce/spin)" catches the
+          //     winning-streak-CONTINUATION reveal that NBA/NHL/soccer recaps lead with when there is no
+          //     result verb to trip the keywords ("Warriors make it three straight", "Celtics make it 10 in
+          //     a row", "United make it four on the bounce"): it reveals the side won again, the mirror of the
+          //     streak-END sibling above it ("… unbeaten run ends"), yet the digit sits inside "three straight"
+          //     (no standalone score for SCORE_RX) and without a "win"/"won"/"winning" token it matched no
+          //     keyword, so a bare "… on the bounce" recap leaked. It is pinned to the "make(s)/made it" +
+          //     count + streak-marker frame, so the everyday "N years in a row" and "makes it look easy"/"made
+          //     it to the final" senses pass through untouched (no leading "make it" + count + marker). Its one
+          //     benign over-match — a preview asking whether a side can make it three straight — errs to the
+          //     same over-hide-is-safe side as the siblings above. Byte-identical to spoilers.ts.
+          //     "(?:the|a|their) (?:league/domestic/season) double over" catches the rivalry-double reveal
+          //     football recaps lead with when a side beats the same opponent home and away ("Arsenal
+          //     complete the double over Tottenham", "City do the league double over United", "Rangers get
+          //     their double over Celtic"): completing the double means both meetings were won, a decisive
+          //     reveal that carries no digit for SCORE_RX and — with "seal"/"clinch" already keyworded but
+          //     "complete"/"do"/"get"/"record" not — leaked when phrased with any of those verbs. It is
+          //     pinned to a leading article/possessive ("the"/"a"/"their") immediately before "double over",
+          //     so the everyday injury sense "doubled over in pain" (past participle, no article) and "the
+          //     crowd double over laughing" (no article on "double") never fire. Its one benign over-match —
+          //     a preview asking whether a side can complete the double over a rival — errs to the same
+          //     over-hide-is-safe side as the siblings above. Byte-identical to spoilers.ts.
+          //     "(?:even|level|square|tie|knot …) the series" catches the SERIES-TYING reveal NBA/NHL/MLB
+          //     playoff recaps lead with when the trailing side wins a game to draw a best-of-seven back
+          //     level ("Bruins EVEN THE SERIES", "Heat LEVEL THE SERIES", "Rays KNOT THE SERIES", "Oilers
+          //     SQUARE THE SERIES"): drawing the series level means that game was won, a decisive reveal
+          //     that on its own carries no digit for SCORE_RX — the "… at 2-2" scoreline recaps append is
+          //     what SCORE_RX catches, so a bare "… even the series" leaked. The "clos(?:e…) out … series"
+          //     and "settl(?:e…) the series" idioms beside it already mask the series-CLINCH and
+          //     series-DECIDER reveals; this adds the series-EQUALISER twin. It is pinned to the fixed
+          //     "<verb> (up) the series" frame — each verb immediately governing "the series" — so the
+          //     everyday "even the odds", "level the playing field" and "tie the knot" senses never fire
+          //     (none is followed by "the series"). Its one benign over-match — a preview asking whether a
+          //     side can even the series — errs to the same over-hide-is-safe side as the siblings above.
+          //     Byte-identical to spoilers.ts.
+          //     "forc(?:e…)[- ](?:a/an/another )?(?:deciding game|game <n>|decider)" catches the SERIES-EXTENDING
+          //     reveal NBA/NHL/MLB playoff recaps lead with when the trailing side wins an elimination game to keep
+          //     the series alive ("Celtics FORCE GAME 7", "Oilers force a deciding Game 7", "Heat force a decider"):
+          //     you can only force a further game by WINNING to avoid elimination, so it discloses that game's winner
+          //     just as plainly as the "clos(?:e…) out … series" (series-clinch) and "even the series" (series-equaliser)
+          //     siblings beside it — yet on its own it carries no digit for SCORE_RX (the "Game 7" number is the game
+          //     index, not a score) and matched no existing keyword, so a bare "… force Game 7" recap leaked. It is
+          //     pinned to a leading "force" verb immediately governing a decider object — "game" + a number (or the
+          //     spelled "five"/"seven"), a "deciding game", or a bare "decider" — so the everyday "Air Force game",
+          //     "task force", "brute force" and "show of force" senses never fire (none is followed by a decider
+          //     object; "Air Force game" has no game number). Its one benign over-match — a preview asking whether a
+          //     side can force Game 7 — errs to the same over-hide-is-safe side as the siblings above. Byte-identical
+          //     to spoilers.ts.
+          //     "(?:grab…|earn…|secur…|pick…up) (?:a/an/the) (?:draw|point|stalemate)" is the DRAW-CLAIM twin of the
+          //     "settl(?:e…) for a draw/point" and "make do with a draw/point" idioms beside it: a football side that
+          //     "earns a point", "grabs a draw", "secures a point" or "picks up a point" has drawn the match — a
+          //     definitive result reveal that on its own carries no digit for SCORE_RX, and whose acquisition verbs
+          //     (grab/earn/secure/pick up) are not standalone win-tokens, so "Newcastle earn a point at Anfield" and
+          //     "West Ham grab a draw" had leaked. It is pinned to the fixed "<verb> (a/an/the) draw|point|stalemate"
+          //     frame — the object restricted to those three draw nouns and the singular "point" (a drawn side takes
+          //     ONE point; the trailing \b keeps "points"/"three points" — a WIN — out, and "(a/an/the)" blocks the
+          //     plural too) — mirroring the object set of the two draw idioms it sits with. The everyday "make a
+          //     point", "grab a bite", "earn a living" never fire (their objects are outside the set), and a tennis
+          //     rally "wins the point" was already caught by the standalone "wins" token, so this adds no new
+          //     single-rally over-match. Byte-identical to spoilers.ts.
+          //     "(?:hard[- ]?fought|hard[- ]?earned|battling|gritty|spirited|creditable|dour|drab|gutsy|point[- ]?saving)[- ]draws?"
+          //     is the bare NOUN-PHRASE twin of the "held to a … draw"/"settle for a draw" verb idioms beside it: a recap
+          //     headline that just labels the result — "Battling draw at Anfield", "A hard-fought draw for United" —
+          //     reveals the match ended level, yet the standalone adjective+"draw" noun phrase (no verb frame, no digit for
+          //     SCORE_RX) slipped past every draw clause because "draw" is not a keyword alone. It is pinned to a fixed list
+          //     of manner-of-play adjectives that only ever describe a drawn RESULT, deliberately EXCLUDING the adjectives a
+          //     knockout/bracket draw takes ("a tough/kind/favourable/open draw", "the group-stage draw") — none appears
+          //     here, so the fixture-draw sense never fires and bare "hard"/"tough" can't match. Byte-identical to spoilers.ts.
+          //     "restor(?:e|es|ed|ing)[- ]parity" (in the equaliser cluster, just before "equali[sz]") catches the "restore
+          //     parity" framing for an equaliser — the plainest way a soccer/hockey recap says a side scored to level the game
+          //     ("Spurs restore parity", "Canada restored parity in the second"). It reveals the same score-state leak
+          //     "equalise"/"leveller"/"draws level" beside it already hides, yet carries no digits (SCORE_RX misses it) and
+          //     named no existing token: bare "parity" is far too common a preview/analysis word to be a keyword on its own
+          //     ("NFL parity on display", "pay parity"). Anchoring to the scoring verb "restore" (mirroring the sibling
+          //     "restor…advantage" clause for extending a lead) pins it to the equaliser sense and leaves those bare-"parity"
+          //     senses visible. Any residual over-hide errs to the over-hide-is-safe side. Byte-identical to spoilers.ts.
+          //     "open(?:s|ed|ing)[- ]the[- ]scoring" (beside "deadlock", the 0-0 it breaks) catches the canonical recap
+          //     phrase for the first goal/points ("Haaland opens the scoring", "Arsenal opened the scoring inside five
+          //     minutes"). It reveals the score is no longer level and who struck first, yet carries no digits (SCORE_RX
+          //     misses it) and named no existing token. Pinned to the inflected forms only (opens/opened/opening) so the
+          //     bare infinitive every preview uses stays visible ("who WILL open the scoring", "can X open the scoring"); a
+          //     leading (?<!\bwho[- ]) drops the "who opens the scoring?" preview shape. Byte-identical to spoilers.ts.
+          //     "(?:match|game)[- ]?winn(?:er|ers|ing)" (right after "victors", beside the bare "winners?"/"winning"
+          //     tokens it backstops) catches the CLOSED-compound spelling of the winning-goal reveal — "matchwinner",
+          //     "matchwinners", "matchwinning", "gamewinner", "gamewinning" — that fan-channel titles write without a
+          //     separator ("MATCHWINNER! Saka strikes late", "Tatum's gamewinner"). The hyphenated/spaced forms
+          //     ("match-winner", "match winner", "match-winning") already matched via the bare "winners?"/"winning"
+          //     tokens, which sit behind the word boundary the hyphen/space supplies; the one-word spelling has no
+          //     boundary before "winn…", so \bwinners? could not fire inside it and the compound leaked with no digits
+          //     for SCORE_RX. A matchwinner/gamewinner is by definition the scorer of the deciding goal/basket, so it
+          //     names a result outright with no non-result sense to false-positive on. Byte-identical to spoilers.ts.
+          //     "serv(?:e|es|ed|ing)[- ]out … (?:set|match)" (right after "match[- ]?points?") catches the tennis
+          //     serve-out reveal ("Sinner serves out the match", "Alcaraz served out the opening set"): serving out
+          //     the set/match is winning the closing game, so it names who took it, yet carries no digits for SCORE_RX
+          //     and matched no token. Pinned to the "set"/"match" object so "serve out a suspension/ban/contract" stay
+          //     visible; a trailing lookahead drops the "one-match ban" collision and a leading \b keeps "reserves out"
+          //     clear. Byte-identical to spoilers.ts.
+          const SPOILER_RX = /\b(walk[- ]?off|walk(?:s|ed|ing)?[- ]?it[- ]?off|buzzer[- ]?beaters?|comeback|(?:come|comes|came)[- ]from[- ]behind|(?:complet(?:e|es|ed|ing)|stag(?:e|es|ed|ing)|mount(?:s|ed|ing)?|produc(?:e|es|ed|ing)|orchestrat(?:e|es|ed|ing)|pull(?:s|ed|ing)?[- ]?off)(?:[- ][\w'’-]+){0,3}?[- ]turnarounds?|(?:come|comes|came)[- ]from(?:[- ](?:an?|\d{1,2}|one|two|three|four|five|six))?(?:[- ](?:goals?|sets?|points?|runs?|scores?))?[- ]down\b|(?:storm|roar|claw)(?:s|ed|ing)?[- ]?back|battl(?:e|es|ed|ing)[- ]?back|peg(?:s|ged|ging)?[- ]?back|(?:pulls?|pulled|pulling|grabs?|grabbed|grabbing) (?:one|a goal|another) back|fight(?:s|ing)?[- ]?back|fought[- ]?back|rall(?:y|ies|ied|ying) (?:past|back|from)|(?:overturn(?:s|ed|ing)?|overhaul(?:s|ed|ing)?|wip(?:e|es|ed|ing)[- ]?out|eras(?:e|es|ed|ing))(?: [\w'’-]+){0,4}? deficit|(?:cut(?:s|ting)?|halv(?:e|es|ed|ing)|reduc(?:e|es|ed|ing)|trim(?:s|med|ming)?|slash(?:es|ed|ing)?)(?: [\w'’-]+){0,3}? (?<!(?:budget|trade|fiscal|spending|wage|wages|federal|national|structural) )deficit|extra[- ]?innings?|overtime|extra[- ]?time|sudden[- ]?death|golden[- ]?goals?|stun|stuns|stunned|stunning|stunner|shock|shocks|shocked|shocking|crush\w*|outlast\w*|outclass\w*|outplay\w*|overpower\w*|overwhelm\w*|outgun\w*|outmuscl\w*|outduel\w*|outscor\w*|outpoint\w*|outbox\w*|outfight\w*|outfought|prevail\w*|surviv\w*|relegat\w*|(?:secur\w*|earn\w*|seal\w*|clinch\w*|gain\w*|confirm\w*|achiev\w*|complet\w*|celebrat\w*|win|won)(?:[- ][\w'’-]+){0,3}?[- ]promotion\b|promot(?:ed|ion)[- ](?:to|into|back[- ]to|straight[- ]back[- ]to)[- ](?:the[- ])?(?:[\w'’-]+[- ]){0,3}?(?:league|division|flight|tier|premier|championship|serie[- ]a|bundesliga|la[- ]liga|eredivisie)|overcome|overcomes|overcoming|overcame|dominat\w*|defeat\w*|beat\w*|edge\w*|pip(?:s|ped|ping)?|dispatch\w*|(?:takes?|taking|took) down|sinks?|sank|sunk|(?<!ups and )downs|downed|holds?[- ]?off|held[- ]?off|hold(?:s|ing)?[- ]?on|held[- ]?on|hang(?:s|ing)?[- ]?on|hung[- ]?on|(?:cling(?:s|ing)?|clung)[- ]?on|(?:cling(?:s|ing)?|clung)[- ]?to (?:a |an |the |their |his |her |its )?(?:[\w'’-]+ )?(?:win|victory|lead|advantage|points?|result)|(?:hold(?:s|ing)?|held)[- ]out[- ]for (?:a |an |the |their )?(?:[\w'’-]+ )?(?:win|victory|draw|points?|result|lead)|escap(?:e|es|ed|ing)[- ]with (?:a |an |the |their )?(?:[\w'’-]+ )?(?:win|victory|draw|points?|result)|(?:hold(?:s|ing)?|held)[- ](?:their|his|her|its)[- ]nerve|(?:sees?|saw|seen|seeing) out (?:a |an |the )?(?:[\w-]+ )?(?:win|victory|result|points?|lead)|sees?[- ]?off|saw[- ]?off|fends?[- ]?off|fended[- ]?off|rout|routs|routed|top(?:s|ped)|toppl\w*|trounc\w*|demoli(?:sh\w*|tions?)|destroy\w*|dismantl\w*|humiliat\w*|embarrass\w*|capitulat\w*|choke\w*|collaps\w*|obliterat\w*|annihilat\w*|decimat\w*|vanquish\w*|pulveri[sz]\w*|thrash\w*|thump\w*|pummel\w*|steamroll\w*|drub\w*|smash\w*|wallop\w*|spank\w*|maul\w*|clobber\w*|shellac\w*|overrun\w*|overran|brush(?:es|ed|ing)?[- ]?aside|swat(?:s|ted|ting)?[- ]?aside|(?:runs?|running|ran) (?:riot|rampant)|(?:runs?|running|ran)[- ]?away[- ]?with|(?:runs?|running|ran) rings (?:a)?round|to the sword|(?:tak(?:e|es|ing)|took|claim(?:s|ed|ing)?)[- ]?(?:the[- ]?)?che(?:ck|qu)ered[- ]?flag|cross(?:es|ed|ing)?[- ]?(?:the[- ]?)?(?:finish[- ]?)?line[- ]?first|podium[- ]?finish(?:es)?|hammer(?:ed|ing)|batter(?:ed|ing)|cruise(?:s|d)?|canter(?:s|ed|ing)?|pull(?:s|ed|ing)?[- ]?away|pull(?:s|ed|ing)?[- ]?clear|(?:makes?|made|making) (?:light|hard|short) work of|prov(?:e|es|ed|ing) too (?:strong|good|much)|(?:ha(?:ve|s|d)|having) too much (?:class |quality |firepower |pace |power |strength )?for|too (?:good|strong) for(?! (?:words|comfort)\b)|(?:gets?|getting|got) the better of|(?<!\bto )(?:get(?:s|ting)?|got)[- ]one[- ]over[- ]on\b|(?:(?:gets?|getting|got) the )?job done|(?:gets?|getting|got) over the line|put(?:s|ting)?[- ]?(?:the |this |that )?(?:game|tie|match|contest|result|series|final|derby|affair)s? to bed|put(?:s|ting)?[- ]?(?:the |this |that )?(?:game|tie|match|contest|result|series|final|derby)s? away|(?<!\b(?:the|on|onto|hit|hits|hitting)[- ])\bic(?:e|es|ed|ing)[- ](?:the[- ])?(?:game|match|win|victory|contest|result)|put(?:s|ting)?[- ]?(?:the |this |that |it |a |an )?(?:[\w'’-]+ )?(?:beyond (?:all )?(?:doubt|reach)|out of (?:sight|reach))|(?:grind(?:s|ing)?|ground)[- ]?out (?:a |an |the )?(?:win|victory|result|draw|points?)|ek(?:e|es|ed|ing)[- ]?out (?:a |an |the )?(?:win|victory|result|draw|points?)|(?:eas(?:e|es|ed)|power(?:s|ed)?|breez(?:e|es|ed)|coast(?:s|ed)?|sail(?:s|ed)?|stroll(?:s|ed)?|glid(?:e|es|ed)|waltz(?:es|ed)?|roll(?:s|ed)?|blow(?:s|n)?|blew|battl(?:e|es|ed|ing)|grind(?:s|ing)?|ground|get(?:s|ting)?|got)[- ]?past|(?:sneak(?:s|ed)?|snuck|slip(?:s|ped)?|squeez(?:e|es|ed))[- ]?past|squeak(?:s|ed|ing)?[- ]?(?:past|by|through)|scrap(?:e|es|ed|ing)[- ]?(?:past|by|through)|(?:put(?:s|ting)?|stick(?:s|ing)?|stuck|slam(?:s|med|ming)?|bang(?:s|ed|ing)?|slot(?:s|ted|ting)?|rifle(?:s|d)?|fire(?:s|d)?|bur(?:y|ies|ied)) (?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten) past|(?:the|a|their)[- ](?:league[- ]|domestic[- ]|season(?:['’]s)?[- ])?double[- ]over\b|leapfrog(?:s|ged|ging)?|triumph\w*|romp\w*|conquer\w*|dethron\w*|reign(?:s|ed|ing)?[- ]supreme|(?:end(?:s|ed|ing)?|halt(?:s|ed|ing)?)(?:[- ][\w'’-]+){0,2}?[- ](?:their|its|his|her|[\w'’-]+['’]s)[- ](?:[\w'’-]+[- ])?reign\b|(?<!\bto )(?:gets?|getting|got|gains?|gaining|gained|exacts?|exacting|exacted|takes?|taking|took)(?:[- ][\w'’-]+){0,3}?[- ]revenge\b|(?<!\bto )aveng(?:e|es|ed|ing)\b|upset\w*|upend\w*|(?:spoil(?:s|ed|t|ing)?|ruin(?:s|ed|ing)?)[- ]?(?:the|their|[\w'’-]+['’]s)[- ]?(?:party|homecoming|return|debut|farewell|reunion|swan[- ]?song)|clinch\w*|seals?|sealed|snatch\w*|nick(?:s|ed|ing)?[- ]?(?:it|the (?:win|points?|lead|victory|title|tie)|an? (?:win|winner|point|victory|late (?:winner|goal))|all[- ]?three[- ]?points)|(?:steals?|stealing|stole|stolen)[- ]?(?:it|the (?:win|points?|lead|victory|title|tie)|an? (?:win|winner|point|victory|late (?:winner|goal))|all[- ]?three[- ]?points)|shad(?:e|es|ed|ing)[- ](?:it|(?:the|this|that)[- ](?:[\w'’-]+[- ])?(?:set|sets|game|games|frame|frames|leg|legs|round|rounds|opener|decider|contest|match|tie|fight|bout|series|final))|sweep\w*|swept|whitewash\w*|clos(?:e|es|ed|ing)[- ]?out(?: the| a| their| its)? series|oust\w*|eliminat\w*|bow(?:s|ed|ing)?[- ]?out|crash(?:es|ed|ing)?[- ]?out|dump(?:s|ed|ing)?[- ]?out|bundl(?:e|es|ed|ing)?[- ]?out|(?:knock|dump|bundl|boot)\w* (?:[\w'’.-]+ ){1,4}out of (?:the |their |any |all )?(?:[\w'’.-]+ ){0,2}(?:cup|competition|tournament|tourney|play[- ]?offs?|post[- ]?season|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|world[- ]?cup|champions[- ]?league|europ[ae]|last[- ]?(?:32|16|8|4|sixteen|eight|four)(?!\s+(?:third|minutes?|mins?|seconds?|secs?|games?|matches|weeks?|days?|overs?|balls?|laps?|holes?|rounds?|innings?|men|places?)))|knock(?:s|ed|ing)[- ]?out|knock out|knock(?:s|ed|ing)? off|sent[- ]?packing|qualif(?:y|ies|ied)|advanc\w*|(?<!(?:season|campaign|tournament|competition|time|show|world|life|year|band|war|army|parade|fans?|supporters?|crowd|faithful)[- ])\bmarch(?:es|ed|ing)?[- ]on\b(?![- ]?(?:to|toward|towards|together)\b)|book(?:s|ed)? (?:(?:their|its|a|his|her) (?:place|spot|berth|ticket|passage)|(?:place|spot|berth|passage))|book(?:s|ed)? (?:(?:their|its|a|his|her)[- ])?(?:(?:grand[- ]?)?final|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:32|16|8|4|sixteen|eight|four)|play[- ]?offs?)[- ](?:place|spot|berth|passage)|punch(?:es|ed)? (?:their|its|a|his|her) ticket|reach(?:es|ed|ing)? (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:32|16|8|4|sixteen|eight|four)(?!\s+(?:third|minutes?|mins?|seconds?|secs?|games?|matches|weeks?|days?|overs?|balls?|laps?|holes?|rounds?|innings?|men|places?)))(?!\s+third)|through to (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:32|16|8|4|sixteen|eight|four)(?!\s+(?:third|minutes?|mins?|seconds?|secs?|games?|matches|weeks?|days?|overs?|balls?|laps?|holes?|rounds?|innings?|men|places?)))(?!\s+third)|into (?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:32|16|8|4|sixteen|eight|four)(?!\s+(?:third|minutes?|mins?|seconds?|secs?|games?|matches|weeks?|days?|overs?|balls?|laps?|holes?|rounds?|innings?|men|places?)))(?!\s+third)|progress(?:es|ed|ing)? (?:to |into |through to )?(?:the )?(?:finals?|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:32|16|8|4|sixteen|eight|four)(?!\s+(?:third|minutes?|mins?|seconds?|secs?|games?|matches|weeks?|days?|overs?|balls?|laps?|holes?|rounds?|innings?|men|places?)))(?!\s+third)|(?:reach(?:es|ed|ing)?|through to|progress(?:es|ed|ing)?(?: to| into| through to)?|(?:eas(?:e|es|ed)|breez(?:e|es|ed)|glid(?:e|es|ed)|sail(?:s|ed)?|waltz(?:es|ed)?|stroll(?:s|ed)?|coast(?:s|ed)?|saunter(?:s|ed)?|power(?:s|ed)?|storm(?:s|ed)?) into) (?:the )?next round(?! of (?:talks|negotiations|funding|fundraising|voting|votes?|interviews?|applications?|layoffs?|redundancies|job cuts|tariffs?|sanctions?|testing|tests?|fixtures|games|matches))|set(?:s|ting)?[- ]?up (?:a |an |the |their |his |her |its )?(?:[\w'’-]+ ){0,3}?(?:(?:(?:grand[- ]?)?final|semi[- ]?finals?|semis?|quarter[- ]?finals?|quarters?|last[- ]?(?:32|16|8|4|sixteen|eight|four))(?: (?:showdown|clash|rematch|meeting|tie|decider|encounter))?|showdown|clash|rematch|tie|decider) (?:with|against|versus|vs)|crowned (?:world )?champions?|world[- ]?(?:cup[- ]?)?champions?|(?:lift|hoist)(?:s|ed|ing)? (?:the )?(?:[\w'’-]+ ){0,2}?(?:world[- ]?cup|trophy|cup\b|silverware)|(?:lift(?:s|ed|ing)?|hoist(?:s|ed|ing)?|rais(?:e|es|ed|ing)|captur(?:e|es|ed|ing)|(?:re)?claim(?:s|ed|ing)?|secur(?:e|es|ed|ing)|tak(?:e|es|ing)|took|win|wins|won|slip(?:s|ped)? on) (?:the |a |their )?(?:stanley[- ]?cup|claret[- ]?jug|green[- ]?jacket|larry[- ]?o['’]?brien(?: trophy)?|lombardi(?: trophy)?|wanamaker(?: trophy)?|commissioner['’]?s trophy)|(?:re)?claim(?:s|ed|ing)? (?:the )?(?:title|crown|trophy|championship|pennant|silverware)|(?:(?:re)?claim(?:s|ed|ing)?|tak(?:e|es|ing)|took|secur(?:e|es|ed|ing)|captur(?:e|es|ed|ing)|land(?:s|ed|ing)?|bag(?:s|ged|ging)?|pocket(?:s|ed|ing)?|scoop(?:s|ed|ing)?|lift(?:s|ed|ing)?|hoist(?:s|ed|ing)?)(?:[- ][\w'’-]+){0,3}?[- ](?:title|crown)s?(?!\s*(?:of|bout|fight|clash|race|shot|tilt|eliminator|showdown|decider|defen[cs]e|picture|hopes|challenge|contention|contenders?|holders?|hopefuls?|dream|charge|push|bid|run[- ]?in|jewel|hunt|chase|aspirations?|ambitions?|credentials?|favou?rites?|odds|pedigree))|(?:storm|surg|roar|power|march|charg|dash|sprint|glid|blaz|thunder|romp|waltz|saunter|canter|roll|bulldoz|eas|breez)(?:e|es|ed|ing|s)?[- ]to (?:the |a |an |their |his |her |its )?(?:title|crown|championships?|scudetto|pennant|glory|three[- ]?peat)(?!\s*(?:bout|fight|clash|race|shot|tilt|eliminator|showdown|decider|defen[cs]e|picture|hopes|challenge|contention|contenders?|holders?|hopefuls?|dream|charge|push|bid|run[- ]?in))|wrap(?:s|ped|ping)?[- ]?up (?:the |a |an |their )?(?:[\w'’-]+ ){0,2}?(?:title|crown|trophy|championship|pennant|silverware|scudetto|series|sweep|win|victory)|(?:claim|claims|claimed|claiming|take|takes|taking|took|secure|secures|secured|grab|grabs|grabbed|bag|bags|bagged|scoop|scoops|scooped|strike|strikes|struck) (?:the |a |an )?(?:gold|silver|bronze)(?!\s*coast)(?:[- ]?medals?)?(?![-\w])|(?:end|ends|ended|ending|snap|snaps|snapped|snapping|halt|halts|halted|halting|break|breaks|breaking|broke|broken)(?:\s+[\w'’.-]+){0,3}?\s+(?:unbeaten|unbeatable|winless|perfect|flawless)[- ]?(?:run|streak|start|record)|(?:unbeaten|unbeatable|winless|perfect|flawless)[- ]?(?:run|streak|start|record)(?:\s+[\w'’.-]+){0,2}?\s+(?:ends?|ended|ending|over|snapped|halted|broken|done)|(?:end|ends|ended|ending|snap|snaps|snapped|snapping|halt|halts|halted|halting|break|breaks|breaking|broke|broken)(?:\s+[\w'’.-]+){0,3}?\s+drought\b|drought(?:\s+[\w'’.-]+){0,2}?\s+(?:ends?|ended|ending|over|snapped|halted|broken)|(?:end|ends|ended|ending|snap|snaps|snapped|snapping|halt|halts|halted|halting|break|breaks|breaking|broke|broken)(?:\s+[\w'’.-]+){0,3}?\s+skid\b|(?:makes?|making|made)[- ]it[- ](?:\d{1,2}|two|three|four|five|six|seven|eight|nine|ten)[- ](?:in[- ]a[- ]row|straight|on[- ]the[- ](?:trot|bounce|spin))|(?:go(?:es|ing)?|went|gone|mov(?:e|es|ed|ing)|climb(?:s|ed|ing)?|jump(?:s|ed|ing)?|leap(?:s|ed|t|ing)?|ris(?:e|es|ing)|rose|risen|surg(?:e|es|ed|ing)|storm(?:s|ed|ing)?|vault(?:s|ed|ing)?|shot|sit(?:s|ting)?|sat|stay(?:s|ed|ing)?|remain(?:s|ed|ing)?|return(?:s|ed|ing)?)[- ](?:back[- ])?(?:up[- ])?(?:to[- ](?:the[- ])?)?(?:joint[- ])?top[- ]of[- ](?:the[- ])?(?:table|league|standings|pile|tree|log|ladder|division|premier[- ]?league|championship|bundesliga|eredivisie|serie[- ]a|la[- ]liga|conference)|(?:go(?:es|ing)?|went|gone|mov(?:e|es|ed|ing)|climb(?:s|ed|ing)?|jump(?:s|ed|ing)?|leap(?:s|ed|t|ing)?|ris(?:e|es|ing)|rose|risen|surg(?:e|es|ed|ing)|storm(?:s|ed|ing)?|vault(?:s|ed|ing)?|shot|sit(?:s|ting)?|sat|stay(?:s|ed|ing)?|remain(?:s|ed|ing)?|return(?:s|ed|ing)?|reclaim(?:s|ed|ing)?)[- ](?:back[- ])?(?:up[- ])?(?:(?:to[- ])?top[- ]spot|(?:to[- ])?the[- ]summit|atop[- ](?:the[- ])?(?:table|league|standings|pile|division))|(?:doubl(?:e|es|ed|ing)|restor(?:e|es|ed|ing)|extend(?:s|ed|ing)?|stretch(?:es|ed|ing)?|increas(?:e|es|ed|ing))[- ](?:their|his|her|its|the)[- ]advantage|(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)[- ]points?[- ]clear\b|leads?|leaders?|winning|winners?|wins|won|win|victory|victories|victorious|victors|(?:match|game)[- ]?winn(?:er|ers|ing)|(?:comes?|came)[- ]?out on top|(?:ha(?:ve|s|d|ving)|got|get(?:s|ting)?) the last laugh|losing|lose|loses|lost|loss|(?:comes?|came)[- ]?up[- ]?short|(?:falls?|fell)[- ]?short|(?:falls?|fell)[- ]to(?![- ](?:(?:his|her|their|its|the)[- ])?(?:knees|feet|floor|ground|turf|pitch|deck|ice|canvas|mat|grass|dirt|mud|snow|earth|pieces|bits|silence)\b)|(?:go(?:es)?|going|went|gone)[- ]down[- ]to(?![- ](?:(?:the[- ])?(?:wire|last|earth)|(?:\d{1,2}|ten|nine|eight|seven|six)[- ]?men|injur\w*)\b)|succumb(?:s|ed|ing)?[- ]to(?![- ](?:a[- ]|an[- ]|the[- ]|his[- ]|her[- ]|their[- ]|its[- ])?(?:injur\w*|knock|strain|illness|disease|cancer|virus|infection|fever|wound\w*|pressure|nerves|fatigue|exhaustion|cramp\w*|temptation|heat|conditions|elements|hamstring|knee|ankle|groin|calf|thigh|quad\w*|shoulder|concussion|setback|problem)\b)|hat[- ]?tricks?|braces?|(?:scor(?:e|es|ed|ing)|net(?:s|ted|ting)?|slot(?:s|ted|ting)?|fir(?:e|es|ed|ing)|convert(?:s|ed|ing)?)[- ](?:twice|thrice|three[- ]times|four[- ]times)|(?:triple|double)[- ]?doubles?|no[- ]?hitter|perfect[- ]?games?|empty[- ]?net(?:s|ter|ters)?|shut[- ]?outs?|\d{1,3}[- ]?unanswered|unanswered[- ]?(?:points?|runs?|goals?|scores?|buckets?)|(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)(?:[- ](?:goals?|tries|try|points?|runs?|scores?|buckets?))? without (?:a |any )?reply|blow[- ]?outs?|shoot[- ]?outs?|straight[- ]?sets?|\b(?:break(?:s|ing)?|broke)[- ](?:back[- ]|the[- ]|[\w'’-]+['’]s[- ])?serve\b|\bbreaks?[- ]of[- ]serve\b|match[- ]?points?|\bserv(?:e|es|ed|ing)[- ]out[- ](?:a[- ]|an[- ]|the[- ]|his[- ]|her[- ]|their[- ])?(?:[\w'-]+[- ])?(?:set|match)\b(?![- ](?:ban|bans|suspension|suspensions))|on penalt(?:ies|y kicks)|goalless|scoreless|blank(?:s|ed|ing)|\d{1,2}[- ]?nil|nil[- ]?(?:\d{1,2}|nil|all)|clean[- ]?sheets?|deadlock\w*|stalemate\w*|(?<!\bwho[- ])open(?:s|ed|ing)[- ]the[- ]scoring|salvag\w*|rescu\w*|consolat\w*|(?:claim(?:s|ed|ing)?|tak(?:e|es|ing)|took) the spoils|(?:claim(?:s|ed|ing)?|tak(?:e|es|ing)|took) the honou?rs|(?:claim(?:s|ed|ing)?|tak(?:e|es|ing)|took|secur(?:e|es|ed|ing)|earn(?:s|ed|ing)?|grab(?:s|bed|bing)?|bag(?:s|ged|ging)?|pocket(?:s|ed|ing)?|collect(?:s|ed|ing)?|pick(?:s|ed|ing)?[- ]?up) (?:the )?maximum points|(?:claim(?:s|ed|ing)?|tak(?:e|es|ing)|took|earn(?:s|ed|ing)?)(?:[- ][\w'’-]+){0,3}?[- ]bragging[- ]?rights|bragging[- ]?rights(?:[- ][\w'’-]+){0,2}?[- ](?:go|goes|went|belong(?:s|ed)?)[- ]to|share(?:s|d)?(?: of)? the spoils|share(?:s|d)? the points|share(?:s|d)? the honou?rs|(?:spoils|points|honou?rs) (?:were |are |fairly |evenly |duly )?shared|a point (?:apiece|each)|honou?rs even|held to an? (?:[\w-]+ )?draw|(?:ends?|ended|ending) in an? (?:[\w-]+ )?draw|(?:ends?|ended|ending|finish(?:es|ed|ing)?)[- ](?:all[- ]|dead[- ]|honou?rs[- ])?level\b|play(?:s|ed|ing)?[- ]?out an? (?:[\w-]+ )?draw|(?:battl(?:e|es|ed|ing)|fight(?:s|ing)?|fought|grind(?:s|ing)?|play(?:s|ed|ing)?)[- ]to an? (?:[\w-]+ )?draw|settl(?:e|es|ed|ing)[- ]?(?:it\b|the[- ](?:tie|match|game|contest|series|final|derby|affair)s?)|settl(?:e|es|ed|ing) for (?:a|an|the) (?:draw|point|stalemate)|(?:mak(?:e|es|ing)|made) do with (?:a|an|the) (?:draw|point|stalemate)|(?:(?:ends?|ended|ending|finish(?:es|ed|ing)?) in|play(?:s|ed|ing)? to|settl(?:e|es|ed|ing) for) (?:an?|the) (?:[\w-]+ )?tie(?![-\w])|(?:grab(?:s|bed|bing)?|earn(?:s|ed|ing)?|secur(?:e|es|ed|ing)|pick(?:s|ed|ing)?[- ]?up) (?:a|an|the) (?:draw|point|stalemate)|(?:hard[- ]?fought|hard[- ]?earned|battling|gritty|spirited|creditable|dour|drab|gutsy|point[- ]?saving)[- ]draws?|all[- ]?square|restor(?:e|es|ed|ing)[- ]parity|equali[sz]\w*|level(?:l)?ers?|(?:draws?|drew|drawing)[- ]?level|level(?:s|led|ling)?[- ]?(?:it\b|things up|the (?:scores?|tie|match|contest|derby|affair|aggregate))|(?:even(?:s|ed|ing)?|squar(?:e|es|ed|ing)|t(?:ie|ies|ied|ying)|knot(?:s|ted|ting)?|level(?:s|led|ling|ed|ing)?)(?:[- ]up)?[- ]the[- ]series|(?:t(?:ie|ies|ied|ying)|knot(?:s|ted|ting)?|squar(?:e|es|ed|ing))(?:[- ]up)?[- ]the[- ](?:games?|scores?)|(?:tak(?:e|es|ing)|took|drop(?:s|ped|ping)?)[- ]the[- ]series|(?:claim(?:s|ed|ing)?|tak(?:e|es|ing)|took) (?:the )?rubber[- ]?(?:match|game)|forc(?:e|es|ed|ing)[- ](?:a[- ]|an[- ]|another[- ])?(?:deciding[- ]game|game[- ](?:\d{1,2}|five|seven)|decider)|\b(?:fires?|fired|firing|heads?|headed|heading|nods?|nodded|nodding|slots?|slotted|slotting|taps?|tapped|tapping|tucks?|tucked|tucking|curls?|curled|curling|rifles?|rifled|rifling|lashes?|lashed|lashing|prods?|prodded|prodding|pokes?|poked|poking|bundles?|bundled|bundling|steers?|steered|steering|volleys?|volleyed|volleying|sweeps?|swept|sweeping|puts?|putting) (?:[\w'’-]+[- ]){0,3}?(?:ahead(?![- ]of)|in[- ]front(?![- ]of)|(?:in)?to (?:a |an |the )?(?:\d[- ]?\d[- ])?lead)|go[- ]?ahead (?:goal|run|homer|home[- ]?run|score|basket|bucket|touchdown|header|strike|dunk|three|lay[- ]?up|jumper|try)s?|(?:last[- ]?gasp|last[- ](?:minute|second)|stoppage[- ]?time|injury[- ]?time|added[- ]?time|dying[- ](?:minutes|seconds|embers)|\d{1,3}(?:st|nd|rd|th)?[- ]minute|late)[- ](?:goals?|strikes?)\b(?![- ](?:line|kick|kicks|mouth|post|posts|scoring|scorer|scorers|keeper|keepers|difference|action))|own[- ]?goals?|worldies?|golazos?|wonder[- ]?goals?|screamers?|grand slam|send(?:s|ing)?[- ]?off|sent[- ]?off|sees?[- ]?red|saw[- ]?red|red card|marching[- ]orders|(?:reduc(?:e|es|ed|ing)(?:[- ][\w'’-]+){0,2}?|down)[- ]to[- ](?:nine|ten|9|10)[- ]men|all three points|bowl(?:s|ed|ing)[- ]?out|all[- ]?out for|chas(?:e|es|ed|ing)[- ]?down|chas(?:e|es|ed) \d{2,3}\b|super[- ]?over|defend(?:s|ed|ing)? \d{2,3}\b|\d{2,3}\/(?:10|\d)\b|\d{2,3} for \d\b|five[- ]?for\b|fifer|wicket haul|skittl\w*|TKO|KOs?|KO'd|stops|stopped|def(?=\.)|retain(?:s|ed)|finish(?:es|ed)|flat[- ]?lin(?:e|es|ed|ing)|starch\w*|submission\w*|submit(?:s|ted|ting)|tap(?:s|ped|ping)?[- ]?out|(?:goes|going|went|gone)[- ]the[- ]distance|(?:puts?|putting)[- ](?:(?!fans|crowd|viewers|spectators|everyone|us|me|you|em|them)[\w'’.-]+[- ]){0,3}?to[- ]sleep|\b(?:hand|arm)[- ]raised\b|(?:unanimous|split|majority)[- ]?decision)\b/i;
           // Official WC highlight titles sometimes include the final score
           // ("Argentina 3-2 Egypt") or neutral advancement language in the title.
           // The app never displays YouTube titles in the card, and the modal masks

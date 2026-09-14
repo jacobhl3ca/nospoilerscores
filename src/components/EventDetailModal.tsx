@@ -175,9 +175,18 @@ export default function EventDetailModal({
   // Poker festivals carry a source-backed date WINDOW instead of a kickoff
   // clock (scheduleLabel), because no trustworthy exact start exists — prefer
   // it over inventing a time, the same precedence the tile's status uses.
+  // Boxing has the SAME "date, no real time" shape: boxing.ts anchors every
+  // card's date to a synthetic noon-UTC instant (`${startDate}T12:00:00Z`), the
+  // identical placeholder poker uses — there is no published bout start. But
+  // isTimePlaceholder only recognises MIDNIGHT as TBD, so boxing's noon-UTC (=
+  // 8 AM ET) slipped past it and longWhen rendered a fabricated "Sat, Aug 1,
+  // 8:00 AM EDT" wall-clock for what is a night fight. Force boxing to the
+  // date-only form, matching poker's "don't invent a clock" precedent. Boxing is
+  // never passed a `fight` (that path is UFC bouts only), so the kind check alone
+  // is sufficient.
   const when = event.kind === "poker" && event.scheduleLabel && !fight
     ? event.scheduleLabel
-    : isTimePlaceholder(whenIso)
+    : event.kind === "boxing" || isTimePlaceholder(whenIso)
       ? dayOnly(whenIso)
       : longWhen(whenIso);
 

@@ -30,7 +30,8 @@
 //   * 3 → 8 is the FLAT stretch. Inside one score the exact margin barely
 //     changes how the game watches, so 3, 6, 7 and 8 all sit in GOOD or above.
 //   * 8 → 16 is the CLIFF. Crossing out of one score is the moment a football
-//     game genuinely changes, and it costs four times as much per point.
+//     game genuinely changes, and each point of margin costs about 1.5× as much
+//     closeness there as on the flat stretch (4.0 per point against 2.6).
 //
 // Past three scores it flattens again: 31 down and 38 down watch the same.
 //

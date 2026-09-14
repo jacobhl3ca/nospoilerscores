@@ -35,7 +35,7 @@ function TeamRow({ team }: { team: Game["homeTeam"] }) {
       {team.logo
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={team.logo} alt="" width={32} height={32} loading="lazy" decoding="async" className="w-8 h-8 object-contain shrink-0" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-        : <span className="w-8 h-8 flex items-center justify-center rounded text-xs shrink-0" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>}
+        : <span aria-hidden="true" className="w-8 h-8 flex items-center justify-center rounded text-xs shrink-0" style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)" }}>?</span>}
       <span className="text-base font-semibold truncate" style={{ color: "var(--text)" }}>
         {team.displayName || team.shortDisplayName || team.abbreviation}
       </span>
