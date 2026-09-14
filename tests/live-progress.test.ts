@@ -59,6 +59,14 @@ test("halves and hockey intermissions", () => {
   assert.equal(full(g("nhl", 5, "0:00", "Shootout")), "SO");
 });
 
+// Women's college hockey rides the NHL branch: regular-season period 5 is a
+// shootout, period 4 is the single OT with its running clock.
+test("ncaawh overtime and shootout", () => {
+  assert.equal(full(g("ncaawh", 5, "0:00", "Shootout")), "SO");
+  assert.equal(full(g("ncaawh", 4, "2:10", "2:10 - OT")), "OT - 2:10");
+  assert.equal(full(g("ncaawh", 5, "12:00", "12:00 - 2OT", true)), "2OT - 12:00");
+});
+
 // "End of 4th" with a winner is the final (Jacob 9/12): settle it in espn.ts so
 // the card leaves the live group instead of reading "End of Q4" for minutes.
 const jiti = createJiti(import.meta.url);
@@ -93,4 +101,30 @@ test("level score, earlier breaks and a bare 0:00 stay live", () => {
   assert.equal(settled("nhl", ev(4, "End of OT", ["2", "2"])).state, "in");
   assert.equal(settled("mlb", ev(9, "End of 9th", ["5", "4"])).state, "in");
   assert.equal(settled("epl", ev(2, "End of 2nd Half", ["1", "0"])).state, "in");
+});
+
+// UFL (added 2026-09-14) shares the gridiron branch: four quarters, then OT.
+test("ufl takes the football branch", () => {
+  assert.equal(full(g("ufl", 2, "0:00", "Halftime")), "Halftime");
+  assert.equal(short(g("ufl", 2, "0:00", "Halftime")), "HT");
+  assert.equal(full(g("ufl", 3, "0:00", "End of 3rd")), "End of Q3");
+  assert.equal(full(g("ufl", 4, "6:22", "6:22 - 4th")), "Q4 - 6:22");
+  assert.equal(full(g("ufl", 5, "0:00", "OT")), "OT");
+});
+
+// College baseball and softball (added 2026-09-14) share MLB's "Top 5th" /
+// "Bot 7th" status shape, so they take the ▲/▼ inning branch, not the raw
+// statusDetail fallthrough (which truncated to "Top" on mobile).
+test("college baseball and softball read innings like MLB", () => {
+  const cb = formatGameProgress(g("ncaabase", 5, "", "Top 5th"));
+  assert.equal(cb.full, "▲5");
+  assert.equal(cb.short, "▲5");
+  assert.equal(cb.label, "Top of the 5th inning");
+  const cs = formatGameProgress(g("ncaasoft", 7, "", "Bot 7th"));
+  assert.equal(cs.full, "▼7");
+  assert.equal(cs.label, "Bottom of the 7th inning");
+  const delay = formatGameProgress(g("ncaabase", 1, "", "Rain Delay, Top 1st"));
+  assert.equal(delay.full, "▲1 Rain");
+  assert.equal(delay.delayed, true);
+  assert.equal(delay.label, "Top of the 1st inning, Rain");
 });

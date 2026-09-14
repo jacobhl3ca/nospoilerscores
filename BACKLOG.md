@@ -1,5 +1,144 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — NCAA women's hockey (`ncaawh`) column, on the men's pattern
+
+**Built 2026-09-14** on branch `feat/ncaa-womens-hockey` (worktree `~/hs-ncaawh`), a line-for-line mirror of
+`67aa805e` + `6edcced5` (men's hockey). Config, not code: ESPN serves `/hockey/womens-college-hockey` in
+the standard two-competitor scoreboard shape (league abbr `CWHOC`). Window is ESPN's calendar read live
+2026-09-14: 2026-09-18 → 2027-03-23, Frozen Four semis 03-21, national championship 03-23 (range probe
+`?dates=20270301-20270331`, season type 3), `verifiedFor: 2026`. Opt-in (`excludeFromAuto`), Settings →
+US leagues as "NCAA Women's Hockey", header "NCAAW Hockey" with short form "W. Hockey" (99px at 390px —
+exactly the budget, one line), share code `hw`, TV catalog `SUPPORTED` (not `DEFAULT_ON`). Rating
+config, period labels (P1–P3 / OT / SO, tournament multi-OT via `isPlayoff`), the round-word playoff
+gate, the W-L-T record trim and the calendar duration all mirror `ncaah`. Rank = the USCHO women's Top 15
+on the event (`POLL_RANK_SPORTS`; the 1..25 guard accepts it; tooltip "Top 15 ranking"), not standings —
+there is no standings feed. ESPN news feed 200 (6 articles) → `SPORT_NEWS_PATHS`. Reddit card reuses the
+`reddit-ncaah` snapshot (r/collegehockey covers both tours): no new bake job, no staleness change;
+`news:check` accepts the shared key. Highlights **dark** (`NO_HIGHLIGHT_FALLBACK` + "stays dark and
+unmonitored" regression check) on the men's evidence — no per-game uploader, ESPN+ streams. Team-picker
+logos: `sports.core.api …/womens-college-hockey/teams?limit=400` returns 47 items.
+
+Two changes from the plan, both on evidence:
+- **`championshipDate` is 03-23, not 03-21.** The range probe shows the two Frozen Four semis on 03-21
+  and the title game on 03-23 — the calendar's last day IS the final.
+- **Read-back date is 09-26, not 09-18/19.** ESPN lists only 2 games on 09-18 (LIU @ Princeton, RPI @
+  Mercyhurst) and the same 2 for 09-19; the first full weekend is 09-25 (15) / 09-26 (14).
+
+**Proof (local, 2026-09-14):** tsc, eslint (0 errors), test:unit 294/294, highlights:check, news:check,
+poker:check, tv:catalog + tv:catalog:check (web + tvOS copies regenerated together), `check-season-windows
+--only=ncaawh` ✓, `next build` green. Headless-Chromium read-back against the static export
+(`npx serve out`), clock fixed to Sat 2026-09-26: 14 cards, 28 logos loaded, 0 broken, 0 rank chips (all
+99), 0 highlight buttons; fresh profile = column absent, Settings row OFF, ticking it adds "NCAAW Hockey"
+to the switcher and picking it adds the column (15 cards, Today+Tomo). 390px phone: "W. Hockey" on one
+line beside NFL / MLB. Screenshots in `~/hs-ncaawh/qa/`. Not deployed — awaiting Jacob's merge call;
+production read-back (`curl -s https://hidescore.com/tv/catalog.json | grep '"ncaawh"'` + a Sep 26 page)
+is owed after merge.
+
+**Open:**
+- [ ] The men's "postseason-only channel gate" open item (2026-09-12) would light BOTH tournaments —
+      "NCAA Championships" posts the women's Frozen Four too. Not probed here (kept cheap).
+- [ ] If the women's standings feed ever fills in, W-L records get a source (PTS tail already stripped).
+
+## 2026-09-14 — NCAA baseball (`ncaabase`) + NCAA softball (`ncaasoft`) columns
+
+**✅ Shipped 2026-09-14** — `ea7356c5` (one commit, both leagues, same shape as `ncaah` `67aa805e`; rebased over
+the UFL add, both sides kept). Deploy run 34856702012 green; `hidescore.com/tv/catalog.json` lists `ncaabase` +
+`ncaasoft` (36 leagues). Production read-back, headless Chromium, clock fixed: 4/18 = 138 cards, 276 logos, 0
+broken, 52 poll chips, 0 highlight buttons, Settings opens in 89 ms; fresh profile 9/14 = column absent, both rows
+OFF with "· offseason", ticking adds both to the switcher and the slot dropdown. Both are offseason until February, so nothing shows on the board until then; the tables,
+the TV catalog and the window checker are in place before the openers. Config, not code: ESPN serves
+`/baseball/college-baseball` and `/baseball/college-softball` in the standard scoreboard shape. Windows are ESPN's
+2026 calendar (baseball 02-13 → 06-22 CWS final G3; softball 02-05 → 06-04 WCWS finals G2), `verifiedFor: 2026`,
+endDate padded one day past the final like NBA/NHL/NFL. Opt-in (`excludeFromAuto`), Settings → US leagues,
+share codes `cb` / `cs`, TV catalog `SUPPORTED`, headers "NCAA BSB" / "Softball" on a phone. Softball is SEVEN
+innings (`regulationPeriods: 7`); run-rule finals (`Final/5`) still rate. Live cards read `▲5` / `▼7` / `▲1 Rain`
+like MLB. `isPlayoff` = season type 6 (ESPN files the whole NCAA tournament as `championship-series`) or a
+regional / super regional / world series / championship note, scoped to the two sports. Poll rank on
+`curatedRank` (Top 25), same path as NCAAF / NCAAH. r/collegebaseball card + bake + staleness monitor; softball
+has NO reddit card (no sub with volume).
+
+Three changes from the plan, all on evidence:
+- **Team-picker logos ride the team `guid`, not `ncaa/500/<id>`.** These sports' team ids are their own
+  (softball OU = 524, baseball UCLA = 66); the school-id path 404s for 5 of 6 softball ids and 2 of 8 baseball.
+  The core teams payload carries `guid` for 344 / 342 of 400 teams, and `a.espncdn.com/guid/<guid>/logos/default.png`
+  is the logo ESPN itself puts on the event (5/5 sampled per sport = 200). No guid → no logo, never a broken image.
+- **Picker limit 400 → 500.** College baseball lists 437 teams, softball 446; the old cap dropped the tail.
+- **endDate 06-23 / 06-05, not 06-22 / 06-04.** The WCWS final is 8 PM ET = 00:00Z on 06-05 and the window checker
+  reads UTC dates, so a 06-04 close reported "closes 1d before the last game". `championshipDate` stays on the real day.
+
+**Highlights are dark** (`NO_HIGHLIGHT_FALLBACK`). Strict probe on the live worker, "NCAA Championships", 8
+completed 2026 fixtures: postseason 4/6 correct (CWS finals G1, a CWS double-elimination game, WCWS finals G1, a
+WCWS double-elimination game) and BOTH finals Game 2 probes served the Game 1 cut; regular season baseball "No
+results", softball Michigan–Wisconsin 4/18 served "Wisconsin vs. Michigan State – 2026 NCAA HOCKEY regional
+final". Same shape as ncaah; the monitor does not scan either, a regression check keeps them dark and unmonitored.
+
+**Proof:** tsc, eslint (0 errors), test:unit (297, incl. new `college-baseball-playoff-flag` + live-progress cases),
+highlights:check, news:check, poker:check, tv:catalog:check, `check-season-windows --only=ncaabase,ncaasoft` ✓✓,
+`next build` all green. Headless-Chromium read-back against the local static build, clock fixed: 4/18 Today =
+138 cards (81 baseball + 57 softball, no cap, every game on the column), 276 logos, 0 broken, 52 poll chips
+("Top 25 ranking: #N"), 0 highlight buttons, Settings opens in <100 ms; 6/21 = the CWS final (UNC #5 vs OU), 6/4
+= the WCWS final (Texas #2 vs Texas Tech #11), 2 logos each, 0 broken; phone 390px = "NCAA BSB" / "Softball"
+headers, 0 overflow; fresh profile 9/14 = column absent, both Settings rows OFF with "· offseason", ticking adds
+both to the switcher and the slot dropdown; fresh profile 4/18 = tick + pick in slot 2 adds the column. (An
+offseason league picked into a slot in September renders no column — same as `ncaah` today, not this change.)
+
+**Open:**
+- [ ] 2027 windows: ESPN publishes ~December. Re-read in January; the twice-monthly checker reports them
+      unverified until then.
+- [ ] Softball reddit card — no sub with volume found (r/collegesoftball near-empty; reddit 429'd the probe
+      from this IP on 9/14, re-check).
+- [ ] Postseason-only highlight channel gate (shared with hockey) would light the CWS / WCWS. Note the Game 2 →
+      Game 1 collision even inside the postseason; the real query carries the `Game N` seriesNote, re-probe with it.
+## 2026-09-14 — UFL spring football (`ufl`) gets a column of its own
+
+**✅ Shipped 2026-09-14** — `5ac45ddb`. Deploy run 34856081688 green; `hidescore.com/tv/catalog.json` lists
+`ufl`. Production read-back (same `qa/readback.mjs`, `BASE=https://hidescore.com`): 6/13 = 1 card, 2 logos,
+0 broken, 0 chips; 4/18 = 2 cards, 4 logos, 0 broken; pre-game mock = ABC chip + #4/#3; live mock =
+`Q2 - 8:32`; fresh profile = column absent, "UFL · offseason" row OFF, tick works.
+Config, not code, same as NCAA hockey: ESPN serves
+`/football/ufl/scoreboard` in the standard two-competitor shape (probed 2026-09-14: abbr UFL, four
+quarters, records "6-4", `curatedRank` 99 placeholders — no poll, so NOT in `POLL_RANK_SPORTS`; the
+United Bowl carries `season.type` 3, so `isPlayoff` needs nothing new). Window is ESPN's own fixture
+list: first kickoff Fri 2026-03-27, United Bowl Sat 2026-06-13 on ABC, 43 games (`verifiedFor: 2026`;
+`check-season-windows --only=ufl` ✓). Opt-in (`excludeFromAuto`), listed in Settings → US leagues,
+picker after NCAA Hockey, share code `uf`, glyph 🏈, TV catalog `SUPPORTED`, r/UnitedFootballLeague
+reddit card + bake + staleness monitor (SEASONAL: quiet Jul–Feb). Rating config, `PERIOD_SECONDS`
+900, live labels (Q1–Q4 / OT / Halftime / End of Q3) and `END_OF_PLAY_REGULATION` 4 mirror the NFL.
+Game page = `espn.com/ufl/recap/_/gameId/<id>` (`/game/` 404s); stream fallback = FOX Sports live
+(13 of the 22 May–June fixtures were FOX/FS1). 2027 dates are unpublished.
+
+Four changes from the plan, all on evidence:
+- **Window is 03-25 → 06-14, kickoff 03-27** (plan said 03-12 / 03-14 off the calendar's "Regular
+  Season" start). The calendar opens two weeks before any fixture; the first game was Mar 27.
+- **`RANK_LEAGUES` includes `ufl`.** The standings feed is one flat 8-team table with a real
+  `winPercent` and no per-row `rank`, so the win% sort gives a league-wide "#N" on upcoming cards.
+  `MIN_RANK_GAMES` 2 (10-game season). No `overall` record stat — W-L comes from the event.
+- **The reddit sub is r/UnitedFootballLeague, not r/UFL.** r/UFL is the University of Florida
+  (its hot feed is dorm and course posts); r/UFL_Football stopped in Feb 2025; r/xfl is frozen at 2024.
+- **Highlights are dark** (`NO_HIGHLIGHT_FALLBACK`). Strict probe against the live worker on 5
+  completed 2026 fixtures (Stallions–Storm 5/3, Defenders–Kings 5/16, Renegades–Battlehawks 5/29,
+  Defenders–Storm semi 6/7, Defenders–Kings United Bowl 6/13): "UFL" 0/5, "FOX Sports" 0/1, "ESPN"
+  0/1. Unscoped winners were fan channels ("Cincinnati Bengals / Oklahoma Sooners fan", "Mr. Mane").
+  `gridironWeekNumber` leaves `ufl` out. The monitor does not scan it; a regression check keeps it
+  dark and unmonitored.
+
+**Proof:** tsc, eslint (0 errors), test:unit (292, incl. a new `ufl` live-progress case), highlights:check,
+news:check, poker:check, tv:catalog + tv:catalog:check (34 leagues, `ufl` in both catalog.json copies),
+`next build` all green. Headless-Chromium read-back against the static build, clock pinned
+(`qa/readback.mjs`): 6/13 United Bowl = 1 card, 2 logos, 0 broken, 0 rank chips, 0 highlight buttons;
+Sat 4/18 = 2 cards, 4 logos, 0 broken; ESPN payload rewritten to pre-game = "3:00PM · ABC" chip and
+#4 / #3 standings chips; rewritten to live = `Q2 - 8:32`; fresh profile on 9/14 = column absent,
+Settings row "UFL · offseason" OFF, tick works; on 4/18 the switcher lists UFL and picking it adds the
+column (the switcher omits every opt-in offseason league, so on 9/14 it is absent there by design).
+The plan expected 4 cards on a Saturday — the 2026 UFL spread games Tue–Sun, so a day peaks at 2.
+
+**Open:**
+- [ ] 2027 window re-read when the UFL publishes its schedule (usually January): kickoff, United
+      Bowl, and whether the Tue/Thu games stay.
+- [ ] Highlight re-probe once the 2027 season starts: if the "UFL" channel starts posting per-game
+      cuts, light it (`OFFICIAL_CHANNELS` + `HL_LEAGUES` + the three fallback-monitor maps).
+- [ ] Mid-season 2027: confirm the standings win% chip reads right after week 2 (`MIN_RANK_GAMES`).
+
 ## 2026-09-12 — NCAA men's hockey (`ncaah`) gets a column of its own
 
 **✅ Shipped 2026-09-12** — `67aa805e` (league add), `6edcced5` (in-season tournaments like Ice Breaker /
@@ -34,8 +173,7 @@ adds the column.
 **Open:**
 - [ ] Postseason-only channel gate so the NCAA tournament (late March → Frozen Four 4/8–4/10) gets
       "NCAA Championships" highlights without the regular-season wrong-match risk.
-- [ ] NCAA women's hockey (`ncaawh`): ESPN 200, 2026-09-18 → 2027-03-23, ~19 games a Saturday, no
-      standings. ~30 min on the same pattern. Jacob decides.
+- [x] NCAA women's hockey (`ncaawh`) — shipped, see the 2026-09-14 section above.
 - [ ] Re-check the standings feed mid-season; if it fills in, W-L records have a source (the PTS tail
       is already stripped).
 

@@ -9,12 +9,16 @@ function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
+// Sports that read "Top 5th" / "Bot 7th" and render the ▲/▼ inning glyph.
+// College baseball and softball (added 2026-09-14) share MLB's status shape.
+const BASEBALL_SPORTS = new Set<Game["sport"]>(["mlb", "ncaabase", "ncaasoft"]);
+
 // `label`, when present, is a spoken form for screen readers (applied as an
-// aria-label on the live-status element). Only MLB sets it: the ▲/▼ inning
-// glyphs read as a meaningless "up-pointing triangle 5" otherwise.
+// aria-label on the live-status element). Only the baseball sports set it: the
+// ▲/▼ inning glyphs read as a meaningless "up-pointing triangle 5" otherwise.
 export function formatGameProgress(game: Game): { full: string; short: string; delayed?: boolean; label?: string } {
   const { sport, statusDetail, clock, period } = game;
-  if (sport === "mlb") {
+  if (BASEBALL_SPORTS.has(sport)) {
     // Delayed games arrive as "Rain Delay, Top 1st" / "Heat Delay, ..." —
     // render the inning the same compact way as live cards and append the
     // reason word (Rain/Heat/...) in proper case; the renderer recolors yellow.
@@ -63,8 +67,8 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (hasRunningClock(clock)) return { full: `${q} - ${clock}`, short: q };
     return { full: q, short: q };
   }
-  if (sport === "nhl" || sport === "ncaah") {
-    // College hockey shares this shape: P1–P3, then a 5-min OT (period 4) and a
+  if (sport === "nhl" || sport === "ncaah" || sport === "ncaawh") {
+    // College hockey (men's and women's) shares this shape: P1–P3, then a 5-min OT (period 4) and a
     // shootout in most conferences during the regular season, while the NCAA
     // tournament plays 20-min sudden-death OTs (isPlayoff → "2OT").
     // Regulation is P1–P3, then a single overtime (period 4). In the REGULAR
@@ -83,7 +87,10 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (hasRunningClock(clock)) return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
-  if (sport === "nfl" || sport === "ncaaf") {
+  if (sport === "nfl" || sport === "ncaaf" || sport === "ufl") {
+    // UFL shares the shape: four 15-min quarters, then OT. Its OT is an
+    // alternating series of 2-point tries, but ESPN still reports it as
+    // period 5, so "OT" is the right label.
     // NCAAF plays four 15-min quarters (then OT), the same period structure as
     // the NFL — the rest of the app already classifies it that way (espn.ts:
     // regulationPeriods 4, PERIOD_SECONDS 900). Without this branch a live NCAAF
