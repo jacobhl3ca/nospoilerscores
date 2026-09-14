@@ -9,6 +9,7 @@ import {
   parseRelativeTime,
   parseYtVideoRenderers,
   parseWatchPageLengthSeconds,
+  parseWatchPagePublishMs,
   dailyCoversDate,
   titleDateToYmd,
   weekdayCoversDate,
@@ -188,6 +189,8 @@ test("length, ISO duration, relative time and watch-page seconds parse", () => {
   assert.equal(parseRelativeTime("", now), null);
   assert.equal(parseWatchPageLengthSeconds('{"videoDetails":{"lengthSeconds":"596","title":"x"}}'), 596);
   assert.equal(parseWatchPageLengthSeconds("<html></html>"), null);
+  assert.equal(parseWatchPagePublishMs('"publishDate":"2026-03-27T04:30:00-07:00","uploadDate":"2026-03-27T04:30:00-07:00"'), Date.parse("2026-03-27T04:30:00-07:00"));
+  assert.equal(parseWatchPagePublishMs("<html></html>"), null);
 });
 
 // ── Window / coversDate math ─────────────────────────────────────────────────

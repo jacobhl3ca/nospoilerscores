@@ -7,7 +7,7 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
-  RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds,
+  RECAP_SERIES, RECAP_OUT_NAME, RECAP_TTL_DAYS, parseYtVideoRenderers, parseWatchPageLengthSeconds, parseWatchPagePublishMs,
   parseRelativeTime, isoDurationToSec, etYmd, dailyCoversDate, weekdayCoversDate,
   weeklyWindowFromPublished, nflWeekWindow, matchSeriesTitle, pickNewest, stripRecapRecord,
   fillHeading, pickShorterClub, eplSeasonYear,
@@ -3215,18 +3215,23 @@ async function loadPriorRecaps() {
   return { byId, liveFailed, localOk: !!local?.recaps };
 }
 
-// "lengthSeconds":"596" off the watch page. Cached per id for the run; the
-// baked record keeps it after that, so each id costs one fetch, ever.
-const YT_DURATION_CACHE = new Map();
-async function fetchYtDurationSec(id) {
-  if (!id) return null;
-  if (YT_DURATION_CACHE.has(id)) return YT_DURATION_CACHE.get(id);
-  let sec = null;
+// "lengthSeconds":"596" + "publishDate" off the watch page. Cached per id for
+// the run; the baked record keeps the values after that, so each id costs one
+// fetch, ever.
+const YT_WATCH_META_CACHE = new Map();
+async function fetchYtWatchMeta(id) {
+  if (!id) return { durationSec: null, publishedMs: null };
+  if (YT_WATCH_META_CACHE.has(id)) return YT_WATCH_META_CACHE.get(id);
+  let meta = { durationSec: null, publishedMs: null };
   try {
-    sec = parseWatchPageLengthSeconds(await getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`));
-  } catch { /* unknown duration → the button shows no minutes */ }
-  YT_DURATION_CACHE.set(id, sec);
-  return sec;
+    const html = await getText(`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`);
+    meta = { durationSec: parseWatchPageLengthSeconds(html), publishedMs: parseWatchPagePublishMs(html) };
+  } catch { /* unknown → the button shows no minutes */ }
+  YT_WATCH_META_CACHE.set(id, meta);
+  return meta;
+}
+async function fetchYtDurationSec(id) {
+  return (await fetchYtWatchMeta(id)).durationSec;
 }
 
 // Channel-scoped results page → candidates. Newest-first order is NOT
@@ -3259,9 +3264,14 @@ async function resolveYtRecapSeries(series, seasonYear) {
     } catch { /* results page down → none this run */ }
   }
   if (!pick) return null;
+  // The results page sometimes omits a card's age. Without one the pick could
+  // be months old (a March "Morning Lineup" surfaced with no age on 9/14 and
+  // would have been filed under today), so read the watch page's publishDate
+  // before trusting it.
+  if (!Number.isFinite(pick.publishedMs)) pick.publishedMs = (await fetchYtWatchMeta(pick.videoId)).publishedMs;
   // Out of season the newest cut is months old (NBA in September). It could
-  // never cover a day the card shows, so stop before the oEmbed + watch-page
-  // fetches. The write-time prune below is the second net.
+  // never cover a day the card shows, so stop before the oEmbed fetch. The
+  // write-time prune below is the second net.
   if (Number.isFinite(pick.publishedMs) && Date.now() - pick.publishedMs > (RECAP_TTL_DAYS + 7) * 86400000) {
     console.log(`recaps ${series.channelName} ${series.key}: newest is ${Math.round((Date.now() - pick.publishedMs) / 86400000)}d old, skipping`);
     return null;
