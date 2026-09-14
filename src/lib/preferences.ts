@@ -419,10 +419,13 @@ export interface Preferences {
   // inline images + blurred top comments). Toggled by the Cards/Feed pill in the
   // news header.
   newsFeedView?: boolean;
-  // News "Videos" quick filter: true = show only video posts/highlights. In Cards
-  // it narrows to the video sources; in Feed it filters to posts that carry a
-  // video. Toggled by the 🎥 Videos pill in the news header. Overrides the funnel
-  // type filter while on.
+  // News "Videos only" quick filter: true = show only clip-bearing items. It is
+  // ITEM-level on every surface (Cards, Feed, the aligned strip's ESPN tail) —
+  // a Reddit v.redd.it post counts, a headline-only post never does — via
+  // passesNewsFilters in NewsColumn. Overrides showTextPosts while on (Jacob
+  // 9/14; Text posts defaults ON since 8/9, so letting it re-admit text rows
+  // made this filter a no-op). Does NOT touch the funnel source-type filter.
+  // Toggled by the 🎥 Videos only pill in the news header.
   newsVideosOnly?: boolean;
   // Read a source bottom-to-top: true reverses every news list so the OLDEST
   // item in the feed sits first (Jacob 8/9). Deliberately a reversal of the
