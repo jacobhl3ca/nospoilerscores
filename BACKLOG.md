@@ -2,8 +2,11 @@
 
 ## 2026-09-14 — NCAA baseball (`ncaabase`) + NCAA softball (`ncaasoft`) columns
 
-**Built 2026-09-14 on `feat/ncaa-baseball-softball`, not yet merged** — one commit, both leagues, same shape
-as `ncaah` (`67aa805e`). Both are offseason until February, so nothing shows on the board until then; the tables,
+**✅ Shipped 2026-09-14** — `ea7356c5` (one commit, both leagues, same shape as `ncaah` `67aa805e`; rebased over
+the UFL add, both sides kept). Deploy run 34856702012 green; `hidescore.com/tv/catalog.json` lists `ncaabase` +
+`ncaasoft` (36 leagues). Production read-back, headless Chromium, clock fixed: 4/18 = 138 cards, 276 logos, 0
+broken, 52 poll chips, 0 highlight buttons, Settings opens in 89 ms; fresh profile 9/14 = column absent, both rows
+OFF with "· offseason", ticking adds both to the switcher and the slot dropdown. Both are offseason until February, so nothing shows on the board until then; the tables,
 the TV catalog and the window checker are in place before the openers. Config, not code: ESPN serves
 `/baseball/college-baseball` and `/baseball/college-softball` in the standard scoreboard shape. Windows are ESPN's
 2026 calendar (baseball 02-13 → 06-22 CWS final G3; softball 02-05 → 06-04 WCWS finals G2), `verifiedFor: 2026`,
