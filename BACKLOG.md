@@ -2,7 +2,11 @@
 
 ## 2026-09-14 — UFL spring football (`ufl`) gets a column of its own
 
-**🧪 Built on `feat/ufl`, not yet merged.** Config, not code, same as NCAA hockey: ESPN serves
+**✅ Shipped 2026-09-14** — `5ac45ddb`. Deploy run 34856081688 green; `hidescore.com/tv/catalog.json` lists
+`ufl`. Production read-back (same `qa/readback.mjs`, `BASE=https://hidescore.com`): 6/13 = 1 card, 2 logos,
+0 broken, 0 chips; 4/18 = 2 cards, 4 logos, 0 broken; pre-game mock = ABC chip + #4/#3; live mock =
+`Q2 - 8:32`; fresh profile = column absent, "UFL · offseason" row OFF, tick works.
+Config, not code, same as NCAA hockey: ESPN serves
 `/football/ufl/scoreboard` in the standard two-competitor shape (probed 2026-09-14: abbr UFL, four
 quarters, records "6-4", `curatedRank` 99 placeholders — no poll, so NOT in `POLL_RANK_SPORTS`; the
 United Bowl carries `season.type` 3, so `isPlayoff` needs nothing new). Window is ESPN's own fixture
