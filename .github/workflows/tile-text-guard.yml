@@ -18,23 +18,9 @@ name: Event tile guard
 # deploy.yml: a regression here is a display bug, so it must never be able to
 # block a deploy. It runs alongside and alerts.
 
+# 2026-09-14: dropped the push trigger to cut Actions minutes (free quota ran
+# out). Runs once per PR update instead of again on every push to main.
 on:
-  push:
-    branches: [main]
-    # Everything either invariant depends on: the tile and its fit ladder, the
-    # feed decisions that build the text and pick the event, the board CSS that
-    # sets the team-name ceiling, and the specs themselves.
-    paths:
-      - 'src/components/EventCard.tsx'
-      - 'src/components/LeagueColumn.tsx'
-      - 'src/lib/eventTiles.ts'
-      - 'src/lib/espn.ts'
-      - 'src/lib/types.ts'
-      - 'src/app/globals.css'
-      - 'tests/visual/text-fit.spec.ts'
-      - 'tests/visual/event-tile-day.spec.ts'
-      - 'playwright.config.ts'
-      - '.github/workflows/tile-text-guard.yml'
   pull_request:
     paths:
       - 'src/components/EventCard.tsx'

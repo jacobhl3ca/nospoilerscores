@@ -2453,7 +2453,16 @@ const HL_LEAGUES = [
   // Pacific, which posts the southern-hemisphere host fixtures (mirrors
   // SECONDARY_CHANNELS.nationschamp).
   { sport: "nationschamp", path: "/rugby/17567/scoreboard",                    channel: "World Rugby", secondaryChannel: "Super Rugby Pacific" },
+  // CFL (added 2026-09-13). ESPN no longer serves the CFL, so `worker: true`
+  // reads the slate from our own /api/cfl route (theScore, reshaped to the
+  // ESPN scoreboard — see public/_worker.js) instead of site.api.espn.com.
+  // TSN is the uploader (16/16 strict + week hits on Weeks 12–15); the week
+  // gate is load-bearing because TSN's 2024/2025 uploads carry no year.
+  { sport: "cfl",    path: "/api/cfl",                                          channel: "TSN", worker: true },
 ];
+// Origin for the worker-served leagues above. Overridable so a local
+// `wrangler pages dev` run can be baked against.
+const HL_WORKER_BASE = process.env.HIDESCORE_BASE || "https://hidescore.com";
 
 // Competition token required in the winning video's TITLE. Mirrors
 // COMPETITION_TITLE_TOKENS in src/lib/youtube.ts — keep the two in sync, or the
@@ -2462,6 +2471,18 @@ const HL_COMPETITION_TOKENS = {
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
 };
+// CFL playoffs — mirrors cflPlayoffTitleTokens in src/lib/youtube.ts. Sent per
+// EVENT: TSN titles the postseason by round with no year, and a playoff card
+// has no week, so without this the 2025 semi-finals baked a REGULAR-season
+// meeting of the same pair (probed 2026-09-13). Keep the two in sync.
+function hlCflPlayoffTokens(playoffLabel) {
+  const l = String(playoffLabel || "").toLowerCase();
+  if (/grey.?cup/.test(l)) return ["grey cup"];
+  if (/semi/.test(l)) return ["semi final"];
+  if (/east/.test(l)) return ["east final", "eastern final"];
+  if (/west/.test(l)) return ["west final", "western final"];
+  return ["grey cup", "semi final", "east final", "eastern final", "west final", "western final", "playoff"];
+}
 // NFL preseason — mirrors NFL_PRESEASON_TITLE_TOKENS in src/lib/youtube.ts.
 // Sent per EVENT, not per league: an exhibition (season.type 1) must resolve to
 // a title that says "preseason" (or "hall of fame"), both because the NFL's
@@ -2893,7 +2914,7 @@ async function bakeGameHighlights() {
     for (const ymd of lgDates) {
       let data;
       try {
-        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports${lg.path}?dates=${ymd}`, { headers: { "User-Agent": UA } });
+        const res = await fetch(lg.worker ? `${HL_WORKER_BASE}${lg.path}?dates=${ymd}` : `https://site.api.espn.com/apis/site/v2/sports${lg.path}?dates=${ymd}`, { headers: { "User-Agent": UA } });
         if (!res.ok) continue;
         data = await res.json();
         scoreboardResponses++;
@@ -2919,17 +2940,22 @@ async function bakeGameHighlights() {
             // src/lib/espn.ts for why the postseason is excluded). Undefined
             // everywhere else, which leaves every other league's query
             // byte-identical to before.
-            const week = (lg.sport === "nfl" || lg.sport === "ncaaf") && event.season?.type === 2
+            const week = (lg.sport === "nfl" || lg.sport === "ncaaf" || lg.sport === "cfl") && event.season?.type === 2
               ? event.week?.number
               : undefined;
             // NFL exhibitions (see HL_NFL_PRESEASON_TOKENS). Only the NFL keeps
             // its type-1 slate on the board, so this is false everywhere else.
             const preseason = lg.sport === "nfl" && event.season?.type === 1;
-            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason }];
+            // CFL postseason: the round rides on the first note (the worker
+            // passes theScore's game_description through as notes[0]).
+            const cflPlayoff = lg.sport === "cfl" && event.season?.type === 3
+              ? hlCflPlayoffTokens(comp?.notes?.[0]?.headline)
+              : null;
+            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason, cflPlayoff }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
-        const { away, home, series, week, preseason } = item;
+        const { away, home, series, week, preseason, cflPlayoff } = item;
         const isFifa = lg.sport === "fifa";
         const matchup = hlMatchupFingerprint(away, home);
         const rawPrev = games[key] ?? {};
@@ -2944,7 +2970,7 @@ async function bakeGameHighlights() {
         }
         const dateStr = hlDateStr(item.date);
         const competition = HL_COMPETITION[lg.sport] ?? null;
-        const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (HL_COMPETITION_TOKENS[lg.sport] ?? null);
+        const compTokens = preseason ? HL_NFL_PRESEASON_TOKENS : (cflPlayoff ?? HL_COMPETITION_TOKENS[lg.sport] ?? null);
         const preferExtended = !!competition;
         const primaryChannel = item.channel;
         const secondaryChannel = isFifa ? "FOX Sports" : (lg.secondaryChannel ?? primaryChannel);
@@ -3223,6 +3249,8 @@ const jobs = [
   ["reddit-ufl", () => fetchReddit("UnitedFootballLeague", "r/UnitedFootballLeague")],
   // 2026-09-14: NCAA baseball. Softball has no reddit card (no sub with volume).
   ["reddit-ncaabase", () => fetchReddit("collegebaseball", "r/collegebaseball")],
+  // 2026-09-13: CFL. One more 45s gate slot in the reddit bake.
+  ["reddit-cfl", () => fetchReddit("CFL", "r/CFL")],
   ["reddit-ufc", () => fetchReddit("ufc", "r/ufc")],
   ["reddit-boxing", () => fetchReddit("Boxing", "r/Boxing")],
   ["reddit-f1", () => fetchReddit("formula1", "r/formula1")],
@@ -3239,6 +3267,8 @@ const jobs = [
   ["thescore-ncaam", () => fetchTheScore("ncaab", "theScore")],
   ["thescore-epl", () => fetchTheScore("epl", "theScore")],
   ["thescore-mls", () => fetchTheScore("mls", "theScore")],
+  // 2026-09-13: the CFL column's headline card (ESPN has no CFL feed).
+  ["thescore-cfl", () => fetchTheScore("cfl", "theScore")],
 ];
 
 // Load the YouTube lookup cache once per run so all video feeds share it and

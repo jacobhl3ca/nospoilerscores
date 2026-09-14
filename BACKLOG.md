@@ -1,5 +1,32 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — GitHub Actions free quota ran out: feed crons move to the mini, PR-check burn cut
+
+**Situation:** every Actions job failed in 2 s from ~2pm ET ("recent account payments have failed or your
+spending limit needs to be increased"). Free plan = 2,000 min/month; this repo used 2,650 min since Sep 1
+(~190 min/day, 7,098 in August). Production was never affected: Cloudflare Pages served main HEAD and the
+mini's R2 uploads (news, espn-airings, reddit alerts) kept running.
+
+**Done 2026-09-14:**
+- Share cards now bake on the mini: `~/bin/hidescore-share-cards-cron.sh`, launchd `com.hidescore.share-cards`
+  (hourly, `RunAtLoad`), log `~/Library/Logs/hidescore-share-cards.log`. Same shape as the espn-airings cron:
+  `git show origin/main:scripts/prebake-share-cards.mjs` into `~/hidescore-share-cards/` (node-canvas lives
+  there, `npm install canvas@^3`), never touches the repo working tree. Uploads `cards/<key>.png` to R2 with
+  the workflow's 3x retry.
+- News already ran on the mini (`com.hidescore.reddit-prebake` runs the FULL `prebake-news.mjs` every 30 min,
+  since 2026-07-07). No second news job: two bakers from one residential IP would 429 Reddit.
+- `news-prebake.yml` and `share-cards.yml` are `workflow_dispatch` only (manual fallback when the mini is
+  down). `sticky-guard.yml`, `tile-text-guard.yml`, `unit-tests.yml` lost their `push` trigger (they still run
+  on every PR update; `deploy.yml` runs the unit suite on every push to main anyway).
+  `poker-calendar-check.yml` is schedule + dispatch only. `staleness-check.yml` untouched: it is the watchdog
+  for the mini jobs (1 min/run). Expected burn: ~700–900 min/month, under the 2,000 private cap.
+
+- [ ] **Move `prime-asins.yml` and `big-inning.yml` to the mini** on the share-cards pattern (this week).
+  Both are cheap; do it when there is a spare hour, then flip them to `workflow_dispatch` only.
+- [ ] **NFL "Top 15 / Every Touchdown / Top Plays" recap videos** (league recaps, PR #71): Week 1 uploads
+  post Tue/Wed; the regexes pass unit tests on last season's titles. Read back `recaps.json` for `nfl` after
+  Wed 9/16 and fix the title gate if the card is dark.
+
 ## 2026-09-14 — "↩ Reopen" pill: off the mobile tab bar, quiet, bottom-right on desktop, accidental closes only
 
 **✅ Shipped 2026-09-14** — `9ca51edc`, pushed `fix/reopen-pill:main`. Deploy run 34876772429 green. Production
@@ -312,6 +339,73 @@ The plan expected 4 cards on a Saturday — the 2026 UFL spread games Tue–Sun,
 - [ ] Highlight re-probe once the 2027 season starts: if the "UFL" channel starts posting per-game
       cuts, light it (`OFFICIAL_CHANNELS` + `HL_LEAGUES` + the three fallback-monitor maps).
 - [ ] Mid-season 2027: confirm the standings win% chip reads right after week 2 (`MIN_RANK_GAMES`).
+## 2026-09-13 — CFL (`cfl`) via theScore, the first league that is not an ESPN path
+
+**Shipped 2026-09-14** (merged `feat/cfl` → main; deployed by hand with `wrangler pages deploy` because the Actions quota was out, see the 2026-09-14 entry above). Share code moved `cl` → `ca` at merge time: `cl` had gone to the Conference League on main first. A user asked for the CFL through
+the Settings "Request a league" box. **ESPN no longer serves it**: `football/cfl/scoreboard` answers 200
+but its calendar is frozen at 2023 and every date 2023-11 → 2026-11 returns 0 events, no logos, empty
+standings. The only live free JSON source is theScore's app API (`api.thescore.com/cfl/…`, undocumented,
+CORS `*`, `s-maxage=10`) — the same host `prebake-news.mjs` already pulls the `thescore-*` feeds from.
+Ruled out: `api.cfl.ca` (DNS gone), `stats.cfl.ca` (Genius Sports, auth), TSN's widget (token), CBS (no
+scoreboard). Decisions (Jacob, 9/13): build on theScore; opt-in like NCAA Hockey; highlights wired now.
+
+**Shape:** three worker routes in `public/_worker.js` — `/api/cfl?dates=YYYYMMDD[-YYYYMMDD]`,
+`/api/cfl/standings`, `/api/cfl/teams` — convert theScore into the ESPN scoreboard / standings /
+core-teams shapes, so the client keeps calling `fetchGames → parseGame` and every football behaviour
+(FOOTBALL_CLOSENESS rating, Q1–Q4/OT/Halftime, "End of 4th" settle, playoff flag, lookahead/lookback,
+localStorage cache, standings chip + rank, TeamView) comes for free. `SPORT_PATHS.cfl = "/api/cfl"`
+(no `/scoreboard` suffix ⇒ `check-season-windows` and the tvOS catalog skip it); `scoreboardUrl()` /
+`standingsUrl()` route the worker leagues to the site origin. Events re-bucket onto their ET day in the
+worker (a 02:14Z Sunday kickoff is Saturday's game; Intl handles the Nov 1 fall-back). `rpp=200` is
+load-bearing — the default page truncates. `game_description` passes through as the playoff note only
+when it is a short title: theScore also writes full sentences there ("Bo Levi Mitchell becomes the 10th
+QB … to reach 100 career wins") which name the winner, and those never leave the worker. Records ride
+on the event (`standings.*.short_record`, zero-ties tail dropped, real ties kept); rank = theScore's
+league-wide `playoff_seed` (crossover rule applied), gated by `MIN_RANK_GAMES.cfl = 4`. Share code `ca`.
+Window 06-04 → 11-22 (a week past the Grey Cup, `verifiedFor: 2026`).
+
+**Highlights = TSN** (`UC--i2rV5NCxiEIPefr3l-zQ`), strict + `week=`: 16/16 on Weeks 12–15 against the
+live worker, 0 wrong. The CFL's own channel is 2/8 and titles by city only. **Playoffs need a round
+gate**: TSN titles the postseason by round with no year ("CFL EASTERN SEMI-FINAL: …", "CFL EAST FINAL:
+…", "GREY CUP: …"), playoff cards carry no week, and both 2025 semi-finals resolved to a REGULAR-season
+meeting of the same pair ("CFL WEEK 13: Montreal vs. Winnipeg"). `cflPlayoffTitleTokens(playoffLabel)`
+→ `comp=` (`grey cup` / `semi final` / `east final|eastern final` / `west final|western final`) reads
+all five 2025 playoff games 5/5 right. Mirrored in the prebaker (`hlCflPlayoffTokens`) and the monitor
+(`cflPlayoffTokens`); `highlights:check` asserts all three exist.
+
+**Proof:** tsc, eslint (0 errors), test:unit (304, incl. `cfl-worker` 17 + `cfl-adapter` 9 + live-progress
+cfl cases), highlights:check, news:check, tv:catalog:check (zero diff), `next build` green. Local
+`wrangler pages dev out` + hidden Chromium on the mini (through an SSH reverse tunnel — the mini cannot
+reach the laptop's tailnet port): fresh profile = no CFL column, Settings → US leagues shows CFL OFF
+between NFL and NCAA Hockey, tick + switcher pick adds it in 5s; 9/12 Yesterday = 4 cards, 8 theScore
+logos, 0 broken, TSN highlight buttons (OTT@TOR → `9qL3TD9kZ18`, MTL@BC → `FLz6vPkouHE`, both "CFL WEEK
+15" by TSN); 9/15 Today = lookahead "Fri 9/18 7:30PM CBS MTL #1 @ HAM #7" + the two Sat games with
+rank chips; 2025-11-16 = Grey Cup card, request carries `comp=grey cup`, resolves `27JTeNG_Q2g` ("GREY
+CUP: Saskatchewan Roughriders vs. Montreal Alouettes | FULL HIGHLIGHTS", TSN); Alouettes TeamView =
+RECENT + UPCOMING with ranks, 17 logos, 0 broken, 0 console errors. Data-layer read-back (jiti):
+9/12 four finals rate 91/55/9/40, 11/1 semis carry `Eastern/Western Semi-Final` labels, MTL schedule
+39 games (2025 + 2026), records + ranks filled.
+
+**Open:**
+- [ ] **Live strings are unverified.** First live window Fri 2026-09-18 23:30Z (7:30pm ET) MTL@HAM on
+      CBSSN. Capture theScore's raw `progress` at Q1 / halftime / end of Q3 / final into
+      `tests/fixtures/cfl-live-capture.json` and pin them in `live-progress.test.ts` (the worker maps
+      `clock_label` defensively: contains "half" → Halftime, `^end` → End of Nth, else `clock - Nth`).
+- [ ] Prebake: after the 9/18–19 games, confirm `/news/thescore-cfl.json` + `reddit-cfl.json` bake and
+      `hl-*` entries land for cfl; `check-staleness` green. Mobile news then shows r/CFL + theScore CFL.
+- [ ] Production read-back only after Jacob authorizes deploy: repeat the 9/12 column on hidescore.com
+      and confirm `/api/cfl?dates=20260912` returns 4 events with `Cache-Control: public, max-age=300`.
+- [ ] Postseason placeholders are not in theScore's feed yet (~Oct 25). `Eastern Semi-Final` etc. already
+      match the playoff regex; `grey.?cup` was added.
+- [ ] ET-day bucketing is hardcoded to America/New_York in the worker (not the user's tz override).
+      Follow-up: pass `tz=` to `/api/cfl`.
+- [ ] Rouges: a 1-point margin already reads 100 on FOOTBALL_CLOSENESS. Revisit after a season of margins.
+- [ ] No automated audit of `verifiedFor: 2026`. Calendar reminder Dec 15 2026: re-verify start/end/Grey
+      Cup + the year-specific where-to-watch URL (CBSSN deal ends after 2026).
+- [ ] tvOS: CFL is web + iOS/Android only (Capacitor loads hidescore.com). Per-league base URL in the
+      Swift app is a separate ticket.
+- [ ] `prebake-share-cards.mjs` has no cfl row (its LEAGUE_PATHS are ESPN-only); add one against the
+      worker URL if CFL share cards are wanted.
 
 ## 2026-09-12 — NCAA men's hockey (`ncaah`) gets a column of its own
 
