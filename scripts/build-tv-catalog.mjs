@@ -90,7 +90,7 @@ if (!BASE) throw new Error("build-tv-catalog: BASE_URL not found");
 // groupings), f1 / nascar / indycar / ufc / boxing / chess / poker (single-event
 // tiles, not games), esports (PandaScore via a worker route).
 const SUPPORTED = new Set([
-  "mlb", "llws", "nba", "wnba", "ncaam", "ncaaw", "ncaaf", "nfl", "ufl", "nhl", "ncaah", "ncaawh", "ncaabase", "ncaasoft", "cricket",
+  "mlb", "llws", "nba", "wnba", "ncaam", "ncaaw", "ncaaf", "nfl", "ufl", "nhl", "ncaah", "ncaawh", "ncaavb", "ncaabase", "ncaasoft", "cricket",
   "epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1",
   "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
   "sixnations", "rugbywc", "rugbychamp", "superrugby", "rugbytest", "nationschamp",
@@ -146,7 +146,9 @@ for (const l of ALL_LEAGUES) {
     season: { start: l.startDate ?? null, end: l.endDate ?? null,
               cycleMod: l.yearCycle?.mod ?? null, cycleAnchor: l.yearCycle?.anchor ?? null },
     rating: {
-      kind: l.sport === "cricket" ? "cricket" : "generic",
+      // "volleyball": score is sets, not points — the web app rates it with
+      // volleyballRating (espn.ts); the TV app leaves it unrated until ported.
+      kind: l.sport === "cricket" ? "cricket" : l.sport === "ncaavb" ? "volleyball" : "generic",
       multiplier: r.multiplier,
       overtimeBonus: r.overtimeBonus,
       scoringDivisor: r.scoringDivisor,

@@ -2,7 +2,7 @@
 // It is deliberately absent from ALL_LEAGUES, so nothing that walks the catalog
 // (season windows, news feeds, prebake scripts) ever sees it — it exists as a
 // Sport only so a slot pref, a switcher row and a LeagueData can carry it.
-export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "ufl" | "nhl" | "ncaah" | "ncaawh" | "llws" | "ncaabase" | "ncaasoft" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "cricket" | "sixnations" | "rugbywc" | "rugbychamp" | "superrugby" | "rugbytest" | "nationschamp" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess" | "poker" | "esports" | "top";
+export type Sport = "mlb" | "nba" | "wnba" | "ncaam" | "ncaaw" | "ncaaf" | "nfl" | "ufl" | "nhl" | "ncaah" | "ncaawh" | "ncaavb" | "llws" | "ncaabase" | "ncaasoft" | "golf" | "tennis" | "fifa" | "epl" | "mls" | "ucl" | "uel" | "laliga" | "seriea" | "bundesliga" | "ligue1" | "ligamx" | "nwsl" | "efl" | "libertadores" | "euro" | "afcon" | "saudi" | "cricket" | "sixnations" | "rugbywc" | "rugbychamp" | "superrugby" | "rugbytest" | "nationschamp" | "f1" | "nascar" | "indycar" | "ufc" | "boxing" | "chess" | "poker" | "esports" | "top";
 
 export interface Game {
   id: string;

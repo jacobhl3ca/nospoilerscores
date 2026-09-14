@@ -93,6 +93,13 @@ const SPORT_PATHS: Record<Sport, string> = {
   // three regulation periods, USCHO poll rank on curatedRank (99 = unranked).
   // No groups= param, same as ncaah.
   ncaawh: "/hockey/womens-college-hockey/scoreboard",
+  // NCAA women's volleyball (added 2026-09-14). Standard two-competitor shape,
+  // so parseGame reads it as is — but `score` is SETS won (0-3) and
+  // linescores[].value is the points per set, so the rating and the live label
+  // take a volleyball branch (volleyballRating, liveProgress.ts). Probed live
+  // 2026-09-14: 200, calendar 2026-08-21 → 2026-11-29 (regular season only),
+  // 159 games on a Saturday, curatedRank = AVCA Top 25, records[0] = overall.
+  ncaavb: "/volleyball/womens-college-volleyball/scoreboard",
   golf: "/golf/pga/scoreboard",
   tennis: "/tennis/atp/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",
@@ -406,6 +413,13 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   // ?dates=20270301-20270331, season type 3). Opt-in (excludeFromAuto), like
   // the men's column. Header label is shortened by SHORT_LEAGUE_LABELS.
   { sport: "ncaawh", label: "NCAAW Hockey", startDate: "09-18", endDate: "03-23", championshipDate: "03-23", verifiedFor: 2026, excludeFromAuto: true },
+  // ── NCAA women's volleyball (late Aug–Dec) ──
+  // ESPN's calendar (read 2026-09-14) stops at the REGULAR season: 2026-08-21 →
+  // 2026-11-29. The December edge is last year's tournament, read from
+  // ?dates=20251201-20251231: first round 12-04, regionals 12-11 → 12-15,
+  // semifinals 12-18, national final 12-21. Opt-in (excludeFromAuto), like
+  // NCAAW and NCAA Hockey, so it never takes a column from NCAAF or the NFL.
+  { sport: "ncaavb", label: "NCAA Volleyball", startDate: "08-21", endDate: "12-21", championshipDate: "12-21", verifiedFor: 2026, excludeFromAuto: true },
   // WNBA: regular season May 16 – mid-Sept, playoffs into mid-Oct. Auto-eligible
   // in season, but low priority so it only fills open summer/fall slots after
   // the core leagues and major tournament windows.
@@ -727,7 +741,7 @@ function kickoffFor(league: LeagueConfig, viewDate: Date): LeagueKickoff | null 
 // listed falls back to a neutral marker rather than getting a wrong icon.
 const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   mlb: "⚾", llws: "⚾", ncaabase: "⚾", ncaasoft: "🥎", nba: "🏀", wnba: "🏀", ncaam: "🏀", ncaaw: "🏀",
-  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", golf: "⛳", tennis: "🎾",
+  nfl: "🏈", ncaaf: "🏈", ufl: "🏈", nhl: "🏒", ncaah: "🏒", ncaawh: "🏒", ncaavb: "🏐", golf: "⛳", tennis: "🎾",
   sixnations: "🏉", rugbywc: "🏉", rugbychamp: "🏉", superrugby: "🏉", rugbytest: "🏉", nationschamp: "🏉",
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
@@ -777,7 +791,7 @@ export const SPORT_GROUP_ORDER: { key: SportGroup; label: string }[] = [
 // map degrades to a slightly-wrong section, never to an unpickable league.
 const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   nfl: "us", ufl: "us", nba: "us", mlb: "us", nhl: "us", ncaah: "us", ncaawh: "us", wnba: "us",
-  ncaaf: "us", ncaam: "us", ncaaw: "us", llws: "us", ncaabase: "us", ncaasoft: "us",
+  ncaaf: "us", ncaam: "us", ncaaw: "us", ncaavb: "us", llws: "us", ncaabase: "us", ncaasoft: "us",
   epl: "soccer", ucl: "soccer", uel: "soccer", laliga: "soccer",
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
   ligamx: "soccer", nwsl: "soccer", efl: "soccer", libertadores: "soccer",
@@ -1302,6 +1316,10 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   ncaah:  { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
   // NCAA women's hockey: same three 20-min periods and scoring shape as the men's.
   ncaawh: { multiplier: 18,  overtimeBonus: 20, scoringDivisor: 1.5, regulationPeriods: 3 },
+  // NCAA women's volleyball never reaches the generic scorer — calculateRating
+  // hands it to volleyballRating() (score = sets, not points). regulationPeriods
+  // 5 is the best-of-five; only GameHighlights' buffer math mirrors it.
+  ncaavb: { multiplier: 1,   overtimeBonus: 0,  scoringDivisor: 1,   regulationPeriods: 5 },
   nfl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
   // UFL: four 15-min quarters and NFL-like scoring, so it mirrors NFL.
   ufl:    { multiplier: 5,   overtimeBonus: 15, scoringDivisor: 8,   regulationPeriods: 4, closenessCurve: FOOTBALL_CLOSENESS },
@@ -1647,6 +1665,103 @@ function cricketRating(competitors: MarginCompetitor[], state: string): number |
   return Math.round(Math.max(0, Math.min(100, closeness + scoringBonus)));
 }
 
+
+// ── Volleyball (best-of-five sets) closeness ─────────────────────────────────
+// ESPN's `score` for women's college volleyball is SETS won (0-3), and
+// linescores[i].value is the points in set i (25-10 / 26-24 / 15-13). The
+// generic scorer would read diff ∈ {1,2,3} and total ∈ {3,4,5} and rate every
+// match the same, and calcRunningMargin would sum set points cumulatively,
+// which rewards blowouts backwards. So volleyball scores three things of its
+// own: how many sets it went, how close the sets were, and how close the set
+// that decided it was — plus bonuses for a fifth set, deuce sets and a comeback.
+type VolleyballCompetitor = MarginCompetitor & { score?: string };
+
+// A set counts once it is over: to 25 (15 in the fifth) and won by two. Keeps
+// a live match's in-progress set out of the averages, and trailing empty rows
+// (ESPN pads unplayed sets on some feeds) out of everything.
+function volleyballSetPoints(competitors: VolleyballCompetitor[]): Array<[number, number]> {
+  const ls0 = competitors[0].linescores ?? [];
+  const ls1 = competitors[1].linescores ?? [];
+  const sets: Array<[number, number]> = [];
+  for (let i = 0; i < Math.min(ls0.length, ls1.length); i++) {
+    const a = ls0[i]?.value;
+    const b = ls1[i]?.value;
+    if (typeof a !== "number" || typeof b !== "number" || !Number.isFinite(a) || !Number.isFinite(b)) break;
+    const target = i === 4 ? 15 : 25;
+    if (Math.max(a, b) < target || Math.abs(a - b) < 2) break;
+    sets.push([a, b]);
+  }
+  return sets;
+}
+
+// Set margin → 0-100. A two-point set is the ceiling (deuce or the bare
+// minimum), and a 12-point set was never in doubt.
+function volleyballPointCloseness(margin: number): number {
+  return Math.max(0, Math.min(100, 100 - (margin - 2) * 10));
+}
+
+// 0-100 watchability for a volleyball match, or null while it is too early to
+// say (a live match before its second set — the analogue of the < 0.12 gate).
+function volleyballRating(competitors: VolleyballCompetitor[], period: number, state: string): number | null {
+  const sets0 = parseInt(competitors[0].score ?? "", 10);
+  const sets1 = parseInt(competitors[1].score ?? "", 10);
+  if (Number.isNaN(sets0) || Number.isNaN(sets1)) return null;
+  const live = state === "in";
+  const hi = Math.max(sets0, sets1);
+  const lo = Math.min(sets0, sets1);
+  if (live && (period < 2 || hi + lo < 1)) return null;
+
+  const played = volleyballSetPoints(competitors);
+  // A finished match with no sets on the board (cancelled / forfeit) has
+  // nothing to rate.
+  if (!live && hi < 3 && played.length === 0) return null;
+
+  // Factor 1 — sets closeness (45%). Finished: 3-2 → 85, 3-1 → 65, 3-0 → 30.
+  // 85, not 100: the fifth-set bonus below already lifts every 3-2 by 15, and
+  // at 100 the whole Sep 12 slate's 23 five-setters landed on 99-100 with
+  // nothing to order them — at 85 the set margins do the ordering (84 → 100).
+  // Live: sets so far — level in the fifth 100, level earlier 85, one set apart
+  // 70, two apart (or 1-0) 45.
+  let setsCloseness: number;
+  if (!live) setsCloseness = lo >= 2 ? 85 : lo === 1 ? 65 : 30;
+  else if (hi === lo) setsCloseness = hi >= 2 ? 100 : 85;
+  else setsCloseness = hi - lo === 1 && hi >= 2 ? 70 : 45;
+
+  // Factor 2 — point closeness (35%): mean set margin over the sets played.
+  // Factor 3 — late-set closeness (20%): the last completed set, the one that
+  // decided it (or the latest one, live). Both fall back to the sets score when
+  // there are no linescores, so a sets-only feed still rates.
+  let pointCloseness = setsCloseness;
+  let lateCloseness = setsCloseness;
+  if (played.length > 0) {
+    const margins = played.map(([a, b]) => Math.abs(a - b));
+    pointCloseness = volleyballPointCloseness(margins.reduce((s, m) => s + m, 0) / margins.length);
+    lateCloseness = volleyballPointCloseness(margins[margins.length - 1]);
+  }
+
+  let score = setsCloseness * 0.45 + pointCloseness * 0.35 + lateCloseness * 0.2;
+
+  // Bonuses. A fifth set is the format's own overtime.
+  if (period >= 5 || played.length >= 5) score += 15;
+  // Each deuce set (past 25, or past 15 in the fifth) +4, capped at 12.
+  let deuce = 0;
+  played.forEach(([a, b], i) => {
+    if (Math.max(a, b) >= (i === 4 ? 16 : 26)) deuce += 4;
+  });
+  score += Math.min(deuce, 12);
+  // Comeback, finished matches only: the winner lost the first two sets +20,
+  // lost the first set +10. Read the set winners off the linescores so a feed
+  // that lists the competitors in either order still gets it right.
+  if (!live && sets0 !== sets1 && played.length >= 3) {
+    const winnerIdx = sets0 > sets1 ? 0 : 1;
+    const lostSet = (i: number) => played[i][winnerIdx] < played[i][1 - winnerIdx];
+    if (lostSet(0) && lostSet(1)) score += 20;
+    else if (lostSet(0)) score += 10;
+  }
+
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
 function calculateRating(game: RatingGame): number | null {
   const competition = game.competitions?.[0];
   if (!competition) return null;
@@ -1660,6 +1775,8 @@ function calculateRating(game: RatingGame): number | null {
   // Cricket branches out before the shared scorer touches it — see cricketRating
   // for why runs-vs-runs is actively misleading in this sport.
   if (game._sport === "cricket") return cricketRating(competitors, state);
+  // Volleyball branches out too: its `score` is sets, not points.
+  if (game._sport === "ncaavb") return volleyballRating(competitors, game.status?.period ?? 0, state);
 
   const score1 = parseInt(competitors[0].score ?? "0", 10);
   const score2 = parseInt(competitors[1].score ?? "0", 10);
@@ -2201,7 +2318,18 @@ export function parseGame(event: ScoreboardEvent, sport: Sport): Game {
       // shootout format, so only a ROUND word flags them as playoff — otherwise
       // a shootout renders "2OT" instead of "SO". The label still shows. Both
       // the men's and the women's feeds share the format.
-      if (!COLLEGE_HOCKEY_ROUND_WORD_SPORTS.has(sport) || /quarter.?finals?|semi.?finals?|\bfinals?\b|\brounds?\b|championship|regional|frozen four/i.test(headlineLower)) {
+      // Women's volleyball is the same trap at scale: ~150 in-season
+      // invitationals ("Paradise Invitational", "SFA Tournament", "Ocean State
+      // Cup") are regular-season matches. Its conference tournaments and the
+      // NCAA tournament all carry a round word ("SEC Women's Volleyball
+      // Tournament - Quarterfinal", "NCAA Women's Volleyball Championship -
+      // First Round" / "Lexington Regional" / "Semifinal"; the final is the bare
+      // "NCAA Women's Volleyball Championship"). Read from every 2025 note.
+      // ESPN also tags the whole tournament season.type 2, so the type-3 check
+      // below never helps here. "quarte?r?" absorbs the CAA's "Quartefinal" typo.
+      if (sport === "ncaavb"
+        ? /quarte?r?.?finals?|semi.?finals?|\bfinals?\b|\brounds?\b|championship|regional/i.test(headlineLower)
+        : !COLLEGE_HOCKEY_ROUND_WORD_SPORTS.has(sport) || /quarter.?finals?|semi.?finals?|\bfinals?\b|\brounds?\b|championship|regional|frozen four/i.test(headlineLower)) {
         isPlayoff = true;
       }
       if (!playoffLabel) playoffLabel = headline;
@@ -2542,6 +2670,12 @@ export function espnGameUrl(game: Game): string {
     // with 2026 ids 401851045 / 401846824: 200, no redirect).
     case "ncaabase": return `https://www.espn.com/college-baseball/game/_/gameId/${game.id}`;
     case "ncaasoft": return `https://www.espn.com/college-softball/game/_/gameId/${game.id}`;
+    // ⚠️ Women's college volleyball has NO per-game page on espn.com. Checked
+    // 2026-09-14 in a real browser on gameId 401884323: /game/_/gameId/,
+    // /boxscore?gameId= and /boxscore/_/gameId/ all 404, and the events carry
+    // an empty `links` array (no recapUrl). The scoreboard is the only page
+    // that exists — the same section-landing compromise as the LLWS.
+    case "ncaavb": return `https://www.espn.com/womens-college-volleyball/scoreboard`;
     // ⚠️ The Little League World Series has NO per-game page on espn.com.
     // Checked every plausible pattern on 2026-08-11 with a browser UA and a
     // real event id (401889776): /llws/, /llb/, /baseball/llb/,
@@ -2622,6 +2756,9 @@ export function sportStreamFallback(sport: Sport): string {
     // ESPN / ESPN+ / SEC Network carry nearly all college baseball and softball.
     case "ncaabase": return "https://www.espn.com/watch/";
     case "ncaasoft": return "https://www.espn.com/watch/";
+    // ESPN+ / ESPN2 / ESPNU and the conference networks (B1G+, ACCNX, SECN)
+    // carry college volleyball; the tournament airs on the ESPN networks.
+    case "ncaavb": return "https://www.espn.com/watch/";
     case "mlb": return "https://www.mlb.com/tv";
     // The LLWS is an ESPN-network property end to end (ESPN / ESPN2 / ABC),
     // so ESPN's own watch hub is the correct and only landing.
@@ -4688,6 +4825,7 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string, guid?: s
     case "ncaam":
     case "ncaah":
     case "ncaawh":
+    case "ncaavb":
       return `https://a.espncdn.com/i/teamlogos/ncaa/500/${rawId}.png`;
     // College baseball/softball team ids are sport-specific (softball OU is 524,
     // baseball UCLA is 66), NOT the ncaa/500 school ids — that path 404s for

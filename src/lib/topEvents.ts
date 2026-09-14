@@ -53,6 +53,7 @@ export const HEADER_SLUG_TO_SPORT: Record<string, Sport> = {
   wnba: "wnba",
   "mens-college-basketball": "ncaam",
   "womens-college-basketball": "ncaaw",
+  "womens-college-volleyball": "ncaavb",
   nhl: "nhl",
   "eng.1": "epl",
   "eng.2": "efl",
@@ -76,7 +77,7 @@ export const HEADER_SLUG_TO_SPORT: Record<string, Sport> = {
 // list rather than derived from the map above so a manual pool can include a
 // league ESPN never features on its homepage (Liga MX, Saudi PL).
 export const TOP_EVENTS_GAME_SPORTS: readonly Sport[] = [
-  "nfl", "ncaaf", "ufl", "mlb", "nba", "wnba", "ncaam", "ncaaw", "nhl", "llws", "ncaabase", "ncaasoft",
+  "nfl", "ncaaf", "ufl", "mlb", "nba", "wnba", "ncaam", "ncaaw", "ncaavb", "nhl", "llws", "ncaabase", "ncaasoft",
   "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1", "mls",
   "ligamx", "nwsl", "efl", "libertadores", "saudi", "fifa", "euro", "afcon",
 ];
@@ -149,7 +150,7 @@ export interface TopEventScore {
 const NATIONAL_TV = /^(espn2?|espnu|espn\+|abc|fox|fs1|nbc|cbs|tnt|tbs|trutv|peacock|prime video|amazon prime video|amazon|apple tv\+?|netflix|paramount\+|cbs sports network|nfl network|nba tv|mlb network|nhl network|usa network)$/i;
 
 const HOUR_MS = 3_600_000;
-const POLL_RANKED_SPORTS = new Set<Sport>(["ncaaf", "ncaam", "ncaaw"]);
+const POLL_RANKED_SPORTS = new Set<Sport>(["ncaaf", "ncaam", "ncaaw", "ncaavb"]);
 
 export function scoreGame(game: Game, ctx: TopEventsContext): TopEventScore {
   let score = 0;

@@ -748,6 +748,30 @@
       }
     },
     {
+      "key": "ncaavb",
+      "label": "NCAA Volleyball",
+      "path": "/volleyball/womens-college-volleyball/scoreboard",
+      "logo": "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/sports-volleyball-solid.png",
+      "defaultOn": false,
+      "preseasonIsRegular": false,
+      "season": {
+        "start": "08-21",
+        "end": "12-21",
+        "cycleMod": null,
+        "cycleAnchor": null
+      },
+      "rating": {
+        "kind": "volleyball",
+        "multiplier": 1,
+        "overtimeBonus": 0,
+        "scoringDivisor": 1,
+        "regulationPeriods": 5,
+        "periodSeconds": null,
+        "soccer": false,
+        "closenessCurve": null
+      }
+    },
+    {
       "key": "wnba",
       "label": "WNBA",
       "path": "/basketball/wnba/scoreboard",

@@ -20,6 +20,7 @@ export const SHORT_LEAGUE_LABELS: Record<string, string> = {
   "NCAA Baseball": "NCAA BSB",    // 8 chars (the college scoreboard's own abbreviation)
   "NCAA Softball": "Softball",    // 8 chars (the only softball league on the board)
   "NCAAW Hockey": "W. Hockey",    // 116 → 99  (women's college hockey; the "S. Rugby" house style. Measured at 390px on 2026-09-14: exactly the budget, one line)
+  "NCAA Volleyball": "NCAA VB",   // 15 chars, well past the 99px budget (the sport key stays "ncaavb")
   "NFL Preseason": "NFL Pre",     // 122 → 63
   "Premier League": "EPL",        // 128 → 31  (matches the sport key, and the UCL/UEL house style)
   "Rugby Nations": "Nations",     // 119 → 63

@@ -1036,7 +1036,7 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // would bake a literal "#null" into it if that guard ever
                   // moved. Set it only when we actually have a rank.
                   if (rank != null) title = `FIFA world ranking: #${rank}`;
-                } else if (game.sport === "ncaaf" || game.sport === "ncaah" || game.sport === "ncaawh" || game.sport === "ncaabase" || game.sport === "ncaasoft") {
+                } else if (game.sport === "ncaaf" || game.sport === "ncaah" || game.sport === "ncaawh" || game.sport === "ncaavb" || game.sport === "ncaabase" || game.sport === "ncaasoft") {
                   // No date/finished gate — see the NCAAF bullet above. The
                   // tooltip stays poll-neutral because ESPN's curated rank is
                   // the AP Top 25 until December and the CFP committee's
@@ -1045,8 +1045,8 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
                   // narrows it with its own `!= null` guard, this one doesn't.
                   rank = team.rank ?? null;
                   // College hockey's curated rank is the USCHO poll: Top 20
-                  // for the men, Top 15 for the women. Baseball and softball
-                  // carry a Top 25 poll like football.
+                  // for the men, Top 15 for the women. Baseball, softball and
+                  // women's volleyball (AVCA) carry a Top 25 poll like football.
                   if (rank != null) title = `${POLL_RANK_TITLE[game.sport] ?? "Top 25"} ranking: #${rank}`;
                 } else if (team.rank != null && !effectivePastDate && !isFinished) {
                   rank = team.rank;
