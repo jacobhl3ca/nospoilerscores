@@ -12,7 +12,10 @@ import { routeModalKey } from "@/lib/modalArrowKeys";
 interface VideoModalProps {
   videoId: string;
   fallbackUrl: string;
-  onClose: () => void;
+  // "explicit" = one of the ✕ buttons; "accidental" (default) = backdrop,
+  // a tap on content that bubbles, or Esc. The host only offers its undo
+  // pill for accidental closes.
+  onClose: (reason?: "explicit" | "accidental") => void;
   // When set, the modal plays this HLS (or MP4) stream directly via <video> +
   // hls.js instead of embedding a YouTube iframe. Used for MLB clips where the
   // source's own stream is accessible (gives us the exact clip, not a YouTube
@@ -1229,7 +1232,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
         if (fakeFs) { setFakeFs(false); return; }
         if (nativeFs) return;                                  // browser exits FS itself
         if (Date.now() - fsExitAtRef.current < 350) return;    // just left FS — swallow
-        onClose();
+        onClose("accidental");
         return;
       }
       // Enter confirms that same prompt — the keyboard twin of "Skip anyway".
@@ -2044,7 +2047,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
       // internally, and the wrapper below can grow past the viewport for it).
       className={textMode ? "fixed inset-0 overflow-y-auto" : "fixed inset-0 overflow-hidden"}
       style={{ zIndex: 9999 }}
-      onClick={onClose}
+      onClick={() => onClose("accidental")}
     >
       {/* Backdrop — fixed so it stays covering the viewport while a tall post
           scrolls inside the container above it. */}
@@ -2125,7 +2128,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
               </button>
             )}
             <button type="button"
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
               className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
               aria-label="Close"
               title="Close (Esc)"
@@ -2153,7 +2156,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 width, so it hugs the top-right corner without covering content. */}
             <div className="mb-2 flex justify-end">
               <button type="button"
-                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
                 title="Close (Esc)"
@@ -2258,7 +2261,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
           >
             <div className="mb-2 flex justify-end">
               <button type="button"
-                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white bg-black/45 hover:bg-black/65 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
                 title="Close (Esc)"
@@ -2311,7 +2314,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
             // wrapper itself, not a child) dismisses when not fullscreen; clicks
             // bubbling up from the player/controls still stop here so they keep
             // working. The video surface stops propagation in handleSurfaceTap.
-            onClick={(e) => { if (!fsActive && e.target === e.currentTarget) onClose(); else e.stopPropagation(); }}
+            onClick={(e) => { if (!fsActive && e.target === e.currentTarget) onClose("accidental"); else e.stopPropagation(); }}
             // Non-fullscreen: pin the wrapper to the exact video width and centre
             // it. Without an explicit width this is a shrink-to-fit flex item, and
             // Safari resolves its width to the full viewport (not the video's) —
@@ -2346,7 +2349,7 @@ export default function VideoModal({ videoId, fallbackUrl, onClose, playbackUrl,
                 CC
               </button>
               <button type="button"
-                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                onClick={(e) => { e.stopPropagation(); onClose("explicit"); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-white/75 hover:text-white bg-black/50 hover:bg-black/70 border border-white/15 transition-colors cursor-pointer"
                 aria-label="Close"
                 title="Close (Esc)"
