@@ -1,5 +1,31 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — "↩ Reopen" pill: off the mobile tab bar, quiet, bottom-right on desktop, accidental closes only
+
+**Built 2026-09-14** — `9ca51edc` on `fix/reopen-pill` (worktree `~/hs-reopen`), pending push to `main` + the
+production read-back. The undo-close pill (8 s after a news/highlight modal closes, shipped `c956640d` 8/21)
+and the favorites toast both sat at `bottom-6`, under the fixed bottom tab bar.
+
+**Before (measured on hidescore.com, iPhone 13 390×664):** pill y 586–640, tab bar y 607–664 → 33 px
+overlap covering the Ratings tab. Desktop: centred over the 3rd column, accent-filled 44 px button.
+
+**After (headless Chromium against the static export, same viewport, dark + light):** pill bottom 588 <
+tab bar top 607 (19 px clear); favorites toast bottom 588 < 607; with both showing the pill sits at 476,
+10 px above the toast's top at 486. Pill tap height 50 px. Desktop 1280×800: right edge exactly 1248
+(`right: 2rem`), 36 px button, no fill; no overlap with the Keys chip; scrolled 900 px the pill rides
+626–668 above the scroll-to-top button at 680–724; at the footer, pill bottom 623 < footer top 691.
+
+- Both toasts use the scroll-to-top lift on `< sm` (`safe-area + 4.75rem`); the pill stacks 7 rem
+  above the toast (the toast is ~6.4 rem tall — the old `bottom-28` stacking was 5.5 rem and overlapped).
+- Desktop: `sm:right-8`, bottom via a `--reopen-desktop-bottom` custom property that mirrors the
+  scroll-to-top formula (`max(safe-area + 4.75rem, scrollTopLift)`) plus 3.5 rem while that button shows.
+- `VideoModal.onClose(reason)`: the four ✕ buttons send `"explicit"` and do not arm the pill;
+  backdrop, bubbling content taps, Esc and browser Back stay `"accidental"` and do.
+- Unchanged on purpose: `REOPEN_MS = 8000`, the generic label (a headline is a spoiler), VideoModal-only.
+- Checks: `tsc`, `eslint src` (7 pre-existing warnings, 0 errors), `next build`, 314 unit tests, and a
+  35-assertion Playwright pass (Escape / backdrop / ✕ / Reopen round-trip / Back re-arm / 8 s
+  auto-dismiss). Screenshots `~/hidescore-reopen-qa-2026-09-14-{mobile,desktop}.png`.
+
 ## 2026-09-14 — UEFA Conference League + FA Cup, Copa del Rey, DFB-Pokal (`uecl` / `facup` / `copadelrey` / `dfbpokal`)
 
 **✅ Shipped 2026-09-14** — `1da799d1` (rebased over the same-day UFL, baseball/softball, women's hockey and
