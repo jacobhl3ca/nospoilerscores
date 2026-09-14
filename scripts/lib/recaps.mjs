@@ -217,6 +217,15 @@ export function parseWatchPageLengthSeconds(html) {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// "publishDate":"2026-03-27T04:30:00-07:00" (microformat) → ms. The results
+// page sometimes omits a card's age; the watch page never does.
+export function parseWatchPagePublishMs(html) {
+  const m = String(html ?? "").match(/"(?:publishDate|uploadDate)":"([^"]+)"/);
+  if (!m) return null;
+  const ms = Date.parse(m[1]);
+  return Number.isFinite(ms) ? ms : null;
+}
+
 // ── Dates (all YYYYMMDD, ET) ─────────────────────────────────────────────────
 
 const ET = "America/New_York";
