@@ -226,6 +226,30 @@ check(
   youtube.hasNoTrustedHighlightSource("ncaavb") === true &&
     !monitor.includes('ncaavb: "/volleyball/womens-college-volleyball/scoreboard"'),
 );
+// Conference League, Copa del Rey and DFB-Pokal are dark (2026-09-14): no
+// uploader cleared the 4/5 gate and every candidate served a wrong match. The
+// monitor must not scan them. The FA Cup IS lit, on ESPN FC with a required
+// "fa cup" title token in all three copies.
+for (const [sport, path] of [
+  ["uecl", '/soccer/uefa.europa.conf/scoreboard'],
+  ["copadelrey", '/soccer/esp.copa_del_rey/scoreboard'],
+  ["dfbpokal", '/soccer/ger.dfb_pokal/scoreboard'],
+]) {
+  check(
+    `${sport} stays dark and unmonitored`,
+    youtube.hasNoTrustedHighlightSource(sport) === true && !monitor.includes(`"${path}"`),
+  );
+}
+check(
+  "FA Cup is lit on ESPN FC with the fa cup title gate in all three copies",
+  youtube.hasNoTrustedHighlightSource("facup") === false &&
+    youtube.getOfficialChannelName("facup") === "ESPN FC" &&
+    JSON.stringify(youtube.getCompetitionTitleTokens("facup")) === JSON.stringify(["fa cup"]) &&
+    monitor.includes('facup:        "/soccer/eng.fa/scoreboard"') &&
+    monitor.includes('facup: "ESPN FC"') &&
+    /facup: \["fa cup"\]/.test(monitor) &&
+    /facup: \["fa cup"\]/.test(readFileSync("scripts/prebake-news.mjs", "utf8")),
+);
 check("monitor rejects incomplete ESPN audits", monitor.includes("Source failures are not zero-game slates"));
 check("rejected custom ESPN User-Agent is gone", !monitor.includes("nospoilerscores-staleness-check/1.0"));
 check(

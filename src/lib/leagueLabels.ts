@@ -13,7 +13,9 @@
 // to break at, so they overflowed the column rather than wrapping — same fix.
 export const SHORT_LEAGUE_LABELS: Record<string, string> = {
   "Champions Cup": "Champ Cup",   // 128 → 94  (rugby)
-  "Championship": "EFL Champ",    // 117 → 91  (the division; bare "EFL" is the governing body, which also runs League One and Two)
+  "Championship": "EFL Champ",
+  "Conference League": "UECL",    // 17 chars, well past the budget; matches the UCL/UEL house style
+  "Copa del Rey": "Copa Rey",     // 12 chars, same shape as "Libertadores" → "Copa Lib"    // 117 → 91  (the division; bare "EFL" is the governing body, which also runs League One and Two)
   "French Open": "Fr. Open",      // 103 → 68  (keeps the noun, like the sibling "Aus Open"/"US Open"/"The Open")
   "Libertadores": "Copa Lib",     // 105 → 71
   "Little League": "LLWS",        // 107 → 44  (matches the sport key)

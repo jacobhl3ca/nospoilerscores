@@ -57,6 +57,12 @@ const SPORT_NEWS_PATHS: Partial<Record<Sport, string>> = {
   euro: "/soccer/uefa.euro",
   afcon: "/soccer/caf.nations",
   saudi: "/soccer/ksa.1",
+  // Conference League + the three domestic cups (2026-09-14): each /news feed
+  // probed 200 with 6 articles the day they were added.
+  uecl: "/soccer/uefa.europa.conf",
+  facup: "/soccer/eng.fa",
+  copadelrey: "/soccer/esp.copa_del_rey",
+  dfbpokal: "/soccer/ger.dfb_pokal",
   // Cricket: same league-base + /news shape. Note this feed is ESPNcricinfo's
   // GENERAL cricket wire, not IPL-only — it carries county / Hundred / Test
   // headlines too. That's still the right feed (it's the only one ESPN serves
@@ -337,6 +343,11 @@ export const LEAGUE_LOGO: Record<Sport, string> = {
   afcon: "https://a.espncdn.com/i/leaguelogos/soccer/500/76.png",
   nwsl: "https://a.espncdn.com/i/leaguelogos/soccer/500/2323.png",
   saudi: "https://a.espncdn.com/i/leaguelogos/soccer/500/2488.png",
+  // League logo ids read off each league's own scoreboard `logos` 2026-09-14.
+  uecl: "https://a.espncdn.com/i/leaguelogos/soccer/500/20296.png",
+  facup: "https://a.espncdn.com/i/leaguelogos/soccer/500/40.png",
+  copadelrey: "https://a.espncdn.com/i/leaguelogos/soccer/500/80.png",
+  dfbpokal: "https://a.espncdn.com/i/leaguelogos/soccer/500/2061.png",
   // Cricket keys its league logos by series id under its own /cricket/ path
   // (8048 = IPL), not the /soccer/ path. Verified 200 on 2026-08-03.
   cricket: "https://a.espncdn.com/i/leaguelogos/cricket/500/8048.png",
@@ -470,6 +481,9 @@ const SOCCER_REDDIT_FIREHOSE = new Set<Sport>([
   // new sub is another prebake job competing for the Mac mini's Reddit per-IP
   // budget, which is the known cause of the 429 storms.
   "ligamx", "efl", "libertadores", "euro", "afcon", "saudi",
+  // Conference League + the domestic cups (2026-09-14): no per-cup sub has the
+  // volume, and r/soccer already carries every one of them.
+  "uecl", "facup", "copadelrey", "dfbpokal",
   // nwsl is deliberately NOT here. r/soccer is overwhelmingly men's club
   // football, so piping it into the NWSL column would fill that column with
   // news about a different sport. As of 2026-08-04 NWSL has its own r/NWSL
@@ -493,6 +507,10 @@ const ESPN_LEAGUE_LABEL: Partial<Record<Sport, string>> = {
   libertadores: "ESPN Libertadores",
   euro: "ESPN Euro",
   saudi: "ESPN Saudi Pro League",
+  uecl: "ESPN Conference League",
+  facup: "ESPN FA Cup",
+  copadelrey: "ESPN Copa del Rey",
+  dfbpokal: "ESPN DFB-Pokal",
 };
 
 export function leagueSourceCascade(sport: Sport): ColumnSource[] {
@@ -545,6 +563,7 @@ export const MOBILE_NEWS_LEAGUE_ORDER: Sport[] = [
   // yearCycle-gated national-team tournaments sit just above it, since in a year
   // when they're active they're the biggest story in the sport.
   "euro", "afcon", "ligamx", "nwsl", "efl", "libertadores", "saudi",
+  "uecl", "facup", "copadelrey", "dfbpokal",
   "cricket",
   "ufc", "boxing", "f1", "nascar", "indycar", "poker",
 ];

@@ -127,6 +127,16 @@ const SPORT_PATHS: Record<Sport, string> = {
   euro: "/soccer/uefa.euro/scoreboard",
   afcon: "/soccer/caf.nations/scoreboard",
   saudi: "/soccer/ksa.1/scoreboard",
+  // UEFA Conference League + three domestic cups (added 2026-09-14). Probed
+  // live via site.web.api the same day: 200, standard soccer event shape, so
+  // the soccer parsers (up-counting clock, deriveStage, penalty handling) read
+  // them as is. ESPN's `calendar` for every one of these is a single
+  // year-wide "list" entry, so the windows in ALL_LEAGUES are hand-set from
+  // fixture range probes, never from the calendar.
+  uecl: "/soccer/uefa.europa.conf/scoreboard",
+  facup: "/soccer/eng.fa/scoreboard",
+  copadelrey: "/soccer/esp.copa_del_rey/scoreboard",
+  dfbpokal: "/soccer/ger.dfb_pokal/scoreboard",
   // Cricket (added 2026-08-03). ESPN's cricket API is keyed by ESPNcricinfo
   // SERIES id, not by a league slug — 8048 is the IPL. Verified 2026-08-03: it
   // returns a full 62-date calendar (03-28 → 05-31) and standard two-competitor
@@ -378,6 +388,29 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { sport: "afcon", label: "AFCON", startDate: "06-17", endDate: "07-19", kickoffDate: "06-19", championshipDate: "07-17", verifiedFor: 2027, excludeFromAuto: true, yearCycle: { mod: 2, anchor: 2027 } },
   // Saudi Pro League: ESPN calendar 08-13 → 05-28.
   { sport: "saudi", label: "Saudi PL", startDate: "08-13", endDate: "05-28", championshipDate: "05-28", excludeFromAuto: true },
+  // ── UEFA Conference League + domestic cups (added 2026-09-14) ──
+  // ESPN's calendar for each of these is one year-wide "list" entry, so every
+  // edge below was read from fixture range probes on 2026-09-14, not from the
+  // calendar. Rule: open when the top-division clubs enter, close on the final.
+  // Qualifying rounds (Copa del Rey Sep 26 / Oct 3: 20 clubs, no logos) stay
+  // outside the window on purpose.
+  // Conference League: MD1 2026-10-15 (18 fixtures, Paramount+), league phase
+  // through 12-17; 2026-27 final Istanbul 2027-06-02 per UEFA (ESPN has not
+  // listed the knockouts yet — far edge unverified by fixtures).
+  { sport: "uecl", label: "Conference League", startDate: "10-13", kickoffDate: "10-15", endDate: "06-03", championshipDate: "06-02", verifiedFor: 2026, excludeFromAuto: true },
+  // FA Cup: third round proper (PL clubs enter) 2027-01-09, final 2027-05-22
+  // per the FA's published calendar; ESPN has no 2026-27 fixtures yet, so both
+  // edges are checked against the 2025-26 running (01-09 → 05-16).
+  { sport: "facup", label: "FA Cup", startDate: "01-07", kickoffDate: "01-09", endDate: "05-23", championshipDate: "05-22", verifiedFor: 2026, excludeFromAuto: true },
+  // Copa del Rey: first round proper 2026-10-28, final at La Cartuja
+  // 2027-04-24 per the RFEF calendar; ESPN lists only the qualifying round so
+  // far (both edges unverified by fixtures). Lower-league hosts in the first
+  // two rounds have no ESPN logo — the card degrades to the club name.
+  { sport: "copadelrey", label: "Copa del Rey", startDate: "10-27", kickoffDate: "10-28", endDate: "04-25", championshipDate: "04-24", verifiedFor: 2026, excludeFromAuto: true },
+  // DFB-Pokal: first round 2026-08-21 → 08-24 (+ two leftovers 09-01/02), all
+  // Bundesliga clubs in; final in Berlin 2027-05-29 per the DFB (far edge
+  // unverified by fixtures). Amateur hosts in round one have no ESPN logo.
+  { sport: "dfbpokal", label: "DFB-Pokal", startDate: "08-21", kickoffDate: "08-21", endDate: "05-30", championshipDate: "05-29", verifiedFor: 2026, excludeFromAuto: true },
   // ── Cricket (IPL) ──
   // Window is ESPN's own calendar for the competition, first date → final:
   // 2026-03-28 → 2026-05-31. Opt-in like the rest of the second wave.
@@ -746,6 +779,7 @@ const SPORT_GLYPH: Partial<Record<Sport, string>> = {
   fifa: "⚽", epl: "⚽", mls: "⚽", ucl: "⚽", uel: "⚽",
   laliga: "⚽", seriea: "⚽", bundesliga: "⚽", ligue1: "⚽", ligamx: "⚽",
   nwsl: "⚽", efl: "⚽", libertadores: "⚽", euro: "⚽", afcon: "⚽", saudi: "⚽",
+  uecl: "⚽", facup: "⚽", copadelrey: "⚽", dfbpokal: "⚽",
   cricket: "🏏", f1: "🏎️", nascar: "🏎️", indycar: "🏎️",
   ufc: "🥊", boxing: "🥊", chess: "♟️", poker: "🃏", esports: "🎮", top: "⭐",
 };
@@ -796,6 +830,7 @@ const SPORT_GROUP: Partial<Record<Sport, SportGroup>> = {
   seriea: "soccer", bundesliga: "soccer", ligue1: "soccer", mls: "soccer",
   ligamx: "soccer", nwsl: "soccer", efl: "soccer", libertadores: "soccer",
   saudi: "soccer", fifa: "soccer", euro: "soccer", afcon: "soccer",
+  uecl: "soccer", facup: "soccer", copadelrey: "soccer", dfbpokal: "soccer",
   golf: "majors", tennis: "majors",
   f1: "other", nascar: "other", indycar: "other", ufc: "other",
   boxing: "other", cricket: "other", chess: "other", poker: "other",
@@ -1345,6 +1380,12 @@ const SPORT_RATING_CONFIG: Record<Sport, {
   efl:          { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   saudi:        { multiplier: 22, overtimeBonus: 20, scoringDivisor: 0.5, regulationPeriods: 2 },
   libertadores: { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  // Conference League + the three domestic cups (2026-09-14): knockout ties go
+  // to extra time, so they take the Libertadores/AFCON calibration.
+  uecl:         { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  facup:        { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  copadelrey:   { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
+  dfbpokal:     { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   euro:         { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   afcon:        { multiplier: 22, overtimeBonus: 25, scoringDivisor: 0.5, regulationPeriods: 2 },
   // Cricket never reaches the generic scorer — calculateRating hands a T20
@@ -1400,6 +1441,7 @@ const PERIOD_SECONDS: Partial<Record<Sport, number>> = {
 const SOCCER_SPORTS = new Set<Sport>([
   "epl", "mls", "ucl", "uel", "fifa", "laliga", "seriea", "bundesliga", "ligue1",
   "ligamx", "nwsl", "efl", "libertadores", "euro", "afcon", "saudi",
+  "uecl", "facup", "copadelrey", "dfbpokal",
 ]);
 const FULL_MATCH_SECONDS = 5400;
 
@@ -2093,7 +2135,11 @@ export function buildTennisGames(events: TennisScoreboardEvent[], when?: string 
 // so regular-season games show no stage line.
 function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
   const seg = (altGameNote ?? "").split(",").map((s) => s.trim()).filter(Boolean).pop() ?? "";
-  if (/^(group [a-l]|round of \d+|quarter-?finals?|semi-?finals?|final|third place(?: match)?|matchday \d+|knockout(?: round)?(?: play-?offs?)?)$/i.test(seg)) {
+  // Cup rounds (FA Cup / Copa del Rey / DFB-Pokal / Conference League, read
+  // 2026-09-14): altGameNote is "English FA Cup, Third Round", "German Cup,
+  // First Round", "UEFA Conference League, League Phase" — the ordinal-round
+  // and league-phase forms are cup-only and never carry a result.
+  if (/^(group [a-l]|round of \d+|quarter-?finals?|semi-?finals?|final|third place(?: match)?|matchday \d+|knockout(?: round)?(?: play-?offs?)?|(?:preliminary|qualifying|first|second|third|fourth|fifth|sixth) round|league phase)$/i.test(seg)) {
     return seg;
   }
   const slug = (seasonSlug ?? "").toLowerCase().trim();
@@ -2111,6 +2157,18 @@ function deriveStage(altGameNote?: string, seasonSlug?: string): string | null {
     "3rd-place-match": "Third Place",
     "third-place": "Third Place",
     "final": "Final",
+    // Cup + Conference League season.slugs, read from live fixtures 2026-09-14
+    // (eng.fa, esp.copa_del_rey, ger.dfb_pokal, uefa.europa.conf). ESPN spells
+    // the play-off round "knockout-round-playoffs", no hyphen in "playoffs".
+    "qualifying-round": "Qualifying Round",
+    "first-round": "First Round",
+    "second-round": "Second Round",
+    "third-round": "Third Round",
+    "fourth-round": "Fourth Round",
+    "fifth-round": "Fifth Round",
+    "league-phase": "League Phase",
+    "knockout-round-playoffs": "Knockout Round Playoffs",
+    "knockout-round-play-offs": "Knockout Round Playoffs",
   };
   return slugMap[slug] ?? null;
 }
@@ -2709,6 +2767,10 @@ export function espnGameUrl(game: Game): string {
     case "euro":
     case "afcon":
     case "saudi":
+    case "uecl":
+    case "facup":
+    case "copadelrey":
+    case "dfbpokal":
       return `https://www.espn.com/soccer/match/_/gameId/${game.id}`;
     // ESPN serves cricket off its India edition; 8048 is the IPL series id
     // (same id as SPORT_PATHS). The /scorecard/ path is the per-match page.
@@ -2804,6 +2866,16 @@ export function sportStreamFallback(sport: Sport): string {
     case "afcon": return "https://www.beinsports.com/en-us/";
     case "euro": return "https://www.foxsports.com/soccer/uefa-european-championship";
     case "saudi": return "https://www.fanatiz.com/";
+    // Conference League: every 2025-26 and 2026-27 fixture ESPN lists carries a
+    // "Paramount+" broadcast (108/108 league-phase, 45/45 knockout, read
+    // 2026-09-14) — CBS holds all three UEFA club competitions in the US.
+    case "uecl": return "https://www.paramountplus.com/";
+    // FA Cup / Copa del Rey / DFB-Pokal: ESPN+ on every 2025-26 fixture that
+    // named a broadcaster (FA Cup 63/63 from the third round, Copa del Rey
+    // 18/18 knockouts, DFB-Pokal 43/63), read 2026-09-14.
+    case "facup": return "https://plus.espn.com/";
+    case "copadelrey": return "https://plus.espn.com/";
+    case "dfbpokal": return "https://plus.espn.com/";
     // Willow TV holds the US broadcast rights to the IPL (and to most
     // international cricket). Verified reachable 2026-08-03.
     case "cricket": return "https://www.willow.tv/";
@@ -4856,6 +4928,10 @@ function logoForTeam(sport: Sport, rawId: string, abbreviation: string, guid?: s
     case "euro":
     case "afcon":
     case "saudi":
+    case "uecl":
+    case "facup":
+    case "copadelrey":
+    case "dfbpokal":
       return `https://a.espncdn.com/i/teamlogos/soccer/500/${rawId}.png`;
     default:
       return undefined;

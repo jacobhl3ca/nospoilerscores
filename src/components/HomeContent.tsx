@@ -1594,8 +1594,9 @@ export default function HomeContent({
     "ufc", "boxing", "golf", "tennis", "f1", "nascar", "indycar", "cricket",
     "chess", "poker", "esports",
     // ── soccer block, bottom ──
-    "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1",
+    "epl", "ucl", "uel", "uecl", "laliga", "seriea", "bundesliga", "ligue1",
     "mls", "ligamx", "nwsl", "efl", "libertadores", "saudi",
+    "facup", "copadelrey", "dfbpokal",
     "fifa", "euro", "afcon",
   ];
   const pickerOptions = useMemo(() => {
