@@ -118,7 +118,11 @@ export const RECAP_SERIES = {
       key: "everygoalnbc", enabled: true, source: "youtube", cadence: "weekly",
       heading: "Every goal, Matchweek {n}", label: "Every goal, full",
       channelId: "UCqZQlzSHbVJrwrn5XvzrzcA", channelName: "NBC Sports", handle: "NBCSports",
+      // NBC stamps the season "(2026-27)"; required, and checked against the
+      // season that is running (see eplSeasonYear) so last season's Matchweek
+      // 38 can never outrank this season's Matchweek 3.
       titleRx: /Every Premier League goal from Matchweek (\d{1,2})/i, weekGroup: 1,
+      seasonRx: /\((\d{4})-\d{2,4}\)/, seasonRequired: true,
       searchQuery: "Every Premier League goal from Matchweek",
     },
   ],
@@ -296,6 +300,17 @@ export function nflWeekWindow(weekEvents, nextWeekEvents) {
 
 // ── Candidate pick ───────────────────────────────────────────────────────────
 
+// The European season that is running on an ET date: it starts in August, so
+// July onward is the year itself, before that the year before. "(2026-27)" on
+// a title → 2026.
+export function eplSeasonYear(input = new Date()) {
+  const ymd = etYmd(input);
+  if (!ymd) return null;
+  const y = parseInt(ymd.slice(0, 4), 10);
+  const m = parseInt(ymd.slice(4, 6), 10);
+  return m >= 7 ? y : y - 1;
+}
+
 // Apply a series' title regex + uploader gate to one candidate. Returns the
 // parsed facts or null. `seasonYear` is ESPN's current season year; a series
 // with a season token in its title must match it (last season's Week 1 is in
@@ -333,6 +348,12 @@ export function pickNewest(matches) {
   return [...list].sort((a, b) => {
     const da = day(a);
     const db = day(b);
+    // A candidate with no readable age never outranks one with an age: the
+    // results page occasionally omits publishedTimeText on one card, and
+    // "unknown age, Matchweek 38" is last season, not newer than "7 days ago,
+    // Matchweek 3" (the third live run).
+    if (da === null && db !== null) return 1;
+    if (da !== null && db === null) return -1;
     if (da !== null && db !== null && da !== db) return db - da;
     if ((b.week ?? -1) !== (a.week ?? -1)) return (b.week ?? -1) - (a.week ?? -1);
     if ((b.titleDate ?? "") !== (a.titleDate ?? "")) return (b.titleDate ?? "") > (a.titleDate ?? "") ? 1 : -1;
