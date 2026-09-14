@@ -1114,9 +1114,12 @@ export default function HomeContent({
     }
   }, [reopenVideo, clearReopen, modalShareHref]);
 
-  const closeVideoModal = useCallback(() => {
+  // `reason` comes from VideoModal: its ✕ buttons say "explicit", everything
+  // else (backdrop, bubbling content tap, Esc) is "accidental" and gets the
+  // undo pill. A deliberate ✕ never does — the pill would just be noise.
+  const closeVideoModal = useCallback((reason: "explicit" | "accidental" = "accidental") => {
     const closing = videoModalRef.current;
-    if (closing) armReopen(closing);
+    if (closing && reason !== "explicit") armReopen(closing);
     setVideoModal(null);
     if (typeof window === "undefined") return;
     if (window.history.state?.videoModal) window.history.back();
@@ -4044,7 +4047,9 @@ export default function HomeContent({
 
       {showFavToast && (
         <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl shadow-lg animate-fade-in max-w-xs w-[calc(100%-2rem)]"
+          // < sm: lifted clear of the fixed bottom tab bar (h-14 + safe-area),
+          // same offset as the scroll-to-top button. sm+: no tab bar, 1.5rem.
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] sm:bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl shadow-lg animate-fade-in max-w-xs w-[calc(100%-2rem)]"
           style={{ background: "linear-gradient(var(--bg-card), var(--bg-card)), var(--bg)", border: "1px solid var(--border)" }}
         >
           <div className="px-4 py-3">
@@ -4213,29 +4218,45 @@ export default function HomeContent({
 
       {/* Undo-close pill. Deliberately says nothing about WHAT was closed — a
           highlight's title is a spoiler (that's why VideoModal masks it), so the
-          label stays generic. Sits above the favorites toast when both show. */}
+          label stays generic. Quiet on purpose: no accent fill, small text — it
+          is an undo, not a call to action.
+          < sm: centred for thumb reach, lifted clear of the bottom tab bar
+          (same 4.75rem + safe-area as the scroll-to-top button), and stacked
+          above the favorites toast (~6.4rem tall) when both show. Before this
+          it sat at bottom-6 and covered the Ratings tab (9/14).
+          sm+: bottom-right corner, right: 2rem like the scroll-to-top button,
+          and stacked above it (44px + 12px gap) whenever that button is
+          showing; otherwise it takes the button's slot, which already clears
+          the "Keys" chip in the corner and rides above the footer via
+          scrollTopLift. */}
       {reopenVideo && !videoModal && (
         <div
           role="status"
           aria-live="polite"
-          className={`fixed ${showFavToast ? "bottom-28" : "bottom-6"} left-1/2 -translate-x-1/2 z-50 rounded-xl shadow-lg animate-fade-in flex items-center gap-1 pl-1.5 pr-1 py-1`}
-          style={{ background: "linear-gradient(var(--bg-card), var(--bg-card)), var(--bg)", border: "1px solid var(--border)" }}
+          className={`fixed z-50 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-8 ${showFavToast ? "bottom-[calc(env(safe-area-inset-bottom)+11.75rem)]" : "bottom-[calc(env(safe-area-inset-bottom)+4.75rem)]"} sm:bottom-(--reopen-desktop-bottom) rounded-full shadow-md animate-fade-in flex items-center gap-0.5 pl-1 pr-0.5 py-0.5`}
+          style={{
+            background: "linear-gradient(var(--bg-card), var(--bg-card)), var(--bg)",
+            border: "1px solid var(--border)",
+            ["--reopen-desktop-bottom" as string]: showScrollTop
+              ? `calc(max(calc(env(safe-area-inset-bottom) + 4.75rem), ${scrollTopLift}px) + 3.5rem)`
+              : `max(calc(env(safe-area-inset-bottom) + 4.75rem), ${scrollTopLift}px)`,
+          }}
         >
           <button
             type="button"
             onClick={reopenVideoModal}
-            className="flex items-center gap-1.5 rounded-lg px-3.5 min-h-[44px] text-sm font-medium cursor-pointer"
-            style={{ background: "var(--accent)", color: "white" }}
+            className="flex items-center gap-1.5 rounded-full px-3 min-h-[44px] sm:min-h-[36px] text-xs font-medium cursor-pointer"
+            style={{ color: "var(--text)" }}
             aria-label="Reopen what you just closed"
           >
             {/* \uFE0E forces text presentation — bare U+21A9 renders as a boxed emoji arrow on macOS/iOS. */}
-            <span aria-hidden="true">{"\u21A9\uFE0E"}</span>
+            <span aria-hidden="true" style={{ color: "var(--accent)" }}>{"\u21A9\uFE0E"}</span>
             Reopen
           </button>
           <button
             type="button"
             onClick={clearReopen}
-            className="px-2 min-h-[44px] min-w-[36px] text-xs cursor-pointer"
+            className="px-2 min-h-[44px] sm:min-h-[36px] min-w-[32px] text-[11px] cursor-pointer"
             style={{ color: "var(--text-muted)" }}
             aria-label="Dismiss"
           >
