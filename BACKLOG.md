@@ -1,5 +1,32 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — GitHub Actions free quota ran out: feed crons move to the mini, PR-check burn cut
+
+**Situation:** every Actions job failed in 2 s from ~2pm ET ("recent account payments have failed or your
+spending limit needs to be increased"). Free plan = 2,000 min/month; this repo used 2,650 min since Sep 1
+(~190 min/day, 7,098 in August). Production was never affected: Cloudflare Pages served main HEAD and the
+mini's R2 uploads (news, espn-airings, reddit alerts) kept running.
+
+**Done 2026-09-14:**
+- Share cards now bake on the mini: `~/bin/hidescore-share-cards-cron.sh`, launchd `com.hidescore.share-cards`
+  (hourly, `RunAtLoad`), log `~/Library/Logs/hidescore-share-cards.log`. Same shape as the espn-airings cron:
+  `git show origin/main:scripts/prebake-share-cards.mjs` into `~/hidescore-share-cards/` (node-canvas lives
+  there, `npm install canvas@^3`), never touches the repo working tree. Uploads `cards/<key>.png` to R2 with
+  the workflow's 3x retry.
+- News already ran on the mini (`com.hidescore.reddit-prebake` runs the FULL `prebake-news.mjs` every 30 min,
+  since 2026-07-07). No second news job: two bakers from one residential IP would 429 Reddit.
+- `news-prebake.yml` and `share-cards.yml` are `workflow_dispatch` only (manual fallback when the mini is
+  down). `sticky-guard.yml`, `tile-text-guard.yml`, `unit-tests.yml` lost their `push` trigger (they still run
+  on every PR update; `deploy.yml` runs the unit suite on every push to main anyway).
+  `poker-calendar-check.yml` is schedule + dispatch only. `staleness-check.yml` untouched: it is the watchdog
+  for the mini jobs (1 min/run). Expected burn: ~700–900 min/month, under the 2,000 private cap.
+
+- [ ] **Move `prime-asins.yml` and `big-inning.yml` to the mini** on the share-cards pattern (this week).
+  Both are cheap; do it when there is a spare hour, then flip them to `workflow_dispatch` only.
+- [ ] **NFL "Top 15 / Every Touchdown / Top Plays" recap videos** (league recaps, PR #71): Week 1 uploads
+  post Tue/Wed; the regexes pass unit tests on last season's titles. Read back `recaps.json` for `nfl` after
+  Wed 9/16 and fix the title gate if the card is dark.
+
 ## 2026-09-14 — "↩ Reopen" pill: off the mobile tab bar, quiet, bottom-right on desktop, accidental closes only
 
 **✅ Shipped 2026-09-14** — `9ca51edc`, pushed `fix/reopen-pill:main`. Deploy run 34876772429 green. Production
