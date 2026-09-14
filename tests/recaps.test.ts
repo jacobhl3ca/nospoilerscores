@@ -111,6 +111,9 @@ test("EPL and MLS every-goal series parse the matchweek / matchday", () => {
   assert.equal(matchSeriesTitle(series("epl", "everygoal"), cand("EVERY Weekend Goal | Matchweek 4", "Premier League"))?.week, 4);
   assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 4 | Premier League | NBC Sports", "NBC Sports"))?.week, 4);
   assert.equal(matchSeriesTitle(series("mls", "everygoal"), cand("Every Goal From Matchday 25", "Major League Soccer"))?.week, 25);
+  assert.equal(matchSeriesTitle(series("mls", "everygoal"), cand("Watch Every Goal from Matchday 25!", "Major League Soccer"))?.week, 25);
+  assert.equal(matchSeriesTitle(series("mls", "everygoal"), cand("Every Goal From Matchday 24! Luis Suárez, Cavan Sullivan, and more!", "Major League Soccer"))?.week, 24);
+  assert.equal(matchSeriesTitle(series("epl", "everygoalnbc"), cand("Every Premier League goal from Matchweek 3 (2026-27) | Premier League | NBC Sports", "NBC Sports"))?.week, 3);
   assert.equal(matchSeriesTitle(series("mls", "everygoal"), cand("Inter Miami vs LAFC | Highlights", "Major League Soccer")), null);
   assert.equal(matchSeriesTitle(series("epl", "everygoal"), cand("Bedard's BEAUTY of a goal | NHL Week 21", "Premier League")), null);
 });
@@ -169,6 +172,8 @@ test("length, ISO duration, relative time and watch-page seconds parse", () => {
   assert.equal(isoDurationToSec("PT10M32S"), 632);
   assert.equal(isoDurationToSec("PT1H"), 3600);
   assert.equal(isoDurationToSec("PT58.5S"), 59);
+  assert.equal(isoDurationToSec("P0Y0M0DT0H15M0S"), 900); // mlb.com's shape
+  assert.equal(isoDurationToSec("P0Y0M0DT0H1M2S"), 62);
   assert.equal(isoDurationToSec("nope"), null);
   const now = Date.UTC(2026, 8, 14, 12, 0, 0);
   assert.equal(parseRelativeTime("2 days ago", now), now - 2 * 86400e3);
@@ -222,7 +227,8 @@ test("NFL week window runs first game day → day before the next week's first g
   assert.equal(nflWeekWindow([], wk2), null);
 });
 
-test("pickNewest ranks by week, then title date, then publish time — never page order", () => {
+test("pickNewest ranks by publish day, then week, then title date — never page order", () => {
+  const D = 86400e3;
   const byWeek = pickNewest([
     { videoId: "a", week: 14, publishedMs: 9 },
     { videoId: "b", week: 16, publishedMs: 1 },
@@ -230,6 +236,16 @@ test("pickNewest ranks by week, then title date, then publish time — never pag
     { videoId: "c", week: 15, publishedMs: 5 },
   ]);
   assert.equal(byWeek?.videoId, "b");
+  // Across seasons the week number lies: 2025's Matchday 31 is older than
+  // 2026's Matchday 25 (the first live run got this wrong).
+  const crossSeason = pickNewest([
+    { videoId: "md31", week: 31, publishedMs: 100 * D },
+    { videoId: "md25", week: 25, publishedMs: 465 * D },
+    { videoId: "md24", week: 24, publishedMs: 463 * D },
+  ]);
+  assert.equal(crossSeason?.videoId, "md25");
+  // Unknown publish time on one side falls back to the week.
+  assert.equal(pickNewest([{ videoId: "x", week: 3, publishedMs: null }, { videoId: "y", week: 4, publishedMs: 5 * D }])?.videoId, "y");
   const byDate = pickNewest([
     { videoId: "a", week: null, titleDate: "20261022", publishedMs: 9 },
     { videoId: "b", week: null, titleDate: "20261023", publishedMs: 1 },

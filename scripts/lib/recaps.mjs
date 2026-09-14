@@ -127,7 +127,8 @@ export const RECAP_SERIES = {
       key: "everygoal", enabled: true, source: "youtube", cadence: "weekly",
       heading: "Every goal, Matchday {n}", label: "Every goal",
       channelId: "UCSZbXT5TLLW_i-5W8FZpFsg", channelName: "Major League Soccer", handle: "MLS",
-      titleRx: /^Every Goal From Matchday (\d{1,2})/i, weekGroup: 1,
+      // Unanchored: MLS varies the lead-in ("Watch Every Goal from Matchday 25!").
+      titleRx: /\bEvery Goal From Matchday (\d{1,2})\b/i, weekGroup: 1,
       searchQuery: "Every Goal From Matchday",
     },
   ],
@@ -155,11 +156,12 @@ export function parseLengthText(text) {
   return parts.reduce((acc, p) => acc * 60 + parseInt(p, 10), 0);
 }
 
-// ISO 8601 duration ("PT10M32S") → seconds. null when unparseable.
+// ISO 8601 duration ("PT10M32S", mlb.com's "P0Y0M0DT0H15M0S") → seconds. null
+// when unparseable. Years / months are ignored (no video runs that long).
 export function isoDurationToSec(iso) {
-  const m = String(iso ?? "").match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/i);
+  const m = String(iso ?? "").match(/^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/i);
   if (!m || m.slice(1).every((g) => g === undefined)) return null;
-  const [d, h, min, s] = m.slice(1).map((g) => (g === undefined ? 0 : parseFloat(g)));
+  const [, , d, h, min, s] = m.slice(1).map((g) => (g === undefined ? 0 : parseFloat(g)));
   return Math.round(d * 86400 + h * 3600 + min * 60 + s);
 }
 
@@ -318,13 +320,20 @@ export function matchSeriesTitle(series, candidate, { seasonYear } = {}) {
   return { videoId: candidate.videoId, week, season, titleDate, durationSec: candidate.durationSec ?? null, publishedMs: candidate.publishedMs ?? null };
 }
 
-// Newest first: highest week for a weekly series, latest title date for a
-// dated daily, else the most recent publish time. YouTube's "sort by date"
+// Newest first. Publish DAY leads (exact from RSS, approximate from the
+// results page's "2 days ago"), because a week number alone spans seasons —
+// the first live run ranked 2025's "Matchday 31" over 2026's "Matchday 25" and
+// last season's EPL "Matchweek 38" over this season's "Matchweek 3". Within
+// the same day: highest week, then latest title date. YouTube's "sort by date"
 // param is ignored without cookies, so page order is never trusted.
 export function pickNewest(matches) {
   const list = (matches ?? []).filter(Boolean);
   if (!list.length) return null;
+  const day = (m) => (Number.isFinite(m.publishedMs) ? Math.floor(m.publishedMs / 86400e3) : null);
   return [...list].sort((a, b) => {
+    const da = day(a);
+    const db = day(b);
+    if (da !== null && db !== null && da !== db) return db - da;
     if ((b.week ?? -1) !== (a.week ?? -1)) return (b.week ?? -1) - (a.week ?? -1);
     if ((b.titleDate ?? "") !== (a.titleDate ?? "")) return (b.titleDate ?? "") > (a.titleDate ?? "") ? 1 : -1;
     return (b.publishedMs ?? 0) - (a.publishedMs ?? 0);

@@ -3246,6 +3246,13 @@ async function resolveYtRecapSeries(series, seasonYear) {
     } catch { /* results page down → none this run */ }
   }
   if (!pick) return null;
+  // Out of season the newest cut is months old (NBA in September). It could
+  // never cover a day the card shows, so stop before the oEmbed + watch-page
+  // fetches. The write-time prune below is the second net.
+  if (Number.isFinite(pick.publishedMs) && Date.now() - pick.publishedMs > (RECAP_TTL_DAYS + 7) * 86400000) {
+    console.log(`recaps ${series.channelName} ${series.key}: newest is ${Math.round((Date.now() - pick.publishedMs) / 86400000)}d old, skipping`);
+    return null;
+  }
   const meta = await hlOembedMeta(pick.videoId);
   if (String(meta?.author ?? "").toLowerCase() !== series.channelName.toLowerCase()) {
     console.warn(`RECAP-CHANNEL-REJECT ${series.channelName} ${series.key} ${pick.videoId} author=${meta?.author ?? "?"}`);
@@ -3356,6 +3363,11 @@ async function bakeLeagueRecaps() {
         }
         if (!rec) {
           console.log(`${tag} → none`);
+          continue;
+        }
+        const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;
+        if (!end || end < cutoff) {
+          console.log(`${tag} → stale (${end || "no date"}), skipped`);
           continue;
         }
         const id = recapIdentity(rec);
