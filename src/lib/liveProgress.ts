@@ -87,6 +87,15 @@ export function formatGameProgress(game: Game): { full: string; short: string; d
     if (hasRunningClock(clock)) return { full: `${p} - ${clock}`, short: p };
     return { full: p, short: p };
   }
+  if (sport === "ncaavb") {
+    // Volleyball is best-of-five sets with no running clock, so the label is
+    // the set number and nothing else: "Set 2" / "S2". ESPN's period is the set
+    // being played; its between-sets detail (a "End of …" shape, like the timed
+    // sports) reads "End of Set N" / "End S2". `clock` is ignored on purpose.
+    const n = Math.max(1, period);
+    if (/^end\b|between/i.test(statusDetail)) return { full: `End of Set ${n}`, short: `End S${n}` };
+    return { full: `Set ${n}`, short: `S${n}` };
+  }
   if (sport === "nfl" || sport === "ncaaf" || sport === "ufl") {
     // UFL shares the shape: four 15-min quarters, then OT. Its OT is an
     // alternating series of 2-point tries, but ESPN still reports it as

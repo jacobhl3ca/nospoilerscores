@@ -41,7 +41,10 @@ export type PollRankCompetitor = { curatedRank?: { current?: number } };
 //
 // NCAA WOMEN'S HOCKEY (2026-09-14): no standings feed at all; curatedRank is the
 // USCHO women's Top 15, so the 1..25 guard below already accepts it.
-const POLL_RANK_SPORTS = new Set<Sport>(["ncaaf", "ncaah", "ncaawh", "ncaabase", "ncaasoft"]);
+//
+// NCAA WOMEN'S VOLLEYBALL (2026-09-14): curatedRank is the AVCA Top 25 on the
+// event (1, 2, 3, 4, 8 seen on the 2026-09-12 slate; 99 = unranked).
+const POLL_RANK_SPORTS = new Set<Sport>(["ncaaf", "ncaah", "ncaawh", "ncaavb", "ncaabase", "ncaasoft"]);
 
 // Returns null for every sport but the college poll leagues above, and for the two shapes ESPN uses to
 // mean "not ranked": the sentinel 99, and an absent curatedRank.
