@@ -51,6 +51,10 @@ enum Rating {
         if input.state == "pre" { return nil }
         guard input.competitors.count >= 2 else { return nil }
         if config.kind == "cricket" { return cricket(input) }
+        // Volleyball's score is sets (0-3), which the generic scorer would read as
+        // a 1-3 point game and rate ~99 every time. Unrated on TV until the web
+        // app's volleyballRating (src/lib/espn.ts) is ported here.
+        if config.kind == "volleyball" { return nil }
 
         guard let s1 = input.competitors[0].score, let s2 = input.competitors[1].score else { return nil }
         let diff = Double(abs(s1 - s2))

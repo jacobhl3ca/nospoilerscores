@@ -281,6 +281,14 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // The regular season streams on ESPN+ / SEC Network+ with no per-game
 // uploader. The same postseason-only channel gate ncaah needs would light
 // the CWS / WCWS.
+//
+// ncaavb (NCAA women's volleyball, added 2026-09-14): probed against the LIVE
+// worker with strict=1, bare query shape, on the 2025 NCAA tournament (final,
+// both semifinals, a regional final, a regional semifinal). "NCAA
+// Championships" hit 1/5 (the Wisconsin–Kentucky semifinal only) and "ESPN"
+// 0/3; two regular-season Sep 2026 queries were 0/2. Well under the 4/5 gate,
+// and regular-season matches stream on ESPN+ / B1G+ with no official upload.
+// Dark.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "cricket",
   "euro",
@@ -291,6 +299,7 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "ncaawh",
   "ncaabase",
   "ncaasoft",
+  "ncaavb",
   "rugbychamp",
   "rugbytest",
   "ufl",

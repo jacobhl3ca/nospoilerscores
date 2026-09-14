@@ -1,5 +1,68 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — NCAA women's volleyball (`ncaavb`) gets a column of its own
+
+**✅ Built 2026-09-14 on `feat/ncaa-volleyball`** (worktree `~/hs-ncaavb`), not yet merged — Jacob authorizes the
+deploy. Follows the `67aa805e` ncaah template plus two volleyball-only branches, because ESPN's `score` for
+this sport is SETS won (0-3) and `linescores[].value` is the points per set. Path
+`/volleyball/womens-college-volleyball`, label "NCAA Volleyball" (header short form "NCAA VB"), opt-in
+(`excludeFromAuto`), Settings → US leagues, share code `vb`, TV catalog `SUPPORTED` (rating kind
+`"volleyball"`, which the tvOS scorer leaves unrated until `volleyballRating` is ported). Window
+08-21 → 12-21: ESPN's calendar stops at the regular season (2026-08-21 → 2026-11-29); the December edge is
+the 2025 tournament read from `?dates=20251201-20251231` (first round 12-04, regionals 12-11 → 12-15,
+semifinals 12-18, final 12-21). Rank chip = AVCA Top 25 via `POLL_RANK_SPORTS` (15 chips on the 9/12 slate);
+not in `RANK_LEAGUES`. No reddit feed (r/volleyball is beach/pro/indoor mixed). No per-game page on
+espn.com (all three URL forms 404 in a real browser, events carry `links: []`), so `espnGameUrl` lands on the
+scoreboard like the LLWS. Highlights dark: strict probe on the 2025 tournament, "NCAA Championships" 1/5
+(only the Wisconsin–Kentucky semifinal), "ESPN" 0/3, two Sep 2026 regular-season queries 0/2.
+
+**Rating (`volleyballRating`, espn.ts)** — 0.45 × sets closeness (finished 3-2 → 85, 3-1 → 65, 3-0 → 30;
+live level-in-the-fifth 100, level earlier 85, one set apart 70, 2-0/1-0 45) + 0.35 × point closeness (mean
+set margin over completed sets, ≤2 → 100 linear to 0 at ≥12) + 0.20 × the same curve on the LAST completed
+set; then +15 for a fifth set, +4 per deuce set (≥26, or ≥16 in the fifth) capped at 12, +20 when the
+winner lost the first two sets / +10 when it lost the first (finished only); clamp 0-100. Live before the
+second set → null. A set only counts once it is over (to 25 / 15, won by two), so an in-progress set never
+skews the averages. Missing linescores → the sets-only score (30 / 65 / 100), never NaN.
+Sep 12 spot-check (159 finals): five-setters 77-100 (mean 97), four-setters 41-97 (mean 69), sweeps 17-74
+(mean 47); top card = Notre Dame–Duquesne 25-19 / 18-25 / 24-26 / 26-24 / 16-14; no sweep outrates any
+five-setter (max sweep 74 < min five 77). `ratingorder:audit` reports 4% "inversions" for ncaavb — by design
+(a deuce-heavy 3-0 outranks a 3-1 with three blowout sets), and biggest tie 18 at 100.
+
+**Live label (`liveProgress.ts`)** — "Set N" / "SN"; an "End of …" / "between" detail → "End of Set N" /
+"End SN"; the clock is ignored (volleyball has none). ⚠️ Built from the plan's shape, not a captured sample —
+no match was live on Monday. See Open.
+
+**Playoff flag** — same gate as hockey: for ncaavb only a round word (`quarte?r?final | semifinal | final |
+round | championship | regional`) sets `isPlayoff`; ~150 in-season invitationals ("Paradise Invitational",
+"SFA Tournament", "Ocean State Cup") stay regular season. ESPN tags the whole season `type 2`, tournament
+included, so the type-3 check never helps here. The CAA's "Quartefinal" typo is absorbed.
+
+**Two changes from the plan, both on evidence:**
+- **3-2 finished = 85, not 100.** At 100 every one of the 23 five-setters on 9/12 landed on 99-100 with the
+  +15 fifth-set bonus stacked on top; at 85 the set margins order them (77 → 100).
+- **No detail-modal set line.** `GameDetailModal` never renders a score, revealed or not ("even then only the
+  rating badge, never the raw score line"), so there is no revealed-score section to hang "25-10 · 25-14"
+  under. `setScores` was not added to `Game`.
+
+**Proof:** tsc, eslint (0 errors), test:unit (301, incl. new `volleyball-rating`, `ncaavb-playoff-flag`,
+live-progress volleyball cases), highlights:check, news:check, poker:check, tv:catalog + check,
+`check-season-windows --only=ncaavb` ✓, `next build` all green. Read-back on the mini (hidden Chromium via
+`bg_chromium` + headless for screenshots, reverse tunnel to the local static export), clock pinned to
+2026-09-12 23:30 ET: column = 159 cards, all shown (no collapse in multi-column mode), data on screen 0.7 s
+after load, evaluate round-trip 0.06 s after data; 318 team logos, 317 loaded, 1 blank = Tampa Spartans
+(D-II, ESPN ships no logo and the CDN 404s on id 2626); 15 rank chips; 0 highlight buttons; 159 rating
+badges, top card the five-setter above. Mocked live: `Set 5` + GREAT on a 2-2, `Set 2` + MEH on 1-0,
+`End of Set 1` with no badge. v2 profile: column absent, Settings row OFF, tick → `shownLeagues:["ncaavb"]`
+→ "NCAA Volleyball" in the switcher → picking it adds the column. Screenshots in `~/hs-ncaavb/qa/`.
+
+**Open:**
+- [ ] Capture a live sample Tue 9/15 evening (`status.type.detail` / `shortDetail` / `period` for a match
+      in progress AND one between sets) and confirm the `Set N` / `End of Set N` branch against it.
+- [ ] December tournament edge: re-read ESPN's calendar once it publishes the 2026 bracket (~Nov 30) and
+      adjust 12-21 if the final moves.
+- [ ] Port `volleyballRating` to tvOS `Rating.swift` (catalog kind `"volleyball"` currently = unrated on TV).
+- [ ] Highlights stay dark; the NCAA channel covers the tournament only (1/5 even there).
+
 ## 2026-09-14 — NCAA women's hockey (`ncaawh`) column, on the men's pattern
 
 **✅ Shipped 2026-09-14** — `3a816465` (rebased over the same-day UFL and baseball/softball adds, both sides

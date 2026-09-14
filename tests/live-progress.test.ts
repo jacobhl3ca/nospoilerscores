@@ -128,3 +128,14 @@ test("college baseball and softball read innings like MLB", () => {
   assert.equal(delay.delayed, true);
   assert.equal(delay.label, "Top of the 1st inning, Rain");
 });
+
+test("volleyball reads the set number, no clock", () => {
+  // Shapes are the plan's (no live sample captured yet — a Monday); ESPN's
+  // volleyball period is the set in play and its clock is parked at 0:00.
+  assert.equal(full(g("ncaavb", 2, "0:00", "Set 2")), "Set 2");
+  assert.equal(short(g("ncaavb", 2, "0:00", "Set 2")), "S2");
+  assert.equal(full(g("ncaavb", 5, "0:00", "5th Set")), "Set 5");
+  assert.equal(full(g("ncaavb", 1, "0:00", "End of 1st Set")), "End of Set 1");
+  assert.equal(short(g("ncaavb", 1, "0:00", "End of 1st Set")), "End S1");
+  assert.equal(full(g("ncaavb", 3, "0:00", "Between sets")), "End of Set 3");
+});
