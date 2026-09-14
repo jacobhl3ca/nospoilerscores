@@ -43,3 +43,33 @@ test("the racing idioms do not swallow ordinary highlight titles", () => {
     assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
   }
 });
+
+// "Podium finish" is the top-3 result reveal the chequered-flag/line-first pair
+// misses: those name only the RACE WINNER, so a "podium finish" (2nd/3rd in
+// F1/MotoGP/cycling/athletics) still leaked. The phrase is always a sports
+// placing — a lectern or ceremony "podium" never takes "finish" — so it is
+// anchored tightly to podium+finish and carries no false-positive risk.
+test("a podium-finish reveal never reads as a clean title", () => {
+  for (const title of [
+    "Hamilton takes a podium finish at Monza",
+    "Norris secures a podium finish",
+    "Leclerc's podium finish | Race Highlights",
+    "Podium finish for Alpine in Miami",
+    "Two podium finishes for Ferrari this weekend",
+  ]) {
+    assert.equal(isScoreSpoiler(title), true, `leaked: ${title}`);
+  }
+});
+
+// The podium anchor needs the trailing "finish": the lectern/ceremony senses of
+// "podium" reveal no result, so the mask must still lift for them.
+test("the podium anchor does not swallow the lectern or ceremony sense", () => {
+  for (const title of [
+    "How to watch the podium ceremony",
+    "The president takes the podium",
+    "Podium presentation | Full replay",
+    "Where does the podium go after the race?",
+  ]) {
+    assert.equal(isScoreSpoiler(title), false, `over-hidden: ${title}`);
+  }
+});
