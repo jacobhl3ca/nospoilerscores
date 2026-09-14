@@ -2422,6 +2422,10 @@ const HL_LEAGUES = [
   { sport: "libertadores", path: "/soccer/conmebol.libertadores/scoreboard",  channel: "CONMEBOL Libertadores" },
   { sport: "saudi",      path: "/soccer/ksa.1/scoreboard",                    channel: "الدوري السعودي للمحترفين - Saudi Pro League" },
   { sport: "afcon",      path: "/soccer/caf.nations/scoreboard",              channel: "CAF TV" },
+  // FA Cup (added 2026-09-14): ESPN FC, 7/10 strict on 2025-26 ties, 0 wrong,
+  // with the "fa cup" title token below. uecl / copadelrey / dfbpokal are dark
+  // and deliberately absent — see NO_HIGHLIGHT_FALLBACK in src/lib/youtube.ts.
+  { sport: "facup",      path: "/soccer/eng.fa/scoreboard",                   channel: "ESPN FC" },
   // Little League World Series (added 2026-08-21). ESPN cuts a per-game
   // "Full Game Highlights" for the Williamsport rounds. The names it titles
   // with are the state/country, not ESPN's own city-based team name — see
@@ -2456,6 +2460,7 @@ const HL_LEAGUES = [
 // bake will write clips the client would have refused to resolve live.
 const HL_COMPETITION_TOKENS = {
   nationschamp: ["nations championship"],
+  facup: ["fa cup"],
 };
 // NFL preseason — mirrors NFL_PRESEASON_TITLE_TOKENS in src/lib/youtube.ts.
 // Sent per EVENT, not per league: an exhibition (season.type 1) must resolve to

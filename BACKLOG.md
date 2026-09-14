@@ -1,5 +1,80 @@
 # HideScore — Master Backlog
 
+## 2026-09-14 — UEFA Conference League + FA Cup, Copa del Rey, DFB-Pokal (`uecl` / `facup` / `copadelrey` / `dfbpokal`)
+
+**✅ Built 2026-09-14** on `feat/conference-league-and-cups` (worktree `~/hs-cups`) — awaiting Jacob's merge +
+deploy authorization. Four opt-in soccer competitions (Jacob chose 4 of the 7 probed; Carabao Cup, Coppa
+Italia and Coupe de France are out). Config, not code: ESPN serves all four in the standard soccer
+scoreboard shape (`site.web.api`, 200 each, probed 2026-09-14), so the soccer parsers do the work. All
+four: `SOCCER_SPORTS` (up-counting clock, closeness model, `reconcileSoccerDay`), `overtimeBonus: 25`
+(knockout extra time), Settings → Soccer group (16 → 20 rows, all OFF on a v2 profile), `excludeFromAuto`,
+share codes `cl fa cr dp`, TV catalog `SUPPORTED` (rows say `soccer: true`), news feeds (each `/news`
+200 / 6 articles) on the shared r/soccer firehose, `HEADER_SLUG_TO_SPORT` + Top-events pool. Short header
+labels "UECL" and "Copa Rey"; "FA Cup" / "DFB-Pokal" fit as-is. No standings table → not in
+`RANK_LEAGUES`, 0 rank chips. `deriveStage` learned the cup rounds (altGameNote "English FA Cup, Third
+Round" / "German Cup, First Round" / "UEFA Conference League, League Phase", plus the season.slugs
+`qualifying-round` … `fifth-round`, `league-phase`, `knockout-round-playoffs` — ESPN spells it without
+the hyphen), so the detail modal shows "First Round" / "League Phase" / "Final".
+
+**Windows (2026-27, HAND-SET — ESPN's calendar for each is one year-wide "list" entry).** Read from
+fixture range probes on 2026-09-14 and the competitions' published finals; `verifiedFor: 2026`:
+- `uecl` Conference League 10-13 → 06-03 (kickoff 10-15, final 06-02). MD1 2026-10-15 = 18 fixtures, all
+  Paramount+, league phase through 12-17. Final: Istanbul 2027-06-02 per UEFA (plan said 05-27).
+- `facup` FA Cup 01-07 → 05-23 (kickoff 01-09, final 05-22). Third round proper 2027-01-09, final
+  2027-05-22 per the FA (plan said 05-29). Checked against 2025-26 (01-09 → 05-16) — ✓ in the checker.
+- `copadelrey` Copa del Rey 10-27 → 04-25 (kickoff 10-28, final 04-24). First round proper 2026-10-28,
+  final La Cartuja 2027-04-24 per the RFEF (plan said 04-30). Qualifying (09-26 / 10-03, 20 clubs, no
+  logos) is outside the window on purpose.
+- `dfbpokal` DFB-Pokal 08-21 → 05-30 (kickoff 08-21, final 05-29). Round one 2026-08-21 → 08-24 (+ two
+  leftovers 09-01/02), round two 10-27/28; final Berlin 2027-05-29 per the DFB (plan said 08-14 / 05-22).
+
+Three changes from the plan, all on evidence:
+- **Only the FA Cup is lit; the other three are dark** (`NO_HIGHLIGHT_FALLBACK`, regression check keeps
+  them dark and unmonitored). Live worker, strict=1, 5 completed 2025-26 fixtures per probe, bare query:
+  - facup: "Emirates FA Cup" 0/5. **"ESPN FC" 7/10, 0 wrong** (5/5 from the fourth round; the three
+    misses were all-EFL third-round ties ESPN FC never cut — hidden button, not a wrong video). Ships
+    with a REQUIRED `"fa cup"` title token (`COMPETITION_TITLE_TOKENS`, mirrored in prebake-news and
+    the monitor) because the same channel cuts the PL meetings of the same clubs — see Copa del Rey.
+    Local read-back of the 5/16 final resolved "FA CUP FINAL 🏆 Chelsea vs. Manchester City | FA Cup
+    Highlights | ESPN FC". Badge reads "FA CUP".
+  - uecl: "CBS Sports Golazo" 0/5 — the uploader is a separate **"CBS Sports Golazo - Europe"**
+    channel: 2/5, and one hit was the WRONG LEG (R16 Leg 1 served for the Leg 2 fixture a week
+    later). A title token cannot separate two legs of one tie. Dark.
+  - copadelrey: "ESPN FC" 3/5 with TWO wrong matches (LaLiga Elche–Betis and Betis–Atlético served
+    for the cup ties); with a "copa del rey" token 2/5, 0 wrong — under the gate. Dark.
+  - dfbpokal: "DFB" 0/5, "ESPN FC" 0/5; unscoped winners were Bundesliga league games of the same
+    clubs (Dortmund–Leverkusen MD16 for the R16 tie). Dark.
+- **Windows moved off the plan's guesses** (see above) — the DFB-Pokal opener is 08-21 not 08-14, and
+  three finals are later than the plan had them.
+- **Empty-logo cards.** Amateur hosts in the DFB-Pokal first round (5 of 11 cards on 8/22) and the Copa
+  del Rey first two rounds have no ESPN logo at all, and an `<img src="">` never fires `onError`, so the
+  card drew an empty bordered box. GameCard now renders a same-size muted tile when `team.logo` is empty
+  (the compact row and the modal already guarded it).
+
+**Proof:** tsc, eslint (0 errors), test:unit (294, incl. new `tests/cup-stage-labels.test.ts`),
+highlights:check, news:check, poker:check, tv:catalog + tv:catalog:check (37 leagues), `next build` all
+green; `check-season-windows --only=uecl,facup,copadelrey,dfbpokal`: FA Cup ✓, the other three
+"unverified" (no far-edge fixtures yet), 0 flagged. Headless-Chromium read-back against the local
+export (`serve out`), clock fixed, screenshots in `~/hs-cups/qa/`: 8/22 DFB-Pokal = 11 cards, 17 logos +
+5 muted placeholders, 0 broken, 0 rank chips, 0 highlight buttons, modal stage "First Round", no
+scoreline; 10/15 Conference League = 18 cards, 36 logos, 0 broken, "League Phase", WATCH: Paramount+;
+5/16 FA Cup final = 1 card, 2 logos, stage "Final", 1 "ESPN FC highlights" button (worker proxied to
+production). Settings on a v2 profile: 20 Soccer rows, all four OFF, DFB-Pokal without "· offseason",
+the other three with it; ticking DFB-Pokal adds it to the header switcher (an offseason tick stays
+saved for its return, as designed).
+
+**Open:**
+- [ ] Far edges ESPN could not verify yet: Conference League final 06-02, Copa del Rey opener 10-28 and
+      final 04-24, DFB-Pokal final 05-29 — the checker reports them "unverified"; re-run `--only=` once
+      the draws land (Copa del Rey first round is drawn in October; UEFA knockouts in February).
+- [ ] January re-probe of the three dark cups once the 2026-27 knockouts exist. Candidates: "CBS Sports
+      Golazo - Europe" for uecl (needs a leg gate, not a title gate), "ESPN FC" + token for Copa del
+      Rey and the DFB-Pokal. ≥4/5 and 0 wrong to light.
+- [ ] Cup upsets ("Eintracht Frankfurt at SC St. Tönis", 11-0) rate on the league closeness model;
+      nothing marks a lower-division host. Fine for now — the card is spoiler-safe either way.
+- [ ] Production read-back after merge: `curl -s https://hidescore.com/tv/catalog.json | grep '"dfbpokal"'`,
+      pick DFB-Pokal, step ‹ to 8/22 and count 11 cards.
+
 ## 2026-09-14 — NCAA women's volleyball (`ncaavb`) gets a column of its own
 
 **✅ Shipped 2026-09-14** — `f7dea68d` (rebased over the same-day UFL, baseball/softball, women's hockey and
@@ -739,15 +814,15 @@ _src: 2026-08-03 session_
   > - **NASCAR / IndyCar** — `racing/nascar-cup`, `racing/irl`. Niche overlap with F1; skip unless interested.
   > - **Cricket (IPL, T20 World Cup)** — `cricket/<league>`. Global big, small US daily audience.
   > - **Rugby (Six Nations, RWC)** — `rugby/<league>`. Niche in the US.
-  > - **UEFA Conference League** — `soccer/uefa.europa.conf`. Pairs with UCL + UEL.
+  > - ~~**UEFA Conference League** — `soccer/uefa.europa.conf`. Pairs with UCL + UEL.~~ ✅ shipped 2026-09-14 (see the top of this file), with the FA Cup, Copa del Rey and DFB-Pokal.
   > _src: session 2026-05-27 sports-audit_
   >
   > **Update 2026-08-03 — most of this list SHIPPED.** Added and verified live against
   > ESPN: Liga MX, NWSL, EFL Championship, Copa Libertadores, Saudi Pro League, Euro
   > (yearCycle-gated to 2028), AFCON (gated to 2027), Cricket/IPL, NASCAR, IndyCar.
   > NCAAM/NCAAW were already in. Still open from the list above: Olympics, Ryder Cup,
-  > Rugby (ESPN's `rugby/*` scoreboard 400s — no working path found), UEFA Conference
-  > League.
+  > Rugby (ESPN's `rugby/*` scoreboard 400s — no working path found). UEFA Conference
+  > League shipped 2026-09-14.
 
 - [ ] **Esports column (LoL) — new data provider, not ESPN.** Biggest remaining audience gap. Worlds peaks ~6M+ concurrent excluding China and is watched almost entirely on VOD in the West because it's played in Asian timezones, which makes it the purest spoiler use-case after cricket.
   > **Source found and de-risked (2026-08-03):** `https://esports-api.lolesports.com/persisted/gw/getSchedule?hl=en-US`

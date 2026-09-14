@@ -29,6 +29,7 @@ const highlightBufferHours: Record<string, number> = {
   // league. Liga MX and Libertadores skew to late-night ET kickoffs, but the
   // buffer is measured from kickoff, not wall clock, so 3 still holds.
   ligamx: 3, nwsl: 3, efl: 3, libertadores: 3, euro: 3, afcon: 3, saudi: 3,
+  uecl: 3, facup: 3, copadelrey: 3, dfbpokal: 3,
   // Cricket: 7 hours, and it is NOT a padded soccer number. The buffer counts
   // from the scheduled START, and a T20 runs ~3h20m of play before the innings
   // break and presentation — so an official highlight package doesn't exist
@@ -49,7 +50,7 @@ const highlightBufferHours: Record<string, number> = {
 // of 2 made otPeriods = 4 - 2 = 2 for EVERY regulation game, adding a phantom
 // 1-hour double-OT buffer that delayed the highlight buttons. ncaam stays 2
 // (men's still play two 20-min halves). Mirrors SPORT_RATING_CONFIG in espn.ts.
-const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5, mlb: 9, ncaabase: 9, ncaasoft: 7, nfl: 4, ufl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, cricket: 2, golf: 4, tennis: 4,
+const regulationPeriods: Record<string, number> = { nba: 4, wnba: 4, ncaam: 2, ncaaw: 4, ncaaf: 4, nhl: 3, ncaah: 3, ncaawh: 3, ncaavb: 5, mlb: 9, ncaabase: 9, ncaasoft: 7, nfl: 4, ufl: 4, fifa: 2, epl: 2, mls: 2, ucl: 2, uel: 2, laliga: 2, seriea: 2, bundesliga: 2, ligue1: 2, ligamx: 2, nwsl: 2, efl: 2, libertadores: 2, euro: 2, afcon: 2, saudi: 2, uecl: 2, facup: 2, copadelrey: 2, dfbpokal: 2, cricket: 2, golf: 4, tennis: 4,
   // Two 40-minute halves. Without these the default of 4 made rawOt negative
   // for every finished rugby match — clamped to 0 by the Math.max, so the
   // buffer was right by accident; stating it keeps that an intent, not luck.
@@ -68,6 +69,8 @@ const highlightBadgeLabel: Record<string, string> = {
   seriea: "SERIE A", ligamx: "LIGA MX",
   sixnations: "6 NATIONS", superrugby: "SUPER RUGBY", rugbywc: "RWC",
   rugbychamp: "CHAMPIONS", rugbytest: "TESTS", nationschamp: "NATIONS",
+  // FA Cup (2026-09-14): the only lit cup; "FACUP" is not a word either.
+  facup: "FA CUP",
 };
 
 

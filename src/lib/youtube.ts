@@ -86,6 +86,19 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
   // AFCON: CAF's own channel ("CAFOnline" verified 0/1). Gated to 2027 in
   // ALL_LEAGUES, so this sits inert until the tournament year.
   afcon: "CAF TV",
+  // FA Cup (added 2026-09-14): ESPN holds the US rights and "ESPN FC" posts a
+  // per-tie "A vs. B | FA Cup Highlights | ESPN FC" cut. The FA's own "Emirates
+  // FA Cup" channel was 0/5 on strict. ESPN FC verified END-TO-END against the
+  // LIVE worker with strict=1 on ten completed 2025-26 ties, bare query shape:
+  // 7/10 hits, 0 wrong. The three misses were all-EFL third-round ties (Oxford
+  // v MK Dons, Blackpool v Ipswich, Blackburn v Hull) ESPN FC never cut — a
+  // hidden button, not a wrong video. From the fourth round on it was 5/5.
+  // ⚠️ The SAME channel also cuts the Premier League meetings of the same
+  // clubs, and Copa del Rey showed exactly that failure (a LaLiga Elche–Betis
+  // served for the cup tie), so the FA Cup ships with a REQUIRED "fa cup"
+  // title token — see COMPETITION_TITLE_TOKENS. Re-measured with the token:
+  // still 7/10, 0 wrong.
+  facup: "ESPN FC",
   // Little League World Series: ESPN holds the US broadcast AND posts a
   // per-game "Full Game Highlights" cut. This was written off as no-uploader on
   // 2026-08-12 (see the removed NO_HIGHLIGHT_FALLBACK note) because the probe
@@ -289,8 +302,26 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // 0/3; two regular-season Sep 2026 queries were 0/2. Well under the 4/5 gate,
 // and regular-season matches stream on ESPN+ / B1G+ with no official upload.
 // Dark.
+//
+// uecl / copadelrey / dfbpokal (added 2026-09-14, all three DARK). Probed
+// against the LIVE worker with strict=1 on 5 completed 2025-26 fixtures each,
+// bare query shape:
+//   uecl — "CBS Sports Golazo" 0/5 (the uploader is a separate "CBS Sports
+//     Golazo - Europe" channel: 2/5, and one of the two was the WRONG LEG —
+//     "Round of 16 - Leg 1" served for the Leg 2 fixture a week later; a title
+//     token cannot tell two legs of one tie apart).
+//   copadelrey — "ESPN FC" 3/5 with TWO wrong matches (LaLiga Elche–Betis and
+//     Betis–Atlético served for the cup ties); with a "copa del rey" title
+//     token 2/5 and 0 wrong, still under the 4/5 gate.
+//   dfbpokal — "DFB" 0/5, "ESPN FC" 0/5; the unscoped winners were Bundesliga
+//     league meetings of the same clubs (Dortmund–Leverkusen MD16 for the
+//     round-of-16 tie), i.e. the wrong-match class again.
+// Re-probe once the 2026-27 knockouts exist; any relight needs ≥4/5 and a
+// competition title token.
 const NO_HIGHLIGHT_FALLBACK = new Set([
+  "copadelrey",
   "cricket",
+  "dfbpokal",
   "euro",
   "esports",
   "laliga",
@@ -303,6 +334,7 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "rugbychamp",
   "rugbytest",
   "ufl",
+  "uecl",
 ]);
 
 // True when a league has no exact approved channel. Callers must render no
@@ -496,8 +528,15 @@ export function getCompetitionName(sport: string): string | null {
 // the correct trade: a hidden button is recoverable, a wrong scoreline on a
 // no-spoiler card is not. Do NOT widen this to "july internationals": it is
 // generic enough to match a plain test that is not part of the competition.
+//
+// facup: ESPN FC cuts the FA Cup AND the Premier League, and the same two clubs
+// meet in both. Copa del Rey on the same channel measured the failure outright
+// (a LaLiga Elche–Betis served for the cup tie, 2026-09-14), so the FA Cup
+// requires its name in the title. Every ESPN FC FA Cup cut is titled
+// "… | FA Cup Highlights | ESPN FC" (7/7 hits carried it).
 const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
   nationschamp: ["nations championship"],
+  facup: ["fa cup"],
 };
 
 // NFL preseason — the same failure one season-phase over. The NFL channel
