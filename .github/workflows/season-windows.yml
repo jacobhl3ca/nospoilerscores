@@ -38,7 +38,7 @@ jobs:
     steps:
       # Same convention as staleness-check.yml: pre-script infra flakes are
       # skips, not failures — only the script's own exit code should alert.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         id: checkout
         continue-on-error: true
       - uses: actions/setup-node@v6

@@ -17,7 +17,7 @@ jobs:
       # Treat pre-script GitHub infra failures (checkout 403s, setup-node hiccups)
       # as skips, not job failures — only the staleness script's exit code should
       # email. A sustained Actions outage will surface via the publishing workflows.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         id: checkout
         continue-on-error: true
       - uses: actions/setup-node@v6
