@@ -174,6 +174,10 @@ function shortNetwork(name: string): string {
     .trim() || name;
 }
 
+// Compact upcoming-game row for the games AFTER the first in an NBA/NHL playoff
+// series (the first renders as a full GameCard). The two teams are fixed for the
+// series, so each row just needs the VENUE — "@ HOME · date · time" with the
+// broadcast network pinned right (Jacob 6/4). No series state here: it shows
 // Display tip-off time tight: drop the space before the meridiem ("8:30 PM" →
 // "8:30PM") and KEEP the full ":00" on on-the-hour times ("7:00 PM" stays
 // "7:00PM", not "7PM"). The no-space form reads as one unit and also buys a few
@@ -183,10 +187,6 @@ function formatTime(t: string | null | undefined): string {
   return (t ?? "").replace(/(\d)\s+([AP]M)\b/i, "$1$2");
 }
 
-// Compact upcoming-game row for the games AFTER the first in an NBA/NHL playoff
-// series (the first renders as a full GameCard). The two teams are fixed for the
-// series, so each row just needs the VENUE — "@ HOME · date · time" with the
-// broadcast network pinned right (Jacob 6/4). No series state here: it shows
 // once, on the full lead card, instead of repeating down every row.
 export function CompactUpcomingCard({
   game,
@@ -488,15 +488,9 @@ export default function GameCard({ game, favoriteTeams, onToggleFavoriteTeam, sh
       // onError hides a 404'd/blocked ESPN logo so it degrades to the team name
       // beside it rather than the browser's broken-image glyph (matches the
       // remote-image guards in NewsColumn/AlignedVideoStrip/VideoModal).
-      // The `team.logo &&` guard skips the render entirely when the source has
-      // no logo art at all (esports teams, obscure lower-division clubs — ESPN's
-      // parseTeam yields logo: "" there): a bare src="" makes the browser
-      // re-request the current page as an image and trips React's empty-src
-      // warning, and onError doesn't reliably fire to hide it. Degrades to the
-      // adjacent team name, matching CompactUpcomingCard's guard in this file.
       // eslint-disable-next-line @next/next/no-img-element
       <img src={team.logo} alt="" title={team.displayName} loading="lazy" decoding="async" width={24} height={24} className="w-4 h-4 sm:w-6 sm:h-6 object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-    ) : null;
+    );
 
   // Clicking the card body opens a spoiler-safe details popup. Inner
   // buttons/links that stopPropagation keep their own actions — team names
