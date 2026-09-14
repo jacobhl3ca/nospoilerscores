@@ -2,8 +2,11 @@
 
 ## 2026-09-14 — UEFA Conference League + FA Cup, Copa del Rey, DFB-Pokal (`uecl` / `facup` / `copadelrey` / `dfbpokal`)
 
-**✅ Built 2026-09-14** on `feat/conference-league-and-cups` (worktree `~/hs-cups`) — awaiting Jacob's merge +
-deploy authorization. Four opt-in soccer competitions (Jacob chose 4 of the 7 probed; Carabao Cup, Coppa
+**✅ Shipped 2026-09-14** — `1da799d1` (rebased over the same-day UFL, baseball/softball, women's hockey and
+volleyball adds; both sides kept, catalog regenerated). Deploy run 34872768498 green; `hidescore.com/tv/catalog.json`
+lists all four. Production read-back (headless Chromium, fresh v2 profile, real clock): no cup column, Settings
+DFB-Pokal row OFF, tick + pick puts DFB-Pokal in the column; 23 × ‹ to Sat Aug 22 = 11 cards, 17 logos + 5 muted
+placeholders, 0 broken, 0 highlight buttons, 0 scorelines, modal "First Round". Four opt-in soccer competitions (Jacob chose 4 of the 7 probed; Carabao Cup, Coppa
 Italia and Coupe de France are out). Config, not code: ESPN serves all four in the standard soccer
 scoreboard shape (`site.web.api`, 200 each, probed 2026-09-14), so the soccer parsers do the work. All
 four: `SOCCER_SPORTS` (up-counting clock, closeness model, `reconcileSoccerDay`), `overtimeBonus: 25`
@@ -72,8 +75,6 @@ saved for its return, as designed).
       Rey and the DFB-Pokal. ≥4/5 and 0 wrong to light.
 - [ ] Cup upsets ("Eintracht Frankfurt at SC St. Tönis", 11-0) rate on the league closeness model;
       nothing marks a lower-division host. Fine for now — the card is spoiler-safe either way.
-- [ ] Production read-back after merge: `curl -s https://hidescore.com/tv/catalog.json | grep '"dfbpokal"'`,
-      pick DFB-Pokal, step ‹ to 8/22 and count 11 cards.
 
 ## 2026-09-14 — NCAA women's volleyball (`ncaavb`) gets a column of its own
 
