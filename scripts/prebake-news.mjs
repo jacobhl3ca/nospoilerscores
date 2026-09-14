@@ -2674,6 +2674,12 @@ const HL_NFL_CLUB_CHANNELS = (() => {
 // lookup only runs on games this recent — it is two extra worker calls per
 // still-missing game per run, on top of the league resolve.
 const HL_CLUB_DAYS = 3;
+// A club GAME package runs 4–10 min (Week 1 2026: 259–596 s). The clubs also
+// post 1–3 min single-player reels that clear the worker's gates ("Jaxson Dart
+// Highlights: Giants vs. Cowboys | Week 1 SNF", 108 s, the first dry run), so
+// anything under four minutes is not the game and is rejected. An unknown
+// duration (watch page unreachable) is let through.
+const HL_CLUB_MIN_SEC = 240;
 
 function hlTitleHasTeam(title, team) {
   const normalizedTitle = hlNormalizeTeam(title);
@@ -3072,10 +3078,12 @@ async function bakeGameHighlights() {
             .map((a) => (a ? HL_NFL_CLUB_CHANNELS[String(a).toUpperCase()] : null))
             .filter(Boolean))];
           const carriedClub = prev.club && clubChannels.some((c) => sameChannel(prev.clubChannel, c)) ? prev.club : null;
-          if (carriedClub && await hlVideoMatchesChannel(carriedClub, prev.clubChannel) && await hlVideoMatchesTeams(carriedClub, away, home) && await hlVideoMatchesWeek(carriedClub, week)) {
+          const carriedDuration = carriedClub ? (Number.isFinite(prev.clubDurationSec) ? prev.clubDurationSec : await fetchYtDurationSec(carriedClub)) : null;
+          const carriedLongEnough = !Number.isFinite(carriedDuration) || carriedDuration >= HL_CLUB_MIN_SEC;
+          if (carriedClub && carriedLongEnough && await hlVideoMatchesChannel(carriedClub, prev.clubChannel) && await hlVideoMatchesTeams(carriedClub, away, home) && await hlVideoMatchesWeek(carriedClub, week)) {
             club = carriedClub;
             clubChannel = prev.clubChannel;
-            clubDurationSec = Number.isFinite(prev.clubDurationSec) ? prev.clubDurationSec : await fetchYtDurationSec(club);
+            clubDurationSec = carriedDuration;
           } else if (carriedClub) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} club=${carriedClub} (${away} vs ${home} wk${week})`);
           }
@@ -3089,7 +3097,12 @@ async function bakeGameHighlights() {
                 console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved club=${id} (${channel})`);
                 continue;
               }
-              candidates.push({ videoId: id, channel, durationSec: await fetchYtDurationSec(id) });
+              const durationSec = await fetchYtDurationSec(id);
+              if (Number.isFinite(durationSec) && durationSec < HL_CLUB_MIN_SEC) {
+                console.warn(`HIGHLIGHT-CLUB-SHORT-REJECT ${key} club=${id} (${channel}) ${durationSec}s`);
+                continue;
+              }
+              candidates.push({ videoId: id, channel, durationSec });
             }
             const best = pickShorterClub(candidates);
             if (best) {
@@ -3179,14 +3192,14 @@ async function loadPriorRecaps() {
     local = JSON.parse(await readFile(RECAPS_OUT_PATH, "utf8"));
   } catch { /* fresh checkout / ignored generated file */ }
   let live = null;
-  let liveOk = false;
+  // A 404 is "never baked yet" (safe to write the first file); anything else
+  // that is not a 200 means the prior could not be read, which matters below.
+  let liveFailed = false;
   try {
     const res = await fetch(`https://hidescore.com/news/${RECAP_OUT_NAME}.json?ts=${Date.now()}`, { headers: { "User-Agent": UA } });
-    if (res.ok) {
-      live = await res.json();
-      liveOk = !!live?.recaps;
-    }
-  } catch { /* live prior unavailable */ }
+    if (res.ok) live = await res.json();
+    else if (res.status !== 404) liveFailed = true;
+  } catch { liveFailed = true; }
   // Same entry-by-entry merge as loadPriorHighlights: either copy can fill a
   // gap, the newer timestamp wins.
   const byId = new Map();
@@ -3199,7 +3212,7 @@ async function loadPriorRecaps() {
       }
     }
   }
-  return { byId, liveOk, localOk: !!local?.recaps };
+  return { byId, liveFailed, localOk: !!local?.recaps };
 }
 
 // "lengthSeconds":"596" off the watch page. Cached per id for the run; the
@@ -3301,6 +3314,13 @@ async function bakeLeagueRecaps() {
   const todayYmd = hlEtYmd(0);
   const cutoff = hlEtYmd(-RECAP_TTL_DAYS);
   const prior = await loadPriorRecaps();
+  // No prior at all to carry (fresh GHA checkout, live copy unreadable): a
+  // partial result from an IP YouTube / mlb.com refuse would be uploaded over
+  // the mini's good file, so leave the live file alone this run.
+  if (prior.liveFailed && !prior.localOk) {
+    console.warn(`${RECAPS_OUT_PATH}: live prior unreadable and no local copy — skipping this run`);
+    return;
+  }
   const byId = new Map();
   for (const [id, rec] of prior.byId) {
     const end = rec.cadence === "weekly" ? rec.windowEnd : rec.coversDate;

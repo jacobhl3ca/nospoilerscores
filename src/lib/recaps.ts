@@ -87,10 +87,17 @@ export function loadBakedRecaps(): Promise<Record<string, RecapRecord[]>> {
 }
 
 // Records for one sport that cover `ymd`, uploader-verified, shortest first.
+// Weekly windows from different uploaders are approximate and can overlap by a
+// day (EPL: the PL channel's Matchweek 4 and NBC's Matchweek 3 both cover the
+// Monday between them), so when matching weekly records disagree on the week
+// only the latest week is kept — one heading, one set of buttons.
 export function selectRecaps(all: Record<string, RecapRecord[]> | null | undefined, sport: string, ymd: string): RecapRecord[] {
   const list = Array.isArray(all?.[sport]) ? all![sport] : [];
-  return list
-    .filter((rec) => recapChannelVerified(rec) && recapCoversDay(rec, ymd) && (rec.videoId || rec.playbackUrl))
+  const hits = list.filter((rec) => recapChannelVerified(rec) && recapCoversDay(rec, ymd) && (rec.videoId || rec.playbackUrl));
+  const weeks = hits.map((r) => (r.cadence === "weekly" ? r.coversWeek : undefined)).filter((w): w is number => Number.isFinite(w));
+  const latestWeek = weeks.length ? Math.max(...weeks) : null;
+  return hits
+    .filter((rec) => rec.cadence !== "weekly" || latestWeek === null || rec.coversWeek === latestWeek)
     .sort((a, b) => (a.durationSec ?? Infinity) - (b.durationSec ?? Infinity));
 }
 
