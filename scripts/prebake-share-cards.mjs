@@ -25,6 +25,7 @@ const LEAGUE_PATHS = {
   ncaaw: "/basketball/womens-college-basketball/scoreboard",
   ncaaf: "/football/college-football/scoreboard",
   nfl: "/football/nfl/scoreboard",
+  ufl: "/football/ufl/scoreboard",
   nhl: "/hockey/nhl/scoreboard",
   ncaah: "/hockey/mens-college-hockey/scoreboard",
   fifa: "/soccer/fifa.world/scoreboard",

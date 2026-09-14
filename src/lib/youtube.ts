@@ -258,6 +258,13 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // hockey regional final highlights". A wrong match fails the gate outright, and
 // regular-season games stream on ESPN+ with no official upload. Dark. A
 // postseason-only channel gate is the way to light it for the March tournament.
+//
+// ufl (UFL spring football, added 2026-09-14): probed against the LIVE worker
+// with strict=1 on 5 completed 2026 fixtures (May 3, May 16, May 29, Jun 7
+// semifinal, Jun 13 United Bowl), bare query shape. "UFL" was 0/5; "FOX Sports"
+// and "ESPN" 0/1 each on the United Bowl. The unscoped winners were fan
+// channels ("Cincinnati Bengals / Oklahoma Sooners fan", "Mr. Mane"). Dark
+// until an official uploader owns the per-game cut.
 const NO_HIGHLIGHT_FALLBACK = new Set([
   "cricket",
   "euro",
@@ -267,6 +274,7 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "ncaah",
   "rugbychamp",
   "rugbytest",
+  "ufl",
 ]);
 
 // True when a league has no exact approved channel. Callers must render no

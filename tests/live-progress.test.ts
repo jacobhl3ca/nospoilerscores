@@ -94,3 +94,12 @@ test("level score, earlier breaks and a bare 0:00 stay live", () => {
   assert.equal(settled("mlb", ev(9, "End of 9th", ["5", "4"])).state, "in");
   assert.equal(settled("epl", ev(2, "End of 2nd Half", ["1", "0"])).state, "in");
 });
+
+// UFL (added 2026-09-14) shares the gridiron branch: four quarters, then OT.
+test("ufl takes the football branch", () => {
+  assert.equal(full(g("ufl", 2, "0:00", "Halftime")), "Halftime");
+  assert.equal(short(g("ufl", 2, "0:00", "Halftime")), "HT");
+  assert.equal(full(g("ufl", 3, "0:00", "End of 3rd")), "End of Q3");
+  assert.equal(full(g("ufl", 4, "6:22", "6:22 - 4th")), "Q4 - 6:22");
+  assert.equal(full(g("ufl", 5, "0:00", "OT")), "OT");
+});

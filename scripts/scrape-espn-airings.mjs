@@ -41,6 +41,7 @@ const SPORT_PATHS = {
   ncaah: "/hockey/mens-college-hockey/scoreboard",
   mlb: "/baseball/mlb/scoreboard",
   nfl: "/football/nfl/scoreboard",
+  ufl: "/football/ufl/scoreboard",
   ncaam: "/basketball/mens-college-basketball/scoreboard",
 };
 

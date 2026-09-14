@@ -44,6 +44,7 @@ export const TOP_EVENTS_MAX_SOURCES = 8;
 export const HEADER_SLUG_TO_SPORT: Record<string, Sport> = {
   "college-football": "ncaaf",
   nfl: "nfl",
+  ufl: "ufl",
   mlb: "mlb",
   llb: "llws",
   nba: "nba",
@@ -73,7 +74,7 @@ export const HEADER_SLUG_TO_SPORT: Record<string, Sport> = {
 // list rather than derived from the map above so a manual pool can include a
 // league ESPN never features on its homepage (Liga MX, Saudi PL).
 export const TOP_EVENTS_GAME_SPORTS: readonly Sport[] = [
-  "nfl", "ncaaf", "mlb", "nba", "wnba", "ncaam", "ncaaw", "nhl", "llws",
+  "nfl", "ncaaf", "ufl", "mlb", "nba", "wnba", "ncaam", "ncaaw", "nhl", "llws",
   "epl", "ucl", "uel", "laliga", "seriea", "bundesliga", "ligue1", "mls",
   "ligamx", "nwsl", "efl", "libertadores", "saudi", "fifa", "euro", "afcon",
 ];
