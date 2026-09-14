@@ -2,8 +2,10 @@
 
 ## 2026-09-14 — "↩ Reopen" pill: off the mobile tab bar, quiet, bottom-right on desktop, accidental closes only
 
-**Built 2026-09-14** — `9ca51edc` on `fix/reopen-pill` (worktree `~/hs-reopen`), pending push to `main` + the
-production read-back. The undo-close pill (8 s after a news/highlight modal closes, shipped `c956640d` 8/21)
+**✅ Shipped 2026-09-14** — `9ca51edc`, pushed `fix/reopen-pill:main`. Deploy run 34876772429 green. Production
+read-back on hidescore.com: the deployed CSS carries `--reopen-desktop-bottom`, one JS chunk carries
+"Reopen what you just closed", and the same 35-assertion Playwright pass is ALL PASS against production (mobile
+pill bottom 588 < tab bar 607). The undo-close pill (8 s after a news/highlight modal closes, shipped `c956640d` 8/21)
 and the favorites toast both sat at `bottom-6`, under the fixed bottom tab bar.
 
 **Before (measured on hidescore.com, iPhone 13 390×664):** pill y 586–640, tab bar y 607–664 → 33 px
