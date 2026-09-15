@@ -78,8 +78,10 @@ const DIVISIONS: Record<number, { league: LeagueKey; name: string; short: string
 const LEAGUE_NAME: Record<LeagueKey, string> = { AL: "American League", NL: "National League" };
 
 // How many chasing teams to list per league. Four is enough to cover a real
-// race without turning the panel into the full standings.
-const HUNT_LIMIT = 4;
+// race without turning the panel into the full standings. buildPicture keeps
+// every live chaser (by record); the panel cuts to this many AFTER ordering
+// by playoff odds, see orderHunt — the odds arrive from a second feed.
+export const HUNT_LIMIT = 4;
 
 export interface StatsApiTeamRecord {
   team?: { id?: number; name?: string; abbreviation?: string };
@@ -155,7 +157,7 @@ export function buildPicture(records: StatsApiRecord[], season: number): Playoff
     const wildCards = rest.slice(0, 3);
     const seeded = [...leaders.slice(0, 3), ...wildCards];
     seeded.forEach((t, i) => { t.seed = i + 1; });
-    const hunt = rest.slice(3).filter((t) => !t.eliminated).slice(0, HUNT_LIMIT);
+    const hunt = rest.slice(3).filter((t) => !t.eliminated);
     return { key, name: LEAGUE_NAME[key], seeded, hunt };
   });
 
@@ -228,6 +230,28 @@ export function oddsFromEspn(root: EspnStandingsNode): PlayoffOdds {
   };
   walk(root);
   return out;
+}
+
+// A formatted odds label back to a sortable number. ">99%" sorts above "99%"
+// and "<1%" above "0%"; a team with no label sorts last. Only used to ORDER —
+// the label itself is what renders.
+export function oddsValue(label: string | null | undefined): number {
+  if (!label) return -1;
+  if (label.startsWith(">")) return 99.5;
+  if (label.startsWith("<")) return 0.5;
+  const v = parseFloat(label);
+  return Number.isFinite(v) ? v : -1;
+}
+
+// The "still alive" list, best chance first. Games back is hidden by default
+// and the odds are the one number on the row, so the row order has to follow
+// the odds or the list reads upside-down (2026-09-13: a 0.4% club sat above a
+// 7% club because their records tied). Record breaks an odds tie; a club with
+// no odds yet keeps its record position at the end.
+export function orderHunt(hunt: PlayoffTeam[], odds: PlayoffOdds | null, limit = HUNT_LIMIT): PlayoffTeam[] {
+  return [...hunt]
+    .sort((a, b) => oddsValue(odds?.[b.abbrev]) - oddsValue(odds?.[a.abbrev]) || byRecord(a, b))
+    .slice(0, limit);
 }
 
 const ESPN_STANDINGS = "https://site.web.api.espn.com/apis/v2/sports/baseball/mlb/standings?level=3";
