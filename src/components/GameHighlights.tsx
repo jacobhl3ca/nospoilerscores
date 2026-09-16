@@ -6,7 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, hasNoTrustedHighlightSource, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, hasNoTrustedHighlightSource, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
 import { clubNickname, formatRecapDuration } from "@/lib/recaps";
 import { nflTeamChannelChain } from "@/lib/nflTeamChannels";
@@ -134,14 +134,36 @@ export default function GameHighlights({
   // city ("Tacoma WA") and its recap title is the state ("Washington"). Used for
   // the query, the fallback YouTube URL and the baked-ID identity check alike —
   // the prebake keys on the same rewritten pair, so the two must not diverge.
-  const hlAway = highlightTeamName(game.sport, game.awayTeam.shortDisplayName);
-  const hlHome = highlightTeamName(game.sport, game.homeTeam.shortDisplayName);
+  const hlAway = highlightTeamName(game.sport, game.awayTeam.shortDisplayName, game.awayTeam.location);
+  const hlHome = highlightTeamName(game.sport, game.homeTeam.shortDisplayName, game.homeTeam.location);
+  // Conference / network uploaders tried for the official slot only after the
+  // primary channel misses (college football today). Each carries the title
+  // token its request must send. Empty for every other sport, which leaves
+  // their resolve path unchanged. See lib/collegeHighlights.ts.
+  const homeConferenceId = game.homeTeam.conferenceId;
+  const awayConferenceId = game.awayTeam.conferenceId;
+  const broadcastsKey = game.broadcasts.join("|");
+  const fallbackChannels = useMemo(
+    () => (isMlb ? [] : getHighlightFallbackChannels(game.sport, primaryChannel, homeConferenceId, awayConferenceId, broadcastsKey ? broadcastsKey.split("|") : [])),
+    [isMlb, game.sport, primaryChannel, homeConferenceId, awayConferenceId, broadcastsKey],
+  );
+  // A baked official id is trusted from the primary channel or any fallback in
+  // THIS game's chain, never from an uploader outside it.
+  const bakedOfficialFromChain = useCallback((baked: BakedHighlight | null): { id: string; channel: string } | null => {
+    for (const channel of [primaryChannel, ...fallbackChannels.map((f) => f.channel)]) {
+      const id = getChannelVerifiedBakedId(baked, "official", channel, hlAway, hlHome);
+      if (id && channel) return { id, channel };
+    }
+    return null;
+  }, [primaryChannel, fallbackChannels, hlAway, hlHome]);
   const initialBaked = getCachedBakedHighlight(game.sport, game.id);
   // MLB's visible row is MLB.com-native; never hydrate its removed YouTube row.
   // Every other prebaked ID must carry the exact expected uploader marker.
-  const initialOfficialId = !isMlb && hasOfficialButton
-    ? getChannelVerifiedBakedId(initialBaked, "official", primaryChannel, hlAway, hlHome)
-    : null;
+  const initialOfficial = !isMlb && hasOfficialButton ? bakedOfficialFromChain(initialBaked) : null;
+  const initialOfficialId = initialOfficial?.id ?? null;
+  // Which uploader the official id came from. The modal's retry must stay on
+  // that channel with that channel's title gate.
+  const [officialSource, setOfficialSource] = useState<string | null>(initialOfficial?.channel ?? null);
   const initialSecondaryId = !isMlb
     ? getChannelVerifiedBakedId(initialBaked, "extended", secondaryChannel, hlAway, hlHome)
     : null;
@@ -307,14 +329,28 @@ export default function GameHighlights({
     [game.sport, game.isPreseason, game.isPlayoff, game.playoffLabel],
   );
   const compGateParam = compTokens.length ? `&nss_comp=${encodeURIComponent(compTokens.join("|"))}` : "";
-  const modalFallbackUrl = (channels: (string | null | undefined)[]) => {
+  const modalFallbackUrl = (channels: (string | null | undefined)[], compParam = compGateParam) => {
     if (!highlightUrl) return null;
-    if (noSearchFallback) return `${highlightUrl}&nss_no_fallback=1${weekGateParam}${compGateParam}`;
+    if (noSearchFallback) return `${highlightUrl}&nss_no_fallback=1${weekGateParam}${compParam}`;
     const allowed = [...new Set(channels.filter((channel): channel is string => !!channel))];
-    if (!allowed.length) return `${highlightUrl}${weekGateParam}${compGateParam}`;
-    return `${highlightUrl}&nss_strict=1&nss_channels=${encodeURIComponent(allowed.join("|"))}${weekGateParam}${compGateParam}`;
+    if (!allowed.length) return `${highlightUrl}${weekGateParam}${compParam}`;
+    return `${highlightUrl}&nss_strict=1&nss_channels=${encodeURIComponent(allowed.join("|"))}${weekGateParam}${compParam}`;
   };
-  const officialModalFallbackUrl = modalFallbackUrl([primaryChannel]);
+  const officialFallback = fallbackChannels.find((f) => f.channel === officialSource);
+  const officialModalFallbackUrl = officialFallback
+    ? modalFallbackUrl([officialFallback.channel], `&nss_comp=${encodeURIComponent((compTokens.length ? compTokens : officialFallback.titleTokens).join("|"))}`)
+    : modalFallbackUrl([primaryChannel]);
+  // Primary channel first, then the fallback chain. Resolves to the first hit
+  // and the channel it came from.
+  const resolveOfficial = useCallback(async (): Promise<{ id: string; channel: string } | null> => {
+    const primaryId = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, compTokens);
+    if (primaryId && primaryChannel) return { id: primaryId, channel: primaryChannel };
+    for (const f of fallbackChannels) {
+      const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, f.channel, undefined, competition, false, weekNumber, compTokens.length ? compTokens : f.titleTokens);
+      if (id) return { id, channel: f.channel };
+    }
+    return null;
+  }, [hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, competition, weekNumber, compTokens, fallbackChannels]);
   const secondaryModalFallbackUrl = modalFallbackUrl([secondaryChannel]);
   // The club channel rides the strict gate too: leadChannelBlocksEmbeds knows
   // every club name, so VideoModal opens on the hand-off card at once.
@@ -351,7 +387,8 @@ export default function GameHighlights({
         // above, so the prefetch, the click paths and the modal's retry all
         // send the same filter.
         const baked = await getBakedHighlight(game.sport, game.id);
-        const bakedOfficial = getChannelVerifiedBakedId(baked, "official", primaryChannel, away, home);
+        const bakedOfficialHit = bakedOfficialFromChain(baked);
+        const bakedOfficial = bakedOfficialHit?.id ?? null;
         if (isNfl) {
           setClub(verifiedClub(baked));
           setOfficialDurationSec(bakedOfficial && Number.isFinite(baked?.officialDurationSec) ? (baked!.officialDurationSec as number) : null);
@@ -364,11 +401,11 @@ export default function GameHighlights({
         // id nothing can display. The `secondP` slot was already safe (MLB's
         // secondaryChannel is undefined → resolveHighlightVideo returns null
         // before any fetch); this closes the same leak on the official slot.
-        const officialP = !hasOfficialButton || isMlb
+        const officialP: Promise<{ id: string; channel: string } | null> = !hasOfficialButton || isMlb
           ? Promise.resolve(null)
-          : bakedOfficial
-          ? Promise.resolve(bakedOfficial)
-          : resolveHighlightVideo(away, home, dateStr, series, primaryChannel, undefined, competition, false, weekNumber, compTokens);
+          : bakedOfficialHit
+          ? Promise.resolve(bakedOfficialHit)
+          : resolveOfficial();
         // If the server prebake already found the primary clip but no secondary,
         // trust that miss for this page load instead of making every browser do
         // another slow live YouTube scrape. The 30-min prebake will fill
@@ -417,7 +454,9 @@ export default function GameHighlights({
             setTelemundoLongStatus(telemundoLongId ? "found" : "missing");
           })();
         }
-        const officialId = await officialP;
+        const officialHit = await officialP;
+        const officialId = officialHit?.id ?? null;
+        setOfficialSource(officialHit?.channel ?? null);
         prefetchedOfficialId.current = officialId;
         setOfficialStatus(officialId ? "found" : "missing");
         let secondId = await secondP;
@@ -432,7 +471,7 @@ export default function GameHighlights({
         setSearchStatus(secondId ? "found" : "missing");
       })();
     }
-  }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, isNfl, verifiedClub, fifaTelemundoEnabled, weekNumber, compTokens]);
+  }, [highlightUrl, game.sport, game.id, hlAway, hlHome, dateStr, game.seriesNote, officialChannel, primaryChannel, secondaryChannel, competition, hasOfficialButton, isMlb, isFifa, isNfl, verifiedClub, fifaTelemundoEnabled, weekNumber, compTokens, bakedOfficialFromChain, resolveOfficial]);
 
   // See resolvedMlb above. Fires only when the board enrich did NOT already
   // attach a recap (game.mlbRecapPlaybackUrl absent) and the highlight window
@@ -541,12 +580,14 @@ export default function GameHighlights({
                   return;
                 }
                 setFetchingOnClick("official");
-                const id = await resolveHighlightVideo(hlAway, hlHome, dateStr, game.seriesNote, primaryChannel, undefined, competition, false, weekNumber, compTokens);
+                const hit = await resolveOfficial();
                 setFetchingOnClick(null);
-                if (id) {
-                  prefetchedOfficialId.current = id;
+                if (hit) {
+                  prefetchedOfficialId.current = hit.id;
+                  setOfficialSource(hit.channel);
                   setOfficialStatus("found");
-                  playHl(id, officialModalFallbackUrl!, shareCard);
+                  const fb = fallbackChannels.find((f) => f.channel === hit.channel);
+                  playHl(hit.id, (fb ? modalFallbackUrl([fb.channel], `&nss_comp=${encodeURIComponent((compTokens.length ? compTokens : fb.titleTokens).join("|"))}`) : modalFallbackUrl([primaryChannel]))!, shareCard);
                 } else {
                   setOfficialStatus("missing");
                 }

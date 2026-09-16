@@ -1,4 +1,6 @@
 import llwsRegions from "./llwsRegions.json";
+import collegeHighlightChannels from "./collegeHighlightChannels.json";
+import { buildCollegeFallbackChain, type CollegeHighlightConfig, type FallbackChannel } from "./collegeHighlights";
 import { isNflTeamChannel } from "./nflTeamChannels";
 
 // The JSON import types as a literal object, which cannot be indexed by an
@@ -602,6 +604,21 @@ export function getCompetitionTitleTokens(
   return COMPETITION_TITLE_TOKENS[sport] ?? [];
 }
 
+// Per-game fallback uploaders for the official slot, tried in order only after
+// the primary channel misses. Empty for every sport without an entry in
+// collegeHighlightChannels.json. See lib/collegeHighlights.ts.
+const COLLEGE_HIGHLIGHT_CONFIG = collegeHighlightChannels as Record<string, CollegeHighlightConfig>;
+
+export function getHighlightFallbackChannels(
+  sport: string,
+  primaryChannel: string | null | undefined,
+  homeConferenceId: string | null | undefined,
+  awayConferenceId: string | null | undefined,
+  broadcasts: readonly string[] | null | undefined,
+): FallbackChannel[] {
+  return buildCollegeFallbackChain(COLLEGE_HIGHLIGHT_CONFIG[sport], primaryChannel, homeConferenceId, awayConferenceId, broadcasts);
+}
+
 // Returns the full curated fallback chain of YouTube channels to try for the
 // 2nd highlight button, in priority order. Empty array means no curated
 // options; callers must not substitute a generic search.
@@ -649,9 +666,21 @@ function aliasTeam(name: string): string {
 // apart would make the bake and the client disagree on matchup identity, at which
 // point getChannelVerifiedBakedId rejects every entry the bake writes.
 
+// College football titles spell the school out ("Western Kentucky Hilltoppers
+// vs. Georgia Bulldogs"), but ESPN's shortDisplayName abbreviates it ("Western
+// KY", "Arizona St", "E Michigan"), and the worker's both-teams gate then
+// rejects the real upload. ESPN's `location` is the plain school name. Measured
+// 2026-09-16 on the 9/12 slate against the live worker, strict on ESPN College
+// Football: every game the short name found, the location found too, plus
+// Western Kentucky–Georgia and Eastern Michigan–Michigan State.
+const LOCATION_NAME_SPORTS = new Set(["ncaaf"]);
+
 // Rewrite a team name into the form the sport's official uploader puts in its
-// titles. Identity for every sport but LLWS, so nothing else can regress.
-export function highlightTeamName(sport: string, name: string): string {
+// titles. Identity for every sport but LLWS and the LOCATION_NAME_SPORTS, so
+// nothing else can regress. `location` is ESPN's team.location; when it is
+// missing the short name stands.
+export function highlightTeamName(sport: string, name: string, location?: string | null): string {
+  if (LOCATION_NAME_SPORTS.has(sport)) return location?.trim() || name;
   if (sport !== "llws") return name;
   const code = name.trim().split(/\s+/).pop() ?? "";
   return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
