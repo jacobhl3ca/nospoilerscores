@@ -1,0 +1,23 @@
+{
+  "ncaaf": {
+    "titleTokens": ["football"],
+    "conferences": {
+      "1": "ACC Digital Network",
+      "4": "Big 12 Conference",
+      "5": "Big Ten Football",
+      "8": "SEC",
+      "12": "Conference USA",
+      "37": "Sun Belt Conference",
+      "151": "American Conference"
+    },
+    "networks": [
+      { "names": ["FOX", "FS1", "FS2"], "channel": "CFB ON FOX" },
+      { "names": ["NBC", "USA Net", "Peacock"], "channel": "NBC Sports" },
+      { "names": ["CBS", "CBSSN"], "channel": "CBS Sports College Football" },
+      { "names": ["CW"], "channel": "CW Sports" }
+    ],
+    "channelTitleTokens": {
+      "Conference USA": ["football", "regular season week"]
+    }
+  }
+}
