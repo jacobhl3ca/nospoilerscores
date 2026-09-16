@@ -30,6 +30,7 @@ import VideoModal from "@/components/VideoModal";
 import AlignedVideoStrip from "@/components/AlignedVideoStrip";
 import WorldCupMattersCard from "@/components/WorldCupMattersCard";
 import LeagueRecapCard from "@/components/LeagueRecapCard";
+import { getRecapsFor } from "@/lib/recaps";
 import Link from "next/link";
 
 function getResolvedTheme(theme: Theme): "dark" | "light" {
@@ -2309,6 +2310,41 @@ export default function HomeContent({
   const ptrVisible = pullDelta > 0 || refreshing;
   const ptrTranslateY = refreshing ? 28 : Math.max(0, pullDelta - 12);
 
+  // Recap-pill row alignment. When ONE column shows the league recap pill and
+  // a sibling has none for its day, the sibling's first card sat ~50px higher
+  // (Jacob 9/16). Resolve which visible columns have a recap here — same
+  // (sport, ymd) rule as recapTopCard, same slot → league queue as
+  // slotEntries — so every LeagueRecapCard can reserve the row. Cheap:
+  // getRecapsFor reads the session-cached /news/recaps.json.
+  const recapQueryKey = (() => {
+    if (!(selectedDate < getDateString(0))) return "";
+    const queue = [...sortedLeagues];
+    const pairs: string[] = [];
+    for (const slotIdx of SLOT_INDICES.slice(0, slotCount)) {
+      if (selectedSlotLeagues[slotIdx] === "empty") continue;
+      const league = queue.shift();
+      if (!league) continue;
+      const ymd = (league.games.length ? null : league.previousGameDay?.date) || selectedDate;
+      pairs.push(`${league.sport}:${ymd}`);
+    }
+    return pairs.join(",");
+  })();
+  const [recapSports, setRecapSports] = useState<{ key: string; sports: Set<string> }>({ key: "", sports: new Set() });
+  useEffect(() => {
+    if (!recapQueryKey) return;
+    let alive = true;
+    const pairs = recapQueryKey.split(",").map((p) => p.split(":") as [string, string]);
+    Promise.all(pairs.map(([sport, ymd]) => getRecapsFor(sport, ymd).then((list) => (list.length ? sport : null)).catch(() => null)))
+      .then((hits) => {
+        if (alive) setRecapSports({ key: recapQueryKey, sports: new Set(hits.filter((s): s is string => !!s)) });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [recapQueryKey]);
+  // A stale set from the previous date/column mix never reserves a row.
+  const anyRecap = recapSports.key === recapQueryKey && recapSports.sports.size > 0;
+
   return (
     <div ref={rootRef} className="min-h-screen flex flex-col" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Keyboard skip link (WCAG 2.4.1) — visually hidden until focused, then
@@ -3485,12 +3521,22 @@ export default function HomeContent({
             // League-wide recap pill on top of each column, past dates only
             // (the ask). Follows the "Last played" slate when the column is
             // showing one, so the NFL Week-1 card tracks Sun 9/13 on Tue/Wed.
+            // A column with no recap of its own reserves the pill's row
+            // (invisible) when a sibling shows one, so first cards line up.
+            // Only when columns sit side by side: boardRowCls below is a
+            // flex-row whenever !singleColumn — phones included (2–3 narrow
+            // columns) — and a flex-col stack when singleColumn, where there
+            // is nothing to align with. A lone column has no sibling either.
+            const reserveRecapSlot = anyRecap && !(prefs.singleColumn ?? false)
+              && SLOT_INDICES.slice(0, slotCount).filter((i) => selectedSlotLeagues[i] !== "empty").length >= 2
+              && sortedLeagues.length >= 2;
             const recapTopCard = (league: LeagueData) => isPast
               ? (
                 <LeagueRecapCard
                   sport={league.sport}
                   date={selectedDate}
                   lastPlayedDate={league.games.length ? null : league.previousGameDay?.date}
+                  reserveSlot={reserveRecapSlot}
                   onPlayHighlight={openVideoModal}
                   onPlayEmbed={openEmbedModal}
                 />
