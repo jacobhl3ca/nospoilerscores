@@ -6,7 +6,7 @@ import { buildShareCard, type ShareCardMeta } from "@/lib/shareCard";
 import { isDemoModeActive } from "@/lib/demoMode";
 import { openExternal } from "@/lib/openExternal";
 import { getTimeZone } from "@/lib/etDay";
-import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, hasNoTrustedHighlightSource, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
+import { getYouTubeSearchUrl, getOfficialChannelName, getSecondaryChannels, getCompetitionName, getCompetitionTitleTokens, getHighlightFallbackChannels, hasNoTrustedHighlightSource, highlightPrimaryFromChain, highlightTeamName, requiresStrictChannelOnly, resolveHighlightVideo, resolveTelemundoWorldCupVideo } from "@/lib/youtube";
 import { getBakedHighlight, getCachedBakedHighlight, getChannelVerifiedBakedId } from "@/lib/highlights";
 import { clubNickname, formatRecapDuration } from "@/lib/recaps";
 import { nflTeamChannelChain } from "@/lib/nflTeamChannels";
@@ -76,6 +76,8 @@ const highlightBadgeLabel: Record<string, string> = {
   rugbychamp: "CHAMPIONS", rugbytest: "TESTS", nationschamp: "NATIONS",
   // FA Cup (2026-09-14): the only lit cup; "FACUP" is not a word either.
   facup: "FA CUP",
+  // NCAA volleyball (lit 2026-09-16): "NCAAVB" reads as a code, not a sport.
+  ncaavb: "NCAA VB",
 };
 
 
@@ -105,7 +107,29 @@ export default function GameHighlights({
   // pass the column label ("Esports") as leagueLabel, which is useless here, so
   // swap in the league PandaScore reported. Every other sport is unchanged.
   const highlightLabel = game.sport === "esports" ? (game.esportsLeague ?? undefined) : leagueLabel;
-  const officialChannel = getOfficialChannelName(game.sport, highlightLabel);
+  // Conference / network uploaders for this game (college sports; empty for
+  // every other sport). ncaaf tries them only after its fixed channel misses.
+  // ncaavb has no fixed channel, so the chain's first channel IS the official
+  // one and a game with no chain stays dark. See lib/collegeHighlights.ts.
+  const fixedOfficialChannel = getOfficialChannelName(game.sport, highlightLabel);
+  const homeConferenceId = game.homeTeam.conferenceId;
+  const awayConferenceId = game.awayTeam.conferenceId;
+  const homeTeamId = game.homeTeam.id;
+  const awayTeamId = game.awayTeam.id;
+  const broadcastsKey = game.broadcasts.join("|");
+  const gameChain = useMemo(
+    () => getHighlightFallbackChannels(
+      game.sport,
+      fixedOfficialChannel,
+      { id: homeTeamId, conferenceId: homeConferenceId },
+      { id: awayTeamId, conferenceId: awayConferenceId },
+      broadcastsKey ? broadcastsKey.split("|") : [],
+    ),
+    [game.sport, fixedOfficialChannel, homeTeamId, homeConferenceId, awayTeamId, awayConferenceId, broadcastsKey],
+  );
+  const chainIsPrimary = !fixedOfficialChannel && highlightPrimaryFromChain(game.sport);
+  const officialChannel = chainIsPrimary ? (gameChain[0]?.channel ?? null) : fixedOfficialChannel;
+  const fallbackChannels = useMemo(() => (chainIsPrimary ? gameChain.slice(1) : gameChain), [chainIsPrimary, gameChain]);
   // MLB's visible highlight row is MLB.com-native; no YouTube slot renders.
   const isMlb = game.sport === "mlb";
   const isFifa = game.sport === "fifa";
@@ -136,17 +160,6 @@ export default function GameHighlights({
   // the prebake keys on the same rewritten pair, so the two must not diverge.
   const hlAway = highlightTeamName(game.sport, game.awayTeam.shortDisplayName, game.awayTeam.location);
   const hlHome = highlightTeamName(game.sport, game.homeTeam.shortDisplayName, game.homeTeam.location);
-  // Conference / network uploaders tried for the official slot only after the
-  // primary channel misses (college football today). Each carries the title
-  // token its request must send. Empty for every other sport, which leaves
-  // their resolve path unchanged. See lib/collegeHighlights.ts.
-  const homeConferenceId = game.homeTeam.conferenceId;
-  const awayConferenceId = game.awayTeam.conferenceId;
-  const broadcastsKey = game.broadcasts.join("|");
-  const fallbackChannels = useMemo(
-    () => (isMlb ? [] : getHighlightFallbackChannels(game.sport, primaryChannel, homeConferenceId, awayConferenceId, broadcastsKey ? broadcastsKey.split("|") : [])),
-    [isMlb, game.sport, primaryChannel, homeConferenceId, awayConferenceId, broadcastsKey],
-  );
   // A baked official id is trusted from the primary channel or any fallback in
   // THIS game's chain, never from an uploader outside it.
   const bakedOfficialFromChain = useCallback((baked: BakedHighlight | null): { id: string; channel: string } | null => {
@@ -295,7 +308,7 @@ export default function GameHighlights({
   // what gates the prefetch effect AND is the modal's fallback link, so nulling
   // it here is the single point that keeps both highlight buttons off the card:
   // without it a league lacking an approved uploader could reach resolution.
-  const noTrustedSource = hasNoTrustedHighlightSource(game.sport, highlightLabel);
+  const noTrustedSource = chainIsPrimary ? !officialChannel : hasNoTrustedHighlightSource(game.sport, highlightLabel);
   const highlightUrl = highlightsReady && !noTrustedSource
     ? getYouTubeSearchUrl(hlAway, hlHome, dateStr, game.seriesNote, competition)
     : null;

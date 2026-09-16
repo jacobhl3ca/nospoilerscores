@@ -2560,20 +2560,23 @@ const HL_LLWS_REGION_NAMES = JSON.parse(
 // College football titles use the full school name ESPN keeps in team.location
 // ("Western Kentucky"), not the shortDisplayName ("Western KY"). Mirrors
 // LOCATION_NAME_SPORTS in src/lib/youtube.ts.
-const HL_LOCATION_NAME_SPORTS = new Set(["ncaaf"]);
+const HL_LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb"]);
 // Per-game fallback uploaders (conference + TV network) for the official slot.
 // SAME FILE src/lib/youtube.ts reads; the chain builder mirrors
 // buildCollegeFallbackChain in src/lib/collegeHighlights.ts.
 const HL_COLLEGE_CHANNELS = JSON.parse(
   readFileSync(new URL("../src/lib/collegeHighlightChannels.json", import.meta.url), "utf8"),
 );
-const hlFallbackChain = (sport, primaryChannel, homeConf, awayConf, broadcasts) => {
+const hlFallbackChain = (sport, primaryChannel, homeTeam, awayTeam, broadcasts) => {
   const cfg = HL_COLLEGE_CHANNELS[sport];
   if (!cfg) return [];
+  const confKey = (t) => (t?.conferenceId ? String(t.conferenceId) : (t?.id ? cfg.teamConferences?.[String(t.id)] : undefined));
   const channels = [];
   const add = (c) => { if (c && c !== primaryChannel && !channels.includes(c)) channels.push(c); };
-  add(homeConf ? cfg.conferences[String(homeConf)] : undefined);
-  add(awayConf ? cfg.conferences[String(awayConf)] : undefined);
+  const homeConf = confKey(homeTeam);
+  const awayConf = confKey(awayTeam);
+  add(homeConf ? cfg.conferences[homeConf] : undefined);
+  add(awayConf ? cfg.conferences[awayConf] : undefined);
   for (const name of broadcasts ?? []) add(cfg.networks.find((n) => n.names.includes(name))?.channel);
   return channels.map((channel) => ({ channel, titleTokens: cfg.channelTitleTokens?.[channel] ?? cfg.titleTokens }));
 };
@@ -3000,7 +3003,7 @@ async function bakeGameHighlights() {
             const away = hlHighlightTeamName(lg.sport, awayTeam?.shortDisplayName, awayTeam?.location);
             const home = hlHighlightTeamName(lg.sport, homeTeam?.shortDisplayName, homeTeam?.location);
             const broadcasts = (comp?.broadcasts ?? []).flatMap((b) => b?.names ?? []);
-            const fallbacks = hlFallbackChain(lg.sport, lg.channel, homeTeam?.conferenceId, awayTeam?.conferenceId, broadcasts);
+            const fallbacks = hlFallbackChain(lg.sport, lg.channel, homeTeam, awayTeam, broadcasts);
             if (!event.id || !away || !home) return [];
             let series = null;
             for (const note of comp?.notes ?? []) {

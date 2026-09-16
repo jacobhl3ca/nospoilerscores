@@ -340,7 +340,7 @@ const LLWS_REGION_NAMES = JSON.parse(
 // ncaaf titles use ESPN's team.location ("Western Kentucky"), not the short
 // name ("Western KY") — mirrors LOCATION_NAME_SPORTS in src/lib/youtube.ts.
 function highlightTeamName(sport, name, location) {
-  if (sport === "ncaaf") return (location && String(location).trim()) || name;
+  if (sport === "ncaaf" || sport === "ncaavb") return (location && String(location).trim()) || name;
   if (sport !== "llws") return name;
   const code = String(name ?? "").trim().split(/\s+/).pop() ?? "";
   return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;

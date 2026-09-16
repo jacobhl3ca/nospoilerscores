@@ -75,14 +75,14 @@ check(
 check(
   "NCAAF fallback chain: home conference, away conference, network; all football-gated",
   (() => {
-    const chain = youtube.getHighlightFallbackChannels("ncaaf", "ESPN College Football", "8", "5", ["FOX"]);
+    const chain = youtube.getHighlightFallbackChannels("ncaaf", "ESPN College Football", { conferenceId: "8" }, { conferenceId: "5" }, ["FOX"]);
     return JSON.stringify(chain.map((f) => f.channel)) === JSON.stringify(["SEC", "Big Ten Football", "CFB ON FOX"]) &&
       chain.every((f) => f.titleTokens.includes("football"));
   })(),
 );
 check(
   "Sports without a fallback table get no fallback channels",
-  youtube.getHighlightFallbackChannels("nba", "NBA", "8", "5", ["FOX"]).length === 0,
+  youtube.getHighlightFallbackChannels("nba", "NBA", { conferenceId: "8" }, { conferenceId: "5" }, ["FOX"]).length === 0,
 );
 
 check(
