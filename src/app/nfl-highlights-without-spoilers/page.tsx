@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
-const TITLE = "NFL Highlights Without Spoilers | HideScore";
+const TITLE = "NFL Highlights Without Spoilers: Find the Best Games | HideScore";
 const DESC =
-  "Watch NFL highlights and catch up on football games without seeing scores, winners, or spoiler headlines first. HideScore keeps results hidden until you tap.";
+  "Watch NFL highlights without seeing the final score. Every game is rated for excitement first, so you pick the ones worth your time. Free, no account.";
 const CANONICAL = "/nfl-highlights-without-spoilers";
 
 // Answer-engine questions. Depth here is deliberate: this page ranked at
@@ -47,6 +47,10 @@ const FAQ = [
     q: "Is HideScore free?",
     a: "Yes. HideScore is free on the web and in the iPhone app, and it works without an account. Signing in only syncs your league columns and preferences across devices.",
   },
+  {
+    q: "Where can I see which NFL games were worth watching without the scores?",
+    a: "On HideScore's board. Every finished game shows an excitement rating with the score hidden. Tap a game only when you want the result.",
+  },
 ];
 
 export const metadata: Metadata = {
@@ -89,6 +93,7 @@ export default function NflHighlightsWithoutSpoilersPage() {
     <SeoLandingPage
       h1="NFL highlights without spoilers"
       intro={[
+        "Yes, you can watch NFL highlights without spoilers: HideScore shows every game with the score hidden and an excitement rating, so you choose a game first and reveal the result only when you want to.",
         "The NFL is built to spoil itself. Eight games kick off at once on a Sunday afternoon, RedZone cuts between all of them, fantasy apps buzz on every touchdown, and the moment a game ends its final score is a push alert, a group-chat message, and a thumbnail on every app you own. If you did not watch it live, the ending usually reaches you before the game does.",
         "HideScore is a starting point that will not do that. Every game card opens with the score covered, so you can see what has finished and what is still going without learning how any of it ended. A spoiler-free rating tells you whether a game was close or dramatic; it never tells you who won. When you pick one, the highlights open with the scoreline filtered out of the video title.",
         "The 2026 season kicks off on Wednesday, September 9 with New England at Seattle, and week 1 closes on Monday, September 14 with Denver at Kansas City.",

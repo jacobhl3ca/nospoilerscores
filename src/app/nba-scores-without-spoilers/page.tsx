@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
-const TITLE = "NBA Scores Without Spoilers | HideScore";
+const TITLE = "NBA Scores Without Spoilers: Find the Best Games | HideScore";
 const DESC =
-  "Check NBA scores, standings, and highlights without seeing who won. HideScore keeps every basketball result hidden until you tap, so you can pick a game worth watching first.";
+  "Follow NBA scores without seeing the result. Every game is rated for excitement first, so you know which ones to watch. Free, no account.";
 const CANONICAL = "/nba-scores-without-spoilers";
 
 // Rebuilt 2026-09-03. This page was the worst performer on the site with real
@@ -47,6 +47,10 @@ const FAQ = [
     q: "Is HideScore free?",
     a: "Yes. HideScore is free on the web and in the iPhone app, and works without an account. Signing in only syncs your league columns and preferences across devices.",
   },
+  {
+    q: "How do I follow NBA scores on my phone without spoilers from headlines?",
+    a: "Open HideScore instead of a news app. Every game is hidden until you tap, and the excitement rating tells you which ones to watch.",
+  },
 ];
 
 export const metadata: Metadata = {
@@ -87,6 +91,7 @@ export default function NbaScoresWithoutSpoilersPage() {
     <SeoLandingPage
       h1="NBA scores without spoilers"
       intro={[
+        "Yes, you can follow NBA scores without spoilers: HideScore shows every game with the result hidden and rates it for excitement, so you pick a game before you learn who won.",
         "The NBA plays almost every night for six months, and on a normal Wednesday twelve games finish inside four hours of each other. If you are not watching live, the results arrive anyway — a push alert, a fantasy app, a highlight thumbnail, someone's reaction in a group chat. By the time you sit down with the game you wanted, you usually already know how it ended.",
         "HideScore is a scoreboard built the other way around. Every game opens with the score covered, so you can scan the whole night — who played, what has finished, what is still on — without learning a single result. A spoiler-free rating tells you which games were close or dramatic; it never tells you who won.",
         "The 2026-27 season opens on Tuesday, October 20, 2026 with a tripleheader, and the league is fully in action the following night.",
