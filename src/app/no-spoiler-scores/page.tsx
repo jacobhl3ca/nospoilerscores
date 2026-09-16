@@ -13,9 +13,9 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // while /premier-league-without-spoilers converted 24.2% from 6.2 on 734 words.
 // Same rank, six times the click-through, and the only material difference was
 // substance — so this is the page where depth was worth the most.
-const TITLE = "No Spoiler Scores - Sports Scores Without Spoilers | HideScore";
+const TITLE = "No Spoiler Scores: NFL, NBA, MLB, NHL & Soccer | HideScore";
 const DESC =
-  "Check NBA, NFL, NHL, MLB, soccer, and World Cup scores without spoilers. HideScore hides every result until you tap, and rates games so you know which are worth watching.";
+  "Check every game with the score hidden until you tap. Excitement ratings tell you what is worth watching. NFL, NBA, MLB, NHL, soccer. Free, no account.";
 const CANONICAL = "/no-spoiler-scores";
 
 const FAQ = [
@@ -50,6 +50,10 @@ const FAQ = [
   {
     q: "Is HideScore free, and does it track me?",
     a: "It is free, it works without an account, and it uses no tracking cookies. Signing in is optional and only syncs your league columns and preferences across devices.",
+  },
+  {
+    q: "What apps let me browse fixtures and standings without showing live scores by default?",
+    a: "HideScore does. Scores are hidden by default on web, iOS and Android, and you reveal each game one tap at a time.",
   },
 ];
 
@@ -89,6 +93,7 @@ export default function NoSpoilerScoresPage() {
     <SeoLandingPage
       h1="No spoiler scores for sports fans"
       intro={[
+        "No spoiler scores means a scoreboard that hides every result until you tap: HideScore does this for NFL, NBA, MLB, NHL and soccer, with an excitement rating so you know which games to watch.",
         "Every normal scoreboard is built to tell you the result as fast as it can. That is the right design if you are following live and the wrong one for everybody else — anyone watching on delay, anyone in the wrong time zone, anyone who wants to pick a replay worth an evening without being told how it ends first.",
         "HideScore inverts it. Scores are covered by default across every league it carries, so you can scan matchups, start times, and what has finished without learning a single result. When you want one, you tap that game — and only that game.",
         "A spoiler-free rating does the rest: it tells you a finished game was close, high-scoring, or decided late, so you can choose what to watch without the choice giving the ending away.",

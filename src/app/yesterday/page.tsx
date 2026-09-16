@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import HomeContent from "@/components/HomeContent";
 
 export const metadata: Metadata = {
-  title: "Yesterday's Sports Scores — No Spoilers | HideScore",
+  title: "Yesterday's Games Without Spoilers: What to Watch | HideScore",
   description:
-    "Yesterday's NBA, MLB, NHL, NFL, and soccer games without spoilers. Catch up on completed games — scores hidden, highlights one tap away.",
+    "Catch up on yesterday's games with scores hidden. Excitement ratings show which ones are worth a replay or the highlights. Free, no account.",
   alternates: { canonical: "/yesterday" },
   openGraph: {
-    title: "Yesterday's Sports Scores — No Spoilers | HideScore",
-    description: "Yesterday's completed games, spoiler-free. Tap to see scores or watch highlights.",
+    title: "Yesterday's Games Without Spoilers: What to Watch | HideScore",
+    description: "Catch up on yesterday's games with scores hidden. Excitement ratings show which ones are worth a replay or the highlights. Free, no account.",
     url: "https://hidescore.com/yesterday",
     siteName: "HideScore",
     // og:locale matches the site-level Open Graph block in layout.tsx. A page's
@@ -22,8 +22,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Yesterday's Sports Scores — No Spoilers | HideScore",
-    description: "Yesterday's completed games, spoiler-free. Tap to see scores or watch highlights.",
+    title: "Yesterday's Games Without Spoilers: What to Watch | HideScore",
+    description: "Catch up on yesterday's games with scores hidden. Excitement ratings show which ones are worth a replay or the highlights. Free, no account.",
     images: [{ url: "https://hidescore.com/og-image.png", alt: "HideScore — yesterday's sports scores, spoiler-free" }],
   },
 };
@@ -50,9 +50,9 @@ export default function YesterdayPage() {
             "@graph": [
               {
                 "@type": "WebPage",
-                name: "Yesterday's Sports Scores — No Spoilers | HideScore",
+                name: "Yesterday's Games Without Spoilers: What to Watch | HideScore",
                 description:
-                  "Yesterday's NBA, MLB, NHL, NFL, and soccer games without spoilers. Catch up on completed games — scores hidden, highlights one tap away.",
+                  "Catch up on yesterday's games with scores hidden. Excitement ratings show which ones are worth a replay or the highlights. Free, no account.",
                 url: "https://hidescore.com/yesterday",
                 inLanguage: "en",
                 isPartOf: { "@id": "https://hidescore.com/#website" },

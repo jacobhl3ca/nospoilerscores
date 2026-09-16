@@ -17,9 +17,9 @@ import SeoLandingPage from "@/components/SeoLandingPage";
 // Fixed by Request Indexing plus a homepage link, and the page brought up to the
 // depth that makes /premier-league-without-spoilers convert at 24.2%. Season
 // dates and networks verified against ESPN's hockey/nhl scoreboard 2026-09-03.
-const TITLE = "NHL Highlights Without Spoilers | HideScore";
+const TITLE = "NHL Highlights Without Spoilers: Find the Best Games | HideScore";
 const DESC =
-  "Watch NHL highlights and catch up on hockey games without seeing scores, winners, or spoiler headlines first. HideScore keeps results hidden until you tap.";
+  "Watch NHL highlights without seeing who won. Scores stay hidden and every game is rated for excitement, so you know which ones to watch. Free, no account.";
 const CANONICAL = "/nhl-highlights-without-spoilers";
 
 const FAQ = [
@@ -54,6 +54,10 @@ const FAQ = [
   {
     q: "Is HideScore free?",
     a: "Yes. HideScore is free on the web and in the iPhone app, and works without an account. Signing in only syncs your league columns and preferences across devices.",
+  },
+  {
+    q: "Where can I view upcoming NHL matchups without seeing scores from earlier games?",
+    a: "On HideScore. The schedule and finished games sit on one board with every score hidden until you tap.",
   },
 ];
 
@@ -92,6 +96,7 @@ export default function NhlHighlightsWithoutSpoilersPage() {
     <SeoLandingPage
       h1="NHL highlights without spoilers"
       intro={[
+        "Yes, you can see upcoming and finished NHL games without seeing earlier scores: HideScore hides every result until you tap and rates each game for excitement.",
         "Hockey highlights are almost impossible to search for safely. Type the matchup into YouTube and the top result tells you the final score in its title, the thumbnail shows whoever scored the winner celebrating, and the preview text underneath finishes the job. You wanted to watch the game; you have already been told how it went.",
         "HideScore fixes the starting point. You open highlights from a covered game card instead of from a search box — the matchup is visible, the result is not, and clips whose titles give the score away are filtered out before they reach you. The ones that remain have their titles masked.",
         "The 2026-27 season opens on Tuesday, September 29, 2026, with five games, widening to eight on Thursday, October 1.",
