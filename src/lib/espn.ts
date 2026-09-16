@@ -4460,6 +4460,58 @@ export function eventsToGames(events: ScoreboardEvent[], sport: Sport): Game[] {
 // scoreboard accepts a DATE RANGE (`?dates=YYYYMMDD-YYYYMMDD`) returning every
 // fixture in the window in ONE request, so we can find the true next match day
 // without dozens of separate fetches. Returns the earliest future day's slate.
+// ESPN's team-sport scoreboards stopped honouring a `dates=YYYYMMDD-YYYYMMDD`
+// range on or before 2026-09-16: NFL/MLB/NBA/EPL all answer a range with ZERO
+// events (no error) while the same single day still returns the slate. Verified
+// from two hosts (laptop + mini) and both site.api / site.web.api. The event
+// scoreboards (racing/f1, mma/ufc) still take a range, so fetchLeagueEvent is
+// untouched. Every ranged lookback/lookahead below now fans out one request
+// per day instead, in parallel chunks, stopping at the first chunk that has
+// what the caller wants — so an in-season league costs ~7 requests, not the
+// whole window. Symptom this fixes: the Yesterday tab's NFL column read
+// "Starts Tomorrow" the day after Monday Night Football, because the empty
+// lookback made the column think the season had not begun (Jacob 9/16).
+const RANGE_FANOUT_CHUNK_DAYS = 7;
+
+async function fetchScoreboardEventsForDay(sport: Sport, ymd: string): Promise<ScoreboardEvent[]> {
+  const url = scoreboardUrl(sport);
+  url.searchParams.set("dates", ymd);
+  try {
+    const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.events ?? []) as ScoreboardEvent[];
+  } catch {
+    return [];
+  }
+}
+
+// Fetch `days` (already ordered in the direction the caller walks) in chunks
+// of RANGE_FANOUT_CHUNK_DAYS, each chunk in parallel. `enough(games)` is asked
+// after every chunk with the games gathered so far; the walk stops as soon as
+// it says yes. Returns every game gathered (the caller filters/groups).
+async function fetchGamesAcrossDays(
+  sport: Sport,
+  days: string[],
+  enough: (gamesSoFar: Game[]) => boolean,
+): Promise<Game[]> {
+  const gathered: Game[] = [];
+  for (let i = 0; i < days.length; i += RANGE_FANOUT_CHUNK_DAYS) {
+    const chunk = days.slice(i, i + RANGE_FANOUT_CHUNK_DAYS);
+    const perDay = await Promise.all(chunk.map((d) => fetchScoreboardEventsForDay(sport, d)));
+    // A single-day query can bleed a late-ET game into the neighbouring UTC
+    // day, so the same event can arrive twice across a chunk — dedupe by id.
+    const seen = new Set(gathered.map((g) => g.id));
+    for (const g of eventsToGames(perDay.flat(), sport)) {
+      if (seen.has(g.id)) continue;
+      seen.add(g.id);
+      gathered.push(g);
+    }
+    if (enough(gathered)) break;
+  }
+  return gathered;
+}
+
 // How far ahead fetchNextGameDayRange reads in ONE request. Shared with the
 // offseason-opener gate in fetchAllLeagues so the gate can never green-light a
 // league whose opener sits outside the span the fetch would actually cover.
@@ -4486,27 +4538,28 @@ async function fetchNextGameDayRange(
   const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   const start = new Date(base); start.setDate(start.getDate() + 1);
   const end = new Date(base); end.setDate(end.getDate() + windowDays);
-  const url = scoreboardUrl(sport);
-  url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
-  let events: ScoreboardEvent[];
-  try {
-    // ESPN's tennis scoreboard payload is large during Slams. Do not let a
-    // ranged tennis lookahead retry for ~30s before admitting there is no slate.
-    const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
-    if (!res.ok) return null;
-    const data = await res.json();
-    events = data?.events ?? [];
-  } catch {
-    return null;
+  // Tennis still takes a `dates=A-B` range (checked 2026-09-16, HTTP 200) and
+  // returns the whole Slam regardless, so it keeps the single ranged request:
+  // its matches nest inside a 0-competitor tournament wrapper that
+  // eventsToGames drops, and go through their own parser with the window
+  // applied per match. Every other sport fans out per day — see
+  // RANGE_FANOUT_CHUNK_DAYS — because ESPN now answers their ranges with 400.
+  let rangedTennis: Game[] | null = null;
+  if (sport === "tennis") {
+    const url = scoreboardUrl(sport);
+    url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
+    try {
+      // ESPN's tennis scoreboard payload is large during Slams. Do not let a
+      // ranged tennis lookahead retry for ~30s before admitting there is no slate.
+      const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
+      if (!res.ok) return null;
+      const data = await res.json();
+      const events: ScoreboardEvent[] = data?.events ?? [];
+      rangedTennis = buildTennisGames(events as unknown as TennisScoreboardEvent[], { from: ymd(start), to: ymd(end) });
+    } catch {
+      return null;
+    }
   }
-  // Tennis nests its matches inside a 0-competitor tournament wrapper that
-  // eventsToGames drops, so it goes through its own parser with the window
-  // applied per match (ESPN returns the whole Slam regardless of `dates`).
-  const parsed = sport === "tennis"
-    ? buildTennisGames(events as unknown as TennisScoreboardEvent[], { from: ymd(start), to: ymd(end) })
-    : eventsToGames(events, sport);
-  const games = parsed.filter((g) => g.state === "pre" || g.state === "in");
-  if (!games.length) return null;
   // Group by the fixture's ET calendar day, return the earliest day's slate.
   const dayOf = (iso: string) => {
     try {
@@ -4515,6 +4568,17 @@ async function fetchNextGameDayRange(
       return "";
     }
   };
+  // Day-by-day fan-out (see RANGE_FANOUT_CHUNK_DAYS): date+1 … date+windowDays.
+  const days = Array.from({ length: windowDays }, (_, i) => {
+    const d = new Date(base); d.setDate(d.getDate() + i + 1); return ymd(d);
+  });
+  const upcoming = (gs: Game[]) => gs.filter((g) => g.state === "pre" || g.state === "in");
+  const distinctDays = (gs: Game[]) => new Set(gs.map((g) => dayOf(g.date)).filter(Boolean)).size;
+  // allDays wants the whole window; maxDays wants N distinct match-days; the
+  // default wants just the first day — stop as soon as that much is in hand.
+  const wanted = opts?.allDays ? Infinity : (opts?.maxDays ?? 1);
+  const games = upcoming(rangedTennis ?? await fetchGamesAcrossDays(sport, days, (gs) => distinctDays(upcoming(gs)) >= wanted));
+  if (!games.length) return null;
   const chrono = (gs: Game[]) => [...gs].sort((a, b) => chronoMs(a.date) - chronoMs(b.date));
   const leadDay = (gs: Game[]) => { let f = ""; for (const g of gs) { const d = dayOf(g.date); if (d && (!f || d < f)) f = d; } return f; };
   // allGames: the whole window, chronological, each game on its own day. The
@@ -4586,22 +4650,14 @@ async function fetchPreviousGameDayRange(
     ? new Date(`${fromDate.slice(0, 4)}-${fromDate.slice(4, 6)}-${fromDate.slice(6, 8)}T12:00:00`)
     : new Date();
   const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-  const end = new Date(base); end.setDate(end.getDate() - 1);            // the day BEFORE the viewed date
-  const start = new Date(base); start.setDate(start.getDate() - windowDays);
-  const url = scoreboardUrl(sport);
-  url.searchParams.set("dates", `${ymd(start)}-${ymd(end)}`);
-  let events: ScoreboardEvent[];
-  try {
-    // ESPN's tennis scoreboard payload is large during Slams. Do not let a
-    // ranged tennis lookback retry for ~30s before admitting there is no slate.
-    const res = await fetchWithRetry(url.toString(), ...scoreboardFetchArgs(sport));
-    if (!res.ok) return null;
-    const data = await res.json();
-    events = data?.events ?? [];
-  } catch {
-    return null;
-  }
-  const games = eventsToGames(events, sport).filter((g) => g.state === "post");
+  // Day-by-day fan-out (see RANGE_FANOUT_CHUNK_DAYS), walking BACK from the
+  // day before the viewed date so the first chunk with a finished game is the
+  // most recent one and the walk can stop there.
+  const days = Array.from({ length: windowDays }, (_, i) => {
+    const d = new Date(base); d.setDate(d.getDate() - (i + 1)); return ymd(d);
+  });
+  const finished = (gs: Game[]) => gs.filter((g) => g.state === "post");
+  const games = finished(await fetchGamesAcrossDays(sport, days, (gs) => finished(gs).length > 0));
   if (!games.length) return null;
   const dayOf = (iso: string) => {
     try {
@@ -4631,9 +4687,14 @@ export async function fetchGames(
   // with the date nav's 1 AM rollover. To reconcile, fetch a 2-day window
   // [date, date+1] and keep only fixtures whose slate day is the viewed date —
   // this pulls a midnight kickoff back onto yesterday and off today (Jacob 6/17).
+  // ⚠️ Since 2026-09-16 ESPN answers a `dates=A-B` range on team-sport
+  // scoreboards with HTTP 400 (see RANGE_FANOUT_CHUNK_DAYS) — which made every
+  // soccer column fail outright. The 2-day window is now two single-day
+  // requests merged below; the day+1 fetch is best-effort so a blip on it
+  // cannot blank the viewed day.
   const reconcileSoccerDay = !!date && SOCCER_SPORTS.has(sport);
   if (date) {
-    url.searchParams.set("dates", reconcileSoccerDay ? `${date}-${nextYmd(date)}` : date);
+    url.searchParams.set("dates", date);
   }
 
   // For MLB, fetch game metadata (gamePk + live linescore) in parallel with ESPN data
@@ -4669,6 +4730,10 @@ export async function fetchGames(
     data = await res.json();
   } catch {
     return failWithCacheFallback();
+  }
+  if (reconcileSoccerDay && date) {
+    const spill = await fetchScoreboardEventsForDay(sport, nextYmd(date));
+    if (spill.length) data = { events: [...(data?.events ?? []), ...spill] };
   }
 
   const events = data?.events ?? [];

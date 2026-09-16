@@ -107,6 +107,10 @@ function serve(opts: { teams?: { path: string; events: Ev[] }; tennis?: unknown 
     if (!opts.teams || !u.pathname.includes(opts.teams.path)) return new Response("{}", { status: 404 });
     const dates = u.searchParams.get("dates") ?? "";
     const [from, to = from] = dates.split("-");
+    // Since 2026-09-16 the real team-sport scoreboards answer any A-B range
+    // with HTTP 400 (tennis still takes one) — mirror that so a lookahead or
+    // lookback that quietly went back to a range fails here, not in production.
+    if (to !== from) return new Response('{"code":400}', { status: 400 });
     const events = opts.teams.events.filter((e) => {
       const d = dayOfIso(e.date);
       return d >= from && d <= to;
@@ -268,7 +272,7 @@ test("NFL: four divisional games ahead all show under today's cards", async () =
   assert.equal(league.nextGameDay?.date, d1);
   assert.deepEqual(league.nextGameDay?.games.map((g) => dayOfIso(g.date)), [d1, d1, d2, d2]);
   assert.deepEqual(league.nextGameDay?.games.map((g) => g.id), events.slice(2).map((e) => e.id));
-  assert.equal(rangedRequests().length, 1);
+  assert.equal(rangedRequests().length, 0, "team-sport ranges 400 since 2026-09-16 — the lookahead fans out per day");
 });
 
 test("NFL: six wild-card games ahead is above the cap — nothing stacks", async () => {
