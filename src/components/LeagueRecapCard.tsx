@@ -23,6 +23,7 @@ export default function LeagueRecapCard({
   sport,
   date,
   lastPlayedDate,
+  reserveSlot = false,
   onPlayHighlight,
   onPlayEmbed,
 }: {
@@ -32,6 +33,11 @@ export default function LeagueRecapCard({
   // — the NFL Week-1 card must follow that slate through the Tue/Wed the cut
   // posts on. YYYYMMDD, same format as `date`.
   lastPlayedDate?: string | null;
+  // A sibling column on the same side-by-side board shows a pill. With no
+  // records of our own, render an invisible row of the same height so the
+  // first game cards of every column sit at the same y — the same idea as
+  // PlayoffSubtitle's transparent header spacer.
+  reserveSlot?: boolean;
   onPlayHighlight?: (videoId: string, fallbackUrl: string, shareCard?: ShareCardMeta | null) => void;
   onPlayEmbed?: (embedUrl: string, fallbackUrl: string, sourceLabel: string, shareCard?: ShareCardMeta | null, playbackUrl?: string | null, poster?: string | null) => void;
 }) {
@@ -59,7 +65,29 @@ export default function LeagueRecapCard({
     };
   }, [sport, ymd]);
 
-  if (!records.length) return null;
+  if (!records.length) {
+    if (!reserveSlot) return null;
+    // Same box model as the real pill: 1px (transparent) border, padding, and
+    // a text span + one button skeleton so the height is identical.
+    // `invisible` keeps layout and hides paint; a <span> stands in for the
+    // button so nothing here is focusable or read out.
+    return (
+      <div
+        aria-hidden="true"
+        data-league-recap-spacer={sport}
+        className="mb-2 rounded-lg flex items-center gap-2 px-2.5 py-1.5 invisible"
+        style={{ border: "1px solid transparent" }}
+      >
+        <span className="flex-1 min-w-0 text-[11.5px] font-semibold tracking-tight truncate">&nbsp;</span>
+        <div className="flex gap-1 shrink-0">
+          <span className="highlight-btn flex items-center justify-center gap-1 px-2 py-1 rounded-md">
+            <svg aria-hidden="true" className="shrink-0" width="10" height="10" viewBox="0 0 24 24" />
+            <span className="text-[10px] font-medium whitespace-nowrap">0m</span>
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const play = (rec: RecapRecord) => {
     if (rec.playbackUrl) {
