@@ -552,7 +552,11 @@ export default function GameHighlights({
     // skips — and gets no marker, so it reserves and lines up with the MLB card
     // beside it (Jacob 9/5). The 60s tick above re-renders this component the
     // moment the buffer opens, which drops the marker without a reload.
-    return isFinished && !highlightsReady ? <span data-hl-pending hidden /> : null;
+    // A league with NO trusted uploader at all (hasNoTrustedHighlightSource —
+    // NCAA volleyball, hockey, baseball, softball, cricket …) can never earn a
+    // button, so the reserve is a permanent blank band on every one of its
+    // cards; it emits the same marker (Jacob 9/16, the volleyball column).
+    return isFinished && (!highlightsReady || noTrustedSource) ? <span data-hl-pending hidden /> : null;
   }
 
   // The OTHER resolved highlight versions of this game, minus the one being
