@@ -4737,7 +4737,11 @@ export async function fetchGames(
   }
   if (reconcileSoccerDay && date) {
     const spill = await fetchScoreboardEventsForDay(sport, nextYmd(date));
-    if (spill.length) data = { events: [...(data?.events ?? []), ...spill] };
+    // A late kickoff can sit on both single-day slates (the old dates=A-B range
+    // listed it once), so keep only spill events the viewed day lacks.
+    const have = new Set((data?.events ?? []).map((e) => (e as { id?: string }).id));
+    const fresh = spill.filter((e) => !have.has(e.id));
+    if (fresh.length) data = { events: [...(data?.events ?? []), ...fresh] };
   }
 
   const events = data?.events ?? [];
