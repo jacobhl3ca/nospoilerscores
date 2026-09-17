@@ -1290,6 +1290,8 @@ type RawCompetitor = {
     abbreviation?: string;
     displayName?: string;
     shortDisplayName?: string;
+    location?: string;
+    conferenceId?: string | number;
     logo?: string;
     color?: string;
   };
@@ -1333,6 +1335,8 @@ function parseTeam(competitor: RawCompetitor, sport: Sport): Team {
     abbreviation: competitor.team?.abbreviation ?? "",
     displayName: competitor.team?.displayName ?? "",
     shortDisplayName: competitor.team?.shortDisplayName ?? "",
+    ...(competitor.team?.location ? { location: competitor.team.location } : {}),
+    ...(competitor.team?.conferenceId != null ? { conferenceId: String(competitor.team.conferenceId) } : {}),
     logo: competitor.team?.logo ?? "",
     color: competitor.team?.color ?? "666666",
     score: formatScore(competitor.score ?? "0", sport),

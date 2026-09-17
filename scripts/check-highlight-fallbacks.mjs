@@ -337,7 +337,10 @@ function saveIncidentState(state) {
 const LLWS_REGION_NAMES = JSON.parse(
   fs.readFileSync(new URL("../src/lib/llwsRegions.json", import.meta.url), "utf8"),
 );
-function highlightTeamName(sport, name) {
+// ncaaf titles use ESPN's team.location ("Western Kentucky"), not the short
+// name ("Western KY") — mirrors LOCATION_NAME_SPORTS in src/lib/youtube.ts.
+function highlightTeamName(sport, name, location) {
+  if (sport === "ncaaf" || sport === "ncaavb") return (location && String(location).trim()) || name;
   if (sport !== "llws") return name;
   const code = String(name ?? "").trim().split(/\s+/).pop() ?? "";
   return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
@@ -350,8 +353,8 @@ function extractTeams(ev, sport) {
   const home = comp.competitors.find((c) => c.homeAway === "home");
   if (!away || !home) return null;
   return {
-    away: highlightTeamName(sport, away.team.shortDisplayName ?? away.team.displayName),
-    home: highlightTeamName(sport, home.team.shortDisplayName ?? home.team.displayName),
+    away: highlightTeamName(sport, away.team.shortDisplayName ?? away.team.displayName, away.team.location),
+    home: highlightTeamName(sport, home.team.shortDisplayName ?? home.team.displayName, home.team.location),
     awayScore: away.score,
     homeScore: home.score,
   };

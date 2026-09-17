@@ -2557,7 +2557,31 @@ const hlAlias = (n) => HL_TEAM_ALIASES[n] ?? n;
 const HL_LLWS_REGION_NAMES = JSON.parse(
   readFileSync(new URL("../src/lib/llwsRegions.json", import.meta.url), "utf8"),
 );
-const hlHighlightTeamName = (sport, name) => {
+// College football titles use the full school name ESPN keeps in team.location
+// ("Western Kentucky"), not the shortDisplayName ("Western KY"). Mirrors
+// LOCATION_NAME_SPORTS in src/lib/youtube.ts.
+const HL_LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb"]);
+// Per-game fallback uploaders (conference + TV network) for the official slot.
+// SAME FILE src/lib/youtube.ts reads; the chain builder mirrors
+// buildCollegeFallbackChain in src/lib/collegeHighlights.ts.
+const HL_COLLEGE_CHANNELS = JSON.parse(
+  readFileSync(new URL("../src/lib/collegeHighlightChannels.json", import.meta.url), "utf8"),
+);
+const hlFallbackChain = (sport, primaryChannel, homeTeam, awayTeam, broadcasts) => {
+  const cfg = HL_COLLEGE_CHANNELS[sport];
+  if (!cfg) return [];
+  const confKey = (t) => (t?.conferenceId ? String(t.conferenceId) : (t?.id ? cfg.teamConferences?.[String(t.id)] : undefined));
+  const channels = [];
+  const add = (c) => { if (c && c !== primaryChannel && !channels.includes(c)) channels.push(c); };
+  const homeConf = confKey(homeTeam);
+  const awayConf = confKey(awayTeam);
+  add(homeConf ? cfg.conferences[homeConf] : undefined);
+  add(awayConf ? cfg.conferences[awayConf] : undefined);
+  for (const name of broadcasts ?? []) add(cfg.networks.find((n) => n.names.includes(name))?.channel);
+  return channels.map((channel) => ({ channel, titleTokens: cfg.channelTitleTokens?.[channel] ?? cfg.titleTokens }));
+};
+const hlHighlightTeamName = (sport, name, location) => {
+  if (HL_LOCATION_NAME_SPORTS.has(sport)) return (location && String(location).trim()) || name;
   if (sport !== "llws") return name;
   const code = String(name).trim().split(/\s+/).pop() ?? "";
   return HL_LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
@@ -2974,8 +2998,12 @@ async function bakeGameHighlights() {
             // Rewritten to the uploader's title form before anything else
             // touches it, so the query, the matchup fingerprint and the title
             // check all agree with the client. Identity outside LLWS.
-            const away = hlHighlightTeamName(lg.sport, comps.find((c) => c.homeAway === "away")?.team?.shortDisplayName);
-            const home = hlHighlightTeamName(lg.sport, comps.find((c) => c.homeAway === "home")?.team?.shortDisplayName);
+            const awayTeam = comps.find((c) => c.homeAway === "away")?.team;
+            const homeTeam = comps.find((c) => c.homeAway === "home")?.team;
+            const away = hlHighlightTeamName(lg.sport, awayTeam?.shortDisplayName, awayTeam?.location);
+            const home = hlHighlightTeamName(lg.sport, homeTeam?.shortDisplayName, homeTeam?.location);
+            const broadcasts = (comp?.broadcasts ?? []).flatMap((b) => b?.names ?? []);
+            const fallbacks = hlFallbackChain(lg.sport, lg.channel, homeTeam, awayTeam, broadcasts);
             if (!event.id || !away || !home) return [];
             let series = null;
             for (const note of comp?.notes ?? []) {
@@ -3000,7 +3028,7 @@ async function bakeGameHighlights() {
             const cflPlayoff = lg.sport === "cfl" && event.season?.type === 3
               ? hlCflPlayoffTokens(comp?.notes?.[0]?.headline)
               : null;
-            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff }];
+            return [{ id: event.id, away, home, date: event.date, series, channel: lg.channel, week, preseason, awayAbbr, homeAbbr, cflPlayoff, fallbacks }];
           });
       for (const item of items) {
         const key = `${lg.sport}:${item.id}`;
@@ -3024,7 +3052,14 @@ async function bakeGameHighlights() {
         const primaryChannel = item.channel;
         const secondaryChannel = isFifa ? "FOX Sports" : (lg.secondaryChannel ?? primaryChannel);
         const sameChannel = (actual, expected) => !!actual && !!expected && actual.toLowerCase() === expected.toLowerCase();
-        const carriedOfficial = sameChannel(prev.officialChannel, primaryChannel) ? prev.official : null;
+        // The official slot may come from the primary channel or, when that
+        // skipped the game, from a fallback in this game's chain. Each fallback
+        // carries the title token its lookups and revalidation must require.
+        const fallbacks = item.fallbacks ?? [];
+        const carriedFallback = fallbacks.find((f) => sameChannel(prev.officialChannel, f.channel)) ?? null;
+        const carriedOfficial = sameChannel(prev.officialChannel, primaryChannel) || carriedFallback ? prev.official : null;
+        let officialChannel = carriedFallback ? carriedFallback.channel : primaryChannel;
+        const officialTokensFor = (fb) => (fb && !compTokens?.length ? fb.titleTokens : compTokens);
         const carriedExtended = sameChannel(prev.extendedChannel, secondaryChannel) ? prev.extended : null;
         // 1st button (official/primary) and 2nd button (extended/secondary),
         // deduped so the two buttons never play the same clip — mirrors the
@@ -3038,7 +3073,7 @@ async function bakeGameHighlights() {
 
         // Revalidate every carried slot against both its uploader and matchup.
         // A channel marker proves provenance, not that the clip is for this game.
-        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, primaryChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week)) || !(await hlVideoMatchesComp(prevOfficial, compTokens)))) {
+        if (prevOfficial && (!(await hlVideoMatchesChannel(prevOfficial, officialChannel)) || !(await hlVideoMatchesTeams(prevOfficial, away, home)) || !(await hlVideoMatchesWeek(prevOfficial, week)) || !(await hlVideoMatchesComp(prevOfficial, officialTokensFor(carriedFallback))))) {
           console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} official=${prevOfficial} (${away} vs ${home}${week ? ` wk${week}` : ""})`);
           prevOfficial = null;
         }
@@ -3049,10 +3084,24 @@ async function bakeGameHighlights() {
 
         let official = prevOfficial ?? null;
         if (!official) {
+          officialChannel = primaryChannel;
           official = await hlResolve(away, home, dateStr, series, primaryChannel, undefined, competition, false, week, compTokens);
           if (official && (!(await hlVideoMatchesTeams(official, away, home)) || !(await hlVideoMatchesWeek(official, week)) || !(await hlVideoMatchesComp(official, compTokens)))) {
             console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} newly-resolved official=${official} (${away} vs ${home})`);
             official = null;
+          }
+          for (const fb of official ? [] : fallbacks) {
+            const tokens = officialTokensFor(fb);
+            const id = await hlResolve(away, home, dateStr, series, fb.channel, undefined, competition, false, week, tokens);
+            if (!id) continue;
+            if (!(await hlVideoMatchesTeams(id, away, home)) || !(await hlVideoMatchesWeek(id, week)) || !(await hlVideoMatchesComp(id, tokens))) {
+              console.warn(`HIGHLIGHT-MATCHUP-REJECT ${key} fallback ${fb.channel}=${id} (${away} vs ${home})`);
+              continue;
+            }
+            official = id;
+            officialChannel = fb.channel;
+            console.log(`${lg.sport} fallback → ${fb.channel} ${id} (${away} vs ${home})`);
+            break;
           }
         }
         let extended = prevExtended ?? null;
@@ -3148,7 +3197,7 @@ async function bakeGameHighlights() {
         const entry = { t: now, teams: [away, home], matchup, eventDate: item.date };
         if (official) {
           entry.official = official;
-          entry.officialChannel = primaryChannel;
+          entry.officialChannel = officialChannel;
           if (Number.isFinite(officialDurationSec)) entry.officialDurationSec = officialDurationSec;
         }
         if (club) {
