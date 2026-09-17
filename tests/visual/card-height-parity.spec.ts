@@ -285,3 +285,45 @@ test("the floor crosses columns: one clip in one league lifts the finished cards
   expect(withVideo.name).toBe("Aces");
   for (const card of cards) expect(card.slot).toBe(withVideo.btnRow);
 });
+
+// ── …and never on a league that has no trusted uploader at all ──────────────
+//
+// The reserve answers "this card will never get a button" for a game whose
+// league DOES have one — a college football game on a channel ESPN skips. A
+// league in NO_HIGHLIGHT_FALLBACK (NCAA volleyball: 1/5 strict on the 2025
+// tournament, regular season on ESPN+/B1G+ with no official upload) never earns
+// a button on any card, so the reserve there is a permanent blank band — the
+// volleyball column in Jacob's 9/16 screenshot. GameHighlights emits the same
+// [data-hl-pending] marker for it, permanently.
+// 9/16, not 8/6: volleyball's season opens 08-21, so an August board drops the column.
+test("a dark league reserves nothing, even beside a league that has a clip", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-16T20:00:00-04:00"));
+  await setLeagues(page, ["wnba", "ncaavb"]);
+  await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Aces", "Lynx", "Fever", "Sky"], 900001, "2026-09-16T18:00:00Z"),
+  }));
+  await page.route("**/volleyball/womens-college-volleyball/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["North Florida", "William & Mary", "Rhode Island", "Penn"], 920001, "2026-09-16T18:00:00Z"),
+  }));
+  await resolveOnly(page, "Aces");
+
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => {
+    const cards = await measuredCards(page);
+    return cards.find((c) => c.name.includes("Aces"))?.hasBtn ?? null;
+  }, { timeout: 15_000 }).toBe(true);
+  await page.waitForTimeout(1500);
+
+  const cards = await measuredCards(page);
+  const aces = cards.find((c) => c.name.includes("Aces"))!;
+  const vb = cards.filter((c) => c.name.includes("North Florida") || c.name.includes("Rhode Island"));
+  expect(vb).toHaveLength(2);
+  expect(aces.slot).toBeGreaterThan(20);
+  for (const card of vb) {
+    expect(card.hasBtn).toBe(false);
+    expect(card.slot).toBe(0);
+  }
+});
