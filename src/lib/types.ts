@@ -144,6 +144,12 @@ export interface Team {
   abbreviation: string;
   displayName: string;
   shortDisplayName: string;
+  // ESPN team.location ("Western Kentucky") and team.conferenceId ("12").
+  // College only, for the highlight lookup: the uploaders title with the full
+  // school name, and the conference picks the fallback channel. See
+  // highlightTeamName and getHighlightFallbackChannels in lib/youtube.ts.
+  location?: string;
+  conferenceId?: string;
   logo: string;
   color: string;
   score: string;

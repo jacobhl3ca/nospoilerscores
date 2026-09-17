@@ -40,6 +40,15 @@ const clubTransformed = await transform(clubSource, {
 });
 const tempClubs = join(tmpdir(), `hidescore-nflTeamChannels-${process.pid}.mjs`);
 writeFileSync(tempClubs, clubTransformed.code);
+// …and ./collegeHighlights + its JSON table (college fallbacks, 2026-09-16).
+const tempCollegeJson = join(tmpdir(), "collegeHighlightChannels.json");
+writeFileSync(tempCollegeJson, readFileSync("src/lib/collegeHighlightChannels.json", "utf8"));
+const collegeTransformed = await transform(readFileSync("src/lib/collegeHighlights.ts", "utf8"), {
+  jsc: { parser: { syntax: "typescript" }, target: "es2022" },
+  module: { type: "es6" },
+});
+const tempCollege = join(tmpdir(), `hidescore-collegeHighlights-${process.pid}.mjs`);
+writeFileSync(tempCollege, collegeTransformed.code);
 writeFileSync(
   tempModule,
   transformed.code
@@ -47,12 +56,34 @@ writeFileSync(
       /(from\s*")(\.[^"]*\.json)(")/g,
       '$1$2$3 with { type: "json" }',
     )
-    .replace(/(from\s*")\.\/nflTeamChannels(")/g, `$1./${tempClubs.split("/").pop()}$2`),
+    .replace(/(from\s*")\.\/nflTeamChannels(")/g, `$1./${tempClubs.split("/").pop()}$2`)
+    .replace(/(from\s*")\.\/collegeHighlights(")/g, `$1./${tempCollege.split("/").pop()}$2`),
 );
 const youtube = await import(pathToFileURL(tempModule).href);
 unlinkSync(tempModule);
 unlinkSync(tempRegions);
 unlinkSync(tempClubs);
+unlinkSync(tempCollege);
+unlinkSync(tempCollegeJson);
+
+check(
+  "NCAAF queries use the full school name (team.location), not ESPN's short form",
+  youtube.highlightTeamName("ncaaf", "Western KY", "Western Kentucky") === "Western Kentucky" &&
+    youtube.highlightTeamName("ncaaf", "Georgia", undefined) === "Georgia" &&
+    youtube.highlightTeamName("nba", "Lakers", "Los Angeles") === "Lakers",
+);
+check(
+  "NCAAF fallback chain: home conference, away conference, network; all football-gated",
+  (() => {
+    const chain = youtube.getHighlightFallbackChannels("ncaaf", "ESPN College Football", { conferenceId: "8" }, { conferenceId: "5" }, ["FOX"]);
+    return JSON.stringify(chain.map((f) => f.channel)) === JSON.stringify(["SEC", "Big Ten Football", "CFB ON FOX"]) &&
+      chain.every((f) => f.titleTokens.includes("football"));
+  })(),
+);
+check(
+  "Sports without a fallback table get no fallback channels",
+  youtube.getHighlightFallbackChannels("nba", "NBA", { conferenceId: "8" }, { conferenceId: "5" }, ["FOX"]).length === 0,
+);
 
 check(
   "WNBA expansion names use official title forms",

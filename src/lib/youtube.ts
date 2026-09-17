@@ -1,4 +1,6 @@
 import llwsRegions from "./llwsRegions.json";
+import collegeHighlightChannels from "./collegeHighlightChannels.json";
+import { buildCollegeFallbackChain, type ChainTeam, type CollegeHighlightConfig, type FallbackChannel } from "./collegeHighlights";
 import { isNflTeamChannel } from "./nflTeamChannels";
 
 // The JSON import types as a literal object, which cannot be indexed by an
@@ -314,7 +316,10 @@ const OFFICIAL_CHANNELS: Record<string, string> = {
 // Championships" hit 1/5 (the Wisconsin–Kentucky semifinal only) and "ESPN"
 // 0/3; two regular-season Sep 2026 queries were 0/2. Well under the 4/5 gate,
 // and regular-season matches stream on ESPN+ / B1G+ with no official upload.
-// Dark.
+// Lit 2026-09-16 WITHOUT a fixed channel: the conference channels (Big Ten
+// Volleyball, ACC Digital Network, Big 12 Conference, SEC) post per-match cuts,
+// so each match uses its own schools' conference chain. See
+// lib/collegeHighlights.ts; a match outside those four conferences stays dark.
 //
 // uecl / copadelrey / dfbpokal (added 2026-09-14, all three DARK). Probed
 // against the LIVE worker with strict=1 on 5 completed 2025-26 fixtures each,
@@ -343,7 +348,6 @@ const NO_HIGHLIGHT_FALLBACK = new Set([
   "ncaawh",
   "ncaabase",
   "ncaasoft",
-  "ncaavb",
   "rugbychamp",
   "rugbytest",
   "ufl",
@@ -553,7 +557,11 @@ export function getCompetitionName(sport: string): string | null {
 // (a LaLiga Elche–Betis served for the cup tie, 2026-09-14), so the FA Cup
 // requires its name in the title. Every ESPN FC FA Cup cut is titled
 // "… | FA Cup Highlights | ESPN FC" (7/7 hits carried it).
+// ncaavb: its conference channels (SEC, Big Ten Network, ESPN) post football and
+// basketball between the same schools; strict probes served both. Every match
+// cut says "Volleyball" in the title. See lib/collegeHighlights.ts.
 const COMPETITION_TITLE_TOKENS: Record<string, string[]> = {
+  ncaavb: ["volleyball"],
   nationschamp: ["nations championship"],
   facup: ["fa cup"],
 };
@@ -600,6 +608,27 @@ export function getCompetitionTitleTokens(
   if (sport === "nfl" && opts?.preseason) return NFL_PRESEASON_TITLE_TOKENS;
   if (sport === "cfl" && opts?.playoff) return cflPlayoffTitleTokens(opts.playoffLabel);
   return COMPETITION_TITLE_TOKENS[sport] ?? [];
+}
+
+// Per-game fallback uploaders for the official slot, tried in order only after
+// the primary channel misses. Empty for every sport without an entry in
+// collegeHighlightChannels.json. See lib/collegeHighlights.ts.
+const COLLEGE_HIGHLIGHT_CONFIG = collegeHighlightChannels as Record<string, CollegeHighlightConfig>;
+
+export function getHighlightFallbackChannels(
+  sport: string,
+  primaryChannel: string | null | undefined,
+  home: ChainTeam | null | undefined,
+  away: ChainTeam | null | undefined,
+  broadcasts: readonly string[] | null | undefined,
+): FallbackChannel[] {
+  return buildCollegeFallbackChain(COLLEGE_HIGHLIGHT_CONFIG[sport], primaryChannel, home, away, broadcasts);
+}
+
+// True for a sport with no fixed uploader whose official channel is the first
+// channel of each game's chain (ncaavb). A game whose chain is empty stays dark.
+export function highlightPrimaryFromChain(sport: string): boolean {
+  return !!COLLEGE_HIGHLIGHT_CONFIG[sport]?.primaryFromChain;
 }
 
 // Returns the full curated fallback chain of YouTube channels to try for the
@@ -649,9 +678,23 @@ function aliasTeam(name: string): string {
 // apart would make the bake and the client disagree on matchup identity, at which
 // point getChannelVerifiedBakedId rejects every entry the bake writes.
 
+// College football titles spell the school out ("Western Kentucky Hilltoppers
+// vs. Georgia Bulldogs"), but ESPN's shortDisplayName abbreviates it ("Western
+// KY", "Arizona St", "E Michigan"), and the worker's both-teams gate then
+// rejects the real upload. ESPN's `location` is the plain school name. Measured
+// 2026-09-16 on the 9/12 slate against the live worker, strict on ESPN College
+// Football: every game the short name found, the location found too, plus
+// Western Kentucky–Georgia and Eastern Michigan–Michigan State.
+// ncaavb (same date): location 11 hits over 143 conference-channel probes,
+// shortDisplayName 1 over 35.
+const LOCATION_NAME_SPORTS = new Set(["ncaaf", "ncaavb"]);
+
 // Rewrite a team name into the form the sport's official uploader puts in its
-// titles. Identity for every sport but LLWS, so nothing else can regress.
-export function highlightTeamName(sport: string, name: string): string {
+// titles. Identity for every sport but LLWS and the LOCATION_NAME_SPORTS, so
+// nothing else can regress. `location` is ESPN's team.location; when it is
+// missing the short name stands.
+export function highlightTeamName(sport: string, name: string, location?: string | null): string {
+  if (LOCATION_NAME_SPORTS.has(sport)) return location?.trim() || name;
   if (sport !== "llws") return name;
   const code = name.trim().split(/\s+/).pop() ?? "";
   return LLWS_REGION_NAMES[code.toUpperCase()] ?? name;
