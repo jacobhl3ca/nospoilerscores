@@ -167,12 +167,45 @@ async function fetchDroprMp4(pageUrl) {
   }
 }
 
+// streama.in / streamain.com — r/soccer's CURRENT dominant goal-clip host
+// (verified 2026-09-18: a month of the sub shows 0 streamff posts, ~8 dropr,
+// and a full search page of streama.in). The /<id>/watch page is a JS player
+// with no og:video, but /embed/<id> server-renders the direct CDN mp4
+// (cdn.streamain.com/...mp4 — 206 + video/mp4 + CORS *, so <video> plays it
+// natively). The poster is the same stem under /thumbnails/<stem>_thumb.jpg.
+// Mirrors the other resolvers; null on any failure so the post stays link-only.
+async function fetchStreamainMp4(pageUrl) {
+  try {
+    const idm = pageUrl.match(
+      /^https?:\/\/(?:streama\.in|streamain\.\w+)\/(?:[a-z]{2}\/)?([A-Za-z0-9_-]{6,40})(?:\/|$)/i,
+    );
+    if (!idm) return null;
+    const res = await fetch(`https://streamain.com/embed/${idm[1]}`, {
+      headers: { "User-Agent": UA, Referer: "https://www.reddit.com/" },
+      signal: AbortSignal.timeout(9000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m = html.match(/(https?:\/\/cdn\.streamain\.\w+\/[^"'\s]+\.mp4)/i);
+    if (!m) return null;
+    const mp4 = m[1].split(/[?#]/)[0];
+    const stem = (mp4.match(/\/([^/]+)\.mp4$/) || [])[1];
+    return {
+      mp4,
+      thumb: stem ? `https://streamain.com/thumbnails/${stem}_thumb.jpg` : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Route an external clip-host /v/<id> page URL to the matching mp4 resolver.
 // Used by the redlib + RSS paths, which capture the host URL into one map.
 function fetchClipMp4(url) {
   if (/^https?:\/\/streamff\.\w+\/v\//i.test(url)) return fetchStreamffMp4(url);
   if (/^https?:\/\/streamin\.\w+\/v\//i.test(url)) return fetchStreaminMp4(url);
   if (/^https?:\/\/dropr\.\w+\/v\//i.test(url)) return fetchDroprMp4(url);
+  if (/^https?:\/\/(?:streama\.in|streamain\.\w+)\//i.test(url)) return fetchStreamainMp4(url);
   return Promise.resolve(null);
 }
 
@@ -1416,17 +1449,13 @@ async function fetchRedditVideoMap(subreddit) {
   const offset = [...subreddit].reduce((a, c) => a + c.charCodeAt(0), 0) % REDLIB_INSTANCES.length;
   for (let k = 0; k < REDLIB_INSTANCES.length; k++) {
     const base = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
-    let html;
-    try {
-      const res = await fetch(`${base}/r/${subreddit}/hot`, {
-        headers: { "User-Agent": UA },
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!res.ok) continue;
-      html = await res.text();
-    } catch {
-      continue; // dead / blocked mirror — try the next
-    }
+    // Go through redlibGet, not a raw fetch: safereddit.com (the only mirror
+    // still answering as of 2026-09-18) serves an Anubis challenge page —
+    // HTTP 200, zero posts — to anything sending a browser User-Agent, and the
+    // real listing only to a UA-less request. redlibGet tries both and checks
+    // the body, so a challenge page no longer reads as success.
+    const html = await redlibGet(base, `/r/${subreddit}/hot`, /<div class="post[ "]/);
+    if (!html) continue; // dead / blocked / challenged mirror — try the next
     // Redlib renders each post inside <div class="post ...">; the post-id is in
     // its /r/<sub>/comments/<id>/ permalink and the v.redd.it id appears in the
     // media element — usually the /vid/<id>/ proxy path, but match the raw and
@@ -1444,7 +1473,9 @@ async function fetchRedditVideoMap(subreddit) {
       // streamff / streamin goal clips render as a "no_thumbnail" link anchor
       // (no <img>), so capture the /v/<id> url here for fetchRedditRSS to resolve
       // into a playable mp4 (fetchClipMp4). v.redd.it wins if both.
-      const cl = block.match(/href="(https?:\/\/(?:streamff|streamin|dropr)\.\w+\/v\/[^"]+)"/i);
+      const cl =
+        block.match(/href="(https?:\/\/(?:streamff|streamin|dropr)\.\w+\/v\/[^"]+)"/i) ||
+        block.match(/href="(https?:\/\/(?:streama\.in|streamain\.\w+)\/[^"]+)"/i);
       if (cl && !map.has(idm[1])) clips.set(idm[1], decodeEntities(cl[1]));
     }
     if (map.size > 0 || clips.size > 0) return { vreddit: map, clips };
@@ -1733,14 +1764,18 @@ async function parseRedlibListing(html, subreddit, sectionLabel) {
         const streamin = /^https?:\/\/streamin\.\w+\/v\//i.test(extUrl);
         const streamff = /^https?:\/\/streamff\.\w+\/v\//i.test(extUrl);
         const dropr = /^https?:\/\/dropr\.\w+\/v\//i.test(extUrl);
-        if (sm || streamff || streamin || dropr) {
+        // streama.in posts as /<id>/watch, not /v/<id> — match on host only.
+        const streamain = /^https?:\/\/(?:streama\.in|streamain\.\w+)\//i.test(extUrl);
+        if (sm || streamff || streamin || dropr || streamain) {
           const clip = sm
             ? await fetchStreamableMp4(sm[1])
             : streamff
               ? await fetchStreamffMp4(extUrl)
               : streamin
                 ? await fetchStreaminMp4(extUrl)
-                : await fetchDroprMp4(extUrl);
+                : dropr
+                  ? await fetchDroprMp4(extUrl)
+                  : await fetchStreamainMp4(extUrl);
           if (clip) {
             videoUrl = clip.mp4;
             if (!imageUrl) imageUrl = clip.thumb;
@@ -1826,18 +1861,13 @@ async function fillMissingRedlibVideos(items, subreddit) {
     const base = REDLIB_INSTANCES[(offset + k) % REDLIB_INSTANCES.length];
     if (tried.has(base)) continue;
     tried.add(base);
-    let html;
-    try {
-      const res = await fetch(`${base}/r/${subreddit}/hot`, {
-        headers: { "User-Agent": UA },
-        signal: AbortSignal.timeout(9000),
-      });
-      if (!res.ok) continue;
-      html = await res.text();
-    } catch {
-      continue; // dead / blocked mirror — try the next
-    }
-    if (!/<div class="post[ "]/.test(html)) continue;
+    // Go through redlibGet, not a raw fetch: safereddit.com (the only mirror
+    // still answering as of 2026-09-18) serves an Anubis challenge page —
+    // HTTP 200, zero posts — to anything sending a browser User-Agent, and the
+    // real listing only to a UA-less request. redlibGet tries both and checks
+    // the body, so a challenge page no longer reads as success.
+    const html = await redlibGet(base, `/r/${subreddit}/hot`, /<div class="post[ "]/);
+    if (!html) continue; // dead / blocked / challenged mirror — try the next
     for (const block of html.split(/<div class="post[ "]/).slice(1)) {
       const idm = block.match(new RegExp(`/r/${subreddit}/comments/(\\w+)/`, "i"));
       if (!idm || !missing.has(idm[1])) continue;
@@ -2140,6 +2170,9 @@ async function fetchRedditListing(subreddit, sectionLabel, token) {
       if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
     } else if (/^streamff\.\w+$/i.test(p.domain || "") && /\/v\//.test(p.url || "")) {
       const clip = await fetchStreamffMp4(p.url);
+      if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
+    } else if (/^(?:streama\.in|streamain\.\w+)$/i.test(p.domain || "")) {
+      const clip = await fetchStreamainMp4(p.url || "");
       if (clip) { videoUrl = clip.mp4; if (!imageUrl) imageUrl = clip.thumb; }
     }
     // i.redd.it image posts: surface the original full-res URL so the client
