@@ -22,6 +22,17 @@ import { resolveMlbGameVideos, type MlbGameVideos } from "@/lib/espn";
 // gate as isMlb below — that one is MLB.com-native video and stays MLB-only.
 const BASEBALL_SPORTS = new Set<string>(["mlb", "ncaabase", "ncaasoft"]);
 
+// Leagues where a resolved clip is the exception, not the rule. Their cards may
+// still EARN a button (2026-09-17 yesterday board: 3 of 61 volleyball games did,
+// MAC/Big East/Mountain West), so they are not dark — but the other 58 map to a
+// P4 conference channel that posts football and no volleyball, so the floor read
+// them as "past the buffer, nothing found" and parked a permanent 36px band on
+// 18 cards (Jacob's 9/17 screenshot: Illinois, Stanford, Purdue …). A sport in
+// here never reserves; the rare card that lands a clip is simply the taller one,
+// the same way the mixed slate has always worked ("bigger box not until it has
+// actual highlight", Jacob 8/10).
+const NEVER_RESERVE_SPORTS = new Set<string>(["ncaavb"]);
+
 const highlightBufferHours: Record<string, number> = {
   nba: 3.5, wnba: 3.5, ncaam: 4, ncaaw: 4, ncaaf: 5, nhl: 4.5, ncaah: 4.5, ncaawh: 4.5, ncaavb: 3, mlb: 5, ufl: 4,
   // CFL: TSN posts the full-highlights cut on the same timeline as NFL recaps.
@@ -556,7 +567,7 @@ export default function GameHighlights({
     // NCAA volleyball, hockey, baseball, softball, cricket …) can never earn a
     // button, so the reserve is a permanent blank band on every one of its
     // cards; it emits the same marker (Jacob 9/16, the volleyball column).
-    return isFinished && (!highlightsReady || noTrustedSource) ? <span data-hl-pending hidden /> : null;
+    return isFinished && (!highlightsReady || noTrustedSource || NEVER_RESERVE_SPORTS.has(game.sport)) ? <span data-hl-pending hidden /> : null;
   }
 
   // The OTHER resolved highlight versions of this game, minus the one being

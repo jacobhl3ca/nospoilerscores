@@ -52,10 +52,11 @@ async function setLeagues(page: Page, leagues: string[]) {
 
 // Two finished games on one slate, named so a highlight mock can resolve one
 // and not the other — the exact mixed column that used to go ragged.
-function twoFinishedGames(names: [string, string, string, string], idBase = 900001, startIso = "2026-08-06T02:00:00Z") {
+function twoFinishedGames(names: [string, string, string, string], idBase = 900001, startIso = "2026-08-06T02:00:00Z", conferenceId?: string) {
   const team = (id: string, name: string, abbr: string, score: string) => ({
     id, displayName: name, shortDisplayName: name, abbreviation: abbr, score,
     logo: "", color: "666666",
+    ...(conferenceId ? { conferenceId } : {}),
   });
   const event = (id: string, away: ReturnType<typeof team>, home: ReturnType<typeof team>) => ({
     id,
@@ -326,4 +327,39 @@ test("a dark league reserves nothing, even beside a league that has a clip", asy
     expect(card.hasBtn).toBe(false);
     expect(card.slot).toBe(0);
   }
+});
+
+// ── …and not on a volleyball card that DOES map to a conference channel ─────
+//
+// The dark-league case above is a volleyball game with no channel at all. A P4
+// game maps to one ("Big Ten Volleyball", conference 5, from #75) — and that
+// channel posts football, not volleyball, so the card resolved nothing, emitted
+// no marker and reserved a permanent 36px band. 18 of them on Jacob's 9/17
+// board. ncaavb is in NEVER_RESERVE_SPORTS now: a volleyball card reserves
+// nothing whether or not it has a channel.
+test("a P4 volleyball card with a conference channel still reserves nothing", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-16T20:00:00-04:00"));
+  await setLeagues(page, ["wnba", "ncaavb"]);
+  await page.route("**/basketball/wnba/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Aces", "Lynx", "Fever", "Sky"], 900001, "2026-09-16T18:00:00Z"),
+  }));
+  await page.route("**/volleyball/womens-college-volleyball/scoreboard?**", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: twoFinishedGames(["Illinois", "Purdue", "Michigan", "Indiana"], 930001, "2026-09-16T18:00:00Z", "5"),
+  }));
+  await resolveOnly(page, "Aces");
+
+  await page.goto("/today");
+  await expect(page.getByRole("heading", { name: "WNBA" })).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => {
+    const cards = await measuredCards(page);
+    return cards.find((c) => c.name.includes("Aces"))?.hasBtn ?? null;
+  }, { timeout: 15_000 }).toBe(true);
+  await page.waitForTimeout(1500);
+
+  const cards = await measuredCards(page);
+  const vb = cards.filter((c) => c.name.includes("Illinois") || c.name.includes("Michigan"));
+  expect(vb).toHaveLength(2);
+  for (const card of vb) expect(card.slot).toBe(0);
 });
