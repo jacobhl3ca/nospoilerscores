@@ -137,3 +137,37 @@ test("odds are walked out of ESPN's nested standings and keyed by MLB's abbrevia
   });
   assert.deepEqual(odds, { AZ: "39%", CWS: "85%", NYY: ">99%" }); // SEA has no odds stat → absent, never "0%"
 });
+
+// ── Hunt order (2026-09-13) ──────────────────────────────────────────────────
+
+import { HUNT_LIMIT, oddsValue, orderHunt } from "../src/lib/playoffPicture.ts";
+
+test("odds labels sort as numbers, with the capped labels on the right side", () => {
+  assert.ok(oddsValue(">99%") > oddsValue("99%"));
+  assert.ok(oddsValue("<1%") > oddsValue("0%"));
+  assert.ok(oddsValue("1%") > oddsValue("<1%"));
+  assert.equal(oddsValue(null), -1);
+});
+
+test("the hunt is ordered by playoff odds, record only breaks a tie, cut to the limit", () => {
+  const team = (id: number, name: string, abbrev: string, wins: number, losses: number) => ({
+    id, name, abbrev, league: "AL" as const, division: "AL East", wins, losses,
+    pct: (wins / (wins + losses)).toFixed(3), seed: null, divisionLeader: false, clinched: false,
+    gamesBack: "-", wildCardGamesBack: "-", magicNumber: null, eliminated: false,
+  });
+  // Record order: TOR, TEX, BAL, MIN, DET, SEA. Odds order differs.
+  const hunt = [
+    team(1, "Toronto", "TOR", 74, 75), team(2, "Texas", "TEX", 73, 76), team(3, "Baltimore", "BAL", 72, 77),
+    team(4, "Minnesota", "MIN", 70, 78), team(5, "Detroit", "DET", 70, 79), team(6, "Seattle", "SEA", 70, 79),
+  ];
+  const odds = { TOR: "35%", TEX: "24%", BAL: "4%", MIN: "2%", DET: "<1%", SEA: "7%" };
+  assert.deepEqual(orderHunt(hunt, odds).map((t) => t.abbrev), ["TOR", "TEX", "SEA", "BAL"]);
+  assert.equal(HUNT_LIMIT, 4);
+  // No odds yet (feed down): falls back to record order, still capped.
+  assert.deepEqual(orderHunt(hunt, null).map((t) => t.abbrev), ["TOR", "TEX", "BAL", "MIN"]);
+  // Equal odds → record decides; a club with no label goes last.
+  assert.deepEqual(
+    orderHunt(hunt, { TOR: "5%", TEX: "5%", BAL: "5%", MIN: "5%", DET: "5%" }).map((t) => t.abbrev),
+    ["TOR", "TEX", "BAL", "MIN"],
+  );
+});

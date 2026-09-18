@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchPlayoffOdds,
   fetchPlayoffPicture,
+  orderHunt,
   teamLogo,
   type PlayoffLeague,
   type PlayoffOdds,
@@ -37,21 +38,33 @@ function loadRevealed(season: number): boolean {
   }
 }
 
+// "Updated 2:58 PM" when the feed stamped today, "Updated Sep 12, 2:58 PM"
+// otherwise — the date only earns its space once it is not obvious.
+export function formatUpdated(iso: string, now: Date = new Date()): string | null {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  return sameDay ? time : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`;
+}
+
 // The one-line status a row earns, most decisive first: a clinched berth, then
 // the wins that would clinch a division, then — only when asked for — how far
-// back the chase is.
-function statusFor(t: PlayoffTeam, showGamesBack: boolean): { text: string; tone: "good" | "plain" } | null {
+// back the chase is. MLB writes "-" for wild-card games back when a club holds
+// or is tied for the LAST wild-card spot (zero back, zero up): a seeded club
+// holds it, an unseeded one is tied for it and lost the tiebreak.
+export function statusFor(t: PlayoffTeam, showGamesBack: boolean, seeded: boolean): { text: string; tone: "good" | "plain" } | null {
   if (t.clinched) return { text: "Clinched", tone: "good" };
   if (t.divisionLeader && t.magicNumber) return { text: `Magic ${t.magicNumber}`, tone: "good" };
   if (t.divisionLeader) return { text: "Leads division", tone: "good" };
   if (!showGamesBack) return null;
   const gb = t.wildCardGamesBack;
   if (gb && gb !== "-") return { text: gb.startsWith("+") ? `${gb.slice(1)} up` : `${gb} back`, tone: "plain" };
-  return { text: "In the mix", tone: "plain" };
+  return { text: seeded ? "Holds last spot" : "Tied for last spot", tone: "plain" };
 }
 
 function Row({ team, seed, odds, showGamesBack }: { team: PlayoffTeam; seed: number | null; odds: string | null; showGamesBack: boolean }) {
-  const status = statusFor(team, showGamesBack);
+  const status = statusFor(team, showGamesBack, seed != null);
   return (
     <div className="flex items-center gap-2 py-1 px-1.5 rounded min-w-0" style={{ background: "var(--bg-card)" }}>
       <span className="text-[11px] w-4 text-center shrink-0 tabular-nums font-bold" style={{ color: seed ? "var(--text)" : "var(--text-muted)", opacity: seed ? 1 : 0.5 }}>
@@ -120,7 +133,7 @@ function LeaguePanel({ league, odds, showGamesBack }: { league: PlayoffLeague; o
             <div className="h-px flex-1" style={{ background: "var(--border)" }} />
           </div>
           <div className="space-y-1">
-            {league.hunt.map((t) => <Row key={t.id} team={t} seed={null} odds={oddsFor(t)} showGamesBack={showGamesBack} />)}
+            {orderHunt(league.hunt, odds).map((t) => <Row key={t.id} team={t} seed={null} odds={oddsFor(t)} showGamesBack={showGamesBack} />)}
           </div>
         </>
       ) : null}
@@ -219,12 +232,7 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
     }
   };
 
-  const updatedLabel = picture?.updated
-    ? (() => {
-        const d = new Date(picture.updated);
-        return isNaN(d.getTime()) ? null : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-      })()
-    : null;
+  const updatedLabel = picture?.updated ? formatUpdated(picture.updated) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -306,12 +314,10 @@ export default function PlayoffPictureModal({ onClose }: { onClose: () => void }
                 </button>
               ) : null}
             </div>
-            <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[10px] mt-3" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
-              <p className="m-0">
-                Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards. The number is each club&rsquo;s chance of making the playoffs (FanGraphs, via ESPN). Standings are a spoiler, so this stays covered until you ask for it.
-              </p>
-              {updatedLabel ? <p className="m-0 ml-auto whitespace-nowrap tabular-nums">Updated {updatedLabel}</p> : null}
-            </div>
+            <p className="m-0 mt-3 text-[10px]" style={{ color: "var(--text-muted)", opacity: 0.7 }}>
+              Seeds 1&ndash;3 are the division winners, 4&ndash;6 the wild cards.
+              {updatedLabel ? <em className="tabular-nums" style={{ opacity: 0.75 }}> Updated {updatedLabel}</em> : null}
+            </p>
           </>
         )}
       </div>
