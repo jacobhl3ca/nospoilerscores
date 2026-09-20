@@ -166,9 +166,10 @@ test("the recap pill sits on top of the NFL and MLB columns on /yesterday, and t
 
   // NFL game card: league cut with minutes + the club short cut beside it;
   // the card whose clubs posted nothing shows the league button only.
-  await expect(page.getByRole("button", { name: "Detroit Lions highlights" })).toHaveCount(1, { timeout: 15_000 });
-  await expect(page.getByRole("button", { name: "Detroit Lions highlights" })).toHaveText(/Lions 10m/);
-  await expect(page.getByRole("button", { name: "NFL highlights" })).toHaveCount(2);
+  // Club button is OFF pending QA (CLUB_BUTTON_ENABLED in GameHighlights.tsx):
+  // the baked club slot must not render, even though the record carries it.
+  await expect(page.getByRole("button", { name: "NFL highlights" })).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Detroit Lions highlights" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "NFL highlights" }).first()).toHaveText(/NFL 17m/);
   await expect(page.getByRole("button", { name: "NFL highlights" }).nth(1)).toHaveText(/NFL 14m/);
 
